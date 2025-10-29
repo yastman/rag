@@ -8,8 +8,8 @@
 
 ```bash
 # 1. Клонирование репозитория
-git clone <your-repo-url>
-cd contextual_rag
+git clone https://github.com/yastman/rag.git
+cd rag
 
 # 2. Создание виртуального окружения
 python3.9 -m venv venv
@@ -366,5 +366,6 @@ python -m pytest tests/                  # Unit тесты (если есть)
 
 ---
 
-**Last Updated**: 2025-10-29
+**Last Updated**: 2024-10-29
 **Version**: 2.0.1
+**Repository**: https://github.com/yastman/rag
