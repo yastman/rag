@@ -1,117 +1,117 @@
 # 📋 PROJECT STRUCTURE - Contextual RAG v2.0.1
 
-> **Полное руководство структуры проекта с описанием каждого модуля**
+> **Complete project structure guide with description of each module**
 
-## Оглавление
-1. [Обзор проекта](#обзор-проекта)
-2. [Структура директорий](#структура-директорий)
-3. [Основные модули](#основные-модули)
-4. [Технологический стек](#технологический-стек)
-5. [Рабочий процесс](#рабочий-процесс)
-6. [Быстрая справка](#быстрая-справка)
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Directory Structure](#directory-structure)
+3. [Core Modules](#core-modules)
+4. [Technology Stack](#technology-stack)
+5. [Workflow](#workflow)
+6. [Quick Reference](#quick-reference)
 
 ---
 
-## Обзор проекта
+## Project Overview
 
-**Contextual RAG Pipeline** - это production-ready система поиска и извлечения информации из украинских юридических документов, использующая:
-- 🤖 **Гибридный поиск**: Dense (BGE-M3) + Sparse (ColBERT) векторы
-- 🔍 **DBSF Ranking**: Density-Based Semantic Fusion для оптимальных результатов
-- 📊 **ML Платформы**: MLflow + Langfuse для отслеживания экспериментов
-- 🚀 **Множественные LLM**: Claude, OpenAI, Groq, Z.AI
-- 📚 **Контекстуализация**: Автоматическое обогащение контекста через Claude API
+**Contextual RAG Pipeline** - a production-ready system for searching and retrieving information from Ukrainian legal documents, using:
+- 🤖 **Hybrid Search**: Dense (BGE-M3) + Sparse (ColBERT) vectors
+- 🔍 **DBSF Ranking**: Density-Based Semantic Fusion for optimal results
+- 📊 **ML Platforms**: MLflow + Langfuse for experiment tracking
+- 🚀 **Multiple LLMs**: Claude, OpenAI, Groq, Z.AI
+- 📚 **Contextualization**: Automatic context enrichment through Claude API
 
-**Версия**: 2.0.1
+**Version**: 2.0.1
 **Python**: ≥ 3.9
-**Лицензия**: MIT
-**Статус**: Production Ready ✅
+**License**: MIT
+**Status**: Production Ready ✅
 
 ---
 
-## Структура директорий
+## Directory Structure
 
 ```
 contextual_rag/
 │
-├── 📋 ROOT КОНФИГУРАЦИЯ
-│   ├── pyproject.toml               # Конфигурация проекта, зависимости
-│   ├── config.py                    # Параметры приложения
-│   ├── prompts.py                   # Система промптов для LLM
-│   ├── .env                         # API ключи и URLs (НЕ коммитить!)
-│   ├── .env.example                 # Пример переменных окружения
-│   ├── .pre-commit-config.yaml      # Pre-commit хуки (Ruff, MyPy)
-│   └── __init__.py                  # Package инициализация
+├── 📋 ROOT CONFIGURATION
+│   ├── pyproject.toml               # Project configuration, dependencies
+│   ├── config.py                    # Application parameters
+│   ├── prompts.py                   # Prompt system for LLM
+│   ├── .env                         # API keys and URLs (DO NOT commit!)
+│   ├── .env.example                 # Environment variables example
+│   ├── .pre-commit-config.yaml      # Pre-commit hooks (Ruff, MyPy)
+│   └── __init__.py                  # Package initialization
 │
 ├── 🔄 CONTEXTUALIZATION & RETRIEVAL
-│   ├── contextualize.py             # ⭐ Claude API (основной)
-│   ├── contextualize_groq_async.py  # Groq асинхронная версия
-│   ├── contextualize_openai_async.py # OpenAI асинхронная версия
-│   ├── contextualize_zai.py         # Z.AI синхронная версия
-│   └── contextualize_zai_async.py   # Z.AI асинхронная версия
+│   ├── contextualize.py             # ⭐ Claude API (main)
+│   ├── contextualize_groq_async.py  # Groq async version
+│   ├── contextualize_openai_async.py # OpenAI async version
+│   ├── contextualize_zai.py         # Z.AI sync version
+│   └── contextualize_zai_async.py   # Z.AI async version
 │
 ├── 📥 INGESTION & INDEXING
-│   ├── ingestion_contextual_kg_fast.py # ⭐ Fast версия (оптимизированная)
-│   ├── ingestion_contextual_kg.py      # Базовая версия
+│   ├── ingestion_contextual_kg_fast.py # ⭐ Fast version (optimized)
+│   ├── ingestion_contextual_kg.py      # Base version
 │   ├── pymupdf_chunker.py              # PDF parsing + chunking
-│   ├── create_collection_enhanced.py   # Создание Qdrant коллекции
-│   └── create_payload_indexes.py       # Создание индексов для payload
+│   ├── create_collection_enhanced.py   # Qdrant collection creation
+│   └── create_payload_indexes.py       # Payload index creation
 │
 ├── 🧪 TESTING & VALIDATION
-│   ├── test_api_quick.py            # Быстрый smoke тест
-│   ├── test_api_safe.py             # Безопасное тестирование
-│   ├── test_api_comparison.py       # Сравнение разных API
-│   ├── test_api_extended.py         # Расширенный тест с метриками
-│   ├── test_api_comparison_multi.py # Multi-API сравнение
-│   ├── test_dbsf_fusion.py          # Тестирование DBSF+ColBERT
-│   ├── evaluate_ab.py               # A/B тестирование
-│   ├── evaluation.py                # Основной evaluator
-│   └── example_search.py            # Пример использования
+│   ├── test_api_quick.py            # Quick smoke test
+│   ├── test_api_safe.py             # Safe testing
+│   ├── test_api_comparison.py       # API comparison
+│   ├── test_api_extended.py         # Extended test with metrics
+│   ├── test_api_comparison_multi.py # Multi-API comparison
+│   ├── test_dbsf_fusion.py          # DBSF+ColBERT testing
+│   ├── evaluate_ab.py               # A/B testing
+│   ├── evaluation.py                # Main evaluator
+│   └── example_search.py            # Usage example
 │
 ├── 📊 EVALUATION/
-│   ├── search_engines.py            # Реализация 3 поисковиков
+│   ├── search_engines.py            # Implementation of 3 search engines
 │   │                                # (Baseline, Hybrid, DBSF)
-│   ├── run_ab_test.py               # ⭐ A/B тест с MLflow логированием
-│   ├── evaluate_with_ragas.py       # RAGAS framework интеграция
-│   ├── smoke_test.py                # Smoke тесты
+│   ├── run_ab_test.py               # ⭐ A/B test with MLflow logging
+│   ├── evaluate_with_ragas.py       # RAGAS framework integration
+│   ├── smoke_test.py                # Smoke tests
 │   ├── langfuse_integration.py      # Langfuse (LLM tracing)
 │   ├── mlflow_integration.py        # MLflow (experiment tracking)
-│   ├── evaluator.py                 # Основной evaluator класс
-│   ├── metrics_logger.py            # Логирование метрик
-│   ├── config_snapshot.py           # Снимок конфигурации при запуске
-│   ├── generate_test_queries.py     # Генерация тестовых запросов
-│   ├── extract_ground_truth.py      # Извлечение правильных ответов
-│   ├── search_engines_rerank.py     # Reranking поисков
-│   ├── test_mlflow_ab.py            # MLflow тестирование
-│   ├── data/                        # Тестовые данные
-│   ├── evaluation/                  # Результаты оценки
-│   ├── reports/                     # Отчеты об оценке
-│   └── results/                     # Результаты тестов
+│   ├── evaluator.py                 # Main evaluator class
+│   ├── metrics_logger.py            # Metrics logging
+│   ├── config_snapshot.py           # Configuration snapshot at runtime
+│   ├── generate_test_queries.py     # Test query generation
+│   ├── extract_ground_truth.py      # Ground truth extraction
+│   ├── search_engines_rerank.py     # Search reranking
+│   ├── test_mlflow_ab.py            # MLflow testing
+│   ├── data/                        # Test data
+│   ├── evaluation/                  # Evaluation results
+│   ├── reports/                     # Evaluation reports
+│   └── results/                     # Test results
 │
 ├── 📚 DOCS/
-│   ├── INDEX.md                     # Указатель всей документации
-│   ├── README.md                    # Обзор документации
-│   ├── documents/                   # Украинские юридические документы
+│   ├── INDEX.md                     # Index of all documentation
+│   ├── README.md                    # Documentation overview
+│   ├── documents/                   # Ukrainian legal documents
 │   │   ├── Конституція України
 │   │   ├── Кримінальний кодекс України
 │   │   └── Цивільний кодекс України
-│   ├── guides/                      # Практические руководства
+│   ├── guides/                      # Practical guides
 │   │   ├── QUICK_START_DBSF.md
 │   │   ├── DEDUPLICATION_GUIDE.md
 │   │   └── DOC_LING_RAG_TASKS_2025.md
-│   ├── implementation/              # Чеклисты и планы
+│   ├── implementation/              # Checklists and plans
 │   │   ├── IMPLEMENTATION_CHECKLIST.md
 │   │   └── DBSF_COLBERT_IMPLEMENTATION_SUMMARY.md
-│   ├── reports/                     # Итоговые отчеты
+│   ├── reports/                     # Final reports
 │   │   ├── FINAL_REPORT_CONTEXTUAL_RAG.md
 │   │   ├── FINAL_OPTIMIZATION_REPORT.md
 │   │   └── TEST_RESULTS_SUMMARY.md
-│   └── archive/                     # Старые версии документов
+│   └── archive/                     # Old document versions
 │
 ├── 🛠️ UTILS/
-│   ├── __init__.py                  # Package инициализация
-│   └── structure_parser.py          # Парсер структуры документов
+│   ├── __init__.py                  # Package initialization
+│   └── structure_parser.py          # Document structure parser
 │
-├── 📦 contextual_rag.egg-info/      # Metadata пакета (auto-generated)
+├── 📦 contextual_rag.egg-info/      # Package metadata (auto-generated)
 │   ├── PKG-INFO
 │   ├── SOURCES.txt
 │   ├── dependency_links.txt
@@ -119,87 +119,87 @@ contextual_rag/
 │   ├── requires.txt
 │   └── top_level.txt
 │
-├── 🗂️ ROOT ДОКУМЕНТАЦИЯ
-│   ├── README.md                    # ⭐ Главная документация
-│   ├── ARCHITECTURE.md              # Архитектура системы
-│   ├── SETUP.md                     # Установка и настройка
-│   ├── CODE_QUALITY.md              # Рекомендации качества кода
-│   ├── MIGRATION_PLAN.md            # План миграции на ML платформы
-│   ├── OPTIMIZATION_PLAN.md         # План оптимизации
-│   ├── DBSF_vs_RRF_ANALYSIS.md      # Анализ методов ranking
-│   ├── PHASE1_COMPLETION_SUMMARY.md # Завершение Phase 1
-│   ├── PHASE2_COMPLETION_SUMMARY.md # Завершение Phase 2
-│   └── PHASE3_COMPLETION_SUMMARY.md # Завершение Phase 3
+├── 🗂️ ROOT DOCUMENTATION
+│   ├── README.md                    # ⭐ Main documentation
+│   ├── ARCHITECTURE.md              # System architecture
+│   ├── SETUP.md                     # Installation and setup
+│   ├── CODE_QUALITY.md              # Code quality recommendations
+│   ├── MIGRATION_PLAN.md            # ML platform migration plan
+│   ├── OPTIMIZATION_PLAN.md         # Optimization plan
+│   ├── DBSF_vs_RRF_ANALYSIS.md      # Ranking methods analysis
+│   ├── PHASE1_COMPLETION_SUMMARY.md # Phase 1 completion
+│   ├── PHASE2_COMPLETION_SUMMARY.md # Phase 2 completion
+│   └── PHASE3_COMPLETION_SUMMARY.md # Phase 3 completion
 │
 ├── 🔐 BACKUP & CACHE
-│   ├── contextual_rag_backup_*.tar.gz # Резервные копии проекта
-│   ├── **/__pycache__/              # Python кэш (игнорировать)
-│   └── *.egg-info/                  # Package metadata (игнорировать)
+│   ├── contextual_rag_backup_*.tar.gz # Project backups
+│   ├── **/__pycache__/              # Python cache (ignore)
+│   └── *.egg-info/                  # Package metadata (ignore)
 │
 └── 📝 GIT & CI/CD
-    ├── .git/                        # Git репозиторий
-    ├── .gitignore                   # Игнорируемые файлы
-    ├── docker-compose.yml           # Docker сервисы (Qdrant, MLflow, Langfuse)
-    └── .github/workflows/           # GitHub Actions (если есть)
+    ├── .git/                        # Git repository
+    ├── .gitignore                   # Ignored files
+    ├── docker-compose.yml           # Docker services (Qdrant, MLflow, Langfuse)
+    └── .github/workflows/           # GitHub Actions (if present)
 ```
 
 ---
 
-## Основные модули
+## Core Modules
 
-### 1. Contextualization Layer (Слой контекстуализации)
+### 1. Contextualization Layer
 
-| Модуль | Назначение | Статус |
-|--------|-----------|--------|
-| `contextualize.py` | Claude API с prompt caching | ⭐ Основной |
-| `contextualize_groq_async.py` | Groq (быстро) | Альтернатива |
-| `contextualize_openai_async.py` | OpenAI GPT | Альтернатива |
+| Module | Purpose | Status |
+|--------|---------|--------|
+| `contextualize.py` | Claude API with prompt caching | ⭐ Main |
+| `contextualize_groq_async.py` | Groq (fast) | Alternative |
+| `contextualize_openai_async.py` | OpenAI GPT | Alternative |
 | `contextualize_zai*.py` | Z.AI (legacy) | Legacy |
 
-**Функция**: Обогащение контекста документов через LLM перед поиском.
+**Function**: Document context enrichment through LLM before search.
 
 ```python
-# Пример использования
+# Usage example
 from contextualize import contextualize_documents
 enriched_docs = contextualize_documents(documents, query)
 ```
 
 ---
 
-### 2. Ingestion Layer (Слой загрузки)
+### 2. Ingestion Layer
 
-| Модуль | Назначение | Статус |
-|--------|-----------|--------|
-| `ingestion_contextual_kg_fast.py` | Fast оптимизированная загрузка | ⭐ Основной |
-| `ingestion_contextual_kg.py` | Стандартная загрузка | Fallback |
-| `pymupdf_chunker.py` | Парсер PDF с chunking | Утилита |
-| `create_collection_enhanced.py` | Создание коллекции | Setup |
-| `create_payload_indexes.py` | Индексы для payload | Setup |
+| Module | Purpose | Status |
+|--------|---------|--------|
+| `ingestion_contextual_kg_fast.py` | Fast optimized ingestion | ⭐ Main |
+| `ingestion_contextual_kg.py` | Standard ingestion | Fallback |
+| `pymupdf_chunker.py` | PDF parser with chunking | Utility |
+| `create_collection_enhanced.py` | Collection creation | Setup |
+| `create_payload_indexes.py` | Payload indexes | Setup |
 
-**Функция**: Загрузка PDF документов в Qdrant с контекстуализацией.
+**Function**: Loading PDF documents into Qdrant with contextualization.
 
 ```python
-# Пример использования
+# Usage example
 from ingestion_contextual_kg_fast import ingest_documents
 ingest_documents(pdf_path, collection_name='legal_documents')
 ```
 
 ---
 
-### 3. Search & Retrieval (Поиск и извлечение)
+### 3. Search & Retrieval
 
-**Три уровня поиска**:
-1. **Baseline**: BM25 + Dense векторы (стандартный)
+**Three search levels**:
+1. **Baseline**: BM25 + Dense vectors (standard)
 2. **Hybrid**: Dense + Sparse (BGE-M3 + ColBERT)
-3. **DBSF**: Density-Based Semantic Fusion (оптимальный)
+3. **DBSF**: Density-Based Semantic Fusion (optimal)
 
-**Метрики улучшения (DBSF vs Baseline)**:
+**Improvement metrics (DBSF vs Baseline)**:
 - Recall@1: 91.3% → 94.0% (+2.9%) ✅
 - NDCG@10: 0.9619 → 0.9711 (+1.0%) ✅
 - MRR: 0.9491 → 0.9636 (+1.5%) ✅
 
 ```python
-# Реализация в evaluation/search_engines.py
+# Implementation in evaluation/search_engines.py
 from evaluation.search_engines import DBSFSearchEngine
 engine = DBSFSearchEngine()
 results = engine.search(query, top_k=10)
@@ -207,48 +207,48 @@ results = engine.search(query, top_k=10)
 
 ---
 
-### 4. Evaluation Layer (Слой оценки)
+### 4. Evaluation Layer
 
-| Модуль | Назначение |
-|--------|-----------|
-| `run_ab_test.py` | A/B тест с MLflow логированием |
+| Module | Purpose |
+|--------|---------|
+| `run_ab_test.py` | A/B test with MLflow logging |
 | `evaluate_with_ragas.py` | RAGAS evaluation framework |
-| `smoke_test.py` | Быстрые smoke тесты |
-| `langfuse_integration.py` | LLM tracing через Langfuse |
-| `mlflow_integration.py` | Experiment tracking через MLflow |
+| `smoke_test.py` | Quick smoke tests |
+| `langfuse_integration.py` | LLM tracing via Langfuse |
+| `mlflow_integration.py` | Experiment tracking via MLflow |
 
-**Интеграции**:
+**Integrations**:
 - **MLflow**: http://localhost:5000
 - **Langfuse**: http://localhost:3001
 - **RAGAS**: RAG evaluation metrics
 
 ---
 
-### 5. Configuration (Конфигурация)
+### 5. Configuration
 
-**config.py** - центральная конфигурация проекта:
+**config.py** - central project configuration:
 ```python
 API_PROVIDER = 'claude'           # 'claude', 'openai', 'groq', 'zai'
 VECTOR_DB_URL = 'http://localhost:6333'  # Qdrant
 COLLECTION_NAME = 'legal_documents'
-MODEL_NAME = 'claude-3-5-sonnet-20241022'  # Основная модель
+MODEL_NAME = 'claude-3-5-sonnet-20241022'  # Main model
 EMBEDDING_MODEL = 'BAAI/bge-m3'   # 1024-dim vectors
 ```
 
 ---
 
-### 6. Utility Functions (Утилиты)
+### 6. Utility Functions
 
-| Модуль | Назначение |
-|--------|-----------|
-| `utils/structure_parser.py` | Парсер структуры документов |
-| `check_sparse_vectors.py` | Проверка sparse vectors |
-| `list_available_models.py` | Список доступных моделей |
-| `example_search.py` | Пример использования API |
+| Module | Purpose |
+|--------|---------|
+| `utils/structure_parser.py` | Document structure parser |
+| `check_sparse_vectors.py` | Sparse vectors check |
+| `list_available_models.py` | List available models |
+| `example_search.py` | API usage example |
 
 ---
 
-## Технологический стек
+## Technology Stack
 
 ### Vector Database
 - **Qdrant** v0.13.x
@@ -257,9 +257,9 @@ EMBEDDING_MODEL = 'BAAI/bge-m3'   # 1024-dim vectors
 - **Hybrid Search**: DBSF + RRF
 
 ### LLM APIs
-- **Anthropic Claude** 3.5 Sonnet (основной)
-- **OpenAI GPT-4** (альтернатива)
-- **Groq LLaMA3** (быстрая)
+- **Anthropic Claude** 3.5 Sonnet (main)
+- **OpenAI GPT-4** (alternative)
+- **Groq LLaMA3** (fast)
 - **Z.AI GLM-4.6** (legacy)
 
 ### ML Platforms
@@ -280,34 +280,34 @@ EMBEDDING_MODEL = 'BAAI/bge-m3'   # 1024-dim vectors
 
 ---
 
-## Рабочий процесс
+## Workflow
 
 ### 1️⃣ Setup & Installation
 ```bash
-# Клонирование репозитория
+# Clone repository
 git clone <repo>
 cd contextual_rag
 
-# Установка зависимостей
+# Install dependencies
 pip install -e .
 
-# Конфигурация
+# Configuration
 cp .env.example .env
-# Отредактировать .env с вашими API ключами
+# Edit .env with your API keys
 
-# Запуск Qdrant через Docker
+# Start Qdrant via Docker
 docker compose up -d qdrant
 
-# (Опционально) Запуск ML платформ
+# (Optional) Start ML platforms
 docker compose --profile ml up -d mlflow langfuse
 ```
 
 ### 2️⃣ Data Ingestion
 ```bash
-# Создание коллекции
+# Create collection
 python create_collection_enhanced.py
 
-# Загрузка документов
+# Load documents
 python ingestion_contextual_kg_fast.py \
   --pdf-path docs/documents/ \
   --collection legal_documents
@@ -315,19 +315,19 @@ python ingestion_contextual_kg_fast.py \
 
 ### 3️⃣ Testing
 ```bash
-# Smoke тест
+# Smoke test
 python evaluation/smoke_test.py
 
-# A/B тестирование (с логированием в MLflow)
+# A/B testing (with MLflow logging)
 python evaluation/run_ab_test.py
 
-# Быстрый тест API
+# Quick API test
 python test_api_quick.py
 ```
 
 ### 4️⃣ Production Query
 ```bash
-# Пример поиска
+# Search example
 python example_search.py \
   --query "Які право мають громадяни?" \
   --top-k 10
@@ -344,57 +344,57 @@ open http://localhost:3001
 
 ---
 
-## Быстрая справка
+## Quick Reference
 
-### Основные команды
+### Main Commands
 
-| Команда | Описание |
-|---------|---------|
-| `python test_api_quick.py` | Быстрый smoke тест |
-| `python evaluation/run_ab_test.py` | A/B тест с логированием |
-| `python example_search.py --query "..."` | Поиск |
-| `ruff check .` | Lint проверка |
-| `ruff format .` | Форматирование кода |
+| Command | Description |
+|---------|-------------|
+| `python test_api_quick.py` | Quick smoke test |
+| `python evaluation/run_ab_test.py` | A/B test with logging |
+| `python example_search.py --query "..."` | Search |
+| `ruff check .` | Lint check |
+| `ruff format .` | Code formatting |
 | `mypy . --ignore-missing-imports` | Type checking |
-| `docker compose up -d` | Запуск Qdrant |
-| `docker compose --profile ml up -d` | Запуск ML платформ |
+| `docker compose up -d` | Start Qdrant |
+| `docker compose --profile ml up -d` | Start ML platforms |
 
-### Важные файлы для редактирования
+### Important Files to Edit
 
-| Файл | Когда редактировать |
-|------|-------------------|
-| `.env` | Добавление API ключей |
-| `config.py` | Изменение параметров системы |
-| `prompts.py` | Обновление промптов для LLM |
-| `pyproject.toml` | Добавление новых зависимостей |
-| `.pre-commit-config.yaml` | Изменение качества кода |
+| File | When to Edit |
+|------|-------------|
+| `.env` | Adding API keys |
+| `config.py` | Changing system parameters |
+| `prompts.py` | Updating LLM prompts |
+| `pyproject.toml` | Adding new dependencies |
+| `.pre-commit-config.yaml` | Changing code quality settings |
 
-### Возможные проблемы
+### Common Issues
 
-| Проблема | Решение |
-|----------|--------|
-| `ConnectionError` к Qdrant | Запустите `docker compose up -d qdrant` |
-| `APIError` от Claude | Проверьте `.env` ключ `ANTHROPIC_API_KEY` |
-| `ModuleNotFoundError` | Переустановите `pip install -e .` |
-| Медленный поиск | Используйте `ingestion_contextual_kg_fast.py` |
-| Низкие метрики | Проверьте DBSF конфигурацию в `config.py` |
-
----
-
-## Документация по модулям
-
-Детальное описание каждого модуля см. в:
-- 📖 **MODULE_GUIDE.md** - Описание всех модулей
-- 🚀 **QUICK_START.md** - Пошаговый старт
-- 📦 **DEPENDENCIES.md** - Все зависимости
-- 🔧 **DEBUGGING_GUIDE.md** - Решение проблем
+| Issue | Solution |
+|-------|----------|
+| `ConnectionError` to Qdrant | Run `docker compose up -d qdrant` |
+| `APIError` from Claude | Check `.env` key `ANTHROPIC_API_KEY` |
+| `ModuleNotFoundError` | Reinstall `pip install -e .` |
+| Slow search | Use `ingestion_contextual_kg_fast.py` |
+| Low metrics | Check DBSF configuration in `config.py` |
 
 ---
 
-## Контакты и поддержка
+## Module Documentation
 
-- **Issues**: Создавайте GitHub issues
-- **Documentation**: См. `/docs` папку
+Detailed description of each module see in:
+- 📖 **MODULE_GUIDE.md** - Description of all modules
+- 🚀 **QUICK_START.md** - Step-by-step start
+- 📦 **DEPENDENCIES.md** - All dependencies
+- 🔧 **DEBUGGING_GUIDE.md** - Troubleshooting
+
+---
+
+## Contact and Support
+
+- **Issues**: Create GitHub issues
+- **Documentation**: See `/docs` folder
 - **Status**: Production ready ✅
 
 ---
