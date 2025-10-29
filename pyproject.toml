@@ -1,0 +1,286 @@
+[project]
+name = "contextual-rag"
+version = "2.0.1"
+description = "Contextual RAG Pipeline with DBSF + ColBERT hybrid search"
+requires-python = ">=3.9"
+dependencies = [
+    "pymupdf",
+    "anthropic",
+    "openai",
+    "groq",
+    "python-dotenv",
+    "numpy",
+    "aiohttp",
+    "requests",
+    "pandas",
+    "FlagEmbedding",
+    "scipy",
+    "sentence-transformers",  # BGE-M3 embeddings
+    "qdrant-client",          # Vector database client
+    # ML Platform & Evaluation (2025-10-23)
+    "mlflow>=2.22.1",        # Experiment tracking
+    "ragas>=0.2.10",          # RAG evaluation framework
+    "langfuse>=3.0.0",        # LLM observability & tracing
+    "datasets>=3.0.0",        # For RAGAS evaluation datasets
+]
+
+[project.optional-dependencies]
+# Development tools (linters, formatters, type checkers)
+dev = [
+    "ruff>=0.6.0",           # Fast linter + formatter
+    "mypy>=1.11.0",          # Type checking
+    "pylint>=3.2.0",         # Comprehensive linting
+    "bandit>=1.7.9",         # Security linting
+    "vulture>=2.11",         # Dead code detection
+    "pytest>=8.3.0",         # Testing framework
+    "pytest-cov>=5.0.0",     # Coverage plugin
+    "pytest-asyncio>=0.24.0",# Async testing
+    "pre-commit>=3.8.0",     # Git hooks
+]
+
+# Documentation tools
+docs = [
+    "mkdocs>=1.6.0",         # Documentation generator
+    "mkdocs-material>=9.5.0",# Material theme
+    "mkdocstrings[python]>=0.25.0",  # Auto API docs
+]
+
+# All optional dependencies
+all = [
+    "contextual-rag[dev,docs]",
+]
+
+# =============================================================================
+# RUFF CONFIGURATION (Modern Python Linter + Formatter, 2025)
+# =============================================================================
+# Ruff replaces: flake8, black, isort, pyupgrade, autoflake, and more
+# Speed: 10-100x faster than traditional tools
+# Documentation: https://docs.astral.sh/ruff/
+
+[tool.ruff]
+# Exclude common directories
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+# Line length: 100 (slightly longer than Black's 88 for readability)
+line-length = 100
+indent-width = 4
+
+# Target Python 3.9+ (project minimum)
+target-version = "py39"
+
+# =============================================================================
+# LINTING RULES
+# =============================================================================
+
+[tool.ruff.lint]
+# Enable recommended rule sets (2025 best practices)
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # Pyflakes (undefined names, unused imports, etc.)
+    "B",     # flake8-bugbear (common bugs and design problems)
+    "I",     # isort (import sorting)
+    "UP",    # pyupgrade (modernize Python code)
+    "SIM",   # flake8-simplify (simplify code)
+    "C4",    # flake8-comprehensions (better list/dict/set comprehensions)
+    "PIE",   # flake8-pie (misc lints)
+    "T20",   # flake8-print (detect print statements)
+    "RET",   # flake8-return (return statement issues)
+    "ARG",   # flake8-unused-arguments
+    "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
+]
+
+# Ignore specific rules
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "B008",   # Function calls in argument defaults
+    "T201",   # print() statements (we use them for logging)
+    "PTH123", # pathlib open() (we use built-in open())
+    "PTH",    # os.path usage (pathlib migration not critical for this project)
+    "ARG002", # Unused method arguments (often required for interface compatibility)
+    "B904",   # raise-without-from (context dependent, not always needed)
+    "SIM113", # enumerate-for-loop (minor optimization, not critical)
+]
+
+# Allow auto-fix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Per-file ignores
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]  # Allow unused imports and late imports
+"evaluation/*.py" = ["T201"]      # Allow print() in evaluation scripts
+"test_*.py" = ["E402", "T201"]    # Allow late imports (after load_dotenv()) and print() in tests
+"*.py" = ["ARG001"]               # Allow unused function arguments (common in callbacks)
+
+# Import sorting configuration (isort replacement)
+[tool.ruff.lint.isort]
+known-first-party = ["config", "evaluation"]
+force-single-line = false
+lines-after-imports = 2
+
+# =============================================================================
+# FORMATTING
+# =============================================================================
+
+[tool.ruff.format]
+# Use double quotes for strings (like Black)
+quote-style = "double"
+
+# Indent with spaces (4 spaces)
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Auto-detect line endings (LF on Linux, CRLF on Windows)
+line-ending = "auto"
+
+# Format code examples in docstrings
+docstring-code-format = true
+
+# Docstring code line length (dynamic = same as main code)
+docstring-code-line-length = "dynamic"
+
+# =============================================================================
+# MYPY CONFIGURATION (Type Checking)
+# =============================================================================
+# Uncomment to enable strict type checking
+# Run: mypy .
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Set to true for strict mode
+ignore_missing_imports = true  # Ignore missing stubs for now
+
+# Per-module overrides
+[[tool.mypy.overrides]]
+module = "evaluation.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "FlagEmbedding.*"
+ignore_missing_imports = true
+
+# =============================================================================
+# BANDIT CONFIGURATION (Security Linting)
+# =============================================================================
+# Uncomment to enable security checks
+# Run: bandit -r . -c pyproject.toml
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests", "evaluation", "legacy", "__pycache__"]
+skips = ["B101"]  # Skip assert_used (common in tests)
+
+# =============================================================================
+# PYLINT CONFIGURATION (Comprehensive Linting)
+# =============================================================================
+# Run: pylint src/
+
+[tool.pylint.main]
+# Python version for compatibility checks
+py-version = "3.9"
+
+# Files/directories to exclude
+ignore = ["legacy", "tests", ".venv", "__pycache__"]
+ignore-patterns = [".*_old\\.py$", ".*_backup\\.py$"]
+
+[tool.pylint.messages_control]
+# Disable specific checks
+disable = [
+    "C0111",  # missing-docstring
+    "C0103",  # invalid-name (sometimes OK for ML code)
+    "R0913",  # too-many-arguments (common in ML)
+    "R0914",  # too-many-locals
+    "W0511",  # fixme/todo comments
+    "C0301",  # line-too-long (handled by ruff)
+]
+
+[tool.pylint.format]
+max-line-length = 100
+indent-string = "    "  # 4 spaces
+
+[tool.pylint.basic]
+# Good variable names
+good-names = ["i", "j", "k", "ex", "Run", "_", "id", "f", "e"]
+
+[tool.pylint.design]
+max-args = 10  # Allow more args (ML models need many params)
+max-attributes = 15
+max-branches = 15
+
+# =============================================================================
+# PYTEST CONFIGURATION
+# =============================================================================
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = """
+    -ra
+    --strict-markers
+    --strict-config
+    --showlocals
+    --cov=src
+    --cov-report=html
+    --cov-report=term-missing:skip-covered
+"""
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+# =============================================================================
+# COVERAGE CONFIGURATION
+# =============================================================================
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/legacy/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
