@@ -1,152 +1,152 @@
 # 🚀 Contextual RAG Pipeline v2.0.1
 
-> **Production-ready документопошук для українських юридичних документів**
+> **Production-ready document search for Ukrainian legal documents**
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Code Quality](https://img.shields.io/badge/Code%20Quality-Ruff-purple)](https://github.com/astral-sh/ruff)
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)](#)
 
-## 📋 Что это?
+## 📋 What is this?
 
-**Contextual RAG Pipeline** - це система пошуку та видобування інформації з українських юридичних документів з використанням:
+**Contextual RAG Pipeline** is an information retrieval system for Ukrainian legal documents featuring:
 
-- 🔍 **Гібридний пошук**: Dense (BGE-M3) + Sparse (ColBERT) векторы
-- 🎯 **DBSF Ranking**: 94.0% Recall@1 (найкраща точність)
-- 🤖 **Множина LLM**: Claude, OpenAI, Groq
-- 💰 **Економія 90%**: Prompt caching для Claude API
-- 📊 **ML платформи**: MLflow + Langfuse
-- ✅ **Production Ready**: 0 помилок коду, повні тести
+- 🔍 **Hybrid Search**: Dense (BGE-M3) + Sparse (ColBERT) vectors
+- 🎯 **DBSF Ranking**: 94.0% Recall@1 (best accuracy)
+- 🤖 **Multiple LLMs**: Claude, OpenAI, Groq
+- 💰 **90% Cost Savings**: Prompt caching for Claude API
+- 📊 **ML Platforms**: MLflow + Langfuse
+- ✅ **Production Ready**: 0 code errors, full tests
 
 ---
 
-## 📁 Структура проекту
+## 📁 Project Structure
 
 ```
 contextual_rag/
-├── src/                          # Весь код програми
-│   ├── config/                   # Конфігурація
-│   ├── contextualization/        # LLM контекстуалізація
-│   ├── retrieval/                # Пошукові движки
-│   ├── ingestion/                # Завантаження документів
-│   ├── evaluation/               # Оцінка та метрики
-│   ├── utils/                    # Утиліти
-│   └── core/                     # Основний pipeline
+├── src/                          # All application code
+│   ├── config/                   # Configuration
+│   ├── contextualization/        # LLM contextualization
+│   ├── retrieval/                # Search engines
+│   ├── ingestion/                # Document loading
+│   ├── evaluation/               # Evaluation and metrics
+│   ├── utils/                    # Utilities
+│   └── core/                     # Main pipeline
 │
-├── docs/                         # Документація
-│   ├── guides/                   # Керівництва користувача
-│   ├── architecture/             # Архітектура системи
-│   ├── implementation/           # Деталі реалізації
-│   ├── reports/                  # Звіти проекту
-│   └── documents/                # Юридичні документи
+├── docs/                         # Documentation
+│   ├── guides/                   # User guides
+│   ├── architecture/             # System architecture
+│   ├── implementation/           # Implementation details
+│   ├── reports/                  # Project reports
+│   └── documents/                # Legal documents
 │
-├── tests/                        # Тести
-│   ├── unit/                     # Юніт-тести
-│   ├── integration/              # Інтеграційні тести
-│   └── legacy/                   # Старі тести
+├── tests/                        # Tests
+│   ├── unit/                     # Unit tests
+│   ├── integration/              # Integration tests
+│   └── legacy/                   # Legacy tests
 │
-├── data/                         # Дані
-│   ├── documents/                # Вхідні документи
-│   ├── test_queries/             # Тестові запити
-│   └── evaluation/               # Результати оцінки
+├── data/                         # Data
+│   ├── documents/                # Input documents
+│   ├── test_queries/             # Test queries
+│   └── evaluation/               # Evaluation results
 │
-├── legacy/                       # Старий код (deprecated)
-├── logs/                         # Логи
-├── pyproject.toml                # Конфігурація проекту
-├── .env.example                  # Приклад змінних середовища
-└── docker-compose.yml            # Docker сервіси
+├── legacy/                       # Old code (deprecated)
+├── logs/                         # Logs
+├── pyproject.toml                # Project configuration
+├── .env.example                  # Environment variables example
+└── docker-compose.yml            # Docker services
 ```
 
 ---
 
-## ⚡ Швидкий старт (5 хвилин)
+## ⚡ Quick Start (5 minutes)
 
-### 1. Встановлення
+### 1. Installation
 
-**Варіант A: Claude Code CLI на сервері (🏆 РЕКОМЕНДОВАНО)**
+**Option A: Claude Code CLI on Server (🏆 RECOMMENDED)**
 
 ```bash
-# 1. SSH на сервер
+# 1. SSH to server
 ssh user@your-server.com
 
-# 2. Клонувати проект
+# 2. Clone project
 git clone https://github.com/yastman/rag.git
 cd rag
 
-# 3. Налаштувати середовище
+# 3. Setup environment
 python3.9 -m venv venv
 source venv/bin/activate
 pip install -e ".[dev]"
 
-# 4. Налаштувати Git
+# 4. Configure Git
 git config user.name "Your Name"
 git config user.email "your@email.com"
 
-# 5. Налаштувати pre-commit
+# 5. Setup pre-commit
 pre-commit install --install-hooks
 pre-commit install --hook-type pre-push
 
-# 6. Налаштувати .env
+# 6. Configure .env
 cp .env.example .env
-nano .env  # API ключі
+nano .env  # Add your API keys
 
-# 7. Запустити Claude Code
+# 7. Launch Claude Code
 claude
 
-# Готово! Тепер просто говоріть з Claude:
-# "покажи структуру проекту"
-# "запусти тести"
-# "створи нову функцію для..."
+# Done! Now just talk to Claude:
+# "show project structure"
+# "run tests"
+# "create a new function for..."
 ```
 
-**Варіант B: Локальна розробка (без Claude Code)**
+**Option B: Local Development (without Claude Code)**
 
 ```bash
-# Локально
+# Locally
 git clone https://github.com/yastman/rag.git
 cd rag
 
-# Віртуальне середовище
+# Virtual environment
 python3.9 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Залежності
+# Dependencies
 pip install -e ".[dev]"
 
 # Git hooks
 pre-commit install --install-hooks
 pre-commit install --hook-type pre-push
 
-# Налаштування
+# Configuration
 cp .env.example .env
-# Відредагуйте .env з вашими API ключами
+# Edit .env with your API keys
 ```
 
-### 2. Запуск Qdrant
+### 2. Start Qdrant
 
 ```bash
 docker compose up -d qdrant
 ```
 
-### 3. Індексація документів
+### 3. Index Documents
 
 ```python
 from src.core import RAGPipeline
 
 pipeline = RAGPipeline()
 
-# Індексування PDF
+# Index PDF
 await pipeline.index_documents(
-    pdf_paths=["docs/documents/Конституція_України.pdf"],
+    pdf_paths=["docs/documents/Constitution_Ukraine.pdf"],
     collection_name="legal_documents"
 )
 ```
 
-### 4. Пошук
+### 4. Search
 
 ```python
-# Пошук
-result = await pipeline.search("Які права мають громадяни?")
+# Search
+result = await pipeline.search("What rights do citizens have?")
 
 for r in result.results:
     print(f"{r['article_number']}: {r['text'][:100]}...")
@@ -155,11 +155,11 @@ for r in result.results:
 
 ---
 
-## 📚 Модулі системи
+## 📚 System Modules
 
 ### 🔧 Config (`src/config/`)
 
-Централізована конфігурація з валідацією:
+Centralized configuration with validation:
 
 ```python
 from src.config import Settings, APIProvider, SearchEngine
@@ -172,7 +172,7 @@ settings = Settings(
 
 ### 🤖 Contextualization (`src/contextualization/`)
 
-LLM-збагачення документів контекстом:
+LLM-powered document enrichment:
 
 ```python
 from src.contextualization import ClaudeContextualizer
@@ -181,16 +181,16 @@ contextualizer = ClaudeContextualizer()
 chunks = await contextualizer.contextualize(texts, query)
 ```
 
-**Провайдери:**
-- ⭐ **Claude** (рекомендовано): найвища якість, prompt caching
-- **OpenAI**: дуже хороша якість
-- **Groq**: найшвидший (2-4 хв на 100 chunks)
+**Providers:**
+- ⭐ **Claude** (recommended): highest quality, prompt caching
+- **OpenAI**: very good quality
+- **Groq**: fastest (2-4 min for 100 chunks)
 
 ### 🔍 Retrieval (`src/retrieval/`)
 
-Три рівні пошукових движків:
+Three tiers of search engines:
 
-| Движок | Recall@1 | NDCG@10 | Latency |
+| Engine | Recall@1 | NDCG@10 | Latency |
 |--------|----------|---------|---------|
 | Baseline | 91.3% | 0.9619 | 0.65s |
 | Hybrid RRF | 88.7% | 0.9524 | 0.72s |
@@ -205,57 +205,57 @@ results = engine.search(query_embedding, top_k=10)
 
 ### 📥 Ingestion (`src/ingestion/`)
 
-Pipeline завантаження документів:
+Document loading pipeline:
 
 ```python
 from src.ingestion import PDFParser, DocumentChunker, DocumentIndexer
 
-# 1. Парсинг PDF
+# 1. Parse PDF
 parser = PDFParser()
 doc = parser.parse_file("document.pdf")
 
-# 2. Розбиття на chunks
+# 2. Split into chunks
 chunker = DocumentChunker(chunk_size=512, overlap=128)
 chunks = chunker.chunk_text(doc.content, doc.filename, "article_1")
 
-# 3. Індексація в Qdrant
+# 3. Index in Qdrant
 indexer = DocumentIndexer()
 stats = await indexer.index_chunks(chunks, "legal_documents")
 ```
 
 ### 📊 Evaluation (`src/evaluation/`)
 
-Оцінка якості та експерименти:
+Quality assessment and experiments:
 
-- **Метрики**: Recall@K, NDCG@K, MRR
-- **MLflow**: http://localhost:5000 (tracking експериментів)
+- **Metrics**: Recall@K, NDCG@K, MRR
+- **MLflow**: http://localhost:5000 (experiment tracking)
 - **Langfuse**: http://localhost:3001 (LLM tracing)
 - **RAGAS**: RAG evaluation framework
 
 ### 🎯 Core (`src/core/`)
 
-Головний RAG pipeline:
+Main RAG pipeline:
 
 ```python
 from src.core import RAGPipeline
 
 pipeline = RAGPipeline()
 
-# Пошук
-result = await pipeline.search("запит", top_k=5)
+# Search
+result = await pipeline.search("query", top_k=5)
 
-# Оцінка
+# Evaluate
 metrics = await pipeline.evaluate(test_queries, ground_truth)
 
-# Статистика
+# Statistics
 stats = pipeline.get_stats()
 ```
 
 ---
 
-## ⚙️ Конфігурація
+## ⚙️ Configuration
 
-Налаштування через `.env`:
+Settings via `.env`:
 
 ```env
 # LLM API
@@ -268,27 +268,27 @@ GROQ_API_KEY=gsk_...
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
 
-# Пошук
+# Search
 SEARCH_ENGINE=dbsf_colbert       # baseline, hybrid_rrf, dbsf_colbert
 COLLECTION_NAME=legal_documents
 TOP_K=10
 
-# Функції
+# Features
 ENABLE_CACHING=true
 ENABLE_QUERY_EXPANSION=true
 ENABLE_MLFLOW=true
 ENABLE_LANGFUSE=true
 
-# Середовище
+# Environment
 ENV=development                  # development, production
 DEBUG=false
 ```
 
 ---
 
-## 📊 Продуктивність
+## 📊 Performance
 
-### Якість пошуку (150 тестових запитів)
+### Search Quality (150 test queries)
 
 ```
 BASELINE:       Recall@1=91.3%, NDCG@10=0.9619, Latency=0.65s
@@ -296,157 +296,157 @@ HYBRID RRF:     Recall@1=88.7%, NDCG@10=0.9524, Latency=0.72s
 DBSF+ColBERT:   Recall@1=94.0%, NDCG@10=0.9711, Latency=0.69s ⭐
 ```
 
-### Швидкість індексації
+### Indexing Speed
 
-- **Парсинг**: 132 chunks за 2-3 хвилини
-- **Контекстуалізація**: $0-3 (залежно від API)
-- **Індексація**: 6 хвилин повний pipeline
+- **Parsing**: 132 chunks in 2-3 minutes
+- **Contextualization**: $0-3 (depending on API)
+- **Indexing**: 6 minutes full pipeline
 
 ---
 
-## 🧪 Тестування
+## 🧪 Testing
 
 ```bash
-# Unit тести
+# Unit tests
 pytest tests/unit/
 
-# Інтеграційні тести
+# Integration tests
 pytest tests/integration/
 
-# Smoke тест
+# Smoke test
 python src/evaluation/smoke_test.py
 
-# A/B тестування
+# A/B testing
 python src/evaluation/run_ab_test.py
 ```
 
 ---
 
-## 📖 Документація
+## 📖 Documentation
 
-| Документ | Призначення |
+| Document | Purpose |
 |-----------|-------------|
-| [QUICK_START.md](docs/guides/QUICK_START.md) | Швидкий старт за 5 хвилин |
-| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | Архітектура системи |
-| [CODE_QUALITY.md](docs/guides/CODE_QUALITY.md) | Стандарти розробки |
-| [README_NEW_STRUCTURE.md](docs/README_NEW_STRUCTURE.md) | Детальний опис структури |
+| [QUICK_START.md](docs/guides/QUICK_START.md) | 5-minute quick start |
+| [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) | System architecture |
+| [CODE_QUALITY.md](docs/guides/CODE_QUALITY.md) | Development standards |
+| [README_NEW_STRUCTURE.md](docs/README_NEW_STRUCTURE.md) | Detailed structure description |
 
 ---
 
-## 🛠️ Розробка
+## 🛠️ Development
 
-### Робота з сервером
+### Working on Server
 
-**🏆 Варіант 1: Claude Code CLI на сервері (НАЙПРОСТІШЕ!)**
+**🏆 Option 1: Claude Code CLI on Server (EASIEST!)**
 
 ```bash
-# 1. Підключитись до сервера
+# 1. Connect to server
 ssh user@your-server.com
 
-# 2. Встановити Claude Code (якщо ще не встановлено)
+# 2. Install Claude Code (if not installed)
 # curl -fsSL https://claude.ai/install.sh | sh
 
-# 3. Перейти в проект
+# 3. Go to project
 cd /path/to/rag
 
-# 4. Запустити Claude Code
+# 4. Launch Claude Code
 claude
 
-# Готово! 🎉
-# Claude Code автоматично:
-# - Бачить всі файли проекту
-# - Має доступ до Git
-# - Може запускати команди
-# - Редагує файли
-# - Робить коміти з pre-commit hooks
-# - Пушить в GitHub
+# Done! 🎉
+# Claude Code automatically:
+# - Sees all project files
+# - Has Git access
+# - Can run commands
+# - Edits files
+# - Makes commits with pre-commit hooks
+# - Pushes to GitHub
 ```
 
-**Переваги Claude Code CLI:**
-- ⚡ **Найшвидший спосіб** - одна команда `claude`
-- 🤖 **AI-асистент** - допомагає з кодом, документацією, дебагінгом
-- 🔧 **Все інтегровано** - Git, linting, testing, всі інструменти
-- 📝 **Автоматичні коміти** - з правильними повідомленнями
-- 🎯 **Розуміє контекст** - бачить весь проект
-- 🚀 **Не потрібні налаштування** - працює з коробки
+**Claude Code CLI Benefits:**
+- ⚡ **Fastest way** - one command `claude`
+- 🤖 **AI assistant** - helps with code, docs, debugging
+- 🔧 **Everything integrated** - Git, linting, testing, all tools
+- 📝 **Automatic commits** - with proper messages
+- 🎯 **Understands context** - sees entire project
+- 🚀 **No setup needed** - works out of the box
 
-**Варіант 2: VS Code Remote SSH**
+**Option 2: VS Code Remote SSH**
 
 ```bash
-# VS Code з розширенням "Remote - SSH"
+# VS Code with "Remote - SSH" extension
 # 1. F1 → "Remote-SSH: Connect to Host"
 # 2. user@your-server.com
-# 3. Відкрити папку /path/to/rag
+# 3. Open folder /path/to/rag
 ```
 
-**Варіант 3: Звичайний SSH**
+**Option 3: Plain SSH**
 
 ```bash
 ssh user@your-server.com
 cd /path/to/rag
-nano src/file.py  # або vim, emacs
+nano src/file.py  # or vim, emacs
 ```
 
-**Рекомендований workflow з Claude Code:**
+**Recommended workflow with Claude Code:**
 ```bash
-# На сервері
+# On server
 cd /path/to/rag
 claude
 
-# Потім просто кажете Claude що робити:
-"Додай функцію для кешування результатів пошуку"
-"Виправ помилку в src/retrieval/search_engines.py"
-"Створи тести для нового модуля"
-"Зроби коміт з цими змінами"
-"Запуш в GitHub"
+# Then just tell Claude what to do:
+"Add caching function for search results"
+"Fix error in src/retrieval/search_engines.py"
+"Create tests for new module"
+"Make a commit with these changes"
+"Push to GitHub"
 
-# Claude все зробить автоматично! 🎉
+# Claude will do everything automatically! 🎉
 ```
 
-### Якість коду
+### Code Quality
 
 ```bash
 # Linting
 ruff check src/
 
-# Форматування
+# Formatting
 ruff format src/
 
 # Type checking
 mypy src/ --ignore-missing-imports
 
-# Pre-commit hooks (один раз при setup)
+# Pre-commit hooks (one-time setup)
 pip install pre-commit
 pre-commit install --install-hooks
 pre-commit install --hook-type pre-push
 
-# Запуск вручну
+# Run manually
 pre-commit run --all-files
 ```
 
-### Git Workflow (Автоматизовано)
+### Git Workflow (Automated)
 
-**Pre-commit хуки запускаються автоматично:**
+**Pre-commit hooks run automatically:**
 
 ```bash
-# 1. Створити feature branch
+# 1. Create feature branch
 git checkout -b feature/amazing-feature
 
-# 2. Внести зміни
-# ... редагування коду ...
+# 2. Make changes
+# ... edit code ...
 
-# 3. Коммит (автоматично: linting, formatting, checks)
+# 3. Commit (automatic: linting, formatting, checks)
 git add .
 git commit -m "feat: Add amazing feature"
-# → Ruff перевірить та відформатує код
-# → Якщо є помилки - коммит зупиниться
+# → Ruff checks and formats code
+# → If errors - commit stops
 
-# 4. Push (автоматично: branch protection warning)
+# 4. Push (automatic: branch protection warning)
 git push origin feature/amazing-feature
-# → Попередження якщо пушите в main/master
+# → Warning if pushing to main/master
 ```
 
-**Структура коммітів (Conventional Commits):**
+**Commit Structure (Conventional Commits):**
 
 ```bash
 # Feature
@@ -465,76 +465,76 @@ git commit -m "refactor: Optimize search engine performance"
 git commit -m "test: Add unit tests for retrieval module"
 ```
 
-**Що відбувається автоматично:**
-- ✅ **Перед commit**: Ruff перевіряє та форматує код
-- ✅ **Перед push**: Попередження про push в main/master
-- ✅ **При помилках**: Коммит зупиняється, треба виправити
-- ✅ **Auto-fix**: Більшість помилок виправляються автоматично
+**What happens automatically:**
+- ✅ **Before commit**: Ruff checks and formats code
+- ✅ **Before push**: Warning about push to main/master
+- ✅ **On errors**: Commit stops, need to fix
+- ✅ **Auto-fix**: Most errors are fixed automatically
 
 ---
 
-## 🐛 Вирішення проблем
+## 🐛 Troubleshooting
 
-##***REMOVED*** не доступний
+##***REMOVED*** not available
 
 ```bash
 docker compose up -d qdrant
 curl http://localhost:6333/health
 ```
 
-### API ключ не працює
+### API key not working
 
 ```bash
 python -c "from src.config import Settings; Settings()"
-# Перевірте .env файл
+# Check .env file
 ```
 
-### Повільний пошук
+### Slow search
 
-- Використовуйте DBSF+ColBERT замість Baseline
-- Перевірте, що Qdrant працює
-- Збільште HNSW ef параметр у конфігу
-
----
-
-## 🤝 Внесок
-
-1. Fork проекту
-2. Створіть feature branch: `git checkout -b feature/amazing`
-3. Commit змін: `git commit -m 'Add amazing feature'`
-4. Push до branch: `git push origin feature/amazing`
-5. Створіть Pull Request
+- Use DBSF+ColBERT instead of Baseline
+- Check that Qdrant is running
+- Increase HNSW ef parameter in config
 
 ---
 
-## 📞 Підтримка
+## 🤝 Contributing
+
+1. Fork the project
+2. Create feature branch: `git checkout -b feature/amazing`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing`
+5. Create Pull Request
+
+---
+
+## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/yastman/rag/issues)
-- **Документація**: Папка `/docs`
-- **Статус**: ✅ Production Ready
+- **Documentation**: `/docs` folder
+- **Status**: ✅ Production Ready
 
 ---
 
-## 📜 Ліцензія
+## 📜 License
 
-MIT License - дивись [LICENSE](LICENSE)
+MIT License - see [LICENSE](LICENSE)
 
 ---
 
 ## 🎯 Roadmap
 
 ### ✅ Completed (v2.0.1)
-- [x] Гібридний DBSF+ColBERT пошук
-- [x] MLflow + Langfuse інтеграція
-- [x] Prompt caching (90% економія)
-- [x] Модульна архітектура
-- [x] Повна документація
+- [x] Hybrid DBSF+ColBERT search
+- [x] MLflow + Langfuse integration
+- [x] Prompt caching (90% savings)
+- [x] Modular architecture
+- [x] Complete documentation
 
 ### 🚀 Planned (v2.1.0)
-- [ ] Query expansion через LLM
+- [ ] Query expansion via LLM
 - [ ] Semantic caching (Redis)
-- [ ] Graph traversal для related articles
-- [ ] Multi-language support (BGE-M3 підтримує 111 мов)
+- [ ] Graph traversal for related articles
+- [ ] Multi-language support (BGE-M3 supports 111 languages)
 - [ ] Web UI dashboard
 
 ---
@@ -544,4 +544,4 @@ MIT License - дивись [LICENSE](LICENSE)
 **Repository**: https://github.com/yastman/rag
 **Maintainer**: Contextual RAG Team
 
-**⭐ Якщо проект корисний - поставте зірку!**
+**⭐ If this project is useful - give it a star!**
