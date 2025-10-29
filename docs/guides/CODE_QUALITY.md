@@ -93,27 +93,59 @@ docstring-code-format = true
 
 ***REMOVED******REMOVED******REMOVED*** 2. `.pre-commit-config.yaml` - Git Hooks
 
-Location: `/srv/app/.pre-commit-config.yaml`
+Location: `.pre-commit-config.yaml`
+
+**Git Workflow с автоматическими проверками:**
 
 **Setup:**
 ```bash
 ***REMOVED*** Install
 pip install pre-commit
 
-***REMOVED*** Enable hooks
-pre-commit install
+***REMOVED*** Enable pre-commit hooks (runs before git commit)
+pre-commit install --install-hooks
 
-***REMOVED*** Run manually
+***REMOVED*** Enable pre-push hooks (runs before git push)
+pre-commit install --hook-type pre-push
+
+***REMOVED*** Run manually on all files
 pre-commit run --all-files
+
+***REMOVED*** Run only pre-push hooks manually
+pre-commit run --hook-stage pre-push --all-files
 ```
 
-**What it does:**
-1. Runs Ruff linter with auto-fix
-2. Runs Ruff formatter
-3. Checks YAML/TOML/JSON syntax
-4. Removes trailing whitespace
-5. Fixes line endings
-6. Prevents large files
+**What runs automatically:**
+
+**При `git commit` (Pre-commit):**
+1. ✅ Ruff linter with auto-fix
+2. ✅ Ruff formatter
+3. ✅ YAML/TOML/JSON syntax checks
+4. ✅ Trailing whitespace removal
+5. ✅ Line ending fixes
+6. ✅ Large files prevention
+7. ✅ Merge conflict markers check
+
+**При `git push` (Pre-push):**
+1. ⚠️  Branch protection warning (main/master)
+2. 🧪 Tests (если раскомментировать pytest hook)
+
+**Рекомендуемый workflow:**
+```bash
+***REMOVED*** 1. Перед началом работы - создать ветку
+git checkout -b feature/my-feature
+
+***REMOVED*** 2. Редактировать код
+***REMOVED*** ... изменения в файлах ...
+
+***REMOVED*** 3. Коммит (автоматически запустятся pre-commit хуки)
+git add .
+git commit -m "feat: Add new feature"
+***REMOVED*** → Ruff проверит и отформатирует код автоматически
+
+***REMOVED*** 4. Push (автоматически запустятся pre-push хуки)
+git push origin feature/my-feature
+***REMOVED*** → Предупреждение если пушите в main/master
 
 ---
 
