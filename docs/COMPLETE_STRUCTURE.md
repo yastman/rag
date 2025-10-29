@@ -1,80 +1,80 @@
-# 📚 ПОЛНАЯ СТРУКТУРА ПРОЕКТА - Contextual RAG v2.0.1
+# 📚 COMPLETE PROJECT STRUCTURE - Contextual RAG v2.0.1
 
-> **Комплексное описание переделанной архитектуры проекта**
+> **Comprehensive description of the redesigned project architecture**
 
-## 📊 Обзор проекта
+## 📊 Project Overview
 
-**Contextual RAG Pipeline** - production-ready система поиска в украинских юридических документах с использованием гибридного поиска, LLM контекстуализации и полной интеграцией с ML платформами.
+**Contextual RAG Pipeline** - production-ready system for searching Ukrainian legal documents using hybrid search, LLM contextualization, and full integration with ML platforms.
 
-| Параметр | Значение |
+| Parameter | Value |
 |----------|----------|
-| **Версия** | 2.0.1 |
+| **Version** | 2.0.1 |
 | **Python** | ≥3.9 |
-| **Статус** | ✅ Production Ready |
-| **Код Issues** | 0 (было 499) |
-| **Лучший поиск** | DBSF+ColBERT: 94.0% Recall@1 |
-| **Время индексации** | 6 минут на 132 chunks |
+| **Status** | ✅ Production Ready |
+| **Code Issues** | 0 (was 499) |
+| **Best Search** | DBSF+ColBERT: 94.0% Recall@1 |
+| **Indexing Time** | 6 minutes for 132 chunks |
 
 ---
 
-## 🏗️ НОВАЯ СТРУКТУРА ПРОЕКТА
+## 🏗️ NEW PROJECT STRUCTURE
 
-### ROOT УРОВЕНЬ
+### ROOT LEVEL
 
 ```
 contextual_rag/
-├── src/                    # ⭐ ВЕСЬ КОД ПРИЛОЖЕНИЯ (новая структура)
-├── tests/                  # Тест суиты
-├── docs/                   # Документация
-├── data/                   # Данные и ресурсы
-├── logs/                   # Логи приложения
-├── legacy/                 # Старый код (deprecated)
-├── pyproject.toml          # Конфигурация зависимостей
-├── .env.example            # Пример переменных
-├── .env                    # Переменные окружения (НЕ коммитить!)
-├── .gitignore              # Git ignore правила
+├── src/                    # ⭐ ALL APPLICATION CODE (new structure)
+├── tests/                  # Test suites
+├── docs/                   # Documentation
+├── data/                   # Data and resources
+├── logs/                   # Application logs
+├── legacy/                 # Old code (deprecated)
+├── pyproject.toml          # Dependency configuration
+├── .env.example            # Environment variables example
+├── .env                    # Environment variables (DO NOT commit!)
+├── .gitignore              # Git ignore rules
 ├── .pre-commit-config.yaml # Pre-commit hooks
-├── docker-compose.yml      # Docker сервисы (Qdrant, MLflow, Langfuse)
-├── README.md               # Главная документация
-└── Makefile                # Общие команды (опционально)
+├── docker-compose.yml      # Docker services (Qdrant, MLflow, Langfuse)
+├── README.md               # Main documentation
+└── Makefile                # Common commands (optional)
 ```
 
-### SRC СТРУКТУРА - ГЛАВНОЕ (33 Python файла)
+### SRC STRUCTURE - MAIN (33 Python files)
 
 ```
-src/                              # Весь код проекта
+src/                              # All project code
 │
-├── __init__.py                   # Package инициализация (v2.0.1)
+├── __init__.py                   # Package initialization (v2.0.1)
 │
-├── config/                       # ⭐ КОНФИГУРАЦИЯ (2 файла)
+├── config/                       # ⭐ CONFIGURATION (2 files)
 │   ├── __init__.py
-│   ├── constants.py              # Enums, dataclasses, константы
+│   ├── constants.py              # Enums, dataclasses, constants
 │   │                             # - SearchEngine, APIProvider, ModelName
 │   │                             # - VectorDimensions, ThresholdValues
 │   │                             # - BatchSizes, RetrievalStages
-│   └── settings.py               # Settings класс с валидацией
-│                                 # - Загружает .env и аргументы
-│                                 # - Создает global settings instance
+│   └── settings.py               # Settings class with validation
+│                                 # - Loads .env and arguments
+│                                 # - Creates global settings instance
 │
-├── contextualization/            # ⭐ LLM КОНТЕКСТУАЛИЗАЦИЯ (4 файла)
+├── contextualization/            # ⭐ LLM CONTEXTUALIZATION (4 files)
 │   ├── __init__.py
-│   ├── base.py                   # Базовый класс ContextualizeProvider
+│   ├── base.py                   # Base class ContextualizeProvider
 │   │                             # - ContextualizedChunk dataclass
-│   │                             # - Abstract методы для провайдеров
-│   ├── claude.py                 # ⭐ Claude API (РЕКОМЕНДУЕТСЯ)
-│   │                             # - Prompt caching для 90% экономии
-│   │                             # - Async + sync методы
-│   │                             # - Token tracking и cost estimation
-│   ├── openai.py                 # OpenAI GPT интеграция
-│   │                             # - Поддержка GPT-4, GPT-3.5
-│   │                             # - Async + sync обработка
-│   └── groq.py                   # Groq LLaMA (быстрая альтернатива)
-│                                 # - 2-4 минуты на 100 chunks
-│                                 # - Free tier доступен
+│   │                             # - Abstract methods for providers
+│   ├── claude.py                 # ⭐ Claude API (RECOMMENDED)
+│   │                             # - Prompt caching for 90% savings
+│   │                             # - Async + sync methods
+│   │                             # - Token tracking and cost estimation
+│   ├── openai.py                 # OpenAI GPT integration
+│   │                             # - Support for GPT-4, GPT-3.5
+│   │                             # - Async + sync processing
+│   └── groq.py                   # Groq LLaMA (fast alternative)
+│                                 # - 2-4 minutes for 100 chunks
+│                                 # - Free tier available
 │
-├── retrieval/                    # ⭐ ПОИСК И РАНЖИРОВАНИЕ (1 файл)
+├── retrieval/                    # ⭐ SEARCH AND RANKING (1 file)
 │   ├── __init__.py
-│   └── search_engines.py         # 3 search engine реализации
+│   └── search_engines.py         # 3 search engine implementations
 │                                 # 1. BaselineSearchEngine (Dense only)
 │                                 #    - 91.3% Recall@1
 │                                 #    - 0.65s latency
@@ -86,126 +86,126 @@ src/                              # Весь код проекта
 │                                 #    - DBSF + ColBERT reranking
 │                                 #    - 0.69s latency
 │
-├── ingestion/                    # ⭐ ЗАГРУЗКА ДОКУМЕНТОВ (3 файла)
+├── ingestion/                    # ⭐ DOCUMENT LOADING (3 files)
 │   ├── __init__.py
-│   ├── pdf_parser.py             # PDF парсинг (PyMuPDF)
-│   │                             # - Поддерживает PDF, DOCX, EPUB, TXT
-│   │                             # - Метаданные и структура
-│   ├── chunker.py                # Разбиение на chunks
-│   │                             # - 3 стратегии: Fixed, Semantic, Sliding
-│   │                             # - Сохранение структуры документов
-│   │                             # - Метаданные для юридических документов
-│   └── indexer.py                # Индексация в Qdrant
+│   ├── pdf_parser.py             # PDF parsing (PyMuPDF)
+│   │                             # - Supports PDF, DOCX, EPUB, TXT
+│   │                             # - Metadata and structure
+│   ├── chunker.py                # Document chunking
+│   │                             # - 3 strategies: Fixed, Semantic, Sliding
+│   │                             # - Preserves document structure
+│   │                             # - Metadata for legal documents
+│   └── indexer.py                # Indexing to Qdrant
 │                                 # - BGE-M3 embeddings (1024-dim)
 │                                 # - Batch processing
 │                                 # - Payload indexes
 │
-├── evaluation/                   # ⭐ ОЦЕНКА И МЕТРИКИ (12 файлов)
+├── evaluation/                   # ⭐ EVALUATION AND METRICS (12 files)
 │   ├── __init__.py
-│   ├── metrics.py                # Recall@K, NDCG@K, MRR (новый)
+│   ├── metrics.py                # Recall@K, NDCG@K, MRR (new)
 │   ├── mlflow_integration.py     # MLflow tracking
-│   │                             # - Эксперимент tracking
-│   │                             # - Параметры и метрики
+│   │                             # - Experiment tracking
+│   │                             # - Parameters and metrics
 │   ├── langfuse_integration.py   # Langfuse LLM tracing
-│   │                             # - Trace всех LLM запросов
+│   │                             # - Trace all LLM requests
 │   │                             # - Latency tracking
-│   ├── run_ab_test.py            # A/B тестирование
+│   ├── run_ab_test.py            # A/B testing
 │   ├── evaluate_with_ragas.py    # RAGAS evaluation
-│   ├── smoke_test.py             # Быстрые smoke тесты
-│   ├── evaluator.py              # Основной evaluator класс
-│   ├── metrics_logger.py         # Логирование метрик
-│   ├── config_snapshot.py        # Снимок конфигурации
-│   ├── generate_test_queries.py  # Генерация тестовых запросов
-│   ├── search_engines_rerank.py  # Reranking поисков
-│   └── test_mlflow_ab.py         # Тестирование MLflow
+│   ├── smoke_test.py             # Fast smoke tests
+│   ├── evaluator.py              # Main evaluator class
+│   ├── metrics_logger.py         # Metrics logging
+│   ├── config_snapshot.py        # Configuration snapshot
+│   ├── generate_test_queries.py  # Test query generation
+│   ├── search_engines_rerank.py  # Search reranking
+│   └── test_mlflow_ab.py         # MLflow testing
 │
-├── utils/                        # ⭐ УТИЛИТЫ (1 файл)
+├── utils/                        # ⭐ UTILITIES (1 file)
 │   ├── __init__.py
-│   └── structure_parser.py       # Парсер структуры документов
+│   └── structure_parser.py       # Document structure parser
 │
-└── core/                         # ⭐ ГЛАВНЫЙ PIPELINE (1 файл)
+└── core/                         # ⭐ MAIN PIPELINE (1 file)
     ├── __init__.py
-    └── pipeline.py               # RAGPipeline - оркестратор
-                                  # - Главный класс для использования
-                                  # - Интегрирует все компоненты
+    └── pipeline.py               # RAGPipeline - orchestrator
+                                  # - Main class for usage
+                                  # - Integrates all components
                                   # - search(), index_documents()
                                   # - evaluate(), get_stats()
 ```
 
-### DOCS СТРУКТУРА
+### DOCS STRUCTURE
 
 ```
 docs/
-├── README.md                       # Обзор документации
-├── README_NEW_STRUCTURE.md         # Описание новой структуры
-├── COMPLETE_STRUCTURE.md           # Этот файл - полная структура
-├── PROJECT_STRUCTURE.md            # Старое описание (ориентир)
-├── QUICK_START.md                  # 5 минут до первого поиска
-├── INDEX.md                        # Указатель документов
+├── README.md                       # Documentation overview
+├── README_NEW_STRUCTURE.md         # New structure description
+├── COMPLETE_STRUCTURE.md           # This file - complete structure
+├── PROJECT_STRUCTURE.md            # Old description (reference)
+├── QUICK_START.md                  # 5 minutes to first search
+├── INDEX.md                        # Document index
 │
-├── guides/                         # Практические керівництва
-│   ├── QUICK_START.md              # Быстрый старт
-│   ├── SETUP.md                    # Установка и конфигурация
-│   └── CODE_QUALITY.md             # Стандарты разработки
+├── guides/                         # Practical guides
+│   ├── QUICK_START.md              # Quick start
+│   ├── SETUP.md                    # Installation and configuration
+│   └── CODE_QUALITY.md             # Development standards
 │
-├── architecture/                   # Архитектура и дизайн
-│   ├── ARCHITECTURE.md             # Системная архитектура
-│   ├── MIGRATION_PLAN.md           # План миграции на новую структуру
-│   └── API_DESIGN.md               # Дизайн API (новый)
+├── architecture/                   # Architecture and design
+│   ├── ARCHITECTURE.md             # System architecture
+│   ├── MIGRATION_PLAN.md           # Migration plan to new structure
+│   └── API_DESIGN.md               # API design (new)
 │
-├── implementation/                 # Детали реализации
-│   ├── OPTIMIZATION_PLAN.md        # План оптимизации
-│   ├── DBSF_vs_RRF_ANALYSIS.md     # Сравнение алгоритмов
-│   ├── SEARCH_ENGINE_GUIDE.md      # Руководство search engines (новый)
-│   └── CONFIG_GUIDE.md             # Руководство конфигурации (новый)
+├── implementation/                 # Implementation details
+│   ├── OPTIMIZATION_PLAN.md        # Optimization plan
+│   ├── DBSF_vs_RRF_ANALYSIS.md     # Algorithm comparison
+│   ├── SEARCH_ENGINE_GUIDE.md      # Search engines guide (new)
+│   └── CONFIG_GUIDE.md             # Configuration guide (new)
 │
-├── reports/                        # Проектные отчеты
-│   ├── FULL_PROJECT_ANALYSIS.md    # Полный анализ проекта
+├── reports/                        # Project reports
+│   ├── FULL_PROJECT_ANALYSIS.md    # Full project analysis
 │   ├── PHASE1_COMPLETION_SUMMARY.md
 │   ├── PHASE2_COMPLETION_SUMMARY.md
 │   └── PHASE3_COMPLETION_SUMMARY.md
 │
-├── documents/                      # Юридические документы
+├── documents/                      # Legal documents
 │   ├── Конституція України/
 │   ├── Кримінальний кодекс України/
 │   └── Цивільний кодекс України/
 │
-└── api/                            # API Reference (создается)
-    └── API_REFERENCE.md            # Полный API docs (новый)
+└── api/                            # API Reference (generated)
+    └── API_REFERENCE.md            # Full API docs (new)
 ```
 
-### TESTS СТРУКТУРА
+### TESTS STRUCTURE
 
 ```
 tests/
-├── conftest.py                     # Pytest конфигурация (новый)
-├── unit/                           # Юніт-тести (создавать)
+├── conftest.py                     # Pytest configuration (new)
+├── unit/                           # Unit tests (to be created)
 │   ├── test_config.py
 │   ├── test_chunker.py
 │   └── test_search_engines.py
-├── integration/                    # Интеграционные тесты (создавать)
+├── integration/                    # Integration tests (to be created)
 │   ├── test_full_pipeline.py
 │   └── test_qdrant_integration.py
-└── legacy/                         # Старые тесты
+└── legacy/                         # Old tests
     ├── test_api_*.py
     ├── evaluate_ab.py
     ├── example_search.py
     └── ...
 ```
 
-### DATA СТРУКТУРА
+### DATA STRUCTURE
 
 ```
 data/
-├── documents/                      # Вхідні PDF документи
+├── documents/                      # Input PDF documents
 │   ├── Конституція_України.pdf
 │   ├── Кримінальний_кодекс.pdf
 │   └── Цивільний_кодекс.pdf
-├── test_queries/                   # Тестові запити
-│   ├── queries.json                # 150+ тестових запитів
-│   └── ground_truth.json           # Правильні відповіді
-├── embeddings/                     # Кеш вбудовувань (опціонально)
-└── evaluation/                     # Результати оцінки
+├── test_queries/                   # Test queries
+│   ├── queries.json                # 150+ test queries
+│   └── ground_truth.json           # Correct answers
+├── embeddings/                     # Embeddings cache (optional)
+└── evaluation/                     # Evaluation results
     ├── recall_metrics.json
     ├── ndcg_metrics.json
     └── results_summary.json
@@ -213,25 +213,25 @@ data/
 
 ---
 
-## 🔑 КЛЮЧЕВЫЕ МОДУЛИ (ДЕТАЛЬНО)
+## 🔑 KEY MODULES (DETAILED)
 
 ### 1. CONFIG (`src/config/`)
 
-**Цель**: Централізована конфігурація всієї системи
+**Purpose**: Centralized configuration for the entire system
 
-**Файлы**:
-- `constants.py` - Enums, dataclasses, константы
-- `settings.py` - Settings класс с загрузкой .env
+**Files**:
+- `constants.py` - Enums, dataclasses, constants
+- `settings.py` - Settings class with .env loading
 
-**Ключевые классы**:
+**Key classes**:
 ```python
 class SearchEngine(Enum):
     BASELINE = "baseline"
     HYBRID_RRF = "hybrid_rrf"
-    DBSF_COLBERT = "dbsf_colbert"  # Рекомендуется
+    DBSF_COLBERT = "dbsf_colbert"  # Recommended
 
 class APIProvider(Enum):
-    CLAUDE = "claude"      # ⭐ Рекомендуется
+    CLAUDE = "claude"      # ⭐ Recommended
     OPENAI = "openai"
     GROQ = "groq"
     Z_AI = "zai"          # Legacy
@@ -247,14 +247,14 @@ class Settings:
     )
 ```
 
-**Использование**:
+**Usage**:
 ```python
 from src.config import Settings, SearchEngine
 
-# Загрузить из .env
+# Load from .env
 settings = Settings()
 
-# Переопределить некоторые параметры
+# Override some parameters
 settings = Settings(
     api_provider="openai",
     search_engine=SearchEngine.BASELINE
@@ -265,18 +265,18 @@ settings = Settings(
 
 ### 2. CONTEXTUALIZATION (`src/contextualization/`)
 
-**Цель**: LLM-обогащение документов контекстом
+**Purpose**: LLM-based document enrichment with context
 
-**Провайдеры**:
+**Providers**:
 
-| Провайдер | Время | Стоимость | Качество | Статус |
+| Provider | Time | Cost | Quality | Status |
 |-----------|-------|-----------|----------|--------|
-| **Claude** | 8-12 мин | ~$12 | ⭐⭐⭐⭐⭐ | ✅ |
-| **OpenAI** | 5-8 мин | ~$8 | ⭐⭐⭐⭐ | ✅ |
-| **Groq** | 2-4 мин | FREE | ⭐⭐⭐ | ✅ |
-| Z.AI (legacy) | 3-5 мин | $3/mo | ⭐⭐⭐ | ⚠️ |
+| **Claude** | 8-12 min | ~$12 | ⭐⭐⭐⭐⭐ | ✅ |
+| **OpenAI** | 5-8 min | ~$8 | ⭐⭐⭐⭐ | ✅ |
+| **Groq** | 2-4 min | FREE | ⭐⭐⭐ | ✅ |
+| Z.AI (legacy) | 3-5 min | $3/mo | ⭐⭐⭐ | ⚠️ |
 
-**Базовый класс**:
+**Base class**:
 ```python
 class ContextualizeProvider(ABC):
     async def contextualize(
@@ -295,19 +295,19 @@ class ContextualizeProvider(ABC):
         pass
 ```
 
-**Использование**:
+**Usage**:
 ```python
 from src.contextualization import ClaudeContextualizer
 
 contextualizer = ClaudeContextualizer()
 
-# Контекстуализировать chunks
+# Contextualize chunks
 result = await contextualizer.contextualize(
     chunks=["Стаття 1..."],
     query="User query"
 )
 
-# Получить статистику
+# Get statistics
 stats = contextualizer.get_stats()
 # {'total_tokens': 1234, 'total_cost_usd': 0.0042, ...}
 ```
@@ -316,9 +316,9 @@ stats = contextualizer.get_stats()
 
 ### 3. RETRIEVAL (`src/retrieval/`)
 
-**Цель**: Поиск и ранжирование документов
+**Purpose**: Search and document ranking
 
-**Три поисковых движка**:
+**Three search engines**:
 
 #### A. BaselineSearchEngine
 ```
@@ -354,16 +354,16 @@ Algorithm:
 5. Final ranking
 ```
 
-**Использование**:
+**Usage**:
 ```python
 from src.retrieval import create_search_engine, SearchEngine
 
-# Создать движок
+# Create engine
 engine = create_search_engine(
     engine_type=SearchEngine.DBSF_COLBERT
 )
 
-# Поиск
+# Search
 results = engine.search(
     query_embedding=query_vec,  # List[float] - 1024 dims
     top_k=10,
@@ -379,9 +379,9 @@ for result in results:
 
 ### 4. INGESTION (`src/ingestion/`)
 
-**Цель**: Загрузка и индексация документов
+**Purpose**: Document loading and indexing
 
-**3-этапный pipeline**:
+**3-stage pipeline**:
 
 #### Stage 1: PDF Parsing
 ```python
@@ -413,7 +413,7 @@ chunks = chunker.chunk_text(
     document_name="Конституція_України",
     article_number="Ст. 1"
 )
-# List[Chunk] с метаданными
+# List[Chunk] with metadata
 ```
 
 #### Stage 3: Vector Indexing
@@ -422,13 +422,13 @@ from src.ingestion import DocumentIndexer
 
 indexer = DocumentIndexer()
 
-# Создать коллекцию
+# Create collection
 indexer.create_collection(
     collection_name="legal_documents",
     recreate=False
 )
 
-# Индексировать chunks
+# Index chunks
 stats = await indexer.index_chunks(
     chunks=chunks,
     collection_name="legal_documents",
@@ -443,34 +443,34 @@ print(f"Failed: {stats.failed_chunks}")
 
 ### 5. EVALUATION (`src/evaluation/`)
 
-**Цель**: Оценка качества и tracking экспериментов
+**Purpose**: Quality evaluation and experiment tracking
 
-**12 модулей**:
+**12 modules**:
 
-| Модуль | Назначение |
+| Module | Purpose |
 |--------|-----------|
-| `metrics.py` | Recall@K, NDCG@K, MRR (новый) |
+| `metrics.py` | Recall@K, NDCG@K, MRR (new) |
 | `mlflow_integration.py` | MLflow experiment tracking |
 | `langfuse_integration.py` | Langfuse LLM tracing |
-| `run_ab_test.py` | A/B тестирование |
+| `run_ab_test.py` | A/B testing |
 | `evaluate_with_ragas.py` | RAGAS evaluation |
-| `smoke_test.py` | Быстрые smoke тесты |
-| `evaluator.py` | Основной evaluator |
-| `metrics_logger.py` | Логирование метрик |
-| `config_snapshot.py` | Снимок конфигурации |
-| `generate_test_queries.py` | Генерация запросов |
-| `extract_ground_truth.py` | Извлечение ground truth |
+| `smoke_test.py` | Fast smoke tests |
+| `evaluator.py` | Main evaluator |
+| `metrics_logger.py` | Metrics logging |
+| `config_snapshot.py` | Configuration snapshot |
+| `generate_test_queries.py` | Query generation |
+| `extract_ground_truth.py` | Ground truth extraction |
 | `search_engines_rerank.py` | Reranking |
 
-**Использование**:
+**Usage**:
 ```python
-# A/B тестирование
+# A/B testing
 python src/evaluation/run_ab_test.py \
   --queries data/test_queries/queries.json \
   --baseline baseline \
   --challenger dbsf_colbert
 
-# Результаты в MLflow
+# Results in MLflow
 open http://localhost:5000
 ```
 
@@ -478,15 +478,15 @@ open http://localhost:5000
 
 ### 6. CORE PIPELINE (`src/core/pipeline.py`)
 
-**Главный класс для использования**:
+**Main class for usage**:
 
 ```python
 from src.core import RAGPipeline
 
-# Инициализировать
+# Initialize
 pipeline = RAGPipeline()
 
-# 1. Поиск
+# 1. Search
 result = await pipeline.search(
     query="Які права мають громадяни?",
     top_k=5,
@@ -496,7 +496,7 @@ result = await pipeline.search(
 for r in result.results:
     print(f"{r['article_number']}: {r['text'][:100]}")
 
-# 2. Индексирование
+# 2. Indexing
 stats = await pipeline.index_documents(
     pdf_paths=[
         "docs/documents/Конституція_України.pdf",
@@ -506,42 +506,42 @@ stats = await pipeline.index_documents(
     recreate_collection=False
 )
 
-# 3. Оценка
+# 3. Evaluation
 metrics = await pipeline.evaluate(
     queries=test_queries,
     ground_truth=correct_answers
 )
 
-# 4. Статистика
+# 4. Statistics
 stats = pipeline.get_stats()
 ```
 
 ---
 
-## 🔄 МИГРАЦИЯ СТАРОГО КОДА
+## 🔄 OLD CODE MIGRATION
 
-### Что переместилось в legacy/
+### What moved to legacy/
 
 ```
 legacy/
-├── config_old.py                  # Старая конфигурация
-├── contextualize*.py              # Старые contextualize (5 файлов)
-├── ingestion_contextual_kg*.py    # Старые ingestion (2 файла)
-├── create_*.py                    # Утилиты создания коллекций
+├── config_old.py                  # Old configuration
+├── contextualize*.py              # Old contextualize (5 files)
+├── ingestion_contextual_kg*.py    # Old ingestion (2 files)
+├── create_*.py                    # Collection creation utilities
 ├── check_sparse_vectors.py
 ├── list_available_models*.py
 └── prompts_old.py
 ```
 
-### Как мигрировать свой код
+### How to migrate your code
 
-**Было (старое)**:
+**Before (old)**:
 ```python
 from config import ANTHROPIC_API_KEY, QDRANT_URL
 from contextualize import contextualize_documents
 ```
 
-**Стало (новое)**:
+**After (new)**:
 ```python
 from src.config import Settings
 from src.contextualization import ClaudeContextualizer
@@ -552,9 +552,9 @@ contextualizer = ClaudeContextualizer(settings)
 
 ---
 
-## 📝 ENVIRONMENT КОНФИГУРАЦИЯ
+## 📝 ENVIRONMENT CONFIGURATION
 
-**.env файл переменные**:
+**.env file variables**:
 
 ```env
 # ========== API CONFIGURATION ==========
@@ -565,7 +565,7 @@ GROQ_API_KEY=gsk_...
 
 # ========== VECTOR DATABASE ==========
 QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=                    # Если требуется аутентификация
+QDRANT_API_KEY=                    # If authentication required
 
 # ========== SEARCH CONFIGURATION ==========
 SEARCH_ENGINE=dbsf_colbert         # baseline, hybrid_rrf, dbsf_colbert
@@ -589,40 +589,40 @@ DEBUG=false
 
 ---
 
-## 🔗 ЗАВИСИМОСТИ
+## 🔗 DEPENDENCIES
 
-**Основные** (обязательные):
+**Core** (required):
 ```
-pymupdf                   # PDF парсинг
+pymupdf                   # PDF parsing
 anthropic                 # Claude API
 openai                    # OpenAI API
 groq                      # Groq API
 sentence-transformers     # BGE-M3 embeddings
-qdrant-client             # Vector DB клієнт
+qdrant-client             # Vector DB client
 ```
 
-**ML платформы** (опциональные, но рекомендуется):
+**ML platforms** (optional, but recommended):
 ```
 mlflow>=2.22.1            # Experiment tracking
 ragas>=0.2.10             # RAG evaluation
 langfuse>=3.0.0           # LLM observability
 ```
 
-**Качество кода** (разработка):
+**Code quality** (development):
 ```
 ruff                      # Linting + formatting
 mypy                      # Type checking
-pytest                    # Тестирование
+pytest                    # Testing
 pre-commit                # Git hooks
 ```
 
 ---
 
-## 📊 ПРОДУКТИВНОСТЬ И МЕТРИКИ
+## 📊 PERFORMANCE AND METRICS
 
-### Качество поиска (150 test queries)
+### Search Quality (150 test queries)
 
-| Метрика | Baseline | Hybrid RRF | DBSF+ColBERT | Улучшение |
+| Metric | Baseline | Hybrid RRF | DBSF+ColBERT | Improvement |
 |---------|----------|-----------|--------------|-----------|
 | **Recall@1** | 91.3% | 88.7% | 94.0% | +2.9% ⭐ |
 | **Recall@3** | 96.5% | 94.2% | 97.1% | +0.6% |
@@ -633,7 +633,7 @@ pre-commit                # Git hooks
 | **MRR** | 0.9491 | 0.9421 | 0.9636 | +1.5% ⭐ |
 | **Latency** | 0.65s | 0.72s | 0.69s | -0.04s |
 
-### Tiempo ингеста
+### Ingestion Time
 
 ```
 PDF Parsing:       2-3 minutes (132 chunks)
@@ -646,15 +646,15 @@ Total Pipeline:    ~15-20 minutes
 
 ---
 
-## 🎯 ИСПОЛЬЗУЕМЫЕ ТЕХНОЛОГИИ
+## 🎯 TECHNOLOGIES USED
 
 ### LLM APIs
-- **Anthropic Claude** 3.5 Sonnet (основной)
-- **OpenAI GPT-4 Turbo** (альтернатива)
-- **Groq LLaMA 3** (быстрая)
+- **Anthropic Claude** 3.5 Sonnet (primary)
+- **OpenAI GPT-4 Turbo** (alternative)
+- **Groq LLaMA 3** (fast)
 
 ### Vector Database
-- **Qdrant** v0.13.x (основной)
+- **Qdrant** v0.13.x (primary)
 - **BGE-M3** (1024-dim dense + sparse)
 - **ColBERT** (sparse embeddings)
 
@@ -670,12 +670,12 @@ Total Pipeline:    ~15-20 minutes
 
 ---
 
-## 📈 СЛЕДУЮЩИЕ ШАГИ
+## 📈 NEXT STEPS
 
-### Phase 4 (Планируется)
-- [ ] Query expansion через LLM
+### Phase 4 (Planned)
+- [ ] Query expansion via LLM
 - [ ] Semantic caching (Redis)
-- [ ] Graph traversal для related articles
+- [ ] Graph traversal for related articles
 - [ ] Web UI dashboard
 - [ ] Multi-language support
 
