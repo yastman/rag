@@ -305,12 +305,38 @@ ruff format src/
 # Type checking
 mypy src/ --ignore-missing-imports
 
-# Pre-commit hooks
-pre-commit install
+# Pre-commit hooks (один раз при setup)
+pip install pre-commit
+pre-commit install --install-hooks
+pre-commit install --hook-type pre-push
+
+# Запуск вручну
 pre-commit run --all-files
 ```
 
-### Структура коммітів
+### Git Workflow (Автоматизовано)
+
+**Pre-commit хуки запускаються автоматично:**
+
+```bash
+# 1. Створити feature branch
+git checkout -b feature/amazing-feature
+
+# 2. Внести зміни
+# ... редагування коду ...
+
+# 3. Коммит (автоматично: linting, formatting, checks)
+git add .
+git commit -m "feat: Add amazing feature"
+# → Ruff перевірить та відформатує код
+# → Якщо є помилки - коммит зупиниться
+
+# 4. Push (автоматично: branch protection warning)
+git push origin feature/amazing-feature
+# → Попередження якщо пушите в main/master
+```
+
+**Структура коммітів (Conventional Commits):**
 
 ```bash
 # Feature
@@ -321,7 +347,19 @@ git commit -m "fix: Fix Qdrant connection timeout"
 
 # Documentation
 git commit -m "docs: Update README with new structure"
+
+# Refactoring
+git commit -m "refactor: Optimize search engine performance"
+
+# Tests
+git commit -m "test: Add unit tests for retrieval module"
 ```
+
+**Що відбувається автоматично:**
+- ✅ **Перед commit**: Ruff перевіряє та форматує код
+- ✅ **Перед push**: Попередження про push в main/master
+- ✅ **При помилках**: Коммит зупиняється, треба виправити
+- ✅ **Auto-fix**: Більшість помилок виправляються автоматично
 
 ---
 
