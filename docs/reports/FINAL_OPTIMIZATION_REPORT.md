@@ -1,28 +1,28 @@
-# RAG Pipeline - Финальный отчет по оптимизации
+# RAG Pipeline - Final Optimization Report
 
-**Дата:** 2025-10-22
+**Date:** 2025-10-22
 **Pipeline:** Docling → BGE-M3 → Qdrant → Hybrid Search
-**Документ:** tsivilnij-kodeks-ukraini-yurinkom-inter.pdf (132 chunks)
+**Document:** tsivilnij-kodeks-ukraini-yurinkom-inter.pdf (132 chunks)
 
 ---
 
 ## 🎯 Executive Summary
 
-Проведена полная оптимизация RAG pipeline с использованием официальной документации (Context7 MCP) и глубокого анализа (Sequential Thinking MCP).
+Complete RAG pipeline optimization was conducted using official documentation (Context7 MCP) and deep analysis (Sequential Thinking MCP).
 
-**Критические улучшения:**
-- ✅ **Qdrant quantization** включена → 75% экономия памяти
-- ✅ **BGE-M3 MAX_LENGTH** оптимизирован → 8192→2048
-- ✅ **Полное тестирование** на 132 chunks → все тесты пройдены
-- ✅ **Качество поиска** сохранено → релевантные результаты
+**Critical improvements:**
+- ✅ **Qdrant quantization** enabled → 75% memory savings
+- ✅ **BGE-M3 MAX_LENGTH** optimized → 8192→2048
+- ✅ **Full testing** on 132 chunks → all tests passed
+- ✅ **Search quality** preserved → relevant results
 
-**Результат:** Pipeline полностью оптимизирован и production-ready.
+**Result:** Pipeline fully optimized and production-ready.
 
 ---
 
 ## 📊 Performance Comparison
 
-### Тест 1: Baseline (10 chunks, MAX_LENGTH=8192, no quantization)
+### Test 1: Baseline (10 chunks, MAX_LENGTH=8192, no quantization)
 ```
 Duration: 54.92s
 Avg per chunk: 1.02s
@@ -30,7 +30,7 @@ Qdrant memory: 28.99 MiB
 Quantization: ❌ DISABLED
 ```
 
-### Тест 2: With Quantization (132 chunks, MAX_LENGTH=8192)
+### Test 2: With Quantization (132 chunks, MAX_LENGTH=8192)
 ```
 Duration: 160.69s
 Avg per chunk: 0.86s  ✅ +16% faster
@@ -38,9 +38,9 @@ Qdrant memory: 83.54 MiB
 Quantization: ✅ ENABLED (INT8)
 ```
 
-### Тест 3: Full Optimization (132 chunks, MAX_LENGTH=2048, quantization)
+### Test 3: Full Optimization (132 chunks, MAX_LENGTH=2048, quantization)
 ```
-Duration: 159.23s   ✅ -1.46s от Test 2
+Duration: 159.23s   ✅ -1.46s from Test 2
 Avg per chunk: 0.88s
 Qdrant memory: 77.82 MiB
 BGE-M3 memory: 987.7 MiB (~1GB with FP16)
@@ -50,49 +50,49 @@ Search quality: ✅ IDENTICAL SCORES
 
 ---
 
-## 🔧 Оптимизации выполнены
+## 🔧 Optimizations Performed
 
-### 1. Qdrant Scalar Quantization ✅ КРИТИЧЕСКОЕ
+### 1. Qdrant Scalar Quantization ✅ CRITICAL
 
-**Проблема:** Quantization отключена → 4x расход памяти
+**Problem:** Quantization disabled → 4x memory usage
 
-**Решение:**
+**Solution:**
 ```python
 quantization_config = {
     "scalar": {
-        "type": "int8",        # 75% экономия памяти
-        "quantile": 0.99,      # Обработка outliers
-        "always_ram": True     # Quantized в RAM для скорости
+        "type": "int8",        # 75% memory savings
+        "quantile": 0.99,      # Outlier handling
+        "always_ram": True     # Quantized in RAM for speed
     }
 }
 ```
 
-**Результат:**
+**Result:**
 - Dense vectors: 4KB → 1KB per chunk (quantized)
-- Qdrant memory: ~80 MiB для 132 chunks
-- Без quantization было бы: ~320 MiB (+300% memory)
+- Qdrant memory: ~80 MiB for 132 chunks
+- Without quantization would be: ~320 MiB (+300% memory)
 
-**Файл:** `recreate_qdrant_with_quantization.py`
+**File:** `recreate_qdrant_with_quantization.py`
 
-### 2. BGE-M3 MAX_LENGTH оптимизация ⚠️ МИНОРНОЕ
+### 2. BGE-M3 MAX_LENGTH optimization ⚠️ MINOR
 
-**Изменение:** MAX_LENGTH: 8192 → 2048
+**Change:** MAX_LENGTH: 8192 → 2048
 
-**Ожидание:** 10-15% ускорение
-**Реальность:** +0.02s per chunk (в пределах погрешности)
+**Expected:** 10-15% speedup
+**Reality:** +0.02s per chunk (within margin of error)
 
-**Причина:** Chunks ~125-250 tokens, разница между 2048 и 8192 незначительна
+**Reason:** Chunks ~125-250 tokens, difference between 2048 and 8192 is negligible
 
-**Вывод:** Оставить 2048 (меньше памяти, нет замедления)
+**Conclusion:** Keep at 2048 (less memory, no slowdown)
 
-**Файл:** `/home/admin/bge-m3-api/config.py`
+**File:** `/home/admin/bge-m3-api/config.py`
 
-### 3. Docling Serve ✅ БЕЗ ИЗМЕНЕНИЙ
+### 3. Docling Serve ✅ NO CHANGES
 
-**Статус:** Оптимален по умолчанию
-- HybridChunker работает корректно
-- 132 chunks за 42-46s
-- Изменения не требуются
+**Status:** Optimal by default
+- HybridChunker works correctly
+- 132 chunks in 42-46s
+- No changes required
 
 ---
 
@@ -126,19 +126,19 @@ Breakdown per chunk:
 
 **Query 1:** "При здійсненні своїх цивільних прав"
 ```
-Rank 1: Chunk 76, Score: 6.0531 - Стаття 13. Межі здійснення...
-Rank 2: Chunk 79, Score: 5.8922 - Стаття 13. При здійсненні...
-Rank 3: Chunk 72, Score: 5.8613 - Стаття 12. Здійснення...
+Rank 1: Chunk 76, Score: 6.0531 - Article 13. Limits of exercise...
+Rank 2: Chunk 79, Score: 5.8922 - Article 13. When exercising...
+Rank 3: Chunk 72, Score: 5.8613 - Article 12. Exercise...
 ```
-✅ Релевантные результаты (все про здійснення прав)
+✅ Relevant results (all about exercising rights)
 
 **Query 2:** "цивільна правоздатність"
 ```
-Rank 1: Chunk 126, Score: 5.4041 - Стаття 25. Цивільна правоздатність...
-Rank 2: Chunk 129, Score: 5.0562 - Стаття 26. Обсяг цивільної правоздатності...
-Rank 3: Chunk 127, Score: 5.0238 - Стаття 25. (продолжение)
+Rank 1: Chunk 126, Score: 5.4041 - Article 25. Civil legal capacity...
+Rank 2: Chunk 129, Score: 5.0562 - Article 26. Scope of civil legal capacity...
+Rank 3: Chunk 127, Score: 5.0238 - Article 25. (continued)
 ```
-✅ Очень релевантные результаты (точно по теме)
+✅ Very relevant results (exactly on topic)
 
 **Query 3:** "місце проживання особи"
 ```
@@ -146,7 +146,7 @@ Rank 1: Chunk 1, Score: 2.0171
 Rank 2: Chunk 95, Score: 1.8510
 Rank 3: Chunk 38, Score: 1.7799
 ```
-✅ Результаты найдены (lower scores нормально для более общего запроса)
+✅ Results found (lower scores normal for broader query)
 
 ---
 
@@ -156,7 +156,7 @@ Rank 3: Chunk 38, Score: 1.7799
 
 **Before (10 chunks):** 28.99 MiB
 **After (132 chunks):** 77.82 MiB
-**Growth:** 48.83 MiB для 122 chunks = 0.4 MiB per chunk
+**Growth:** 48.83 MiB for 122 chunks = 0.4 MiB per chunk
 
 **Theoretical without quantization:**
 - Dense vectors: 132 × 4KB = 528KB
@@ -181,7 +181,7 @@ Rank 3: Chunk 38, Score: 1.7799
 | 10,000 | ~3.2 GB | ~13 GB |
 | 100,000 | ~30 GB | ~120 GB |
 
-**Quantization critical для scale!**
+**Quantization critical for scale!**
 
 ---
 

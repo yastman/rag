@@ -17,20 +17,20 @@
 **Results:**
 ```
 Test 1: Full structure ✓
-  - Book: Книга перша (number: 1)
-  - Section: Розділ I (number: 1)
-  - Chapter: Глава 2 (number: 2)
-  - Article: Стаття 13 "Межі здійснення цивільних прав"
+  - Book: Book One (number: 1)
+  - Section: Section I (number: 1)
+  - Chapter: Chapter 2 (number: 2)
+  - Article: Article 13 "Limits of exercise of civil rights"
   - Related articles: [12, 13, 25]
   - Graph edges: prev=12, next=14
 
 Test 2: Article only ✓
-  - Article: Стаття 25 "Цивільна правоздатність фізичної особи"
+  - Article: Article 25 "Civil legal capacity of natural person"
   - Graph edges: prev=24, next=26
 
 Test 3: Chapter and article ✓
-  - Chapter: Глава 3 "Представництво. Довіреність"
-  - Article: Стаття 31 "Представник"
+  - Chapter: Chapter 3 "Representation. Power of Attorney"
+  - Article: Article 31 "Representative"
   - Graph edges: prev=30, next=32
 
 Status: 🟢 ALL TESTS PASSED
@@ -38,10 +38,10 @@ Accuracy: 100% metadata extraction
 ```
 
 **Conclusion:**
-- ✅ Regex parser работает безупречно
-- ✅ Извлекает все уровни структуры (Book → Section → Chapter → Article)
-- ✅ Идентифицирует related articles
-- ✅ Генерирует graph edges автоматически
+- ✅ Regex parser works flawlessly
+- ✅ Extracts all structure levels (Book → Section → Chapter → Article)
+- ✅ Identifies related articles
+- ✅ Generates graph edges automatically
 
 ---
 
@@ -61,7 +61,7 @@ Final result: FALLBACK ACTIVATED ✓
 Fallback Metadata Extraction:
 {
   "article_number": 13,
-  "article_title": "Межі здійснення цивільних прав",
+  "article_title": "Limits of exercise of civil rights",
   "related_articles": [13],
   "book/section/chapter": null (not in chunk)
 }
@@ -80,9 +80,9 @@ System Behavior:
 - **Fallback mechanism proves system reliability**
 
 **Conclusion:**
-- ⚠️ Z.AI rate limited (может быть временная проблема или нужен другой plan)
-- ✅ Fallback работает идеально
-- ✅ Система устойчива к сбоям API
+- ⚠️ Z.AI rate limited (may be temporary issue or need different plan)
+- ✅ Fallback works perfectly
+- ✅ System is resilient to API failures
 
 ---
 
@@ -92,12 +92,12 @@ System Behavior:
 
 **Two-tier approach validated:**
 
-1. **Primary (LLM-based):** Z.AI GLM-4.6 для rich context generation
-2. **Fallback (Regex-based):** Structure parser для guaranteed metadata
+1. **Primary (LLM-based):** Z.AI GLM-4.6 for rich context generation
+2. **Fallback (Regex-based):** Structure parser for guaranteed metadata
 
 **Benefits:**
-- System works даже если API недоступен
-- Fallback даёт 70-80% качества primary метода
+- System works even if API unavailable
+- Fallback provides 70-80% quality of primary method
 - Zero downtime architecture
 - Cost optimization (fallback is free)
 
