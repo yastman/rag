@@ -65,8 +65,8 @@ contextual_rag/
 
 ```bash
 # Клонування
-git clone <your-repo>
-cd contextual_rag
+git clone https://github.com/yastman/rag.git
+cd rag
 
 # Віртуальне середовище
 python3.9 -m venv venv
@@ -361,7 +361,7 @@ python -c "from src.config import Settings; Settings()"
 
 ## 📞 Підтримка
 
-- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+- **Issues**: [GitHub Issues](https://github.com/yastman/rag/issues)
 - **Документація**: Папка `/docs`
 - **Статус**: ✅ Production Ready
 
@@ -391,8 +391,9 @@ MIT License - дивись [LICENSE](LICENSE)
 
 ---
 
-**Last Updated**: October 29, 2025
+**Last Updated**: October 29, 2024
 **Version**: 2.0.1
+**Repository**: https://github.com/yastman/rag
 **Maintainer**: Contextual RAG Team
 
 **⭐ Якщо проект корисний - поставте зірку!**
