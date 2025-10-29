@@ -1,12 +1,22 @@
 ***REMOVED*** Pre-commit hooks configuration for rag-fresh project
 ***REMOVED*** Install: pip install pre-commit
-***REMOVED*** Setup: pre-commit install
+***REMOVED*** Setup: pre-commit install --install-hooks
+***REMOVED*** Setup pre-push: pre-commit install --hook-type pre-push
 ***REMOVED*** Run manually: pre-commit run --all-files
 ***REMOVED***
 ***REMOVED*** Documentation: https://pre-commit.com/
 
 default_language_version:
   python: python3.9
+
+***REMOVED*** Install both pre-commit and pre-push hooks by default
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
+***REMOVED*** Default stages for hooks (can be overridden per hook)
+default_stages:
+  - pre-commit
 
 repos:
   ***REMOVED*** Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
@@ -76,6 +86,33 @@ repos:
   ***REMOVED***         - -c
   ***REMOVED***         - pyproject.toml
   ***REMOVED***       additional_dependencies: ["bandit[toml]"]
+
+  ***REMOVED*** =============================================================================
+  ***REMOVED*** PRE-PUSH HOOKS (Run before git push)
+  ***REMOVED*** =============================================================================
+  ***REMOVED*** These hooks run more expensive checks that shouldn't slow down commits
+
+  ***REMOVED*** Run tests before push (if you have tests)
+  ***REMOVED*** Uncomment when tests are available
+  ***REMOVED*** - repo: local
+  ***REMOVED***   hooks:
+  ***REMOVED***     - id: pytest
+  ***REMOVED***       name: Run pytest
+  ***REMOVED***       entry: pytest
+  ***REMOVED***       language: system
+  ***REMOVED***       pass_filenames: false
+  ***REMOVED***       stages: [pre-push]
+
+  ***REMOVED*** Prevent pushing to main/master branches accidentally
+  - repo: local
+    hooks:
+      - id: branch-protection
+        name: Protect main/master branch
+        entry: bash -c 'BRANCH=$(git rev-parse --abbrev-ref HEAD); if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then echo "⚠️  Direct push to $BRANCH is not recommended. Use a feature branch."; exit 0; fi'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
 
 ***REMOVED*** CI configuration
 ci:
