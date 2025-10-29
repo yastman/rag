@@ -1,48 +1,48 @@
-***REMOVED*** Руководство по подключению к Qdrant
+***REMOVED*** Qdrant Connection Guide
 
-***REMOVED******REMOVED*** Обзор
+***REMOVED******REMOVED*** Overview
 
-Qdrant развернут на удаленном сервере и доступен как локально (на сервере), так и удаленно (с вашей машины).
+Qdrant is deployed on a remote server and is accessible both locally (on the server) and remotely (from your machine).
 
-***REMOVED******REMOVED******REMOVED*** Информация о сервере
+***REMOVED******REMOVED******REMOVED*** Server Information
 
-- **IP адрес**: REDACTED_VPS_IP
-- **SSH порт**: 22
-- **SSH пользователь**: admin
-- **SSH ключ**: ~/.ssh/vps_access_key
-- **Алиас для подключения**: `vps` (определен в ~/.zshrc)
+- **IP Address**: REDACTED_VPS_IP
+- **SSH Port**: 22
+- **SSH User**: admin
+- **SSH Key**: ~/.ssh/vps_access_key
+- **Connection Alias**: `vps` (defined in ~/.zshrc)
 
-***REMOVED******REMOVED******REMOVED*** Информация о Qdrant
+***REMOVED******REMOVED******REMOVED*** Qdrant Information
 
-- **Версия**: 1.15.4
-- **Docker контейнер**: `ai-qdrant`
-- **HTTP порт**: 6333
-- **gRPC порт**: 6334
-- **API ключ**: REDACTED_QDRANT_KEY
+- **Version**: 1.15.4
+- **Docker Container**: `ai-qdrant`
+- **HTTP Port**: 6333
+- **gRPC Port**: 6334
+- **API Key**: REDACTED_QDRANT_KEY
 
-***REMOVED******REMOVED*** Текущее состояние
+***REMOVED******REMOVED*** Current State
 
-***REMOVED******REMOVED******REMOVED*** Коллекции
+***REMOVED******REMOVED******REMOVED*** Collections
 
-На данный момент существует **1 коллекция**:
+Currently there is **1 collection**:
 
 **legal_documents**
-- Точек (vectors): 1,294
-- Индексированных векторов: 3,878
-- Статус: GREEN (здоров)
-- Конфигурация векторов:
-  - **dense**: 1024-размерность, Cosine similarity, HNSW индекс (M=16, ef_construct=200)
-    - Квантизация: int8 (scalar)
-    - On-disk хранение
-  - **colbert**: 1024-размерность, Cosine similarity, мультивектор (max_sim)
-    - HNSW отключен (M=0)
-  - **sparse**: IDF модификатор для sparse vectors
+- Points (vectors): 1,294
+- Indexed vectors: 3,878
+- Status: GREEN (healthy)
+- Vector configuration:
+  - **dense**: 1024-dimensional, Cosine similarity, HNSW index (M=16, ef_construct=200)
+    - Quantization: int8 (scalar)
+    - On-disk storage
+  - **colbert**: 1024-dimensional, Cosine similarity, multi-vector (max_sim)
+    - HNSW disabled (M=0)
+  - **sparse**: IDF modifier for sparse vectors
 
-***REMOVED******REMOVED*** Конфигурация подключения
+***REMOVED******REMOVED*** Connection Configuration
 
-***REMOVED******REMOVED******REMOVED*** 1. Для локальной разработки (с вашей машины)
+***REMOVED******REMOVED******REMOVED*** 1. For Local Development (from your machine)
 
-Используйте основной `.env` файл:
+Use the main `.env` file:
 
 ```bash
 ***REMOVED*** .env
@@ -50,76 +50,76 @@ QDRANT_URL=http://REDACTED_VPS_IP:6333
 QDRANT_API_KEY=REDACTED_QDRANT_KEY
 ```
 
-***REMOVED******REMOVED******REMOVED*** 2. Для работы на сервере
+***REMOVED******REMOVED******REMOVED*** 2. For Working on the Server
 
-Используйте `.env.server`:
+Use `.env.server`:
 
 ```bash
-***REMOVED*** Скопировать конфигурацию для сервера
+***REMOVED*** Copy server configuration
 cp .env.server .env
 
-***REMOVED*** Или создать символическую ссылку
+***REMOVED*** Or create a symbolic link
 ln -sf .env.server .env
 ```
 
-Содержимое `.env.server`:
+Contents of `.env.server`:
 ```bash
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=REDACTED_QDRANT_KEY
 ```
 
-***REMOVED******REMOVED*** Проверка подключения
+***REMOVED******REMOVED*** Connection Testing
 
-***REMOVED******REMOVED******REMOVED*** 1. Через curl (с локальной машины)
+***REMOVED******REMOVED******REMOVED*** 1. Via curl (from local machine)
 
 ```bash
-***REMOVED*** Получить список коллекций
+***REMOVED*** Get list of collections
 curl -s -H 'api-key: REDACTED_QDRANT_KEY' \
   http://REDACTED_VPS_IP:6333/collections
 
-***REMOVED*** Информация о конкретной коллекции
+***REMOVED*** Information about a specific collection
 curl -s -H 'api-key: REDACTED_QDRANT_KEY' \
   http://REDACTED_VPS_IP:6333/collections/legal_documents
 ```
 
-***REMOVED******REMOVED******REMOVED*** 2. Через curl (на сервере)
+***REMOVED******REMOVED******REMOVED*** 2. Via curl (on the server)
 
 ```bash
-***REMOVED*** Подключиться к серверу
+***REMOVED*** Connect to the server
 ssh -i ~/.ssh/vps_access_key -p 22 admin@REDACTED_VPS_IP
 
-***REMOVED*** Или используя алиас из ~/.zshrc
+***REMOVED*** Or using the alias from ~/.zshrc
 zsh -c "$(grep 'alias vps=' ~/.zshrc | cut -d'=' -f2-)"
 
-***REMOVED*** Проверить коллекции
+***REMOVED*** Check collections
 curl -s -H 'api-key: REDACTED_QDRANT_KEY' \
   http://localhost:6333/collections
 ```
 
-***REMOVED******REMOVED******REMOVED*** 3. Через Python (тестовый скрипт)
+***REMOVED******REMOVED******REMOVED*** 3. Via Python (test script)
 
-Создан тестовый скрипт `test_qdrant_connection.py`:
+A test script `test_qdrant_connection.py` has been created:
 
 ```bash
-***REMOVED*** На сервере (с установленными зависимостями)
+***REMOVED*** On the server (with dependencies installed)
 python3 test_qdrant_connection.py
 
-***REMOVED*** Или через poetry (если установлен)
+***REMOVED*** Or via poetry (if installed)
 poetry run python test_qdrant_connection.py
 ```
 
-***REMOVED******REMOVED******REMOVED*** 4. Проверка Docker контейнера
+***REMOVED******REMOVED******REMOVED*** 4. Docker Container Check
 
 ```bash
-***REMOVED*** На сервере
+***REMOVED*** On the server
 ssh -i ~/.ssh/vps_access_key -p 22 admin@REDACTED_VPS_IP \
   "docker ps | grep qdrant"
 
-***REMOVED*** Вывод:
+***REMOVED*** Output:
 ***REMOVED*** 218ec1ea2aa1   qdrant/qdrant:v1.15.4   Up 2 hours (healthy)
 ```
 
-***REMOVED******REMOVED*** Использование в коде
+***REMOVED******REMOVED*** Usage in Code
 
 ***REMOVED******REMOVED******REMOVED*** Python (qdrant-client)
 
@@ -127,86 +127,86 @@ ssh -i ~/.ssh/vps_access_key -p 22 admin@REDACTED_VPS_IP \
 from qdrant_client import QdrantClient
 from src.config.settings import Settings
 
-***REMOVED*** Загрузить настройки из .env
+***REMOVED*** Load settings from .env
 settings = Settings()
 
-***REMOVED*** Создать клиента
+***REMOVED*** Create client
 client = QdrantClient(
-    url=settings.qdrant_url,  ***REMOVED*** Автоматически берется из .env
+    url=settings.qdrant_url,  ***REMOVED*** Automatically loaded from .env
     api_key=settings.qdrant_api_key
 )
 
-***REMOVED*** Получить коллекции
+***REMOVED*** Get collections
 collections = client.get_collections()
-print(f"Коллекций: {len(collections.collections)}")
+print(f"Collections: {len(collections.collections)}")
 
-***REMOVED*** Получить информацию о коллекции
+***REMOVED*** Get collection information
 info = client.get_collection("legal_documents")
-print(f"Точек: {info.points_count}")
+print(f"Points: {info.points_count}")
 ```
 
-***REMOVED******REMOVED*** Важные заметки
+***REMOVED******REMOVED*** Important Notes
 
-1. **API ключ обязателен**: Qdrant настроен с обязательной аутентификацией
-2. **Порты открыты**: Порты 6333 и 6334 доступны извне (0.0.0.0)
-3. **Два варианта конфигурации**:
-   - `.env` - для локальной разработки (удаленное подключение)
-   - `.env.server` - для запуска на сервере (localhost)
-4. **Безопасность**: API ключ хранится в .env (добавлен в .gitignore)
+1. **API key is required**: Qdrant is configured with mandatory authentication
+2. **Ports are open**: Ports 6333 and 6334 are accessible from outside (0.0.0.0)
+3. **Two configuration options**:
+   - `.env` - for local development (remote connection)
+   - `.env.server` - for running on the server (localhost)
+4. **Security**: API key is stored in .env (added to .gitignore)
 
 ***REMOVED******REMOVED*** Troubleshooting
 
-***REMOVED******REMOVED******REMOVED*** Ошибка: "Must provide an API key"
+***REMOVED******REMOVED******REMOVED*** Error: "Must provide an API key"
 
-Убедитесь что передаете API ключ:
-- В curl: `-H 'api-key: YOUR_KEY'`
-- В Python: `api_key=settings.qdrant_api_key`
+Make sure you are passing the API key:
+- In curl: `-H 'api-key: YOUR_KEY'`
+- In Python: `api_key=settings.qdrant_api_key`
 
-***REMOVED******REMOVED******REMOVED*** Ошибка: "Connection refused"
+***REMOVED******REMOVED******REMOVED*** Error: "Connection refused"
 
-1. Проверьте что Qdrant запущен: `docker ps | grep qdrant`
-2. Проверьте правильность URL в .env
-3. Проверьте доступность порта 6333
+1. Check that Qdrant is running: `docker ps | grep qdrant`
+2. Check that the URL in .env is correct
+3. Check that port 6333 is accessible
 
-***REMOVED******REMOVED******REMOVED*** Ошибка: "ModuleNotFoundError: qdrant_client"
+***REMOVED******REMOVED******REMOVED*** Error: "ModuleNotFoundError: qdrant_client"
 
-Установите зависимости:
+Install dependencies:
 ```bash
-***REMOVED*** Через poetry
+***REMOVED*** Via poetry
 poetry install
 
-***REMOVED*** Через pip (в виртуальном окружении)
+***REMOVED*** Via pip (in a virtual environment)
 python3 -m venv .venv
 source .venv/bin/activate
 pip install qdrant-client python-dotenv sentence-transformers
 ```
 
-***REMOVED******REMOVED*** Полезные команды
+***REMOVED******REMOVED*** Useful Commands
 
 ```bash
-***REMOVED*** Подключиться к серверу через SSH
+***REMOVED*** Connect to the server via SSH
 ssh -i ~/.ssh/vps_access_key -p 22 admin@REDACTED_VPS_IP
 
-***REMOVED*** Проверить статус контейнера
+***REMOVED*** Check container status
 docker ps -a | grep qdrant
 
-***REMOVED*** Логи Qdrant
+***REMOVED*** Qdrant logs
 docker logs ai-qdrant --tail 100
 
-***REMOVED*** Рестарт Qdrant
+***REMOVED*** Restart Qdrant
 docker restart ai-qdrant
 
-***REMOVED*** Проверить использование ресурсов
+***REMOVED*** Check resource usage
 docker stats ai-qdrant --no-stream
 ```
 
-***REMOVED******REMOVED*** Дополнительная информация
+***REMOVED******REMOVED*** Additional Information
 
-- **Документация Qdrant**: https://qdrant.tech/documentation/
+- **Qdrant Documentation**: https://qdrant.tech/documentation/
 - **API Reference**: https://qdrant.tech/documentation/api-reference/
 - **Python Client**: https://github.com/qdrant/qdrant-client
 
 ---
 
-**Последнее обновление**: 2025-10-29
-**Статус**: ✅ Подключение настроено и протестировано
+**Last Updated**: 2025-10-29
+**Status**: ✅ Connection configured and tested

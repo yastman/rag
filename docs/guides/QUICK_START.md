@@ -1,94 +1,94 @@
 ***REMOVED*** 🚀 QUICK START - Contextual RAG
 
-> **Пошаговая инструкция для быстрого начала работы**
+> **Step-by-step guide for quick start**
 
-***REMOVED******REMOVED*** 5 минут до первого поиска
+***REMOVED******REMOVED*** 5 minutes to first search
 
-***REMOVED******REMOVED******REMOVED*** Шаг 1: Установка (2 минуты)
+***REMOVED******REMOVED******REMOVED*** Step 1: Installation (2 minutes)
 
 ```bash
-***REMOVED*** 1. Клонирование репозитория
+***REMOVED*** 1. Clone repository
 git clone https://github.com/yastman/rag.git
 cd rag
 
-***REMOVED*** 2. Создание виртуального окружения
+***REMOVED*** 2. Create virtual environment
 python3.9 -m venv venv
-source venv/bin/activate  ***REMOVED*** На Windows: venv\Scripts\activate
+source venv/bin/activate  ***REMOVED*** On Windows: venv\Scripts\activate
 
-***REMOVED*** 3. Установка зависимостей
+***REMOVED*** 3. Install dependencies
 pip install -e .
 
-***REMOVED*** 4. Копирование конфигурации
+***REMOVED*** 4. Copy configuration
 cp .env.example .env
 ```
 
-***REMOVED******REMOVED******REMOVED*** Шаг 2: Конфигурация (1 минута)
+***REMOVED******REMOVED******REMOVED*** Step 2: Configuration (1 minute)
 
-**Отредактировать `.env`:**
+**Edit `.env`:**
 
 ```env
-***REMOVED*** Anthropic Claude API (основной)
+***REMOVED*** Anthropic Claude API (primary)
 ANTHROPIC_API_KEY=[REDACTED-ANTHROPIC-KEY]
 
 ***REMOVED*** Qdrant Vector Database
 QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=  ***REMOVED*** Если требуется
+QDRANT_API_KEY=  ***REMOVED*** If required
 
-***REMOVED*** OpenAI (опционально)
+***REMOVED*** OpenAI (optional)
 OPENAI_API_KEY=[REDACTED-OPENAI-KEY]
 
-***REMOVED*** Groq (опционально)
+***REMOVED*** Groq (optional)
 GROQ_API_KEY=[REDACTED-GROQ-KEY]
 
-***REMOVED*** Z.AI (опционально)
+***REMOVED*** Z.AI (optional)
 Z_AI_API_KEY=...
 ```
 
-***REMOVED******REMOVED******REMOVED*** Шаг 3: Запуск Qdrant (1 минута)
+***REMOVED******REMOVED******REMOVED*** Step 3: Start Qdrant (1 minute)
 
 ```bash
-***REMOVED*** Вариант A: Docker Compose (рекомендуется)
+***REMOVED*** Option A: Docker Compose (recommended)
 docker compose up -d qdrant
 
-***REMOVED*** Вариант B: Docker (если нет compose)
+***REMOVED*** Option B: Docker (if no compose)
 docker run -d --name qdrant \
   -p 6333:6333 -p 6334:6334 \
   qdrant/qdrant:latest
 
-***REMOVED*** Проверка
+***REMOVED*** Check
 curl http://localhost:6333/health
 ```
 
-***REMOVED******REMOVED******REMOVED*** Шаг 4: Создание коллекции (1 минута)
+***REMOVED******REMOVED******REMOVED*** Step 4: Create Collection (1 minute)
 
 ```bash
-***REMOVED*** Создание коллекции с индексами
+***REMOVED*** Create collection with indexes
 python create_collection_enhanced.py
 ```
 
-**Вывод:**
+**Output:**
 ```
 ✓ Collection 'legal_documents' created
 ✓ Indexes created successfully
 ✓ Ready for ingestion
 ```
 
-***REMOVED******REMOVED******REMOVED*** Шаг 5: Загрузка документов (1 минута)
+***REMOVED******REMOVED******REMOVED*** Step 5: Load Documents (1 minute)
 
 ```bash
-***REMOVED*** Загрузка PDF документов из docs/documents/
+***REMOVED*** Load PDF documents from docs/documents/
 python ingestion_contextual_kg_fast.py \
   --pdf-path docs/documents/ \
   --collection legal_documents \
   --batch-size 10
 
-***REMOVED*** Или для одного файла
+***REMOVED*** Or for a single file
 python ingestion_contextual_kg_fast.py \
-  --pdf-file docs/documents/Конституція_України.pdf \
+  --pdf-file docs/documents/Constitution_Ukraine.pdf \
   --collection legal_documents
 ```
 
-**Вывод:**
+**Output:**
 ```
 Loading documents...
 ✓ 1245 chunks processed
@@ -98,88 +98,88 @@ Loading documents...
 
 ---
 
-***REMOVED******REMOVED*** Первый поиск (2 минуты)
+***REMOVED******REMOVED*** First Search (2 minutes)
 
-***REMOVED******REMOVED******REMOVED*** Вариант A: Python скрипт
+***REMOVED******REMOVED******REMOVED*** Option A: Python Script
 
 **test_api_quick.py:**
 ```bash
 python test_api_quick.py
 ```
 
-**Или самостоятельно:**
+**Or manually:**
 
 ```python
 from qdrant_client import QdrantClient
 from config import QDRANT_URL, COLLECTION_NAME
 
-***REMOVED*** Подключение к Qdrant
+***REMOVED*** Connect to Qdrant
 client = QdrantClient(QDRANT_URL)
 
-***REMOVED*** Поиск
-query = "Які права мають громадяни України?"
+***REMOVED*** Search
+query = "What rights do Ukrainian citizens have?"
 results = client.search(
     collection_name=COLLECTION_NAME,
-    query_vector=[0.1, 0.2, ...],  ***REMOVED*** Embedding запроса
+    query_vector=[0.1, 0.2, ...],  ***REMOVED*** Query embedding
     limit=5
 )
 
 for result in results:
-    print(f"Тема: {result.payload['title']}")
-    print(f"Текст: {result.payload['text'][:200]}...")
-    print(f"Рейтинг: {result.score}\n")
+    print(f"Topic: {result.payload['title']}")
+    print(f"Text: {result.payload['text'][:200]}...")
+    print(f"Score: {result.score}\n")
 ```
 
-***REMOVED******REMOVED******REMOVED*** Вариант B: CLI команда
+***REMOVED******REMOVED******REMOVED*** Option B: CLI Command
 
 ```bash
 python example_search.py \
-  --query "Які права мають громадяни України?" \
+  --query "What rights do Ukrainian citizens have?" \
   --top-k 5
 ```
 
-**Ожидаемый результат:**
+**Expected result:**
 ```
-Результаты поиска (DBSF):
+Search results (DBSF):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. [0.9636] Розділ II. Права і свободи людини і громадянина
-   Конституція України, ст. 28-68
+1. [0.9636] Section II. Rights and Freedoms of Man and Citizen
+   Constitution of Ukraine, art. 28-68
 
-2. [0.9402] Основні права громадян
-   Цивільний кодекс, ст. 1-10
+2. [0.9402] Basic Rights of Citizens
+   Civil Code, art. 1-10
 
-3. [0.9187] Защита прав громадян
-   Кримінальний кодекс, ст. 100-150
+3. [0.9187] Protection of Citizens' Rights
+   Criminal Code, art. 100-150
 ```
 
 ---
 
-***REMOVED******REMOVED*** Тестирование (2 минуты)
+***REMOVED******REMOVED*** Testing (2 minutes)
 
-***REMOVED******REMOVED******REMOVED*** Smoke тест
+***REMOVED******REMOVED******REMOVED*** Smoke Test
 
 ```bash
-***REMOVED*** Быстрая проверка всех компонентов
+***REMOVED*** Quick check of all components
 python evaluation/smoke_test.py
 
-***REMOVED*** Результат
+***REMOVED*** Result
 ✓ Qdrant connection OK
 ✓ Claude API OK
 ✓ Embeddings OK
 ✓ Search OK
 ```
 
-***REMOVED******REMOVED******REMOVED*** A/B тестирование
+***REMOVED******REMOVED******REMOVED*** A/B Testing
 
 ```bash
-***REMOVED*** Запуск A/B теста (логирование в MLflow)
+***REMOVED*** Run A/B test (logging to MLflow)
 python evaluation/run_ab_test.py \
   --queries evaluation/data/test_queries.txt \
   --baseline baseline \
   --challenger dbsf
 
-***REMOVED*** Результаты
+***REMOVED*** Results
 BASELINE:  Recall@1=91.3%, NDCG@10=0.9619
 DBSF:      Recall@1=94.0%, NDCG@10=0.9711
 IMPROVEMENT: +2.9% Recall, +1.0% NDCG
@@ -187,109 +187,109 @@ IMPROVEMENT: +2.9% Recall, +1.0% NDCG
 
 ---
 
-***REMOVED******REMOVED*** Мониторинг (опционально)
+***REMOVED******REMOVED*** Monitoring (optional)
 
 ***REMOVED******REMOVED******REMOVED*** MLflow Dashboard
 
 ```bash
-***REMOVED*** Запуск MLflow сервера
+***REMOVED*** Start MLflow server
 docker compose --profile ml up -d mlflow
 
-***REMOVED*** Открыть в браузере
+***REMOVED*** Open in browser
 open http://localhost:5000
 ```
 
-**Что видить:**
-- Все запущенные эксперименты
-- Метрики (Recall, NDCG, Latency)
-- Сравнение между runs
-- Параметры конфигурации
+**What you'll see:**
+- All running experiments
+- Metrics (Recall, NDCG, Latency)
+- Comparison between runs
+- Configuration parameters
 
 ***REMOVED******REMOVED******REMOVED*** Langfuse Dashboard
 
 ```bash
-***REMOVED*** Запуск Langfuse
+***REMOVED*** Start Langfuse
 docker compose --profile ml up -d langfuse
 
-***REMOVED*** Открыть в браузере
+***REMOVED*** Open in browser
 open http://localhost:3001
 ```
 
-**Что видить:**
-- Все LLM запросы и ответы
-- Latency и token count
-- Ошибки и exceptions
-- Аналитика использования
+**What you'll see:**
+- All LLM requests and responses
+- Latency and token count
+- Errors and exceptions
+- Usage analytics
 
 ---
 
-***REMOVED******REMOVED*** Частые вопросы
+***REMOVED******REMOVED*** Frequently Asked Questions
 
-***REMOVED******REMOVED******REMOVED*** Q: Как добавить новые документы?
+***REMOVED******REMOVED******REMOVED*** Q: How to add new documents?
 
 ```bash
-***REMOVED*** Просто добавьте PDF в docs/documents/
+***REMOVED*** Simply add PDF to docs/documents/
 cp my_document.pdf docs/documents/
 
-***REMOVED*** И снова запустите ingestion
+***REMOVED*** And run ingestion again
 python ingestion_contextual_kg_fast.py \
   --pdf-path docs/documents/ \
   --collection legal_documents
 ```
 
-***REMOVED******REMOVED******REMOVED*** Q: Как выбрать другой LLM (OpenAI, Groq)?
+***REMOVED******REMOVED******REMOVED*** Q: How to select another LLM (OpenAI, Groq)?
 
-**Вариант 1: Через config.py**
+**Option 1: Via config.py**
 ```python
-API_PROVIDER = 'openai'  ***REMOVED*** Или 'groq', 'zai'
+API_PROVIDER = 'openai'  ***REMOVED*** Or 'groq', 'zai'
 MODEL_NAME = 'gpt-4-turbo-preview'
 ```
 
-**Вариант 2: Через переменную окружения**
+**Option 2: Via environment variable**
 ```bash
 export API_PROVIDER=groq
 python test_api_quick.py
 ```
 
-***REMOVED******REMOVED******REMOVED*** Q: Как улучшить качество поиска?
+***REMOVED******REMOVED******REMOVED*** Q: How to improve search quality?
 
-1. **Используйте DBSF вместо базового поиска**
+1. **Use DBSF instead of baseline search**
    ```python
    from evaluation.search_engines import DBSFSearchEngine
    engine = DBSFSearchEngine()
    ```
 
-2. **Увеличьте контекст документов**
+2. **Increase document context**
    ```python
-   ***REMOVED*** В config.py
-   CHUNK_SIZE = 1024  ***REMOVED*** Вместо 512
+   ***REMOVED*** In config.py
+   CHUNK_SIZE = 1024  ***REMOVED*** Instead of 512
    ```
 
-3. **Добавьте больше документов**
+3. **Add more documents**
    ```bash
    python ingestion_contextual_kg_fast.py --pdf-path /more/docs
    ```
 
-***REMOVED******REMOVED******REMOVED*** Q: Как запустить на production сервере?
+***REMOVED******REMOVED******REMOVED*** Q: How to run on production server?
 
 ```bash
-***REMOVED*** 1. Используйте production конфигурацию
+***REMOVED*** 1. Use production configuration
 export ENV=production
 export QDRANT_URL=https://qdrant.example.com
 export QDRANT_API_KEY=your-secure-key
 
-***REMOVED*** 2. Используйте WSGI сервер (Gunicorn)
+***REMOVED*** 2. Use WSGI server (Gunicorn)
 pip install gunicorn
 gunicorn -w 4 -b 0.0.0.0:8000 app:application
 
-***REMOVED*** 3. Используйте SSL сертификат
-***REMOVED*** Настройте nginx/reverse proxy
+***REMOVED*** 3. Use SSL certificate
+***REMOVED*** Configure nginx/reverse proxy
 ```
 
-***REMOVED******REMOVED******REMOVED*** Q: Как очистить данные?
+***REMOVED******REMOVED******REMOVED*** Q: How to clear data?
 
 ```bash
-***REMOVED*** Удалить коллекцию Qdrant
+***REMOVED*** Delete Qdrant collection
 python -c "
 from qdrant_client import QdrantClient
 from config import QDRANT_URL, COLLECTION_NAME
@@ -298,70 +298,70 @@ client = QdrantClient(QDRANT_URL)
 client.delete_collection(COLLECTION_NAME)
 "
 
-***REMOVED*** Или просто перезагрузить Qdrant
+***REMOVED*** Or simply restart Qdrant
 docker compose down qdrant
 docker compose up -d qdrant
 ```
 
 ---
 
-***REMOVED******REMOVED*** Типовые ошибки и решения
+***REMOVED******REMOVED*** Common Errors and Solutions
 
-| Ошибка | Причина | Решение |
+| Error | Cause | Solution |
 |--------|---------|---------|
-| `ConnectionError: localhost:6333` | Qdrant не запущен | `docker compose up -d qdrant` |
-| `APIError: invalid_request_error` | Неверный API ключ | Проверьте `.env` ANTHROPIC_API_KEY |
-| `ModuleNotFoundError: qdrant_client` | Зависимости не установлены | `pip install -e .` |
-| `TimeoutError` при загрузке | PDF слишком большой | Используйте `--batch-size 5` |
-| Низкие метрики поиска | Документы не индексированы | Запустите ingestion заново |
+| `ConnectionError: localhost:6333` | Qdrant not running | `docker compose up -d qdrant` |
+| `APIError: invalid_request_error` | Invalid API key | Check `.env` ANTHROPIC_API_KEY |
+| `ModuleNotFoundError: qdrant_client` | Dependencies not installed | `pip install -e .` |
+| `TimeoutError` during loading | PDF too large | Use `--batch-size 5` |
+| Low search metrics | Documents not indexed | Run ingestion again |
 
 ---
 
-***REMOVED******REMOVED*** Следующие шаги
+***REMOVED******REMOVED*** Next Steps
 
-1. **Прочитайте PROJECT_STRUCTURE.md** - Полное описание всех модулей
-2. **Изучите ARCHITECTURE.md** - Архитектура системы
-3. **Запустите evaluation/run_ab_test.py** - A/B тестирование
-4. **Попробуйте разные LLM** - OpenAI, Groq, Z.AI
-5. **Мониторьте метрики** - MLflow и Langfuse dashboards
-
----
-
-***REMOVED******REMOVED*** Чеклист готовности к production
-
-- [ ] Все API ключи настроены в `.env`
-- [ ] Qdrant запущен и доступен
-- [ ] Документы загружены и проиндексированы
-- [ ] Smoke тест пройден (`evaluation/smoke_test.py`)
-- [ ] A/B тест показывает ожидаемые метрики
-- [ ] MLflow/Langfuse настроены для мониторинга
-- [ ] SSL сертификат установлен (для production)
-- [ ] Резервные копии данных настроены
-- [ ] Документация обновлена для вашего команды
+1. **Read PROJECT_STRUCTURE.md** - Complete description of all modules
+2. **Study ARCHITECTURE.md** - System architecture
+3. **Run evaluation/run_ab_test.py** - A/B testing
+4. **Try different LLMs** - OpenAI, Groq, Z.AI
+5. **Monitor metrics** - MLflow and Langfuse dashboards
 
 ---
 
-***REMOVED******REMOVED*** Полезные команды
+***REMOVED******REMOVED*** Production Readiness Checklist
+
+- [ ] All API keys configured in `.env`
+- [ ] Qdrant running and accessible
+- [ ] Documents loaded and indexed
+- [ ] Smoke test passed (`evaluation/smoke_test.py`)
+- [ ] A/B test shows expected metrics
+- [ ] MLflow/Langfuse configured for monitoring
+- [ ] SSL certificate installed (for production)
+- [ ] Data backups configured
+- [ ] Documentation updated for your team
+
+---
+
+***REMOVED******REMOVED*** Useful Commands
 
 ```bash
-***REMOVED*** Информация о проекте
-python list_available_models.py          ***REMOVED*** Список доступных моделей
-python check_sparse_vectors.py           ***REMOVED*** Проверка sparse vectors
+***REMOVED*** Project information
+python list_available_models.py          ***REMOVED*** List available models
+python check_sparse_vectors.py           ***REMOVED*** Check sparse vectors
 
-***REMOVED*** Тестирование
+***REMOVED*** Testing
 python test_api_quick.py                 ***REMOVED*** Smoke test
-python test_api_safe.py                  ***REMOVED*** Безопасный тест
-python evaluation/smoke_test.py          ***REMOVED*** Полный smoke test
+python test_api_safe.py                  ***REMOVED*** Safe test
+python evaluation/smoke_test.py          ***REMOVED*** Full smoke test
 
-***REMOVED*** Оценка
-python evaluation/run_ab_test.py         ***REMOVED*** A/B тест с логированием
-python evaluation/evaluate_with_ragas.py ***REMOVED*** RAGAS оценка
+***REMOVED*** Evaluation
+python evaluation/run_ab_test.py         ***REMOVED*** A/B test with logging
+python evaluation/evaluate_with_ragas.py ***REMOVED*** RAGAS evaluation
 
-***REMOVED*** Разработка
-ruff check .                             ***REMOVED*** Lint проверка
-ruff format .                            ***REMOVED*** Форматирование
+***REMOVED*** Development
+ruff check .                             ***REMOVED*** Lint check
+ruff format .                            ***REMOVED*** Formatting
 mypy . --ignore-missing-imports          ***REMOVED*** Type checking
-python -m pytest tests/                  ***REMOVED*** Unit тесты (если есть)
+python -m pytest tests/                  ***REMOVED*** Unit tests (if available)
 ```
 
 ---
