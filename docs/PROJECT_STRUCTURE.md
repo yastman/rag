@@ -1,117 +1,117 @@
 ***REMOVED*** 📋 PROJECT STRUCTURE - Contextual RAG v2.0.1
 
-> **Полное руководство структуры проекта с описанием каждого модуля**
+> **Complete project structure guide with description of each module**
 
-***REMOVED******REMOVED*** Оглавление
-1. [Обзор проекта](***REMOVED***обзор-проекта)
-2. [Структура директорий](***REMOVED***структура-директорий)
-3. [Основные модули](***REMOVED***основные-модули)
-4. [Технологический стек](***REMOVED***технологический-стек)
-5. [Рабочий процесс](***REMOVED***рабочий-процесс)
-6. [Быстрая справка](***REMOVED***быстрая-справка)
+***REMOVED******REMOVED*** Table of Contents
+1. [Project Overview](***REMOVED***project-overview)
+2. [Directory Structure](***REMOVED***directory-structure)
+3. [Core Modules](***REMOVED***core-modules)
+4. [Technology Stack](***REMOVED***technology-stack)
+5. [Workflow](***REMOVED***workflow)
+6. [Quick Reference](***REMOVED***quick-reference)
 
 ---
 
-***REMOVED******REMOVED*** Обзор проекта
+***REMOVED******REMOVED*** Project Overview
 
-**Contextual RAG Pipeline** - это production-ready система поиска и извлечения информации из украинских юридических документов, использующая:
-- 🤖 **Гибридный поиск**: Dense (BGE-M3) + Sparse (ColBERT) векторы
-- 🔍 **DBSF Ranking**: Density-Based Semantic Fusion для оптимальных результатов
-- 📊 **ML Платформы**: MLflow + Langfuse для отслеживания экспериментов
-- 🚀 **Множественные LLM**: Claude, OpenAI, Groq, Z.AI
-- 📚 **Контекстуализация**: Автоматическое обогащение контекста через Claude API
+**Contextual RAG Pipeline** - a production-ready system for searching and retrieving information from Ukrainian legal documents, using:
+- 🤖 **Hybrid Search**: Dense (BGE-M3) + Sparse (ColBERT) vectors
+- 🔍 **DBSF Ranking**: Density-Based Semantic Fusion for optimal results
+- 📊 **ML Platforms**: MLflow + Langfuse for experiment tracking
+- 🚀 **Multiple LLMs**: Claude, OpenAI, Groq, Z.AI
+- 📚 **Contextualization**: Automatic context enrichment through Claude API
 
-**Версия**: 2.0.1
+**Version**: 2.0.1
 **Python**: ≥ 3.9
-**Лицензия**: MIT
-**Статус**: Production Ready ✅
+**License**: MIT
+**Status**: Production Ready ✅
 
 ---
 
-***REMOVED******REMOVED*** Структура директорий
+***REMOVED******REMOVED*** Directory Structure
 
 ```
 rag-fresh/
 │
-├── 📋 ROOT КОНФИГУРАЦИЯ
-│   ├── pyproject.toml               ***REMOVED*** Конфигурация проекта, зависимости
-│   ├── config.py                    ***REMOVED*** Параметры приложения
-│   ├── prompts.py                   ***REMOVED*** Система промптов для LLM
-│   ├── .env                         ***REMOVED*** API ключи и URLs (НЕ коммитить!)
-│   ├── .env.example                 ***REMOVED*** Пример переменных окружения
-│   ├── .pre-commit-config.yaml      ***REMOVED*** Pre-commit хуки (Ruff, MyPy)
-│   └── __init__.py                  ***REMOVED*** Package инициализация
+├── 📋 ROOT CONFIGURATION
+│   ├── pyproject.toml               ***REMOVED*** Project configuration, dependencies
+│   ├── config.py                    ***REMOVED*** Application parameters
+│   ├── prompts.py                   ***REMOVED*** Prompt system for LLM
+│   ├── .env                         ***REMOVED*** API keys and URLs (DO NOT commit!)
+│   ├── .env.example                 ***REMOVED*** Environment variables example
+│   ├── .pre-commit-config.yaml      ***REMOVED*** Pre-commit hooks (Ruff, MyPy)
+│   └── __init__.py                  ***REMOVED*** Package initialization
 │
 ├── 🔄 CONTEXTUALIZATION & RETRIEVAL
-│   ├── contextualize.py             ***REMOVED*** ⭐ Claude API (основной)
-│   ├── contextualize_groq_async.py  ***REMOVED*** Groq асинхронная версия
-│   ├── contextualize_openai_async.py ***REMOVED*** OpenAI асинхронная версия
-│   ├── contextualize_zai.py         ***REMOVED*** Z.AI синхронная версия
-│   └── contextualize_zai_async.py   ***REMOVED*** Z.AI асинхронная версия
+│   ├── contextualize.py             ***REMOVED*** ⭐ Claude API (main)
+│   ├── contextualize_groq_async.py  ***REMOVED*** Groq async version
+│   ├── contextualize_openai_async.py ***REMOVED*** OpenAI async version
+│   ├── contextualize_zai.py         ***REMOVED*** Z.AI sync version
+│   └── contextualize_zai_async.py   ***REMOVED*** Z.AI async version
 │
 ├── 📥 INGESTION & INDEXING
-│   ├── ingestion_contextual_kg_fast.py ***REMOVED*** ⭐ Fast версия (оптимизированная)
-│   ├── ingestion_contextual_kg.py      ***REMOVED*** Базовая версия
+│   ├── ingestion_contextual_kg_fast.py ***REMOVED*** ⭐ Fast version (optimized)
+│   ├── ingestion_contextual_kg.py      ***REMOVED*** Base version
 │   ├── pymupdf_chunker.py              ***REMOVED*** PDF parsing + chunking
-│   ├── create_collection_enhanced.py   ***REMOVED*** Создание Qdrant коллекции
-│   └── create_payload_indexes.py       ***REMOVED*** Создание индексов для payload
+│   ├── create_collection_enhanced.py   ***REMOVED*** Qdrant collection creation
+│   └── create_payload_indexes.py       ***REMOVED*** Payload index creation
 │
 ├── 🧪 TESTING & VALIDATION
-│   ├── test_api_quick.py            ***REMOVED*** Быстрый smoke тест
-│   ├── test_api_safe.py             ***REMOVED*** Безопасное тестирование
-│   ├── test_api_comparison.py       ***REMOVED*** Сравнение разных API
-│   ├── test_api_extended.py         ***REMOVED*** Расширенный тест с метриками
-│   ├── test_api_comparison_multi.py ***REMOVED*** Multi-API сравнение
-│   ├── test_dbsf_fusion.py          ***REMOVED*** Тестирование DBSF+ColBERT
-│   ├── evaluate_ab.py               ***REMOVED*** A/B тестирование
-│   ├── evaluation.py                ***REMOVED*** Основной evaluator
-│   └── example_search.py            ***REMOVED*** Пример использования
+│   ├── test_api_quick.py            ***REMOVED*** Quick smoke test
+│   ├── test_api_safe.py             ***REMOVED*** Safe testing
+│   ├── test_api_comparison.py       ***REMOVED*** API comparison
+│   ├── test_api_extended.py         ***REMOVED*** Extended test with metrics
+│   ├── test_api_comparison_multi.py ***REMOVED*** Multi-API comparison
+│   ├── test_dbsf_fusion.py          ***REMOVED*** DBSF+ColBERT testing
+│   ├── evaluate_ab.py               ***REMOVED*** A/B testing
+│   ├── evaluation.py                ***REMOVED*** Main evaluator
+│   └── example_search.py            ***REMOVED*** Usage example
 │
 ├── 📊 EVALUATION/
-│   ├── search_engines.py            ***REMOVED*** Реализация 3 поисковиков
+│   ├── search_engines.py            ***REMOVED*** Implementation of 3 search engines
 │   │                                ***REMOVED*** (Baseline, Hybrid, DBSF)
-│   ├── run_ab_test.py               ***REMOVED*** ⭐ A/B тест с MLflow логированием
-│   ├── evaluate_with_ragas.py       ***REMOVED*** RAGAS framework интеграция
-│   ├── smoke_test.py                ***REMOVED*** Smoke тесты
+│   ├── run_ab_test.py               ***REMOVED*** ⭐ A/B test with MLflow logging
+│   ├── evaluate_with_ragas.py       ***REMOVED*** RAGAS framework integration
+│   ├── smoke_test.py                ***REMOVED*** Smoke tests
 │   ├── langfuse_integration.py      ***REMOVED*** Langfuse (LLM tracing)
 │   ├── mlflow_integration.py        ***REMOVED*** MLflow (experiment tracking)
-│   ├── evaluator.py                 ***REMOVED*** Основной evaluator класс
-│   ├── metrics_logger.py            ***REMOVED*** Логирование метрик
-│   ├── config_snapshot.py           ***REMOVED*** Снимок конфигурации при запуске
-│   ├── generate_test_queries.py     ***REMOVED*** Генерация тестовых запросов
-│   ├── extract_ground_truth.py      ***REMOVED*** Извлечение правильных ответов
-│   ├── search_engines_rerank.py     ***REMOVED*** Reranking поисков
-│   ├── test_mlflow_ab.py            ***REMOVED*** MLflow тестирование
-│   ├── data/                        ***REMOVED*** Тестовые данные
-│   ├── evaluation/                  ***REMOVED*** Результаты оценки
-│   ├── reports/                     ***REMOVED*** Отчеты об оценке
-│   └── results/                     ***REMOVED*** Результаты тестов
+│   ├── evaluator.py                 ***REMOVED*** Main evaluator class
+│   ├── metrics_logger.py            ***REMOVED*** Metrics logging
+│   ├── config_snapshot.py           ***REMOVED*** Configuration snapshot at runtime
+│   ├── generate_test_queries.py     ***REMOVED*** Test query generation
+│   ├── extract_ground_truth.py      ***REMOVED*** Ground truth extraction
+│   ├── search_engines_rerank.py     ***REMOVED*** Search reranking
+│   ├── test_mlflow_ab.py            ***REMOVED*** MLflow testing
+│   ├── data/                        ***REMOVED*** Test data
+│   ├── evaluation/                  ***REMOVED*** Evaluation results
+│   ├── reports/                     ***REMOVED*** Evaluation reports
+│   └── results/                     ***REMOVED*** Test results
 │
 ├── 📚 DOCS/
-│   ├── INDEX.md                     ***REMOVED*** Указатель всей документации
-│   ├── README.md                    ***REMOVED*** Обзор документации
-│   ├── documents/                   ***REMOVED*** Украинские юридические документы
+│   ├── INDEX.md                     ***REMOVED*** Index of all documentation
+│   ├── README.md                    ***REMOVED*** Documentation overview
+│   ├── documents/                   ***REMOVED*** Ukrainian legal documents
 │   │   ├── Конституція України
 │   │   ├── Кримінальний кодекс України
 │   │   └── Цивільний кодекс України
-│   ├── guides/                      ***REMOVED*** Практические руководства
+│   ├── guides/                      ***REMOVED*** Practical guides
 │   │   ├── QUICK_START_DBSF.md
 │   │   ├── DEDUPLICATION_GUIDE.md
 │   │   └── DOC_LING_RAG_TASKS_2025.md
-│   ├── implementation/              ***REMOVED*** Чеклисты и планы
+│   ├── implementation/              ***REMOVED*** Checklists and plans
 │   │   ├── IMPLEMENTATION_CHECKLIST.md
 │   │   └── DBSF_COLBERT_IMPLEMENTATION_SUMMARY.md
-│   ├── reports/                     ***REMOVED*** Итоговые отчеты
+│   ├── reports/                     ***REMOVED*** Final reports
 │   │   ├── FINAL_REPORT_CONTEXTUAL_RAG.md
 │   │   ├── FINAL_OPTIMIZATION_REPORT.md
 │   │   └── TEST_RESULTS_SUMMARY.md
-│   └── archive/                     ***REMOVED*** Старые версии документов
+│   └── archive/                     ***REMOVED*** Old document versions
 │
 ├── 🛠️ UTILS/
-│   ├── __init__.py                  ***REMOVED*** Package инициализация
-│   └── structure_parser.py          ***REMOVED*** Парсер структуры документов
+│   ├── __init__.py                  ***REMOVED*** Package initialization
+│   └── structure_parser.py          ***REMOVED*** Document structure parser
 │
-├── 📦 rag-fresh.egg-info/      ***REMOVED*** Metadata пакета (auto-generated)
+├── 📦 rag-fresh.egg-info/      ***REMOVED*** Package metadata (auto-generated)
 │   ├── PKG-INFO
 │   ├── SOURCES.txt
 │   ├── dependency_links.txt
@@ -119,87 +119,87 @@ rag-fresh/
 │   ├── requires.txt
 │   └── top_level.txt
 │
-├── 🗂️ ROOT ДОКУМЕНТАЦИЯ
-│   ├── README.md                    ***REMOVED*** ⭐ Главная документация
-│   ├── ARCHITECTURE.md              ***REMOVED*** Архитектура системы
-│   ├── SETUP.md                     ***REMOVED*** Установка и настройка
-│   ├── CODE_QUALITY.md              ***REMOVED*** Рекомендации качества кода
-│   ├── MIGRATION_PLAN.md            ***REMOVED*** План миграции на ML платформы
-│   ├── OPTIMIZATION_PLAN.md         ***REMOVED*** План оптимизации
-│   ├── DBSF_vs_RRF_ANALYSIS.md      ***REMOVED*** Анализ методов ranking
-│   ├── PHASE1_COMPLETION_SUMMARY.md ***REMOVED*** Завершение Phase 1
-│   ├── PHASE2_COMPLETION_SUMMARY.md ***REMOVED*** Завершение Phase 2
-│   └── PHASE3_COMPLETION_SUMMARY.md ***REMOVED*** Завершение Phase 3
+├── 🗂️ ROOT DOCUMENTATION
+│   ├── README.md                    ***REMOVED*** ⭐ Main documentation
+│   ├── ARCHITECTURE.md              ***REMOVED*** System architecture
+│   ├── SETUP.md                     ***REMOVED*** Installation and setup
+│   ├── CODE_QUALITY.md              ***REMOVED*** Code quality recommendations
+│   ├── MIGRATION_PLAN.md            ***REMOVED*** ML platform migration plan
+│   ├── OPTIMIZATION_PLAN.md         ***REMOVED*** Optimization plan
+│   ├── DBSF_vs_RRF_ANALYSIS.md      ***REMOVED*** Ranking methods analysis
+│   ├── PHASE1_COMPLETION_SUMMARY.md ***REMOVED*** Phase 1 completion
+│   ├── PHASE2_COMPLETION_SUMMARY.md ***REMOVED*** Phase 2 completion
+│   └── PHASE3_COMPLETION_SUMMARY.md ***REMOVED*** Phase 3 completion
 │
 ├── 🔐 BACKUP & CACHE
-│   ├── contextual_rag_backup_*.tar.gz ***REMOVED*** Резервные копии проекта
-│   ├── **/__pycache__/              ***REMOVED*** Python кэш (игнорировать)
-│   └── *.egg-info/                  ***REMOVED*** Package metadata (игнорировать)
+│   ├── contextual_rag_backup_*.tar.gz ***REMOVED*** Project backups
+│   ├── **/__pycache__/              ***REMOVED*** Python cache (ignore)
+│   └── *.egg-info/                  ***REMOVED*** Package metadata (ignore)
 │
 └── 📝 GIT & CI/CD
-    ├── .git/                        ***REMOVED*** Git репозиторий
-    ├── .gitignore                   ***REMOVED*** Игнорируемые файлы
-    ├── docker-compose.yml           ***REMOVED*** Docker сервисы (Qdrant, MLflow, Langfuse)
-    └── .github/workflows/           ***REMOVED*** GitHub Actions (если есть)
+    ├── .git/                        ***REMOVED*** Git repository
+    ├── .gitignore                   ***REMOVED*** Ignored files
+    ├── docker-compose.yml           ***REMOVED*** Docker services (Qdrant, MLflow, Langfuse)
+    └── .github/workflows/           ***REMOVED*** GitHub Actions (if present)
 ```
 
 ---
 
-***REMOVED******REMOVED*** Основные модули
+***REMOVED******REMOVED*** Core Modules
 
-***REMOVED******REMOVED******REMOVED*** 1. Contextualization Layer (Слой контекстуализации)
+***REMOVED******REMOVED******REMOVED*** 1. Contextualization Layer
 
-| Модуль | Назначение | Статус |
-|--------|-----------|--------|
-| `contextualize.py` | Claude API с prompt caching | ⭐ Основной |
-| `contextualize_groq_async.py` | Groq (быстро) | Альтернатива |
-| `contextualize_openai_async.py` | OpenAI GPT | Альтернатива |
+| Module | Purpose | Status |
+|--------|---------|--------|
+| `contextualize.py` | Claude API with prompt caching | ⭐ Main |
+| `contextualize_groq_async.py` | Groq (fast) | Alternative |
+| `contextualize_openai_async.py` | OpenAI GPT | Alternative |
 | `contextualize_zai*.py` | Z.AI (legacy) | Legacy |
 
-**Функция**: Обогащение контекста документов через LLM перед поиском.
+**Function**: Document context enrichment through LLM before search.
 
 ```python
-***REMOVED*** Пример использования
+***REMOVED*** Usage example
 from contextualize import contextualize_documents
 enriched_docs = contextualize_documents(documents, query)
 ```
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** 2. Ingestion Layer (Слой загрузки)
+***REMOVED******REMOVED******REMOVED*** 2. Ingestion Layer
 
-| Модуль | Назначение | Статус |
-|--------|-----------|--------|
-| `ingestion_contextual_kg_fast.py` | Fast оптимизированная загрузка | ⭐ Основной |
-| `ingestion_contextual_kg.py` | Стандартная загрузка | Fallback |
-| `pymupdf_chunker.py` | Парсер PDF с chunking | Утилита |
-| `create_collection_enhanced.py` | Создание коллекции | Setup |
-| `create_payload_indexes.py` | Индексы для payload | Setup |
+| Module | Purpose | Status |
+|--------|---------|--------|
+| `ingestion_contextual_kg_fast.py` | Fast optimized ingestion | ⭐ Main |
+| `ingestion_contextual_kg.py` | Standard ingestion | Fallback |
+| `pymupdf_chunker.py` | PDF parser with chunking | Utility |
+| `create_collection_enhanced.py` | Collection creation | Setup |
+| `create_payload_indexes.py` | Payload indexes | Setup |
 
-**Функция**: Загрузка PDF документов в Qdrant с контекстуализацией.
+**Function**: Loading PDF documents into Qdrant with contextualization.
 
 ```python
-***REMOVED*** Пример использования
+***REMOVED*** Usage example
 from ingestion_contextual_kg_fast import ingest_documents
 ingest_documents(pdf_path, collection_name='legal_documents')
 ```
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** 3. Search & Retrieval (Поиск и извлечение)
+***REMOVED******REMOVED******REMOVED*** 3. Search & Retrieval
 
-**Три уровня поиска**:
-1. **Baseline**: BM25 + Dense векторы (стандартный)
+**Three search levels**:
+1. **Baseline**: BM25 + Dense vectors (standard)
 2. **Hybrid**: Dense + Sparse (BGE-M3 + ColBERT)
-3. **DBSF**: Density-Based Semantic Fusion (оптимальный)
+3. **DBSF**: Density-Based Semantic Fusion (optimal)
 
-**Метрики улучшения (DBSF vs Baseline)**:
+**Improvement metrics (DBSF vs Baseline)**:
 - Recall@1: 91.3% → 94.0% (+2.9%) ✅
 - NDCG@10: 0.9619 → 0.9711 (+1.0%) ✅
 - MRR: 0.9491 → 0.9636 (+1.5%) ✅
 
 ```python
-***REMOVED*** Реализация в evaluation/search_engines.py
+***REMOVED*** Implementation in evaluation/search_engines.py
 from evaluation.search_engines import DBSFSearchEngine
 engine = DBSFSearchEngine()
 results = engine.search(query, top_k=10)
@@ -207,48 +207,48 @@ results = engine.search(query, top_k=10)
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** 4. Evaluation Layer (Слой оценки)
+***REMOVED******REMOVED******REMOVED*** 4. Evaluation Layer
 
-| Модуль | Назначение |
-|--------|-----------|
-| `run_ab_test.py` | A/B тест с MLflow логированием |
+| Module | Purpose |
+|--------|---------|
+| `run_ab_test.py` | A/B test with MLflow logging |
 | `evaluate_with_ragas.py` | RAGAS evaluation framework |
-| `smoke_test.py` | Быстрые smoke тесты |
-| `langfuse_integration.py` | LLM tracing через Langfuse |
-| `mlflow_integration.py` | Experiment tracking через MLflow |
+| `smoke_test.py` | Quick smoke tests |
+| `langfuse_integration.py` | LLM tracing via Langfuse |
+| `mlflow_integration.py` | Experiment tracking via MLflow |
 
-**Интеграции**:
+**Integrations**:
 - **MLflow**: http://localhost:5000
 - **Langfuse**: http://localhost:3001
 - **RAGAS**: RAG evaluation metrics
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** 5. Configuration (Конфигурация)
+***REMOVED******REMOVED******REMOVED*** 5. Configuration
 
-**config.py** - центральная конфигурация проекта:
+**config.py** - central project configuration:
 ```python
 API_PROVIDER = 'claude'           ***REMOVED*** 'claude', 'openai', 'groq', 'zai'
 VECTOR_DB_URL = 'http://localhost:6333'  ***REMOVED*** Qdrant
 COLLECTION_NAME = 'legal_documents'
-MODEL_NAME = 'claude-3-5-sonnet-20241022'  ***REMOVED*** Основная модель
+MODEL_NAME = 'claude-3-5-sonnet-20241022'  ***REMOVED*** Main model
 EMBEDDING_MODEL = 'BAAI/bge-m3'   ***REMOVED*** 1024-dim vectors
 ```
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** 6. Utility Functions (Утилиты)
+***REMOVED******REMOVED******REMOVED*** 6. Utility Functions
 
-| Модуль | Назначение |
-|--------|-----------|
-| `utils/structure_parser.py` | Парсер структуры документов |
-| `check_sparse_vectors.py` | Проверка sparse vectors |
-| `list_available_models.py` | Список доступных моделей |
-| `example_search.py` | Пример использования API |
+| Module | Purpose |
+|--------|---------|
+| `utils/structure_parser.py` | Document structure parser |
+| `check_sparse_vectors.py` | Sparse vectors check |
+| `list_available_models.py` | List available models |
+| `example_search.py` | API usage example |
 
 ---
 
-***REMOVED******REMOVED*** Технологический стек
+***REMOVED******REMOVED*** Technology Stack
 
 ***REMOVED******REMOVED******REMOVED*** Vector Database
 - **Qdrant** v0.13.x
@@ -257,9 +257,9 @@ EMBEDDING_MODEL = 'BAAI/bge-m3'   ***REMOVED*** 1024-dim vectors
 - **Hybrid Search**: DBSF + RRF
 
 ***REMOVED******REMOVED******REMOVED*** LLM APIs
-- **Anthropic Claude** 3.5 Sonnet (основной)
-- **OpenAI GPT-4** (альтернатива)
-- **Groq LLaMA3** (быстрая)
+- **Anthropic Claude** 3.5 Sonnet (main)
+- **OpenAI GPT-4** (alternative)
+- **Groq LLaMA3** (fast)
 - **Z.AI GLM-4.6** (legacy)
 
 ***REMOVED******REMOVED******REMOVED*** ML Platforms
@@ -280,34 +280,34 @@ EMBEDDING_MODEL = 'BAAI/bge-m3'   ***REMOVED*** 1024-dim vectors
 
 ---
 
-***REMOVED******REMOVED*** Рабочий процесс
+***REMOVED******REMOVED*** Workflow
 
 ***REMOVED******REMOVED******REMOVED*** 1️⃣ Setup & Installation
 ```bash
-***REMOVED*** Клонирование репозитория
+***REMOVED*** Clone repository
 git clone <repo>
 cd rag-fresh
 
-***REMOVED*** Установка зависимостей
+***REMOVED*** Install dependencies
 pip install -e .
 
-***REMOVED*** Конфигурация
+***REMOVED*** Configuration
 cp .env.example .env
-***REMOVED*** Отредактировать .env с вашими API ключами
+***REMOVED*** Edit .env with your API keys
 
-***REMOVED*** Запуск Qdrant через Docker
+***REMOVED*** Start Qdrant via Docker
 docker compose up -d qdrant
 
-***REMOVED*** (Опционально) Запуск ML платформ
+***REMOVED*** (Optional) Start ML platforms
 docker compose --profile ml up -d mlflow langfuse
 ```
 
 ***REMOVED******REMOVED******REMOVED*** 2️⃣ Data Ingestion
 ```bash
-***REMOVED*** Создание коллекции
+***REMOVED*** Create collection
 python create_collection_enhanced.py
 
-***REMOVED*** Загрузка документов
+***REMOVED*** Load documents
 python ingestion_contextual_kg_fast.py \
   --pdf-path docs/documents/ \
   --collection legal_documents
@@ -315,19 +315,19 @@ python ingestion_contextual_kg_fast.py \
 
 ***REMOVED******REMOVED******REMOVED*** 3️⃣ Testing
 ```bash
-***REMOVED*** Smoke тест
+***REMOVED*** Smoke test
 python evaluation/smoke_test.py
 
-***REMOVED*** A/B тестирование (с логированием в MLflow)
+***REMOVED*** A/B testing (with MLflow logging)
 python evaluation/run_ab_test.py
 
-***REMOVED*** Быстрый тест API
+***REMOVED*** Quick API test
 python test_api_quick.py
 ```
 
 ***REMOVED******REMOVED******REMOVED*** 4️⃣ Production Query
 ```bash
-***REMOVED*** Пример поиска
+***REMOVED*** Search example
 python example_search.py \
   --query "Які право мають громадяни?" \
   --top-k 10
@@ -344,57 +344,57 @@ open http://localhost:3001
 
 ---
 
-***REMOVED******REMOVED*** Быстрая справка
+***REMOVED******REMOVED*** Quick Reference
 
-***REMOVED******REMOVED******REMOVED*** Основные команды
+***REMOVED******REMOVED******REMOVED*** Main Commands
 
-| Команда | Описание |
-|---------|---------|
-| `python test_api_quick.py` | Быстрый smoke тест |
-| `python evaluation/run_ab_test.py` | A/B тест с логированием |
-| `python example_search.py --query "..."` | Поиск |
-| `ruff check .` | Lint проверка |
-| `ruff format .` | Форматирование кода |
+| Command | Description |
+|---------|-------------|
+| `python test_api_quick.py` | Quick smoke test |
+| `python evaluation/run_ab_test.py` | A/B test with logging |
+| `python example_search.py --query "..."` | Search |
+| `ruff check .` | Lint check |
+| `ruff format .` | Code formatting |
 | `mypy . --ignore-missing-imports` | Type checking |
-| `docker compose up -d` | Запуск Qdrant |
-| `docker compose --profile ml up -d` | Запуск ML платформ |
+| `docker compose up -d` | Start Qdrant |
+| `docker compose --profile ml up -d` | Start ML platforms |
 
-***REMOVED******REMOVED******REMOVED*** Важные файлы для редактирования
+***REMOVED******REMOVED******REMOVED*** Important Files to Edit
 
-| Файл | Когда редактировать |
-|------|-------------------|
-| `.env` | Добавление API ключей |
-| `config.py` | Изменение параметров системы |
-| `prompts.py` | Обновление промптов для LLM |
-| `pyproject.toml` | Добавление новых зависимостей |
-| `.pre-commit-config.yaml` | Изменение качества кода |
+| File | When to Edit |
+|------|-------------|
+| `.env` | Adding API keys |
+| `config.py` | Changing system parameters |
+| `prompts.py` | Updating LLM prompts |
+| `pyproject.toml` | Adding new dependencies |
+| `.pre-commit-config.yaml` | Changing code quality settings |
 
-***REMOVED******REMOVED******REMOVED*** Возможные проблемы
+***REMOVED******REMOVED******REMOVED*** Common Issues
 
-| Проблема | Решение |
-|----------|--------|
-| `ConnectionError` к Qdrant | Запустите `docker compose up -d qdrant` |
-| `APIError` от Claude | Проверьте `.env` ключ `ANTHROPIC_API_KEY` |
-| `ModuleNotFoundError` | Переустановите `pip install -e .` |
-| Медленный поиск | Используйте `ingestion_contextual_kg_fast.py` |
-| Низкие метрики | Проверьте DBSF конфигурацию в `config.py` |
-
----
-
-***REMOVED******REMOVED*** Документация по модулям
-
-Детальное описание каждого модуля см. в:
-- 📖 **MODULE_GUIDE.md** - Описание всех модулей
-- 🚀 **QUICK_START.md** - Пошаговый старт
-- 📦 **DEPENDENCIES.md** - Все зависимости
-- 🔧 **DEBUGGING_GUIDE.md** - Решение проблем
+| Issue | Solution |
+|-------|----------|
+| `ConnectionError` to Qdrant | Run `docker compose up -d qdrant` |
+| `APIError` from Claude | Check `.env` key `ANTHROPIC_API_KEY` |
+| `ModuleNotFoundError` | Reinstall `pip install -e .` |
+| Slow search | Use `ingestion_contextual_kg_fast.py` |
+| Low metrics | Check DBSF configuration in `config.py` |
 
 ---
 
-***REMOVED******REMOVED*** Контакты и поддержка
+***REMOVED******REMOVED*** Module Documentation
 
-- **Issues**: Создавайте GitHub issues
-- **Documentation**: См. `/docs` папку
+Detailed description of each module see in:
+- 📖 **MODULE_GUIDE.md** - Description of all modules
+- 🚀 **QUICK_START.md** - Step-by-step start
+- 📦 **DEPENDENCIES.md** - All dependencies
+- 🔧 **DEBUGGING_GUIDE.md** - Troubleshooting
+
+---
+
+***REMOVED******REMOVED*** Contact and Support
+
+- **Issues**: Create GitHub issues
+- **Documentation**: See `/docs` folder
 - **Status**: Production ready ✅
 
 ---

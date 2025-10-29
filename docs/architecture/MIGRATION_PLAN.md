@@ -1,67 +1,67 @@
 ***REMOVED*** 🚀 Migration Plan: Custom Scripts → Production Tools
 
-**Цель:** Заменить самописные скрипты (923 lines) на production-grade инструменты за 2-3 дня.
+**Goal:** Replace custom scripts (923 lines) with production-grade tools in 2-3 days.
 
-**Статус:** ✅ **ЗАВЕРШЕНО** (2025-10-23)
+**Status:** ✅ **COMPLETED** (2025-10-23)
 
 ---
 
-***REMOVED******REMOVED*** 📋 Статус выполнения
+***REMOVED******REMOVED*** 📋 Completion Status
 
-| Фаза | Статус | Дата завершения | Документация |
+| Phase | Status | Completion Date | Documentation |
 |------|--------|-----------------|--------------|
-| **Фаза 1:** MLflow + RAGAS Infrastructure | ✅ Завершено | 2025-10-23 | [PHASE1_COMPLETION_SUMMARY.md](PHASE1_COMPLETION_SUMMARY.md) |
-| **Фаза 2:** MLflow Integration в run_ab_test.py | ✅ Завершено | 2025-10-23 | [PHASE2_COMPLETION_SUMMARY.md](PHASE2_COMPLETION_SUMMARY.md) |
-| **Фаза 3:** Langfuse Native SDK Integration | ✅ Завершено | 2025-10-23 | [PHASE3_COMPLETION_SUMMARY.md](PHASE3_COMPLETION_SUMMARY.md) |
+| **Phase 1:** MLflow + RAGAS Infrastructure | ✅ Completed | 2025-10-23 | [PHASE1_COMPLETION_SUMMARY.md](PHASE1_COMPLETION_SUMMARY.md) |
+| **Phase 2:** MLflow Integration in run_ab_test.py | ✅ Completed | 2025-10-23 | [PHASE2_COMPLETION_SUMMARY.md](PHASE2_COMPLETION_SUMMARY.md) |
+| **Phase 3:** Langfuse Native SDK Integration | ✅ Completed | 2025-10-23 | [PHASE3_COMPLETION_SUMMARY.md](PHASE3_COMPLETION_SUMMARY.md) |
 
-**Итого:** Все 3 фазы завершены, production-ready ML platform развернут.
+**Total:** All 3 phases completed, production-ready ML platform deployed.
 
 ---
 
-***REMOVED******REMOVED*** 📊 Что заменяем
+***REMOVED******REMOVED*** 📊 What We're Replacing
 
-| Компонент | Было (наш код) | Станет | Выигрыш |
+| Component | Before (our code) | After | Benefit |
 |-----------|---------------|---------|---------|
 | Config versioning | config_snapshot.py (67 lines) | **MLflow** | UI + reproducibility |
-| E2E evaluation | ❌ Не было | **RAGAS** | 4 метрики из коробки |
+| E2E evaluation | ❌ None | **RAGAS** | 4 metrics out-of-the-box |
 | Metrics logging | metrics_logger.py (403 lines) | **Langfuse** | Full observability |
-| Smoke testing | smoke_test.py (453 lines) | **Giskard** | Автотесты + reports |
+| Smoke testing | smoke_test.py (453 lines) | **Giskard** | Auto-tests + reports |
 
 ---
 
-***REMOVED******REMOVED*** 🎯 Фазированная миграция
+***REMOVED******REMOVED*** 🎯 Phased Migration
 
-***REMOVED******REMOVED******REMOVED*** ✅ Фаза 1 (День 1): MLflow + RAGAS - Quick Wins
+***REMOVED******REMOVED******REMOVED*** ✅ Phase 1 (Day 1): MLflow + RAGAS - Quick Wins
 
-**Цель:** Репродуцируемость экспериментов + e2e метрики
-**Время:** 4 часа
-**Риск:** 🟢 Минимальный
+**Goal:** Experiment reproducibility + e2e metrics
+**Time:** 4 hours
+**Risk:** 🟢 Minimal
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 1.1: Создать virtual environment (15 мин)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 1.1: Create virtual environment (15 min)
 
 ```bash
 cd /srv/rag-fresh
 python3 -m venv venv
 source venv/bin/activate
 
-***REMOVED*** Сохранить текущие зависимости
+***REMOVED*** Save current dependencies
 pip freeze > requirements_current.txt
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 1.2: Установить MLflow (15 мин)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 1.2: Install MLflow (15 min)
 
 ```bash
 pip install mlflow==2.22.1
-pip install boto3  ***REMOVED*** Если будем использовать S3 для артефактов
+pip install boto3  ***REMOVED*** If using S3 for artifacts
 
-***REMOVED*** Запустить MLflow UI
+***REMOVED*** Start MLflow UI
 mlflow ui --backend-store-uri ./mlruns --port 5001
-***REMOVED*** Открыть: http://localhost:5001
+***REMOVED*** Open: http://localhost:5001
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 1.3: Интегрировать MLflow в run_ab_test.py (1.5 часа)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 1.3: Integrate MLflow in run_ab_test.py (1.5 hours)
 
-Создать `evaluation/mlflow_integration.py`:
+Create `evaluation/mlflow_integration.py`:
 
 ```python
 """MLflow integration wrapper for A/B tests."""
@@ -100,26 +100,26 @@ def log_ab_test(engine_name: str, results: dict, report_path: str):
         mlflow.set_tag("embedder", CONFIG_SNAPSHOT["models"]["embedder"]["name"])
 ```
 
-Добавить в `evaluation/run_ab_test.py`:
+Add to `evaluation/run_ab_test.py`:
 
 ```python
 from mlflow_integration import log_ab_test
 
-***REMOVED*** В конце функции run_evaluation():
+***REMOVED*** At the end of run_evaluation() function:
 if args.mlflow:
     log_ab_test(engine_name, results, report_path)
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 1.4: Установить RAGAS (30 мин)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 1.4: Install RAGAS (30 min)
 
 ```bash
 pip install ragas==0.1.20 langchain-openai==0.3.2
 
-***REMOVED*** Добавить в .env
+***REMOVED*** Add to .env
 echo "OPENAI_API_KEY=[REDACTED-OPENAI-KEY] >> .env
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 1.5: Создать evaluate_with_ragas.py (1.5 часа)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 1.5: Create evaluate_with_ragas.py (1.5 hours)
 
 ```python
 ***REMOVED***!/usr/bin/env python3
@@ -235,60 +235,60 @@ if __name__ == "__main__":
     run_ragas_evaluation()
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 1.6: Тестирование (30 мин)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 1.6: Testing (30 min)
 
 ```bash
-***REMOVED*** Запустить MLflow UI
+***REMOVED*** Start MLflow UI
 mlflow ui --backend-store-uri ./mlruns --port 5001 &
 
-***REMOVED*** Запустить A/B тест с MLflow
+***REMOVED*** Run A/B test with MLflow
 source venv/bin/activate
 cd evaluation
 python run_ab_test.py --engines dbsf_colbert --mlflow
 
-***REMOVED*** Запустить RAGAS evaluation
+***REMOVED*** Run RAGAS evaluation
 python evaluate_with_ragas.py
 
-***REMOVED*** Проверить в UI: http://localhost:5001
+***REMOVED*** Check UI: http://localhost:5001
 ```
 
-**✅ Результат Фазы 1:**
-- Все эксперименты в MLflow UI
-- 4 новых метрики от RAGAS
-- Сравнение разных runs
-- Полная репродуцируемость
+**✅ Phase 1 Results:**
+- All experiments in MLflow UI
+- 4 new metrics from RAGAS
+- Compare different runs
+- Full reproducibility
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** ✅ Фаза 2 (День 2): MLflow Integration в run_ab_test.py - ЗАВЕРШЕНО
+***REMOVED******REMOVED******REMOVED*** ✅ Phase 2 (Day 2): MLflow Integration in run_ab_test.py - COMPLETED
 
-**Цель:** Автоматическое логирование A/B тестов в MLflow
-**Время:** 2 часа (запланировано: 6 часов)
-**Риск:** 🟢 Минимальный
-**Статус:** ✅ **ЗАВЕРШЕНО** (2025-10-23)
+**Goal:** Automatic A/B test logging in MLflow
+**Time:** 2 hours (planned: 6 hours)
+**Risk:** 🟢 Minimal
+**Status:** ✅ **COMPLETED** (2025-10-23)
 
-**Реализация:**
-- Добавлено опциональное логирование в `run_ab_test.py` (+85 строк)
-- Graceful degradation: работает с/без MLflow
-- Логируется: 5 параметров + 25 метрик + markdown report
-- Создан тест-скрипт `test_mlflow_ab.py` для быстрой проверки
+**Implementation:**
+- Added optional logging in `run_ab_test.py` (+85 lines)
+- Graceful degradation: works with/without MLflow
+- Logs: 5 parameters + 25 metrics + markdown report
+- Created test script `test_mlflow_ab.py` for quick checks
 
-Подробности: [PHASE2_COMPLETION_SUMMARY.md](PHASE2_COMPLETION_SUMMARY.md)
+Details: [PHASE2_COMPLETION_SUMMARY.md](PHASE2_COMPLETION_SUMMARY.md)
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** ✅ Фаза 3 (День 2-3): Langfuse - Production Observability - ЗАВЕРШЕНО
+***REMOVED******REMOVED******REMOVED*** ✅ Phase 3 (Day 2-3): Langfuse - Production Observability - COMPLETED
 
-**Цель:** Трейсинг production запросов с native SDK
-**Время:** 3 часа (запланировано: 6 часов)
-**Риск:** 🟢 Минимальный (использован native SDK)
-**Статус:** ✅ **ЗАВЕРШЕНО** (2025-10-23)
+**Goal:** Production request tracing with native SDK
+**Time:** 3 hours (planned: 6 hours)
+**Risk:** 🟢 Minimal (used native SDK)
+**Status:** ✅ **COMPLETED** (2025-10-23)
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 2.1: Установить Langfuse (1 час)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 2.1: Install Langfuse (1 hour)
 
-**Вариант A: Self-hosted (рекомендуется)**
+**Option A: Self-hosted (recommended)**
 
-Добавить в `/srv/docker-compose.yml`:
+Add to `/srv/docker-compose.yml`:
 
 ```yaml
   langfuse-server:
@@ -307,39 +307,39 @@ python evaluate_with_ragas.py
       - ai-unified-network
 ```
 
-Создать DB:
+Create DB:
 
 ```bash
 docker exec -it ai-postgres psql -U postgres -c "CREATE DATABASE langfuse;"
 
-***REMOVED*** Добавить в .env
+***REMOVED*** Add to .env
 echo "LANGFUSE_SECRET=$(openssl rand -hex 32)" >> .env
 echo "LANGFUSE_SALT=$(openssl rand -hex 32)" >> .env
 
-***REMOVED*** Перезапустить
+***REMOVED*** Restart
 docker compose up -d langfuse-server
 ```
 
-**Вариант B: Cloud (быстрее)**
+**Option B: Cloud (faster)**
 
 ```bash
-***REMOVED*** Получить ключи на https://cloud.langfuse.com
+***REMOVED*** Get keys from https://cloud.langfuse.com
 echo "LANGFUSE_PUBLIC_KEY=[REDACTED-LANGFUSE-KEY] >> .env
 echo "LANGFUSE_SECRET_KEY=[REDACTED-LANGFUSE-KEY] >> .env
 echo "LANGFUSE_HOST=https://cloud.langfuse.com" >> .env
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 2.2: Установить Python SDK (15 мин)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 2.2: Install Python SDK (15 min)
 
 ```bash
 pip install langfuse==2.56.0
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 2.3: Создать langfuse_integration.py с native SDK (1 час) ✅
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 2.3: Create langfuse_integration.py with native SDK (1 hour) ✅
 
-**Фактическая реализация:** Использован official Langfuse SDK без custom wrappers
+**Actual implementation:** Used official Langfuse SDK without custom wrappers
 
-Создан `evaluation/langfuse_integration.py` (430 строк):
+Created `evaluation/langfuse_integration.py` (430 lines):
 
 ```python
 """
@@ -398,13 +398,13 @@ def trace_search_with_spans(query, search_fn, engine_name):
             span.score(name="precision_at_1", value=metrics["p@1"])
 ```
 
-**Преимущества native SDK:**
-- Нет custom wrappers → меньше кода, меньше багов
-- Автоматическое нестирование decorated functions
-- Официальные паттерны из документации
-- Поддержка из коробки от Langfuse team
+**Native SDK benefits:**
+- No custom wrappers → less code, fewer bugs
+- Automatic nesting of decorated functions
+- Official patterns from documentation
+- Out-of-the-box support from Langfuse team
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 2.4: Добавить custom scores (1 час)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 2.4: Add custom scores (1 hour)
 
 ```python
 from langfuse import Langfuse
@@ -425,41 +425,41 @@ def log_search_metrics(trace_id: str, precision_at_1: float, latency_ms: float):
     )
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 2.5: Тестирование (30 мин)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 2.5: Testing (30 min)
 
 ```bash
-***REMOVED*** Открыть Langfuse UI
+***REMOVED*** Open Langfuse UI
 open http://localhost:3001  ***REMOVED*** Self-hosted
 ***REMOVED*** or
 open https://cloud.langfuse.com  ***REMOVED*** Cloud
 
-***REMOVED*** Запустить тест с трейсингом
+***REMOVED*** Run test with tracing
 python run_ab_test.py --engines dbsf_colbert --sample 10
 
-***REMOVED*** Проверить traces в UI
+***REMOVED*** Check traces in UI
 ```
 
-**✅ Результат Фазы 2:**
-- Полный трейсинг: encode → search → rerank
-- Latency breakdown по шагам
+**✅ Phase 2 Results:**
+- Full tracing: encode → search → rerank
+- Latency breakdown by steps
 - Custom scores (P@1, latency)
 - Production-ready observability
 
 ---
 
-***REMOVED******REMOVED******REMOVED*** ✅ Фаза 3 (Опционально): Giskard - Automated Testing
+***REMOVED******REMOVED******REMOVED*** ✅ Phase 3 (Optional): Giskard - Automated Testing
 
-**Цель:** Автоматические проверки качества + HTML reports
-**Время:** 4 часа
-**Риск:** 🟢 Минимальный
+**Goal:** Automated quality checks + HTML reports
+**Time:** 4 hours
+**Risk:** 🟢 Minimal
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 3.1: Установить Giskard (15 мин)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 3.1: Install Giskard (15 min)
 
 ```bash
 pip install giskard==2.15.4
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 3.2: Создать giskard_smoke_tests.py (3 часа)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 3.2: Create giskard_smoke_tests.py (3 hours)
 
 ```python
 ***REMOVED***!/usr/bin/env python3
@@ -516,9 +516,9 @@ results = suite.run()
 results.to_html("evaluation/reports/giskard_smoke_report.html")
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Шаг 3.3: Интеграция с CI/CD (30 мин)
+***REMOVED******REMOVED******REMOVED******REMOVED*** Step 3.3: CI/CD Integration (30 min)
 
-Создать `.github/workflows/smoke_test.yml`:
+Create `.github/workflows/smoke_test.yml`:
 
 ```yaml
 name: Smoke Test with Giskard
@@ -547,58 +547,58 @@ jobs:
           path: evaluation/reports/giskard_smoke_report.html
 ```
 
-**✅ Результат Фазы 3:**
-- Автоматические smoke tests
+**✅ Phase 3 Results:**
+- Automated smoke tests
 - HTML reports
 - CI/CD integration
-- Проверки на hallucinations, bias, prompt injection
+- Checks for hallucinations, bias, prompt injection
 
 ---
 
-***REMOVED******REMOVED*** ⚠️ Риски и митигация
+***REMOVED******REMOVED*** ⚠️ Risks and Mitigation
 
-***REMOVED******REMOVED******REMOVED*** Риск 1: Версионирование LLM для RAGAS
+***REMOVED******REMOVED******REMOVED*** Risk 1: LLM versioning for RAGAS
 
-**Проблема:** Оценки RAGAS могут меняться при смене версии LLM
-**Митигация:**
-- Зафиксировать `gpt-4o-mini` + `temperature=0.0` в MLflow params
-- Запускать evaluation несколько раз и проверять дисперсию
-- Использовать `ragas_version` как tag
+**Problem:** RAGAS scores may change when LLM version changes
+**Mitigation:**
+- Fix `gpt-4o-mini` + `temperature=0.0` in MLflow params
+- Run evaluation multiple times and check variance
+- Use `ragas_version` as tag
 
-***REMOVED******REMOVED******REMOVED*** Риск 2: Секреты в репозитории
+***REMOVED******REMOVED******REMOVED*** Risk 2: Secrets in repository
 
-**Проблема:** OpenAI keys, Langfuse keys могут попасть в git
-**Митигация:**
-- Все ключи только в `.env` (уже в `.gitignore`)
-- Использовать environment variables в CI/CD
-- Добавить pre-commit hook для проверки секретов
+**Problem:** OpenAI keys, Langfuse keys may get into git
+**Mitigation:**
+- All keys only in `.env` (already in `.gitignore`)
+- Use environment variables in CI/CD
+- Add pre-commit hook for secret checking
 
-***REMOVED******REMOVED******REMOVED*** Риск 3: Latency overhead от трейсинга
+***REMOVED******REMOVED******REMOVED*** Risk 3: Latency overhead from tracing
 
-**Проблема:** Langfuse может добавлять latency
-**Митигация:**
-- Async отправка в Langfuse (по умолчанию)
-- Измерить overhead: запустить A/B с/без трейсинга
-- Настроить sampling (не логировать каждый запрос в prod)
+**Problem:** Langfuse may add latency
+**Mitigation:**
+- Async sending to Langfuse (by default)
+- Measure overhead: run A/B with/without tracing
+- Configure sampling (don't log every request in prod)
 
-***REMOVED******REMOVED******REMOVED*** Риск 4: PII в трейсах
+***REMOVED******REMOVED******REMOVED*** Risk 4: PII in traces
 
-**Проблема:** Пользовательские запросы могут содержать персональные данные
-**Митигация:**
-- Для тестовых данных (150 queries УК) - не проблема
-- Для production: включить PII masking в Langfuse
-- Регулярно чистить старые traces
+**Problem:** User queries may contain personal data
+**Mitigation:**
+- For test data (150 queries) - not a problem
+- For production: enable PII masking in Langfuse
+- Regularly clean old traces
 
 ---
 
-***REMOVED******REMOVED*** 📦 Финальная архитектура
+***REMOVED******REMOVED*** 📦 Final Architecture
 
 ```
 rag-fresh/
 ├── venv/                          ***REMOVED*** 🆕 Virtual environment
 ├── mlruns/                        ***REMOVED*** 🆕 MLflow experiments
 ├── evaluation/
-│   ├── search_engines.py          ***REMOVED*** ✅ Без изменений
+│   ├── search_engines.py          ***REMOVED*** ✅ No changes
 │   ├── run_ab_test.py             ***REMOVED*** 🔄 + MLflow logging
 │   ├── mlflow_integration.py      ***REMOVED*** 🆕 MLflow wrapper
 │   ├── evaluate_with_ragas.py     ***REMOVED*** 🆕 RAGAS evaluation
@@ -618,26 +618,26 @@ rag-fresh/
 
 ---
 
-***REMOVED******REMOVED*** 📊 Ожидаемые результаты
+***REMOVED******REMOVED*** 📊 Expected Results
 
-| Метрика | До миграции | После миграции |
+| Metric | Before migration | After migration |
 |---------|------------|----------------|
 | **Lines of custom code** | 923 | ~150 (-84%) |
 | **UI dashboards** | 0 | 2 (MLflow + Langfuse) |
-| **Метрик RAG** | 5 (R@1, R@10, NDCG, MRR, latency) | 9 (+4 RAGAS) |
-| **Трейсинг** | ❌ Нет | ✅ Full pipeline |
-| **Автотесты** | Manual | ✅ Automated |
+| **RAG metrics** | 5 (R@1, R@10, NDCG, MRR, latency) | 9 (+4 RAGAS) |
+| **Tracing** | ❌ None | ✅ Full pipeline |
+| **Auto-tests** | Manual | ✅ Automated |
 | **Reproducibility** | Hash only | ✅ Full experiment tracking |
 | **Production-ready** | 🟡 Partial | ✅ Yes |
 
 ---
 
-***REMOVED******REMOVED*** 🚀 Следующие шаги
+***REMOVED******REMOVED*** 🚀 Next Steps
 
-1. **Прочитать и утвердить план**
-2. **Начать с Фазы 1** (MLflow + RAGAS) → 4 часа работы
-3. **Проверить результаты** в MLflow UI
-4. **Перейти к Фазе 2** (Langfuse) → production observability
-5. **Опционально Фаза 3** (Giskard) → automated testing
+1. **Read and approve the plan**
+2. **Start with Phase 1** (MLflow + RAGAS) → 4 hours work
+3. **Check results** in MLflow UI
+4. **Move to Phase 2** (Langfuse) → production observability
+5. **Optional Phase 3** (Giskard) → automated testing
 
-**Готов начать?** Скажи "го Фаза 1" и я сразу создам все нужные файлы и запущу установку.
+**Ready to start?** Say "go Phase 1" and I'll immediately create all necessary files and start installation.
