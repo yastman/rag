@@ -1,0 +1,286 @@
+[project]
+name = "contextual-rag"
+version = "2.0.1"
+description = "Contextual RAG Pipeline with DBSF + ColBERT hybrid search"
+requires-python = ">=3.9"
+dependencies = [
+    "pymupdf",
+    "anthropic",
+    "openai",
+    "groq",
+    "python-dotenv",
+    "numpy",
+    "aiohttp",
+    "requests",
+    "pandas",
+    "FlagEmbedding",
+    "scipy",
+    "sentence-transformers",  ***REMOVED*** BGE-M3 embeddings
+    "qdrant-client",          ***REMOVED*** Vector database client
+    ***REMOVED*** ML Platform & Evaluation (2025-10-23)
+    "mlflow>=2.22.1",        ***REMOVED*** Experiment tracking
+    "ragas>=0.2.10",          ***REMOVED*** RAG evaluation framework
+    "langfuse>=3.0.0",        ***REMOVED*** LLM observability & tracing
+    "datasets>=3.0.0",        ***REMOVED*** For RAGAS evaluation datasets
+]
+
+[project.optional-dependencies]
+***REMOVED*** Development tools (linters, formatters, type checkers)
+dev = [
+    "ruff>=0.6.0",           ***REMOVED*** Fast linter + formatter
+    "mypy>=1.11.0",          ***REMOVED*** Type checking
+    "pylint>=3.2.0",         ***REMOVED*** Comprehensive linting
+    "bandit>=1.7.9",         ***REMOVED*** Security linting
+    "vulture>=2.11",         ***REMOVED*** Dead code detection
+    "pytest>=8.3.0",         ***REMOVED*** Testing framework
+    "pytest-cov>=5.0.0",     ***REMOVED*** Coverage plugin
+    "pytest-asyncio>=0.24.0",***REMOVED*** Async testing
+    "pre-commit>=3.8.0",     ***REMOVED*** Git hooks
+]
+
+***REMOVED*** Documentation tools
+docs = [
+    "mkdocs>=1.6.0",         ***REMOVED*** Documentation generator
+    "mkdocs-material>=9.5.0",***REMOVED*** Material theme
+    "mkdocstrings[python]>=0.25.0",  ***REMOVED*** Auto API docs
+]
+
+***REMOVED*** All optional dependencies
+all = [
+    "contextual-rag[dev,docs]",
+]
+
+***REMOVED*** =============================================================================
+***REMOVED*** RUFF CONFIGURATION (Modern Python Linter + Formatter, 2025)
+***REMOVED*** =============================================================================
+***REMOVED*** Ruff replaces: flake8, black, isort, pyupgrade, autoflake, and more
+***REMOVED*** Speed: 10-100x faster than traditional tools
+***REMOVED*** Documentation: https://docs.astral.sh/ruff/
+
+[tool.ruff]
+***REMOVED*** Exclude common directories
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+***REMOVED*** Line length: 100 (slightly longer than Black's 88 for readability)
+line-length = 100
+indent-width = 4
+
+***REMOVED*** Target Python 3.9+ (project minimum)
+target-version = "py39"
+
+***REMOVED*** =============================================================================
+***REMOVED*** LINTING RULES
+***REMOVED*** =============================================================================
+
+[tool.ruff.lint]
+***REMOVED*** Enable recommended rule sets (2025 best practices)
+select = [
+    "E",     ***REMOVED*** pycodestyle errors
+    "W",     ***REMOVED*** pycodestyle warnings
+    "F",     ***REMOVED*** Pyflakes (undefined names, unused imports, etc.)
+    "B",     ***REMOVED*** flake8-bugbear (common bugs and design problems)
+    "I",     ***REMOVED*** isort (import sorting)
+    "UP",    ***REMOVED*** pyupgrade (modernize Python code)
+    "SIM",   ***REMOVED*** flake8-simplify (simplify code)
+    "C4",    ***REMOVED*** flake8-comprehensions (better list/dict/set comprehensions)
+    "PIE",   ***REMOVED*** flake8-pie (misc lints)
+    "T20",   ***REMOVED*** flake8-print (detect print statements)
+    "RET",   ***REMOVED*** flake8-return (return statement issues)
+    "ARG",   ***REMOVED*** flake8-unused-arguments
+    "PTH",   ***REMOVED*** flake8-use-pathlib (prefer pathlib over os.path)
+]
+
+***REMOVED*** Ignore specific rules
+ignore = [
+    "E501",   ***REMOVED*** Line too long (handled by formatter)
+    "B008",   ***REMOVED*** Function calls in argument defaults
+    "T201",   ***REMOVED*** print() statements (we use them for logging)
+    "PTH123", ***REMOVED*** pathlib open() (we use built-in open())
+    "PTH",    ***REMOVED*** os.path usage (pathlib migration not critical for this project)
+    "ARG002", ***REMOVED*** Unused method arguments (often required for interface compatibility)
+    "B904",   ***REMOVED*** raise-without-from (context dependent, not always needed)
+    "SIM113", ***REMOVED*** enumerate-for-loop (minor optimization, not critical)
+]
+
+***REMOVED*** Allow auto-fix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+***REMOVED*** Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+***REMOVED*** Per-file ignores
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "E402"]  ***REMOVED*** Allow unused imports and late imports
+"evaluation/*.py" = ["T201"]      ***REMOVED*** Allow print() in evaluation scripts
+"test_*.py" = ["E402", "T201"]    ***REMOVED*** Allow late imports (after load_dotenv()) and print() in tests
+"*.py" = ["ARG001"]               ***REMOVED*** Allow unused function arguments (common in callbacks)
+
+***REMOVED*** Import sorting configuration (isort replacement)
+[tool.ruff.lint.isort]
+known-first-party = ["config", "evaluation"]
+force-single-line = false
+lines-after-imports = 2
+
+***REMOVED*** =============================================================================
+***REMOVED*** FORMATTING
+***REMOVED*** =============================================================================
+
+[tool.ruff.format]
+***REMOVED*** Use double quotes for strings (like Black)
+quote-style = "double"
+
+***REMOVED*** Indent with spaces (4 spaces)
+indent-style = "space"
+
+***REMOVED*** Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+***REMOVED*** Auto-detect line endings (LF on Linux, CRLF on Windows)
+line-ending = "auto"
+
+***REMOVED*** Format code examples in docstrings
+docstring-code-format = true
+
+***REMOVED*** Docstring code line length (dynamic = same as main code)
+docstring-code-line-length = "dynamic"
+
+***REMOVED*** =============================================================================
+***REMOVED*** MYPY CONFIGURATION (Type Checking)
+***REMOVED*** =============================================================================
+***REMOVED*** Uncomment to enable strict type checking
+***REMOVED*** Run: mypy .
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  ***REMOVED*** Set to true for strict mode
+ignore_missing_imports = true  ***REMOVED*** Ignore missing stubs for now
+
+***REMOVED*** Per-module overrides
+[[tool.mypy.overrides]]
+module = "evaluation.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "FlagEmbedding.*"
+ignore_missing_imports = true
+
+***REMOVED*** =============================================================================
+***REMOVED*** BANDIT CONFIGURATION (Security Linting)
+***REMOVED*** =============================================================================
+***REMOVED*** Uncomment to enable security checks
+***REMOVED*** Run: bandit -r . -c pyproject.toml
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests", "evaluation", "legacy", "__pycache__"]
+skips = ["B101"]  ***REMOVED*** Skip assert_used (common in tests)
+
+***REMOVED*** =============================================================================
+***REMOVED*** PYLINT CONFIGURATION (Comprehensive Linting)
+***REMOVED*** =============================================================================
+***REMOVED*** Run: pylint src/
+
+[tool.pylint.main]
+***REMOVED*** Python version for compatibility checks
+py-version = "3.9"
+
+***REMOVED*** Files/directories to exclude
+ignore = ["legacy", "tests", ".venv", "__pycache__"]
+ignore-patterns = [".*_old\\.py$", ".*_backup\\.py$"]
+
+[tool.pylint.messages_control]
+***REMOVED*** Disable specific checks
+disable = [
+    "C0111",  ***REMOVED*** missing-docstring
+    "C0103",  ***REMOVED*** invalid-name (sometimes OK for ML code)
+    "R0913",  ***REMOVED*** too-many-arguments (common in ML)
+    "R0914",  ***REMOVED*** too-many-locals
+    "W0511",  ***REMOVED*** fixme/todo comments
+    "C0301",  ***REMOVED*** line-too-long (handled by ruff)
+]
+
+[tool.pylint.format]
+max-line-length = 100
+indent-string = "    "  ***REMOVED*** 4 spaces
+
+[tool.pylint.basic]
+***REMOVED*** Good variable names
+good-names = ["i", "j", "k", "ex", "Run", "_", "id", "f", "e"]
+
+[tool.pylint.design]
+max-args = 10  ***REMOVED*** Allow more args (ML models need many params)
+max-attributes = 15
+max-branches = 15
+
+***REMOVED*** =============================================================================
+***REMOVED*** PYTEST CONFIGURATION
+***REMOVED*** =============================================================================
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = """
+    -ra
+    --strict-markers
+    --strict-config
+    --showlocals
+    --cov=src
+    --cov-report=html
+    --cov-report=term-missing:skip-covered
+"""
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+***REMOVED*** =============================================================================
+***REMOVED*** COVERAGE CONFIGURATION
+***REMOVED*** =============================================================================
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/legacy/*",
+    "*/__pycache__/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

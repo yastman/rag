@@ -1,0 +1,164 @@
+***REMOVED*** Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+***REMOVED*** C extensions
+*.so
+
+***REMOVED*** Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+***REMOVED*** PyInstaller
+*.manifest
+*.spec
+
+***REMOVED*** Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+***REMOVED*** Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+***REMOVED*** Translations
+*.mo
+*.pot
+
+***REMOVED*** Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+***REMOVED*** Flask stuff:
+instance/
+.webassets-cache
+
+***REMOVED*** Scrapy stuff:
+.scrapy
+
+***REMOVED*** Sphinx documentation
+docs/_build/
+
+***REMOVED*** PyBuilder
+target/
+
+***REMOVED*** Jupyter Notebook
+.ipynb_checkpoints
+
+***REMOVED*** IPython
+profile_default/
+ipython_config.py
+
+***REMOVED*** pyenv
+.python-version
+
+***REMOVED*** pipenv
+Pipfile.lock
+
+***REMOVED*** PEP 582
+__pypackages__/
+
+***REMOVED*** Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+***REMOVED*** SageMath parsed files
+*.sage.py
+
+***REMOVED*** Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+***REMOVED*** Spyder project settings
+.spyderproject
+.spyproject
+
+***REMOVED*** Rope project settings
+.ropeproject
+
+***REMOVED*** mkdocs documentation
+/site
+
+***REMOVED*** mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+***REMOVED*** Pyre type checker
+.pyre/
+
+***REMOVED*** IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+***REMOVED*** Project specific
+logs/
+data/embeddings/
+data/evaluation/
+evaluation/results/
+evaluation/evaluation/
+*.tar.gz
+*.backup
+
+***REMOVED*** Sensitive files
+.env
+.env.local
+credentials.json
+secrets.yaml
+
+***REMOVED*** Temporary files
+tmp/
+temp/
+*.tmp
+
+***REMOVED*** MLflow
+mlruns/
+.mlflow
+
+***REMOVED*** Langfuse
+langfuse_logs/
+
+***REMOVED*** Qdrant
+qdrant_storage/
+
+***REMOVED*** Pre-commit
+.pre-commit-config.yaml~
