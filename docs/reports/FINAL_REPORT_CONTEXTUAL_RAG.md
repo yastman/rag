@@ -1,14 +1,14 @@
-# 🔬 ФИНАЛЬНЫЙ ОТЧЁТ: CONTEXTUAL RAG + KNOWLEDGE GRAPH
+# 🔬 FINAL REPORT: CONTEXTUAL RAG + KNOWLEDGE GRAPH
 
-**Дата**: 2025-10-22
-**Проект**: Ukrainian Civil Code RAG System
-**Цель**: Улучшить retrieval quality через Contextual Retrieval + Knowledge Graph
+**Date**: 2025-10-22
+**Project**: Ukrainian Civil Code RAG System
+**Goal**: Improve retrieval quality through Contextual Retrieval + Knowledge Graph
 
 ---
 
 ## 📋 EXECUTIVE SUMMARY
 
-### ✅ Технические достижения:
+### ✅ Technical achievements:
 
 1. **Z.AI GLM-4.6 Integration** - 100% success rate
 2. **Performance Optimization** - 4.7x speedup (8.21s → 1.75s per chunk)
@@ -27,62 +27,62 @@
 | **Failure Rate@5** | 20% | 30% | **–50%** ❌ |
 | **Recall@10** | 76.7% | 66.7% | **–13.0%** ❌ |
 
-**Ожидалось**: Contextual+KG улучшит Failure Rate на 40-49% (как в статье Anthropic)
-**Получили**: Baseline работает ЛУЧШЕ по всем метрикам
+**Expected**: Contextual+KG would improve Failure Rate by 40-49% (as in Anthropic article)
+**Received**: Baseline works BETTER across all metrics
 
 ---
 
-## 🏗️ ЧТО БЫЛО СДЕЛАНО
+## 🏗️ WHAT WAS DONE
 
-### 1. Диагностика и исправление Z.AI API ✅
+### 1. Z.AI API Diagnostics and Fixes ✅
 
-**Проблема**: 429 Too Many Requests несмотря на GLM Coding Max-Monthly Plan ($30/month)
+**Problem**: 429 Too Many Requests despite GLM Coding Max-Monthly Plan ($30/month)
 
-**Решение**:
-- Обнаружили что нужен специальный endpoint для подписчиков: `/api/coding/paas/v4`
-- Исправили response parsing: GLM-4.6 возвращает `reasoning_content` или `content`
-- Добавили `"thinking": {"type": "disabled"}` для прямого output
-- Результат: **100% success rate** на всех 132 chunks
+**Solution**:
+- Discovered special endpoint for subscribers: `/api/coding/paas/v4`
+- Fixed response parsing: GLM-4.6 returns `reasoning_content` or `content`
+- Added `"thinking": {"type": "disabled"}` for direct output
+- Result: **100% success rate** on all 132 chunks
 
-**Файлы**:
-- `/home/admin/contextual_rag/contextualize_zai.py` - основная версия
-- `/home/admin/contextual_rag/contextualize_zai_async.py` - оптимизированная
+**Files**:
+- `/home/admin/contextual_rag/contextualize_zai.py` - main version
+- `/home/admin/contextual_rag/contextualize_zai_async.py` - optimized
 
-### 2. Оптимизация производительности ✅
+### 2. Performance Optimization ✅
 
-**Проблема**: Медленная обработка (8.21s/chunk = 18+ минут на 132 chunks)
+**Problem**: Slow processing (8.21s/chunk = 18+ minutes for 132 chunks)
 
-**Анализ через Sequential Thinking MCP**:
-- Bottleneck: 8,750 tokens document context в КАЖДОМ запросе (97.7% от total!)
-- Sequential processing вместо параллельного
-- Rate limit delay 1.2s между запросами
+**Analysis via Sequential Thinking MCP**:
+- Bottleneck: 8,750 tokens document context in EVERY request (97.7% of total!)
+- Sequential processing instead of parallel
+- Rate limit delay 1.2s between requests
 
-**Решения**:
-1. **Удалили full document context** из промптов
-   - Старый подход: отправляли весь документ (35K символов) каждый раз
-   - Новый: только chunk + minimal system prompt
-   - Экономия: **90% токенов** (8,750 → ~850 tokens per request)
+**Solutions**:
+1. **Removed full document context** from prompts
+   - Old approach: sent entire document (35K characters) each time
+   - New: only chunk + minimal system prompt
+   - Savings: **90% tokens** (8,750 → ~850 tokens per request)
 
 2. **Async parallel processing**:
-   - `aiohttp` для async HTTP requests
-   - `asyncio.Semaphore(10)` для rate limiting
-   - 10 concurrent requests вместо sequential
+   - `aiohttp` for async HTTP requests
+   - `asyncio.Semaphore(10)` for rate limiting
+   - 10 concurrent requests instead of sequential
 
 3. **Reduced delays**:
    - Rate limit delay: 1.2s → 0.5s
-   - Max tokens: 2048 → 1500 (меньше truncation)
+   - Max tokens: 2048 → 1500 (less truncation)
 
-**Результаты**:
+**Results**:
 - **4.7x speedup**: 1,084s → 231s (18 min → 4 min)
 - **1.75s per chunk** (vs 8.21s original)
 - **100% success rate** maintained
 
-**Файлы**:
+**Files**:
 - `/home/admin/contextual_rag/ingestion_contextual_kg_fast.py`
 
 ### 3. Full Pipeline Run ✅
 
-**Статистика обработки**:
+**Processing statistics**:
 ```
 Total chunks:        132/132 (100%)
 Z.AI Success Rate:   132/132 (100%)
@@ -124,7 +124,7 @@ Savings:              99% cost reduction
 
 ---
 
-## 📊 ДЕТАЛЬНЫЕ РЕЗУЛЬТАТЫ EVALUATION
+## 📊 DETAILED EVALUATION RESULTS
 
 ### Metrics @ K=1
 
@@ -134,7 +134,7 @@ Savings:              99% cost reduction
 | NDCG@1 | 0.6000 | 0.6000 | 0.0% |
 | Failure Rate | 40% | 40% | 0.0% |
 
-**Анализ**: Одинаковые результаты при K=1 (top-1 результат совпадает)
+**Analysis**: Identical results at K=1 (top-1 result matches)
 
 ### Metrics @ K=3
 
@@ -144,17 +144,17 @@ Savings:              99% cost reduction
 | NDCG@3 | 0.5253 | 0.4758 | **–9.4%** ❌ |
 | Failure Rate | 30% | 30% | 0.0% |
 
-**Анализ**: При K=3 contextual начинает проигрывать
+**Analysis**: At K=3 contextual starts to lose
 
 ### Metrics @ K=5 (KEY METRIC)
 
 | Metric | Baseline | Contextual+KG | Delta | Target |
 |--------|----------|---------------|-------|--------|
-| **Recall@5** | **65.0%** | **51.7%** | **–20.5%** ❌ | +15-20 п.п. |
+| **Recall@5** | **65.0%** | **51.7%** | **–20.5%** ❌ | +15-20 p.p. |
 | **NDCG@5** | **0.5768** | **0.5139** | **–10.9%** ❌ | +0.10 |
 | **Failure Rate@5** | **20%** | **30%** | **–50%** ❌ | –40...–50% |
 
-**Анализ**: Самые критические метрики - все хуже у contextual!
+**Analysis**: Most critical metrics - all worse for contextual!
 
 ### Metrics @ K=10
 
@@ -164,83 +164,83 @@ Savings:              99% cost reduction
 | NDCG@10 | 0.6001 | 0.5477 | **–8.7%** ❌ |
 | Failure Rate | 20% | 20% | 0.0% |
 
-**Анализ**: Даже при K=10 contextual не догоняет baseline
+**Analysis**: Even at K=10 contextual doesn't catch up to baseline
 
 ---
 
-## 🔍 АНАЛИЗ: ПОЧЕМУ CONTEXTUAL+KG ХУЖЕ?
+## 🔍 ANALYSIS: WHY IS CONTEXTUAL+KG WORSE?
 
-### Гипотеза #1: Contextual Prefix Разбавляет Semantic Signal ⭐ ГЛАВНАЯ
+### Hypothesis #1: Contextual Prefix Dilutes Semantic Signal ⭐ PRIMARY
 
-**Проблема**:
+**Problem**:
 ```
 Baseline embedding:
-  "Стаття 13. Межі здійснення цивільних прав..."
-  → Прямой semantic match с query "межі здійснення цивільних прав"
+  "Article 13. Limits of exercise of civil rights..."
+  → Direct semantic match with query "limits of exercise of civil rights"
 
 Contextual+KG embedding:
-  "Цей фрагмент з Книги першої, Розділу I, Глави 2...
-   Стаття 13. Межі здійснення цивільних прав..."
-  → Context prefix добавляет структурную информацию,
-     НО разбавляет прямой semantic match!
+  "This fragment is from Book One, Section I, Chapter 2...
+   Article 13. Limits of exercise of civil rights..."
+  → Context prefix adds structural information,
+     BUT dilutes direct semantic match!
 ```
 
-**Почему так происходит**:
-1. BGE-M3 encoder смотрит на ВЕСЬ текст (context + chunk)
-2. Context prefix занимает ~100-150 tokens
-3. При encoding получается "усреднённый" вектор
-4. Прямое lexical совпадение (query → chunk) ослабевает
+**Why this happens**:
+1. BGE-M3 encoder looks at ENTIRE text (context + chunk)
+2. Context prefix occupies ~100-150 tokens
+3. During encoding, an "averaged" vector is produced
+4. Direct lexical match (query → chunk) is weakened
 
-**Пример**:
-- Query: "межі здійснення цивільних прав"
-- Baseline: вектор максимально близкий к query (прямое совпадение слов)
-- Contextual: вектор "размыт" structural context-ом (Book/Section/Chapter)
+**Example**:
+- Query: "limits of exercise of civil rights"
+- Baseline: vector maximally close to query (direct word match)
+- Contextual: vector "diluted" by structural context (Book/Section/Chapter)
 
-### Гипотеза #2: Оптимизация Убрала Важный Document Context
+### Hypothesis #2: Optimization Removed Important Document Context
 
-**Что мы удалили**:
+**What we removed**:
 ```python
-# СТАРЫЙ ПОДХОД (не использовали):
+# OLD APPROACH (not used):
 doc_prompt = f"""
-Вот полный документ (35K символов):
+Here is the full document (35K characters):
 {full_document_text}
 
-Проанализируй этот чанк в контексте документа:
+Analyze this chunk in document context:
 {chunk_text}
 """
 
-# НОВЫЙ ПОДХОД (используем):
+# NEW APPROACH (used):
 doc_prompt = f"""
-Ты эксперт по структуре юридических документов.
-Проанализируй этот чанк:
+You are an expert in legal document structure.
+Analyze this chunk:
 {chunk_text}
 """
 ```
 
-**Последствия**:
-- Z.AI генерирует context БЕЗ знания полного документа
-- Context может быть **менее точным** или **слишком generic**
-- Пример: "Цей фрагмент з Цивільного кодексу України" (слишком общее)
+**Consequences**:
+- Z.AI generates context WITHOUT knowledge of full document
+- Context may be **less accurate** or **too generic**
+- Example: "This fragment from Civil Code of Ukraine" (too general)
 
-### Гипотеза #3: Metadata Noise в Payload
+### Hypothesis #3: Metadata Noise in Payload
 
-**Что добавили в payload**:
+**What was added to payload**:
 ```python
 payload = {
     "text": chunk_text,
     "contextual_prefix": context_text,  # NEW
     "embedded_text": context + chunk,   # NEW
-    "document": "Цивільний кодекс України",
+    "document": "Civil Code of Ukraine",
 
     # Knowledge Graph metadata:
-    "book": "Книга перша",
+    "book": "Book One",
     "book_number": 1,
-    "section": "Розділ I",
+    "section": "Section I",
     "section_number": 1,
-    "chapter": "Глава 2",
+    "chapter": "Chapter 2",
     "chapter_number": 2,
     "article_number": 13,
-    "article_title": "Межі здійснення цивільних прав",
+    "article_title": "Limits of exercise of civil rights",
     "related_articles": [12, 14],
     "parent_article": None,
     "child_articles": [],
@@ -253,52 +253,52 @@ payload = {
 }
 ```
 
-**Проблема**: Если используется **только dense vector search**, вся эта metadata **не участвует** в ranking!
+**Problem**: If using **only dense vector search**, all this metadata **doesn't participate** in ranking!
 
-### Гипотеза #4: Collection Schema Mismatch
+### Hypothesis #4: Collection Schema Mismatch
 
-**Проверка нужна**:
-- Может `uk_civil_code_v2` (baseline) имеет другую структуру?
-- Может разные chunking strategies?
-- Может baseline использует hybrid search (dense + sparse)?
+**Verification needed**:
+- Maybe `uk_civil_code_v2` (baseline) has different structure?
+- Maybe different chunking strategies?
+- Maybe baseline uses hybrid search (dense + sparse)?
 
-### Гипотеза #5: Query Type Bias
+### Hypothesis #5: Query Type Bias
 
-**Наблюдение**: 10 queries - это очень мало для статистической значимости
+**Observation**: 10 queries is too few for statistical significance
 
-**Возможно**:
-- Queries больше подходят для "direct lexical match"
-- Cross-reference queries (где должен выиграть KG) всего 1 из 10
-- Bilingual query всего 1 из 10
+**Possibly**:
+- Queries are better suited for "direct lexical match"
+- Cross-reference queries (where KG should win) only 1 of 10
+- Bilingual query only 1 of 10
 
 ---
 
-## 🎯 ЧТО НУЖНО СДЕЛАТЬ ДАЛЬШЕ
+## 🎯 WHAT NEEDS TO BE DONE NEXT
 
-### Priority 1: Проверить Гипотезу #1 (Context Dilution) ⭐
+### Priority 1: Test Hypothesis #1 (Context Dilution) ⭐
 
-**Эксперимент**:
-1. Создать вариант БЕЗ contextual prefix (только metadata)
-2. Сравнить:
+**Experiment**:
+1. Create variant WITHOUT contextual prefix (only metadata)
+2. Compare:
    - A: Baseline (no context, no metadata)
-   - B: Only metadata (no context prefix в embedding)
+   - B: Only metadata (no context prefix in embedding)
    - C: Contextual+metadata (current)
 
-**Ожидание**: B может показать improvement без dilution effect
+**Expectation**: B may show improvement without dilution effect
 
-### Priority 2: Использовать Hybrid Search Правильно
+### Priority 2: Use Hybrid Search Properly
 
-**Проблема**: Сейчас используем только dense vectors, игнорируя:
+**Problem**: Currently using only dense vectors, ignoring:
 - Sparse vectors (BM25)
 - ColBERT multivectors
 - Metadata filtering
 
-**Решение**:
+**Solution**:
 ```python
-# Вместо:
+# Instead of:
 data = {"vector": {"name": "dense", "vector": [...]}}
 
-# Использовать:
+# Use:
 data = {
     "query": dense_vector,
     "using": "dense",
@@ -320,92 +320,92 @@ data = {
 }
 ```
 
-### Priority 3: Улучшить Context Generation
+### Priority 3: Improve Context Generation
 
-**Варианты**:
-1. **Вернуть document context** - но оптимизировать его:
-   - Не весь документ, а только relevant section
-   - Или использовать chunked document (sliding window)
+**Options**:
+1. **Return document context** - but optimize it:
+   - Not full document, only relevant section
+   - Or use chunked document (sliding window)
 
 2. **Two-stage approach**:
-   - Stage 1: Generate context WITH full document (slow, качественно)
-   - Stage 2: Cache contexts, reuse для новых chunks
+   - Stage 1: Generate context WITH full document (slow, quality)
+   - Stage 2: Cache contexts, reuse for new chunks
 
-3. **Улучшить Z.AI промпт**:
-   - Добавить examples (few-shot)
-   - Более specific instructions для legal document structure
+3. **Improve Z.AI prompt**:
+   - Add examples (few-shot)
+   - More specific instructions for legal document structure
 
-### Priority 4: Расширить Evaluation Set
+### Priority 4: Expand Evaluation Set
 
-**Текущие проблемы**:
-- Только 10 queries (статистически недостаточно)
-- Bias к article-specific queries (5/10)
-- Только 1 cross-reference query (где KG должен выигрывать!)
+**Current problems**:
+- Only 10 queries (statistically insufficient)
+- Bias toward article-specific queries (5/10)
+- Only 1 cross-reference query (where KG should win!)
 
-**Нужно**:
-- Минимум 30-40 queries
-- Сбалансировать типы:
+**Need**:
+- Minimum 30-40 queries
+- Balance types:
   - 30% article-specific
   - 30% conceptual
   - 20% cross-reference (multi-hop)
   - 10% bilingual
   - 10% edge cases
 
-### Priority 5: Проверить Collection Integrity
+### Priority 5: Verify Collection Integrity
 
-**Чеклист**:
-- [ ] Baseline и Contextual используют ОДИНАКОВЫЙ chunking?
-- [ ] Одинаковое количество chunks? (132 vs ?)
-- [ ] Chunk IDs в queries соответствуют обеим коллекциям?
-- [ ] Vector dimensions совпадают? (1024D INT8)
-- [ ] Quantization settings одинаковые?
+**Checklist**:
+- [ ] Baseline and Contextual use SAME chunking?
+- [ ] Same number of chunks? (132 vs ?)
+- [ ] Chunk IDs in queries match both collections?
+- [ ] Vector dimensions match? (1024D INT8)
+- [ ] Quantization settings identical?
 
 ---
 
-## 💡 ВЫВОДЫ И РЕКОМЕНДАЦИИ
+## 💡 CONCLUSIONS AND RECOMMENDATIONS
 
-### ✅ Что точно работает:
+### ✅ What definitely works:
 
-1. **Z.AI GLM-4.6 Integration** - стабильно, 100% success
-2. **Performance Optimization** - 4.7x speedup реально достигнут
+1. **Z.AI GLM-4.6 Integration** - stable, 100% success
+2. **Performance Optimization** - 4.7x speedup achieved
 3. **Token & Cost Efficiency** - 91% token reduction, 99% cost savings
-4. **Async Pipeline** - работает быстро и надёжно
+4. **Async Pipeline** - works fast and reliably
 
-### ⚠️ Что требует исследования:
+### ⚠️ What requires investigation:
 
-1. **Context Dilution Effect** - возможно contextual prefix вредит вместо помощи
-2. **Hybrid Search Missing** - не используем sparse vectors и metadata filtering
-3. **Document Context Removal** - возможно слишком агрессивная оптимизация
-4. **Evaluation Set Size** - 10 queries недостаточно для выводов
+1. **Context Dilution Effect** - possibly contextual prefix hurts instead of helps
+2. **Hybrid Search Missing** - not using sparse vectors and metadata filtering
+3. **Document Context Removal** - possibly too aggressive optimization
+4. **Evaluation Set Size** - 10 queries insufficient for conclusions
 
-### 🎯 Следующие шаги (по приоритету):
+### 🎯 Next steps (by priority):
 
-1. **Проверить гипотезу #1**: Создать вариант "metadata only" (без context prefix)
-2. **Внедрить hybrid search**: Использовать dense + sparse + metadata filtering
-3. **Расширить evaluation**: До 30-40 queries с фокусом на cross-reference
+1. **Test hypothesis #1**: Create "metadata only" variant (no context prefix)
+2. **Implement hybrid search**: Use dense + sparse + metadata filtering
+3. **Expand evaluation**: To 30-40 queries with focus on cross-reference
 4. **A/B/C test**: Baseline / Metadata-only / Contextual+Metadata
-5. **Улучшить context generation**: Few-shot examples или section-level document context
+5. **Improve context generation**: Few-shot examples or section-level document context
 
-### 📝 Итоговая оценка проекта:
+### 📝 Overall project assessment:
 
-**Технически**: 9/10 ✅
-- Все компоненты работают
-- Отличная оптимизация
-- Надёжный pipeline
+**Technically**: 9/10 ✅
+- All components work
+- Excellent optimization
+- Reliable pipeline
 
-**Результаты**: 4/10 ⚠️
-- Evaluation показала regression вместо improvement
-- Нужен дополнительный анализ
-- Требуются итерации
+**Results**: 4/10 ⚠️
+- Evaluation showed regression instead of improvement
+- Additional analysis needed
+- Iterations required
 
-**Потенциал**: 8/10 💪
-- Framework готов для экспериментов
-- Быстрый async pipeline позволяет тестировать варианты
-- Knowledge Graph metadata пока не задействована в search
+**Potential**: 8/10 💪
+- Framework ready for experiments
+- Fast async pipeline allows testing variants
+- Knowledge Graph metadata not yet utilized in search
 
 ---
 
-## 📂 КЛЮЧЕВЫЕ ФАЙЛЫ
+## 📂 KEY FILES
 
 ### Code
 - `/home/admin/contextual_rag/contextualize_zai_async.py` - Async contextualizer
@@ -427,7 +427,7 @@ data = {
 
 ---
 
-## 🔬 ТЕХНИЧЕСКИЕ ДЕТАЛИ
+## 🔬 TECHNICAL DETAILS
 
 ### Z.AI API Configuration
 ```python
@@ -470,7 +470,7 @@ data = {
 
 ---
 
-## 📊 МЕТРИКИ ПРОИЗВОДИТЕЛЬНОСТИ
+## 📊 PERFORMANCE METRICS
 
 ### Pipeline Performance
 ```
@@ -509,25 +509,25 @@ Cost:
 
 ## 🎓 LESSONS LEARNED
 
-1. **Context is a double-edged sword**: Contextual prefix может помогать LLM, но вредить embeddings
-2. **Document context removal**: Агрессивная оптимизация требует trade-offs
-3. **Hybrid search matters**: Dense-only search не использует metadata преимущества
-4. **Evaluation is critical**: Assumptions нужно проверять на реальных данных
-5. **Small test sets mislead**: 10 queries недостаточно для статистических выводов
+1. **Context is a double-edged sword**: Contextual prefix may help LLM, but harm embeddings
+2. **Document context removal**: Aggressive optimization requires trade-offs
+3. **Hybrid search matters**: Dense-only search doesn't utilize metadata advantages
+4. **Evaluation is critical**: Assumptions need to be verified on real data
+5. **Small test sets mislead**: 10 queries insufficient for statistical conclusions
 
 ---
 
-**Отчёт подготовлен**: 2025-10-22
-**Версия pipeline**: v1.0 (async optimized)
-**Статус**: Ready for iteration
+**Report prepared**: 2025-10-22
+**Pipeline version**: v1.0 (async optimized)
+**Status**: Ready for iteration
 
 ---
 
 ## 🚀 READY FOR NEXT ITERATION
 
-Framework готов к экспериментам. Следующая итерация должна focus на:
+Framework ready for experiments. Next iteration should focus on:
 1. Metadata-driven hybrid search
 2. Context generation improvements
 3. Expanded evaluation set
 
-**Код стабилен, инфраструктура работает, осталось найти правильный баланс между context richness и semantic precision.**
+**Code is stable, infrastructure works, need to find right balance between context richness and semantic precision.**
