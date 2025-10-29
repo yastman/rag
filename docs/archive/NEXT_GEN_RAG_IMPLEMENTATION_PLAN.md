@@ -1,18 +1,18 @@
 # Next-Gen RAG Implementation Plan - Ukrainian Civil Code
 
-**Дата:** 2025-10-22
-**Цель:** Обновление RAG pipeline до state-of-the-art 2025 уровня
-**Методология:** Anthropic Contextual Retrieval + Lightweight Knowledge Graph + Best Practices
+**Date:** 2025-10-22
+**Goal:** Upgrade RAG pipeline to state-of-the-art 2025 level
+**Methodology:** Anthropic Contextual Retrieval + Lightweight Knowledge Graph + Best Practices
 
 ---
 
 ## 🎯 Executive Summary
 
-### Текущий статус: PRODUCTION-GRADE BASELINE ✅
+### Current Status: PRODUCTION-GRADE BASELINE ✅
 
-Существующий pipeline уже оптимизирован до физических пределов:
+Existing pipeline already optimized to physical limits:
 
-| Компонент | Статус | Метрика |
+| Component | Status | Metric |
 |-----------|--------|---------|
 | Docling HybridChunker | ✅ Optimal | 132 chunks, 42s |
 | BGE-M3 FP16 | ✅ Optimal | 0.88s/chunk, 50% memory saved |
@@ -22,9 +22,9 @@
 
 ### Next-Gen Upgrade: CONTEXTUAL + KNOWLEDGE GRAPH
 
-**Цель:** Усиление смысловой точности и навигации (не скорости)
+**Goal:** Strengthen semantic accuracy and navigation (not speed)
 
-**Ожидаемые улучшения:**
+**Expected improvements:**
 - ✅ **49% reduction in failure rate** (Anthropic benchmark)
 - ✅ **+15-20% Recall improvement** (Contextual Embeddings)
 - ✅ **Semantic navigation** (Knowledge Graph metadata)
@@ -36,16 +36,16 @@
 
 ### 1. Contextual Retrieval (Anthropic) - MAXIMUM PRIORITY
 
-**Проблема:** Standard RAG теряет контекст при chunking
-**Решение:** Добавить document-level context к каждому chunk перед embedding
+**Problem:** Standard RAG loses context during chunking
+**Solution:** Add document-level context to each chunk before embedding
 
-**Пример:**
+**Example:**
 ```
-БЕЗ КОНТЕКСТА:
+WITHOUT CONTEXT:
 "Особа здійснює свої цивільні права вільно..."
-→ Embeddings не знают: какая книга, раздел, статья
+→ Embeddings don't know: which book, section, article
 
-С КОНТЕКСТОМ:
+WITH CONTEXT:
 "Документ: Цивільний кодекс України
 Книга перша: Загальні положення
 Розділ I: Загальні положення
@@ -53,10 +53,10 @@
 Стаття 13: Межі здійснення цивільних прав
 
 Особа здійснює свої цивільні права вільно..."
-→ Embeddings содержат полный структурный контекст
+→ Embeddings contain full structural context
 ```
 
-**Результат (из Anthropic research):**
+**Results (from Anthropic research):**
 - Failure rate reduction: 49%
 - Retrieval accuracy: +15-20%
 - Cost with prompt caching: $0.10 for 132 chunks (90% savings vs no cache)
@@ -67,8 +67,8 @@
 
 ### 2. Lightweight Knowledge Graph - HIGH PRIORITY
 
-**Проблема:** Нет связей между статьями для навигации
-**Решение:** Добавить graph metadata в Qdrant payload (без полного GraphRAG)
+**Problem:** No links between articles for navigation
+**Solution:** Add graph metadata to Qdrant payload (without full GraphRAG)
 
 **Enhanced Qdrant Schema:**
 ```python
@@ -103,35 +103,35 @@ payload = {
 ```
 
 **Benefits:**
-- Semantic navigation: "покажи наступну статтю"
+- Semantic navigation: "show next article"
 - Filtered search: `{"article_number": 13}`
-- Multi-hop queries: "які статті пов'язані з правоздатністю"
+- Multi-hop queries: "which articles are related to legal capacity"
 - Related article discovery: follow graph edges
 
-**Implementation:** Parse structure + regex для references + Claude extraction
+**Implementation:** Parse structure + regex for references + Claude extraction
 
 ---
 
 ### 3. Enhanced Prompts - INTEGRATED APPROACH
 
-**Стратегия:** Один Claude API call для context + metadata + relationships
+**Strategy:** One Claude API call for context + metadata + relationships
 
 **ENHANCED_CHUNK_CONTEXT_PROMPT:**
 ```python
-"""Проаналізуй фрагмент тексту з юридичного документа та надай:
-1. Короткий контекст для пошуку (1-2 речення)
-2. Структурні метадані у JSON форматі
+"""Analyze the text fragment from a legal document and provide:
+1. Brief context for search (1-2 sentences)
+2. Structural metadata in JSON format
 
 <chunk>
 {chunk_content}
 </chunk>
 
-Відповідь має бути у форматі:
+The response should be in the format:
 
-КОНТЕКСТ: [короткий опис розташування фрагмента в документі, включаючи
-книгу, розділ, главу, статтю - для покращення семантичного пошуку]
+CONTEXT: [brief description of the fragment's location in the document, including
+book, section, chapter, article - to improve semantic search]
 
-МЕТАДАНІ:
+METADATA:
 {{
   "book": "Книга перша. Загальні положення",
   "book_number": 1,
@@ -144,9 +144,9 @@ payload = {
   "related_articles": [12, 14, 25]
 }}
 
-Якщо якесь поле відсутнє, використай null.
-Для related_articles: включи номери статей, які явно згадуються або
-семантично пов'язані з цим фрагментом."""
+If any field is missing, use null.
+For related_articles: include article numbers that are explicitly mentioned or
+semantically related to this fragment."""
 ```
 
 **Parsing Claude Response:**

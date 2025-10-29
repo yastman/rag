@@ -1,84 +1,84 @@
-# Docling → Qdrant → n8n (BGE‑M3) — чек‑лист задач (обновлено 2025-10-22 06:41:41)
+# Docling → Qdrant → n8n (BGE-M3) — Task Checklist (Updated 2025-10-22 06:41:41)
 
-Цель: собрать продакшен‑пайплайн от извлечения структуры Docling до гибридного поиска в Qdrant с реранком и оркестрацией через n8n/Redis. На выходе — готовые шаги, что и как настроить.
+Goal: Build a production pipeline from Docling structure extraction to hybrid search in Qdrant with reranking and orchestration through n8n/Redis. Output: ready-to-use steps on what to configure and how.
 
 ---
 
-## 0) Предусловия и версии
-1. Сервер: 6 CPU / 12 ГБ RAM / SSD (или эквивалент).
-2. Контейнеры/сервисы:
-   - Docling (CLI/библиотека) и/или Docling Serve (если нужен REST).
+## 0) Prerequisites and Versions
+1. Server: 6 CPU / 12 GB RAM / SSD (or equivalent).
+2. Containers/services:
+   - Docling (CLI/library) and/or Docling Serve (if REST needed).
    - Qdrant ≥ 1.15.x.
-   - Embeddings API: BGE‑M3 (dense + sparse + colbert).
+   - Embeddings API: BGE-M3 (dense + sparse + colbert).
    - Redis 8.2.x.
-   - n8n (оркестрация).
-3. Python ≥ 3.10 для скриптов обработки.
+   - n8n (orchestration).
+3. Python ≥ 3.10 for processing scripts.
 
-См. архитектурный план и параметры коллекции, кэширования и метрик: `RAG_ARCHITECTURE_BLUEPRINT_v3.md`, `RAG_DEPLOYMENT_PLAN_UPDATED_2025.md`, `rag_contextual_improvements_v_2025.md`, `rag_qdrant_n_8_n_plan_v_2025.md` (эти файлы уже у вас).
+See architectural plan and collection parameters, caching and metrics: `RAG_ARCHITECTURE_BLUEPRINT_v3.md`, `RAG_DEPLOYMENT_PLAN_UPDATED_2025.md`, `rag_contextual_improvements_v_2025.md`, `rag_qdrant_n_8_n_plan_v_2025.md` (these files are already in your repository).
 
 ---
 
-## 1) Конвертация документов в DoclingDocument
-Задача: получить единый объект `DoclingDocument` с текстом, таблицами, рисунками, иерархией и метаданными.
-- Установить docling:
+## 1) Converting Documents to DoclingDocument
+Task: Obtain a unified `DoclingDocument` object with text, tables, images, hierarchy and metadata.
+- Install docling:
   ```bash
   pip install -U docling docling-core[chunking]
   ```
-- Преобразование:
+- Conversion:
   ```python
   from docling.document_converter import DocumentConverter
   dl_doc = DocumentConverter().convert(source=PATH_OR_URL).document
   ```
-- Проверить наличие структурных узлов (`body`, `groups`, заголовки), таблиц, картинок.
+- Verify presence of structural nodes (`body`, `groups`, headings), tables, images.
 
-Результат: корректно сформированный `DoclingDocument`, пригодный для chunking/serialization.
-
----
-
-## 2) Чанкование: Hierarchical → Hybrid
-Задача: разбить документ на смысловые фрагменты, учитывая структуру и ограничения по токенам.
-- Базовый путь: стартовать с `HierarchicalChunker` (чанк на элемент структуры; умеет прикреплять заголовки/подписи).
-- Затем применить `HybridChunker` с токенизатором, **согласованным с моделью эмбеддингов** (например, HF‑tokenizer для BGE‑M3). Настроить:
-  - Целевой размер чанка: 1200–2000 символов (или 400–800 токенов).
-  - Перекрытие: 10–15%.
-  - `merge_peers=True` (по умолчанию) — объединять недогруженные соседние куски с одинаковыми заголовками.
-- На этапе `contextualize(chunk)` добавлять префикс с названием раздела/подраздела.
-
-Результат: поток чанков с богатой структурой и контекстом, готовых к сериализации/эмбеддингам.
+Result: Correctly formed `DoclingDocument`, suitable for chunking/serialization.
 
 ---
 
-## 3) Сериализация (Markdown/JSON/YAML) + DPK (опционально)
-Задача: сохранить текст и метаданные для аудита и последующего ingest.
-- Базовая сериализация (пример): `MarkdownDocSerializer` или `HTMLDocSerializer` для человекочитаемого аудита + JSON/YAML для машинной обработки.
-- Мини‑нормализация текста перед эмбеддингом: Unicode NFC, удаление `\u00AD`, склейка строк без завершающей пунктуации.
-- Опция: Data Prep Kit (DPK) pipeline, если нужен стандартизованный конвейер:
-  - `Docling2Parquet` → `Doc_Chunk` → `Tokenization` (модель токенизатора согласовать с эмбеддером).
-  - На выходе — parquet‑файлы на каждом этапе; удобно для отладки.
+## 2) Chunking: Hierarchical → Hybrid
+Task: Split document into meaningful fragments, considering structure and token limits.
+- Basic path: Start with `HierarchicalChunker` (chunk per structure element; can attach headers/captions).
+- Then apply `HybridChunker` with tokenizer **aligned with embedding model** (e.g., HF-tokenizer for BGE-M3). Configure:
+  - Target chunk size: 1200-2000 characters (or 400-800 tokens).
+  - Overlap: 10-15%.
+  - `merge_peers=True` (default) - merge underloaded neighboring chunks with same headers.
+- During `contextualize(chunk)` stage, add prefix with section/subsection title.
 
-Результат: токен‑дружественные чанки с явными метаданными и воспроизводимой сериализацией.
-
----
-
-## 4) Эмбеддинги (BGE‑M3: dense + sparse + colbert/multivector)
-Задача: из каждого чанка получить три представления.
-- Для каждого чанка формировать вход вида: `"{section_title}: {chunk_text}"`.
-- Вызвать encode с возвратом: dense (1024‑D), sparse (лексические веса), colbert‑векторы (мультивектор).
-- Сохранить результирующие вектора рядом с payload (см. схему метаданных ниже).
-
-Результат: три вида эмбеддингов для гибридного префетча и late‑interaction реранка.
+Result: Stream of chunks with rich structure and context, ready for serialization/embeddings.
 
 ---
 
-## 5) Qdrant: коллекция и загрузка
-Задача: создать коллекцию с тремя типами представлений и оптимизациями под CPU.
-- Коллекция:
-  - `vectors.dense` size=1024, distance=Cosine, **quantization=int8** (после A/B‑теста).
-  - `vectors.colbert` size=1024, multivector=MaxSim, **без HNSW** (используется только как rerank).
-  - `sparse_vectors.sparse` включён.
-  - HNSW: m=16, ef_construct=100, ef_search=64 (для dense).
-  - Text index/tokenizer: multilingual (если база укр/рус).
-- Payload/метаданные (пример):
+## 3) Serialization (Markdown/JSON/YAML) + DPK (optional)
+Task: Save text and metadata for audit and subsequent ingest.
+- Basic serialization (example): `MarkdownDocSerializer` or `HTMLDocSerializer` for human-readable audit + JSON/YAML for machine processing.
+- Mini-normalization of text before embedding: Unicode NFC, remove `\u00AD`, join lines without trailing punctuation.
+- Option: Data Prep Kit (DPK) pipeline, if standardized conveyor needed:
+  - `Docling2Parquet` → `Doc_Chunk` → `Tokenization` (align tokenizer model with embedder).
+  - Output: parquet files at each stage; convenient for debugging.
+
+Result: Token-friendly chunks with explicit metadata and reproducible serialization.
+
+---
+
+## 4) Embeddings (BGE-M3: dense + sparse + colbert/multivector)
+Task: Get three representations from each chunk.
+- For each chunk, form input as: `"{section_title}: {chunk_text}"`.
+- Call encode with return: dense (1024-D), sparse (lexical weights), colbert vectors (multivector).
+- Save resulting vectors alongside payload (see metadata schema below).
+
+Result: Three types of embeddings for hybrid prefetch and late-interaction rerank.
+
+---
+
+## 5) Qdrant: Collection and Loading
+Task: Create collection with three types of representations and CPU optimizations.
+- Collection:
+  - `vectors.dense` size=1024, distance=Cosine, **quantization=int8** (after A/B test).
+  - `vectors.colbert` size=1024, multivector=MaxSim, **no HNSW** (used only as rerank).
+  - `sparse_vectors.sparse` enabled.
+  - HNSW: m=16, ef_construct=100, ef_search=64 (for dense).
+  - Text index/tokenizer: multilingual (if database is Ukrainian/Russian).
+- Payload/metadata (example):
   ```json
   {
     "document_id": "...",
@@ -93,96 +93,96 @@
     "date": "2024-01-01"
   }
   ```
-- Upsert: записать `dense`, `sparse`, `colbert` + payload.
+- Upsert: Write `dense`, `sparse`, `colbert` + payload.
 
-Результат: коллекция готова к гибридному поиску с поздним реранком.
+Result: Collection ready for hybrid search with late rerank.
 
 ---
 
-## 6) Поисковый запрос (retrieve → rerank) + фильтры
-Задача: сделать один вызов в Qdrant с prefetch‑фазой и финальным реранком.
+## 6) Search Query (retrieve → rerank) + Filters
+Task: Make one call to Qdrant with prefetch phase and final rerank.
 - Prefetch:
-  - dense limit=50–100
-  - sparse limit=30–50
-  - fusion: DBSF или RRF (DBSF рекомендовано как основной).
+  - dense limit=50-100
+  - sparse limit=30-50
+  - fusion: DBSF or RRF (DBSF recommended as primary).
 - Rerank: `using="colbert"`, limit=10.
-- Фильтры: `lang="uk"`, по датам/источнику при необходимости.
-- Дедуп: оставить не более 1–2 чанков на `article_no`/`document_id`.
-- Отсечь низкие скоры; при недостающем контексте — добрать соседние чанки (`prev_section`/`next_section`).
+- Filters: `lang="uk"`, by dates/source when necessary.
+- Dedup: Keep no more than 1-2 chunks per `article_no`/`document_id`.
+- Filter low scores; if context insufficient - fetch neighboring chunks (`prev_section`/`next_section`).
 
-Результат: устойчивый гибридный retrieve с точным реранком и контролем достаточности контекста.
+Result: Robust hybrid retrieve with precise rerank and context sufficiency control.
 
 ---
 
-## 7) n8n оркестрация и Redis‑кэш
-Задача: собрать end‑to‑end workflow и снизить нагрузку.
-- n8n (типовой граф):
-  `Webhook → HTTP(Embed API: BGE‑M3) → HTTP(Qdrant query) → Function(дедуп/склейка/контроль длины) → HTTP(LLM) → Respond → Redis.set`
+## 7) n8n Orchestration and Redis Cache
+Task: Assemble end-to-end workflow and reduce load.
+- n8n (typical graph):
+  `Webhook → HTTP(Embed API: BGE-M3) → HTTP(Qdrant query) → Function(dedup/join/length control) → HTTP(LLM) → Respond → Redis.set`
 - Redis 8.2.x:
-  - L2: кэш эмбеддингов запроса (TTL 24h).
-  - L3: кэш результатов поиска (TTL 7–12h).
-  - Политика: `allkeys-lru`, ограничение памяти 1–2 ГБ.
-- Профили весов fusion: general 0.7/0.3; legal 0.55/0.45; mixed‑lang 0.65/0.35.
+  - L2: query embedding cache (TTL 24h).
+  - L3: search results cache (TTL 7-12h).
+  - Policy: `allkeys-lru`, memory limit 1-2 GB.
+- Fusion weight profiles: general 0.7/0.3; legal 0.55/0.45; mixed-lang 0.65/0.35.
 
-Результат: быстрые ответы, меньше загрузки на эмбеддер/Qdrant/LLM.
-
----
-
-## 8) Контекстуализация и улучшения retrieval
-Задача: повысить релевантность без роста стоимости.
-- Contextual Chunking: префиксы разделов + overlap.
-- Query Expansion (узел Function/LLM): синонимы/варианты терминов для укр/рус.
-- Context‑aware rerank: +0.1 к score для того же `document_id`, +0.05 для разделов типа «Висновки».
-- Контроль достаточности: минимум 2 документа в контексте или расширить top‑N и добавить соседей.
-
-Результат: Recall/NDCG растут, галлюцинации снижаются.
+Result: Fast responses, less load on embedder/Qdrant/LLM.
 
 ---
 
-## 9) Оценка качества (offline)
-Задача: зафиксировать метрики до/после тюнинга.
-- Набор из 30+ запросов (указать ожидаемые статьи/разделы).
-- Метрики: Recall@K, NDCG@K, MRR, Faithfulness, Answer Relevance.
-- Бейзлайн vs изменения (квантизация, ef_search, лимиты prefetch и т.п.).
-- Условие принятия: качество не ухудшилось (пороги из blueprint).
+## 8) Contextualization and Retrieval Improvements
+Task: Increase relevance without cost increase.
+- Contextual Chunking: section prefixes + overlap.
+- Query Expansion (Function/LLM node): synonyms/term variants for Ukrainian/Russian.
+- Context-aware rerank: +0.1 to score for same `document_id`, +0.05 for sections like "Conclusions".
+- Sufficiency control: minimum 2 documents in context or expand top-N and add neighbors.
 
-Результат: управляемый тюнинг без регрессий.
+Result: Recall/NDCG increase, hallucinations decrease.
 
 ---
 
-## 10) Наблюдаемость и алёрты
-Задача: видеть задержки/ошибки/эффективность кэша.
-- Prometheus экспорты:
+## 9) Quality Evaluation (offline)
+Task: Record metrics before/after tuning.
+- Set of 30+ queries (specify expected articles/sections).
+- Metrics: Recall@K, NDCG@K, MRR, Faithfulness, Answer Relevance.
+- Baseline vs changes (quantization, ef_search, prefetch limits, etc.).
+- Acceptance criteria: quality not degraded (thresholds from blueprint).
+
+Result: Controlled tuning without regressions.
+
+---
+
+## 10) Observability and Alerts
+Task: See latencies/errors/cache effectiveness.
+- Prometheus exports:
   - `rag_chunking_duration_seconds`, `rag_embedding_latency_seconds`, `rag_search_latency_seconds`.
-  - `rag_cache_hits_total/misses_total` и hit‑ratio по L2/L3.
+  - `rag_cache_hits_total/misses_total` and hit-ratio by L2/L3.
   - `rag_errors_total{stage="chunking|embedding|search|insert"}`.
-- Grafana панели: latency p50/p95/p99, hit‑ratio, ошибки, throughput.
-- Алёрты: p95 > 0.5–1.0s; ошибок > 1%; падение hit‑ratio.
+- Grafana panels: latency p50/p95/p99, hit-ratio, errors, throughput.
+- Alerts: p95 > 0.5-1.0s; errors > 1%; hit-ratio drop.
 
-Результат: прозрачность работы и быстрое реагирование на деградации.
-
----
-
-## 11) Безопасность и лимиты
-- Ограничения на размер PDF (≤ 50 МБ) и число страниц (≤ 2000).
-- Redis ACL, Qdrant API‑ключи, контейнерные лимиты CPU/RAM.
-- Логи (PII/секреты) не включать в payload/контекст.
+Result: Transparency of operation and quick response to degradations.
 
 ---
 
-## 12) Итоговая проверка (go‑live checklist)
-- [ ] Коллекция Qdrant создана (dense+sparse+colbert), квантизация протестирована.
-- [ ] Чанкование даёт ≥ 50 чанков/документ, покрытие ≥ 70% содержимого.
-- [ ] Эмбеддинги и пайплайн ingest завершаются без ошибок, валидация пройдена.
-- [ ] Поиск: prefetch+fusion работает, rerank colbert выдаёт стабильный top‑10.
-- [ ] n8n: кэш Redis включён, профили весов настроены.
-- [ ] Оценка качества проведена; метрики соответствуют целям.
-- [ ] Метрики/алёрты в Grafana/Prometheus активны.
-- [ ] Документация и примеры запросов обновлены.
+## 11) Security and Limits
+- Limits on PDF size (≤ 50 MB) and page count (≤ 2000).
+- Redis ACL, Qdrant API keys, container CPU/RAM limits.
+- Logs (PII/secrets) not included in payload/context.
 
 ---
 
-## Примечания по реализации
-- Контекстно‑зависимое текстовое представление для эмбеддингов (“`Section: …` + текст”) повышает Recall/NDCG.
-- Для юридических документов критична мультиязычная токенизация (укр/рус) и sparse‑сигнал (BM25‑подобный).
-- Реранк multivector в Qdrant снимает необходимость в тяжёлом cross‑encoder на CPU.
+## 12) Final Check (go-live checklist)
+- [ ] Qdrant collection created (dense+sparse+colbert), quantization tested.
+- [ ] Chunking produces ≥ 50 chunks/document, coverage ≥ 70% of content.
+- [ ] Embeddings and ingest pipeline complete without errors, validation passed.
+- [ ] Search: prefetch+fusion works, colbert rerank delivers stable top-10.
+- [ ] n8n: Redis cache enabled, weight profiles configured.
+- [ ] Quality evaluation completed; metrics meet goals.
+- [ ] Metrics/alerts in Grafana/Prometheus active.
+- [ ] Documentation and query examples updated.
+
+---
+
+## Implementation Notes
+- Context-dependent text representation for embeddings ("`Section: ...` + text") increases Recall/NDCG.
+- For legal documents, multilingual tokenization (Ukrainian/Russian) and sparse signal (BM25-like) are critical.
+- Multivector rerank in Qdrant removes need for heavy cross-encoder on CPU.
