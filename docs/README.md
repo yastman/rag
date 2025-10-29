@@ -74,10 +74,10 @@ open http://localhost:3001  ***REMOVED*** Langfuse UI
 | Recall@10 | 100% | 99.3% | -0.7% | Baseline |
 | Latency | 0.673s | 0.690s | +2.5% | Baseline |
 
-**✅ DBSF+ColBERT готов к production:**
-- Лучше по критичным метрикам (Recall@1, NDCG, MRR)
-- Приемлемый latency (+17ms = +2.5%)
-- Для legal domain Recall@1 критичен → DBSF лучше!
+**✅ DBSF+ColBERT ready for production:**
+- Better on critical metrics (Recall@1, NDCG, MRR)
+- Acceptable latency (+17ms = +2.5%)
+- For legal domain, Recall@1 is critical → DBSF is better!
 
 ***REMOVED******REMOVED******REMOVED*** Previous: Contextual Retrieval Testing (10 queries)
 
@@ -87,27 +87,27 @@ open http://localhost:3001  ***REMOVED*** Langfuse UI
 | NDCG@5 | **0.5768** | 0.5139 | -10.9% |
 | Failure@5 | **20%** | 30% | +50% |
 
-**❌ Contextual провалился:** Удалили document context для экономии токенов → убили основную ценность метода.
+**❌ Contextual failed:** Removed document context to save tokens → killed the main value of the method.
 
 ---
 
-***REMOVED******REMOVED*** 📁 Структура Проекта
+***REMOVED******REMOVED*** 📁 Project Structure
 
 ```
 contextual_rag/
 ├── config.py, prompts.py, .env
 │
-├── Ingestion (2 версии):
+├── Ingestion (2 versions):
 │   ├── ingestion_contextual_kg.py         ***REMOVED*** Sync (Docling API)
 │   └── ingestion_contextual_kg_fast.py    ***REMOVED*** ✅ Async, 15-50x faster
 │
-├── Contextualization (4 API):
+├── Contextualization (4 APIs):
 │   ├── contextualize.py                   ***REMOVED*** Anthropic Claude
 │   ├── contextualize_openai_async.py      ***REMOVED*** OpenAI
 │   ├── contextualize_groq_async.py        ***REMOVED*** Groq
 │   └── contextualize_zai_async.py         ***REMOVED*** ✅ Z.AI (fastest, $3/mo)
 │
-├── utils/structure_parser.py              ***REMOVED*** Fallback парсер
+├── utils/structure_parser.py              ***REMOVED*** Fallback parser
 ├── pymupdf_chunker.py                     ***REMOVED*** Standalone chunker
 │
 ├── evaluation/                            ***REMOVED*** A/B testing framework + ML tools
@@ -168,7 +168,7 @@ Qdrant v1.15.5:     localhost:6333  (API key in .env)
 BGE-M3 API:         localhost:8001  (BAAI/bge-m3)
 Docling API:        localhost:5001  (OCR, tables)
 
-***REMOVED*** ML Platform (новые)
+***REMOVED*** ML Platform (new)
 MLflow v3.5.1:      localhost:5000  (experiment tracking)
 Langfuse v2.95.9:   localhost:3001  (LLM observability)
 ```
@@ -205,7 +205,7 @@ docker run --rm -v ai-bge-m3-models:/models alpine ls -lh /models/huggingface/hu
 
 ---
 
-**Коллекции в Qdrant (7):**
+**Qdrant Collections (7):**
 1. `uk_civil_code_v2` ← **BEST (baseline)**
 2. `uk_civil_code_contextual_kg`
 3. `tsivilnij_kodeks_ukraini_yurinkom_inter_contextual_kg`
@@ -220,21 +220,21 @@ docker run --rm -v ai-bge-m3-models:/models alpine ls -lh /models/huggingface/hu
 ```bash
 cd /srv/contextual_rag
 cp .env.example .env
-nano .env  ***REMOVED*** Добавить API keys
+nano .env  ***REMOVED*** Add API keys
 ```
 
-**Минимальные переменные:**
+**Minimum required variables:**
 ```bash
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=your_key
 BGE_M3_URL=http://localhost:8001
 DOCLING_URL=http://localhost:5001
 
-***REMOVED*** Один из API провайдеров:
-ANTHROPIC_API_KEY=[REDACTED-ANTHROPIC-KEY]  ***REMOVED*** или
-OPENAI_API_KEY=[REDACTED-OPENAI-KEY]    ***REMOVED*** или
-GROQ_API_KEY=[REDACTED-GROQ-KEY]           ***REMOVED*** или
-ZAI_API_KEY=[REDACTED-ZAI-KEY]                ***REMOVED*** ✅ Рекомендуется ($3/mo)
+***REMOVED*** One of the API providers:
+ANTHROPIC_API_KEY=[REDACTED-ANTHROPIC-KEY]  ***REMOVED*** or
+OPENAI_API_KEY=[REDACTED-OPENAI-KEY]    ***REMOVED*** or
+GROQ_API_KEY=[REDACTED-GROQ-KEY]           ***REMOVED*** or
+ZAI_API_KEY=[REDACTED-ZAI-KEY]                ***REMOVED*** ✅ Recommended ($3/mo)
 ```
 
 ***REMOVED******REMOVED******REMOVED*** 2. Install
@@ -247,17 +247,17 @@ pip install pymupdf anthropic openai groq python-dotenv numpy aiohttp requests p
 
 ```bash
 python ingestion_contextual_kg_fast.py --test
-***REMOVED*** ~15-30 сек, $0.01
+***REMOVED*** ~15-30 sec, $0.01
 ```
 
 ***REMOVED******REMOVED******REMOVED*** 4. Full run (132 chunks)
 
 ```bash
 python ingestion_contextual_kg_fast.py
-***REMOVED*** Z.AI: 3-5 мин, $0 (в рамках плана)
-***REMOVED*** Groq: 2-4 мин, free (с лимитами)
-***REMOVED*** OpenAI: 5-8 мин, ~$5-10
-***REMOVED*** Claude: 8-12 мин, ~$10-15
+***REMOVED*** Z.AI: 3-5 min, $0 (within plan limits)
+***REMOVED*** Groq: 2-4 min, free (with rate limits)
+***REMOVED*** OpenAI: 5-8 min, ~$5-10
+***REMOVED*** Claude: 8-12 min, ~$10-15
 ```
 
 ---
@@ -273,7 +273,7 @@ python run_ab_test.py
 ***REMOVED*** Reports → evaluation/reports/
 ```
 
-**Метрики:** Recall@K, NDCG@K, MRR, Precision@K, Failure Rate@K
+**Metrics:** Recall@K, NDCG@K, MRR, Precision@K, Failure Rate@K
 
 ***REMOVED******REMOVED******REMOVED*** View Results
 
@@ -308,9 +308,9 @@ python test_mlflow_ab.py
 
 ---
 
-***REMOVED******REMOVED*** 🧪 API Провайдеры
+***REMOVED******REMOVED*** 🧪 API Providers
 
-***REMOVED******REMOVED******REMOVED*** Сравнение (132 chunks)
+***REMOVED******REMOVED******REMOVED*** Comparison (132 chunks)
 
 | Provider | Time | Cost | Quality | Success |
 |----------|------|------|---------|---------|
@@ -319,12 +319,12 @@ python test_mlflow_ab.py
 | OpenAI async | 5-8 min | ~$8 | Very Good | 99% |
 | Claude | 8-12 min | ~$12 | Excellent | 99% |
 
-*Rate limits на free tier
+*Rate limits on free tier
 
-***REMOVED******REMOVED******REMOVED*** Использование
+***REMOVED******REMOVED******REMOVED*** Usage
 
 ```python
-***REMOVED*** Z.AI (рекомендуется)
+***REMOVED*** Z.AI (recommended)
 from contextualize_zai_async import ContextualRetrievalZAIAsync
 retriever = ContextualRetrievalZAIAsync()
 context = await retriever.generate_context_async(chunk_text)
@@ -344,16 +344,16 @@ retriever = ContextualRetrievalClaude(use_prompt_caching=True)
 
 ---
 
-***REMOVED******REMOVED*** 🏗️ Архитектура
+***REMOVED******REMOVED*** 🏗️ Architecture
 
-***REMOVED******REMOVED******REMOVED*** Адаптивный chunker
+***REMOVED******REMOVED******REMOVED*** Adaptive Chunker
 
 ```python
 complexity = detect_pdf_complexity(pdf_path)  ***REMOVED*** <500ms
 chunks = docling_chunk(pdf_path) if complexity["use_docling"] else pymupdf_chunk(pdf_path)
 ```
 
-***REMOVED******REMOVED******REMOVED*** Fallback система
+***REMOVED******REMOVED******REMOVED*** Fallback System
 
 ```python
 try:
@@ -362,12 +362,12 @@ except APIError:
     context = parse_legal_structure(chunk)  ***REMOVED*** Regex fallback
 ```
 
-***REMOVED******REMOVED******REMOVED*** Qdrant payload
+***REMOVED******REMOVED******REMOVED*** Qdrant Payload
 
 ```python
 {
     "text": chunk_text,
-    "contextual_prefix": "Документ: ..., Стаття 13...",
+    "contextual_prefix": "Document: ..., Article 13...",
     "book_number": 1, "section_number": 1, "chapter_number": 2,
     "article_number": 13, "article_title": "...",
     "prev_article": 12, "next_article": 14,
@@ -397,7 +397,7 @@ Cost: $0 (Z.AI plan)
 ```
 Same PDF
 TOTAL: 18-20 min (sequential)
-Используйте fast версию
+Use fast version instead
 ```
 
 ---
@@ -449,13 +449,13 @@ cat .env | grep API_KEY
 
 2. **Container size is 8GB:** Model is in writable layer, not volume. Check `HF_HOME=/models/huggingface` in docker-compose.yml.
 
-3. **Rate limits (Z.AI):** Увеличить `ZAI_RATE_LIMIT_DELAY` в config.py или уменьшить `ASYNC_SEMAPHORE_LIMIT`.
+3. **Rate limits (Z.AI):** Increase `ZAI_RATE_LIMIT_DELAY` in config.py or decrease `ASYNC_SEMAPHORE_LIMIT`.
 
 ---
 
-***REMOVED******REMOVED*** 📚 Документация
+***REMOVED******REMOVED*** 📚 Documentation
 
-***REMOVED******REMOVED******REMOVED*** Основная документация (в корне проекта)
+***REMOVED******REMOVED******REMOVED*** Core Documentation (in project root)
 
 - **[README.md](README.md)** - Project overview, quick start
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture, components, data flow
@@ -469,27 +469,27 @@ cat .env | grep API_KEY
 - Consistent formatting across all files
 - Pre-commit hooks configured
 
-***REMOVED******REMOVED******REMOVED*** Research документы (папка docs/, организованы по категориям)
+***REMOVED******REMOVED******REMOVED*** Research Documents (docs/ folder, organized by categories)
 
 **Guides** (`docs/guides/`):
 - [QUICK_START_DBSF.md](docs/guides/QUICK_START_DBSF.md) - ⭐ DBSF + ColBERT quick start
-- [DEDUPLICATION_GUIDE.md](docs/guides/DEDUPLICATION_GUIDE.md) - Дедупликация
-- [DOC_LING_RAG_TASKS_2025.md](docs/guides/DOC_LING_RAG_TASKS_2025.md) - Docling интеграция
+- [DEDUPLICATION_GUIDE.md](docs/guides/DEDUPLICATION_GUIDE.md) - Deduplication
+- [DOC_LING_RAG_TASKS_2025.md](docs/guides/DOC_LING_RAG_TASKS_2025.md) - Docling integration
 
 **Implementation** (`docs/implementation/`):
-- [DBSF_COLBERT_IMPLEMENTATION_SUMMARY.md](docs/implementation/DBSF_COLBERT_IMPLEMENTATION_SUMMARY.md) - Полный гайд
-- [IMPLEMENTATION_CHECKLIST.md](docs/implementation/IMPLEMENTATION_CHECKLIST.md) - Чеклист
+- [DBSF_COLBERT_IMPLEMENTATION_SUMMARY.md](docs/implementation/DBSF_COLBERT_IMPLEMENTATION_SUMMARY.md) - Complete guide
+- [IMPLEMENTATION_CHECKLIST.md](docs/implementation/IMPLEMENTATION_CHECKLIST.md) - Checklist
 
 **Reports** (`docs/reports/`):
-- [FINAL_REPORT_CONTEXTUAL_RAG.md](docs/reports/FINAL_REPORT_CONTEXTUAL_RAG.md) - Evaluation результаты
-- [TEST_RESULTS_SUMMARY.md](docs/reports/TEST_RESULTS_SUMMARY.md) - API сравнение
-- [FINAL_OPTIMIZATION_REPORT.md](docs/reports/FINAL_OPTIMIZATION_REPORT.md) - Оптимизация
+- [FINAL_REPORT_CONTEXTUAL_RAG.md](docs/reports/FINAL_REPORT_CONTEXTUAL_RAG.md) - Evaluation results
+- [TEST_RESULTS_SUMMARY.md](docs/reports/TEST_RESULTS_SUMMARY.md) - API comparison
+- [FINAL_OPTIMIZATION_REPORT.md](docs/reports/FINAL_OPTIMIZATION_REPORT.md) - Optimization
 
-**Archive** (`docs/archive/`) - исторические документы:
-- [NEXT_GEN_RAG_IMPLEMENTATION_PLAN.md](docs/archive/NEXT_GEN_RAG_IMPLEMENTATION_PLAN.md) - Оригинальный план
-- [IMPLEMENTATION_COMPLETE_SUMMARY.md](docs/archive/IMPLEMENTATION_COMPLETE_SUMMARY.md) - Итоги
+**Archive** (`docs/archive/`) - historical documents:
+- [NEXT_GEN_RAG_IMPLEMENTATION_PLAN.md](docs/archive/NEXT_GEN_RAG_IMPLEMENTATION_PLAN.md) - Original plan
+- [IMPLEMENTATION_COMPLETE_SUMMARY.md](docs/archive/IMPLEMENTATION_COMPLETE_SUMMARY.md) - Summary
 
-**Полная навигация:** [docs/INDEX.md](docs/INDEX.md)
+**Full Navigation:** [docs/INDEX.md](docs/INDEX.md)
 
 ***REMOVED******REMOVED******REMOVED*** External Research
 
@@ -502,7 +502,7 @@ cat .env | grep API_KEY
 
 ***REMOVED******REMOVED*** 💰 Cost (1000 docs)
 
-- **Z.AI:** $3/месяц (fixed)
+- **Z.AI:** $3/month (fixed)
 - **OpenAI:** ~$50
 - **Claude:** ~$100
 
@@ -510,34 +510,34 @@ cat .env | grep API_KEY
 
 ***REMOVED******REMOVED*** 🎓 Lessons Learned
 
-***REMOVED******REMOVED******REMOVED*** ✅ Сработало
-- Async обработка: 4.7x speedup
-- Fallback система: 100% надежность
-- Адаптивный chunker
-- Множественные API провайдеры
+***REMOVED******REMOVED******REMOVED*** ✅ What Worked
+- Async processing: 4.7x speedup
+- Fallback system: 100% reliability
+- Adaptive chunker
+- Multiple API providers
 
-***REMOVED******REMOVED******REMOVED*** ❌ Не сработало
-- Contextual retrieval: baseline лучше
-- Document context удален для экономии → качество упало
-- KG метаданные не дали преимущества
+***REMOVED******REMOVED******REMOVED*** ❌ What Didn't Work
+- Contextual retrieval: baseline is better
+- Document context removed to save costs → quality degraded
+- KG metadata provided no advantage
 
-***REMOVED******REMOVED******REMOVED*** 💡 Вывод
-Anthropic contextual retrieval работает **только с полным document context** в каждом запросе. Оптимизация стоимости убила эффективность.
+***REMOVED******REMOVED******REMOVED*** 💡 Conclusion
+Anthropic contextual retrieval works **only with full document context** in each request. Cost optimization killed effectiveness.
 
 ---
 
 ***REMOVED******REMOVED*** 🚀 Next Steps
 
-***REMOVED******REMOVED******REMOVED*** Production (рекомендуется)
+***REMOVED******REMOVED******REMOVED*** Production (recommended)
 1. Reranking (ColBERTv2, bge-reranker)
 2. Hybrid Search (BM25 + dense)
 3. Query expansion
-4. KG metadata для filtering
+4. KG metadata for filtering
 
 ***REMOVED******REMOVED******REMOVED*** Experiments
-1. Вернуть full document context (принять высокую стоимость)
+1. Return full document context (accept high cost)
 2. Aggressive prompt caching (Anthropic)
-3. Больше тестовых запросов (>10)
+3. More test queries (>10)
 
 ---
 

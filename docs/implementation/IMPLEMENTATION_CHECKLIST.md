@@ -287,7 +287,7 @@
 ***REMOVED******REMOVED*** 🎓 Key Implementation Decisions
 
 ***REMOVED******REMOVED******REMOVED*** Why DBSF Over RRF?
-- **User explicitly requested:** "используй DBSF"
+- **User explicitly requested:** "use DBSF"
 - **Newer & better:** DBSF added in Qdrant 1.11 as improvement
 - **More stable:** Normalizes using mean ± 3σ (adapts to score distribution)
 - **Production-ready:** Recommended in Qdrant 2025 best practices

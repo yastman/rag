@@ -4,7 +4,7 @@
 
 ---
 
-***REMOVED******REMOVED*** ⚡ 3-Minute Quick Start
+***REMOVED******REMOVED*** 3-Minute Quick Start
 
 ```bash
 ***REMOVED*** 1. Create payload indexes (one-time setup, ~30 seconds)
@@ -21,16 +21,16 @@ cat reports/AB_TEST_REPORT_*.md | tail -50
 
 ---
 
-***REMOVED******REMOVED*** 📊 What to Look For in Results
+***REMOVED******REMOVED*** What to Look For in Results
 
 ***REMOVED******REMOVED******REMOVED*** Success Criteria
 
-✅ **DBSF+ColBERT wins** if:
+**DBSF+ColBERT wins** if:
 - Recall@10 > 70% (baseline: 65%)
 - Improvement over baseline > +10%
 - NDCG@10 > 0.65 (baseline: 0.577)
 
-⚠️ **Investigate** if:
+**Investigate** if:
 - Recall@10 < 65% (worse than baseline)
 - Failure rate > 20%
 - Search time > 2x baseline
@@ -42,14 +42,14 @@ cat reports/AB_TEST_REPORT_*.md | tail -50
 
 | Metric | Baseline | DBSF+ColBERT | Best |
 |--------|----------|--------------|------|
-| Recall@10 | 0.6500 | 0.7800 | DBSF |  ← +20% improvement ✅
-| NDCG@10 | 0.5768 | 0.6891 | DBSF |   ← +19.5% improvement ✅
-| MRR | 0.4231 | 0.5467 | DBSF |       ← +29.2% improvement ✅
+| Recall@10 | 0.6500 | 0.7800 | DBSF |  ← +20% improvement
+| NDCG@10 | 0.5768 | 0.6891 | DBSF |   ← +19.5% improvement
+| MRR | 0.4231 | 0.5467 | DBSF |       ← +29.2% improvement
 ```
 
 ---
 
-***REMOVED******REMOVED*** 🔧 Configuration Tuning
+***REMOVED******REMOVED*** Configuration Tuning
 
 ***REMOVED******REMOVED******REMOVED*** If Recall@10 is Too Low (< 70%)
 
@@ -93,7 +93,7 @@ self.payload_fields = PAYLOAD_FIELDS_MINIMAL  ***REMOVED*** ["article_number", "
 
 ---
 
-***REMOVED******REMOVED*** 🧪 Testing Individual Components
+***REMOVED******REMOVED*** Testing Individual Components
 
 ***REMOVED******REMOVED******REMOVED*** Test 1: Verify Payload Indexes
 
@@ -156,7 +156,7 @@ print("DBSF+ColBERT results:", [r['article_number'] for r in dbsf.search(query, 
 
 ---
 
-***REMOVED******REMOVED*** 📝 Common Issues & Fixes
+***REMOVED******REMOVED*** Common Issues & Fixes
 
 ***REMOVED******REMOVED******REMOVED*** Issue 1: "No such vector named 'colbert'"
 
@@ -197,11 +197,11 @@ curl http://localhost:6333/collections/ukraine_criminal_code_zai_full | \
 
 ---
 
-***REMOVED******REMOVED*** 🎯 Next Steps After Successful Test
+***REMOVED******REMOVED*** Next Steps After Successful Test
 
 ***REMOVED******REMOVED******REMOVED*** If DBSF+ColBERT Wins (Recall@10 > 70%)
 
-✅ **Recommend for production:**
+**Recommend for production:**
 
 1. Update production collection schema:
    ```bash
@@ -224,7 +224,7 @@ curl http://localhost:6333/collections/ukraine_criminal_code_zai_full | \
 
 ***REMOVED******REMOVED******REMOVED*** If Results Are Close (65-70%)
 
-⚠️ **Tune parameters:**
+**Tune parameters:**
 
 1. Try different configurations (see "Configuration Tuning" above)
 2. Run A/B test on larger dataset (50+ queries)
@@ -233,7 +233,7 @@ curl http://localhost:6333/collections/ukraine_criminal_code_zai_full | \
 
 ***REMOVED******REMOVED******REMOVED*** If Baseline Still Wins (< 65%)
 
-❌ **Investigate issues:**
+**Investigate issues:**
 
 1. Check ColBERT vectors are correctly indexed:
    ```bash
@@ -249,7 +249,7 @@ curl http://localhost:6333/collections/ukraine_criminal_code_zai_full | \
 
 ---
 
-***REMOVED******REMOVED*** 📚 Additional Resources
+***REMOVED******REMOVED*** Additional Resources
 
 - **Full Implementation Details:** `DBSF_COLBERT_IMPLEMENTATION_SUMMARY.md`
 - **Original README:** `README.md`

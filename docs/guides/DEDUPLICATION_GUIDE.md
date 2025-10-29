@@ -1,33 +1,33 @@
-***REMOVED*** 🔑 Content-Based Deduplication Guide
+***REMOVED*** Content-Based Deduplication Guide
 
-**Дата**: 2025-10-22
-**Версия**: v1.1 (with deduplication)
-
----
-
-***REMOVED******REMOVED*** 📋 Что изменилось?
-
-***REMOVED******REMOVED******REMOVED*** ❌ СТАРЫЙ подход (sequential IDs):
-```python
-***REMOVED*** Каждый запуск создавал новые points с новыми IDs
-point_id = 1, 2, 3, 4...  ***REMOVED*** При втором запуске: 133, 134, 135...
-```
-
-**Проблема**: Дубликаты накапливаются при повторной обработке
-
-***REMOVED******REMOVED******REMOVED*** ✅ НОВЫЙ подход (content-based hash IDs):
-```python
-***REMOVED*** ID генерируется из SHA256 hash контента
-point_id = "a3f5e8c9..."  ***REMOVED*** Всегда одинаковый для одного chunk
-```
-
-**Решение**: Qdrant `upsert` автоматически обновляет существующий point
+**Date**: 2025-10-22
+**Version**: v1.1 (with deduplication)
 
 ---
 
-***REMOVED******REMOVED*** 🎯 Как работает deduplication?
+***REMOVED******REMOVED*** What Changed?
 
-***REMOVED******REMOVED******REMOVED*** 1. Генерация stable ID
+***REMOVED******REMOVED******REMOVED*** OLD approach (sequential IDs):
+```python
+***REMOVED*** Each run created new points with new IDs
+point_id = 1, 2, 3, 4...  ***REMOVED*** On second run: 133, 134, 135...
+```
+
+**Problem**: Duplicates accumulate on repeated processing
+
+***REMOVED******REMOVED******REMOVED*** NEW approach (content-based hash IDs):
+```python
+***REMOVED*** ID generated from SHA256 hash of content
+point_id = "a3f5e8c9..."  ***REMOVED*** Always the same for one chunk
+```
+
+**Solution**: Qdrant `upsert` automatically updates existing point
+
+---
+
+***REMOVED******REMOVED*** How Does Deduplication Work?
+
+***REMOVED******REMOVED******REMOVED*** 1. Stable ID Generation
 ```python
 def generate_chunk_id(chunk_text: str, source: str, chunk_index: int) -> str:
     """Generate stable UUID from content hash."""
@@ -36,109 +36,109 @@ def generate_chunk_id(chunk_text: str, source: str, chunk_index: int) -> str:
     return hash_obj.hexdigest()[:32]  ***REMOVED*** First 32 hex chars
 ```
 
-**Что включается в hash:**
-- `source`: Полный путь к PDF файлу
-- `chunk_text`: Текст chunk
-- Результат: Уникальный 32-символьный hex ID
+**What's included in hash:**
+- `source`: Full path to PDF file
+- `chunk_text`: Chunk text
+- Result: Unique 32-character hex ID
 
-***REMOVED******REMOVED******REMOVED*** 2. Qdrant upsert behavior
+***REMOVED******REMOVED******REMOVED*** 2. Qdrant Upsert Behavior
 ```python
-***REMOVED*** Если ID существует → UPDATE existing point
-***REMOVED*** Если ID не существует → CREATE new point
+***REMOVED*** If ID exists → UPDATE existing point
+***REMOVED*** If ID doesn't exist → CREATE new point
 qdrant_upsert(collection, chunk_id, vectors, payload)
 ```
 
 ---
 
-***REMOVED******REMOVED*** 📊 Примеры работы
+***REMOVED******REMOVED*** Usage Examples
 
-***REMOVED******REMOVED******REMOVED*** Сценарий 1: Первый запуск
+***REMOVED******REMOVED******REMOVED*** Scenario 1: First Run
 ```bash
 ./process-pdf.sh document.pdf
 ```
 
-**Результат**:
+**Result**:
 - Chunk 1: hash `abc123...` → CREATE new point
 - Chunk 2: hash `def456...` → CREATE new point
 - Chunk 3: hash `789ghi...` → CREATE new point
 - **Total points: 3**
 
-***REMOVED******REMOVED******REMOVED*** Сценарий 2: Повторный запуск (тот же PDF)
+***REMOVED******REMOVED******REMOVED*** Scenario 2: Repeated Run (same PDF)
 ```bash
-./process-pdf.sh document.pdf  ***REMOVED*** Снова!
+./process-pdf.sh document.pdf  ***REMOVED*** Again!
 ```
 
-**Результат**:
+**Result**:
 - Chunk 1: hash `abc123...` → UPDATE existing (content unchanged)
 - Chunk 2: hash `def456...` → UPDATE existing (content unchanged)
 - Chunk 3: hash `789ghi...` → UPDATE existing (content unchanged)
-- **Total points: 3** ✅ (нет дубликатов!)
+- **Total points: 3** (no duplicates!)
 
-***REMOVED******REMOVED******REMOVED*** Сценарий 3: Обновлённый PDF
+***REMOVED******REMOVED******REMOVED*** Scenario 3: Updated PDF
 ```bash
-***REMOVED*** document.pdf изменён (Chunk 2 updated, Chunk 4 added)
+***REMOVED*** document.pdf changed (Chunk 2 updated, Chunk 4 added)
 ./process-pdf.sh document.pdf
 ```
 
-**Результат**:
+**Result**:
 - Chunk 1: hash `abc123...` → UPDATE (unchanged)
 - Chunk 2: hash `NEW_HASH` → CREATE (text changed!)
 - Chunk 3: hash `789ghi...` → UPDATE (unchanged)
 - Chunk 4: hash `jkl012...` → CREATE (new chunk)
 - **Total points: 5** (old Chunk 2 + new Chunk 2 + others)
 
-**Примечание**: Старый Chunk 2 остаётся в базе (можно удалить вручную если нужно)
+**Note**: Old Chunk 2 remains in database (can be deleted manually if needed)
 
-***REMOVED******REMOVED******REMOVED*** Сценарий 4: Cross-document deduplication
+***REMOVED******REMOVED******REMOVED*** Scenario 4: Cross-Document Deduplication
 ```bash
 ./process-pdf.sh doc1.pdf
-./process-pdf.sh doc2.pdf  ***REMOVED*** Содержит те же chunks
+./process-pdf.sh doc2.pdf  ***REMOVED*** Contains same chunks
 ```
 
-**Результат**:
-- Если chunks идентичны → используют разные IDs (из-за `source` в hash)
-- Если хочешь **глобальную дедупликацию** → убери `source` из hash
+**Result**:
+- If chunks are identical → they use different IDs (because of `source` in hash)
+- If you want **global deduplication** → remove `source` from hash
 
 ---
 
-***REMOVED******REMOVED*** 🔧 Настройка поведения
+***REMOVED******REMOVED*** Configuring Behavior
 
-***REMOVED******REMOVED******REMOVED*** Опция 1: Per-document deduplication (текущее)
+***REMOVED******REMOVED******REMOVED*** Option 1: Per-Document Deduplication (current)
 ```python
-***REMOVED*** В generate_chunk_id():
+***REMOVED*** In generate_chunk_id():
 content = f"{source}::{chunk_text}"
 ```
 
-**Эффект**: Одинаковые chunks из разных PDF имеют **разные ID**
+**Effect**: Identical chunks from different PDFs have **different IDs**
 
-**Use case**: Каждый документ независимый (Civil Code, Criminal Code)
+**Use case**: Each document is independent (Civil Code, Criminal Code)
 
-***REMOVED******REMOVED******REMOVED*** Опция 2: Global deduplication
+***REMOVED******REMOVED******REMOVED*** Option 2: Global Deduplication
 ```python
-***REMOVED*** Изменить в generate_chunk_id():
-content = chunk_text  ***REMOVED*** Убрать source!
+***REMOVED*** Change in generate_chunk_id():
+content = chunk_text  ***REMOVED*** Remove source!
 ```
 
-**Эффект**: Одинаковые chunks из любых PDF имеют **одинаковый ID**
+**Effect**: Identical chunks from any PDFs have **the same ID**
 
-**Use case**: Хочешь хранить unique chunks across all documents
+**Use case**: You want to store unique chunks across all documents
 
-***REMOVED******REMOVED******REMOVED*** Опция 3: Versioned deduplication
+***REMOVED******REMOVED******REMOVED*** Option 3: Versioned Deduplication
 ```python
-***REMOVED*** Добавить timestamp в hash:
+***REMOVED*** Add timestamp to hash:
 import datetime
 content = f"{source}::{chunk_text}::{datetime.date.today()}"
 ```
 
-**Эффект**: Каждый день создаются новые IDs
+**Effect**: New IDs created each day
 
 **Use case**: Tracking historical changes
 
 ---
 
-***REMOVED******REMOVED*** 🎯 Что происходит при UPDATE?
+***REMOVED******REMOVED*** What Happens During UPDATE?
 
-Когда Qdrant видит существующий ID:
+When Qdrant sees an existing ID:
 
 ```python
 ***REMOVED*** OLD point (before update):
@@ -164,11 +164,11 @@ content = f"{source}::{chunk_text}::{datetime.date.today()}"
 }
 ```
 
-**Всё заменяется**: vector, payload, всё!
+**Everything is replaced**: vector, payload, everything!
 
 ---
 
-***REMOVED******REMOVED*** 📝 Payload теперь включает hash ID
+***REMOVED******REMOVED*** Payload Now Includes Hash ID
 
 ```json
 {
@@ -181,7 +181,7 @@ content = f"{source}::{chunk_text}::{datetime.date.today()}"
 }
 ```
 
-**Зачем?** Можешь найти point по hash в payload:
+**Why?** You can find point by hash in payload:
 ```python
 ***REMOVED*** Search by hash
 from qdrant_client.models import Filter, FieldCondition, MatchValue
@@ -201,22 +201,22 @@ client.scroll(
 
 ---
 
-***REMOVED******REMOVED*** 🚨 Важные примечания
+***REMOVED******REMOVED*** Important Notes
 
-***REMOVED******REMOVED******REMOVED*** ✅ Что защищено:
-- **Точные дубликаты** - автоматически обновляются
-- **Повторная обработка** - безопасна, создаёт 0 новых points
-- **Concurrency** - SHA256 hash deterministic, нет race conditions
+***REMOVED******REMOVED******REMOVED*** What's Protected:
+- **Exact duplicates** - automatically updated
+- **Repeated processing** - safe, creates 0 new points
+- **Concurrency** - SHA256 hash is deterministic, no race conditions
 
-***REMOVED******REMOVED******REMOVED*** ⚠️ Что НЕ защищено:
-- **Minor text changes** - даже пробел изменит hash → новый point
-- **Encoding differences** - UTF-8 vs CP1251 → разные hashes
-- **Normalized vs raw text** - "Article  13" vs "Article 13" → разные hashes
+***REMOVED******REMOVED******REMOVED*** What's NOT Protected:
+- **Minor text changes** - even a space will change hash → new point
+- **Encoding differences** - UTF-8 vs CP1251 → different hashes
+- **Normalized vs raw text** - "Article  13" vs "Article 13" → different hashes
 
-***REMOVED******REMOVED******REMOVED*** 💡 Best Practices:
-1. **Normalize text** перед hash (lowercase, trim spaces, etc.)
-2. **Use same PDF source** - разные пути → разные hashes
-3. **Clean before re-process** - если хочешь fresh start:
+***REMOVED******REMOVED******REMOVED*** Best Practices:
+1. **Normalize text** before hashing (lowercase, trim spaces, etc.)
+2. **Use same PDF source** - different paths → different hashes
+3. **Clean before re-processing** - if you want fresh start:
    ```bash
    ***REMOVED*** Delete collection before re-processing
    curl -X DELETE "http://localhost:6333/collections/my_collection"
@@ -224,9 +224,9 @@ client.scroll(
 
 ---
 
-***REMOVED******REMOVED*** 🔍 Debugging
+***REMOVED******REMOVED*** Debugging
 
-***REMOVED******REMOVED******REMOVED*** Проверить hash для chunk:
+***REMOVED******REMOVED******REMOVED*** Check hash for chunk:
 ```python
 import hashlib
 
@@ -237,7 +237,7 @@ hash_id = hashlib.sha256(content.encode('utf-8')).hexdigest()[:32]
 print(f"Chunk ID: {hash_id}")
 ```
 
-***REMOVED******REMOVED******REMOVED*** Найти duplicate chunks:
+***REMOVED******REMOVED******REMOVED*** Find duplicate chunks:
 ```python
 from qdrant_client import QdrantClient
 
@@ -265,30 +265,30 @@ for chunk_id, point_ids in duplicates.items():
 
 ---
 
-***REMOVED******REMOVED*** 🎓 Связь с Qdrant best practices
+***REMOVED******REMOVED*** Relation to Qdrant Best Practices
 
-Из [Qdrant docs](https://qdrant.tech/documentation/):
+From [Qdrant docs](https://qdrant.tech/documentation/):
 
 > **Point IDs can be any unique identifier**: integers, UUIDs, or strings. Using content-based IDs (like SHA256 hash) enables automatic deduplication via upsert operation.
 
-**Преимущества content-based IDs**:
-1. ✅ Idempotent writes - можно запускать pipeline много раз
-2. ✅ No external ID tracking - не нужна отдельная база ID mapping
-3. ✅ Automatic dedup - Qdrant делает всё сам
-4. ✅ Fast lookups - hash ID = direct point access (O(1))
+**Advantages of content-based IDs**:
+1. Idempotent writes - can run pipeline multiple times
+2. No external ID tracking - no need for separate ID mapping database
+3. Automatic dedup - Qdrant does everything automatically
+4. Fast lookups - hash ID = direct point access (O(1))
 
 ---
 
-***REMOVED******REMOVED*** 📚 Дополнительное чтение
+***REMOVED******REMOVED*** Further Reading
 
 - [Qdrant Upsert Documentation](https://qdrant.tech/documentation/concepts/points/***REMOVED***upload-points)
-- [SHA256 Hash Collisions](https://en.wikipedia.org/wiki/SHA-2) - вероятность ~0 для наших данных
-- [Content Addressing](https://en.wikipedia.org/wiki/Content-addressable_storage) - концепция hash-based IDs
+- [SHA256 Hash Collisions](https://en.wikipedia.org/wiki/SHA-2) - probability ~0 for our data
+- [Content Addressing](https://en.wikipedia.org/wiki/Content-addressable_storage) - concept of hash-based IDs
 
 ---
 
-**Версия**: 1.1
-**Файл**: `/srv/app/ingestion_contextual_kg_fast.py`
-**Функция**: `generate_chunk_id()` (lines 110-134)
+**Version**: 1.1
+**File**: `/srv/app/ingestion_contextual_kg_fast.py`
+**Function**: `generate_chunk_id()` (lines 110-134)
 
-**Вопросы?** Проверь examples выше или запусти `./process-pdf.sh --help`
+**Questions?** Check examples above or run `./process-pdf.sh --help`

@@ -1,8 +1,8 @@
 ***REMOVED*** 🔌 API REFERENCE - Contextual RAG v2.0.1
 
-> **Полная справка по API и примеры использования всех модулей**
+> **Complete API reference and usage examples for all modules**
 
-***REMOVED******REMOVED*** 📖 Оглавление
+***REMOVED******REMOVED*** 📖 Table of Contents
 
 1. [Config API](***REMOVED***config-api)
 2. [Contextualization API](***REMOVED***contextualization-api)
@@ -17,15 +17,15 @@
 
 ***REMOVED******REMOVED*** CONFIG API
 
-***REMOVED******REMOVED******REMOVED*** Модуль: `src.config`
+***REMOVED******REMOVED******REMOVED*** Module: `src.config`
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Settings класс
+***REMOVED******REMOVED******REMOVED******REMOVED*** Settings class
 
 ```python
 from src.config import Settings, APIProvider, SearchEngine
 
 class Settings:
-    """Центральная конфигурация системы."""
+    """Central system configuration."""
 
     def __init__(
         self,
@@ -70,35 +70,35 @@ class Settings:
         pass
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Использование
+***REMOVED******REMOVED******REMOVED******REMOVED*** Usage
 
 ```python
-***REMOVED*** 1. Загрузить из .env
+***REMOVED*** 1. Load from .env
 settings = Settings()
 
-***REMOVED*** 2. С переопределениями
+***REMOVED*** 2. With overrides
 settings = Settings(
     api_provider="openai",
     search_engine="baseline",
     qdrant_url="https://qdrant.example.com"
 )
 
-***REMOVED*** 3. Доступ к свойствам
+***REMOVED*** 3. Access properties
 print(settings.model_name)           ***REMOVED*** "claude-3-5-sonnet-20241022"
 print(settings.api_provider.value)   ***REMOVED*** "claude"
 print(settings.collection_name)      ***REMOVED*** "legal_documents"
 
-***REMOVED*** 4. Экспорт
+***REMOVED*** 4. Export
 config_dict = settings.to_dict()
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Доступные перечисления
+***REMOVED******REMOVED******REMOVED******REMOVED*** Available enumerations
 
 ```python
 from src.config import APIProvider, SearchEngine, ModelName
 
-***REMOVED*** API провайдеры
-APIProvider.CLAUDE      ***REMOVED*** "claude" - рекомендуется
+***REMOVED*** API providers
+APIProvider.CLAUDE      ***REMOVED*** "claude" - recommended
 APIProvider.OPENAI      ***REMOVED*** "openai"
 APIProvider.GROQ        ***REMOVED*** "groq"
 APIProvider.Z_AI        ***REMOVED*** "zai" - deprecated
@@ -106,7 +106,7 @@ APIProvider.Z_AI        ***REMOVED*** "zai" - deprecated
 ***REMOVED*** Search engines
 SearchEngine.BASELINE        ***REMOVED*** Dense only
 SearchEngine.HYBRID_RRF      ***REMOVED*** Dense + Sparse
-SearchEngine.DBSF_COLBERT    ***REMOVED*** Лучший (94% Recall@1)
+SearchEngine.DBSF_COLBERT    ***REMOVED*** Best (94% Recall@1)
 
 ***REMOVED*** LLM Models
 ModelName.CLAUDE_SONNET      ***REMOVED*** claude-3-5-sonnet-20241022
@@ -119,16 +119,16 @@ ModelName.GROQ_LLAMA3_70B    ***REMOVED*** llama3-70b-8192
 
 ***REMOVED******REMOVED*** CONTEXTUALIZATION API
 
-***REMOVED******REMOVED******REMOVED*** Модуль: `src.contextualization`
+***REMOVED******REMOVED******REMOVED*** Module: `src.contextualization`
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Базовый класс: ContextualizeProvider
+***REMOVED******REMOVED******REMOVED******REMOVED*** Base class: ContextualizeProvider
 
 ```python
 from src.contextualization import ContextualizeProvider
 from typing import List, Optional
 
 class ContextualizeProvider(ABC):
-    """Абстрактный базовый класс для провайдеров контекстуализации."""
+    """Abstract base class for contextualization providers."""
 
     @abstractmethod
     async def contextualize(
@@ -138,15 +138,15 @@ class ContextualizeProvider(ABC):
         context_window: int = 3,
     ) -> List['ContextualizedChunk']:
         """
-        Контекстуализировать список chunks.
+        Contextualize a list of chunks.
 
         Args:
-            chunks: Список текстовых chunks для контекстуализации
-            query: Опциональный пользовательский запрос
-            context_window: Количество соседних chunks для рассмотрения
+            chunks: List of text chunks to contextualize
+            query: Optional user query
+            context_window: Number of neighboring chunks to consider
 
         Returns:
-            List[ContextualizedChunk] - chunks с контекстом
+            List[ContextualizedChunk] - chunks with context
         """
         pass
 
@@ -157,7 +157,7 @@ class ContextualizeProvider(ABC):
         article_number: str,
         query: Optional[str] = None,
     ) -> 'ContextualizedChunk':
-        """Контекстуализировать один chunk."""
+        """Contextualize a single chunk."""
         pass
 ```
 
@@ -168,17 +168,17 @@ from src.contextualization import ClaudeContextualizer
 
 class ClaudeContextualizer(ContextualizeProvider):
     """
-    Контекстуализация через Anthropic Claude API.
+    Contextualization via Anthropic Claude API.
 
-    Особенности:
-    - Prompt caching для 90% экономии стоимости
-    - Async/sync поддержка
+    Features:
+    - Prompt caching for 90% cost savings
+    - Async/sync support
     - Token tracking
     - Highest quality output
 
-    Производительность:
-    - ~8-12 минут на 100 chunks
-    - ~$0.003-0.01 per chunk (с кешированием)
+    Performance:
+    - ~8-12 minutes for 100 chunks
+    - ~$0.003-0.01 per chunk (with caching)
     """
 
     def __init__(
@@ -201,7 +201,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         query: Optional[str] = None,
         context_window: int = 3,
     ) -> List['ContextualizedChunk']:
-        """Контекстуализировать множество chunks."""
+        """Contextualize multiple chunks."""
         pass
 
     async def contextualize_single(
@@ -210,7 +210,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         article_number: str,
         query: Optional[str] = None,
     ) -> 'ContextualizedChunk':
-        """Контекстуализировать один chunk."""
+        """Contextualize a single chunk."""
         pass
 
     def contextualize_sync(
@@ -219,7 +219,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         article_number: str,
         query: Optional[str] = None,
     ) -> 'ContextualizedChunk':
-        """Синхронная контекстуализация (блокирующая)."""
+        """Synchronous contextualization (blocking)."""
         pass
 
     def get_stats(self) -> Dict[str, Any]:
@@ -227,13 +227,13 @@ class ClaudeContextualizer(ContextualizeProvider):
         pass
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Использование
+***REMOVED******REMOVED******REMOVED******REMOVED*** Usage
 
 ```python
 import asyncio
 from src.contextualization import ClaudeContextualizer, OpenAIContextualizer, GroqContextualizer
 
-***REMOVED*** 1. Claude (рекомендуется)
+***REMOVED*** 1. Claude (recommended)
 async def contextualize_with_claude():
     contextualizer = ClaudeContextualizer(use_cache=True)
 
@@ -257,14 +257,14 @@ async def contextualize_with_claude():
     print(f"Total tokens: {stats['total_tokens']}")
     print(f"Total cost: ${stats['total_cost_usd']:.4f}")
 
-***REMOVED*** 2. OpenAI альтернатива
+***REMOVED*** 2. OpenAI alternative
 contextualizer = OpenAIContextualizer()
 result = await contextualizer.contextualize_single(
     text="Стаття 3...",
     article_number="Ст. 3"
 )
 
-***REMOVED*** 3. Groq (быстрая, free)
+***REMOVED*** 3. Groq (fast, free)
 contextualizer = GroqContextualizer()
 results = await contextualizer.contextualize(chunks)
 
@@ -276,9 +276,9 @@ asyncio.run(contextualize_with_claude())
 
 ***REMOVED******REMOVED*** RETRIEVAL API
 
-***REMOVED******REMOVED******REMOVED*** Модуль: `src.retrieval`
+***REMOVED******REMOVED******REMOVED*** Module: `src.retrieval`
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** SearchEngine базовый класс
+***REMOVED******REMOVED******REMOVED******REMOVED*** SearchEngine base class
 
 ```python
 from src.retrieval import SearchEngine, SearchResult, BaselineSearchEngine
@@ -286,14 +286,14 @@ from typing import List, Optional
 
 @dataclass
 class SearchResult:
-    """Один результат поиска."""
+    """Single search result."""
     article_number: str        ***REMOVED*** "Ст. 1"
     text: str                  ***REMOVED*** "Право на життя..."
     score: float               ***REMOVED*** 0.95
     metadata: Dict[str, Any]   ***REMOVED*** {"chapter": "II", ...}
 
 class BaseSearchEngine(ABC):
-    """Абстрактный базовый класс для search engines."""
+    """Abstract base class for search engines."""
 
     def __init__(self, settings: Optional[Settings] = None):
         """Initialize search engine."""
@@ -307,7 +307,7 @@ class BaseSearchEngine(ABC):
         score_threshold: Optional[float] = None,
     ) -> List[SearchResult]:
         """
-        Поиск похожих документов.
+        Search for similar documents.
 
         Args:
             query_embedding: Query embedding vector (1024 dims)
@@ -320,7 +320,7 @@ class BaseSearchEngine(ABC):
         pass
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** 3 реализации
+***REMOVED******REMOVED******REMOVED******REMOVED*** 3 implementations
 
 ```python
 from src.retrieval import (
@@ -338,17 +338,17 @@ results = engine.search(query_embedding, top_k=5)
 engine = HybridRRFSearchEngine()
 results = engine.search(query_embedding, top_k=5)
 
-***REMOVED*** 3. DBSF+ColBERT (Лучший результат)
+***REMOVED*** 3. DBSF+ColBERT (Best result)
 engine = DBSFColBERTSearchEngine()
 results = engine.search(query_embedding, top_k=5)
 
-***REMOVED*** Factory функция
+***REMOVED*** Factory function
 engine = create_search_engine(
     engine_type=SearchEngine.DBSF_COLBERT,
     settings=settings
 )
 
-***REMOVED*** Использование
+***REMOVED*** Usage
 for result in results:
     print(f"{result.article_number}")
     print(f"Text: {result.text[:100]}...")
@@ -360,7 +360,7 @@ for result in results:
 
 ***REMOVED******REMOVED*** INGESTION API
 
-***REMOVED******REMOVED******REMOVED*** Модуль: `src.ingestion`
+***REMOVED******REMOVED******REMOVED*** Module: `src.ingestion`
 
 ***REMOVED******REMOVED******REMOVED******REMOVED*** 1. PDFParser
 
@@ -369,23 +369,23 @@ from src.ingestion import PDFParser, ParsedDocument
 
 parser = PDFParser()
 
-***REMOVED*** Parse один файл
+***REMOVED*** Parse single file
 doc = parser.parse_file("path/to/document.pdf")
 ***REMOVED*** ParsedDocument(
 ***REMOVED***     filename="document.pdf",
-***REMOVED***     title="Документ Назва",
+***REMOVED***     title="Document Title",
 ***REMOVED***     content="Full text...",
 ***REMOVED***     num_pages=150,
 ***REMOVED***     metadata={...}
 ***REMOVED*** )
 
-***REMOVED*** Parse директорию
+***REMOVED*** Parse directory
 docs = parser.parse_directory(
     dirpath="docs/documents/",
     pattern="*.pdf"
 )
 
-***REMOVED*** Parse множество файлов
+***REMOVED*** Parse multiple files
 docs = parser.parse_multiple([
     "file1.pdf",
     "file2.pdf",
@@ -404,24 +404,24 @@ chunker = DocumentChunker(
     strategy=ChunkingStrategy.SEMANTIC  ***REMOVED*** or FIXED_SIZE, SLIDING_WINDOW
 )
 
-***REMOVED*** Chunk текст
+***REMOVED*** Chunk text
 chunks = chunker.chunk_text(
     text=doc.content,
     document_name="Конституція_України",
     article_number="Ст. 1"
 )
 
-***REMOVED*** Результат: List[Chunk]
+***REMOVED*** Result: List[Chunk]
 for chunk in chunks:
     print(f"Chunk {chunk.chunk_id}: {chunk.text[:50]}...")
     print(f"Article: {chunk.article_number}")
     print(f"Order: {chunk.order}")
     print()
 
-***REMOVED*** Стратегии chunking
-ChunkingStrategy.FIXED_SIZE      ***REMOVED*** Фиксированный размер
-ChunkingStrategy.SEMANTIC        ***REMOVED*** По семантическим границам
-ChunkingStrategy.SLIDING_WINDOW  ***REMOVED*** Скользящее окно с перекрытием
+***REMOVED*** Chunking strategies
+ChunkingStrategy.FIXED_SIZE      ***REMOVED*** Fixed size
+ChunkingStrategy.SEMANTIC        ***REMOVED*** By semantic boundaries
+ChunkingStrategy.SLIDING_WINDOW  ***REMOVED*** Sliding window with overlap
 ```
 
 ***REMOVED******REMOVED******REMOVED******REMOVED*** 3. DocumentIndexer
@@ -431,13 +431,13 @@ from src.ingestion import DocumentIndexer, IndexStats
 
 indexer = DocumentIndexer(settings)
 
-***REMOVED*** Создать коллекцию
+***REMOVED*** Create collection
 indexer.create_collection(
     collection_name="legal_documents",
     recreate=False  ***REMOVED*** True to drop and recreate
 )
 
-***REMOVED*** Индексировать chunks
+***REMOVED*** Index chunks
 stats = await indexer.index_chunks(
     chunks=chunks,
     collection_name="legal_documents",
@@ -465,7 +465,7 @@ info = indexer.get_collection_stats("legal_documents")
 
 ***REMOVED******REMOVED*** EVALUATION API
 
-***REMOVED******REMOVED******REMOVED*** Модуль: `src.evaluation`
+***REMOVED******REMOVED******REMOVED*** Module: `src.evaluation`
 
 ***REMOVED******REMOVED******REMOVED******REMOVED*** Metrics
 
@@ -559,7 +559,7 @@ python src/evaluation/run_ab_test.py \
 
 ***REMOVED******REMOVED*** CORE PIPELINE API
 
-***REMOVED******REMOVED******REMOVED*** RAGPipeline - Главный класс
+***REMOVED******REMOVED******REMOVED*** RAGPipeline - Main class
 
 ```python
 from src.core import RAGPipeline
@@ -568,14 +568,14 @@ import asyncio
 
 class RAGPipeline:
     """
-    Главный RAG pipeline - оркестрирует все компоненты.
+    Main RAG pipeline - orchestrates all components.
 
-    Использует:
-    - ClaudeContextualizer (по умолчанию)
-    - DBSFColBERTSearchEngine (по умолчанию)
-    - DocumentIndexer для загрузки
+    Uses:
+    - ClaudeContextualizer (by default)
+    - DBSFColBERTSearchEngine (by default)
+    - DocumentIndexer for loading
 
-    Это основной класс для использования!
+    This is the main class to use!
     """
 
     def __init__(self, settings: Optional[Settings] = None):
@@ -589,7 +589,7 @@ class RAGPipeline:
         use_context: bool = True,
     ) -> 'RAGResult':
         """
-        Поиск документов по запросу.
+        Search documents by query.
 
         Args:
             query: User query string
@@ -642,7 +642,7 @@ class RAGPipeline:
         pass
 ```
 
-***REMOVED******REMOVED******REMOVED******REMOVED*** Использование
+***REMOVED******REMOVED******REMOVED******REMOVED*** Usage
 
 ```python
 import asyncio
@@ -765,7 +765,7 @@ class RAGResult:
 
 ***REMOVED******REMOVED*** EXAMPLES
 
-***REMOVED******REMOVED******REMOVED*** Пример 1: Простой поиск
+***REMOVED******REMOVED******REMOVED*** Example 1: Simple search
 
 ```python
 import asyncio
@@ -785,7 +785,7 @@ async def simple_search():
 asyncio.run(simple_search())
 ```
 
-***REMOVED******REMOVED******REMOVED*** Пример 2: Полный workflow
+***REMOVED******REMOVED******REMOVED*** Example 2: Full workflow
 
 ```python
 import asyncio
@@ -827,7 +827,7 @@ async def full_workflow():
 asyncio.run(full_workflow())
 ```
 
-***REMOVED******REMOVED******REMOVED*** Пример 3: Dengan разными провайдерами
+***REMOVED******REMOVED******REMOVED*** Example 3: Different providers
 
 ```python
 import asyncio
@@ -868,25 +868,25 @@ asyncio.run(compare_providers())
 
 ***REMOVED******REMOVED*** 🎯 Best Practices
 
-***REMOVED******REMOVED******REMOVED*** 1. Конфигурация
+***REMOVED******REMOVED******REMOVED*** 1. Configuration
 
 ```python
-***REMOVED*** ✅ Good: Используйте Settings
+***REMOVED*** ✅ Good: Use Settings
 from src.config import Settings
 settings = Settings()
 
-***REMOVED*** ❌ Bad: Hardcode значений
+***REMOVED*** ❌ Bad: Hardcode values
 QDRANT_URL = "http://localhost:6333"
 ```
 
 ***REMOVED******REMOVED******REMOVED*** 2. Context Managers
 
 ```python
-***REMOVED*** ✅ Good: Используйте async context
+***REMOVED*** ✅ Good: Use async context
 async with create_pipeline() as pipeline:
     result = await pipeline.search("query")
 
-***REMOVED*** ❌ Bad: Не очищайте ресурсы
+***REMOVED*** ❌ Bad: Don't clean up resources
 pipeline = create_pipeline()
 result = pipeline.search("query")
 ```
@@ -894,7 +894,7 @@ result = pipeline.search("query")
 ***REMOVED******REMOVED******REMOVED*** 3. Error Handling
 
 ```python
-***REMOVED*** ✅ Good: Обрабатывайте ошибки
+***REMOVED*** ✅ Good: Handle errors
 try:
     result = await pipeline.search("query")
 except ConnectionError:
@@ -902,19 +902,19 @@ except ConnectionError:
 except ValueError as e:
     print(f"Invalid query: {e}")
 
-***REMOVED*** ❌ Bad: Игнорируйте ошибки
+***REMOVED*** ❌ Bad: Ignore errors
 result = await pipeline.search("query")
 ```
 
 ***REMOVED******REMOVED******REMOVED*** 4. Batch Processing
 
 ```python
-***REMOVED*** ✅ Good: Обрабатывайте батчами
+***REMOVED*** ✅ Good: Process in batches
 queries = ["q1", "q2", "q3", ...]
 for batch in chunks(queries, batch_size=10):
     results = [await pipeline.search(q) for q in batch]
 
-***REMOVED*** ❌ Bad: Один за одним
+***REMOVED*** ❌ Bad: One by one
 for query in queries:
     result = await pipeline.search(query)  ***REMOVED*** Slow!
 ```
