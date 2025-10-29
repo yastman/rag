@@ -100,7 +100,7 @@
 **Direct Queries (50 total):**
 - ✅ All contain explicit article references or key legal terms
 - ✅ All would clearly lead to expected article
-- Note: A few are generic (e.g., "статья 65 Уголовного кодекса Украины") but still valid
+- Note: A few are generic (e.g., "article 65 Criminal Code of Ukraine") but still valid
 
 **Semantic Queries (50 total):**
 - ✅ All accurately describe article concepts using different terminology
@@ -125,13 +125,13 @@
 ### Query Examples
 
 **Excellent Direct Query (Article 185):**
-> "статья 185 кража Уголовный кодекс Украины"
+> "article 185 theft Criminal Code of Ukraine"
 
 **Excellent Semantic Query (Article 121):**
-> "какое наказание за преднамеренное тяжкое телесное повреждение"
+> "what is the punishment for intentional grievous bodily harm"
 
 **Excellent Paraphrased Query (Article 289):**
-> "что грозит за захват машины группой лиц с угрозой насилия"
+> "what is the penalty for hijacking a vehicle by a group with threats of violence"
 
 ### Coverage
 - **Article Range:** 1-394 (well-distributed across Criminal Code)
