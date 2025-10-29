@@ -12,7 +12,7 @@ Successfully integrated Langfuse for production RAG observability using **offici
 **Key Achievement**: User feedback-driven iteration → replaced 415 lines of custom wrapper code with 430 lines of native SDK examples and helper functions.
 
 **Critical User Feedback:**
-> "Ты опять пишешь код кастомный, а готовых решений не нету? Поищи с помощью MCP Context7 документацию."
+> "You're writing custom code again, but aren't there ready-made solutions? Search documentation using MCP Context7."
 
 **Response:** Searched official Langfuse documentation via MCP Context7, rewrote entire integration using native `@observe()` decorator patterns from official docs.
 
@@ -375,7 +375,7 @@ from langfuse_integration import trace_search_with_decorator
 
 # Search with automatic tracing
 results, metrics = trace_search_with_decorator(
-    query="статья 121 УК",
+    query="article 121 CC",
     search_fn=lambda q: engine.search(q, limit=10),
     engine_name="dbsf_colbert",
     user_id="user_123",
