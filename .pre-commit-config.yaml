@@ -1,0 +1,91 @@
+# Pre-commit hooks configuration for contextual_rag project
+# Install: pip install pre-commit
+# Setup: pre-commit install
+# Run manually: pre-commit run --all-files
+#
+# Documentation: https://pre-commit.com/
+
+default_language_version:
+  python: python3.9
+
+repos:
+  # Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4  # Use latest version from: https://github.com/astral-sh/ruff-pre-commit/releases
+    hooks:
+      # Linter - checks code quality
+      - id: ruff
+        name: Ruff Linter
+        args:
+          - --fix           # Auto-fix issues when possible
+          - --exit-non-zero-on-fix  # Fail if fixes were applied (to review changes)
+        types_or: [python, pyi]
+
+      # Formatter - formats code
+      - id: ruff-format
+        name: Ruff Formatter
+        types_or: [python, pyi]
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+        args: ['--unsafe']  # Allow custom YAML tags
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-json
+        name: Check JSON syntax
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: debug-statements
+        name: Check for debugger imports
+      - id: mixed-line-ending
+        name: Check mixed line endings
+        args: ['--fix=lf']
+
+  # Optional: mypy for type checking
+  # Uncomment to enable strict type checking
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.13.0
+  #   hooks:
+  #     - id: mypy
+  #       name: MyPy Type Checker
+  #       additional_dependencies:
+  #         - types-requests
+  #         - types-aiohttp
+  #       args:
+  #         - --config-file=pyproject.toml
+
+  # Optional: bandit for security issues
+  # Uncomment to enable security scanning
+  # - repo: https://github.com/PyCQA/bandit
+  #   rev: '1.7.10'
+  #   hooks:
+  #     - id: bandit
+  #       name: Bandit Security Linter
+  #       args:
+  #         - -c
+  #         - pyproject.toml
+  #       additional_dependencies: ["bandit[toml]"]
+
+# CI configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false
