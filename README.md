@@ -63,34 +63,43 @@ contextual_rag/
 
 ### 1. Встановлення
 
-**Варіант A: Робота на сервері (рекомендовано)**
+**Варіант A: Claude Code CLI на сервері (🏆 РЕКОМЕНДОВАНО)**
 
 ```bash
-# На сервері
+# 1. SSH на сервер
+ssh user@your-server.com
+
+# 2. Клонувати проект
 git clone https://github.com/yastman/rag.git
 cd rag
 
-# Віртуальне середовище
+# 3. Налаштувати середовище
 python3.9 -m venv venv
 source venv/bin/activate
-
-# Залежності (включно з pre-commit)
 pip install -e ".[dev]"
 
-# Налаштування Git hooks
+# 4. Налаштувати Git
+git config user.name "Your Name"
+git config user.email "your@email.com"
+
+# 5. Налаштувати pre-commit
 pre-commit install --install-hooks
 pre-commit install --hook-type pre-push
 
-# Налаштування
+# 6. Налаштувати .env
 cp .env.example .env
-nano .env  # Відредагуйте з вашими API ключами
+nano .env  # API ключі
 
-# Налаштування Git
-git config user.name "Your Name"
-git config user.email "your@email.com"
+# 7. Запустити Claude Code
+claude
+
+# Готово! Тепер просто говоріть з Claude:
+# "покажи структуру проекту"
+# "запусти тести"
+# "створи нову функцію для..."
 ```
 
-**Варіант B: Локальна розробка**
+**Варіант B: Локальна розробка (без Claude Code)**
 
 ```bash
 # Локально
@@ -112,13 +121,6 @@ pre-commit install --hook-type pre-push
 cp .env.example .env
 # Відредагуйте .env з вашими API ключами
 ```
-
-**Чому краще працювати на сервері:**
-- ✅ Окружение вже налаштоване (Python, Qdrant, dependencies)
-- ✅ Прямий доступ до даних та логів
-- ✅ Можна відразу тестувати зміни
-- ✅ Не потрібна синхронізація між машинами
-- ✅ SSH доступ для віддаленої роботи
 
 ### 2. Запуск Qdrant
 
@@ -335,52 +337,70 @@ python src/evaluation/run_ab_test.py
 
 ### Робота з сервером
 
-**SSH доступ:**
-```bash
-# Підключення до сервера
-ssh user@your-server.com
+**🏆 Варіант 1: Claude Code CLI на сервері (НАЙПРОСТІШЕ!)**
 
-# Або з ключем
-ssh -i ~/.ssh/id_rsa user@your-server.com
-```
-
-**VS Code Remote SSH (рекомендовано):**
-1. Встановіть розширення "Remote - SSH" в VS Code
-2. F1 → "Remote-SSH: Connect to Host"
-3. Введіть `user@your-server.com`
-4. Відкрийте папку проекту `/path/to/rag`
-5. Працюйте як локально, але код на сервері!
-
-**Переваги VS Code Remote SSH:**
-- 🚀 Редактор працює локально, код на сервері
-- 🔍 Інтелісенс, дебагінг, термінал - все працює
-- 📁 Файловий браузер серверної системи
-- 🔌 Всі розширення VS Code доступні
-- 💾 Автосейв та Git інтеграція
-
-**Workflow на сервері:**
 ```bash
 # 1. Підключитись до сервера
-ssh user@server
+ssh user@your-server.com
 
-# 2. Перейти в проект
+# 2. Встановити Claude Code (якщо ще не встановлено)
+# curl -fsSL https://claude.ai/install.sh | sh
+
+# 3. Перейти в проект
 cd /path/to/rag
 
-# 3. Активувати venv
-source venv/bin/activate
+# 4. Запустити Claude Code
+claude
 
-# 4. Створити feature branch
-git checkout -b feature/new-feature
+# Готово! 🎉
+# Claude Code автоматично:
+# - Бачить всі файли проекту
+# - Має доступ до Git
+# - Може запускати команди
+# - Редагує файли
+# - Робить коміти з pre-commit hooks
+# - Пушить в GitHub
+```
 
-# 5. Редагувати код
-nano src/some_file.py  # або використовувати VS Code Remote
+**Переваги Claude Code CLI:**
+- ⚡ **Найшвидший спосіб** - одна команда `claude`
+- 🤖 **AI-асистент** - допомагає з кодом, документацією, дебагінгом
+- 🔧 **Все інтегровано** - Git, linting, testing, всі інструменти
+- 📝 **Автоматичні коміти** - з правильними повідомленнями
+- 🎯 **Розуміє контекст** - бачить весь проект
+- 🚀 **Не потрібні налаштування** - працює з коробки
 
-# 6. Commit (pre-commit hooks запустяться автоматично)
-git add .
-git commit -m "feat: Add new feature"
+**Варіант 2: VS Code Remote SSH**
 
-# 7. Push
-git push origin feature/new-feature
+```bash
+# VS Code з розширенням "Remote - SSH"
+# 1. F1 → "Remote-SSH: Connect to Host"
+# 2. user@your-server.com
+# 3. Відкрити папку /path/to/rag
+```
+
+**Варіант 3: Звичайний SSH**
+
+```bash
+ssh user@your-server.com
+cd /path/to/rag
+nano src/file.py  # або vim, emacs
+```
+
+**Рекомендований workflow з Claude Code:**
+```bash
+# На сервері
+cd /path/to/rag
+claude
+
+# Потім просто кажете Claude що робити:
+"Додай функцію для кешування результатів пошуку"
+"Виправ помилку в src/retrieval/search_engines.py"
+"Створи тести для нового модуля"
+"Зроби коміт з цими змінами"
+"Запуш в GitHub"
+
+# Claude все зробить автоматично! 🎉
 ```
 
 ### Якість коду
