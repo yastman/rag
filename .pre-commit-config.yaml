@@ -1,12 +1,22 @@
 # Pre-commit hooks configuration for contextual_rag project
 # Install: pip install pre-commit
-# Setup: pre-commit install
+# Setup: pre-commit install --install-hooks
+# Setup pre-push: pre-commit install --hook-type pre-push
 # Run manually: pre-commit run --all-files
 #
 # Documentation: https://pre-commit.com/
 
 default_language_version:
   python: python3.9
+
+# Install both pre-commit and pre-push hooks by default
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
+# Default stages for hooks (can be overridden per hook)
+default_stages:
+  - pre-commit
 
 repos:
   # Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
@@ -76,6 +86,33 @@ repos:
   #         - -c
   #         - pyproject.toml
   #       additional_dependencies: ["bandit[toml]"]
+
+  # =============================================================================
+  # PRE-PUSH HOOKS (Run before git push)
+  # =============================================================================
+  # These hooks run more expensive checks that shouldn't slow down commits
+
+  # Run tests before push (if you have tests)
+  # Uncomment when tests are available
+  # - repo: local
+  #   hooks:
+  #     - id: pytest
+  #       name: Run pytest
+  #       entry: pytest
+  #       language: system
+  #       pass_filenames: false
+  #       stages: [pre-push]
+
+  # Prevent pushing to main/master branches accidentally
+  - repo: local
+    hooks:
+      - id: branch-protection
+        name: Protect main/master branch
+        entry: bash -c 'BRANCH=$(git rev-parse --abbrev-ref HEAD); if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then echo "⚠️  Direct push to $BRANCH is not recommended. Use a feature branch."; exit 0; fi'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true
 
 # CI configuration
 ci:
