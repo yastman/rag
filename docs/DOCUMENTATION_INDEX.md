@@ -1,66 +1,66 @@
-# 📚 ДОКУМЕНТАЦИЯ - Contextual RAG v2.0.1
+# 📚 DOCUMENTATION - Contextual RAG v2.0.1
 
-> **Полный указатель документации проекта**
+> **Complete project documentation index**
 
-## 🚀 БЫСТРЫЙ СТАРТ (Начните отсюда!)
+## 🚀 QUICK START (Start here!)
 
-- **[README.md](../README.md)** - Главная страница проекта (5 минут)
-- **[QUICK_START.md](guides/QUICK_START.md)** - Установка и первый поиск (5 минут)
-- **[SETUP.md](guides/SETUP.md)** - Полная установка и конфигурация
-
----
-
-## 📖 ОСНОВНАЯ ДОКУМЕНТАЦИЯ
-
-### 1. СТРУКТУРА И АРХИТЕКТУРА
-
-| Документ | Описание |
-|----------|---------|
-| **[COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md)** ⭐ | Полная структура проекта (33 файла, все модули) |
-| **[README_NEW_STRUCTURE.md](README_NEW_STRUCTURE.md)** | Описание новой архитектуры `src/` |
-| **[ARCHITECTURE.md](architecture/ARCHITECTURE.md)** | Системная архитектура и дизайн |
-| **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** | Старое описание (ориентир) |
-
-### 2. API СПРАВКА
-
-| Документ | Описание |
-|----------|---------|
-| **[API_REFERENCE.md](api/API_REFERENCE.md)** ⭐ | Полная API справка всех модулей |
-| **[SEARCH_ENGINE_GUIDE.md](implementation/SEARCH_ENGINE_GUIDE.md)** | Детали search engines (Baseline, Hybrid, DBSF) |
-| **[CONFIG_GUIDE.md](implementation/CONFIG_GUIDE.md)** | Конфигурация и переменные окружения |
-
-### 3. РЕАЛИЗАЦИЯ И ОПТИМИЗАЦИЯ
-
-| Документ | Описание |
-|----------|---------|
-| **[OPTIMIZATION_PLAN.md](implementation/OPTIMIZATION_PLAN.md)** | План оптимизации и улучшения |
-| **[DBSF_vs_RRF_ANALYSIS.md](implementation/DBSF_vs_RRF_ANALYSIS.md)** | Сравнение методов ранжирования |
-| **[MIGRATION_PLAN.md](architecture/MIGRATION_PLAN.md)** | План миграции на новую структуру |
-
-### 4. ОТЧЕТЫ И РЕЗУЛЬТАТЫ
-
-| Документ | Описание |
-|----------|---------|
-| **[FULL_PROJECT_ANALYSIS.md](reports/FULL_PROJECT_ANALYSIS.md)** | Полный анализ проекта (875 строк) |
-| **[PHASE1_COMPLETION_SUMMARY.md](reports/PHASE1_COMPLETION_SUMMARY.md)** | Завершение Phase 1 |
-| **[PHASE2_COMPLETION_SUMMARY.md](reports/PHASE2_COMPLETION_SUMMARY.md)** | Завершение Phase 2 |
-| **[PHASE3_COMPLETION_SUMMARY.md](reports/PHASE3_COMPLETION_SUMMARY.md)** | Завершение Phase 3 |
+- **[README.md](../README.md)** - Project home page (5 minutes)
+- **[QUICK_START.md](guides/QUICK_START.md)** - Installation and first search (5 minutes)
+- **[SETUP.md](guides/SETUP.md)** - Full installation and configuration
 
 ---
 
-## 📚 РУКОВОДСТВА ПОЛЬЗОВАТЕЛЯ
+## 📖 MAIN DOCUMENTATION
 
-### Практические инструкции
+### 1. STRUCTURE AND ARCHITECTURE
 
-| Документ | Назначение |
+| Document | Description |
+|----------|---------|
+| **[COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md)** ⭐ | Complete project structure (33 files, all modules) |
+| **[README_NEW_STRUCTURE.md](README_NEW_STRUCTURE.md)** | New `src/` architecture description |
+| **[ARCHITECTURE.md](architecture/ARCHITECTURE.md)** | System architecture and design |
+| **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** | Old description (reference) |
+
+### 2. API REFERENCE
+
+| Document | Description |
+|----------|---------|
+| **[API_REFERENCE.md](api/API_REFERENCE.md)** ⭐ | Complete API reference for all modules |
+| **[SEARCH_ENGINE_GUIDE.md](implementation/SEARCH_ENGINE_GUIDE.md)** | Search engine details (Baseline, Hybrid, DBSF) |
+| **[CONFIG_GUIDE.md](implementation/CONFIG_GUIDE.md)** | Configuration and environment variables |
+
+### 3. IMPLEMENTATION AND OPTIMIZATION
+
+| Document | Description |
+|----------|---------|
+| **[OPTIMIZATION_PLAN.md](implementation/OPTIMIZATION_PLAN.md)** | Optimization and improvement plan |
+| **[DBSF_vs_RRF_ANALYSIS.md](implementation/DBSF_vs_RRF_ANALYSIS.md)** | Ranking method comparison |
+| **[MIGRATION_PLAN.md](architecture/MIGRATION_PLAN.md)** | Migration plan to new structure |
+
+### 4. REPORTS AND RESULTS
+
+| Document | Description |
+|----------|---------|
+| **[FULL_PROJECT_ANALYSIS.md](reports/FULL_PROJECT_ANALYSIS.md)** | Full project analysis (875 lines) |
+| **[PHASE1_COMPLETION_SUMMARY.md](reports/PHASE1_COMPLETION_SUMMARY.md)** | Phase 1 completion |
+| **[PHASE2_COMPLETION_SUMMARY.md](reports/PHASE2_COMPLETION_SUMMARY.md)** | Phase 2 completion |
+| **[PHASE3_COMPLETION_SUMMARY.md](reports/PHASE3_COMPLETION_SUMMARY.md)** | Phase 3 completion |
+
+---
+
+## 📚 USER GUIDES
+
+### Practical instructions
+
+| Document | Purpose |
 |----------|-----------|
-| **[QUICK_START.md](guides/QUICK_START.md)** | 5-минутный старт |
-| **[SETUP.md](guides/SETUP.md)** | Развернутая установка |
-| **[CODE_QUALITY.md](guides/CODE_QUALITY.md)** | Стандарты разработки |
+| **[QUICK_START.md](guides/QUICK_START.md)** | 5-minute start |
+| **[SETUP.md](guides/SETUP.md)** | Detailed installation |
+| **[CODE_QUALITY.md](guides/CODE_QUALITY.md)** | Development standards |
 
-### Использование компонентов
+### Component usage
 
-| Компонент | Документ |
+| Component | Document |
 |-----------|----------|
 | **Config** | API_REFERENCE.md → CONFIG API |
 | **Contextualization** | API_REFERENCE.md → CONTEXTUALIZATION API |
@@ -71,212 +71,212 @@
 
 ---
 
-## 🎯 НАЙДИ ЧТО ТЕБЕ НУЖНО
+## 🎯 FIND WHAT YOU NEED
 
-### Я хочу...
+### I want to...
 
-#### ...начать с нуля
-1. Прочитай [README.md](../README.md)
-2. Следи [QUICK_START.md](guides/QUICK_START.md)
-3. Запусти примеры из [API_REFERENCE.md](api/API_REFERENCE.md)
+#### ...start from scratch
+1. Read [README.md](../README.md)
+2. Follow [QUICK_START.md](guides/QUICK_START.md)
+3. Run examples from [API_REFERENCE.md](api/API_REFERENCE.md)
 
-#### ...понять архитектуру
-1. Читай [COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md) - полная структура
-2. Смотри [ARCHITECTURE.md](architecture/ARCHITECTURE.md) - системный дизайн
-3. Исследуй [README_NEW_STRUCTURE.md](README_NEW_STRUCTURE.md) - модули
+#### ...understand the architecture
+1. Read [COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md) - complete structure
+2. See [ARCHITECTURE.md](architecture/ARCHITECTURE.md) - system design
+3. Explore [README_NEW_STRUCTURE.md](README_NEW_STRUCTURE.md) - modules
 
-#### ...использовать API
-1. Откройте [API_REFERENCE.md](api/API_REFERENCE.md)
-2. Найдите нужный модуль (Config, Contextualization, Retrieval, etc.)
-3. Скопируйте пример кода
-4. Адаптируйте для своего случая
+#### ...use the API
+1. Open [API_REFERENCE.md](api/API_REFERENCE.md)
+2. Find the needed module (Config, Contextualization, Retrieval, etc.)
+3. Copy code example
+4. Adapt for your use case
 
-#### ...оптимизировать производительность
-1. Прочитайте [OPTIMIZATION_PLAN.md](implementation/OPTIMIZATION_PLAN.md)
-2. Посмотрите [DBSF_vs_RRF_ANALYSIS.md](implementation/DBSF_vs_RRF_ANALYSIS.md)
-3. Используйте DBSF+ColBERT (94.0% Recall@1)
+#### ...optimize performance
+1. Read [OPTIMIZATION_PLAN.md](implementation/OPTIMIZATION_PLAN.md)
+2. See [DBSF_vs_RRF_ANALYSIS.md](implementation/DBSF_vs_RRF_ANALYSIS.md)
+3. Use DBSF+ColBERT (94.0% Recall@1)
 
-#### ...развивать проект
-1. Прочитайте [CODE_QUALITY.md](guides/CODE_QUALITY.md)
-2. Изучите [COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md)
-3. Смотрите примеры в [API_REFERENCE.md](api/API_REFERENCE.md)
+#### ...develop the project
+1. Read [CODE_QUALITY.md](guides/CODE_QUALITY.md)
+2. Study [COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md)
+3. See examples in [API_REFERENCE.md](api/API_REFERENCE.md)
 
-#### ...мониторить эксперименты
-1. Читайте [API_REFERENCE.md](api/API_REFERENCE.md) → EVALUATION API
-2. Запускайте A/B тесты (src/evaluation/run_ab_test.py)
-3. Используйте MLflow (http://localhost:5000)
+#### ...monitor experiments
+1. Read [API_REFERENCE.md](api/API_REFERENCE.md) → EVALUATION API
+2. Run A/B tests (src/evaluation/run_ab_test.py)
+3. Use MLflow (http://localhost:5000)
 
 ---
 
-## 🔍 ПО МОДУЛЯМ
+## 🔍 BY MODULE
 
 ### src/config/
-- **Файлы**: constants.py, settings.py
-- **Документация**: [API_REFERENCE.md](api/API_REFERENCE.md#config-api) | [CONFIG_GUIDE.md](implementation/CONFIG_GUIDE.md)
-- **Назначение**: Централізована конфигурация всей системы
+- **Files**: constants.py, settings.py
+- **Documentation**: [API_REFERENCE.md](api/API_REFERENCE.md#config-api) | [CONFIG_GUIDE.md](implementation/CONFIG_GUIDE.md)
+- **Purpose**: Centralized configuration for entire system
 
 ### src/contextualization/
-- **Файлы**: base.py, claude.py, openai.py, groq.py
-- **Документация**: [API_REFERENCE.md](api/API_REFERENCE.md#contextualization-api)
-- **Назначение**: LLM-обогащение документов контекстом
+- **Files**: base.py, claude.py, openai.py, groq.py
+- **Documentation**: [API_REFERENCE.md](api/API_REFERENCE.md#contextualization-api)
+- **Purpose**: LLM-based document enrichment with context
 
 ### src/retrieval/
-- **Файлы**: search_engines.py
-- **Документация**: [API_REFERENCE.md](api/API_REFERENCE.md#retrieval-api) | [SEARCH_ENGINE_GUIDE.md](implementation/SEARCH_ENGINE_GUIDE.md)
-- **Назначение**: 3 search engines (Baseline, Hybrid RRF, DBSF+ColBERT)
+- **Files**: search_engines.py
+- **Documentation**: [API_REFERENCE.md](api/API_REFERENCE.md#retrieval-api) | [SEARCH_ENGINE_GUIDE.md](implementation/SEARCH_ENGINE_GUIDE.md)
+- **Purpose**: 3 search engines (Baseline, Hybrid RRF, DBSF+ColBERT)
 
 ### src/ingestion/
-- **Файлы**: pdf_parser.py, chunker.py, indexer.py
-- **Документация**: [API_REFERENCE.md](api/API_REFERENCE.md#ingestion-api)
-- **Назначение**: Загрузка и индексация документов
+- **Files**: pdf_parser.py, chunker.py, indexer.py
+- **Documentation**: [API_REFERENCE.md](api/API_REFERENCE.md#ingestion-api)
+- **Purpose**: Document loading and indexing
 
 ### src/evaluation/
-- **Файлы**: 12 модулей (metrics, mlflow, langfuse, etc.)
-- **Документация**: [API_REFERENCE.md](api/API_REFERENCE.md#evaluation-api)
-- **Назначение**: Оценка качества и experiment tracking
+- **Files**: 12 modules (metrics, mlflow, langfuse, etc.)
+- **Documentation**: [API_REFERENCE.md](api/API_REFERENCE.md#evaluation-api)
+- **Purpose**: Quality evaluation and experiment tracking
 
 ### src/core/
-- **Файлы**: pipeline.py
-- **Документация**: [API_REFERENCE.md](api/API_REFERENCE.md#core-pipeline-api)
-- **Назначение**: Главный RAG pipeline (точка входа)
+- **Files**: pipeline.py
+- **Documentation**: [API_REFERENCE.md](api/API_REFERENCE.md#core-pipeline-api)
+- **Purpose**: Main RAG pipeline (entry point)
 
 ### src/utils/
-- **Файлы**: structure_parser.py
-- **Документация**: src/utils/
-- **Назначение**: Утилиты и помощники
+- **Files**: structure_parser.py
+- **Documentation**: src/utils/
+- **Purpose**: Utilities and helpers
 
 ---
 
-## 📊 ПРОИЗВОДИТЕЛЬНОСТЬ
+## 📊 PERFORMANCE
 
-### Поиск (150 тестовых запитів)
+### Search (150 test queries)
 
-| Метрика | Baseline | Hybrid RRF | DBSF+ColBERT |
+| Metric | Baseline | Hybrid RRF | DBSF+ColBERT |
 |---------|----------|-----------|--------------|
 | **Recall@1** | 91.3% | 88.7% | **94.0%** ⭐ |
 | **NDCG@10** | 0.9619 | 0.9524 | **0.9711** ⭐ |
 | **MRR** | 0.9491 | 0.9421 | **0.9636** ⭐ |
 | **Latency** | 0.65s | 0.72s | 0.69s |
 
-**Вывод**: Используйте DBSF+ColBERT для лучших результатов!
+**Conclusion**: Use DBSF+ColBERT for best results!
 
-### Индексация
+### Indexing
 
-- PDF Parsing: 2-3 минуты (132 chunks)
-- Contextualization: 8-12 мин (Claude, ~$12)
-- Indexing: 1-2 минуты
-- **Total**: ~15-20 минут
+- PDF Parsing: 2-3 minutes (132 chunks)
+- Contextualization: 8-12 min (Claude, ~$12)
+- Indexing: 1-2 minutes
+- **Total**: ~15-20 minutes
 
 ---
 
-## 🛠️ ВЕРСИЯ И СОСТОЯНИЕ
+## 🛠️ VERSION AND STATUS
 
-| Параметр | Значение |
+| Parameter | Value |
 |----------|----------|
-| **Версия** | 2.0.1 |
+| **Version** | 2.0.1 |
 | **Python** | ≥3.9 |
-| **Статус** | ✅ Production Ready |
-| **Код Issues** | 0 (было 499) |
-| **Типы** | ✅ MyPy проверено |
-| **Лinting** | ✅ Ruff (0 issues) |
-| **Документация** | ✅ Полная |
+| **Status** | ✅ Production Ready |
+| **Code Issues** | 0 (was 499) |
+| **Types** | ✅ MyPy verified |
+| **Linting** | ✅ Ruff (0 issues) |
+| **Documentation** | ✅ Complete |
 
 ---
 
-## 📞 ПОМОЩЬ И ПОДДЕРЖКА
+## 📞 HELP AND SUPPORT
 
-### Если что-то не работает
+### If something doesn't work
 
-1. **Qdrant не доступен**
+1. **Qdrant unavailable**
    ```bash
    docker compose up -d qdrant
    curl http://localhost:6333/health
    ```
 
-2. **API ключ не работает**
-   - Проверьте `.env` файл
-   - Запустите: `python -c "from src.config import Settings; Settings()"`
+2. **API key doesn't work**
+   - Check `.env` file
+   - Run: `python -c "from src.config import Settings; Settings()"`
 
-3. **Медленный поиск**
-   - Используйте DBSF+ColBERT вместо Baseline
-   - Увеличьте HNSW ef параметр
+3. **Slow search**
+   - Use DBSF+ColBERT instead of Baseline
+   - Increase HNSW ef parameter
 
-### Ресурсы
+### Resources
 
-- **GitHub Issues**: Создавайте issues
-- **Примеры кода**: [API_REFERENCE.md](api/API_REFERENCE.md#examples)
-- **Исходный код**: Папка `src/`
-
----
-
-## 🎓 РЕКОМЕНДУЕМЫЙ ПУТЬ ОБУЧЕНИЯ
-
-### День 1: Введение
-1. ✅ Прочитайте [README.md](../README.md) (15 мин)
-2. ✅ Пройдите [QUICK_START.md](guides/QUICK_START.md) (30 мин)
-3. ✅ Запустите первый поиск (15 мин)
-
-### День 2: Архитектура
-1. ✅ Изучите [COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md) (45 мин)
-2. ✅ Прочитайте [ARCHITECTURE.md](architecture/ARCHITECTURE.md) (30 мин)
-3. ✅ Исследуйте модули в `src/` (30 мин)
-
-### День 3: API и практика
-1. ✅ Проштудируйте [API_REFERENCE.md](api/API_REFERENCE.md) (1 час)
-2. ✅ Запустите примеры кода (30 мин)
-3. ✅ Напишите свой скрипт (1 час)
-
-### День 4+: Углубленное изучение
-1. ✅ [OPTIMIZATION_PLAN.md](implementation/OPTIMIZATION_PLAN.md) - оптимизация
-2. ✅ [CODE_QUALITY.md](guides/CODE_QUALITY.md) - стандарты
-3. ✅ [FULL_PROJECT_ANALYSIS.md](reports/FULL_PROJECT_ANALYSIS.md) - полный анализ
+- **GitHub Issues**: Create issues
+- **Code examples**: [API_REFERENCE.md](api/API_REFERENCE.md#examples)
+- **Source code**: `src/` folder
 
 ---
 
-## 📋 ЧЕКЛИСТ
+## 🎓 RECOMMENDED LEARNING PATH
+
+### Day 1: Introduction
+1. ✅ Read [README.md](../README.md) (15 min)
+2. ✅ Complete [QUICK_START.md](guides/QUICK_START.md) (30 min)
+3. ✅ Run first search (15 min)
+
+### Day 2: Architecture
+1. ✅ Study [COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md) (45 min)
+2. ✅ Read [ARCHITECTURE.md](architecture/ARCHITECTURE.md) (30 min)
+3. ✅ Explore modules in `src/` (30 min)
+
+### Day 3: API and practice
+1. ✅ Study [API_REFERENCE.md](api/API_REFERENCE.md) (1 hour)
+2. ✅ Run code examples (30 min)
+3. ✅ Write your own script (1 hour)
+
+### Day 4+: In-depth study
+1. ✅ [OPTIMIZATION_PLAN.md](implementation/OPTIMIZATION_PLAN.md) - optimization
+2. ✅ [CODE_QUALITY.md](guides/CODE_QUALITY.md) - standards
+3. ✅ [FULL_PROJECT_ANALYSIS.md](reports/FULL_PROJECT_ANALYSIS.md) - full analysis
+
+---
+
+## 📋 CHECKLIST
 
 ### Setup
-- [ ] Клонирован репозиторий
-- [ ] Установлены зависимости (`pip install -e .`)
-- [ ] Скопирован `.env.example` в `.env`
-- [ ] Заполнены API ключи
-- [ ] Запущен Qdrant (`docker compose up -d qdrant`)
+- [ ] Repository cloned
+- [ ] Dependencies installed (`pip install -e .`)
+- [ ] Copied `.env.example` to `.env`
+- [ ] Filled API keys
+- [ ] Started Qdrant (`docker compose up -d qdrant`)
 
-### Первый запуск
-- [ ] Прочитан QUICK_START.md
-- [ ] Выполнены все шаги
-- [ ] Первый поиск работает
-- [ ] Результаты выглядят корректно
+### First run
+- [ ] Read QUICK_START.md
+- [ ] Completed all steps
+- [ ] First search works
+- [ ] Results look correct
 
-### Разработка
-- [ ] Установлены pre-commit hooks
-- [ ] Запущены тесты (pytest)
-- [ ] Лinting проходит (ruff check)
-- [ ] Type checking проходит (mypy)
+### Development
+- [ ] Installed pre-commit hooks
+- [ ] Run tests (pytest)
+- [ ] Linting passes (ruff check)
+- [ ] Type checking passes (mypy)
 
 ### Deployment
-- [ ] Документация актуальна
-- [ ] Все тесты проходят
-- [ ] Performance приемлема
-- [ ] Код готов к production
+- [ ] Documentation up to date
+- [ ] All tests pass
+- [ ] Performance acceptable
+- [ ] Code production ready
 
 ---
 
-## 🔄 ОБНОВЛЕНИЯ И ВЕРСИИ
+## 🔄 UPDATES AND VERSIONS
 
-### v2.0.1 (Текущая)
-- ✅ Новая архитектура `src/`
-- ✅ DBSF+ColBERT поиск
-- ✅ MLflow + Langfuse интеграция
-- ✅ Полная документация
+### v2.0.1 (Current)
+- ✅ New `src/` architecture
+- ✅ DBSF+ColBERT search
+- ✅ MLflow + Langfuse integration
+- ✅ Complete documentation
 - ✅ Refactored modules
 
 ### v2.0.0
-- ✅ Базовая RAG система
-- ✅ Несколько search engines
+- ✅ Basic RAG system
+- ✅ Multiple search engines
 - ✅ Multiple LLM providers
 
-### v3.0.0 (Планируется)
+### v3.0.0 (Planned)
 - [ ] Query expansion
 - [ ] Semantic caching
 - [ ] Graph traversal
@@ -285,5 +285,5 @@
 ---
 
 **Last Updated**: October 29, 2025
-**Версия**: 2.0.1
-**Материал**: Complete
+**Version**: 2.0.1
+**Material**: Complete
