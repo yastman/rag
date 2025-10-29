@@ -63,34 +63,43 @@ rag-fresh/
 
 ***REMOVED******REMOVED******REMOVED*** 1. Встановлення
 
-**Варіант A: Робота на сервері (рекомендовано)**
+**Варіант A: Claude Code CLI на сервері (🏆 РЕКОМЕНДОВАНО)**
 
 ```bash
-***REMOVED*** На сервері
+***REMOVED*** 1. SSH на сервер
+ssh user@your-server.com
+
+***REMOVED*** 2. Клонувати проект
 git clone https://github.com/yastman/rag.git
 cd rag
 
-***REMOVED*** Віртуальне середовище
+***REMOVED*** 3. Налаштувати середовище
 python3.9 -m venv venv
 source venv/bin/activate
-
-***REMOVED*** Залежності (включно з pre-commit)
 pip install -e ".[dev]"
 
-***REMOVED*** Налаштування Git hooks
+***REMOVED*** 4. Налаштувати Git
+git config user.name "Your Name"
+git config user.email "your@email.com"
+
+***REMOVED*** 5. Налаштувати pre-commit
 pre-commit install --install-hooks
 pre-commit install --hook-type pre-push
 
-***REMOVED*** Налаштування
+***REMOVED*** 6. Налаштувати .env
 cp .env.example .env
-nano .env  ***REMOVED*** Відредагуйте з вашими API ключами
+nano .env  ***REMOVED*** API ключі
 
-***REMOVED*** Налаштування Git
-git config user.name "Your Name"
-git config user.email "your@email.com"
+***REMOVED*** 7. Запустити Claude Code
+claude
+
+***REMOVED*** Готово! Тепер просто говоріть з Claude:
+***REMOVED*** "покажи структуру проекту"
+***REMOVED*** "запусти тести"
+***REMOVED*** "створи нову функцію для..."
 ```
 
-**Варіант B: Локальна розробка**
+**Варіант B: Локальна розробка (без Claude Code)**
 
 ```bash
 ***REMOVED*** Локально
@@ -112,13 +121,6 @@ pre-commit install --hook-type pre-push
 cp .env.example .env
 ***REMOVED*** Відредагуйте .env з вашими API ключами
 ```
-
-**Чому краще працювати на сервері:**
-- ✅ Окружение вже налаштоване (Python, Qdrant, dependencies)
-- ✅ Прямий доступ до даних та логів
-- ✅ Можна відразу тестувати зміни
-- ✅ Не потрібна синхронізація між машинами
-- ✅ SSH доступ для віддаленої роботи
 
 ***REMOVED******REMOVED******REMOVED*** 2. Запуск Qdrant
 
@@ -335,52 +337,70 @@ python src/evaluation/run_ab_test.py
 
 ***REMOVED******REMOVED******REMOVED*** Робота з сервером
 
-**SSH доступ:**
-```bash
-***REMOVED*** Підключення до сервера
-ssh user@your-server.com
+**🏆 Варіант 1: Claude Code CLI на сервері (НАЙПРОСТІШЕ!)**
 
-***REMOVED*** Або з ключем
-ssh -i ~/.ssh/id_rsa user@your-server.com
-```
-
-**VS Code Remote SSH (рекомендовано):**
-1. Встановіть розширення "Remote - SSH" в VS Code
-2. F1 → "Remote-SSH: Connect to Host"
-3. Введіть `user@your-server.com`
-4. Відкрийте папку проекту `/path/to/rag`
-5. Працюйте як локально, але код на сервері!
-
-**Переваги VS Code Remote SSH:**
-- 🚀 Редактор працює локально, код на сервері
-- 🔍 Інтелісенс, дебагінг, термінал - все працює
-- 📁 Файловий браузер серверної системи
-- 🔌 Всі розширення VS Code доступні
-- 💾 Автосейв та Git інтеграція
-
-**Workflow на сервері:**
 ```bash
 ***REMOVED*** 1. Підключитись до сервера
-ssh user@server
+ssh user@your-server.com
 
-***REMOVED*** 2. Перейти в проект
+***REMOVED*** 2. Встановити Claude Code (якщо ще не встановлено)
+***REMOVED*** curl -fsSL https://claude.ai/install.sh | sh
+
+***REMOVED*** 3. Перейти в проект
 cd /path/to/rag
 
-***REMOVED*** 3. Активувати venv
-source venv/bin/activate
+***REMOVED*** 4. Запустити Claude Code
+claude
 
-***REMOVED*** 4. Створити feature branch
-git checkout -b feature/new-feature
+***REMOVED*** Готово! 🎉
+***REMOVED*** Claude Code автоматично:
+***REMOVED*** - Бачить всі файли проекту
+***REMOVED*** - Має доступ до Git
+***REMOVED*** - Може запускати команди
+***REMOVED*** - Редагує файли
+***REMOVED*** - Робить коміти з pre-commit hooks
+***REMOVED*** - Пушить в GitHub
+```
 
-***REMOVED*** 5. Редагувати код
-nano src/some_file.py  ***REMOVED*** або використовувати VS Code Remote
+**Переваги Claude Code CLI:**
+- ⚡ **Найшвидший спосіб** - одна команда `claude`
+- 🤖 **AI-асистент** - допомагає з кодом, документацією, дебагінгом
+- 🔧 **Все інтегровано** - Git, linting, testing, всі інструменти
+- 📝 **Автоматичні коміти** - з правильними повідомленнями
+- 🎯 **Розуміє контекст** - бачить весь проект
+- 🚀 **Не потрібні налаштування** - працює з коробки
 
-***REMOVED*** 6. Commit (pre-commit hooks запустяться автоматично)
-git add .
-git commit -m "feat: Add new feature"
+**Варіант 2: VS Code Remote SSH**
 
-***REMOVED*** 7. Push
-git push origin feature/new-feature
+```bash
+***REMOVED*** VS Code з розширенням "Remote - SSH"
+***REMOVED*** 1. F1 → "Remote-SSH: Connect to Host"
+***REMOVED*** 2. user@your-server.com
+***REMOVED*** 3. Відкрити папку /path/to/rag
+```
+
+**Варіант 3: Звичайний SSH**
+
+```bash
+ssh user@your-server.com
+cd /path/to/rag
+nano src/file.py  ***REMOVED*** або vim, emacs
+```
+
+**Рекомендований workflow з Claude Code:**
+```bash
+***REMOVED*** На сервері
+cd /path/to/rag
+claude
+
+***REMOVED*** Потім просто кажете Claude що робити:
+"Додай функцію для кешування результатів пошуку"
+"Виправ помилку в src/retrieval/search_engines.py"
+"Створи тести для нового модуля"
+"Зроби коміт з цими змінами"
+"Запуш в GitHub"
+
+***REMOVED*** Claude все зробить автоматично! 🎉
 ```
 
 ***REMOVED******REMOVED******REMOVED*** Якість коду
