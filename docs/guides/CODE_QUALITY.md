@@ -95,7 +95,7 @@ docstring-code-format = true
 
 Location: `.pre-commit-config.yaml`
 
-**Git Workflow с автоматическими проверками:**
+**Git Workflow with automatic checks:**
 
 **Setup:**
 ```bash
@@ -117,7 +117,7 @@ pre-commit run --hook-stage pre-push --all-files
 
 **What runs automatically:**
 
-**При `git commit` (Pre-commit):**
+**On `git commit` (Pre-commit):**
 1. ✅ Ruff linter with auto-fix
 2. ✅ Ruff formatter
 3. ✅ YAML/TOML/JSON syntax checks
@@ -126,26 +126,26 @@ pre-commit run --hook-stage pre-push --all-files
 6. ✅ Large files prevention
 7. ✅ Merge conflict markers check
 
-**При `git push` (Pre-push):**
+**On `git push` (Pre-push):**
 1. ⚠️  Branch protection warning (main/master)
-2. 🧪 Tests (если раскомментировать pytest hook)
+2. 🧪 Tests (if pytest hook is uncommented)
 
-**Рекомендуемый workflow:**
+**Recommended workflow:**
 ```bash
-# 1. Перед началом работы - создать ветку
+# 1. Before starting work - create a branch
 git checkout -b feature/my-feature
 
-# 2. Редактировать код
-# ... изменения в файлах ...
+# 2. Edit code
+# ... changes to files ...
 
-# 3. Коммит (автоматически запустятся pre-commit хуки)
+# 3. Commit (pre-commit hooks will run automatically)
 git add .
 git commit -m "feat: Add new feature"
-# → Ruff проверит и отформатирует код автоматически
+# → Ruff will check and format code automatically
 
-# 4. Push (автоматически запустятся pre-push хуки)
+# 4. Push (pre-push hooks will run automatically)
 git push origin feature/my-feature
-# → Предупреждение если пушите в main/master
+# → Warning if pushing to main/master
 
 ---
 
