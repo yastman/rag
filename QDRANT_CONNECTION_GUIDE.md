@@ -1,48 +1,48 @@
-# Руководство по подключению к Qdrant
+# Qdrant Connection Guide
 
-## Обзор
+## Overview
 
-Qdrant развернут на удаленном сервере и доступен как локально (на сервере), так и удаленно (с вашей машины).
+Qdrant is deployed on a remote server and is accessible both locally (on the server) and remotely (from your machine).
 
-### Информация о сервере
+### Server Information
 
-- **IP адрес**: 95.111.252.29
-- **SSH порт**: 1654
-- **SSH пользователь**: admin
-- **SSH ключ**: ~/.ssh/vps_access_key
-- **Алиас для подключения**: `vps` (определен в ~/.zshrc)
+- **IP Address**: 95.111.252.29
+- **SSH Port**: 1654
+- **SSH User**: admin
+- **SSH Key**: ~/.ssh/vps_access_key
+- **Connection Alias**: `vps` (defined in ~/.zshrc)
 
-### Информация о Qdrant
+### Qdrant Information
 
-- **Версия**: 1.15.4
-- **Docker контейнер**: `ai-qdrant`
-- **HTTP порт**: 6333
-- **gRPC порт**: 6334
-- **API ключ**: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395
+- **Version**: 1.15.4
+- **Docker Container**: `ai-qdrant`
+- **HTTP Port**: 6333
+- **gRPC Port**: 6334
+- **API Key**: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395
 
-## Текущее состояние
+## Current State
 
-### Коллекции
+### Collections
 
-На данный момент существует **1 коллекция**:
+Currently there is **1 collection**:
 
 **legal_documents**
-- Точек (vectors): 1,294
-- Индексированных векторов: 3,878
-- Статус: GREEN (здоров)
-- Конфигурация векторов:
-  - **dense**: 1024-размерность, Cosine similarity, HNSW индекс (M=16, ef_construct=200)
-    - Квантизация: int8 (scalar)
-    - On-disk хранение
-  - **colbert**: 1024-размерность, Cosine similarity, мультивектор (max_sim)
-    - HNSW отключен (M=0)
-  - **sparse**: IDF модификатор для sparse vectors
+- Points (vectors): 1,294
+- Indexed vectors: 3,878
+- Status: GREEN (healthy)
+- Vector configuration:
+  - **dense**: 1024-dimensional, Cosine similarity, HNSW index (M=16, ef_construct=200)
+    - Quantization: int8 (scalar)
+    - On-disk storage
+  - **colbert**: 1024-dimensional, Cosine similarity, multi-vector (max_sim)
+    - HNSW disabled (M=0)
+  - **sparse**: IDF modifier for sparse vectors
 
-## Конфигурация подключения
+## Connection Configuration
 
-### 1. Для локальной разработки (с вашей машины)
+### 1. For Local Development (from your machine)
 
-Используйте основной `.env` файл:
+Use the main `.env` file:
 
 ```bash
 # .env
@@ -50,76 +50,76 @@ QDRANT_URL=http://95.111.252.29:6333
 QDRANT_API_KEY=3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395
 ```
 
-### 2. Для работы на сервере
+### 2. For Working on the Server
 
-Используйте `.env.server`:
+Use `.env.server`:
 
 ```bash
-# Скопировать конфигурацию для сервера
+# Copy server configuration
 cp .env.server .env
 
-# Или создать символическую ссылку
+# Or create a symbolic link
 ln -sf .env.server .env
 ```
 
-Содержимое `.env.server`:
+Contents of `.env.server`:
 ```bash
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395
 ```
 
-## Проверка подключения
+## Connection Testing
 
-### 1. Через curl (с локальной машины)
+### 1. Via curl (from local machine)
 
 ```bash
-# Получить список коллекций
+# Get list of collections
 curl -s -H 'api-key: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395' \
   http://95.111.252.29:6333/collections
 
-# Информация о конкретной коллекции
+# Information about a specific collection
 curl -s -H 'api-key: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395' \
   http://95.111.252.29:6333/collections/legal_documents
 ```
 
-### 2. Через curl (на сервере)
+### 2. Via curl (on the server)
 
 ```bash
-# Подключиться к серверу
+# Connect to the server
 ssh -i ~/.ssh/vps_access_key -p 1654 admin@95.111.252.29
 
-# Или используя алиас из ~/.zshrc
+# Or using the alias from ~/.zshrc
 zsh -c "$(grep 'alias vps=' ~/.zshrc | cut -d'=' -f2-)"
 
-# Проверить коллекции
+# Check collections
 curl -s -H 'api-key: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395' \
   http://localhost:6333/collections
 ```
 
-### 3. Через Python (тестовый скрипт)
+### 3. Via Python (test script)
 
-Создан тестовый скрипт `test_qdrant_connection.py`:
+A test script `test_qdrant_connection.py` has been created:
 
 ```bash
-# На сервере (с установленными зависимостями)
+# On the server (with dependencies installed)
 python3 test_qdrant_connection.py
 
-# Или через poetry (если установлен)
+# Or via poetry (if installed)
 poetry run python test_qdrant_connection.py
 ```
 
-### 4. Проверка Docker контейнера
+### 4. Docker Container Check
 
 ```bash
-# На сервере
+# On the server
 ssh -i ~/.ssh/vps_access_key -p 1654 admin@95.111.252.29 \
   "docker ps | grep qdrant"
 
-# Вывод:
+# Output:
 # 218ec1ea2aa1   qdrant/qdrant:v1.15.4   Up 2 hours (healthy)
 ```
 
-## Использование в коде
+## Usage in Code
 
 ### Python (qdrant-client)
 
@@ -127,86 +127,86 @@ ssh -i ~/.ssh/vps_access_key -p 1654 admin@95.111.252.29 \
 from qdrant_client import QdrantClient
 from src.config.settings import Settings
 
-# Загрузить настройки из .env
+# Load settings from .env
 settings = Settings()
 
-# Создать клиента
+# Create client
 client = QdrantClient(
-    url=settings.qdrant_url,  # Автоматически берется из .env
+    url=settings.qdrant_url,  # Automatically loaded from .env
     api_key=settings.qdrant_api_key
 )
 
-# Получить коллекции
+# Get collections
 collections = client.get_collections()
-print(f"Коллекций: {len(collections.collections)}")
+print(f"Collections: {len(collections.collections)}")
 
-# Получить информацию о коллекции
+# Get collection information
 info = client.get_collection("legal_documents")
-print(f"Точек: {info.points_count}")
+print(f"Points: {info.points_count}")
 ```
 
-## Важные заметки
+## Important Notes
 
-1. **API ключ обязателен**: Qdrant настроен с обязательной аутентификацией
-2. **Порты открыты**: Порты 6333 и 6334 доступны извне (0.0.0.0)
-3. **Два варианта конфигурации**:
-   - `.env` - для локальной разработки (удаленное подключение)
-   - `.env.server` - для запуска на сервере (localhost)
-4. **Безопасность**: API ключ хранится в .env (добавлен в .gitignore)
+1. **API key is required**: Qdrant is configured with mandatory authentication
+2. **Ports are open**: Ports 6333 and 6334 are accessible from outside (0.0.0.0)
+3. **Two configuration options**:
+   - `.env` - for local development (remote connection)
+   - `.env.server` - for running on the server (localhost)
+4. **Security**: API key is stored in .env (added to .gitignore)
 
 ## Troubleshooting
 
-### Ошибка: "Must provide an API key"
+### Error: "Must provide an API key"
 
-Убедитесь что передаете API ключ:
-- В curl: `-H 'api-key: YOUR_KEY'`
-- В Python: `api_key=settings.qdrant_api_key`
+Make sure you are passing the API key:
+- In curl: `-H 'api-key: YOUR_KEY'`
+- In Python: `api_key=settings.qdrant_api_key`
 
-### Ошибка: "Connection refused"
+### Error: "Connection refused"
 
-1. Проверьте что Qdrant запущен: `docker ps | grep qdrant`
-2. Проверьте правильность URL в .env
-3. Проверьте доступность порта 6333
+1. Check that Qdrant is running: `docker ps | grep qdrant`
+2. Check that the URL in .env is correct
+3. Check that port 6333 is accessible
 
-### Ошибка: "ModuleNotFoundError: qdrant_client"
+### Error: "ModuleNotFoundError: qdrant_client"
 
-Установите зависимости:
+Install dependencies:
 ```bash
-# Через poetry
+# Via poetry
 poetry install
 
-# Через pip (в виртуальном окружении)
+# Via pip (in a virtual environment)
 python3 -m venv .venv
 source .venv/bin/activate
 pip install qdrant-client python-dotenv sentence-transformers
 ```
 
-## Полезные команды
+## Useful Commands
 
 ```bash
-# Подключиться к серверу через SSH
+# Connect to the server via SSH
 ssh -i ~/.ssh/vps_access_key -p 1654 admin@95.111.252.29
 
-# Проверить статус контейнера
+# Check container status
 docker ps -a | grep qdrant
 
-# Логи Qdrant
+# Qdrant logs
 docker logs ai-qdrant --tail 100
 
-# Рестарт Qdrant
+# Restart Qdrant
 docker restart ai-qdrant
 
-# Проверить использование ресурсов
+# Check resource usage
 docker stats ai-qdrant --no-stream
 ```
 
-## Дополнительная информация
+## Additional Information
 
-- **Документация Qdrant**: https://qdrant.tech/documentation/
+- **Qdrant Documentation**: https://qdrant.tech/documentation/
 - **API Reference**: https://qdrant.tech/documentation/api-reference/
 - **Python Client**: https://github.com/qdrant/qdrant-client
 
 ---
 
-**Последнее обновление**: 2025-10-29
-**Статус**: ✅ Подключение настроено и протестировано
+**Last Updated**: 2025-10-29
+**Status**: ✅ Connection configured and tested
