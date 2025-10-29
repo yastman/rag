@@ -10,9 +10,9 @@
 
 ### ✅ PHASE 1-2: Core Implementation (COMPLETED)
 
-Полная система Contextual Retrieval + Knowledge Graph реализована и готова к тестированию.
+Full Contextual Retrieval + Knowledge Graph system implemented and ready for testing.
 
-**Созданные модули (11 файлов):**
+**Created modules (11 files):**
 
 ```
 /srv/app/
@@ -393,8 +393,8 @@ All documentation ready:
 
 ### 4. Ukrainian Legal Documents Optimized
 
-- Специализированные prompts для юридических документов
-- Extraction структуры: Книга → Розділ → Глава → Стаття
+- Specialized prompts for legal documents
+- Structure extraction: Book → Section → Chapter → Article
 - Related articles identification
 - Cross-reference extraction
 
