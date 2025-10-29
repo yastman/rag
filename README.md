@@ -63,8 +63,37 @@ contextual_rag/
 
 ***REMOVED******REMOVED******REMOVED*** 1. Встановлення
 
+**Варіант A: Робота на сервері (рекомендовано)**
+
 ```bash
-***REMOVED*** Клонування
+***REMOVED*** На сервері
+git clone https://github.com/yastman/rag.git
+cd rag
+
+***REMOVED*** Віртуальне середовище
+python3.9 -m venv venv
+source venv/bin/activate
+
+***REMOVED*** Залежності (включно з pre-commit)
+pip install -e ".[dev]"
+
+***REMOVED*** Налаштування Git hooks
+pre-commit install --install-hooks
+pre-commit install --hook-type pre-push
+
+***REMOVED*** Налаштування
+cp .env.example .env
+nano .env  ***REMOVED*** Відредагуйте з вашими API ключами
+
+***REMOVED*** Налаштування Git
+git config user.name "Your Name"
+git config user.email "your@email.com"
+```
+
+**Варіант B: Локальна розробка**
+
+```bash
+***REMOVED*** Локально
 git clone https://github.com/yastman/rag.git
 cd rag
 
@@ -73,12 +102,23 @@ python3.9 -m venv venv
 source venv/bin/activate  ***REMOVED*** Windows: venv\Scripts\activate
 
 ***REMOVED*** Залежності
-pip install -e .
+pip install -e ".[dev]"
+
+***REMOVED*** Git hooks
+pre-commit install --install-hooks
+pre-commit install --hook-type pre-push
 
 ***REMOVED*** Налаштування
 cp .env.example .env
 ***REMOVED*** Відредагуйте .env з вашими API ключами
 ```
+
+**Чому краще працювати на сервері:**
+- ✅ Окружение вже налаштоване (Python, Qdrant, dependencies)
+- ✅ Прямий доступ до даних та логів
+- ✅ Можна відразу тестувати зміни
+- ✅ Не потрібна синхронізація між машинами
+- ✅ SSH доступ для віддаленої роботи
 
 ***REMOVED******REMOVED******REMOVED*** 2. Запуск Qdrant
 
@@ -292,6 +332,56 @@ python src/evaluation/run_ab_test.py
 ---
 
 ***REMOVED******REMOVED*** 🛠️ Розробка
+
+***REMOVED******REMOVED******REMOVED*** Робота з сервером
+
+**SSH доступ:**
+```bash
+***REMOVED*** Підключення до сервера
+ssh user@your-server.com
+
+***REMOVED*** Або з ключем
+ssh -i ~/.ssh/id_rsa user@your-server.com
+```
+
+**VS Code Remote SSH (рекомендовано):**
+1. Встановіть розширення "Remote - SSH" в VS Code
+2. F1 → "Remote-SSH: Connect to Host"
+3. Введіть `user@your-server.com`
+4. Відкрийте папку проекту `/path/to/rag`
+5. Працюйте як локально, але код на сервері!
+
+**Переваги VS Code Remote SSH:**
+- 🚀 Редактор працює локально, код на сервері
+- 🔍 Інтелісенс, дебагінг, термінал - все працює
+- 📁 Файловий браузер серверної системи
+- 🔌 Всі розширення VS Code доступні
+- 💾 Автосейв та Git інтеграція
+
+**Workflow на сервері:**
+```bash
+***REMOVED*** 1. Підключитись до сервера
+ssh user@server
+
+***REMOVED*** 2. Перейти в проект
+cd /path/to/rag
+
+***REMOVED*** 3. Активувати venv
+source venv/bin/activate
+
+***REMOVED*** 4. Створити feature branch
+git checkout -b feature/new-feature
+
+***REMOVED*** 5. Редагувати код
+nano src/some_file.py  ***REMOVED*** або використовувати VS Code Remote
+
+***REMOVED*** 6. Commit (pre-commit hooks запустяться автоматично)
+git add .
+git commit -m "feat: Add new feature"
+
+***REMOVED*** 7. Push
+git push origin feature/new-feature
+```
 
 ***REMOVED******REMOVED******REMOVED*** Якість коду
 
