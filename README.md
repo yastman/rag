@@ -63,8 +63,37 @@ contextual_rag/
 
 ### 1. Встановлення
 
+**Варіант A: Робота на сервері (рекомендовано)**
+
 ```bash
-# Клонування
+# На сервері
+git clone https://github.com/yastman/rag.git
+cd rag
+
+# Віртуальне середовище
+python3.9 -m venv venv
+source venv/bin/activate
+
+# Залежності (включно з pre-commit)
+pip install -e ".[dev]"
+
+# Налаштування Git hooks
+pre-commit install --install-hooks
+pre-commit install --hook-type pre-push
+
+# Налаштування
+cp .env.example .env
+nano .env  # Відредагуйте з вашими API ключами
+
+# Налаштування Git
+git config user.name "Your Name"
+git config user.email "your@email.com"
+```
+
+**Варіант B: Локальна розробка**
+
+```bash
+# Локально
 git clone https://github.com/yastman/rag.git
 cd rag
 
@@ -73,12 +102,23 @@ python3.9 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Залежності
-pip install -e .
+pip install -e ".[dev]"
+
+# Git hooks
+pre-commit install --install-hooks
+pre-commit install --hook-type pre-push
 
 # Налаштування
 cp .env.example .env
 # Відредагуйте .env з вашими API ключами
 ```
+
+**Чому краще працювати на сервері:**
+- ✅ Окружение вже налаштоване (Python, Qdrant, dependencies)
+- ✅ Прямий доступ до даних та логів
+- ✅ Можна відразу тестувати зміни
+- ✅ Не потрібна синхронізація між машинами
+- ✅ SSH доступ для віддаленої роботи
 
 ### 2. Запуск Qdrant
 
@@ -292,6 +332,56 @@ python src/evaluation/run_ab_test.py
 ---
 
 ## 🛠️ Розробка
+
+### Робота з сервером
+
+**SSH доступ:**
+```bash
+# Підключення до сервера
+ssh user@your-server.com
+
+# Або з ключем
+ssh -i ~/.ssh/id_rsa user@your-server.com
+```
+
+**VS Code Remote SSH (рекомендовано):**
+1. Встановіть розширення "Remote - SSH" в VS Code
+2. F1 → "Remote-SSH: Connect to Host"
+3. Введіть `user@your-server.com`
+4. Відкрийте папку проекту `/path/to/rag`
+5. Працюйте як локально, але код на сервері!
+
+**Переваги VS Code Remote SSH:**
+- 🚀 Редактор працює локально, код на сервері
+- 🔍 Інтелісенс, дебагінг, термінал - все працює
+- 📁 Файловий браузер серверної системи
+- 🔌 Всі розширення VS Code доступні
+- 💾 Автосейв та Git інтеграція
+
+**Workflow на сервері:**
+```bash
+# 1. Підключитись до сервера
+ssh user@server
+
+# 2. Перейти в проект
+cd /path/to/rag
+
+# 3. Активувати venv
+source venv/bin/activate
+
+# 4. Створити feature branch
+git checkout -b feature/new-feature
+
+# 5. Редагувати код
+nano src/some_file.py  # або використовувати VS Code Remote
+
+# 6. Commit (pre-commit hooks запустяться автоматично)
+git add .
+git commit -m "feat: Add new feature"
+
+# 7. Push
+git push origin feature/new-feature
+```
 
 ### Якість коду
 
