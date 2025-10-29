@@ -1,0 +1,91 @@
+***REMOVED*** Pre-commit hooks configuration for rag-fresh project
+***REMOVED*** Install: pip install pre-commit
+***REMOVED*** Setup: pre-commit install
+***REMOVED*** Run manually: pre-commit run --all-files
+***REMOVED***
+***REMOVED*** Documentation: https://pre-commit.com/
+
+default_language_version:
+  python: python3.9
+
+repos:
+  ***REMOVED*** Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4  ***REMOVED*** Use latest version from: https://github.com/astral-sh/ruff-pre-commit/releases
+    hooks:
+      ***REMOVED*** Linter - checks code quality
+      - id: ruff
+        name: Ruff Linter
+        args:
+          - --fix           ***REMOVED*** Auto-fix issues when possible
+          - --exit-non-zero-on-fix  ***REMOVED*** Fail if fixes were applied (to review changes)
+        types_or: [python, pyi]
+
+      ***REMOVED*** Formatter - formats code
+      - id: ruff-format
+        name: Ruff Formatter
+        types_or: [python, pyi]
+
+  ***REMOVED*** Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+        args: ['--unsafe']  ***REMOVED*** Allow custom YAML tags
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-json
+        name: Check JSON syntax
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: debug-statements
+        name: Check for debugger imports
+      - id: mixed-line-ending
+        name: Check mixed line endings
+        args: ['--fix=lf']
+
+  ***REMOVED*** Optional: mypy for type checking
+  ***REMOVED*** Uncomment to enable strict type checking
+  ***REMOVED*** - repo: https://github.com/pre-commit/mirrors-mypy
+  ***REMOVED***   rev: v1.13.0
+  ***REMOVED***   hooks:
+  ***REMOVED***     - id: mypy
+  ***REMOVED***       name: MyPy Type Checker
+  ***REMOVED***       additional_dependencies:
+  ***REMOVED***         - types-requests
+  ***REMOVED***         - types-aiohttp
+  ***REMOVED***       args:
+  ***REMOVED***         - --config-file=pyproject.toml
+
+  ***REMOVED*** Optional: bandit for security issues
+  ***REMOVED*** Uncomment to enable security scanning
+  ***REMOVED*** - repo: https://github.com/PyCQA/bandit
+  ***REMOVED***   rev: '1.7.10'
+  ***REMOVED***   hooks:
+  ***REMOVED***     - id: bandit
+  ***REMOVED***       name: Bandit Security Linter
+  ***REMOVED***       args:
+  ***REMOVED***         - -c
+  ***REMOVED***         - pyproject.toml
+  ***REMOVED***       additional_dependencies: ["bandit[toml]"]
+
+***REMOVED*** CI configuration
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false
