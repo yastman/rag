@@ -24,25 +24,44 @@
 
 ```
 contextual_rag/
-├── src/                          # All application code
+├── src/                          # Application code
 │   ├── config/                   # Configuration
 │   ├── contextualization/        # LLM contextualization
 │   ├── retrieval/                # Search engines
 │   ├── ingestion/                # Document loading
-│   ├── evaluation/               # Evaluation and metrics
+│   ├── evaluation/               # 📊 Evaluation + ML platforms
+│   │   ├── mlflow_integration.py     # MLflow wrapper
+│   │   ├── mlflow_experiments.py     # A/B testing
+│   │   ├── create_golden_set.py      # Test set generator (150 queries)
+│   │   └── ragas_evaluation.py       # RAGAS quality metrics
+│   ├── observability/            # 📈 OpenTelemetry (NEW)
+│   │   └── otel_setup.py             # OTEL traces → Tempo/Prometheus
+│   ├── cache/                    # 🚀 Redis semantic cache (NEW)
+│   │   └── redis_semantic_cache.py   # Versioned cache (embeddings + responses)
+│   ├── governance/               # 🏛️ Model Registry (NEW)
+│   │   └── model_registry.py         # MLflow Registry (Staging→Production)
+│   ├── security/                 # 🔒 PII redaction + budget (NEW)
+│   │   └── pii_redaction.py          # Ukrainian PII + cost limits
 │   ├── utils/                    # Utilities
 │   └── core/                     # Main pipeline
+│
+├── scripts/                      # 🛠️ Automation scripts (NEW)
+│   ├── qdrant_backup.sh              # Nightly Qdrant backups (7-day rotation)
+│   └── qdrant_restore.sh             # Disaster recovery (RTO < 1 hour)
 │
 ├── docs/                         # Documentation
 │   ├── guides/                   # User guides
 │   ├── architecture/             # System architecture
 │   ├── implementation/           # Implementation details
 │   ├── reports/                  # Project reports
+│   ├── ML_PLATFORM_INTEGRATION_PLAN.md  # Full ML platform plan
 │   └── documents/                # Legal documents
 │
 ├── tests/                        # Tests
 │   ├── unit/                     # Unit tests
 │   ├── integration/              # Integration tests
+│   ├── data/                     # Test data
+│   │   └── golden_test_set.json      # 150 queries for RAGAS
 │   └── legacy/                   # Legacy tests
 │
 ├── data/                         # Data
@@ -50,12 +69,14 @@ contextual_rag/
 │   ├── test_queries/             # Test queries
 │   └── evaluation/               # Evaluation results
 │
-├── legacy/                       # Old code (deprecated)
+├── legacy/                       # Old code (for reference)
 ├── logs/                         # Logs
 ├── pyproject.toml                # Project configuration
 ├── .env.example                  # Environment variables example
-└── docker-compose.yml            # Docker services
+└── docker-compose.yml            # Docker services (Qdrant, Redis, etc.)
 ```
+
+**📖 Each folder has its own README.md with detailed documentation!**
 
 ---
 
@@ -225,12 +246,130 @@ stats = await indexer.index_chunks(chunks, "legal_documents")
 
 ### 📊 Evaluation (`src/evaluation/`)
 
-Quality assessment and experiments:
+Production ML platform with quality metrics:
 
-- **Metrics**: Recall@K, NDCG@K, MRR
-- **MLflow**: http://localhost:5000 (experiment tracking)
-- **Langfuse**: http://localhost:3001 (LLM tracing)
-- **RAGAS**: RAG evaluation framework
+```python
+# 1. Create golden test set (150 queries)
+python src/evaluation/create_golden_set.py
+
+# 2. Run RAGAS evaluation
+python src/evaluation/ragas_evaluation.py
+
+# 3. A/B testing
+from src.evaluation.mlflow_experiments import RAGExperimentRunner
+runner = RAGExperimentRunner("contextual_rag_ab_tests")
+await runner.run_ab_test(...)
+```
+
+**Components:**
+- **Golden Test Set**: 150 queries across 5 categories (lookup, crimes, concepts, procedures, definitions)
+- **RAGAS**: Automated quality metrics (faithfulness ≥ 0.85, precision ≥ 0.80, recall ≥ 0.90)
+- **MLflow**: http://localhost:5000 (experiments, A/B tests, Model Registry)
+- **Langfuse**: http://localhost:3001 (LLM tracing, cost tracking)
+
+### 📈 Observability (`src/observability/`)
+
+OpenTelemetry integration for system metrics:
+
+```python
+from src.observability.otel_setup import setup_opentelemetry
+setup_opentelemetry("contextual-rag")
+
+# Automatic tracking:
+# - Traces → Tempo (http://localhost:4317)
+# - Metrics → Prometheus
+# - Latency by steps: embed/search/rerank
+# - System metrics: CPU, RAM, I/O
+```
+
+### 🚀 Cache (`src/cache/`)
+
+Redis semantic cache with versioning:
+
+```python
+from src.cache.redis_semantic_cache import RedisSemanticCache
+
+cache = RedisSemanticCache(index_version="1.0.0")
+
+# Embedding cache (TTL: 30 days)
+embedding = await cache.get_embedding(query)
+
+# Response cache (TTL: 5-60 min)
+response = await cache.get_response(query, top_k=10)
+
+# Statistics
+stats = cache.get_stats()  # hit_rate, saved_cost_usd
+```
+
+**Key features:**
+- **Version-aware keys**: `embedding_v1.0.0_{hash}` (invalidates on reindex)
+- **Two-layer caching**: Embeddings (30d) + Full responses (5-60min)
+- **Cost tracking**: `saved_cost_usd` metric
+- **OTEL integration**: Traces cache hits/misses
+
+### 🏛️ Governance (`src/governance/`)
+
+MLflow Model Registry for production workflow:
+
+```python
+from src.governance.model_registry import RAGModelRegistry
+
+registry = RAGModelRegistry()
+
+# Register new config after evaluation
+version = registry.register_config(
+    run_id="abc123",
+    config_version="1.2.0",
+    metrics={"faithfulness": 0.87, ...}
+)
+
+# Promote to staging
+registry.promote_to_staging(version)
+
+# Promote to production
+registry.promote_to_production(version)
+
+# Rollback if needed
+registry.rollback_production(to_version="5")
+```
+
+### 🔒 Security (`src/security/`)
+
+PII redaction and budget guards:
+
+```python
+from src.security.pii_redaction import PIIRedactor, BudgetGuard
+
+# Redact Ukrainian PII
+redactor = PIIRedactor()
+redacted_query, metadata = redactor.redact_query(query)
+# Replaces: phones, emails, tax IDs, passports
+
+# Budget limits
+guard = BudgetGuard()  # Daily: $10, Monthly: $300
+allowed, warning = guard.check_budget(estimated_cost)
+```
+
+### 🛠️ Scripts (`scripts/`)
+
+Automation for disaster recovery:
+
+```bash
+# Nightly Qdrant backup (run via cron)
+./scripts/qdrant_backup.sh
+
+# Restore from backup
+./scripts/qdrant_restore.sh /path/to/backup.snapshot
+
+# Setup cron job for nightly backups
+crontab -e
+# Add: 0 3 * * * /home/admin/contextual_rag/scripts/qdrant_backup.sh
+```
+
+**Features:**
+- **7-day rotation**: Keeps last 7 backups
+- **RTO < 1 hour**: Fast recovery from disasters
+- **Automatic cleanup**: Removes old backups
 
 ### 🎯 Core (`src/core/`)
 
@@ -524,23 +663,35 @@ MIT License - see [LICENSE](LICENSE)
 ## 🎯 Roadmap
 
 ### ✅ Completed (v2.0.1)
-- [x] Hybrid DBSF+ColBERT search
+- [x] Hybrid DBSF+ColBERT search (94% Recall@1)
 - [x] MLflow + Langfuse integration
-- [x] Prompt caching (90% savings)
+- [x] Prompt caching (90% cost savings)
 - [x] Modular architecture
 - [x] Complete documentation
 
-### 🚀 Planned (v2.1.0)
+### ✅ Completed (v2.1.0) - Production ML Platform
+- [x] **RAGAS quality metrics** (faithfulness, precision, recall)
+- [x] **Golden test set** (150 queries with ground truth)
+- [x] **OpenTelemetry** (traces → Tempo, metrics → Prometheus)
+- [x] **Redis semantic cache** (2-layer with versioning)
+- [x] **MLflow Model Registry** (Staging → Production workflow)
+- [x] **Qdrant backups** (7-day rotation, RTO < 1 hour)
+- [x] **PII redaction** (Ukrainian patterns)
+- [x] **Budget guards** ($10/day, $300/month limits)
+- [x] **A/B testing framework**
+- [x] **Nightly RAGAS evaluation** (cron jobs)
+
+### 🚀 Planned (v2.2.0)
 - [ ] Query expansion via LLM
-- [ ] Semantic caching (Redis)
 - [ ] Graph traversal for related articles
-- [ ] Multi-language support (BGE-M3 supports 111 languages)
-- [ ] Web UI dashboard
+- [ ] Multi-language support (BGE-M3 → 111 languages)
+- [ ] Web UI dashboard (Streamlit/Gradio)
+- [ ] Real-time streaming responses
 
 ---
 
-**Last Updated**: October 29, 2024
-**Version**: 2.0.1
+**Last Updated**: October 30, 2025
+**Version**: 2.1.0
 **Repository**: https://github.com/yastman/rag
 **Maintainer**: Contextual RAG Team
 
