@@ -7,7 +7,7 @@
 ***REMOVED*** Documentation: https://pre-commit.com/
 
 default_language_version:
-  python: python3.9
+  python: python3.12  ***REMOVED*** Updated to match installed Python version
 
 ***REMOVED*** Install both pre-commit and pre-push hooks by default
 default_install_hook_types:
@@ -20,18 +20,20 @@ default_stages:
 
 repos:
   ***REMOVED*** Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
+  ***REMOVED*** Best Practice 2025: Run linter BEFORE formatter (lint → format order)
+  ***REMOVED*** Documentation: https://docs.astral.sh/ruff/integrations/
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.4  ***REMOVED*** Use latest version from: https://github.com/astral-sh/ruff-pre-commit/releases
     hooks:
-      ***REMOVED*** Linter - checks code quality
+      ***REMOVED*** Step 1: Linter - checks code quality (runs FIRST)
       - id: ruff
-        name: Ruff Linter
+        name: Ruff Linter (check + fix)
         args:
           - --fix           ***REMOVED*** Auto-fix issues when possible
           - --exit-non-zero-on-fix  ***REMOVED*** Fail if fixes were applied (to review changes)
         types_or: [python, pyi]
 
-      ***REMOVED*** Formatter - formats code
+      ***REMOVED*** Step 2: Formatter - formats code (runs AFTER linting)
       - id: ruff-format
         name: Ruff Formatter
         types_or: [python, pyi]
