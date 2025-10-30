@@ -11,11 +11,11 @@ __version__ = "2.0.1"
 __author__ = "Contextual RAG Team"
 
 __all__ = [
-    "Settings",
-    "RAGPipeline",
     "ClaudeContextualizer",
     "DBSFColBERTSearchEngine",
-    "PDFParser",
     "DocumentChunker",
     "DocumentIndexer",
+    "PDFParser",
+    "RAGPipeline",
+    "Settings",
 ]
