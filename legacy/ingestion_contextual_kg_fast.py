@@ -2,17 +2,29 @@
 """
 FAST Contextual Retrieval + KG Ingestion Pipeline
 Async parallel processing = 15-50x speedup
+
+MLflow Integration (2025):
+- Tracks all ingestion experiments
+- Logs config, metrics, artifacts
+- Enables A/B testing (chunk sizes, context vs no context)
 """
 
 import asyncio
 import hashlib
 import sys
 import time
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import fitz  # PyMuPDF
+import numpy as np
 import requests
 from contextualize_zai_async import ContextualRetrievalZAIAsync
+
+
+# Add src/ to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import (
     BGE_M3_TIMEOUT,
@@ -26,6 +38,7 @@ from config import (
     TEST_MAX_CHUNKS,
     ZAI_API_KEY,
 )
+from src.evaluation.mlflow_integration import MLflowRAGLogger
 from utils.structure_parser import add_graph_edges
 
 
@@ -605,9 +618,10 @@ async def process_document_contextual_kg_async(
     max_chunks: Optional[int] = None,
     document_name: str = DOCUMENT_NAME,
     max_concurrent: int = 10,
+    enable_mlflow: bool = True,
 ):
     """
-    FAST async ingestion pipeline.
+    FAST async ingestion pipeline with MLflow tracking.
 
     Args:
         pdf_path: Path to PDF
@@ -615,6 +629,7 @@ async def process_document_contextual_kg_async(
         max_chunks: Limit for testing
         document_name: Document name
         max_concurrent: Max parallel requests (10 recommended)
+        enable_mlflow: Enable MLflow experiment tracking (default: True)
     """
     print_header("⚡ FAST CONTEXTUAL RETRIEVAL + KG INGESTION")
     print_info(f"Document: {document_name}", 0)
@@ -622,8 +637,28 @@ async def process_document_contextual_kg_async(
     print_info(f"Collection: {collection_name}", 0)
     print_info(f"Max chunks: {max_chunks if max_chunks else 'ALL'}", 0)
     print_info(f"Concurrency: {max_concurrent} parallel requests", 0)
+    if enable_mlflow:
+        print_info("📊 MLflow: ENABLED (tracking experiment)", 0)
 
     start_time = time.time()
+
+    # Initialize MLflow if enabled
+    mlflow_logger = None
+    mlflow_run = None
+    if enable_mlflow:
+        try:
+            mlflow_logger = MLflowRAGLogger(experiment_name="contextual_rag_ingestion")
+            doc_short_name = Path(pdf_path).stem[:30]  # Truncate for run name
+            run_name = f"ingestion_{doc_short_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            mlflow_run = mlflow_logger.start_run(
+                run_name=run_name, tags={"document": document_name, "collection": collection_name}
+            )
+            mlflow_run.__enter__()  # Enter context manager
+            print_info(f"📊 MLflow run: {run_name}", 0)
+        except Exception as e:
+            print(f"\n⚠️  WARNING: MLflow init failed: {e}")
+            print("   Continuing without MLflow tracking...")
+            enable_mlflow = False
 
     # Initialize async contextualizer
     print_step(0, "INITIALIZATION")
@@ -670,8 +705,29 @@ async def process_document_contextual_kg_async(
             chunks = chunks[:max_chunks]
             print_info(f"Limited to {max_chunks} chunks for testing")
 
+        # Log config to MLflow
+        if enable_mlflow and mlflow_logger:
+            mlflow_logger.log_config(
+                {
+                    "pdf_path": pdf_path,
+                    "document_name": document_name,
+                    "collection_name": collection_name,
+                    "chunker_used": chunker_used,
+                    "total_chunks": len(chunks),
+                    "max_chunks": max_chunks or "ALL",
+                    "max_concurrent": max_concurrent,
+                    "enable_contextualization": True,
+                    "llm_model": "glm-4.6",
+                    "embedding_model": "bge-m3",
+                    "docling_skipped": doc_data.get("docling_skipped", False),
+                },
+                prefix="ingestion.",
+            )
+
     except Exception as e:
         print(f"\n❌ ERROR: Chunking failed: {e}")
+        if enable_mlflow and mlflow_run:
+            mlflow_run.__exit__(None, None, None)
         return False
 
     # Process chunks in parallel
@@ -761,6 +817,53 @@ async def process_document_contextual_kg_async(
     print_info(f"Chunks processed: {stats['success']}/{stats['total']}", 0)
     print_info(f"Collection: {collection_name}", 0)
     print_info(f"SPEEDUP: {speedup:.1f}x faster than original", 0)
+
+    # Log metrics to MLflow
+    if enable_mlflow and mlflow_logger:
+        # Calculate metadata coverage
+        sample_chunks_for_coverage = chunks[: min(100, len(chunks))]  # Sample first 100
+        chunks_with_metadata = sum(1 for c in sample_chunks_for_coverage if c.get("article_number"))
+        metadata_coverage = chunks_with_metadata / len(sample_chunks_for_coverage)
+
+        # Calculate avg chunk size
+        avg_chunk_size = np.mean([len(c["text"]) for c in chunks])
+
+        mlflow_logger.log_metrics(
+            {
+                "chunks_created": len(chunks),
+                "chunks_success": stats["success"],
+                "chunks_failed": stats["failed"],
+                "ingestion_time_seconds": total_time,
+                "processing_time_seconds": stats["elapsed"],
+                "avg_chunk_size_chars": float(avg_chunk_size),
+                "avg_time_per_chunk_seconds": stats["elapsed"] / stats["total"],
+                "speedup_factor": float(speedup),
+                "metadata_coverage_percent": metadata_coverage * 100,
+            }
+        )
+
+        # Log sample chunks as artifact
+        sample_chunks = chunks[:5]  # First 5 chunks
+        mlflow_logger.log_dict_artifact(
+            {
+                "chunks": [
+                    {"text": c["text"][:200], **{k: v for k, v in c.items() if k != "text"}}
+                    for c in sample_chunks
+                ]
+            },
+            "chunk_samples.json",
+            artifact_path="samples",
+        )
+
+        # Close MLflow run
+        try:
+            if mlflow_run:
+                run_url = mlflow_logger.get_run_url()
+                print_info(f"📊 MLflow run: {run_url}", 0)
+                mlflow_run.__exit__(None, None, None)
+        except Exception as e:
+            print(f"\n⚠️  WARNING: Error closing MLflow run: {e}")
+
     print("=" * 80)
 
     return stats["failed"] == 0
