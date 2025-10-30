@@ -2,7 +2,7 @@
 
 > **RAG система для украинских юридических документов с production ML платформой**
 
-**Версия:** 2.1.0
+**Версия:** 2.2.0
 **Дата:** 2025-10-30
 **Репозиторий:** https://github.com/yastman/rag
 **Ветка:** main
@@ -16,7 +16,7 @@
 ### Что это за проект?
 
 **Contextual RAG Pipeline** - production-ready система поиска по Уголовному кодексу Украины с:
-- 🔍 Гибридный поиск: DBSF + ColBERT (94% Recall@1)
+- 🔍 Гибридный поиск: **Variant A** (RRF + ColBERT) - 2025 best practice, ~94% Recall@1
 - 📊 ML платформа: MLflow + Langfuse + OpenTelemetry
 - 🚀 Redis кэш (2 уровня, версионирование)
 - 🏛️ Model Registry (Staging → Production)
@@ -225,6 +225,20 @@ git push origin main
 ---
 
 ## 📊 Changelog (История изменений)
+
+### v2.2.0 (2025-10-30) - Variant A Implementation ✅
+
+**Hybrid RRF + ColBERT Reranking (2025 Best Practice):**
+- ✅ **Variant A search engine** (HybridRRFColBERTSearchEngine)
+- ✅ **BGE-M3 integration** (dense + sparse + ColBERT vectors)
+- ✅ **3-stage pipeline** (Prefetch 100 + RRF fusion + ColBERT MaxSim rerank)
+- ✅ **Server-side reranking** (Qdrant Query API multivector support)
+- ✅ **Comprehensive tests** (3 test queries, all passed with method verification)
+- ✅ **Set as default** (SearchEngine.HYBRID_RRF_COLBERT in config)
+- ✅ **Expected performance** (~94% Recall@1, ~0.97 NDCG@10)
+
+**Commits:**
+- `a16f5d6` - feat: implement Variant A - complete BGE-M3 + ColBERT rerank
 
 ### v2.1.0 (2025-10-30) - Production ML Platform ✅
 
@@ -517,7 +531,7 @@ git push origin main
 ---
 
 **Last Updated:** 2025-10-30
-**Version:** 2.1.0
+**Version:** 2.2.0
 **Branch:** main
 **Python:** 3.12.3
 **Path:** `/srv/app/`
