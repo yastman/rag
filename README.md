@@ -2,7 +2,7 @@
 
 > **RAG система для украинских юридических документов с production ML платформой**
 
-**Версия:** 2.2.0
+**Версия:** 2.3.0
 **Дата:** 2025-10-30
 **Репозиторий:** https://github.com/yastman/rag
 **Ветка:** main
@@ -16,7 +16,7 @@
 ### Что это за проект?
 
 **Contextual RAG Pipeline** - production-ready система поиска по Уголовному кодексу Украины с:
-- 🔍 Гибридный поиск: **Variant A** (RRF + ColBERT) - 2025 best practice, ~94% Recall@1
+- 🔍 Гибридный поиск: **Variant A** (RRF + ColBERT, default) & **Variant B** (DBSF + ColBERT, 7% faster)
 - 📊 ML платформа: MLflow + Langfuse + OpenTelemetry
 - 🚀 Redis кэш (2 уровня, версионирование)
 - 🏛️ Model Registry (Staging → Production)
@@ -225,6 +225,23 @@ git push origin main
 ---
 
 ## 📊 Changelog (История изменений)
+
+### v2.3.0 (2025-10-30) - Variant B Implementation & A/B Testing ✅
+
+**Hybrid DBSF + ColBERT Reranking (Alternative to RRF):**
+- ✅ **Variant B search engine** (DBSFColBERTSearchEngine) - complete rewrite
+- ✅ **DBSF fusion** (Distribution-Based Score Fusion with statistical normalization)
+- ✅ **Server-side DBSF** (Qdrant Query API with `fusion: "dbsf"`)
+- ✅ **A/B comparison tests** (RRF vs DBSF on 3 identical queries)
+- ✅ **Performance results** (DBSF is 7% faster, 66.7% top result agreement)
+- ✅ **Documentation** (VARIANT_B_IMPLEMENTATION.md, ARCHITECTURE.md updated)
+- ⚠️ **Recommendation**: Use Variant A (RRF) as default, Variant B for experimentation
+
+**A/B Test Summary:**
+- Top Result Agreement: 2/3 queries (66.7%)
+- DBSF Latency: 0.937s (7% faster than RRF 1.002s)
+- Identical rankings on 2/3 queries (crime qualifier + legal concept)
+- Different top result on article lookup query
 
 ### v2.2.0 (2025-10-30) - Variant A Implementation ✅
 
