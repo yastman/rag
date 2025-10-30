@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from datetime import timedelta
 from typing import Optional
 
@@ -24,7 +25,7 @@ class RedisSemanticCache:
 
     def __init__(
         self,
-        redis_url: str = "redis://localhost:6379/2",
+        redis_url: str | None = None,
         index_version: str = "1.0.0",
         embedding_ttl_days: int = 30,
         response_ttl_minutes: int = 5,
@@ -33,11 +34,23 @@ class RedisSemanticCache:
         Initialize Redis cache.
 
         Args:
-            redis_url: Redis connection string
+            redis_url: Redis connection string (defaults to Docker network with env password)
             index_version: Current index version (increment on reindex)
             embedding_ttl_days: TTL for embedding cache
             response_ttl_minutes: TTL for response cache
         """
+        # Default: Use Docker network with password from environment
+        if redis_url is None:
+            redis_password = os.getenv("REDIS_PASSWORD", "")
+            redis_host = os.getenv("REDIS_HOST", "redis")
+            redis_port = os.getenv("REDIS_PORT", "6379")
+            redis_db = os.getenv("REDIS_CACHE_DB", "2")
+
+            if redis_password:
+                redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}"
+            else:
+                redis_url = f"redis://{redis_host}:{redis_port}/{redis_db}"
+
         self.redis = redis.from_url(redis_url)
         self.index_version = index_version
         self.embedding_ttl = timedelta(days=embedding_ttl_days)
