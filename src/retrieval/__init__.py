@@ -10,9 +10,9 @@ from .search_engines import (
 
 
 __all__ = [
-    "SearchEngine",
     "BaselineSearchEngine",
-    "HybridRRFSearchEngine",
     "DBSFColBERTSearchEngine",
+    "HybridRRFSearchEngine",
+    "SearchEngine",
     "create_search_engine",
 ]
