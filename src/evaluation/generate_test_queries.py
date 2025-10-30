@@ -16,8 +16,12 @@ import requests  ***REMOVED*** type: ignore[import-untyped]
 
 sys.path.append("/srv/rag-fresh")
 from contextualize_groq_async import ContextualRetrievalGroqAsync
+from src.config import Settings
 
-from config import QDRANT_API_KEY, QDRANT_URL
+***REMOVED*** Load settings
+_settings = Settings()
+QDRANT_URL = _settings.qdrant_url
+QDRANT_API_KEY = _settings.qdrant_api_key or ""
 
 
 def fetch_article_texts(collection_name: str, article_numbers: list[str]) -> dict[str, str]:

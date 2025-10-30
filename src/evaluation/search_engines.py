@@ -13,7 +13,19 @@ import requests  ***REMOVED*** type: ignore[import-untyped]
 
 
 sys.path.append("/srv/rag-fresh")
-from config import QDRANT_API_KEY, QDRANT_URL
+from src.config import Settings, HSNWParameters, ThresholdValues, RetrievalStages
+
+***REMOVED*** Load settings
+_settings = Settings()
+QDRANT_URL = _settings.qdrant_url
+QDRANT_API_KEY = _settings.qdrant_api_key or ""
+
+***REMOVED*** Load constants
+HNSW_EF_HIGH_PRECISION = HSNWParameters.EF_HIGH_PRECISION
+SCORE_THRESHOLD_HYBRID = ThresholdValues.HYBRID
+RETRIEVAL_LIMIT_STAGE1 = RetrievalStages.STAGE1_CANDIDATES
+RETRIEVAL_LIMIT_STAGE2 = RetrievalStages.STAGE2_FINAL
+PAYLOAD_FIELDS_MINIMAL = ["article_number", "chapter", "text"]
 
 
 def convert_to_python_types(obj):
@@ -241,16 +253,7 @@ class HybridDBSFColBERTSearchEngine(SearchEngine):
         super().__init__(collection_name)
         self.embedding_model = embedding_model
 
-        ***REMOVED*** Import config parameters
-        sys.path.append("/srv/rag-fresh")
-        from config import (
-            HNSW_EF_HIGH_PRECISION,
-            PAYLOAD_FIELDS_MINIMAL,
-            RETRIEVAL_LIMIT_STAGE1,
-            RETRIEVAL_LIMIT_STAGE2,
-            SCORE_THRESHOLD_HYBRID,
-        )
-
+        ***REMOVED*** Use config parameters from module level
         self.score_threshold = SCORE_THRESHOLD_HYBRID
         self.hnsw_ef = HNSW_EF_HIGH_PRECISION
         self.stage1_limit = RETRIEVAL_LIMIT_STAGE1
@@ -376,16 +379,7 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
         super().__init__(collection_name)
         self.embedding_model = embedding_model
 
-        ***REMOVED*** Import config parameters
-        sys.path.append("/srv/rag-fresh")
-        from config import (
-            HNSW_EF_HIGH_PRECISION,
-            PAYLOAD_FIELDS_MINIMAL,
-            RETRIEVAL_LIMIT_STAGE1,
-            RETRIEVAL_LIMIT_STAGE2,
-            SCORE_THRESHOLD_HYBRID,
-        )
-
+        ***REMOVED*** Use config parameters from module level
         self.score_threshold = SCORE_THRESHOLD_HYBRID
         self.hnsw_ef = HNSW_EF_HIGH_PRECISION
         self.stage1_limit = RETRIEVAL_LIMIT_STAGE1
