@@ -41,7 +41,7 @@ class RAGPipeline:
         >>> pipeline = RAGPipeline()
         >>> results = await pipeline.search("What are citizen rights?")
         >>> for result in results.results:
-        ...     print(result['text'])
+        ...     print(result["text"])
     """
 
     def __init__(self, settings: Optional[Settings] = None):
@@ -98,18 +98,30 @@ class RAGPipeline:
         start_time = time.time()
         top_k = top_k or self.settings.top_k
 
-        # Step 1: Embed query
-        query_embedding = self.embedding_model.encode(
-            query,
-            normalize_embeddings=True,
-        ).tolist()
+        # Step 1: Determine query format based on search engine
+        # HybridRRFSearchEngine can accept query string directly for sparse vectors
+        from src.retrieval import HybridRRFSearchEngine
 
-        # Step 2: Search using configured search engine
-        search_results = self.search_engine.search(
-            query_embedding=query_embedding,
-            top_k=top_k,
-            score_threshold=self.settings.score_threshold,
-        )
+        if isinstance(self.search_engine, HybridRRFSearchEngine):
+            # Pass query string directly for hybrid search with sparse vectors
+            search_results = self.search_engine.search(
+                query_embedding=query,  # Pass string, not embedding
+                top_k=top_k,
+                score_threshold=self.settings.score_threshold,
+            )
+        else:
+            # For other engines, generate dense embedding
+            query_embedding = self.embedding_model.encode(
+                query,
+                normalize_embeddings=True,
+            ).tolist()
+
+            # Step 2: Search using configured search engine
+            search_results = self.search_engine.search(
+                query_embedding=query_embedding,
+                top_k=top_k,
+                score_threshold=self.settings.score_threshold,
+            )
 
         # Step 3: Optional contextualization
         if use_context and self.settings.enable_query_expansion:
@@ -247,9 +259,7 @@ class RAGPipeline:
             "search_engine": self.search_engine.get_name(),
             "collection": self.settings.collection_name,
             "contextualization_stats": (
-                self.contextualizer.get_stats()
-                if hasattr(self.contextualizer, 'get_stats')
-                else {}
+                self.contextualizer.get_stats() if hasattr(self.contextualizer, "get_stats") else {}
             ),
         }
 
