@@ -12,11 +12,11 @@ from .settings import Settings
 
 
 __all__ = [
-    "Settings",
-    "SearchEngine",
     "APIProvider",
-    "VectorDimensions",
-    "ThresholdValues",
     "HSNWParameters",
     "RetrievalStages",
+    "SearchEngine",
+    "Settings",
+    "ThresholdValues",
+    "VectorDimensions",
 ]
