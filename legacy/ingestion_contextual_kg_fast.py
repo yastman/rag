@@ -253,21 +253,72 @@ def docling_chunk(pdf_path: str, max_retries: int = 3) -> dict:
     print(f"  ℹ️  Format: {file_ext.upper()}")
     print(f"  ℹ️  Size: {file_size_mb:.1f} MB")
 
-    # For DOCX files, skip complexity detection and go straight to Docling
+    # For DOCX files, detect if it's a legal document
     if file_ext == ".docx":
-        print("  ✅ DOCX format detected → Using Docling API directly")
-        detection = {
-            "use_docling": True,
-            "reason": "DOCX format requires Docling API",
-            "confidence": 1.0,
-            "metrics": {
-                "detection_time_ms": 0,
-                "has_text_layer": True,
-                "image_count": None,
-                "table_detected": None,
-                "sample_pages_checked": 0,
-            },
-        }
+        print("  ✅ DOCX format detected → Checking document type...")
+
+        # Check if it's a Ukrainian legal document (has "Стаття" pattern)
+        try:
+            import fitz
+
+            doc = fitz.open(pdf_path)
+            sample_text = ""
+            for page_num in range(min(5, len(doc))):
+                sample_text += doc[page_num].get_text("text")
+            doc.close()
+
+            # Check for Ukrainian legal markers
+            has_articles = "Стаття" in sample_text or "статт" in sample_text.lower()
+            is_legal = (
+                has_articles
+                and ("Кодекс" in sample_text or "Закон" in sample_text)
+                and len(sample_text) > 1000
+            )
+
+            if is_legal:
+                print("  ✓ Legal document detected (has 'Стаття' markers) → PyMuPDF fast path")
+                detection = {
+                    "use_docling": False,
+                    "reason": "Ukrainian legal DOCX → PyMuPDF for better structure detection",
+                    "confidence": 0.95,
+                    "metrics": {
+                        "detection_time_ms": 0,
+                        "has_text_layer": True,
+                        "image_count": 0,
+                        "table_detected": False,
+                        "sample_pages_checked": min(5, len(doc)) if "doc" in locals() else 0,
+                    },
+                }
+            else:
+                print("  ✓ Generic DOCX document → Using Docling API")
+                detection = {
+                    "use_docling": True,
+                    "reason": "Generic DOCX format requires Docling API",
+                    "confidence": 1.0,
+                    "metrics": {
+                        "detection_time_ms": 0,
+                        "has_text_layer": True,
+                        "image_count": None,
+                        "table_detected": None,
+                        "sample_pages_checked": 0,
+                    },
+                }
+
+        except Exception as e:
+            print(f"  ⚠️  Could not analyze DOCX: {e}")
+            print("  ✓ Defaulting to Docling API")
+            detection = {
+                "use_docling": True,
+                "reason": "DOCX analysis failed → default to Docling",
+                "confidence": 0.5,
+                "metrics": {
+                    "detection_time_ms": 0,
+                    "has_text_layer": None,
+                    "image_count": None,
+                    "table_detected": None,
+                    "sample_pages_checked": 0,
+                },
+            }
     else:
         # PHASE 1.1: Smart Detection for PDF
         print("  🔍 Running complexity detection...")
