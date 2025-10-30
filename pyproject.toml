@@ -153,6 +153,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "__init__.py" = ["F401", "E402"]  # Allow unused imports and late imports
 "evaluation/*.py" = ["T201"]      # Allow print() in evaluation scripts
 "test_*.py" = ["E402", "T201"]    # Allow late imports (after load_dotenv()) and print() in tests
+"legacy/*.py" = ["ASYNC210"]      # Allow blocking HTTP calls in async functions (legacy code)
 "*.py" = ["ARG001"]               # Allow unused function arguments (common in callbacks)
 
 # Import sorting configuration (isort replacement)
