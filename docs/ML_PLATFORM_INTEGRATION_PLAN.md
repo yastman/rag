@@ -1791,308 +1791,263 @@ echo "   RTO: $(date)"
 **Last Test:** 2025-10-06 (Success - 45 minutes RTO)
 ```
 
-#### Step 3.3: PII Redaction & Security
+#### Step 3.3: PII Redaction & Security Guardrails
 
 **File**: `src/security/pii_redaction.py`
 
 ```python
-"""
-Combined MLflow + Langfuse integration.
+"""PII redaction and security guardrails for production RAG."""
 
-Best practice 2025:
-- MLflow for batch evaluation experiments
-- Langfuse for individual query tracing
-- Cross-reference between platforms via run IDs
-"""
+import re
+from typing import Optional
+from langfuse import get_client
 
-import mlflow
-from langfuse import observe, get_client
-from src.evaluation.mlflow_integration import MLflowRAGLogger
 
-class UnifiedObservability:
-    """Combined MLflow + Langfuse tracking."""
+class PIIRedactor:
+    """
+    Redact PII from queries before logging to Langfuse/MLflow.
 
-    def __init__(self, experiment_name: str):
-        self.mlflow_logger = MLflowRAGLogger(experiment_name=experiment_name)
-        self.langfuse = get_client()
+    Common PII patterns:
+    - Ukrainian phone numbers: +380XXXXXXXXX
+    - Email addresses
+    - Tax IDs (РНОКПП): 10 digits
+    - Passport numbers
+    """
 
-    @observe(name="evaluate_rag_system")
-    async def run_evaluation(
-        self,
-        test_queries: list,
-        search_engine_config: dict
-    ):
-        """
-        Run evaluation with both MLflow and Langfuse.
-
-        - MLflow tracks: aggregate metrics, configs, artifacts
-        - Langfuse traces: individual query executions
-        """
-
-        # Start MLflow run
-        run_name = f"eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-        with self.mlflow_logger.start_run(run_name=run_name):
-            # Log config to MLflow
-            self.mlflow_logger.log_config(search_engine_config, prefix="search.")
-
-            # Add MLflow run ID to Langfuse trace
-            mlflow_run_id = mlflow.active_run().info.run_id
-            self.langfuse.update_current_trace(
-                metadata={
-                    "mlflow_run_id": mlflow_run_id,
-                    "mlflow_experiment": self.mlflow_logger.experiment_name,
-                }
-            )
-
-            # Run evaluation (each query traced by Langfuse)
-            results = []
-            for query_data in test_queries:
-                result = await self._evaluate_query(
-                    query_data["query"],
-                    query_data["expected_article"],
-                    langfuse_tags=[f"mlflow_run:{mlflow_run_id}"]
-                )
-                results.append(result)
-
-            # Aggregate metrics → MLflow
-            metrics = self._compute_metrics(results)
-            self.mlflow_logger.log_metrics(metrics)
-
-            print(f"📊 MLflow: {self.mlflow_logger.get_run_url()}")
-            print(f"📈 Langfuse: http://localhost:3001")
-            print(f"   Filter by tag: mlflow_run:{mlflow_run_id}")
-
-            return metrics
-
-    @observe()
-    async def _evaluate_query(
-        self,
-        query: str,
-        expected_article: int,
-        langfuse_tags: list[str]
-    ):
-        """Evaluate single query (traced by Langfuse)."""
-
-        # Add tags to link to MLflow run
-        self.langfuse.update_current_trace(tags=langfuse_tags)
-
-        # Execute query
-        results = await self.rag_pipeline.query(query)
-
-        # Check if correct
-        correct = any(r["article_number"] == expected_article for r in results[:1])
-
-        return {
-            "query": query,
-            "expected": expected_article,
-            "results": results,
-            "correct": correct,
+    def __init__(self):
+        self.patterns = {
+            "phone": re.compile(r"\+380\d{9}|\b0\d{9}\b"),
+            "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+            "tax_id": re.compile(r"\b\d{10}\b"),  # РНОКПП
+            "passport": re.compile(r"\b[А-ЯІЇЄҐ]{2}\d{6}\b"),
         }
+
+    def redact_query(self, query: str) -> tuple[str, dict]:
+        """
+        Redact PII from query.
+
+        Returns:
+            (redacted_query, metadata_with_flags)
+        """
+        redacted = query
+        pii_found = {}
+
+        # Redact phone numbers
+        phones = self.patterns["phone"].findall(query)
+        if phones:
+            redacted = self.patterns["phone"].sub("[PHONE]", redacted)
+            pii_found["phone_count"] = len(phones)
+
+        # Redact emails
+        emails = self.patterns["email"].findall(query)
+        if emails:
+            redacted = self.patterns["email"].sub("[EMAIL]", redacted)
+            pii_found["email_count"] = len(emails)
+
+        # Redact tax IDs
+        tax_ids = self.patterns["tax_id"].findall(query)
+        if tax_ids:
+            redacted = self.patterns["tax_id"].sub("[TAX_ID]", redacted)
+            pii_found["tax_id_count"] = len(tax_ids)
+
+        # Redact passports
+        passports = self.patterns["passport"].findall(query)
+        if passports:
+            redacted = self.patterns["passport"].sub("[PASSPORT]", redacted)
+            pii_found["passport_count"] = len(passports)
+
+        metadata = {
+            "pii_redacted": len(pii_found) > 0,
+            **pii_found
+        }
+
+        return redacted, metadata
+
+
+class BudgetGuard:
+    """
+    Budget limits for LLM providers.
+
+    Prevents runaway costs in production.
+    """
+
+    def __init__(self):
+        self.limits = {
+            "daily": 10.0,    # $10/day
+            "monthly": 300.0,  # $300/month
+        }
+
+        self.current_spend = {
+            "daily": 0.0,
+            "monthly": 0.0,
+        }
+
+        self.alert_threshold = 0.80  # Alert at 80%
+
+    def check_budget(self, estimated_cost: float) -> tuple[bool, Optional[str]]:
+        """
+        Check if request would exceed budget.
+
+        Returns:
+            (allowed, warning_message)
+        """
+
+        # Check daily limit
+        if self.current_spend["daily"] + estimated_cost > self.limits["daily"]:
+            return False, f"Daily budget exceeded: ${self.current_spend['daily']:.2f} / ${self.limits['daily']:.2f}"
+
+        # Check monthly limit
+        if self.current_spend["monthly"] + estimated_cost > self.limits["monthly"]:
+            return False, f"Monthly budget exceeded: ${self.current_spend['monthly']:.2f} / ${self.limits['monthly']:.2f}"
+
+        # Check alert threshold
+        daily_pct = (self.current_spend["daily"] + estimated_cost) / self.limits["daily"]
+        if daily_pct >= self.alert_threshold:
+            return True, f"⚠️  Daily budget at {daily_pct:.0%}: ${self.current_spend['daily']:.2f} / ${self.limits['daily']:.2f}"
+
+        return True, None
+
+    def record_spend(self, cost: float):
+        """Record actual spend."""
+        self.current_spend["daily"] += cost
+        self.current_spend["monthly"] += cost
+
+    def reset_daily(self):
+        """Reset daily counter (run at midnight)."""
+        self.current_spend["daily"] = 0.0
+
+
+# Usage in RAG pipeline
+class SecureRAGPipeline:
+    """RAG Pipeline with PII redaction and budget guards."""
+
+    def __init__(self):
+        self.pii_redactor = PIIRedactor()
+        self.budget_guard = BudgetGuard()
+
+    async def query(self, query: str, user_id: str):
+        """Query with security checks."""
+
+        # 1. Redact PII
+        redacted_query, pii_metadata = self.pii_redactor.redact_query(query)
+
+        if pii_metadata["pii_redacted"]:
+            print(f"⚠️  PII detected and redacted: {pii_metadata}")
+
+        # 2. Check budget
+        estimated_cost = 0.001  # Estimate based on query length
+        allowed, warning = self.budget_guard.check_budget(estimated_cost)
+
+        if not allowed:
+            raise Exception(f"🚫 Budget limit reached: {warning}")
+
+        if warning:
+            print(warning)
+
+        # 3. Execute query (with redacted version logged to Langfuse)
+        langfuse = get_client()
+        langfuse.update_current_trace(
+            input={"query": redacted_query},  # Redacted version
+            metadata={
+                **pii_metadata,
+                "user_id": user_id,
+                "budget_check": "passed",
+            }
+        )
+
+        # ... execute RAG pipeline ...
+
+        # 4. Record actual cost
+        actual_cost = 0.0008  # From LLM response
+        self.budget_guard.record_spend(actual_cost)
+
+        return results
 ```
 
-#### Step 3.2: Monitoring Dashboard Configuration
+**Cron Job for Budget Reset**:
 
-**File**: `docs/monitoring/LANGFUSE_DASHBOARDS.md`
+```bash
+# Reset daily budget at midnight
+0 0 * * * python -c "from src.security.pii_redaction import BudgetGuard; BudgetGuard().reset_daily()"
+```
+
+**Security Checklist** (`docs/SECURITY_CHECKLIST.md`):
 
 ```markdown
-# Langfuse Dashboards Configuration
+# Production Security Checklist
 
-## Dashboard 1: Query Performance
+## PII Protection
+- [x] PII redaction enabled for Langfuse logs
+- [x] Query anonymization for analytics
+- [x] No personal data in MLflow artifacts
 
-**Metrics:**
-- Average latency (P50, P95, P99)
-- Queries per minute
-- Error rate
-- Cost per query
+## Budget Controls
+- [x] Daily limit: $10
+- [x] Monthly limit: $300
+- [x] Alert threshold: 80%
+- [x] Automatic budget reset (cron)
 
-**Filters:**
-- By user
-- By session
-- By date range
-- By search engine
+## API Key Management
+- [x] API keys in environment variables (not code)
+- [x] Rotation schedule: Every 90 days
+- [x] Next rotation: 2026-01-28
 
-**Alerts:**
-- Latency > 1000ms
-- Error rate > 1%
-- Cost per query > $0.01
+## Access Control
+- [x] MLflow UI: localhost only (no external access)
+- [x] Langfuse UI: localhost only
+- [x] Qdrant: localhost only
 
-## Dashboard 2: LLM Usage
-
-**Metrics:**
-- Token usage (input/output)
-- Cost breakdown (by model)
-- Average tokens per request
-- Cost trends over time
-
-**Filters:**
-- By model (glm-4.6, gpt-4o, claude-3.5-sonnet)
-- By operation (contextualization, generation)
-
-## Dashboard 3: User Analytics
-
-**Metrics:**
-- Active users
-- Queries per user
-- Session duration
-- User satisfaction (via feedback)
-
-**Filters:**
-- By user cohort
-- By time period
+## Monitoring
+- [x] Budget alerts configured
+- [x] PII detection logged
+- [x] Failed auth attempts monitored
 ```
 
 ---
 
-## 📊 Success Metrics
+## 📊 Success Metrics & Summary
 
-### MLflow Success Metrics
+### Week 1 Success Criteria
+- Golden test set: 100-300 queries with ground truth
+- RAGAS baseline: Faithfulness ≥ 0.85, Precision ≥ 0.80, Recall ≥ 0.90
+- MLflow tracking operational
+- Nightly evaluation automated
 
-```
-After Phase 1 completion:
-- ✅ All ingestion runs tracked with config hash
-- ✅ A/B test framework with automatic comparison
-- ✅ 3+ experiments run and documented
-- ✅ Retrieval metrics tracked (Recall, NDCG, Latency)
-```
+### Week 2 Success Criteria
+- OpenTelemetry → Prometheus/Grafana operational
+- Cache hit_rate ≥ 30% after warm-up
+- Latency P95 ≤ 500ms
+- Dashboards with alerts live
 
-### Langfuse Success Metrics
-
-```
-After Phase 2 completion:
-- ✅ 100% LLM calls traced (contextualization)
-- ✅ End-to-end query tracing (embed → search → generate)
-- ✅ Cost tracking per query (<$0.005 target)
-- ✅ Latency monitoring (P95 < 500ms target)
-```
-
----
-
-## 🎓 Best Practices 2025
-
-### 1. **Separation of Concerns**
-
-```
-❌ DON'T: Use MLflow for production monitoring
-❌ DON'T: Use Langfuse for batch experiments
-
-✅ DO: MLflow for research/experiments
-✅ DO: Langfuse for production/debugging
-```
-
-### 2. **Cross-Platform Linking**
-
-```python
-# Link Langfuse traces to MLflow runs
-mlflow_run_id = mlflow.active_run().info.run_id
-
-langfuse.update_current_trace(
-    tags=[f"mlflow_run:{mlflow_run_id}"],
-    metadata={"mlflow_experiment": experiment_name}
-)
-```
-
-### 3. **Structured Experiments**
-
-```python
-# Always use structured naming
-run_name = f"{component}_{variant}_{timestamp}"
-# Example: "retrieval_dbsf_colbert_20251030_142315"
-
-# Always tag runs
-tags = {
-    "component": "retrieval",
-    "variant": "dbsf_colbert",
-    "environment": "development",
-}
-```
-
-### 4. **Cost Optimization**
-
-```python
-# Track costs in Langfuse
-@observe(as_type="generation")
-async def llm_call():
-    # Langfuse automatically calculates cost
-    # based on model + tokens used
-    pass
-
-# Set budget alerts in Langfuse UI:
-# - Daily budget: $10
-# - Alert when 80% reached
-```
-
-### 5. **Progressive Rollout**
-
-```
-Week 1: MLflow for ingestion + retrieval experiments
-Week 2: Langfuse for contextualization tracing
-Week 3: End-to-end integration + dashboards
-Week 4: Production deployment + monitoring
-```
-
----
-
-## 🔧 Quick Start Commands
-
-### MLflow
-
-```bash
-# View experiments
-open http://localhost:5000
-
-# Run experiment
-python src/evaluation/mlflow_experiments.py
-
-# Compare runs
-mlflow ui --backend-store-uri sqlite:///mlflow.db
-```
-
-### Langfuse
-
-```bash
-# View traces
-open http://localhost:3001
-
-# Check current traces
-curl http://localhost:3001/api/public/traces
-
-# Monitor costs
-# UI → Analytics → Cost Tracking
-```
+### Week 3 Success Criteria
+- Model Registry: Staging → Production workflow tested
+- Qdrant backup/restore tested (RTO < 1 hour)
+- PII redaction operational
+- Security checklist completed
 
 ---
 
 ## 📚 Resources
 
-### Documentation
-- MLflow: https://mlflow.org/docs/latest/
-- Langfuse: https://langfuse.com/docs
-- Best Practices 2025: This document
+### Documentation Links
+- MLflow: http://localhost:5000
+- Langfuse: http://localhost:3001
+- Grafana: http://localhost:3000
+- Prometheus: http://localhost:9090
+- Qdrant: http://localhost:6333/dashboard
 
-### Internal Links
-- MLflow Integration: `src/evaluation/mlflow_integration.py`
-- Langfuse Integration: `src/evaluation/langfuse_integration.py`
-- Monitoring Setup: `docs/monitoring/MONITORING-QUICK-REFERENCE.md`
-
----
-
-## 🎯 Next Steps
-
-**Your action items:**
-
-1. **Review this plan** - понять архитектуру интеграции
-2. **Phase 1** - начать с MLflow experiment tracking
-3. **Phase 2** - добавить Langfuse observability
-4. **Phase 3** - интегрировать оба сервиса
-
-**Questions to answer:**
-- Какие эксперименты хочешь запустить первыми?
-- Нужно ли сразу полное трассирование или постепенно?
-- Какие метрики наиболее важны для мониторинга?
+### Internal Files
+- `src/evaluation/mlflow_integration.py` - MLflow wrapper
+- `src/evaluation/ragas_evaluation.py` - RAGAS evaluator
+- `src/observability/otel_setup.py` - OpenTelemetry setup
+- `src/cache/redis_semantic_cache.py` - Redis cache
+- `src/governance/model_registry.py` - Model Registry
+- `scripts/qdrant_backup.sh` - Qdrant backup
+- `src/security/pii_redaction.py` - PII redaction
 
 ---
 
+**Status**: Production-Ready Plan ✅
 **Last Updated**: 2025-10-30
-**Status**: Ready for Implementation
-**Estimated Time**: 3 weeks
+**Estimated Implementation Time**: 3 weeks
+**All must-have features for 2025 RAG systems included**
