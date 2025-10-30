@@ -12,6 +12,7 @@ from typing import Optional
 
 import fitz  # PyMuPDF
 import requests
+from contextualize_zai_async import ContextualRetrievalZAIAsync
 
 from config import (
     BGE_M3_TIMEOUT,
@@ -25,7 +26,6 @@ from config import (
     TEST_MAX_CHUNKS,
     ZAI_API_KEY,
 )
-from contextualize_zai_async import ContextualRetrievalZAIAsync
 from utils.structure_parser import add_graph_edges
 
 
@@ -125,7 +125,6 @@ def detect_tables_heuristic(text: str) -> bool:
     # Real tables typically have many short aligned lines
     # Legal docs have few long aligned sections
     return short_aligned_lines > 5 and aligned_lines > 10
-
 
 
 def detect_pdf_complexity(pdf_path: str) -> dict:
@@ -255,7 +254,7 @@ def docling_chunk(pdf_path: str, max_retries: int = 3) -> dict:
     print(f"  ℹ️  Size: {file_size_mb:.1f} MB")
 
     # For DOCX files, skip complexity detection and go straight to Docling
-    if file_ext == '.docx':
+    if file_ext == ".docx":
         print("  ✅ DOCX format detected → Using Docling API directly")
         detection = {
             "use_docling": True,
@@ -437,7 +436,6 @@ def generate_chunk_id(chunk_text: str, source: str, chunk_index: int) -> str:
     return hash_obj.hexdigest()[:32]
 
 
-
 def qdrant_upsert(collection: str, point_id: str, vectors: dict, payload: dict):
     """
     Insert or update point in Qdrant.
@@ -462,7 +460,7 @@ def qdrant_upsert(collection: str, point_id: str, vectors: dict, payload: dict):
 
 async def process_chunk_async(
     contextualizer: ContextualRetrievalZAIAsync,
-    chunk_text: str,
+    chunk_data: dict,
     collection_name: str,
     document_name: str,
     pdf_path: str,
@@ -473,7 +471,7 @@ async def process_chunk_async(
 
     Args:
         contextualizer: Z.AI async contextualizer
-        chunk_text: Text of the chunk
+        chunk_data: Full chunk dict from chunker (includes text + metadata)
         collection_name: Qdrant collection
         document_name: Name of document
         pdf_path: Source PDF path
@@ -483,12 +481,30 @@ async def process_chunk_async(
         Dict with status and chunk_id
     """
     try:
+        chunk_text = chunk_data["text"]
+
         # Generate stable UUID from content hash (enables auto-deduplication)
         chunk_id = generate_chunk_id(chunk_text, pdf_path, chunk_index)
+
         # Generate context + metadata (ASYNC, NO document context!)
         context_text, metadata = await contextualizer.situate_context_with_metadata(
             chunk_text=chunk_text, document_name=document_name
         )
+
+        # IMPORTANT: Preserve metadata from chunker (article_number, etc.)
+        # Chunker metadata has priority over contextualizer metadata
+        for key in [
+            "article_number",
+            "article_title",
+            "chapter",
+            "chapter_number",
+            "section",
+            "section_number",
+            "book",
+            "book_number",
+        ]:
+            if key in chunk_data and chunk_data[key] is not None:
+                metadata[key] = chunk_data[key]
 
         # Add graph edges
         metadata = add_graph_edges(metadata)
@@ -618,7 +634,7 @@ async def process_document_contextual_kg_async(
     for idx, chunk in enumerate(chunks):
         task = process_chunk_async(
             contextualizer=contextualizer,
-            chunk_text=chunk["text"],
+            chunk_data=chunk,  # Pass full chunk dict with metadata
             collection_name=collection_name,
             document_name=document_name,
             pdf_path=pdf_path,
@@ -723,7 +739,6 @@ async def main_async(args):
         document_name=args.document_name,
         max_concurrent=args.concurrent,
     )
-
 
 
 if __name__ == "__main__":
