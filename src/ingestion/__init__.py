@@ -5,4 +5,4 @@ from .indexer import DocumentIndexer
 from .pdf_parser import PDFParser
 
 
-__all__ = ["PDFParser", "DocumentChunker", "DocumentIndexer"]
+__all__ = ["DocumentChunker", "DocumentIndexer", "PDFParser"]

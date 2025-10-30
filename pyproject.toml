@@ -116,18 +116,29 @@ select = [
     "RET",   # flake8-return (return statement issues)
     "ARG",   # flake8-unused-arguments
     "PTH",   # flake8-use-pathlib (prefer pathlib over os.path)
+    "PERF",  # perflint (performance anti-patterns) - NEW 2025
+    "RUF",   # Ruff-specific rules - NEW 2025
+    "FURB",  # refurb (modernize Python idioms) - NEW 2025
+    "ASYNC", # flake8-async (async/await best practices) - NEW 2025
 ]
 
 # Ignore specific rules
 ignore = [
-    "E501",   # Line too long (handled by formatter)
-    "B008",   # Function calls in argument defaults
-    "T201",   # print() statements (we use them for logging)
-    "PTH123", # pathlib open() (we use built-in open())
-    "PTH",    # os.path usage (pathlib migration not critical for this project)
-    "ARG002", # Unused method arguments (often required for interface compatibility)
-    "B904",   # raise-without-from (context dependent, not always needed)
-    "SIM113", # enumerate-for-loop (minor optimization, not critical)
+    "E501",    # Line too long (handled by formatter)
+    "B008",    # Function calls in argument defaults
+    "T201",    # print() statements (we use them for logging)
+    "PTH123",  # pathlib open() (we use built-in open())
+    "PTH",     # os.path usage (pathlib migration not critical for this project)
+    "ARG002",  # Unused method arguments (often required for interface compatibility)
+    "B904",    # raise-without-from (context dependent, not always needed)
+    "SIM113",  # enumerate-for-loop (minor optimization, not critical)
+    # NEW 2025 rules - selective ignores
+    "RUF001",  # ambiguous-unicode (false positives for Cyrillic/Ukrainian text)
+    "RUF002",  # ambiguous-unicode-docstring (false positives for Cyrillic)
+    "PERF203", # try-except-in-loop (acceptable for error handling in async)
+    "PERF401", # manual-list-comprehension (readability over micro-optimization)
+    "RUF012",  # mutable-class-default (dataclasses handle this correctly)
+    "ASYNC230",# blocking-open-call (some files are small, async not always needed)
 ]
 
 # Allow auto-fix for all enabled rules
