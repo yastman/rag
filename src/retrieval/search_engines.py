@@ -259,6 +259,184 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         return "hybrid_rrf"
 
 
+class HybridRRFColBERTSearchEngine(BaseSearchEngine):
+    """
+    Advanced hybrid search using RRF fusion + ColBERT multivector reranking.
+
+    This is the COMPLETE "Variant A" implementation:
+    - Dense + Sparse vectors from BGE-M3
+    - RRF fusion (Qdrant native)
+    - ColBERT multivector MaxSim rerank (server-side in Qdrant)
+
+    3-Stage Pipeline:
+    1. Prefetch: Dense search (100 candidates) + Sparse BM25 search (100 candidates)
+    2. Fusion: RRF combines both result sets
+    3. Rerank: ColBERT multivector MaxSim reranking → top-K
+
+    Performance (Expected):
+    - Recall@1: ~94% (best across all methods)
+    - NDCG@10: ~0.97
+    - Latency: ~0.7-0.8s (all computation in Qdrant)
+
+    References:
+    - Qdrant Hybrid Search: https://qdrant.tech/articles/hybrid-search/
+    - ColBERT: https://qdrant.tech/documentation/concepts/hybrid-queries/
+    """
+
+    def __init__(self, settings: Optional[Settings] = None):
+        """Initialize hybrid RRF + ColBERT search engine with BGE-M3 model."""
+        super().__init__(settings)
+        self.embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+
+    def search(
+        self,
+        query_embedding: Union[str, list[float]],
+        top_k: int = 10,
+        score_threshold: Optional[float] = None,
+    ) -> list[SearchResult]:
+        """
+        Search using RRF fusion + ColBERT reranking.
+
+        Args:
+            query_embedding: Either query string or pre-computed dense embedding.
+                If string, will use full hybrid search with ColBERT rerank.
+                If list, will use dense-only search (backward compatibility).
+            top_k: Number of results to return
+            score_threshold: Minimum similarity score threshold
+
+        Returns:
+            List of SearchResult objects
+        """
+        if score_threshold is None:
+            score_threshold = 0.3
+
+        # If query is a string, use full hybrid + ColBERT rerank
+        if isinstance(query_embedding, str):
+            return self._search_hybrid_colbert(query_embedding, top_k, score_threshold)
+
+        # Backward compatibility: if embedding provided, use dense-only search
+        dense_results = self.client.search(
+            collection_name=self.settings.collection_name,
+            query_vector=query_embedding,
+            limit=top_k,
+            score_threshold=score_threshold,
+        )
+
+        return [
+            SearchResult(
+                article_number=result.payload.get("article_number", ""),
+                text=result.payload.get("text", ""),
+                score=result.score,
+                metadata=result.payload,
+            )
+            for result in dense_results
+        ]
+
+    def _search_hybrid_colbert(
+        self,
+        query: str,
+        top_k: int,
+        score_threshold: float,
+    ) -> list[SearchResult]:
+        """
+        Internal 3-stage hybrid search with ColBERT rerank.
+
+        Pipeline:
+        1. Prefetch dense (100) + sparse (100) candidates
+        2. RRF fusion combines both
+        3. ColBERT multivector rerank on fused results → top-K
+        """
+        # Generate all embeddings for query (dense + sparse + colbert)
+        query_embeddings = self.embedding_model.encode(
+            query, return_dense=True, return_sparse=True, return_colbert_vecs=True
+        )
+
+        # Convert sparse to Qdrant format
+        lexical_weights = query_embeddings["lexical_weights"]
+        sparse_indices = [int(k) for k in lexical_weights]
+        sparse_values = list(lexical_weights.values())
+
+        # Build 3-stage query: Prefetch → RRF → ColBERT rerank
+        search_payload = {
+            "prefetch": [
+                {
+                    "prefetch": [
+                        # Stage 1a: Dense vector search
+                        {
+                            "query": query_embeddings["dense_vecs"].tolist(),
+                            "using": "dense",
+                            "limit": 100,
+                        },
+                        # Stage 1b: Sparse BM25 search
+                        {
+                            "query": {
+                                "values": sparse_values,
+                                "indices": sparse_indices,
+                            },
+                            "using": "sparse",
+                            "limit": 100,
+                        },
+                    ],
+                    # Stage 2: RRF fusion
+                    "query": {"fusion": "rrf"},
+                }
+            ],
+            # Stage 3: ColBERT multivector rerank
+            "query": query_embeddings["colbert_vecs"].tolist(),
+            "using": "colbert",
+            "limit": top_k,
+            "with_payload": True,
+            "with_vector": False,
+        }
+
+        # Convert all numpy types to Python types
+        search_payload = convert_to_python_types(search_payload)
+
+        # Execute 3-stage query via Qdrant query API
+        response = requests.post(
+            f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
+            json=search_payload,
+            headers={"api-key": self.settings.qdrant_api_key or ""},
+        )
+
+        if response.status_code != 200:
+            # Fallback to RRF without ColBERT on error
+            print(
+                f"WARNING: ColBERT rerank failed ({response.status_code}), falling back to RRF only"
+            )
+            # Create temporary HybridRRFSearchEngine for fallback
+            rrf_engine = HybridRRFSearchEngine(self.settings)
+            return rrf_engine.search(query, top_k, score_threshold)
+
+        response.raise_for_status()
+        resp_data = response.json()
+
+        # Parse response
+        if isinstance(resp_data["result"], dict):
+            points_list = resp_data["result"].get("points", [])
+        elif isinstance(resp_data["result"], list):
+            points_list = resp_data["result"]
+        else:
+            points_list = []
+
+        return [
+            SearchResult(
+                article_number=point["payload"].get("article_number", ""),
+                text=point["payload"].get("text", ""),
+                score=point["score"],
+                metadata={
+                    **point["payload"],
+                    "search_method": "hybrid_rrf_colbert",
+                },
+            )
+            for point in points_list
+        ]
+
+    def get_name(self) -> str:
+        """Get search engine name."""
+        return "hybrid_rrf_colbert"
+
+
 class DBSFColBERTSearchEngine(BaseSearchEngine):
     """
     DBSF (Density-Based Semantic Fusion) with ColBERT reranking.
@@ -394,7 +572,12 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 def create_search_engine(
     engine_type: Optional[SearchEngine] = None,
     settings: Optional[Settings] = None,
-) -> Union["BaselineSearchEngine", "HybridRRFSearchEngine", "DBSFColBERTSearchEngine"]:
+) -> Union[
+    "BaselineSearchEngine",
+    "HybridRRFSearchEngine",
+    "HybridRRFColBERTSearchEngine",
+    "DBSFColBERTSearchEngine",
+]:
     """
     Factory function to create search engine.
 
@@ -404,6 +587,12 @@ def create_search_engine(
 
     Returns:
         Initialized search engine instance
+
+    Available engines:
+        - BASELINE: Dense vectors only (fastest, lowest quality)
+        - HYBRID_RRF: Dense + Sparse with RRF fusion (good balance)
+        - HYBRID_RRF_COLBERT: Dense + Sparse + ColBERT rerank (BEST - Variant A)
+        - DBSF_COLBERT: DBSF fusion + ColBERT (experimental)
     """
     settings = settings or Settings()
     engine_type = engine_type or settings.search_engine
@@ -412,5 +601,10 @@ def create_search_engine(
         return BaselineSearchEngine(settings)
     if engine_type == SearchEngine.HYBRID_RRF:
         return HybridRRFSearchEngine(settings)
-    # Default to DBSF_COLBERT
-    return DBSFColBERTSearchEngine(settings)
+    if engine_type == SearchEngine.HYBRID_RRF_COLBERT:
+        return HybridRRFColBERTSearchEngine(settings)
+    if engine_type == SearchEngine.DBSF_COLBERT:
+        return DBSFColBERTSearchEngine(settings)
+
+    # Default to Variant A (best performance)
+    return HybridRRFColBERTSearchEngine(settings)

@@ -99,11 +99,11 @@ class RAGPipeline:
         top_k = top_k or self.settings.top_k
 
         # Step 1: Determine query format based on search engine
-        # HybridRRFSearchEngine can accept query string directly for sparse vectors
-        from src.retrieval import HybridRRFSearchEngine
+        # Hybrid engines can accept query string directly for sparse/ColBERT vectors
+        from src.retrieval import HybridRRFColBERTSearchEngine, HybridRRFSearchEngine
 
-        if isinstance(self.search_engine, HybridRRFSearchEngine):
-            # Pass query string directly for hybrid search with sparse vectors
+        if isinstance(self.search_engine, (HybridRRFSearchEngine, HybridRRFColBERTSearchEngine)):
+            # Pass query string directly for hybrid search with sparse/ColBERT vectors
             search_results = self.search_engine.search(
                 query_embedding=query,  # Pass string, not embedding
                 top_k=top_k,
