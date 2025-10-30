@@ -494,11 +494,13 @@ search_payload = {
 - Slightly slower than simple search (~150-200ms)
 - Requires Qdrant v1.15.4+ with multivector support
 
-### 4. HybridDBSFColBERTSearchEngine (Experimental)
+### 4. DBSFColBERTSearchEngine (Variant B - Alternative)
 
 **Strategy:** 3-stage retrieval with DBSF + ColBERT reranking
 
-Based on [Qdrant 2025 best practices](https://qdrant.tech/articles/hybrid-search/)
+**Status:** ✅ Fully implemented and tested (v2.3.0)
+
+Based on [Qdrant DBSF documentation](https://qdrant.tech/documentation/concepts/search/) and A/B testing results.
 
 ```python
 search_payload = {
@@ -508,47 +510,72 @@ search_payload = {
             {"query": query_dense, "using": "dense", "limit": 100},
             {"query": query_sparse, "using": "sparse", "limit": 100}
         ],
-        # Stage 2: DBSF fusion
+        # Stage 2: DBSF fusion (statistical normalization)
         "query": {"fusion": "dbsf"}  # Distribution-Based Score Fusion
     }],
-    # Stage 3: ColBERT reranking on fused results
+    # Stage 3: ColBERT MaxSim reranking on fused results
     "query": query_colbert,
     "using": "colbert",
     "limit": 10,
-    "score_threshold": 0.3,
-    "params": {"hnsw_ef": 256}  # High precision for reranking
+    "with_payload": True
 }
 ```
 
-**Pipeline stages:**
+**DBSF Formula (server-side in Qdrant):**
+```
+normalized_score = (score - (μ - 3σ)) / 6σ, clamped to [0, 1]
+where μ = mean, σ = standard deviation of all scores
+```
+
+**Pipeline stages (Identical to Variant A):**
 
 1. **Prefetch (Stage 1):**
-   - Dense search → 100 candidates
-   - Sparse BM25 → 100 candidates
+   - Dense semantic search → 100 candidates
+   - Sparse BM25 search → 100 candidates
    - Total pool: ~150-180 unique docs
 
 2. **DBSF Fusion (Stage 2):**
-   - Normalizes scores from different search methods
-   - Distribution-based weighting
-   - Better than RRF for heterogeneous scores
-   - Output: Ranked list of fused candidates
+   - Statistical normalization: `(s - (μ - 3σ)) / 6σ`
+   - Handles heterogeneous scores better in theory
+   - Computed server-side in Qdrant
+   - Output: Fused ranked list
 
 3. **ColBERT Reranking (Stage 3):**
-   - Token-level matching on top candidates
-   - MaxSim aggregation
-   - Final ranking with high precision
+   - Token-level matching on fused candidates
+   - MaxSim aggregation (server-side in Qdrant)
+   - Multi-vector late interaction
    - Output: Top-K results
 
+**A/B Test Results vs RRF (v2.3.0):**
+
+| Query Type | RRF Top Result | DBSF Top Result | Agreement | RRF Latency | DBSF Latency |
+|------------|----------------|-----------------|-----------|-------------|--------------|
+| Article lookup | Article 231 | Article 171 | ❌ Different | 1.217s | 1.024s |
+| Crime qualifier | Article 115 | Article 115 | ✅ Same | 0.735s | 0.744s |
+| Legal concept | Article 39 | Article 39 | ✅ Same | 1.055s | 1.042s |
+
+**Summary:**
+- Top Result Agreement: 2/3 queries (66.7%)
+- Identical Results: Queries 2 and 3 had 100% identical rankings
+- **DBSF is 7% faster on average** (0.937s vs 1.002s)
+- Overlap: 3-5 out of 5 articles match per query
+
 **Pros:**
-- Distribution-based score normalization (better than RRF in theory)
-- Best theoretical quality for heterogeneous scores
-- Combines 3 vector types optimally
+- **7% faster** than RRF variant (0.937s vs 1.002s)
+- Statistical score normalization (theoretically better for heterogeneous scores)
+- Production-ready and fully tested
+- Single BGE-M3 encoder for all vectors
+- Server-side computation (no external API)
 
 **Cons:**
-- Slower than simple search (~200-300ms)
-- More complex configuration
-- **Status: ⚠️ Experimental - Not recommended for production**
-- **Note:** Use Variant A (HybridRRFColBERTSearchEngine) instead for production
+- Different results on some queries (66.7% agreement with RRF)
+- More complex fusion formula (vs simple RRF)
+- Less proven in production (RRF is de facto standard)
+
+**Recommendation:**
+- ✅ Use **Variant A (RRF)** as default: simpler, proven, de facto standard
+- ⚡ Use **Variant B (DBSF)** if: you need 7% faster execution and can validate results
+- 🧪 Consider A/B testing in production to compare user satisfaction
 
 ### Configuration (config.py)
 
