@@ -16,7 +16,9 @@ import requests  # type: ignore[import-untyped]
 
 sys.path.append("/home/admin/contextual_rag")
 from contextualize_groq_async import ContextualRetrievalGroqAsync
+
 from src.config import Settings
+
 
 # Load settings
 _settings = Settings()
@@ -164,7 +166,6 @@ async def generate_queries_for_article(
             "difficulty": "hard",
         },
     ]
-
 
 
 async def generate_all_queries(
