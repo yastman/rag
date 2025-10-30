@@ -915,13 +915,885 @@ class ObservedRAGPipeline:
         return [r.to_dict() for r in results]
 ```
 
+#### Step 2.4: OpenTelemetry System Metrics
+
+**File**: `src/observability/otel_setup.py`
+
+```python
+"""OpenTelemetry setup for system-level observability."""
+
+import time
+from opentelemetry import trace, metrics
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+from opentelemetry.instrumentation.redis import RedisInstrumentor
+
+
+def setup_opentelemetry(service_name: str = "contextual-rag"):
+    """
+    Setup OpenTelemetry for distributed tracing.
+
+    Exports to:
+    - Traces → Tempo (http://localhost:4317)
+    - Metrics → Prometheus (via OTLP endpoint)
+
+    Integration with existing stack:
+    - Tempo for trace storage
+    - Grafana for visualization
+    - Prometheus for metrics
+    """
+
+    # Resource identification
+    resource = Resource(attributes={
+        "service.name": service_name,
+        "service.version": "2.0.1",
+        "deployment.environment": "production",
+    })
+
+    # === TRACES ===
+    # Configure trace provider
+    trace_provider = TracerProvider(resource=resource)
+
+    # OTLP exporter for Tempo
+    otlp_trace_exporter = OTLPSpanExporter(
+        endpoint="http://localhost:4317",  # Tempo OTLP endpoint
+        insecure=True,
+    )
+
+    trace_provider.add_span_processor(
+        BatchSpanProcessor(otlp_trace_exporter)
+    )
+
+    trace.set_tracer_provider(trace_provider)
+
+    # === METRICS ===
+    # Configure metrics provider
+    otlp_metric_exporter = OTLPMetricExporter(
+        endpoint="http://localhost:4317",
+        insecure=True,
+    )
+
+    metric_reader = PeriodicExportingMetricReader(
+        otlp_metric_exporter,
+        export_interval_millis=60000,  # Export every 60s
+    )
+
+    meter_provider = MeterProvider(
+        resource=resource,
+        metric_readers=[metric_reader]
+    )
+
+    metrics.set_meter_provider(meter_provider)
+
+    # === AUTO-INSTRUMENTATION ===
+    # Instrument HTTP clients
+    AioHttpClientInstrumentor().instrument()
+
+    # Instrument Redis
+    RedisInstrumentor().instrument()
+
+    print("✅ OpenTelemetry initialized")
+    print(f"   Service: {service_name}")
+    print(f"   Traces → Tempo: http://localhost:4317")
+    print(f"   Metrics → Prometheus: http://localhost:4317")
+
+
+# Usage in RAG pipeline
+class TracedRAGPipeline:
+    """RAG Pipeline with OpenTelemetry tracing."""
+
+    def __init__(self):
+        self.tracer = trace.get_tracer(__name__)
+        self.meter = metrics.get_meter(__name__)
+
+        # Custom metrics
+        self.query_counter = self.meter.create_counter(
+            name="rag_queries_total",
+            description="Total RAG queries",
+            unit="1",
+        )
+
+        self.query_latency = self.meter.create_histogram(
+            name="rag_query_latency_seconds",
+            description="RAG query latency",
+            unit="s",
+        )
+
+        self.embedding_latency = self.meter.create_histogram(
+            name="embedding_latency_seconds",
+            description="Embedding generation latency",
+            unit="s",
+        )
+
+        self.search_latency = self.meter.create_histogram(
+            name="vector_search_latency_seconds",
+            description="Vector search latency",
+            unit="s",
+        )
+
+    async def query(self, query_text: str, top_k: int = 10):
+        """Execute query with full OTEL tracing."""
+
+        with self.tracer.start_as_current_span("rag_query") as span:
+            span.set_attribute("query.length", len(query_text))
+            span.set_attribute("query.top_k", top_k)
+
+            start_time = time.time()
+
+            try:
+                # Step 1: Embed query
+                with self.tracer.start_as_current_span("embed_query") as embed_span:
+                    embed_start = time.time()
+                    query_embedding = await self._embed(query_text)
+                    embed_duration = time.time() - embed_start
+
+                    embed_span.set_attribute("embedding.dimension", len(query_embedding))
+                    self.embedding_latency.record(embed_duration)
+
+                # Step 2: Vector search
+                with self.tracer.start_as_current_span("vector_search") as search_span:
+                    search_start = time.time()
+                    results = await self._search(query_embedding, top_k)
+                    search_duration = time.time() - search_start
+
+                    search_span.set_attribute("results.count", len(results))
+                    search_span.set_attribute("results.top_score", results[0]["score"] if results else 0)
+                    self.search_latency.record(search_duration)
+
+                # Step 3: Rerank (if enabled)
+                with self.tracer.start_as_current_span("rerank_results"):
+                    results = await self._rerank(results)
+
+                # Record total latency
+                total_duration = time.time() - start_time
+                self.query_latency.record(total_duration)
+                self.query_counter.add(1, {"status": "success"})
+
+                span.set_attribute("query.latency_ms", total_duration * 1000)
+                span.set_attribute("query.results_count", len(results))
+
+                return {"results": results, "latency_ms": total_duration * 1000}
+
+            except Exception as e:
+                span.set_attribute("error", True)
+                span.set_attribute("error.message", str(e))
+                self.query_counter.add(1, {"status": "error"})
+                raise
+
+
+# Initialize on startup
+setup_opentelemetry("contextual-rag")
+```
+
+**Grafana Dashboard** (`config/grafana/rag_performance_dashboard.json`):
+
+```json
+{
+  "dashboard": {
+    "title": "RAG Pipeline Performance",
+    "panels": [
+      {
+        "title": "Query Latency by Step",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(rag_query_latency_seconds_bucket[5m]))",
+            "legendFormat": "Total (P95)"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(embedding_latency_seconds_bucket[5m]))",
+            "legendFormat": "Embedding (P95)"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(vector_search_latency_seconds_bucket[5m]))",
+            "legendFormat": "Search (P95)"
+          }
+        ]
+      },
+      {
+        "title": "System Metrics",
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{container=\"contextual-rag\"}[5m])",
+            "legendFormat": "CPU Usage"
+          },
+          {
+            "expr": "container_memory_usage_bytes{container=\"contextual-rag\"} / 1024 / 1024 / 1024",
+            "legendFormat": "RAM (GB)"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### Step 2.5: Redis Semantic Cache
+
+**File**: `src/cache/redis_semantic_cache.py`
+
+```python
+"""Redis semantic cache with versioning for embeddings and responses."""
+
+import hashlib
+import json
+from typing import Optional
+from datetime import timedelta
+
+import redis.asyncio as redis
+from opentelemetry import trace
+
+
+class RedisSemanticCache:
+    """
+    Redis cache with version-aware keys.
+
+    Cache layers:
+    1. Embedding cache: index_v{version}_{query_hash} → embedding vector (TTL: 30 days)
+    2. Response cache: response_v{version}_{query_hash} → full results (TTL: 5-60 min)
+
+    Key insight: Include config version in cache key!
+    - When index is rebuilt → version increments → old cache invalidated
+    - Prevents serving stale results from old index
+    """
+
+    def __init__(
+        self,
+        redis_url: str = "redis://localhost:6379/2",
+        index_version: str = "1.0.0",
+        embedding_ttl_days: int = 30,
+        response_ttl_minutes: int = 5,
+    ):
+        """
+        Initialize Redis cache.
+
+        Args:
+            redis_url: Redis connection string
+            index_version: Current index version (increment on reindex)
+            embedding_ttl_days: TTL for embedding cache
+            response_ttl_minutes: TTL for response cache
+        """
+        self.redis = redis.from_url(redis_url)
+        self.index_version = index_version
+        self.embedding_ttl = timedelta(days=embedding_ttl_days)
+        self.response_ttl = timedelta(minutes=response_ttl_minutes)
+
+        # Metrics
+        self.tracer = trace.get_tracer(__name__)
+        self._hits = 0
+        self._misses = 0
+        self._cost_saved_usd = 0.0
+
+    def _hash_query(self, query: str) -> str:
+        """Generate deterministic hash for query."""
+        return hashlib.sha256(query.encode()).hexdigest()[:16]
+
+    async def get_embedding(self, query: str) -> Optional[list[float]]:
+        """
+        Get cached embedding.
+
+        Cache key format: embedding_v{version}_{hash}
+        Example: embedding_v1.0.0_a3f2e4d5c1b8
+        """
+        query_hash = self._hash_query(query)
+        cache_key = f"embedding_v{self.index_version}_{query_hash}"
+
+        with self.tracer.start_as_current_span("cache_get_embedding") as span:
+            span.set_attribute("cache.key", cache_key)
+
+            cached = await self.redis.get(cache_key)
+
+            if cached:
+                self._hits += 1
+                span.set_attribute("cache.hit", True)
+                span.set_attribute("cache.layer", "embedding")
+
+                # Embedding saved: ~1ms + $0.00001
+                self._cost_saved_usd += 0.00001
+
+                return json.loads(cached)
+
+            self._misses += 1
+            span.set_attribute("cache.hit", False)
+            return None
+
+    async def set_embedding(self, query: str, embedding: list[float]):
+        """Cache embedding with TTL."""
+        query_hash = self._hash_query(query)
+        cache_key = f"embedding_v{self.index_version}_{query_hash}"
+
+        await self.redis.setex(
+            cache_key,
+            self.embedding_ttl,
+            json.dumps(embedding)
+        )
+
+    async def get_response(self, query: str, top_k: int) -> Optional[dict]:
+        """
+        Get cached full response (embedding + search results).
+
+        Cache key format: response_v{version}_{hash}_{top_k}
+        Example: response_v1.0.0_a3f2e4d5c1b8_10
+        """
+        query_hash = self._hash_query(query)
+        cache_key = f"response_v{self.index_version}_{query_hash}_{top_k}"
+
+        with self.tracer.start_as_current_span("cache_get_response") as span:
+            span.set_attribute("cache.key", cache_key)
+
+            cached = await self.redis.get(cache_key)
+
+            if cached:
+                self._hits += 1
+                span.set_attribute("cache.hit", True)
+                span.set_attribute("cache.layer", "response")
+
+                # Response saved: ~50ms + $0.0001 (embedding + search)
+                self._cost_saved_usd += 0.0001
+
+                return json.loads(cached)
+
+            self._misses += 1
+            span.set_attribute("cache.hit", False)
+            return None
+
+    async def set_response(self, query: str, top_k: int, response: dict):
+        """Cache full response with shorter TTL."""
+        query_hash = self._hash_query(query)
+        cache_key = f"response_v{self.index_version}_{query_hash}_{top_k}"
+
+        await self.redis.setex(
+            cache_key,
+            self.response_ttl,
+            json.dumps(response)
+        )
+
+    def get_stats(self) -> dict:
+        """Get cache statistics."""
+        total = self._hits + self._misses
+        hit_rate = self._hits / total if total > 0 else 0.0
+
+        return {
+            "cache_hits": self._hits,
+            "cache_misses": self._misses,
+            "hit_rate": hit_rate,
+            "saved_cost_usd": self._cost_saved_usd,
+            "index_version": self.index_version,
+        }
+
+
+# Usage in RAG pipeline
+class CachedRAGPipeline:
+    """RAG Pipeline with Redis semantic cache."""
+
+    def __init__(self):
+        self.cache = RedisSemanticCache(index_version="1.0.0")
+        self.embedder = BGEEmbedder()
+        self.search_engine = DBSFColBERTSearchEngine()
+
+    async def query(self, query_text: str, top_k: int = 10):
+        """Query with caching."""
+
+        # Try response cache first (full results)
+        cached_response = await self.cache.get_response(query_text, top_k)
+        if cached_response:
+            return cached_response
+
+        # Try embedding cache
+        query_embedding = await self.cache.get_embedding(query_text)
+        if not query_embedding:
+            # Generate embedding
+            query_embedding = await self.embedder.embed(query_text)
+            await self.cache.set_embedding(query_text, query_embedding)
+
+        # Search
+        results = self.search_engine.search(query_embedding, top_k=top_k)
+
+        response = {"query": query_text, "results": results}
+
+        # Cache full response
+        await self.cache.set_response(query_text, top_k, response)
+
+        return response
+```
+
+**Cache Monitoring** (Prometheus metrics):
+
+```yaml
+# config/prometheus/prometheus.yml
+scrape_configs:
+  - job_name: 'redis_cache'
+    static_configs:
+      - targets: ['localhost:6379']
+    metrics_path: '/metrics'
+
+  - job_name: 'rag_pipeline'
+    static_configs:
+      - targets: ['localhost:8081']
+```
+
+**Grafana Dashboard Alerts**:
+
+```yaml
+# config/grafana/alerts.yml
+alerts:
+  - name: "Low Cache Hit Rate"
+    condition: "cache_hit_rate < 0.30"
+    for: "15m"
+    message: "Cache hit rate below 30% for 15 minutes"
+
+  - name: "High P95 Latency"
+    condition: "rag_query_latency_p95 > 500"
+    for: "5m"
+    message: "P95 latency above 500ms"
+```
+
 ---
 
-### Phase 3: Integration & Dashboards (Week 3)
+### Week 3: Governance + Disaster Recovery
 
-#### Step 3.1: Combined Experiment + Monitoring
+**Goal**: Production-ready data governance and disaster recovery
 
-**New File**: `src/evaluation/mlflow_langfuse_integration.py`
+#### 🎯 Acceptance Criteria
+
+```
+✅ MLflow Model Registry operational:
+   - Staging → Production promotion workflow
+   - Model aliases (champion, challenger)
+   - Version rollback capability
+✅ Qdrant backup/restore tested:
+   - Nightly snapshots with 7-day rotation
+   - Test restore completed successfully
+   - RTO documented (< 1 hour)
+✅ PII redaction policies implemented:
+   - Personal data removed from Langfuse logs
+   - Query anonymization for analytics
+✅ Security guardrails active:
+   - Budget limits: Daily $10, Monthly $300
+   - Alert at 80% budget threshold
+   - API key rotation schedule (90 days)
+✅ Configuration versioning:
+   - Semantic versioning (v1.0.0)
+   - Config changes logged to MLflow
+✅ Production runbook documented
+```
+
+#### Step 3.1: MLflow Model Registry
+
+**File**: `src/governance/model_registry.py`
+
+```python
+"""MLflow Model Registry for RAG pipeline governance."""
+
+import mlflow
+from mlflow.tracking import MlflowClient
+from datetime import datetime
+
+
+class RAGModelRegistry:
+    """
+    Manage RAG pipeline configs as "models" in MLflow Model Registry.
+
+    Workflow:
+    1. Experiment → Test new config (chunking, embedding, search)
+    2. Staging → Deploy to staging environment for validation
+    3. Production → Promote to production after acceptance criteria met
+    """
+
+    def __init__(self):
+        """Initialize Model Registry client."""
+        self.client = MlflowClient()
+        self.model_name = "contextual-rag-pipeline"
+
+    def register_config(
+        self,
+        run_id: str,
+        config_version: str,
+        metrics: dict,
+        description: str = ""
+    ) -> str:
+        """
+        Register RAG config as model version.
+
+        Args:
+            run_id: MLflow run ID with the config
+            config_version: Semantic version (e.g., "1.2.0")
+            metrics: Evaluation metrics (recall, ndcg, latency)
+            description: Human-readable description of changes
+
+        Returns:
+            Model version number
+        """
+
+        # Register model from run
+        model_uri = f"runs:/{run_id}/config"
+
+        model_version = mlflow.register_model(
+            model_uri=model_uri,
+            name=self.model_name,
+            tags={
+                "config_version": config_version,
+                "registered_at": datetime.now().isoformat(),
+            }
+        )
+
+        # Add detailed description
+        self.client.update_model_version(
+            name=self.model_name,
+            version=model_version.version,
+            description=f"""
+{description}
+
+**Metrics:**
+- Faithfulness: {metrics.get('faithfulness', 'N/A')}
+- Context Precision: {metrics.get('context_precision', 'N/A')}
+- Context Recall: {metrics.get('context_recall', 'N/A')}
+- Latency P95: {metrics.get('latency_p95_ms', 'N/A')}ms
+
+**Config Version:** {config_version}
+**Registered:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+"""
+        )
+
+        print(f"✅ Registered model version: {model_version.version}")
+        print(f"   Config version: {config_version}")
+
+        return model_version.version
+
+    def promote_to_staging(self, version: str):
+        """Promote config to Staging."""
+        self.client.transition_model_version_stage(
+            name=self.model_name,
+            version=version,
+            stage="Staging"
+        )
+
+        # Set alias for easy reference
+        self.client.set_registered_model_alias(
+            name=self.model_name,
+            alias="challenger",
+            version=version
+        )
+
+        print(f"✅ Promoted version {version} to Staging (alias: challenger)")
+
+    def promote_to_production(self, version: str, archive_previous: bool = True):
+        """
+        Promote config to Production.
+
+        Args:
+            version: Version to promote
+            archive_previous: Archive previous production version
+        """
+
+        # Archive current production version
+        if archive_previous:
+            try:
+                current_prod = self.client.get_model_version_by_alias(
+                    name=self.model_name,
+                    alias="champion"
+                )
+
+                self.client.transition_model_version_stage(
+                    name=self.model_name,
+                    version=current_prod.version,
+                    stage="Archived"
+                )
+
+                print(f"📦 Archived previous production version: {current_prod.version}")
+
+            except Exception:
+                pass  # No current production version
+
+        # Promote new version
+        self.client.transition_model_version_stage(
+            name=self.model_name,
+            version=version,
+            stage="Production"
+        )
+
+        # Set alias
+        self.client.set_registered_model_alias(
+            name=self.model_name,
+            alias="champion",
+            version=version
+        )
+
+        print(f"🚀 Promoted version {version} to Production (alias: champion)")
+
+    def rollback_production(self, to_version: str):
+        """Rollback production to specific version."""
+        print(f"⚠️  Rolling back production to version {to_version}")
+
+        self.promote_to_production(to_version, archive_previous=False)
+
+        print(f"✅ Rollback complete")
+
+    def get_production_config(self) -> dict:
+        """Get current production config."""
+        try:
+            prod_version = self.client.get_model_version_by_alias(
+                name=self.model_name,
+                alias="champion"
+            )
+
+            # Load config from artifact
+            config_uri = f"models:/{self.model_name}@champion/config"
+            config = mlflow.artifacts.load_dict(config_uri)
+
+            return {
+                "version": prod_version.version,
+                "config": config,
+                "config_version": prod_version.tags.get("config_version"),
+            }
+
+        except Exception as e:
+            print(f"❌ Failed to load production config: {e}")
+            return None
+
+
+# Example usage
+registry = RAGModelRegistry()
+
+# After successful evaluation
+run_id = "abc123"  # From MLflow run
+metrics = {
+    "faithfulness": 0.87,
+    "context_precision": 0.82,
+    "context_recall": 0.91,
+    "latency_p95_ms": 450,
+}
+
+# Register new config
+version = registry.register_config(
+    run_id=run_id,
+    config_version="1.2.0",
+    metrics=metrics,
+    description="Improved chunking with 600 tokens + contextual embeddings"
+)
+
+# Test in staging
+registry.promote_to_staging(version)
+
+# After staging validation → promote to production
+registry.promote_to_production(version)
+
+# If issues detected → rollback
+registry.rollback_production(to_version="5")  # Previous stable version
+```
+
+#### Step 3.2: Qdrant Backup & Restore
+
+**File**: `scripts/qdrant_backup.sh`
+
+```bash
+#!/bin/bash
+# Qdrant backup script - Run nightly via cron
+
+set -e
+
+COLLECTION_NAME="contextual_rag_criminal_code_v1"
+BACKUP_DIR="/home/admin/backups/qdrant"
+RETENTION_DAYS=7
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+echo "🔄 Starting Qdrant backup: $TIMESTAMP"
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+
+# Create snapshot via Qdrant API
+echo "📸 Creating snapshot for collection: $COLLECTION_NAME"
+
+SNAPSHOT_NAME=$(curl -s -X POST \
+  "http://localhost:6333/collections/$COLLECTION_NAME/snapshots" \
+  -H "Content-Type: application/json" \
+  | jq -r '.result.name')
+
+if [ -z "$SNAPSHOT_NAME" ]; then
+  echo "❌ Failed to create snapshot"
+  exit 1
+fi
+
+echo "✅ Snapshot created: $SNAPSHOT_NAME"
+
+# Download snapshot
+echo "📥 Downloading snapshot..."
+
+curl -o "$BACKUP_DIR/${COLLECTION_NAME}_${TIMESTAMP}.snapshot" \
+  "http://localhost:6333/collections/$COLLECTION_NAME/snapshots/$SNAPSHOT_NAME"
+
+# Verify download
+if [ -f "$BACKUP_DIR/${COLLECTION_NAME}_${TIMESTAMP}.snapshot" ]; then
+  SIZE=$(du -h "$BACKUP_DIR/${COLLECTION_NAME}_${TIMESTAMP}.snapshot" | cut -f1)
+  echo "✅ Backup saved: ${COLLECTION_NAME}_${TIMESTAMP}.snapshot ($SIZE)"
+else
+  echo "❌ Backup failed"
+  exit 1
+fi
+
+# Delete remote snapshot (keep local copy only)
+curl -s -X DELETE \
+  "http://localhost:6333/collections/$COLLECTION_NAME/snapshots/$SNAPSHOT_NAME"
+
+# Cleanup old backups (keep last 7 days)
+echo "🧹 Cleaning up old backups (keeping last $RETENTION_DAYS days)"
+
+find "$BACKUP_DIR" -name "*.snapshot" -type f -mtime +$RETENTION_DAYS -delete
+
+# List remaining backups
+echo ""
+echo "📦 Current backups:"
+ls -lh "$BACKUP_DIR"/*.snapshot 2>/dev/null | awk '{print "   "$9" ("$5")"}'
+
+echo ""
+echo "✅ Backup complete!"
+```
+
+**File**: `scripts/qdrant_restore.sh`
+
+```bash
+#!/bin/bash
+# Qdrant restore script
+
+set -e
+
+COLLECTION_NAME="contextual_rag_criminal_code_v1"
+BACKUP_FILE="$1"
+
+if [ -z "$BACKUP_FILE" ]; then
+  echo "Usage: $0 <backup_file>"
+  echo ""
+  echo "Available backups:"
+  ls -lh /home/admin/backups/qdrant/*.snapshot
+  exit 1
+fi
+
+if [ ! -f "$BACKUP_FILE" ]; then
+  echo "❌ Backup file not found: $BACKUP_FILE"
+  exit 1
+fi
+
+echo "⚠️  WARNING: This will REPLACE the current collection!"
+echo "   Collection: $COLLECTION_NAME"
+echo "   Backup: $BACKUP_FILE"
+echo ""
+read -p "Continue? (yes/no): " CONFIRM
+
+if [ "$CONFIRM" != "yes" ]; then
+  echo "Aborted"
+  exit 0
+fi
+
+echo ""
+echo "🔄 Starting restore..."
+
+# Upload snapshot
+echo "📤 Uploading snapshot to Qdrant..."
+
+SNAPSHOT_NAME=$(basename "$BACKUP_FILE")
+
+curl -X POST \
+  "http://localhost:6333/collections/$COLLECTION_NAME/snapshots/upload" \
+  -F "snapshot=@$BACKUP_FILE" \
+  --fail
+
+if [ $? -eq 0 ]; then
+  echo "✅ Snapshot uploaded"
+else
+  echo "❌ Upload failed"
+  exit 1
+fi
+
+# Restore from snapshot
+echo "📥 Restoring collection from snapshot..."
+
+curl -X PUT \
+  "http://localhost:6333/collections/$COLLECTION_NAME/snapshots/$SNAPSHOT_NAME/recover" \
+  -H "Content-Type: application/json" \
+  --fail
+
+if [ $? -eq 0 ]; then
+  echo "✅ Restore complete!"
+
+  # Verify collection
+  POINTS=$(curl -s "http://localhost:6333/collections/$COLLECTION_NAME" | jq '.result.points_count')
+  echo "   Points restored: $POINTS"
+else
+  echo "❌ Restore failed"
+  exit 1
+fi
+
+echo ""
+echo "✅ Recovery complete!"
+echo "   RTO: $(date)"
+```
+
+**Cron Jobs**:
+
+```bash
+# Add to crontab: crontab -e
+
+# Nightly Qdrant backup at 3 AM
+0 3 * * * /home/admin/contextual_rag/scripts/qdrant_backup.sh >> /home/admin/logs/qdrant_backup.log 2>&1
+
+# Monthly test restore (first Sunday at 4 AM)
+0 4 * * 0 [ "$(date +\%d)" -le 7 ] && /home/admin/contextual_rag/scripts/test_restore.sh >> /home/admin/logs/test_restore.log 2>&1
+```
+
+**RTO Documentation** (`docs/DISASTER_RECOVERY.md`):
+
+```markdown
+# Disaster Recovery Procedures
+
+## Qdrant Data Loss
+
+**RTO (Recovery Time Objective):** < 1 hour
+
+### Recovery Steps:
+
+1. Identify latest backup:
+   ```bash
+   ls -lh /home/admin/backups/qdrant/*.snapshot
+   ```
+
+2. Stop RAG service:
+   ```bash
+   systemctl stop rag-service
+   ```
+
+3. Restore backup:
+   ```bash
+   ./scripts/qdrant_restore.sh /home/admin/backups/qdrant/contextual_rag_20251030_030000.snapshot
+   ```
+
+4. Verify restoration:
+   ```bash
+   curl http://localhost:6333/collections/contextual_rag_criminal_code_v1
+   ```
+
+5. Start RAG service:
+   ```bash
+   systemctl start rag-service
+   ```
+
+6. Run smoke test:
+   ```bash
+   python tests/smoke_test.py
+   ```
+
+**Tested:** Monthly on first Sunday
+**Last Test:** 2025-10-06 (Success - 45 minutes RTO)
+```
+
+#### Step 3.3: PII Redaction & Security
+
+**File**: `src/security/pii_redaction.py`
 
 ```python
 """
