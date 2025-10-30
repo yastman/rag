@@ -88,11 +88,17 @@ This folder contains semantic caching implementation for RAG queries using Redis
 ```python
 from cache.redis_semantic_cache import RedisSemanticCache
 
+***REMOVED*** Default: Automatically uses Docker network with REDIS_PASSWORD from environment
 cache = RedisSemanticCache(
-    redis_url="redis://localhost:6379",
     index_version="1.0.0",  ***REMOVED*** Matches Qdrant collection version
-    embedding_ttl=2592000,  ***REMOVED*** 30 days
-    response_ttl=300,       ***REMOVED*** 5 minutes
+    embedding_ttl_days=30,  ***REMOVED*** 30 days
+    response_ttl_minutes=5, ***REMOVED*** 5 minutes
+)
+
+***REMOVED*** Or specify custom Redis URL
+cache = RedisSemanticCache(
+    redis_url="redis://:password@redis:6379/2",
+    index_version="1.0.0",
 )
 ```
 
@@ -532,14 +538,16 @@ if cached_response is None:
 ***REMOVED******REMOVED******REMOVED*** Environment Variables
 
 ```bash
-***REMOVED*** Redis connection
-export REDIS_URL="redis://localhost:6379"
-export REDIS_DB=0  ***REMOVED*** Default database
+***REMOVED*** Redis connection (automatically used by RedisSemanticCache)
+export REDIS_PASSWORD="your_password_here"  ***REMOVED*** Required for Docker setup
+export REDIS_HOST="redis"                   ***REMOVED*** Default: redis (Docker network)
+export REDIS_PORT="6379"                    ***REMOVED*** Default: 6379
+export REDIS_CACHE_DB="2"                   ***REMOVED*** Default: 2 (separate from other uses)
 
 ***REMOVED*** Cache settings
 export CACHE_INDEX_VERSION="1.0.0"
-export CACHE_EMBEDDING_TTL=2592000  ***REMOVED*** 30 days
-export CACHE_RESPONSE_TTL=1800      ***REMOVED*** 30 minutes
+export CACHE_EMBEDDING_TTL_DAYS=30          ***REMOVED*** 30 days
+export CACHE_RESPONSE_TTL_MINUTES=5         ***REMOVED*** 5 minutes
 
 ***REMOVED*** OpenTelemetry (for tracing)
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
