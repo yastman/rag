@@ -7,12 +7,15 @@
 import sys
 from pathlib import Path
 
+
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from qdrant_client import QdrantClient
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+from qdrant_client import QdrantClient
+
 
 # Загрузить .env
 load_dotenv()
@@ -28,25 +31,22 @@ def test_qdrant_read():
     print("ТЕСТ ЧТЕНИЯ ИЗ QDRANT")
     print("=" * 80)
 
-    print(f"\n📋 Конфигурация:")
+    print("\n📋 Конфигурация:")
     print(f"   URL: {QDRANT_URL}")
     print(f"   API Key: {'***' + QDRANT_API_KEY[-10:] if QDRANT_API_KEY else 'Не установлен'}")
 
     try:
         # Подключение
-        print(f"\n🔌 Подключение к Qdrant...")
-        client = QdrantClient(
-            url=QDRANT_URL,
-            api_key=QDRANT_API_KEY if QDRANT_API_KEY else None
-        )
-        print(f"   ✅ Подключено!")
+        print("\n🔌 Подключение к Qdrant...")
+        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY if QDRANT_API_KEY else None)
+        print("   ✅ Подключено!")
 
         # Список коллекций
         collections = client.get_collections()
         print(f"\n📦 Коллекций: {len(collections.collections)}")
 
         if not collections.collections:
-            print(f"   ℹ️  Нет коллекций для тестирования")
+            print("   ℹ️  Нет коллекций для тестирования")
             return True
 
         # Детали первой коллекции
@@ -60,13 +60,13 @@ def test_qdrant_read():
 
         # Получить несколько точек
         if info.points_count > 0:
-            print(f"\n📄 Получение примера данных (первые 3 точки)...")
+            print("\n📄 Получение примера данных (первые 3 точки)...")
 
             scroll_result = client.scroll(
                 collection_name=collection_name,
                 limit=3,
                 with_payload=True,
-                with_vectors=False  # Не загружать векторы (экономия)
+                with_vectors=False,  # Don't load vectors (saves memory)
             )
 
             points, next_page = scroll_result
@@ -78,32 +78,27 @@ def test_qdrant_read():
                 payload = point.payload or {}
 
                 # Показать основные поля
-                for key in ['document_name', 'article_number', 'chapter', 'text']:
+                for key in ["document_name", "article_number", "chapter", "text"]:
                     if key in payload:
                         value = payload[key]
-                        if key == 'text':
+                        if key == "text":
                             # Обрезать длинный текст
                             value = value[:100] + "..." if len(value) > 100 else value
                         print(f"      {key}: {value}")
 
         # Тест фильтрации
-        print(f"\n🔎 Тест фильтрации (поиск по article_number)...")
+        print("\n🔎 Тест фильтрации (поиск по article_number)...")
 
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         scroll_result = client.scroll(
             collection_name=collection_name,
             scroll_filter=Filter(
-                must=[
-                    FieldCondition(
-                        key="article_number",
-                        match=MatchValue(value="1")
-                    )
-                ]
+                must=[FieldCondition(key="article_number", match=MatchValue(value="1"))]
             ),
             limit=2,
             with_payload=True,
-            with_vectors=False
+            with_vectors=False,
         )
 
         points, _ = scroll_result
@@ -111,7 +106,7 @@ def test_qdrant_read():
 
         if points:
             for point in points:
-                text = point.payload.get('text', 'N/A')[:80]
+                text = point.payload.get("text", "N/A")[:80]
                 print(f"      • {text}...")
 
         print(f"\n{'=' * 80}")
@@ -123,6 +118,7 @@ def test_qdrant_read():
     except Exception as e:
         print(f"\n❌ Ошибка: {type(e).__name__}: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

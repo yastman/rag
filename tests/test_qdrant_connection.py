@@ -7,11 +7,13 @@
 import sys
 from pathlib import Path
 
+
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from qdrant_client import QdrantClient
+
 from src.config.settings import Settings
 
 
@@ -25,26 +27,28 @@ def test_qdrant_connection():
     # Загрузка настроек
     settings = Settings()
 
-    print(f"\n📋 Конфигурация:")
+    print("\n📋 Конфигурация:")
     print(f"   QDRANT_URL: {settings.qdrant_url}")
-    print(f"   API Key: {'***' + settings.qdrant_api_key[-10:] if settings.qdrant_api_key else 'Не установлен'}")
+    print(
+        f"   API Key: {'***' + settings.qdrant_api_key[-10:] if settings.qdrant_api_key else 'Не установлен'}"
+    )
 
     try:
         # Подключение к Qdrant
-        print(f"\n🔌 Подключение к Qdrant...")
+        print("\n🔌 Подключение к Qdrant...")
         client = QdrantClient(
             url=settings.qdrant_url,
-            api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
+            api_key=settings.qdrant_api_key if settings.qdrant_api_key else None,
         )
 
         # Получение списка коллекций
-        print(f"✓ Подключение успешно!")
+        print("✓ Подключение успешно!")
 
         collections = client.get_collections()
         print(f"\n📦 Найдено коллекций: {len(collections.collections)}")
 
         if collections.collections:
-            print(f"\n📊 Список коллекций:")
+            print("\n📊 Список коллекций:")
             for collection in collections.collections:
                 try:
                     info = client.get_collection(collection.name)
@@ -55,18 +59,18 @@ def test_qdrant_connection():
                 except Exception as e:
                     print(f"   • {collection.name} - ошибка получения деталей: {e}")
         else:
-            print(f"   (Коллекции пока не созданы)")
+            print("   (Коллекции пока не созданы)")
 
-        print(f"\n✅ Тест подключения завершен успешно!")
+        print("\n✅ Тест подключения завершен успешно!")
         return True
 
     except Exception as e:
-        print(f"\n❌ Ошибка подключения к Qdrant:")
+        print("\n❌ Ошибка подключения к Qdrant:")
         print(f"   {type(e).__name__}: {e}")
-        print(f"\n💡 Проверьте:")
-        print(f"   1. Запущен ли Qdrant: docker ps | grep qdrant")
+        print("\n💡 Проверьте:")
+        print("   1. Запущен ли Qdrant: docker ps | grep qdrant")
         print(f"   2. Правильный ли URL в .env: {settings.qdrant_url}")
-        print(f"   3. Доступен ли порт 6333")
+        print("   3. Доступен ли порт 6333")
         return False
 
 
