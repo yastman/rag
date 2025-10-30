@@ -17,6 +17,10 @@ dependencies = [
     "scipy",
     "sentence-transformers",  ***REMOVED*** BGE-M3 embeddings
     "qdrant-client",          ***REMOVED*** Vector database client
+    ***REMOVED*** Document Processing (2025-10-30)
+    "docling>=2.0.0",         ***REMOVED*** Advanced document chunking & structure detection
+    "docling-core>=2.0.0",    ***REMOVED*** Core types for Docling
+    "transformers>=4.30.0",   ***REMOVED*** For HuggingFace tokenizers in HybridChunker
     ***REMOVED*** ML Platform & Evaluation (2025-10-23)
     "mlflow>=2.22.1",        ***REMOVED*** Experiment tracking
     "ragas>=0.2.10",          ***REMOVED*** RAG evaluation framework
