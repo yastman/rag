@@ -14,6 +14,7 @@ import requests  # type: ignore[import-untyped]
 sys.path.append("/srv/contextual_rag")
 from src.config import Settings
 
+
 # Load settings
 _settings = Settings()
 QDRANT_URL = _settings.qdrant_url
@@ -79,7 +80,7 @@ def extract_articles(collection_name: str) -> dict[str, list[str]]:
 
     print(f"\n✅ Extracted {len(articles)} articles from {total_points} chunks")
 
-    return dict(articles) # type: ignore[arg-type]
+    return dict(articles)  # type: ignore[arg-type]
 
 
 def print_statistics(articles: dict[str, list[str]]):
