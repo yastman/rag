@@ -13,7 +13,8 @@ import requests  # type: ignore[import-untyped]
 
 
 sys.path.append("/home/admin/contextual_rag")
-from src.config import Settings, HSNWParameters, ThresholdValues, RetrievalStages
+from src.config import HSNWParameters, RetrievalStages, Settings, ThresholdValues
+
 
 # Load settings
 _settings = Settings()
