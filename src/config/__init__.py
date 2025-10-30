@@ -3,6 +3,7 @@
 from .constants import (
     APIProvider,
     HSNWParameters,
+    RetrievalStages,
     SearchEngine,
     ThresholdValues,
     VectorDimensions,
@@ -17,4 +18,5 @@ __all__ = [
     "VectorDimensions",
     "ThresholdValues",
     "HSNWParameters",
+    "RetrievalStages",
 ]
