@@ -4,6 +4,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional, Union
 
+import numpy as np
+import requests
+from FlagEmbedding import BGEM3FlagModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import ScoredPoint
 
@@ -18,6 +21,21 @@ class SearchResult:
     text: str
     score: float
     metadata: dict[str, Any]
+
+
+def convert_to_python_types(obj):
+    """Convert numpy types to native Python types for JSON serialization."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.float32, np.float64)):
+        return float(obj)
+    if isinstance(obj, (np.int32, np.int64)):
+        return int(obj)
+    if isinstance(obj, dict):
+        return {k: convert_to_python_types(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_to_python_types(item) for item in obj]
+    return obj
 
 
 class BaseSearchEngine(ABC):
@@ -89,8 +107,9 @@ class HybridRRFSearchEngine(BaseSearchEngine):
     Hybrid search using RRF (Reciprocal Rank Fusion).
 
     Combines:
-    - Dense vectors (BGE-M3)
-    - Sparse vectors (ColBERT)
+    - Dense vectors (BGE-M3 1024D)
+    - Sparse vectors (BM25 with IDF weighting)
+    - RRF fusion via Qdrant query API
 
     Performance:
     - Recall@1: 88.7%
@@ -98,26 +117,45 @@ class HybridRRFSearchEngine(BaseSearchEngine):
     - Latency: ~0.72s
     """
 
+    def __init__(self, settings: Optional[Settings] = None):
+        """Initialize hybrid RRF search engine with BGE-M3 model."""
+        super().__init__(settings)
+        self.embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+
     def search(
         self,
-        query_embedding: list[float],
+        query_embedding: Union[str, list[float]],
         top_k: int = 10,
         score_threshold: Optional[float] = None,
     ) -> list[SearchResult]:
-        """Search using RRF fusion of dense and sparse vectors."""
+        """
+        Search using RRF fusion of dense and sparse vectors.
+
+        Args:
+            query_embedding: Either query string or pre-computed dense embedding.
+                If string, will generate all vector types (dense + sparse).
+                If list, will use dense-only search (backward compatibility).
+            top_k: Number of results to return
+            score_threshold: Minimum similarity score threshold
+
+        Returns:
+            List of SearchResult objects
+        """
         if score_threshold is None:
             score_threshold = 0.3
 
-        # Stage 1: Get candidates from both dense and sparse search
+        # If query is a string, generate all embeddings and use hybrid search
+        if isinstance(query_embedding, str):
+            return self._search_hybrid(query_embedding, top_k, score_threshold)
+
+        # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
             collection_name=self.settings.collection_name,
             query_vector=query_embedding,
-            limit=self.settings.retrieval_stage1_candidates,
+            limit=top_k,
             score_threshold=score_threshold,
         )
 
-        # RRF fusion: score = sum(1/(rank_dense + rank_sparse + 1))
-        # For now, using dense only (sparse search requires separate index)
         return [
             SearchResult(
                 article_number=result.payload.get("article_number", ""),
@@ -125,7 +163,95 @@ class HybridRRFSearchEngine(BaseSearchEngine):
                 score=result.score,
                 metadata=result.payload,
             )
-            for result in dense_results[:top_k]
+            for result in dense_results
+        ]
+
+    def _search_hybrid(
+        self,
+        query: str,
+        top_k: int,
+        score_threshold: float,
+    ) -> list[SearchResult]:
+        """
+        Internal hybrid search using dense + sparse + RRF.
+
+        Uses Qdrant's query API with prefetch for optimal performance:
+        1. Prefetch dense vector search (100 candidates)
+        2. Prefetch sparse BM25 search (100 candidates)
+        3. RRF fusion combines both result sets
+        """
+        # Generate all embeddings for query
+        query_embeddings = self.embedding_model.encode(
+            query, return_dense=True, return_sparse=True, return_colbert_vecs=False
+        )
+
+        # Convert sparse to Qdrant format
+        lexical_weights = query_embeddings["lexical_weights"]
+        sparse_indices = [int(k) for k in lexical_weights]
+        sparse_values = list(lexical_weights.values())
+
+        # Build hybrid search with RRF using query API
+        search_payload = {
+            "prefetch": [
+                # Prefetch 1: Dense vector search
+                {
+                    "query": query_embeddings["dense_vecs"].tolist(),
+                    "using": "dense",
+                    "limit": 100,  # Get more candidates for fusion
+                },
+                # Prefetch 2: Sparse BM25 search
+                {
+                    "query": {
+                        "values": sparse_values,
+                        "indices": sparse_indices,
+                    },
+                    "using": "sparse",
+                    "limit": 100,
+                },
+            ],
+            "query": {"fusion": "rrf"},  # Reciprocal Rank Fusion
+            "limit": top_k,
+            "with_payload": True,
+            "with_vector": False,
+        }
+
+        # Convert all numpy types to Python types for JSON serialization
+        search_payload = convert_to_python_types(search_payload)
+
+        # Execute hybrid search via Qdrant query API
+        response = requests.post(
+            f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
+            json=search_payload,
+            headers={"api-key": self.settings.qdrant_api_key or ""},
+        )
+
+        if response.status_code != 200:
+            # Fallback to dense-only on error
+            print(
+                f"WARNING: Hybrid search failed ({response.status_code}), falling back to dense-only"
+            )
+            dense_embedding = query_embeddings["dense_vecs"].tolist()
+            return self.search(dense_embedding, top_k, score_threshold)
+
+        response.raise_for_status()
+        resp_data = response.json()
+
+        # Query API returns dict with 'points' key
+        if isinstance(resp_data["result"], dict):
+            points_list = resp_data["result"].get("points", [])
+        elif isinstance(resp_data["result"], list):
+            points_list = resp_data["result"]
+        else:
+            points_list = []
+
+        return [
+            SearchResult(
+                article_number=point["payload"].get("article_number", ""),
+                text=point["payload"].get("text", ""),
+                score=point["score"],
+                metadata=point["payload"],
+            )
+            for point in points_list
         ]
 
     def get_name(self) -> str:
@@ -190,9 +316,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         dbsf_results = self._compute_dbsf_scores(dense_results)
 
         # Stage 3: Rerank and filter
-        reranked = sorted(
-            dbsf_results, key=lambda x: x["dbsf_score"], reverse=True
-        )[:top_k]
+        reranked = sorted(dbsf_results, key=lambda x: x["dbsf_score"], reverse=True)[:top_k]
 
         return [
             SearchResult(
@@ -225,26 +349,24 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
             density_boost = self._compute_density_boost(result, results)
 
             # DBSF score
-            dbsf_score = (
-                alpha * result.score +
-                (1 - alpha) * density_boost
-            )
+            dbsf_score = alpha * result.score + (1 - alpha) * density_boost
 
-            processed.append({
-                "article_number": result.payload.get("article_number", ""),
-                "text": result.payload.get("text", ""),
-                "dbsf_score": dbsf_score,
-                "dense_score": result.score,
-                "density_boost": density_boost,
-                "original_rank": rank,
-                "metadata": result.payload,
-            })
+            processed.append(
+                {
+                    "article_number": result.payload.get("article_number", ""),
+                    "text": result.payload.get("text", ""),
+                    "dbsf_score": dbsf_score,
+                    "dense_score": result.score,
+                    "density_boost": density_boost,
+                    "original_rank": rank,
+                    "metadata": result.payload,
+                }
+            )
 
         return processed
 
     def _compute_density_boost(
-        self, result: ScoredPoint, all_results: list[ScoredPoint],
-        k_neighbors: int = 5
+        self, result: ScoredPoint, all_results: list[ScoredPoint], k_neighbors: int = 5
     ) -> float:
         """
         Compute density boost based on neighborhood.
@@ -263,7 +385,6 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
             boost: float = sum(neighbors_scores) / len(neighbors_scores)
             return boost
         return float(result.score)
-
 
     def get_name(self) -> str:
         """Get search engine name."""
