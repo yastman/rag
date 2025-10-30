@@ -12,7 +12,12 @@ import requests  # type: ignore[import-untyped]
 
 
 sys.path.append("/srv/contextual_rag")
-from config import QDRANT_API_KEY, QDRANT_URL
+from src.config import Settings
+
+# Load settings
+_settings = Settings()
+QDRANT_URL = _settings.qdrant_url
+QDRANT_API_KEY = _settings.qdrant_api_key or ""
 
 
 def extract_articles(collection_name: str) -> dict[str, list[str]]:
