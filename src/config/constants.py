@@ -9,6 +9,7 @@ class SearchEngine(str, Enum):
 
     BASELINE = "baseline"  ***REMOVED*** Dense vectors only
     HYBRID_RRF = "hybrid_rrf"  ***REMOVED*** Dense + Sparse with RRF fusion
+    HYBRID_RRF_COLBERT = "hybrid_rrf_colbert"  ***REMOVED*** Dense + Sparse + ColBERT (Variant A - BEST)
     DBSF_COLBERT = "dbsf_colbert"  ***REMOVED*** Density-Based Semantic Fusion + ColBERT
 
 
@@ -134,7 +135,7 @@ API_LIMITS = {
 
 ***REMOVED*** Default values
 DEFAULTS = {
-    "search_engine": SearchEngine.DBSF_COLBERT,
+    "search_engine": SearchEngine.HYBRID_RRF_COLBERT,  ***REMOVED*** Variant A - Best performance
     "api_provider": APIProvider.CLAUDE,
     "model": ModelName.CLAUDE_SONNET,
     "temperature": 0.0,
