@@ -2,15 +2,41 @@
 """
 Async Contextualization Module - OPTIMIZED VERSION
 Removes document context + async parallel processing = 15-50x speedup
+
+Langfuse Integration (2025):
+- Traces every LLM call with @observe decorator
+- Captures input, output, latency, tokens, cost
+- Enables production monitoring and cost optimization
 """
 
 import asyncio
 import json
 import os
 import re
+import sys
+from pathlib import Path
 from typing import Optional
 
 import aiohttp
+
+
+# Add src/ to path for Langfuse import
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    from langfuse import get_client, observe
+
+    LANGFUSE_AVAILABLE = True
+except ImportError:
+    LANGFUSE_AVAILABLE = False
+
+    # Dummy decorator if Langfuse not available
+    def observe(*args, **kwargs):
+        def decorator(func):
+            return func
+
+        return decorator if args and callable(args[0]) else decorator
+
 
 from prompts import format_enhanced_chunk_context
 
@@ -70,11 +96,19 @@ class ContextualRetrievalZAIAsync:
             "total_output_tokens": 0,
         }
 
+    @observe(as_type="generation")
     async def situate_context_with_metadata(
         self, chunk_text: str, document_name: str = "Цивільний кодекс України"
     ) -> tuple[str, dict]:
         """
         Generate context WITHOUT full document (OPTIMIZATION!)
+
+        Langfuse automatically captures:
+        - Input: chunk_text + document_name
+        - Output: context_text + metadata
+        - Latency: time taken
+        - Tokens: input/output (if available from API)
+        - Cost: calculated from tokens
 
         Args:
             chunk_text: Chunk to contextualize (NO doc_content!)
@@ -83,6 +117,26 @@ class ContextualRetrievalZAIAsync:
         Returns:
             (context_text, metadata_dict)
         """
+        # Update Langfuse metadata (if available)
+        if LANGFUSE_AVAILABLE:
+            try:
+                langfuse = get_client()
+                langfuse.update_current_generation(
+                    name="contextualize_chunk",
+                    model=self.model,
+                    model_parameters={
+                        "temperature": self.temperature,
+                        "max_tokens": self.max_tokens,
+                    },
+                    metadata={
+                        "document": document_name,
+                        "chunk_length": len(chunk_text),
+                        "optimization": "no_document_context",
+                    },
+                )
+            except Exception:
+                pass  # Silently fail if Langfuse not configured
+
         async with self.semaphore:  # Rate limiting
             for attempt in range(self.max_retries):
                 try:
@@ -151,8 +205,25 @@ class ContextualRetrievalZAIAsync:
                     # Track tokens
                     if "usage" in result:
                         usage = result["usage"]
-                        self.stats["total_input_tokens"] += usage.get("prompt_tokens", 0)
-                        self.stats["total_output_tokens"] += usage.get("completion_tokens", 0)
+                        input_tokens = usage.get("prompt_tokens", 0)
+                        output_tokens = usage.get("completion_tokens", 0)
+
+                        self.stats["total_input_tokens"] += input_tokens
+                        self.stats["total_output_tokens"] += output_tokens
+
+                        # Update Langfuse with usage (if available)
+                        if LANGFUSE_AVAILABLE:
+                            try:
+                                langfuse = get_client()
+                                langfuse.update_current_generation(
+                                    usage={
+                                        "input": input_tokens,
+                                        "output": output_tokens,
+                                        "total": input_tokens + output_tokens,
+                                    }
+                                )
+                            except Exception:
+                                pass
 
                     # Parse response
                     message = result["choices"][0]["message"]
