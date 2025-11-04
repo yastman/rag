@@ -170,20 +170,22 @@ class DocumentIndexer:
             texts = [chunk.text for chunk in chunks]
             embeddings = await self._embed_texts(texts)
 
-            # Prepare points for Qdrant
+            # Prepare points for Qdrant (n8n LangChain compatible format)
             points = []
             for chunk, embedding in zip(chunks, embeddings):
                 point = PointStruct(
                     id=str(uuid.uuid4()),
                     vector=embedding,
                     payload={
-                        "text": chunk.text,
-                        "document_name": chunk.document_name,
-                        "article_number": chunk.article_number,
-                        "chapter": chunk.chapter,
-                        "section": chunk.section,
-                        "chunk_id": chunk.chunk_id,
-                        "order": chunk.order,
+                        "page_content": chunk.text,  # n8n expects this field
+                        "metadata": {  # All other fields go into metadata
+                            "document_name": chunk.document_name,
+                            "article_number": chunk.article_number,
+                            "chapter": chunk.chapter,
+                            "section": chunk.section,
+                            "chunk_id": chunk.chunk_id,
+                            "order": chunk.order,
+                        },
                     },
                 )
                 points.append(point)
