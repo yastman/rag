@@ -40,17 +40,17 @@ class DocumentChunker:
 
     def __init__(
         self,
-        chunk_size: int = 512,
-        overlap: int = 128,
-        strategy: ChunkingStrategy = ChunkingStrategy.FIXED_SIZE,
+        chunk_size: int = 1024,
+        overlap: int = 256,
+        strategy: ChunkingStrategy = ChunkingStrategy.SEMANTIC,
     ):
         """
         Initialize chunker.
 
         Args:
-            chunk_size: Target chunk size in characters
+            chunk_size: Target chunk size in characters (1024 optimal for BGE-M3)
             overlap: Overlap between chunks in characters
-            strategy: Chunking strategy
+            strategy: Chunking strategy (SEMANTIC preserves document structure)
         """
         self.chunk_size = chunk_size
         self.overlap = overlap
@@ -81,9 +81,7 @@ class DocumentChunker:
             return self._chunk_sliding_window(text, document_name, article_number)
         raise ValueError(f"Unknown strategy: {self.strategy}")
 
-    def _chunk_fixed_size(
-        self, text: str, document_name: str, article_number: str
-    ) -> list[Chunk]:
+    def _chunk_fixed_size(self, text: str, document_name: str, article_number: str) -> list[Chunk]:
         """Chunk text into fixed-size pieces."""
         chunks = []
 
@@ -109,9 +107,7 @@ class DocumentChunker:
 
         return chunks
 
-    def _chunk_semantic(
-        self, text: str, document_name: str, article_number: str
-    ) -> list[Chunk]:
+    def _chunk_semantic(self, text: str, document_name: str, article_number: str) -> list[Chunk]:
         """
         Chunk text respecting semantic boundaries (paragraphs, sections).
 
