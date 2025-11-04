@@ -143,7 +143,7 @@ def evaluate_with_ragas(
 
     # Prepare RAGAS dataset
     print("\n🏃 Running RAGAS evaluation...")
-    ragas_data: dict =  {
+    ragas_data: dict = {
         "question": [],
         "answer": [],
         "contexts": [],
@@ -163,7 +163,7 @@ def evaluate_with_ragas(
             # Extract contexts (retrieved document texts)
             contexts = []
             for result in results[:5]:  # Use top 5 for context
-                text = result.payload.get("text", "")
+                text = result.text  # SearchResult.text already contains page_content
                 contexts.append(text)
 
             # Generate answer using LLM (simplified - just use first doc)
@@ -216,12 +216,15 @@ def evaluate_with_ragas(
         "answer_relevancy": float(result["answer_relevancy"]),
         "context_recall": float(result["context_recall"]),
         "ragas_score": float(
-            sum([
-                result["faithfulness"],
-                result["context_relevancy"],
-                result["answer_relevancy"],
-                result["context_recall"],
-            ]) / 4
+            sum(
+                [
+                    result["faithfulness"],
+                    result["context_relevancy"],
+                    result["answer_relevancy"],
+                    result["context_recall"],
+                ]
+            )
+            / 4
         ),
     }
 
@@ -248,7 +251,12 @@ def evaluate_with_ragas(
                 "engine": engine_name,
                 "collection": collection,
                 "num_queries": len(queries_data),
-                "ragas_metrics": ["faithfulness", "context_relevancy", "answer_relevancy", "context_recall"],
+                "ragas_metrics": [
+                    "faithfulness",
+                    "context_relevancy",
+                    "answer_relevancy",
+                    "context_recall",
+                ],
             }
             mlflow_logger.log_config(config)
 
@@ -256,11 +264,7 @@ def evaluate_with_ragas(
             mlflow_logger.log_metrics(metrics)
 
             # Log dataset as artifact
-            mlflow_logger.log_dict_artifact(
-                ragas_data,
-                "ragas_dataset.json",
-                artifact_path="data"
-            )
+            mlflow_logger.log_dict_artifact(ragas_data, "ragas_dataset.json", artifact_path="data")
 
             run_url = mlflow_logger.get_run_url()
             print(f"   MLflow Run: {run_url}")
@@ -292,9 +296,7 @@ def evaluate_with_ragas(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Evaluate RAG system with RAGAS framework"
-    )
+    parser = argparse.ArgumentParser(description="Evaluate RAG system with RAGAS framework")
     parser.add_argument(
         "--engine",
         choices=["baseline", "hybrid", "dbsf_colbert"],
