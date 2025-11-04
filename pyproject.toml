@@ -1,10 +1,10 @@
 [project]
 name = "contextual-rag"
-version = "2.0.1"
+version = "2.3.1"
 description = "Contextual RAG Pipeline with DBSF + ColBERT hybrid search"
 requires-python = ">=3.9"
 dependencies = [
-    "pymupdf",
+    "pymupdf>=1.26.0",        # PyMuPDF 1.26+ uses 'import pymupdf' (NOT fitz)
     "anthropic",
     "openai",
     "groq",
@@ -12,7 +12,7 @@ dependencies = [
     "numpy",
     "aiohttp",
     "requests",
-    "pandas",
+    "pandas>=2.0.0",
     "FlagEmbedding",
     "scipy",
     "sentence-transformers",  # BGE-M3 embeddings
