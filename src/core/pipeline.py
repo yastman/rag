@@ -12,7 +12,7 @@ from src.contextualization import (
     GroqContextualizer,
     OpenAIContextualizer,
 )
-from src.ingestion import DocumentChunker, DocumentIndexer, PDFParser
+from src.ingestion import DocumentChunker, DocumentIndexer, UniversalDocumentParser
 from src.retrieval import create_search_engine
 
 
@@ -63,7 +63,7 @@ class RAGPipeline:
         # Initialize indexer for document management
         self.indexer = DocumentIndexer(self.settings)
         self.chunker = DocumentChunker()
-        self.parser = PDFParser()
+        self.parser = UniversalDocumentParser(use_cache=True)
 
     def _create_contextualizer(self):
         """Create contextualizer based on configured API provider."""
@@ -157,7 +157,7 @@ class RAGPipeline:
         Index documents into the system.
 
         Args:
-            pdf_paths: List of PDF file paths
+            pdf_paths: List of document paths (PDF, DOCX, CSV, Excel)
             collection_name: Target collection (uses settings default if None)
             recreate_collection: Whether to drop and recreate collection
 
