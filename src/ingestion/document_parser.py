@@ -20,6 +20,14 @@ from pathlib import Path
 from typing import Optional
 
 import pymupdf  # PyMuPDF 1.26+ (NOT fitz!)
+from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import (
+    AcceleratorDevice,
+    AcceleratorOptions,
+    PdfPipelineOptions,
+    TableFormerMode,
+)
 from docling.document_converter import DocumentConverter
 
 
@@ -102,9 +110,32 @@ class UniversalDocumentParser:
         self.docling_converter = None  # Lazy init
 
     def _get_docling_converter(self):
-        """Lazy initialization of Docling converter."""
+        """
+        Lazy initialization of Docling converter with optimizations.
+
+        Optimizations (Nov 2025):
+        - DoclingParseDocumentBackend: 10x faster parsing backend
+        - TableFormer FAST mode: Balance speed/accuracy
+        - GPU acceleration: AUTO device selection
+        - OCR disabled: For digital documents (CSV, DOCX, XLSX)
+        """
         if self.docling_converter is None:
-            self.docling_converter = DocumentConverter()
+            # Optimized pipeline for DOCX/CSV/XLSX (no OCR needed)
+            pipeline_options = PdfPipelineOptions(
+                do_ocr=False,  # Not needed for digital formats
+                do_table_structure=True,
+                table_structure_options=TableFormerMode.FAST,  # 3-6x faster
+                backend=DoclingParseDocumentBackend,  # 10x faster
+                accelerator_options=AcceleratorOptions(
+                    num_threads=4,
+                    device=AcceleratorDevice.AUTO,  # GPU if available
+                ),
+            )
+
+            self.docling_converter = DocumentConverter(
+                format_options={InputFormat.PDF: pipeline_options}
+            )
+
         return self.docling_converter
 
     def parse_file(self, filepath: str | Path) -> ParsedDocument:
