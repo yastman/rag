@@ -2,8 +2,8 @@
 
 > **RAG система для украинских юридических документов с production ML платформой**
 
-**Версия:** 2.3.0
-**Дата:** 2025-10-30
+**Версия:** 2.3.1
+**Дата:** 2025-11-04
 **Репозиторий:** https://github.com/yastman/rag
 **Ветка:** main
 
@@ -22,6 +22,7 @@
 - 🏛️ Model Registry (Staging → Production)
 - 🔒 PII redaction + budget guards
 - 🛠️ Qdrant backups (7-day rotation)
+- 📄 **CSV support** (через Docling) - индексация структурированных данных
 
 **Пользователь:** yastman
 **Язык:** Python 3.12
@@ -50,7 +51,11 @@
 │   │   └── README.md                   ← Документация security
 │   ├── retrieval/                      ← Поисковые движки (DBSF, ColBERT)
 │   ├── contextualization/              ← LLM контекстуализация
-│   ├── ingestion/                      ← Парсинг документов
+│   ├── ingestion/                      ← Парсинг документов (PDF, CSV, DOCX)
+│   │   ├── pdf_parser.py               ← PDF парсер (PyMuPDF)
+│   │   ├── csv_to_qdrant.py            ← ✅ CSV → Qdrant (через Docling)
+│   │   ├── chunker.py                  ← Стратегии чанкинга
+│   │   └── indexer.py                  ← Индексация в Qdrant
 │   ├── config/                         ← Конфигурация
 │   └── core/                           ← Основной RAG pipeline
 │
@@ -60,6 +65,7 @@
 │   └── qdrant_restore.sh               ← Disaster recovery
 │
 ├── docs/                               ← Документация
+│   ├── PIPELINE_OVERVIEW.md            ← ✅ Полное описание pipeline (НАЧНИ ЗДЕСЬ!)
 │   ├── ML_PLATFORM_INTEGRATION_PLAN.md ← План ML платформы (Week 1-3)
 │   ├── guides/                         ← Гайды
 │   ├── architecture/                   ← Архитектура
@@ -118,11 +124,25 @@ git log --oneline -5
 # Секреты в .env (НЕ в Git!)
 cat .env | grep REDIS_PASSWORD  # Пароль Redis
 cat .env | grep ANTHROPIC       # API ключи
+cat .env | grep QDRANT_API_KEY  # Qdrant API key
 
 # Окружение
 echo $REDIS_HOST        # redis (Docker network)
 echo $MLFLOW_TRACKING_URI  # http://localhost:5000
 ```
+
+### 4. Qdrant Web UI
+
+**URL:** http://localhost:6333/dashboard
+
+**API Key:**
+```
+3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395
+```
+
+**Коллекции:**
+- `legal_documents` - 1294 документов (Уголовный кодекс)
+- `bulgarian_properties` - 4 объектов (demo CSV)
 
 ---
 
@@ -225,6 +245,25 @@ git push origin main
 ---
 
 ## 📊 Changelog (История изменений)
+
+### v2.3.1 (2025-11-04) - CSV Support & Pipeline Documentation ✅
+
+**CSV Indexing через Docling:**
+- ✅ **csv_to_qdrant.py** - универсальный индексатор CSV данных
+- ✅ **BGE-M3 embeddings** (1024-dim) для структурированных данных
+- ✅ **Natural language text generation** из CSV строк
+- ✅ **Metadata preservation** - все поля CSV сохраняются
+- ✅ **Demo dataset** - bulgarian_properties (4 объекта недвижимости)
+- ✅ **Qdrant Web UI access** - API key documented
+
+**Документация:**
+- ✅ **PIPELINE_OVERVIEW.md** - полное описание системы
+- ✅ **Обновлен README** - CSV примеры, Qdrant API key
+- ✅ **Архитектура** - Data Flow от источника до ответа (7 шагов)
+- ✅ **Quick Reference** - fast lookup для всех компонентов
+
+**Commits:**
+- `cdd45d9` - feat: Add CSV to Qdrant indexer with comprehensive pipeline documentation
 
 ### v2.3.0 (2025-10-30) - Variant B Implementation & A/B Testing ✅
 
@@ -474,6 +513,35 @@ git commit -m "docs: Update <module> documentation
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
 ```
+
+### Добавить CSV данные в Qdrant
+
+```bash
+# Индексировать CSV файл
+python src/ingestion/csv_to_qdrant.py \
+    --input your_data.csv \
+    --collection my_collection \
+    --recreate  # опционально
+
+# Пример с demo данными
+python src/ingestion/csv_to_qdrant.py \
+    --input demo_BG.csv \
+    --collection bulgarian_properties
+
+# Проверить результат в Qdrant Web UI
+# http://localhost:6333/dashboard
+```
+
+**Поддерживаемые форматы CSV:**
+- Любая структура (автоматическое определение)
+- UTF-8 encoding
+- Все поля сохраняются как metadata
+
+**Что происходит:**
+1. CSV → текст (natural language)
+2. BGE-M3 embeddings (1024-dim)
+3. Индексация в Qdrant
+4. Полное сохранение metadata
 
 ### Сделать backup Qdrant
 
