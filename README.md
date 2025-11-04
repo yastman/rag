@@ -1,622 +1,210 @@
 ***REMOVED*** Contextual RAG Pipeline
 
-> **RAG система для украинских юридических документов с production ML платформой**
+> **Production RAG система с гибридным поиском и ML платформой**
 
 **Версия:** 2.3.1
 **Дата:** 2025-11-04
 **Репозиторий:** https://github.com/yastman/rag
-**Ветка:** main
 
 ---
 
-***REMOVED******REMOVED*** 📖 Для новой сессии Claude
+***REMOVED******REMOVED*** 🎯 Что это?
 
-Привет! Ты начинаешь новую сессию без контекста. Этот README даст тебе всё для работы.
+Production-ready RAG система для поиска по документам с:
 
-***REMOVED******REMOVED******REMOVED*** Что это за проект?
+- 🔍 **Гибридный поиск:** RRF + ColBERT (Variant A) / DBSF + ColBERT (Variant B)
+- 📊 **ML платформа:** MLflow + Langfuse + OpenTelemetry
+- 🚀 **Redis кэш:** 2 уровня (embeddings 30d + responses 5-60min)
+- 📄 **Форматы:** PDF, CSV, DOCX через Docling
+- 🏛️ **Model Registry:** Staging → Production workflow
+- 🔒 **Security:** PII redaction + budget guards
 
-**Contextual RAG Pipeline** - production-ready система поиска по Уголовному кодексу Украины с:
-- 🔍 Гибридный поиск: **Variant A** (RRF + ColBERT, default) & **Variant B** (DBSF + ColBERT, 7% faster)
-- 📊 ML платформа: MLflow + Langfuse + OpenTelemetry
-- 🚀 Redis кэш (2 уровня, версионирование)
-- 🏛️ Model Registry (Staging → Production)
-- 🔒 PII redaction + budget guards
-- 🛠️ Qdrant backups (7-day rotation)
-- 📄 **CSV support** (через Docling) - индексация структурированных данных
-
-**Пользователь:** yastman
-**Язык:** Python 3.12
-**Окружение:** `/srv/app/` на сервере
+**Use cases:**
+- Уголовный кодекс Украины (1294 документов)
+- CSV данные (недвижимость, каталоги, etc.)
 
 ---
 
-***REMOVED******REMOVED*** 📁 Структура проекта
-
-```
-/srv/app/
-│
-├── README.md                           ← ТЫ ЗДЕСЬ (главный README)
-├── Azbyka_RAG_PLAN_2025_v2.md          ← Новый проект (православный портал)
-│
-├── src/                                ← Исходный код
-│   ├── evaluation/                     ← ✅ MLflow, Langfuse, RAGAS, A/B tests
-│   │   └── README.md                   ← Документация evaluation
-│   ├── observability/                  ← ✅ OpenTelemetry (Tempo, Prometheus)
-│   │   └── README.md                   ← Документация observability
-│   ├── cache/                          ← ✅ Redis semantic cache
-│   │   └── README.md                   ← Документация cache
-│   ├── governance/                     ← ✅ Model Registry (MLflow)
-│   │   └── README.md                   ← Документация governance
-│   ├── security/                       ← ✅ PII redaction, budget guards
-│   │   └── README.md                   ← Документация security
-│   ├── retrieval/                      ← Поисковые движки (DBSF, ColBERT)
-│   ├── contextualization/              ← LLM контекстуализация
-│   ├── ingestion/                      ← Парсинг документов (PDF, CSV, DOCX)
-│   │   ├── pdf_parser.py               ← PDF парсер (PyMuPDF)
-│   │   ├── csv_to_qdrant.py            ← ✅ CSV → Qdrant (через Docling)
-│   │   ├── chunker.py                  ← Стратегии чанкинга
-│   │   └── indexer.py                  ← Индексация в Qdrant
-│   ├── config/                         ← Конфигурация
-│   └── core/                           ← Основной RAG pipeline
-│
-├── scripts/                            ← ✅ Автоматизация
-│   ├── README.md                       ← Документация scripts
-│   ├── qdrant_backup.sh                ← Nightly бэкапы Qdrant
-│   └── qdrant_restore.sh               ← Disaster recovery
-│
-├── docs/                               ← Документация
-│   ├── PIPELINE_OVERVIEW.md            ← ✅ Полное описание pipeline (НАЧНИ ЗДЕСЬ!)
-│   ├── ML_PLATFORM_INTEGRATION_PLAN.md ← План ML платформы (Week 1-3)
-│   ├── guides/                         ← Гайды
-│   ├── architecture/                   ← Архитектура
-│   └── reports/                        ← Отчёты
-│
-├── tests/                              ← Тесты
-│   ├── data/golden_test_set.json       ← 150 тестовых запросов
-│   └── test_redis_cache.py             ← Тесты Redis
-│
-├── data/                               ← Данные
-├── legacy/                             ← Старый код (для справки)
-├── logs/                               ← Логи
-│
-├── .env                                ← Секреты (НЕ в Git!)
-├── .env.example                        ← Пример env переменных
-├── pyproject.toml                      ← Зависимости
-├── .pre-commit-config.yaml             ← Pre-commit hooks
-└── venv/                               ← Virtual environment
-```
-
-**💡 Важно:** Каждая папка (`src/*/`) имеет свой **README.md** с подробной документацией!
-
----
-
-***REMOVED******REMOVED*** 🚀 Как начать работу
-
-***REMOVED******REMOVED******REMOVED*** 1. Окружение
+***REMOVED******REMOVED*** 🚀 Быстрый старт
 
 ```bash
-***REMOVED*** Ты уже здесь:
 cd /srv/contextual_rag
-
-***REMOVED*** Virtual environment
 source venv/bin/activate
 
-***REMOVED*** Python 3.12
-python --version  ***REMOVED*** Python 3.12.3
-```
-
-***REMOVED******REMOVED******REMOVED*** 2. Git
-
-```bash
-***REMOVED*** Текущая ветка
-git branch  ***REMOVED*** * main
-
-***REMOVED*** Статус
+***REMOVED*** Проверить статус
 git status
-
-***REMOVED*** История (последние 5 коммитов)
-git log --oneline -5
-```
-
-***REMOVED******REMOVED******REMOVED*** 3. Конфигурация
-
-```bash
-***REMOVED*** Секреты в .env (НЕ в Git!)
-cat .env | grep REDIS_PASSWORD  ***REMOVED*** Пароль Redis
-cat .env | grep ANTHROPIC       ***REMOVED*** API ключи
-cat .env | grep QDRANT_API_KEY  ***REMOVED*** Qdrant API key
-
-***REMOVED*** Окружение
-echo $REDIS_HOST        ***REMOVED*** redis (Docker network)
-echo $MLFLOW_TRACKING_URI  ***REMOVED*** http://localhost:5000
-```
-
-***REMOVED******REMOVED******REMOVED*** 4. Qdrant Web UI
-
-**URL:** http://localhost:6333/dashboard
-
-**API Key:**
-```
-REDACTED_QDRANT_KEY
-```
-
-**Коллекции:**
-- `legal_documents` - 1294 документов (Уголовный кодекс)
-- `bulgarian_properties` - 4 объектов (demo CSV)
-
----
-
-***REMOVED******REMOVED*** 📝 Git Workflow (ВАЖНО!)
-
-***REMOVED******REMOVED******REMOVED*** Правила коммитов
-
-Используем **Conventional Commits**:
-
-```bash
-***REMOVED*** Формат
-<type>: <description>
-
-- <details line 1>
-- <details line 2>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-```
-
-***REMOVED******REMOVED******REMOVED*** Типы коммитов
-
-| Тип | Когда использовать | Пример |
-|-----|-------------------|--------|
-| `feat` | Новая функциональность | `feat: Add Redis semantic cache` |
-| `fix` | Исправление бага | `fix: Fix Qdrant connection timeout` |
-| `docs` | Документация | `docs: Create README for cache module` |
-| `refactor` | Рефакторинг | `refactor: Optimize search engine` |
-| `test` | Тесты | `test: Add unit tests for cache` |
-| `chore` | Инфраструктура | `chore: Update dependencies` |
-
-***REMOVED******REMOVED******REMOVED*** Примеры коммитов
-
-```bash
-***REMOVED*** Хороший коммит ✅
-git commit -m "$(cat <<'EOF'
-feat: Configure Redis semantic cache for Docker environment
-
-- Updated RedisSemanticCache to use Docker network by default
-- Added automatic REDIS_PASSWORD loading from environment
-- Created example_usage.py with integration examples
-- Added tests for Redis connectivity
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
-EOF
-)"
-
-***REMOVED*** Плохой коммит ❌
-git commit -m "fixed stuff"
-```
-
-***REMOVED******REMOVED******REMOVED*** Pre-commit hooks
-
-**Автоматически запускаются при каждом коммите:**
-
-```bash
-***REMOVED*** Что проверяется:
-✅ Ruff Linter (check + fix)       ***REMOVED*** Проверка кода + автофикс
-✅ Ruff Formatter                  ***REMOVED*** Форматирование
-✅ Trailing whitespace             ***REMOVED*** Пробелы в конце строк
-✅ End of files                    ***REMOVED*** Пустая строка в конце файлов
-✅ Large files                     ***REMOVED*** Файлы > 500KB
-✅ Merge conflicts                 ***REMOVED*** Конфликты слияния
-✅ Debugger imports                ***REMOVED*** print(), debugger
-```
-
-**Если коммит падает:**
-1. Ruff автоматически исправит код
-2. Нужно заново `git add` исправленные файлы
-3. Повторить `git commit`
-
-***REMOVED******REMOVED******REMOVED*** Workflow
-
-```bash
-***REMOVED*** 1. Проверить статус
-git status
-
-***REMOVED*** 2. Добавить файлы
-git add <files>
-***REMOVED*** или всё сразу
-git add -A
-
-***REMOVED*** 3. Коммит (pre-commit hooks запустятся автоматически)
-git commit -m "feat: Add new feature
-
-- Detail 1
-- Detail 2
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-
-***REMOVED*** 4. Push (если нужно)
-git push origin main
-```
-
----
-
-***REMOVED******REMOVED*** 📊 Changelog (История изменений)
-
-***REMOVED******REMOVED******REMOVED*** v2.3.1 (2025-11-04) - CSV Support & Pipeline Documentation ✅
-
-**CSV Indexing через Docling:**
-- ✅ **csv_to_qdrant.py** - универсальный индексатор CSV данных
-- ✅ **BGE-M3 embeddings** (1024-dim) для структурированных данных
-- ✅ **Natural language text generation** из CSV строк
-- ✅ **Metadata preservation** - все поля CSV сохраняются
-- ✅ **Demo dataset** - bulgarian_properties (4 объекта недвижимости)
-- ✅ **Qdrant Web UI access** - API key documented
-
-**Документация:**
-- ✅ **PIPELINE_OVERVIEW.md** - полное описание системы
-- ✅ **Обновлен README** - CSV примеры, Qdrant API key
-- ✅ **Архитектура** - Data Flow от источника до ответа (7 шагов)
-- ✅ **Quick Reference** - fast lookup для всех компонентов
-
-**Commits:**
-- `cdd45d9` - feat: Add CSV to Qdrant indexer with comprehensive pipeline documentation
-
-***REMOVED******REMOVED******REMOVED*** v2.3.0 (2025-10-30) - Variant B Implementation & A/B Testing ✅
-
-**Hybrid DBSF + ColBERT Reranking (Alternative to RRF):**
-- ✅ **Variant B search engine** (DBSFColBERTSearchEngine) - complete rewrite
-- ✅ **DBSF fusion** (Distribution-Based Score Fusion with statistical normalization)
-- ✅ **Server-side DBSF** (Qdrant Query API with `fusion: "dbsf"`)
-- ✅ **A/B comparison tests** (RRF vs DBSF on 3 identical queries)
-- ✅ **Performance results** (DBSF is 7% faster, 66.7% top result agreement)
-- ✅ **Documentation** (VARIANT_B_IMPLEMENTATION.md, ARCHITECTURE.md updated)
-- ⚠️ **Recommendation**: Use Variant A (RRF) as default, Variant B for experimentation
-
-**A/B Test Summary:**
-- Top Result Agreement: 2/3 queries (66.7%)
-- DBSF Latency: 0.937s (7% faster than RRF 1.002s)
-- Identical rankings on 2/3 queries (crime qualifier + legal concept)
-- Different top result on article lookup query
-
-***REMOVED******REMOVED******REMOVED*** v2.2.0 (2025-10-30) - Variant A Implementation ✅
-
-**Hybrid RRF + ColBERT Reranking (2025 Best Practice):**
-- ✅ **Variant A search engine** (HybridRRFColBERTSearchEngine)
-- ✅ **BGE-M3 integration** (dense + sparse + ColBERT vectors)
-- ✅ **3-stage pipeline** (Prefetch 100 + RRF fusion + ColBERT MaxSim rerank)
-- ✅ **Server-side reranking** (Qdrant Query API multivector support)
-- ✅ **Comprehensive tests** (3 test queries, all passed with method verification)
-- ✅ **Set as default** (SearchEngine.HYBRID_RRF_COLBERT in config)
-- ✅ **Expected performance** (~94% Recall@1, ~0.97 NDCG@10)
-
-**Commits:**
-- `a16f5d6` - feat: implement Variant A - complete BGE-M3 + ColBERT rerank
-
-***REMOVED******REMOVED******REMOVED*** v2.1.0 (2025-10-30) - Production ML Platform ✅
-
-**Week 1-3 Implementation:**
-- ✅ **RAGAS quality metrics** (faithfulness ≥ 0.85, precision ≥ 0.80, recall ≥ 0.90)
-- ✅ **Golden test set** (150 queries: lookup/crimes/concepts/procedures/definitions)
-- ✅ **MLflow integration** (experiments, Model Registry, A/B testing)
-- ✅ **Langfuse integration** (LLM tracing, cost tracking)
-- ✅ **OpenTelemetry** (traces → Tempo, metrics → Prometheus)
-- ✅ **Redis semantic cache** (2-layer: embeddings 30d + responses 5-60min)
-- ✅ **Model Registry** (Staging → Production workflow, rollback)
-- ✅ **Qdrant backups** (nightly, 7-day rotation, RTO < 1 hour)
-- ✅ **PII redaction** (Ukrainian phones, emails, tax IDs, passports)
-- ✅ **Budget guards** ($10/day, $300/month limits)
-- ✅ **Comprehensive documentation** (README in each module)
-
-**Commits:**
-- `39051e9` - feat: Configure Redis semantic cache for Docker environment
-- `4de8a79` - docs: Create comprehensive README documentation for all modules
-- `d64d3ea` - feat: implement production ML platform - Week 1, 2, 3 complete
-- `e1413c7` - fix: clean up ML platform plan - remove broken code and old sections
-- `868dc73` - feat: complete production-ready ML platform integration plan
-
-***REMOVED******REMOVED******REMOVED*** v2.0.1 (2025-10-29) - Stable Production
-
-**Features:**
-- Hybrid DBSF+ColBERT search (94% Recall@1)
-- Prompt caching (90% cost savings)
-- Modular architecture
-- Complete documentation
-
-***REMOVED******REMOVED******REMOVED*** v2.0.0 (2025-10-15) - Major Refactor
-
-**Breaking changes:**
-- New modular structure (`src/evaluation/`, `src/retrieval/`)
-- Unified configuration via Pydantic
-- API changes in core pipeline
-
----
-
-***REMOVED******REMOVED*** 📚 Важные документы
-
-***REMOVED******REMOVED******REMOVED*** 📖 Планы
-
-| Документ | Описание | Статус |
-|----------|----------|--------|
-| [ML_PLATFORM_INTEGRATION_PLAN.md](docs/ML_PLATFORM_INTEGRATION_PLAN.md) | План ML платформы (Week 1-3) | ✅ Завершён |
-| [Azbyka_RAG_PLAN_2025_v2.md](Azbyka_RAG_PLAN_2025_v2.md) | Новый проект: православный портал | 📋 В планах |
-
-***REMOVED******REMOVED******REMOVED*** 📂 README по модулям
-
-| Модуль | README | Что внутри |
-|--------|--------|-----------|
-| Evaluation | [src/evaluation/README.md](src/evaluation/README.md) | MLflow, Langfuse, RAGAS, A/B tests, Golden test set |
-| Observability | [src/observability/README.md](src/observability/README.md) | OpenTelemetry, Tempo, Prometheus, Grafana |
-| Cache | [src/cache/README.md](src/cache/README.md) | Redis semantic cache, versioning, cost tracking |
-| Governance | [src/governance/README.md](src/governance/README.md) | Model Registry, Staging→Production, rollback |
-| Security | [src/security/README.md](src/security/README.md) | PII redaction, budget guards, Ukrainian patterns |
-| Scripts | [scripts/README.md](scripts/README.md) | Qdrant backup/restore, disaster recovery |
-
----
-
-***REMOVED******REMOVED*** 🛠️ Технический стек
-
-***REMOVED******REMOVED******REMOVED*** Основное
-
-| Компонент | Версия | Назначение |
-|-----------|--------|-----------|
-| **Python** | 3.12.3 | Основной язык |
-| **Qdrant** | 1.15.4 | Vector database |
-| **Redis** | 8.2 | Кэш (2 уровня) |
-| **MLflow** | latest | Эксперименты, Model Registry |
-| **Langfuse** | latest | LLM tracing, cost tracking |
-
-***REMOVED******REMOVED******REMOVED*** ML Платформа
-
-| Компонент | Порт | Назначение |
-|-----------|------|-----------|
-| **MLflow UI** | :5000 | http://localhost:5000 |
-| **Langfuse UI** | :3001 | http://localhost:3001 |
-| **Prometheus** | :9090 | http://localhost:9090 |
-| **Grafana** | :3000 | http://localhost:3000 |
-| **Qdrant** | :6333 | http://localhost:6333 |
-| **Redis** | :6379 | redis:6379 (Docker network) |
-
-***REMOVED******REMOVED******REMOVED*** Библиотеки
-
-```toml
-***REMOVED*** Ключевые зависимости
-qdrant-client = "^1.12.1"
-redis = "^7.0.1"
-mlflow = "^2.19.0"
-langfuse = "^2.57.0"
-opentelemetry-api = "*"
-opentelemetry-sdk = "*"
-ragas = "*"
-pydantic = "^2.9.2"
-fastapi = "^0.115.4"
-```
-
----
-
-***REMOVED******REMOVED*** 🔍 Быстрая диагностика
-
-***REMOVED******REMOVED******REMOVED*** Проверить окружение
-
-```bash
-***REMOVED*** Python
 python --version  ***REMOVED*** 3.12.3
 
-***REMOVED*** Virtual environment
-which python  ***REMOVED*** /srv/app/venv/bin/python
-
-***REMOVED*** Git
-git remote -v  ***REMOVED*** origin https://github.com/yastman/rag.git
-git branch     ***REMOVED*** * main
-```
-
-***REMOVED******REMOVED******REMOVED*** Проверить сервисы
-
-```bash
-***REMOVED*** Qdrant
-curl http://localhost:6333/health
-
-***REMOVED*** Redis
-docker exec ai-redis-secure redis-cli -a $REDIS_PASSWORD PING
-
-***REMOVED*** MLflow
-curl http://localhost:5000/health
-
-***REMOVED*** Langfuse
-curl http://localhost:3001/api/health
-```
-
-***REMOVED******REMOVED******REMOVED*** Запустить тесты
-
-```bash
-***REMOVED*** Redis cache
-python tests/test_redis_url.py
-
-***REMOVED*** Smoke test
-python src/evaluation/smoke_test.py
-
-***REMOVED*** Unit tests
-pytest tests/unit/
-
-***REMOVED*** All tests
-pytest
-```
-
----
-
-***REMOVED******REMOVED*** 🎯 Частые задачи
-
-***REMOVED******REMOVED******REMOVED*** Создать новый модуль
-
-```bash
-***REMOVED*** 1. Создать папку
-mkdir -p src/new_module
-
-***REMOVED*** 2. Создать __init__.py
-touch src/new_module/__init__.py
-
-***REMOVED*** 3. Создать README.md
-nano src/new_module/README.md
-
-***REMOVED*** 4. Создать основной файл
-nano src/new_module/main.py
-
-***REMOVED*** 5. Добавить в Git
-git add src/new_module/
-git commit -m "feat: Add new_module
-
-- Created module structure
-- Added README with documentation
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-```
-
-***REMOVED******REMOVED******REMOVED*** Добавить зависимость
-
-```bash
-***REMOVED*** 1. Добавить в pyproject.toml
-nano pyproject.toml
-
-***REMOVED*** 2. Установить
-pip install -e ".[dev]"
-
-***REMOVED*** 3. Закоммитить
-git add pyproject.toml
-git commit -m "chore: Add new dependency
-
-- Added <package_name> for <purpose>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-```
-
-***REMOVED******REMOVED******REMOVED*** Обновить документацию
-
-```bash
-***REMOVED*** 1. Редактировать README
-nano src/<module>/README.md
-
-***REMOVED*** 2. Коммит
-git add src/<module>/README.md
-git commit -m "docs: Update <module> documentation
-
-- Added section about <topic>
-- Updated usage examples
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-```
-
-***REMOVED******REMOVED******REMOVED*** Добавить CSV данные в Qdrant
-
-```bash
-***REMOVED*** Индексировать CSV файл
-python src/ingestion/csv_to_qdrant.py \
-    --input your_data.csv \
-    --collection my_collection \
-    --recreate  ***REMOVED*** опционально
-
-***REMOVED*** Пример с demo данными
+***REMOVED*** Добавить CSV в Qdrant
 python src/ingestion/csv_to_qdrant.py \
     --input demo_BG.csv \
     --collection bulgarian_properties
-
-***REMOVED*** Проверить результат в Qdrant Web UI
-***REMOVED*** http://localhost:6333/dashboard
 ```
 
-**Поддерживаемые форматы CSV:**
-- Любая структура (автоматическое определение)
-- UTF-8 encoding
-- Все поля сохраняются как metadata
+---
 
-**Что происходит:**
-1. CSV → текст (natural language)
-2. BGE-M3 embeddings (1024-dim)
-3. Индексация в Qdrant
-4. Полное сохранение metadata
+***REMOVED******REMOVED*** 📁 Структура
 
-***REMOVED******REMOVED******REMOVED*** Сделать backup Qdrant
+```
+contextual_rag/
+├── README.md                    ← ТЫ ЗДЕСЬ
+├── docs/
+│   └── PIPELINE_OVERVIEW.md     ← 📖 НАЧНИ ОТСЮДА (полное описание)
+├── src/
+│   ├── ingestion/               ← PDF/CSV парсеры + индексация
+│   ├── retrieval/               ← Гибридный поиск (Variant A/B)
+│   ├── cache/                   ← Redis 2-level cache
+│   ├── evaluation/              ← MLflow + Langfuse + RAGAS
+│   ├── governance/              ← Model Registry
+│   ├── security/                ← PII + budget guards
+│   └── core/                    ← RAG pipeline
+├── scripts/
+│   ├── qdrant_backup.sh         ← Backup Qdrant
+│   └── qdrant_restore.sh        ← Restore Qdrant
+└── tests/                       ← Unit + integration tests
+```
+
+**💡 Каждый модуль имеет свой README.md**
+
+---
+
+***REMOVED******REMOVED*** 🔧 Конфигурация
+
+***REMOVED******REMOVED******REMOVED*** Environment (.env)
 
 ```bash
-***REMOVED*** Manual backup
+***REMOVED*** API Keys
+ANTHROPIC_API_KEY=[REDACTED-ANTHROPIC-KEY]
+OPENAI_API_KEY=[REDACTED-OPENAI-KEY]
+QDRANT_API_KEY=REDACTED_QDRANT_KEY
+REDIS_PASSWORD=...
+
+***REMOVED*** Services
+QDRANT_URL=http://localhost:6333
+REDIS_HOST=redis
+MLFLOW_TRACKING_URI=http://localhost:5000
+LANGFUSE_HOST=http://localhost:3001
+```
+
+***REMOVED******REMOVED******REMOVED*** Qdrant Web UI
+
+**URL:** http://localhost:6333/dashboard
+**API Key:** `REDACTED_QDRANT_KEY`
+
+**Коллекции:**
+- `legal_documents` - 1294 точек
+- `bulgarian_properties` - 4 точек (demo CSV)
+
+---
+
+***REMOVED******REMOVED*** 📝 Git Workflow
+
+```bash
+***REMOVED*** Pre-commit hooks (автоматически)
+✅ Ruff Linter + Formatter
+✅ Trailing whitespace
+✅ Large files check
+
+***REMOVED*** Commit формат
+<type>: <description>
+
+- <details>
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+***REMOVED*** Типы: feat, fix, docs, refactor, test, chore
+```
+
+---
+
+***REMOVED******REMOVED*** 📊 Changelog
+
+***REMOVED******REMOVED******REMOVED*** v2.3.1 (2025-11-04) - CSV Support ✅
+
+- ✅ CSV → Qdrant indexer (`csv_to_qdrant.py`)
+- ✅ PIPELINE_OVERVIEW.md (full system documentation)
+- ✅ Qdrant Web UI access documented
+
+***REMOVED******REMOVED******REMOVED*** v2.3.0 (2025-10-30) - Variant B ✅
+
+- ✅ DBSF + ColBERT (7% faster than RRF)
+- ✅ A/B testing framework
+
+***REMOVED******REMOVED******REMOVED*** v2.2.0 (2025-10-30) - Variant A ✅
+
+- ✅ RRF + ColBERT (default, 94% Recall@1)
+
+***REMOVED******REMOVED******REMOVED*** v2.1.0 (2025-10-30) - ML Platform ✅
+
+- ✅ MLflow + Langfuse + RAGAS
+- ✅ Redis 2-level cache
+- ✅ Model Registry
+- ✅ PII redaction + budget guards
+
+---
+
+***REMOVED******REMOVED*** 📚 Документация
+
+| Документ | Описание |
+|----------|----------|
+| [PIPELINE_OVERVIEW.md](docs/PIPELINE_OVERVIEW.md) | **НАЧНИ ЗДЕСЬ** - полное описание системы |
+| [src/evaluation/README.md](src/evaluation/README.md) | MLflow, Langfuse, RAGAS |
+| [src/cache/README.md](src/cache/README.md) | Redis 2-level cache |
+| [src/governance/README.md](src/governance/README.md) | Model Registry |
+| [src/security/README.md](src/security/README.md) | PII + budget guards |
+
+---
+
+***REMOVED******REMOVED*** 🎯 Быстрые команды
+
+***REMOVED******REMOVED******REMOVED*** Добавить CSV
+```bash
+python src/ingestion/csv_to_qdrant.py --input file.csv --collection name
+```
+
+***REMOVED******REMOVED******REMOVED*** Backup Qdrant
+```bash
 ./scripts/qdrant_backup.sh
-
-***REMOVED*** Setup cron (nightly at 3 AM)
-crontab -e
-***REMOVED*** Add: 0 3 * * * /srv/app/scripts/qdrant_backup.sh >> /srv/logs/qdrant_backup.log 2>&1
 ```
 
----
-
-***REMOVED******REMOVED*** 🚨 Troubleshooting
-
-***REMOVED******REMOVED******REMOVED*** Pre-commit hook failed
-
+***REMOVED******REMOVED******REMOVED*** Проверить сервисы
 ```bash
-***REMOVED*** Проблема: Ruff нашёл ошибки
-
-***REMOVED*** Решение:
-git add -A  ***REMOVED*** Добавить автофиксы от Ruff
-git commit -m "..."  ***REMOVED*** Повторить коммит
+curl http://localhost:6333/health  ***REMOVED*** Qdrant
+curl http://localhost:5000/health  ***REMOVED*** MLflow
+docker exec ai-redis-secure redis-cli -a $REDIS_PASSWORD PING  ***REMOVED*** Redis
 ```
 
-***REMOVED******REMOVED******REMOVED*** Redis connection error
-
+***REMOVED******REMOVED******REMOVED*** Запустить тесты
 ```bash
-***REMOVED*** Проблема: Can't connect to redis:6379
-
-***REMOVED*** Решение:
-docker ps | grep redis  ***REMOVED*** Проверить контейнер
-echo $REDIS_PASSWORD    ***REMOVED*** Проверить пароль
-```
-
-***REMOVED******REMOVED******REMOVED*** Git divergent branches
-
-```bash
-***REMOVED*** Проблема: fatal: Need to specify how to reconcile divergent branches
-
-***REMOVED*** Решение:
-git pull --rebase origin main
-git push origin main
+python tests/test_redis_url.py           ***REMOVED*** Redis cache
+python src/evaluation/smoke_test.py      ***REMOVED*** Smoke test
+pytest                                    ***REMOVED*** All tests
 ```
 
 ---
 
-***REMOVED******REMOVED*** 📞 Контакты и ресурсы
+***REMOVED******REMOVED*** 🛠️ Технологии
 
-- **GitHub**: https://github.com/yastman/rag
-- **Issues**: https://github.com/yastman/rag/issues
-- **Maintainer**: yastman
-- **Server**: `/srv/app/`
-
----
-
-***REMOVED******REMOVED*** ✅ Checklist для новой сессии
-
-Прочитал этот README? Отлично! Теперь ты знаешь:
-
-- [x] Что это за проект
-- [x] Структуру файлов (где что лежит)
-- [x] Как делать коммиты (conventional commits + pre-commit)
-- [x] Где документация (README в каждой папке)
-- [x] Changelog (что недавно менялось)
-- [x] Технический стек (Python, Qdrant, Redis, MLflow, Langfuse)
-- [x] Частые задачи (создать модуль, добавить зависимость)
-
-**Готов работать!** 🚀
+| Компонент | Технология | Порт |
+|-----------|-----------|------|
+| Vector DB | Qdrant 1.15.4 | 6333 |
+| Cache | Redis 8.2 | 6379 |
+| Embeddings | BGE-M3 (1024-dim) | - |
+| ML Platform | MLflow | 5000 |
+| Tracing | Langfuse | 3001 |
+| Monitoring | Prometheus + Grafana | 9090, 3000 |
 
 ---
 
-**Last Updated:** 2025-10-30
-**Version:** 2.2.0
-**Branch:** main
+***REMOVED******REMOVED*** 📞 Контакты
+
+- **Maintainer:** yastman
+- **GitHub:** https://github.com/yastman/rag
+- **Issues:** https://github.com/yastman/rag/issues
+
+---
+
+**Last Updated:** 2025-11-04
 **Python:** 3.12.3
 **Path:** `/srv/app/`
