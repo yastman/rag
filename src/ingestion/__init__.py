@@ -1,8 +1,8 @@
 """Document ingestion module for loading and indexing documents."""
 
 from .chunker import DocumentChunker
+from .document_parser import UniversalDocumentParser, parse_document
 from .indexer import DocumentIndexer
-from .pdf_parser import PDFParser
 
 
-__all__ = ["DocumentChunker", "DocumentIndexer", "PDFParser"]
+__all__ = ["DocumentChunker", "DocumentIndexer", "UniversalDocumentParser", "parse_document"]
