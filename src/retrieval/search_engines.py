@@ -88,10 +88,10 @@ class BaselineSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=result.payload.get("article_number", ""),
-                text=result.payload.get("text", ""),
+                article_number=result.payload.get("metadata", {}).get("article_number", ""),
+                text=result.payload.get("page_content", ""),
                 score=result.score,
-                metadata=result.payload,
+                metadata=result.payload.get("metadata", {}),
             )
             for result in results
         ]
@@ -157,10 +157,10 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=result.payload.get("article_number", ""),
-                text=result.payload.get("text", ""),
+                article_number=result.payload.get("metadata", {}).get("article_number", ""),
+                text=result.payload.get("page_content", ""),
                 score=result.score,
-                metadata=result.payload,
+                metadata=result.payload.get("metadata", {}),
             )
             for result in dense_results
         ]
@@ -245,10 +245,10 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=point["payload"].get("article_number", ""),
-                text=point["payload"].get("text", ""),
+                article_number=point["payload"].get("metadata", {}).get("article_number", ""),
+                text=point["payload"].get("page_content", ""),
                 score=point["score"],
-                metadata=point["payload"],
+                metadata=point["payload"].get("metadata", {}),
             )
             for point in points_list
         ]
@@ -323,10 +323,10 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=result.payload.get("article_number", ""),
-                text=result.payload.get("text", ""),
+                article_number=result.payload.get("metadata", {}).get("article_number", ""),
+                text=result.payload.get("page_content", ""),
                 score=result.score,
-                metadata=result.payload,
+                metadata=result.payload.get("metadata", {}),
             )
             for result in dense_results
         ]
@@ -421,7 +421,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         return [
             SearchResult(
                 article_number=point["payload"].get("article_number", ""),
-                text=point["payload"].get("text", ""),
+                text=point["payload"].get("page_content", ""),
                 score=point["score"],
                 metadata={
                     **point["payload"],
@@ -508,10 +508,10 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=result.payload.get("article_number", ""),
-                text=result.payload.get("text", ""),
+                article_number=result.payload.get("metadata", {}).get("article_number", ""),
+                text=result.payload.get("page_content", ""),
                 score=result.score,
-                metadata=result.payload,
+                metadata=result.payload.get("metadata", {}),
             )
             for result in dense_results
         ]
@@ -606,7 +606,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         return [
             SearchResult(
                 article_number=point["payload"].get("article_number", ""),
-                text=point["payload"].get("text", ""),
+                text=point["payload"].get("page_content", ""),
                 score=point["score"],
                 metadata={
                     **point["payload"],
