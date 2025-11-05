@@ -5,6 +5,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from FlagEmbedding import BGEM3FlagModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
@@ -17,7 +18,6 @@ from qdrant_client.models import (
     SparseVectorParams,
     VectorParams,
 )
-from sentence_transformers import SentenceTransformer
 
 from src.config import Settings, VectorDimensions
 
@@ -41,8 +41,8 @@ class DocumentIndexer:
     Index documents into Qdrant vector database.
 
     Features:
-    - BGE-M3 embeddings (1024-dim dense + sparse)
-    - Binary quantization (24x memory compression)
+    - BGE-M3 embeddings (1024-dim dense + sparse + ColBERT)
+    - Scalar Int8 quantization (4x compression)
     - HNSW optimization with delta compression
     - Batch indexing for efficiency
     - Automatic collection creation
@@ -58,8 +58,8 @@ class DocumentIndexer:
             settings: Configuration settings
         """
         self.settings = settings or Settings()
-        self.client = QdrantClient(self.settings.qdrant_url)
-        self.embedding_model = SentenceTransformer("BAAI/bge-m3")
+        self.client = QdrantClient(self.settings.qdrant_url, api_key=self.settings.qdrant_api_key)
+        self.embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
         self.stats = IndexStats()
 
     def create_collection(self, collection_name: str, recreate: bool = False) -> bool:
@@ -196,18 +196,29 @@ class DocumentIndexer:
         return self.stats
 
     async def _index_batch(self, chunks: list[Chunk], collection_name: str) -> None:
-        """Index a batch of chunks."""
+        """Index a batch of chunks with BGE-M3 (dense + sparse + colbert)."""
         try:
             # Generate embeddings for batch
             texts = [chunk.text for chunk in chunks]
             embeddings = await self._embed_texts(texts)
 
-            # Prepare points for Qdrant (n8n LangChain compatible format)
+            # Prepare points for Qdrant with named vectors
             points = []
-            for chunk, embedding in zip(chunks, embeddings):
+            for chunk, emb in zip(chunks, embeddings):
+                # Convert sparse dict to lists for Qdrant
+                sparse_indices = list(emb["lexical_weights"].keys())
+                sparse_values = list(emb["lexical_weights"].values())
+
                 point = PointStruct(
                     id=str(uuid.uuid4()),
-                    vector=embedding,
+                    vector={
+                        "dense": emb["dense_vecs"].tolist(),
+                        "colbert": emb["colbert_vecs"].tolist(),
+                        "bm42": {  # BGE-M3 sparse (learned, better than BM25)
+                            "indices": sparse_indices,
+                            "values": sparse_values,
+                        },
+                    },
                     payload={
                         "page_content": chunk.text,  # n8n expects this field
                         "metadata": {  # All other fields go into metadata
@@ -235,23 +246,37 @@ class DocumentIndexer:
             self.stats.failed_chunks += len(chunks)
             print(f"  ✗ Failed to index batch: {e}")
 
-    async def _embed_texts(self, texts: list[str]) -> list[list[float]]:
+    async def _embed_texts(self, texts: list[str]) -> list[dict]:
         """
-        Generate embeddings for texts.
+        Generate embeddings for texts using BGE-M3.
 
-        Uses BGE-M3 model for semantic embeddings.
+        Returns list of dicts with:
+        - dense_vecs: Dense embeddings (1024-dim)
+        - lexical_weights: Sparse embeddings (dict of token_id: weight)
+        - colbert_vecs: ColBERT multivector embeddings
         """
         # Run embedding in threadpool to avoid blocking
-        embeddings = await asyncio.get_event_loop().run_in_executor(
+        output = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self.embedding_model.encode(
                 texts,
                 batch_size=self.settings.batch_size_embeddings,
-                show_progress_bar=False,
-                normalize_embeddings=True,
+                return_dense=True,
+                return_sparse=True,
+                return_colbert_vecs=True,
             ),
         )
-        result: list[list[float]] = embeddings.tolist()
+
+        # Convert to list of dicts (one per text)
+        result = []
+        for i in range(len(texts)):
+            result.append(
+                {
+                    "dense_vecs": output["dense_vecs"][i],
+                    "lexical_weights": output["lexical_weights"][i],
+                    "colbert_vecs": output["colbert_vecs"][i],
+                }
+            )
         return result
 
     def get_collection_stats(self, collection_name: str) -> dict[str, Any]:
