@@ -1,10 +1,11 @@
-# 📚 DOCUMENTATION - Contextual RAG v2.0.1
+# 📚 DOCUMENTATION - Contextual RAG v2.4.0
 
 > **Complete project documentation index**
 
 ## 🚀 QUICK START (Start here!)
 
 - **[README.md](../README.md)** - Project home page (5 minutes)
+- **[PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md)** ⭐ - Full pipeline overview (10 minutes)
 - **[QUICK_START.md](guides/QUICK_START.md)** - Installation and first search (5 minutes)
 - **[SETUP.md](guides/SETUP.md)** - Full installation and configuration
 
@@ -16,7 +17,9 @@
 
 | Document | Description |
 |----------|---------|
-| **[COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md)** ⭐ | Complete project structure (33 files, all modules) |
+| **[PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md)** ⭐ | Complete pipeline overview (ingestion → retrieval) |
+| **[QDRANT_STACK.md](QDRANT_STACK.md)** ⭐ | Qdrant v1.15.4 configuration (BGE-M3, quantization, optimization) |
+| **[COMPLETE_STRUCTURE.md](COMPLETE_STRUCTURE.md)** | Complete project structure (33 files, all modules) |
 | **[README_NEW_STRUCTURE.md](README_NEW_STRUCTURE.md)** | New `src/` architecture description |
 | **[ARCHITECTURE.md](architecture/ARCHITECTURE.md)** | System architecture and design |
 | **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** | Old description (reference) |
@@ -264,7 +267,14 @@
 
 ## 🔄 UPDATES AND VERSIONS
 
-### v2.0.1 (Current)
+### v2.4.0 (Current)
+- ✅ BGE-M3 multi-vector embeddings (dense + sparse + ColBERT)
+- ✅ Qdrant v1.15.4 optimizations (Scalar Int8 quantization, ~75% RAM savings)
+- ✅ BM42 sparse vectors (+9% Precision@10 vs BM25)
+- ✅ Complete Qdrant stack documentation
+- ✅ Updated PIPELINE_OVERVIEW.md
+
+### v2.0.1
 - ✅ New `src/` architecture
 - ✅ DBSF+ColBERT search
 - ✅ MLflow + Langfuse integration
@@ -284,6 +294,6 @@
 
 ---
 
-**Last Updated**: October 29, 2025
-**Version**: 2.0.1
+**Last Updated**: November 5, 2025
+**Version**: 2.4.0
 **Material**: Complete
