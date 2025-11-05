@@ -2,8 +2,8 @@
 
 > **Production RAG система с гибридным поиском и ML платформой**
 
-**Версия:** 2.3.1
-**Дата:** 2025-11-04
+**Версия:** 2.4.0
+**Дата:** 2025-11-05
 **Репозиторий:** https://github.com/yastman/rag
 
 ---
@@ -13,6 +13,8 @@
 Production-ready RAG система для поиска по документам с:
 
 - 🔍 **Гибридный поиск:** RRF + ColBERT (Variant A) / DBSF + ColBERT (Variant B)
+- 🧠 **BGE-M3 Embeddings:** Dense (1024-dim) + Sparse (BM42) + ColBERT за один проход
+- 🗄️ **Qdrant v1.15.4:** Scalar Int8 quantization (~75% RAM savings), оптимизированный HNSW
 - 📊 **ML платформа:** MLflow + Langfuse + OpenTelemetry
 - 🚀 **Redis кэш:** 2 уровня (embeddings 30d + responses 5-60min)
 - 📄 **Форматы:** PDF, CSV, DOCX через Docling
@@ -20,8 +22,14 @@ Production-ready RAG система для поиска по документа�
 - 🔒 **Security:** PII redaction + budget guards
 
 **Use cases:**
-- Уголовный кодекс Украины (1294 документов)
+- Уголовный кодекс Украины (1,294 документов)
 - CSV данные (недвижимость, каталоги, etc.)
+
+**Performance:**
+- Recall@10: 0.96 (hybrid search)
+- NDCG@10: 0.98
+- Latency: ~1.0s (including ColBERT rerank)
+- RAM: ~75% savings with quantization
 
 ---
 
@@ -49,7 +57,8 @@ python src/ingestion/csv_to_qdrant.py \
 rag-fresh/
 ├── README.md                    ← ТЫ ЗДЕСЬ
 ├── docs/
-│   └── PIPELINE_OVERVIEW.md     ← 📖 НАЧНИ ОТСЮДА (полное описание)
+│   ├── PIPELINE_OVERVIEW.md     ← 📖 НАЧНИ ОТСЮДА (полное описание)
+│   └── QDRANT_STACK.md          ← 🗄️ Qdrant конфигурация и оптимизации
 ├── src/
 │   ├── ingestion/               ← PDF/CSV парсеры + индексация
 │   ├── retrieval/               ← Гибридный поиск (Variant A/B)
