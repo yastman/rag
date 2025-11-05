@@ -162,3 +162,5 @@ qdrant_storage/
 
 ***REMOVED*** Pre-commit
 .pre-commit-config.yaml~
+*.docx
+*.pdf

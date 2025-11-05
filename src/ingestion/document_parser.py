@@ -20,14 +20,6 @@ from pathlib import Path
 from typing import Optional
 
 import pymupdf  ***REMOVED*** PyMuPDF 1.26+ (NOT fitz!)
-from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import (
-    AcceleratorDevice,
-    AcceleratorOptions,
-    PdfPipelineOptions,
-    TableFormerMode,
-)
 from docling.document_converter import DocumentConverter
 
 
@@ -120,21 +112,8 @@ class UniversalDocumentParser:
         - OCR disabled: For digital documents (CSV, DOCX, XLSX)
         """
         if self.docling_converter is None:
-            ***REMOVED*** Optimized pipeline for DOCX/CSV/XLSX (no OCR needed)
-            pipeline_options = PdfPipelineOptions(
-                do_ocr=False,  ***REMOVED*** Not needed for digital formats
-                do_table_structure=True,
-                table_structure_options=TableFormerMode.FAST,  ***REMOVED*** 3-6x faster
-                backend=DoclingParseDocumentBackend,  ***REMOVED*** 10x faster
-                accelerator_options=AcceleratorOptions(
-                    num_threads=4,
-                    device=AcceleratorDevice.AUTO,  ***REMOVED*** GPU if available
-                ),
-            )
-
-            self.docling_converter = DocumentConverter(
-                format_options={InputFormat.PDF: pipeline_options}
-            )
+            ***REMOVED*** Simple converter for DOCX/CSV/XLSX (no complex PDF options needed)
+            self.docling_converter = DocumentConverter()
 
         return self.docling_converter
 
