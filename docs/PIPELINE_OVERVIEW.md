@@ -2,8 +2,8 @@
 
 > **Быстрая справка для понимания всего flow системы**
 
-**Версия:** 2.3.0
-**Дата:** 2025-11-04
+**Версия:** 2.4.0
+**Дата:** 2025-11-05
 **Цель:** Быстро понять как работает вся система, чтобы не повторять действия
 
 ---
@@ -113,28 +113,41 @@ records = indexer.read_csv("demo_BG.csv")
 
 **Модуль:** `src/ingestion/indexer.py`
 
-**Модель:** `BAAI/bge-m3`
-- Dense vectors: 1024-dim (основной семантический поиск)
-- Sparse vectors: bag-of-words (для точных совпадений)
-- ColBERT: multi-vector для reranking
+**Модель:** `BAAI/bge-m3` (через FlagEmbedding BGEM3FlagModel)
+
+BGE-M3 генерирует **три типа эмбеддингов за один проход**:
+- **Dense vectors:** 1024-dim (семантический поиск)
+- **Sparse vectors:** Learned BM42 (keyword matching, лучше BM25)
+- **ColBERT:** Multi-vector для token-level reranking
 
 **Процесс:**
 
 ```python
-# В indexer.py
-embedding_model = SentenceTransformer("BAAI/bge-m3")
-embeddings = embedding_model.encode(
+# В indexer.py (обновлено 2025-11-05)
+from FlagEmbedding import BGEM3FlagModel
+
+embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+output = embedding_model.encode(
     texts,
     batch_size=32,
-    normalize_embeddings=True
+    return_dense=True,
+    return_sparse=True,
+    return_colbert_vecs=True
 )
+# Returns: {
+#   "dense_vecs": [1024],
+#   "lexical_weights": {token_id: weight},
+#   "colbert_vecs": [N, 1024]
+# }
 ```
 
 **Батчинг:**
 - Batch size: 32 (configurable)
-- Нормализация для cosine similarity
+- FP16 precision для скорости
 
-**Output:** Vectors [1024-dim float] для каждого chunk
+**Output:** Three vector types для каждого chunk
+
+📖 **Детали:** См. `docs/QDRANT_STACK.md` для полной конфигурации
 
 ---
 
@@ -142,36 +155,59 @@ embeddings = embedding_model.encode(
 
 **Модуль:** `src/ingestion/indexer.py`
 
+**Qdrant Version:** v1.15.4 (с оптимизациями)
+
 **Qdrant Collections:**
 
 1. **`legal_documents`** (основная)
-   - 1294 точек
-   - Векторы: `dense` (1024) + `colbert` (1024 multi-vector)
-   - Metadata: article_number, chapter, section, text
+   - **Points:** 1,294 chunks (Criminal Code of Ukraine)
+   - **Vectors:** Named vectors architecture
+     - `dense` (1024-dim) - с Scalar Int8 quantization
+     - `colbert` (N×1024) - multivector для reranking
+     - `bm42` (sparse) - learned sparse с IDF modifier
+   - **Metadata:** article_number, chapter, section, document_name
+   - **Created:** 2025-11-05 (recreated with optimizations)
 
-2. **`bulgarian_properties`** (новая, пример CSV)
-   - 4 точки (demo_BG.csv)
-   - Векторы: `dense` (1024)
-   - Metadata: все поля CSV (Город, Цена, Комнат, etc.)
+**Ключевые оптимизации (v2.4.0):**
+
+- ✅ **Scalar Int8 quantization**: 4x compression, 0.99 accuracy
+- ✅ **Original vectors on disk**: ~75% RAM savings
+- ✅ **HNSW optimized**: m=16, ef_construct=200
+- ✅ **BM42 sparse vectors**: +9% Precision@10 vs BM25
+- ✅ **ColBERT MaxSim**: Token-level reranking
 
 **Структура Point:**
 
 ```python
 PointStruct(
     id=uuid.uuid4(),
-    vector=embedding,  # [1024-dim]
+    vector={
+        "dense": [1024 floats],           # Semantic search
+        "colbert": [[N×1024] floats],     # Reranking
+        "bm42": {                          # Keyword search
+            "indices": [token_ids],
+            "values": [weights]
+        }
+    },
     payload={
-        "text": chunk.text,
-        "document_name": "...",
-        "article_number": "...",  # для legal docs
-        # + все остальные поля
+        "page_content": chunk.text,  # n8n LangChain format
+        "metadata": {
+            "document_name": "...",
+            "article_number": "...",
+            "chapter": "...",
+            "section": "...",
+            "chunk_id": "...",
+            "order": 0
+        }
     }
 )
 ```
 
-**Индексы для fast filtering:**
+**Payload Indexes (fast filtering):**
 - `article_number` (keyword)
 - `document_name` (keyword)
+
+📖 **Детали:** См. `docs/QDRANT_STACK.md` для архитектуры и бенчмарков
 
 ---
 
@@ -572,17 +608,25 @@ settings = Settings(
    - https://github.com/docling-project/docling
    - Supports: PDF, DOCX, CSV, HTML
 
-2. **BGE-M3:** Embeddings
+2. **BGE-M3:** Embeddings (обновлено 2025-11-05)
    - https://huggingface.co/BAAI/bge-m3
-   - Dense + Sparse + ColBERT
+   - https://github.com/FlagOpen/FlagEmbedding
+   - Dense + Sparse (learned BM42) + ColBERT multi-functionality
 
-3. **Qdrant:** Vector DB
+3. **Qdrant:** Vector DB (v1.15.4)
    - https://qdrant.tech/documentation/
-   - Hybrid search, multivector
+   - https://qdrant.tech/documentation/guides/quantization/
+   - https://qdrant.tech/documentation/guides/optimize/
+   - Hybrid search, multivector, quantization
 
 4. **RRF vs DBSF:**
    - RRF: Reciprocal Rank Fusion (default)
    - DBSF: Distribution-Based Score Fusion (faster)
+
+5. **Внутренняя документация:**
+   - `docs/QDRANT_STACK.md` - детальная конфигурация Qdrant
+   - `docs/PIPELINE_OVERVIEW.md` - этот документ
+   - `docs/architecture/ARCHITECTURE.md` - общая архитектура
 
 ---
 
@@ -620,17 +664,24 @@ docker exec ai-redis-secure redis-cli -a $REDIS_PASSWORD FLUSHDB
 ## ✅ Checklist: Что нужно знать
 
 - [x] Ingestion flow: Document → Chunks → Embeddings → Qdrant
+- [x] BGE-M3: Три типа векторов за один проход (dense + sparse + ColBERT)
+- [x] Qdrant v1.15.4: Scalar Int8 quantization, BM42 sparse, ColBERT
 - [x] Retrieval: Variant A (RRF) vs Variant B (DBSF)
 - [x] Cache: 2-level (embeddings + responses)
 - [x] Security: PII + budget guards
 - [x] Monitoring: OpenTelemetry + Langfuse + MLflow
-- [x] CSV support: `csv_to_qdrant.py`
-- [x] Collections: `legal_documents` (1294 points), `bulgarian_properties` (4 points)
+- [x] Collections: `legal_documents` (1,294 points с оптимизациями)
+- [x] Performance: ~75% RAM savings, +9% Precision@10
 
 ---
 
 **Этот документ должен дать полное понимание системы за 10-15 минут чтения.**
 **При добавлении новых компонентов - обновить этот файл!**
 
-**Last Updated:** 2025-11-04
+**См. также:**
+- 📖 `docs/QDRANT_STACK.md` - детальная конфигурация vector database
+- 📖 `docs/architecture/ARCHITECTURE.md` - архитектура всей системы
+- 📖 `docs/ML_PLATFORM_INTEGRATION_PLAN.md` - ML платформа и эксперименты
+
+**Last Updated:** 2025-11-05
 **Maintainer:** yastman
