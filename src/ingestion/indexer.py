@@ -10,6 +10,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
     HnswConfigDiff,
+    Modifier,
     MultiVectorComparator,
     MultiVectorConfig,
     OptimizersConfigDiff,
@@ -129,7 +130,7 @@ class DocumentIndexer:
             # BM42 sparse vectors (better than BM25 for short chunks)
             sparse_vectors_config={
                 "bm42": SparseVectorParams(
-                    modifier="idf",  # Native IDF computation in Qdrant
+                    modifier=Modifier.IDF,  # Native IDF computation in Qdrant
                 )
             },
             # Optimizer config for better bulk indexing
