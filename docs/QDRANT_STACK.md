@@ -174,18 +174,20 @@ sparse_vectors_config={
 
 #### 2. ColBERT Multivectors (Reranking)
 
-**Location:** `src/ingestion/indexer.py:119-127`
+**Location:** `src/ingestion/indexer.py:119-129`
 
 ```python
 "colbert": VectorParams(
     size=1024,
     distance=Distance.COSINE,
 
+    # MaxSim comparator for token-level matching (MUST be MultiVectorConfig object!)
+    multivector_config=MultiVectorConfig(
+        comparator=MultiVectorComparator.MAX_SIM
+    ),
+
     # Disable HNSW for ColBERT (only used for reranking, not search)
     hnsw_config=HnswConfigDiff(m=0),
-
-    # MaxSim comparator for token-level matching
-    multivector_config={"comparator": "max_sim"},
 
     # Store on disk (only accessed during rerank phase)
     on_disk=True,
@@ -200,12 +202,12 @@ score(Q, D) = Σ max_similarity(q_token, d_tokens)
 
 #### 3. BM42 Sparse Vectors (Keyword Matching)
 
-**Location:** `src/ingestion/indexer.py:130-134`
+**Location:** `src/ingestion/indexer.py:131-135`
 
 ```python
 sparse_vectors_config={
     "bm42": SparseVectorParams(
-        modifier="idf",  # Native IDF computation in Qdrant
+        modifier=Modifier.IDF,  # Native IDF computation in Qdrant (MUST be enum!)
     )
 }
 ```
@@ -592,6 +594,7 @@ curl http://localhost:6333/metrics
 - Enable payload indexes on frequently filtered fields
 - Use hybrid search (RRF fusion) for best quality
 - Monitor collection stats regularly
+- **Use official Qdrant API types (enums, objects) instead of strings/dicts**
 
 ### ✗ DON'T
 
@@ -600,6 +603,60 @@ curl http://localhost:6333/metrics
 - Don't skip HNSW for dense vectors (m=0 only for ColBERT)
 - Don't forget API key authentication in production
 - Don't index large collections without optimizer config
+- **Don't use dict/string for Qdrant config (use MultiVectorConfig, Modifier enums)**
+
+## ⚠️ Common Configuration Mistakes
+
+### Mistake #1: Using Dict for MultiVectorConfig
+
+**Wrong:**
+```python
+multivector_config={"comparator": "max_sim"}  # ❌ Will fail or cause issues
+```
+
+**Correct:**
+```python
+from qdrant_client.models import MultiVectorConfig, MultiVectorComparator
+
+multivector_config=MultiVectorConfig(
+    comparator=MultiVectorComparator.MAX_SIM
+)  # ✅ Official API
+```
+
+### Mistake #2: Using String for Modifier
+
+**Wrong:**
+```python
+SparseVectorParams(modifier="idf")  # ❌ Not type-safe
+```
+
+**Correct:**
+```python
+from qdrant_client.models import Modifier, SparseVectorParams
+
+SparseVectorParams(
+    modifier=Modifier.IDF
+)  # ✅ Type-safe enum
+```
+
+### Required Imports
+
+```python
+from qdrant_client.models import (
+    Distance,
+    HnswConfigDiff,
+    Modifier,                    # ← For sparse vectors
+    MultiVectorComparator,       # ← For ColBERT
+    MultiVectorConfig,           # ← For ColBERT
+    OptimizersConfigDiff,
+    PointStruct,
+    ScalarQuantization,
+    ScalarQuantizationConfig,
+    ScalarType,
+    SparseVectorParams,
+    VectorParams,
+)
+```
 
 ---
 
