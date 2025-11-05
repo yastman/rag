@@ -1,8 +1,10 @@
 """Document chunking strategies."""
 
+import csv
 import re
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Any, Optional
 
 
@@ -222,3 +224,42 @@ class DocumentChunker:
             metadata["chapter"] = chapter_match.group(2)
 
         return metadata
+
+
+def chunk_csv_by_rows(csv_path: Path, document_name: str) -> list[Chunk]:
+    """
+    Chunk CSV file with one row per chunk.
+
+    This preserves row boundaries instead of mixing rows together
+    like token-based chunkers do. Perfect for structured data like
+    apartment listings where each row is a complete entity.
+
+    Args:
+        csv_path: Path to CSV file
+        document_name: Name for the document
+
+    Returns:
+        List of chunks, one per CSV row (excluding header)
+    """
+    chunks = []
+
+    with open(csv_path, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+
+        for row_idx, row in enumerate(reader):
+            # Format row as readable text: "Field1: value1, Field2: value2, ..."
+            row_text = ", ".join(f"{k}: {v}" for k, v in row.items() if v)
+
+            # Use first column value or row number as article_number
+            article_number = next(iter(row.values())) if row else str(row_idx)
+
+            chunk = Chunk(
+                text=row_text,
+                chunk_id=row_idx,
+                document_name=document_name,
+                article_number=article_number,
+                order=row_idx,
+            )
+            chunks.append(chunk)
+
+    return chunks
