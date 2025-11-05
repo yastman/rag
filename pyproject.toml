@@ -16,7 +16,8 @@ dependencies = [
     "FlagEmbedding",
     "scipy",
     "sentence-transformers",  ***REMOVED*** BGE-M3 embeddings
-    "qdrant-client",          ***REMOVED*** Vector database client
+    "qdrant-client>=1.15.0",  ***REMOVED*** Vector database client (v1.15+ for BM42 support)
+    "fastembed>=0.7.0",       ***REMOVED*** FastEmbed for BM42 sparse embeddings
     ***REMOVED*** Document Processing (2025-10-30)
     "docling>=2.0.0",         ***REMOVED*** Advanced document chunking & structure detection
     "docling-core>=2.0.0",    ***REMOVED*** Core types for Docling

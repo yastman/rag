@@ -7,11 +7,13 @@ from typing import Any, Optional
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
-    BinaryQuantization,
-    BinaryQuantizationConfig,
     Distance,
     HnswConfigDiff,
     PointStruct,
+    ScalarQuantization,
+    ScalarQuantizationConfig,
+    ScalarType,
+    SparseVectorParams,
     VectorParams,
 )
 from sentence_transformers import SentenceTransformer
@@ -84,25 +86,46 @@ class DocumentIndexer:
 
         ***REMOVED*** Create collection with optimized vector configuration
         ***REMOVED*** Optimizations (Nov 2025):
-        ***REMOVED*** - Binary 1.5-bit quantization: 24x compression vs unquantized (6x better than int8)
-        ***REMOVED*** - HNSW delta compression: 30% memory savings for graph structure
-        ***REMOVED*** - Always RAM: Fast access to quantized vectors
+        ***REMOVED*** - Scalar Int8 quantization: 4x compression, proven production-grade
+        ***REMOVED*** - BM42 sparse vectors: Better than BM25 for short chunks (RAG use case)
+        ***REMOVED*** - HNSW optimized for RAG workloads
+        ***REMOVED*** - Always RAM for quantized vectors: Fast access
         self.client.create_collection(
             collection_name=collection_name,
-            vectors_config=VectorParams(
-                size=VectorDimensions.DENSE,
-                distance=Distance.COSINE,
-                hnsw_config=HnswConfigDiff(
-                    m=16,  ***REMOVED*** Number of edges per node (good balance)
-                    ef_construct=200,  ***REMOVED*** Quality during indexing
-                    on_disk=False,  ***REMOVED*** Keep HNSW graph in RAM for speed
+            vectors_config={
+                ***REMOVED*** Dense vectors for semantic search (BGE-M3)
+                "dense": VectorParams(
+                    size=VectorDimensions.DENSE,
+                    distance=Distance.COSINE,
+                    hnsw_config=HnswConfigDiff(
+                        m=16,  ***REMOVED*** Number of edges per node (good balance)
+                        ef_construct=200,  ***REMOVED*** Quality during indexing
+                        on_disk=False,  ***REMOVED*** Keep HNSW graph in RAM for speed
+                    ),
+                    quantization_config=ScalarQuantization(
+                        scalar=ScalarQuantizationConfig(
+                            type=ScalarType.INT8,  ***REMOVED*** 4x compression, proven
+                            quantile=0.99,  ***REMOVED*** Preserve 99% accuracy
+                            always_ram=True,  ***REMOVED*** Keep quantized vectors in RAM
+                        )
+                    ),
                 ),
-                quantization_config=BinaryQuantization(
-                    binary=BinaryQuantizationConfig(
-                        always_ram=True,  ***REMOVED*** Keep quantized vectors in RAM
-                    )
+                ***REMOVED*** ColBERT multivector for reranking
+                "colbert": VectorParams(
+                    size=VectorDimensions.DENSE,
+                    distance=Distance.COSINE,
+                    hnsw_config=HnswConfigDiff(
+                        m=0,  ***REMOVED*** Disable HNSW for ColBERT (not needed for reranking)
+                    ),
+                    multivector_config={"comparator": "max_sim"},  ***REMOVED*** MaxSim for ColBERT
                 ),
-            ),
+            },
+            ***REMOVED*** BM42 sparse vectors (better than BM25 for short chunks)
+            sparse_vectors_config={
+                "bm42": SparseVectorParams(
+                    modifier="idf",  ***REMOVED*** Native IDF computation in Qdrant
+                )
+            },
         )
 
         ***REMOVED*** Create indexes on important payload fields for fast filtering
