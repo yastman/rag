@@ -75,7 +75,7 @@ class BaselineSearchEngine(BaseSearchEngine):
         top_k: int = 10,
         score_threshold: Optional[float] = None,
     ) -> list[SearchResult]:
-        """Search using dense vectors only."""
+        """Search using dense vectors only with rescoring for quantization accuracy."""
         if score_threshold is None:
             score_threshold = 0.5
 
@@ -84,6 +84,13 @@ class BaselineSearchEngine(BaseSearchEngine):
             query_vector=query_embedding,
             limit=top_k,
             score_threshold=score_threshold,
+            ***REMOVED*** Oversampling + rescoring for quantization accuracy
+            search_params={
+                "quantization": {
+                    "rescore": True,  ***REMOVED*** Rescore with original vectors
+                    "oversampling": 3.0,  ***REMOVED*** Retrieve 3x more for rescoring
+                }
+            },
         )
 
         return [
