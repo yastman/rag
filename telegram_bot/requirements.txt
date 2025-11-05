@@ -1,0 +1,11 @@
+# Telegram bot
+aiogram==3.15.0
+
+# HTTP client
+httpx==0.28.1
+
+***REMOVED*** client
+qdrant-client==1.12.1
+
+# Environment variables
+python-dotenv==1.0.1
