@@ -8,12 +8,26 @@ Usage:
 
 import argparse
 import asyncio
+import logging
 from pathlib import Path
 
+from docling.chunking import HybridChunker
+from docling.document_converter import DocumentConverter
+
 from src.config import Settings
-from src.ingestion.chunker import DocumentChunker
-from src.ingestion.document_parser import UniversalDocumentParser
 from src.ingestion.indexer import DocumentIndexer
+
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
+
+# Set specific loggers
+logging.getLogger("src.ingestion.indexer").setLevel(logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # Suppress HTTP logs
 
 
 async def main():
@@ -22,8 +36,9 @@ async def main():
     parser.add_argument("files", nargs="+", help="Files to index (PDF, DOCX, CSV, XLSX)")
     parser.add_argument("--collection", default="documents", help="Collection name")
     parser.add_argument("--recreate", action="store_true", help="Recreate collection")
-    parser.add_argument("--chunk-size", type=int, default=1024, help="Chunk size")
-    parser.add_argument("--overlap", type=int, default=256, help="Chunk overlap")
+    parser.add_argument(
+        "--max-tokens", type=int, default=512, help="Max tokens per chunk (default: 512 for BGE-M3)"
+    )
     args = parser.parse_args()
 
     print("=" * 80)
@@ -32,15 +47,24 @@ async def main():
     print(f"Files: {len(args.files)}")
     print(f"Collection: {args.collection}")
     print("Embeddings: BGE-M3 (dense 1024-dim + BM42 sparse + ColBERT)")
+    print(f"Chunking: Docling HybridChunker (max {args.max_tokens} tokens)")
     print("Format: n8n/LangChain compatible (page_content + metadata)")
     print("=" * 80)
     print()
 
     # Initialize
     settings = Settings()
-    doc_parser = UniversalDocumentParser(use_cache=True)
-    chunker = DocumentChunker(chunk_size=args.chunk_size, overlap=args.overlap)
     indexer = DocumentIndexer(settings)
+
+    # Initialize Docling DocumentConverter and HybridChunker
+    print("Initializing Docling DocumentConverter and HybridChunker...")
+    doc_converter = DocumentConverter()
+    chunker = HybridChunker(
+        tokenizer="BAAI/bge-m3",  # HybridChunker accepts model ID directly
+        max_tokens=args.max_tokens,
+    )
+    print(f"✓ Initialized (max_tokens={args.max_tokens})")
+    print()
 
     # Create collection
     if args.recreate:
@@ -56,23 +80,41 @@ async def main():
             print(f"⚠️  File not found: {file_path}")
             continue
 
-        # Parse
-        print(f"📄 Parsing: {file_path.name}...")
-        parsed_doc = doc_parser.parse_file(file_path)
-        print(f"   ✓ {len(parsed_doc.content):,} chars", end="")
-        if parsed_doc.num_pages:
-            print(f", {parsed_doc.num_pages} pages")
-        else:
-            print()
+        # CSV files: use row-based chunking (1 row = 1 chunk)
+        if file_path.suffix.lower() == ".csv":
+            print(f"📄 Processing CSV: {file_path.name}...")
+            from src.ingestion.chunker import chunk_csv_by_rows
 
-        # Chunk
-        file_chunks = chunker.chunk_text(
-            text=parsed_doc.content,
-            document_name=parsed_doc.filename,
-            article_number=file_path.stem,
-        )
-        print(f"   ✓ {len(file_chunks)} chunks")
-        all_chunks.extend(file_chunks)
+            csv_chunks = chunk_csv_by_rows(file_path, file_path.name)
+            print(f"   ✓ {len(csv_chunks)} rows → {len(csv_chunks)} chunks")
+            all_chunks.extend(csv_chunks)
+            continue
+
+        # Other files: use Docling + HybridChunker
+        print(f"📄 Converting: {file_path.name}...")
+        result = doc_converter.convert(file_path)
+        dl_doc = result.document
+
+        # Export to markdown to get character count
+        md_content = dl_doc.export_to_markdown()
+        print(f"   ✓ {len(md_content):,} chars")
+
+        # Chunk with HybridChunker
+        doc_chunks = list(chunker.chunk(dl_doc))
+        print(f"   ✓ {len(doc_chunks)} chunks")
+
+        # Convert HybridChunker chunks to our Chunk format
+        from src.ingestion.chunker import Chunk
+
+        for i, hybrid_chunk in enumerate(doc_chunks):
+            chunk = Chunk(
+                text=hybrid_chunk.text,
+                chunk_id=i,
+                document_name=file_path.name,
+                article_number=file_path.stem,
+                order=i,
+            )
+            all_chunks.append(chunk)
 
     print()
     print(f"Total chunks: {len(all_chunks)}")
