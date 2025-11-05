@@ -10,6 +10,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
     HnswConfigDiff,
+    MultiVectorComparator,
+    MultiVectorConfig,
     OptimizersConfigDiff,
     PointStruct,
     ScalarQuantization,
@@ -117,10 +119,10 @@ class DocumentIndexer:
                 "colbert": VectorParams(
                     size=VectorDimensions.DENSE,
                     distance=Distance.COSINE,
+                    multivector_config=MultiVectorConfig(comparator=MultiVectorComparator.MAX_SIM),
                     hnsw_config=HnswConfigDiff(
                         m=0,  # Disable HNSW for ColBERT (only for reranking)
                     ),
-                    multivector_config={"comparator": "max_sim"},  # MaxSim scoring
                     on_disk=True,  # ColBERT vectors on disk (only used for rerank)
                 ),
             },
