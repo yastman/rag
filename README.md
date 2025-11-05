@@ -2,7 +2,7 @@
 
 > **Production RAG система с гибридным поиском и ML платформой**
 
-**Версия:** 2.4.0
+**Версия:** 2.5.0
 **Дата:** 2025-11-05
 **Репозиторий:** https://github.com/yastman/rag
 
@@ -16,7 +16,7 @@ Production-ready RAG система для поиска по документа�
 - 🧠 **BGE-M3 Embeddings:** Dense (1024-dim) + Sparse (BM42) + ColBERT за один проход
 - 🗄️ **Qdrant v1.15.4:** Scalar Int8 quantization (~75% RAM savings), оптимизированный HNSW
 - 📊 **ML платформа:** MLflow + Langfuse + OpenTelemetry
-- 🚀 **Redis кэш:** 2 уровня (embeddings 30d + responses 5-60min)
+- 🚀 **Redis кэш:** 4-уровневая архитектура с semantic search (Redis Vector Search)
 - 📄 **Форматы:** PDF, CSV, DOCX через Docling
 - 🏛️ **Model Registry:** Staging → Production workflow
 - 🔒 **Security:** PII redaction + budget guards
@@ -129,6 +129,15 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ***REMOVED******REMOVED*** 📊 Changelog
 
+***REMOVED******REMOVED******REMOVED*** v2.5.0 (2025-11-05) - Semantic Cache ✅
+
+- ✅ **Redis Vector Search** - истинный semantic cache с KNN
+- ✅ 4-tier caching: Semantic (Tier 1), Embeddings (Tier 1), Analyzer (Tier 2), Search (Tier 2)
+- ✅ COSINE similarity с threshold 0.85 для semantic matching
+- ✅ Разные формулировки одного вопроса → HIT
+- ✅ Производительность: 1-5ms latency, 1000x speedup для embeddings
+- ✅ Документация: CACHING.md + SEMANTIC_CACHE_COMPARISON.md
+
 ***REMOVED******REMOVED******REMOVED*** v2.4.0 (2025-11-05) - Universal Indexer ✅
 
 - ✅ Universal document indexer CLI (`simple_index_test.py`)
@@ -165,8 +174,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 | Документ | Описание |
 |----------|----------|
 | [PIPELINE_OVERVIEW.md](docs/PIPELINE_OVERVIEW.md) | **НАЧНИ ЗДЕСЬ** - полное описание системы |
+| [CACHING.md](CACHING.md) | **Redis кэширование** - 4-tier semantic cache |
+| [SEMANTIC_CACHE_COMPARISON.md](SEMANTIC_CACHE_COMPARISON.md) | Сравнение подходов к semantic cache |
 | [src/evaluation/README.md](src/evaluation/README.md) | MLflow, Langfuse, RAGAS |
-| [src/cache/README.md](src/cache/README.md) | Redis 2-level cache |
+| [src/cache/README.md](src/cache/README.md) | Redis 2-level cache (legacy) |
 | [src/governance/README.md](src/governance/README.md) | Model Registry |
 | [src/security/README.md](src/security/README.md) | PII + budget guards |
 
@@ -210,7 +221,8 @@ docker exec ai-redis-secure redis-cli -a $REDIS_PASSWORD PING  ***REMOVED*** Red
 
 ***REMOVED******REMOVED******REMOVED*** Запустить тесты
 ```bash
-python tests/test_redis_url.py           ***REMOVED*** Redis cache
+python test_cache.py                      ***REMOVED*** 4-tier cache tests (Semantic + Embeddings + Analyzer + Search)
+python tests/test_redis_url.py           ***REMOVED*** Redis cache (legacy)
 python src/evaluation/smoke_test.py      ***REMOVED*** Smoke test
 pytest                                    ***REMOVED*** All tests
 ```
@@ -222,7 +234,7 @@ pytest                                    ***REMOVED*** All tests
 | Компонент | Технология | Порт |
 |-----------|-----------|------|
 | Vector DB | Qdrant 1.15.4 | 6333 |
-| Cache | Redis 8.2 | 6379 |
+| Cache | Redis Stack 8.2 (RediSearch) | 6379 |
 | Embeddings | BGE-M3 (1024-dim) | - |
 | ML Platform | MLflow | 5000 |
 | Tracing | Langfuse | 3001 |
