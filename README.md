@@ -129,6 +129,13 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## 📊 Changelog
 
+### v2.4.0 (2025-11-05) - Universal Indexer ✅
+
+- ✅ Universal document indexer CLI (`simple_index_test.py`)
+- ✅ Supports PDF, DOCX, CSV, XLSX in single command
+- ✅ Demo files organized in `data/demo/`
+- ✅ Fixed Docling parser configuration
+
 ### v2.3.1 (2025-11-04) - CSV Support ✅
 
 - ✅ CSV → Qdrant indexer (`csv_to_qdrant.py`)
@@ -167,7 +174,24 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## 🎯 Быстрые команды
 
-### Добавить CSV
+### Индексировать документы (универсальный скрипт)
+```bash
+# Индексировать любые файлы (PDF, DOCX, CSV, XLSX)
+python simple_index_test.py file1.pdf file2.docx --collection my_docs
+
+# Пример с демо файлами
+python simple_index_test.py \
+    data/demo/demo_BG.csv \
+    data/demo/info_bg_home.docx \
+    --collection bulgarian_properties \
+    --recreate
+```
+
+**Демо файлы** (в `data/demo/`):
+- `demo_BG.csv` - 4 объекта недвижимости в Болгарии
+- `info_bg_home.docx` - контакты компании
+
+### Добавить CSV (legacy)
 ```bash
 python src/ingestion/csv_to_qdrant.py --input file.csv --collection name
 ```

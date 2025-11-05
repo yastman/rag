@@ -150,6 +150,12 @@ tmp/
 temp/
 *.tmp
 
+# Demo data files (but keep README)
+data/demo/*.csv
+data/demo/*.docx
+data/demo/*.pdf
+data/demo/*.xlsx
+
 # MLflow
 mlruns/
 .mlflow
