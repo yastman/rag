@@ -1,6 +1,8 @@
 """Document indexing to vector database."""
 
 import asyncio
+import logging
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -25,6 +27,9 @@ from qdrant_client.models import (
 from src.config import Settings, VectorDimensions
 
 from .chunker import Chunk
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -61,7 +66,12 @@ class DocumentIndexer:
             settings: Configuration settings
         """
         self.settings = settings or Settings()
-        self.client = QdrantClient(self.settings.qdrant_url, api_key=self.settings.qdrant_api_key)
+        # Use longer timeout for large batches (embeddings can take 40-60s)
+        self.client = QdrantClient(
+            self.settings.qdrant_url,
+            api_key=self.settings.qdrant_api_key,
+            timeout=120,  # 2 minutes timeout for large batch operations
+        )
         self.embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
         self.stats = IndexStats()
 
@@ -149,19 +159,56 @@ class DocumentIndexer:
     def _create_payload_indexes(self, collection_name: str) -> None:
         """Create indexes on payload fields for fast filtering."""
         try:
-            # Index article_number for fast filtering
+            # Basic document metadata indexes
             self.client.create_payload_index(
                 collection_name=collection_name,
-                field_name="article_number",
+                field_name="metadata.article_number",
                 field_schema="keyword",
             )
 
-            # Index document_name
             self.client.create_payload_index(
                 collection_name=collection_name,
-                field_name="document_name",
+                field_name="metadata.document_name",
                 field_schema="keyword",
             )
+
+            # CSV structured data indexes (for filtering apartments)
+            # Text fields
+            self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name="metadata.city",
+                field_schema="keyword",
+            )
+
+            self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name="metadata.source_type",
+                field_schema="keyword",
+            )
+
+            # Numeric fields - enable range filtering (price < 100000, rooms >= 2, etc.)
+            for field in [
+                "price",
+                "rooms",
+                "area",
+                "floor",
+                "floors",
+                "distance_to_sea",
+                "bathrooms",
+            ]:
+                self.client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name=f"metadata.{field}",
+                    field_schema="integer",
+                )
+
+            # Boolean fields
+            for field in ["furnished", "year_round"]:
+                self.client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name=f"metadata.{field}",
+                    field_schema="bool",
+                )
 
             print(f"✓ Created payload indexes for {collection_name}")
         except Exception as e:
@@ -200,17 +247,46 @@ class DocumentIndexer:
 
     async def _index_batch(self, chunks: list[Chunk], collection_name: str) -> None:
         """Index a batch of chunks with BGE-M3 (dense + sparse + colbert)."""
+        batch_start = time.time()
+
         try:
+            # Log batch info
+            doc_names = {c.document_name for c in chunks}
+            logger.info(f"Starting batch: {len(chunks)} chunks from {doc_names}")
+
             # Generate embeddings for batch
             texts = [chunk.text for chunk in chunks]
+            avg_len = sum(len(t) for t in texts) / len(texts)
+            logger.info(f"  Texts prepared: {len(texts)} chunks, avg {avg_len:.0f} chars")
+
+            embed_start = time.time()
             embeddings = await self._embed_texts(texts)
+            embed_time = time.time() - embed_start
+            logger.info(
+                f"  Embeddings generated: {embed_time:.2f}s ({len(texts)/embed_time:.1f} chunks/s)"
+            )
 
             # Prepare points for Qdrant with named vectors
+            prep_start = time.time()
             points = []
             for chunk, emb in zip(chunks, embeddings):
                 # Convert sparse dict to lists for Qdrant
                 sparse_indices = list(emb["lexical_weights"].keys())
                 sparse_values = list(emb["lexical_weights"].values())
+
+                # Build metadata dict
+                metadata_dict = {
+                    "document_name": chunk.document_name,
+                    "article_number": chunk.article_number,
+                    "chapter": chunk.chapter,
+                    "section": chunk.section,
+                    "chunk_id": chunk.chunk_id,
+                    "order": chunk.order,
+                }
+
+                # Add extra_metadata for structured data (CSV, etc.)
+                if chunk.extra_metadata:
+                    metadata_dict.update(chunk.extra_metadata)
 
                 point = PointStruct(
                     id=str(uuid.uuid4()),
@@ -224,29 +300,33 @@ class DocumentIndexer:
                     },
                     payload={
                         "page_content": chunk.text,  # n8n expects this field
-                        "metadata": {  # All other fields go into metadata
-                            "document_name": chunk.document_name,
-                            "article_number": chunk.article_number,
-                            "chapter": chunk.chapter,
-                            "section": chunk.section,
-                            "chunk_id": chunk.chunk_id,
-                            "order": chunk.order,
-                        },
+                        "metadata": metadata_dict,  # All other fields go into metadata
                     },
                 )
                 points.append(point)
 
+            prep_time = time.time() - prep_start
+            logger.info(f"  Points prepared: {len(points)} points in {prep_time:.2f}s")
+
             # Upsert points to Qdrant
+            upsert_start = time.time()
             self.client.upsert(
                 collection_name=collection_name,
                 points=points,
             )
+            upsert_time = time.time() - upsert_start
+            logger.info(f"  Qdrant upsert: {upsert_time:.2f}s")
 
             self.stats.indexed_chunks += len(points)
+
+            batch_time = time.time() - batch_start
+            logger.info(f"✓ Batch complete: {len(points)} chunks in {batch_time:.2f}s")
             print(f"  ✓ Indexed {len(points)} chunks")
 
         except Exception as e:
+            batch_time = time.time() - batch_start
             self.stats.failed_chunks += len(chunks)
+            logger.error(f"✗ Batch failed after {batch_time:.2f}s: {type(e).__name__}: {e}")
             print(f"  ✗ Failed to index batch: {e}")
 
     async def _embed_texts(self, texts: list[str]) -> list[dict]:
@@ -258,7 +338,12 @@ class DocumentIndexer:
         - lexical_weights: Sparse embeddings (dict of token_id: weight)
         - colbert_vecs: ColBERT multivector embeddings
         """
+        logger.debug(
+            f"Encoding {len(texts)} texts with BGE-M3 (batch_size={self.settings.batch_size_embeddings})"
+        )
+
         # Run embedding in threadpool to avoid blocking
+        encode_start = time.time()
         output = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self.embedding_model.encode(
@@ -269,6 +354,8 @@ class DocumentIndexer:
                 return_colbert_vecs=True,
             ),
         )
+        encode_time = time.time() - encode_start
+        logger.debug(f"BGE-M3 encode completed in {encode_time:.2f}s")
 
         # Convert to list of dicts (one per text)
         result = []
