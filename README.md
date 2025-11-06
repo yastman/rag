@@ -2,9 +2,10 @@
 
 > **Production RAG система с гибридным поиском и ML платформой**
 
-**Версия:** 2.5.0
-**Дата:** 2025-11-05
+**Версия:** 2.5.0 → 2.6.0 (Critical Fixes in progress)
+**Дата:** 2025-01-06
 **Репозиторий:** https://github.com/yastman/rag
+**Статус:** 🟡 Development (40% production-ready)
 
 ---
 
@@ -51,29 +52,51 @@ python src/ingestion/csv_to_qdrant.py \
 
 ---
 
-## 📁 Структура
+## 📁 Структура проекта
 
 ```
 contextual_rag/
 ├── README.md                    ← ТЫ ЗДЕСЬ
+│
+├── 📋 Task Management (NEW!)
+│   ├── ROADMAP.md               ← ⭐ Стратегический план (16 задач, 4 фазы)
+│   ├── TODO.md                  ← ⭐ Ежедневный трекинг задач
+│   ├── CHANGELOG.md             ← ⭐ История изменений (Keep a Changelog)
+│   ├── TASK_MANAGEMENT_2025.md  ← Best practices
+│   ├── SETUP_TRACKING.md        ← Quick start guide
+│   └── .claude.md               ← 🤖 Инструкции для Claude AI
+│
+├── .github/workflows/           ← 🤖 CI/CD автоматизация
+│   ├── ci.yml                   ← Lint, Test, Security
+│   ├── release.yml              ← Auto-release on tags
+│   └── update-roadmap.yml       ← Auto-update progress
+│
 ├── docs/
 │   ├── PIPELINE_OVERVIEW.md     ← 📖 НАЧНИ ОТСЮДА (полное описание)
-│   └── QDRANT_STACK.md          ← 🗄️ Qdrant конфигурация и оптимизации
-├── src/
-│   ├── ingestion/               ← PDF/CSV парсеры + индексация
-│   ├── retrieval/               ← Гибридный поиск (Variant A/B)
-│   ├── cache/                   ← Redis 2-level cache
+│   └── QDRANT_STACK.md          ← 🗄️ Qdrant конфигурация
+│
+├── src/                         ← Основной код
+│   ├── core/                    ← RAG pipeline orchestrator
+│   ├── retrieval/               ← Гибридный поиск (4 варианта)
+│   ├── ingestion/               ← Парсинг и индексация
+│   ├── cache/                   ← 4-tier Redis cache
 │   ├── evaluation/              ← MLflow + Langfuse + RAGAS
+│   ├── contextualization/       ← LLM интеграции
+│   ├── config/                  ← Настройки
 │   ├── governance/              ← Model Registry
-│   ├── security/                ← PII + budget guards
-│   └── core/                    ← RAG pipeline
-├── scripts/
-│   ├── qdrant_backup.sh         ← Backup Qdrant
-│   └── qdrant_restore.sh        ← Restore Qdrant
-└── tests/                       ← Unit + integration tests
+│   └── security/                ← PII + budget guards
+│
+├── telegram_bot/                ← Telegram bot
+│   ├── bot.py                   ← Main bot logic
+│   └── services/                ← Cache, LLM, Retriever
+│
+├── tests/                       ← Тесты
+└── scripts/                     ← Утилиты
+
 ```
 
 **💡 Каждый модуль имеет свой README.md**
+**🆕 Новая система управления задачами - см. ROADMAP.md**
 
 ---
 
@@ -82,11 +105,11 @@ contextual_rag/
 ### Environment (.env)
 
 ```bash
-# API Keys
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-QDRANT_API_KEY=REDACTED_QDRANT_KEY
-REDIS_PASSWORD=...
+# API Keys (NEVER commit .env file!)
+ANTHROPIC_API_KEY=sk-ant-your_key_here
+OPENAI_API_KEY=sk-your_key_here
+QDRANT_API_KEY=your_qdrant_api_key_here
+REDIS_PASSWORD=your_redis_password_here
 
 # Services
 QDRANT_URL=http://localhost:6333
@@ -95,10 +118,13 @@ MLFLOW_TRACKING_URI=http://localhost:5000
 LANGFUSE_HOST=http://localhost:3001
 ```
 
+**⚠️ ВАЖНО:** Скопируйте `.env.example` в `.env` и заполните реальные ключи.
+**🔒 БЕЗОПАСНОСТЬ:** Файл `.env` добавлен в `.gitignore` - никогда не коммитьте секреты!
+
 ##***REMOVED*** Web UI
 
 **URL:** http://localhost:6333/dashboard
-**API Key:** `REDACTED_QDRANT_KEY`
+**API Key:** Используйте значение из `.env` (QDRANT_API_KEY)
 
 **Коллекции:**
 - `legal_documents` - 1294 точек
@@ -171,15 +197,29 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## 📚 Документация
 
+### 🆕 Управление проектом (NEW!)
+
+| Документ | Назначение | Обновляется |
+|----------|-----------|-------------|
+| **[ROADMAP.md](ROADMAP.md)** | 📍 Стратегический план с приоритизированными задачами | Еженедельно |
+| **[TODO.md](TODO.md)** | ✅ Ежедневный трекинг задач | Ежедневно |
+| **[CHANGELOG.md](CHANGELOG.md)** | 📝 История версий (Keep a Changelog) | При release |
+| **[TASK_MANAGEMENT_2025.md](TASK_MANAGEMENT_2025.md)** | 📖 Best practices & workflows | По необходимости |
+| **[SETUP_TRACKING.md](SETUP_TRACKING.md)** | 🚀 Quick start для task management | Один раз |
+| **[.claude.md](.claude.md)** | 🤖 Контекст для Claude AI | По необходимости |
+
+### Техническая документация
+
 | Документ | Описание |
 |----------|----------|
-| [PIPELINE_OVERVIEW.md](docs/PIPELINE_OVERVIEW.md) | **НАЧНИ ЗДЕСЬ** - полное описание системы |
-| [CACHING.md](CACHING.md) | **Redis кэширование** - 4-tier semantic cache |
+| [PIPELINE_OVERVIEW.md](docs/PIPELINE_OVERVIEW.md) | **НАЧНИ ЗДЕСЬ** - полная архитектура системы |
+| [QDRANT_STACK.md](docs/QDRANT_STACK.md) | Qdrant конфигурация и оптимизации |
+| [CACHING.md](CACHING.md) | 4-tier semantic cache архитектура |
 | [SEMANTIC_CACHE_COMPARISON.md](SEMANTIC_CACHE_COMPARISON.md) | Сравнение подходов к semantic cache |
-| [src/evaluation/README.md](src/evaluation/README.md) | MLflow, Langfuse, RAGAS |
+| [src/evaluation/README.md](src/evaluation/README.md) | MLflow, Langfuse, RAGAS evaluation |
 | [src/cache/README.md](src/cache/README.md) | Redis 2-level cache (legacy) |
-| [src/governance/README.md](src/governance/README.md) | Model Registry |
-| [src/security/README.md](src/security/README.md) | PII + budget guards |
+| [src/governance/README.md](src/governance/README.md) | Model Registry workflow |
+| [src/security/README.md](src/security/README.md) | PII redaction & budget guards |
 
 ---
 
@@ -250,6 +290,102 @@ pytest                                    # All tests
 
 ---
 
-**Last Updated:** 2025-11-04
+## 🤖 Для Claude AI
+
+Если вы - Claude AI Assistant, работающий с этим проектом:
+
+1. **Прочитайте сначала:** [.claude.md](.claude.md) - полный контекст проекта
+2. **Проверьте задачи:** [TODO.md](TODO.md) - что делать сегодня
+3. **Изучите план:** [ROADMAP.md](ROADMAP.md) - стратегический roadmap
+4. **Следуйте workflow:** Все инструкции в `.claude.md`
+
+**Приоритеты:**
+- 🔴 Phase 1 (Critical): Security & Performance fixes
+- 🟠 Phase 2 (High): Memory & Concurrency issues
+- 🟡 Phase 3 (Medium): Infrastructure & DevOps
+- 🟢 Phase 4 (Low): Nice-to-have improvements
+
+---
+
+## 🚀 Getting Started
+
+### Для разработчиков
+
+```bash
+# 1. Clone репозиторий
+git clone https://github.com/yastman/rag
+cd rag
+
+# 2. Setup окружение
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt  # ⚠️ TODO: Complete (Task 1.3)
+
+# 3. Настроить .env
+cp .env.example .env
+# Заполнить реальные API ключи
+
+# 4. Install pre-commit hooks
+pip install pre-commit
+pre-commit install
+
+# 5. Прочитать документацию
+cat ROADMAP.md          # Что нужно сделать
+cat TODO.md             # Текущие задачи
+cat .claude.md          # Для AI assistants
+```
+
+### Для Contributors
+
+1. Прочитать [TASK_MANAGEMENT_2025.md](TASK_MANAGEMENT_2025.md)
+2. Выбрать задачу из [ROADMAP.md](ROADMAP.md)
+3. Следовать workflow из [TODO.md](TODO.md)
+4. Использовать Conventional Commits
+5. Создать PR с reference на task
+
+---
+
+## 📊 Project Status
+
+### Completion Progress
+
+```
+Phase 1 (Critical):     ░░░░░░░░░░  0% (0/4) 🔴 IN PROGRESS
+Phase 2 (High):         ░░░░░░░░░░  0% (0/4) ⏳ Pending
+Phase 3 (Medium):       ░░░░░░░░░░  0% (0/4) ⏳ Pending
+Phase 4 (Nice-to-have): ░░░░░░░░░░  0% (0/4) ⏳ Pending
+
+Overall: 0/16 tasks (0%)
+```
+
+### Known Issues
+
+- 🔴 **CRITICAL:** Exposed API keys in README (Task 1.1)
+- 🔴 **CRITICAL:** Blocking requests in async (Task 1.2)
+- 🔴 **CRITICAL:** Incomplete requirements.txt (Task 1.3)
+- 🔴 **CRITICAL:** Async methods blocking event loop (Task 1.4)
+
+**See [ROADMAP.md](ROADMAP.md) for complete issue list**
+
+---
+
+## 🔗 Полезные ссылки
+
+### Внутренние
+- 📍 [Roadmap](ROADMAP.md) - План развития
+- ✅ [TODO](TODO.md) - Текущие задачи
+- 📝 [Changelog](CHANGELOG.md) - История изменений
+- 📖 [Architecture](docs/PIPELINE_OVERVIEW.md) - Архитектура системы
+
+### Внешние
+- [GitHub Repository](https://github.com/yastman/rag)
+- [Issues](https://github.com/yastman/rag/issues)
+- [Qdrant Docs](https://qdrant.tech/documentation/)
+- [BGE-M3 Model](https://huggingface.co/BAAI/bge-m3)
+
+---
+
+**Last Updated:** 2025-01-06
 **Python:** 3.12.3
-**Path:** `/srv/app/`
+**Path:** `/mnt/c/Users/user/Documents/Сайты/Раг/`
+**Next Release:** v2.6.0 (Critical Fixes)
