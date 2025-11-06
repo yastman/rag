@@ -18,7 +18,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Features
 - [ ] Implement distributed lock for semantic cache (#2.2)
 - [ ] Add Prometheus metrics endpoint (#4.1)
-- [ ] Structured logging (JSON logs)
+- [ ] User feedback loop (👍/👎 buttons)
+
+---
+
+## [2.8.0] - 2025-01-06
+
+### 🛡️ Resilience
+- ✅ **Graceful degradation** for all services (zero downtime)
+  - Qdrant: Health checks, 5s timeout, empty results on failure
+  - LLM: HTTP error handling, fallback answers with search results
+  - Redis: Existing error handling improved
+- ✅ **Production error handling** - services fail gracefully without crashing
+
+### 📊 Observability
+- ✅ **Structured JSON logging** for production
+  - JSONFormatter for log aggregation (ELK, Grafana Loki, CloudWatch)
+  - Configurable via `LOG_LEVEL`, `LOG_FORMAT`, `LOG_FILE` env vars
+  - StructuredLogger wrapper for contextual logging
+  - Third-party logger noise reduction
+
+### 🏗️ Architecture
+- Improved service resilience patterns
+- Better error propagation and handling
+- Production-ready logging infrastructure
 
 ---
 
