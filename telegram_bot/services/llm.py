@@ -1,9 +1,12 @@
 """LLM service for answer generation."""
 
 import json
+import logging
 from typing import Any, AsyncGenerator
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -34,7 +37,7 @@ class LLMService:
         system_prompt: str | None = None,
     ) -> str:
         """
-        Generate answer based on question and retrieved context.
+        Generate answer based on question and retrieved context with graceful degradation.
 
         Args:
             question: User question
@@ -42,52 +45,63 @@ class LLMService:
             system_prompt: Custom system prompt
 
         Returns:
-            Generated answer
+            Generated answer. Returns fallback message on error.
         """
-        # Build context from chunks
-        context = self._format_context(context_chunks)
+        try:
+            # Build context from chunks
+            context = self._format_context(context_chunks)
 
-        # Default system prompt
-        if not system_prompt:
-            system_prompt = """Ты - ассистент по недвижимости в Болгарии.
+            # Default system prompt
+            if not system_prompt:
+                system_prompt = """Ты - ассистент по недвижимости в Болгарии.
 
 Отвечай на вопросы пользователя на основе предоставленного контекста.
 Если информации недостаточно, честно скажи об этом.
 Всегда указывай цены в евро и расстояния в метрах.
 Будь вежливым и полезным."""
 
-        # Build messages
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"""Контекст:
+            # Build messages
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": f"""Контекст:
 {context}
 
 Вопрос: {question}
 
 Ответь на вопрос на основе контекста выше.""",
-            },
-        ]
+                },
+            ]
 
-        # Call LLM API
-        response = await self.client.post(
-            f"{self.base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self.model,
-                "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 1000,
-            },
-        )
-        response.raise_for_status()
+            # Call LLM API
+            response = await self.client.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 1000,
+                },
+            )
+            response.raise_for_status()
 
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+
+        except httpx.TimeoutException as e:
+            logger.error(f"LLM API timeout: {e}")
+            return self._get_fallback_answer(question, context_chunks)
+        except httpx.HTTPStatusError as e:
+            logger.error(f"LLM API HTTP error {e.response.status_code}: {e}")
+            return self._get_fallback_answer(question, context_chunks)
+        except Exception as e:
+            logger.error(f"LLM generation failed: {e}", exc_info=True)
+            return self._get_fallback_answer(question, context_chunks)
 
     async def stream_answer(
         self,
@@ -96,7 +110,7 @@ class LLMService:
         system_prompt: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """
-        Stream answer generation token by token (Task 2.3).
+        Stream answer generation token by token with graceful degradation.
 
         Allows real-time display of LLM response in Telegram bot.
         Reduces perceived latency - user sees first tokens in ~0.1s.
@@ -107,76 +121,87 @@ class LLMService:
             system_prompt: Custom system prompt
 
         Yields:
-            Text chunks as they arrive from LLM
+            Text chunks as they arrive from LLM. Yields fallback on error.
         """
-        # Build context
-        context = self._format_context(context_chunks)
+        try:
+            # Build context
+            context = self._format_context(context_chunks)
 
-        # Default system prompt
-        if not system_prompt:
-            system_prompt = """Ты - ассистент по недвижимости в Болгарии.
+            # Default system prompt
+            if not system_prompt:
+                system_prompt = """Ты - ассистент по недвижимости в Болгарии.
 
 Отвечай на вопросы пользователя на основе предоставленного контекста.
 Если информации недостаточно, честно скажи об этом.
 Всегда указывай цены в евро и расстояния в метрах.
 Будь вежливым и полезным."""
 
-        # Build messages
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"""Контекст:
+            # Build messages
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": f"""Контекст:
 {context}
 
 Вопрос: {question}
 
 Ответь на вопрос на основе контекста выше.""",
-            },
-        ]
+                },
+            ]
 
-        # Stream LLM response
-        async with self.client.stream(
-            "POST",
-            f"{self.base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": self.model,
-                "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 1000,
-                "stream": True,  # Enable streaming
-            },
-            timeout=60.0,
-        ) as response:
-            response.raise_for_status()
+            # Stream LLM response
+            async with self.client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 1000,
+                    "stream": True,  # Enable streaming
+                },
+                timeout=60.0,
+            ) as response:
+                response.raise_for_status()
 
-            # Parse SSE stream
-            async for line in response.aiter_lines():
-                if not line.strip():
-                    continue
-
-                # SSE format: "data: {...}"
-                if line.startswith("data: "):
-                    data_str = line[6:]  # Remove "data: " prefix
-
-                    # Skip [DONE] marker
-                    if data_str == "[DONE]":
-                        break
-
-                    try:
-                        data = json.loads(data_str)
-                        delta = data.get("choices", [{}])[0].get("delta", {})
-                        content = delta.get("content", "")
-
-                        if content:
-                            yield content
-
-                    except json.JSONDecodeError:
+                # Parse SSE stream
+                async for line in response.aiter_lines():
+                    if not line.strip():
                         continue
+
+                    # SSE format: "data: {...}"
+                    if line.startswith("data: "):
+                        data_str = line[6:]  # Remove "data: " prefix
+
+                        # Skip [DONE] marker
+                        if data_str == "[DONE]":
+                            break
+
+                        try:
+                            data = json.loads(data_str)
+                            delta = data.get("choices", [{}])[0].get("delta", {})
+                            content = delta.get("content", "")
+
+                            if content:
+                                yield content
+
+                        except json.JSONDecodeError:
+                            continue
+
+        except httpx.TimeoutException as e:
+            logger.error(f"LLM streaming timeout: {e}")
+            yield self._get_fallback_answer(question, context_chunks)
+        except httpx.HTTPStatusError as e:
+            logger.error(f"LLM streaming HTTP error {e.response.status_code}: {e}")
+            yield self._get_fallback_answer(question, context_chunks)
+        except Exception as e:
+            logger.error(f"LLM streaming failed: {e}", exc_info=True)
+            yield self._get_fallback_answer(question, context_chunks)
 
     def _format_context(self, chunks: list[dict[str, Any]]) -> str:
         """Format context chunks for LLM prompt."""
@@ -201,6 +226,54 @@ class LLMService:
             context_parts.append(f"[Объект {i}] (релевантность: {score:.2f})\n{meta_str}{text}")
 
         return "\n\n---\n\n".join(context_parts)
+
+    def _get_fallback_answer(
+        self, question: str, context_chunks: list[dict[str, Any]]
+    ) -> str:
+        """
+        Generate fallback answer when LLM API fails.
+
+        Returns raw search results as a simple text response.
+
+        Args:
+            question: User question
+            context_chunks: Retrieved context chunks
+
+        Returns:
+            Simple formatted answer with search results
+        """
+        if not context_chunks:
+            return (
+                "⚠️ Извините, сервис временно недоступен.\n\n"
+                "Попробуйте повторить запрос позже."
+            )
+
+        # Format first 3 results as simple text
+        fallback = "⚠️ Сервис генерации ответов временно недоступен.\n\n"
+        fallback += "Вот найденные объекты по вашему запросу:\n\n"
+
+        for i, chunk in enumerate(context_chunks[:3], 1):
+            meta = chunk.get("metadata", {})
+            fallback += f"{i}. "
+
+            if "title" in meta:
+                fallback += f"{meta['title']}\n"
+            if "price" in meta:
+                price = meta["price"]
+                if isinstance(price, (int, float)):
+                    fallback += f"   Цена: {price:,}€\n"
+                else:
+                    fallback += f"   Цена: {price}€\n"
+            if "city" in meta:
+                fallback += f"   Город: {meta['city']}\n"
+            if "rooms" in meta:
+                fallback += f"   Комнат: {meta['rooms']}\n"
+
+            fallback += "\n"
+
+        fallback += "Пожалуйста, попробуйте повторить запрос позже для получения детального ответа."
+
+        return fallback
 
     async def close(self):
         """Close HTTP client."""
