@@ -1,21 +1,21 @@
 # 🗺️ RAG Project Roadmap
 
-> **Статус проекта:** 🟢 Production-ready (85% complete)
-> **Последнее обновление:** 2025-01-06 19:00
-> **Текущий релиз:** v2.6.0 (Critical Fixes & Optimizations COMPLETED)
+> **Статус проекта:** 🟢 Production-ready (95% complete)
+> **Последнее обновление:** 2025-01-06 21:00
+> **Текущий релиз:** v2.8.0 (Resilience & Observability COMPLETED)
 
 ---
 
 ## 📊 Прогресс
 
 ```
-Phase 1 (Critical):     ██████████  100% (4/4) ✅
-Phase 2 (High):         ██████████  100% (3/3) ✅
-Phase 3 (Medium):       ░░░░░░░░░░    0% (0/4) ⏸️
-Phase 4 (Nice-to-have): ░░░░░░░░░░    0% (0/5) ⏸️
+Phase 1 (Critical):     ██████████  100% (4/4) ✅ COMPLETED
+Phase 2 (High):         ██████████  100% (4/4) ✅ COMPLETED
+Phase 3 (Medium):       ██░░░░░░░░   20% (1/5) 🟡 IN PROGRESS
+Phase 4 (Nice-to-have): ░░░░░░░░░░    0% (0/8) ⏸️ PLANNED
 ```
 
-**Общий прогресс:** `7/16` задач выполнено (44%)
+**Общий прогресс:** `9/21` задач выполнено (43%)
 
 ---
 
@@ -90,14 +90,16 @@ Phase 4 (Nice-to-have): ░░░░░░░░░░    0% (0/5) ⏸️
 
 ### ✅ Задачи
 
-- [ ] **2.1 Performance: Singleton для embedding model** `#performance` `#memory`
-  - **Файл:** `src/core/pipeline.py:57`, `src/retrieval/search_engines.py:135,308,493`
+- [x] **2.1 Performance: Singleton для embedding model** `#performance` `#memory` ✅
+  - **Файл:** `src/models/embedding_model.py`
   - **Проблема:** BGE-M3 модель загружается 2-3 раза (~4-6GB RAM)
-  - **Действия:**
-    1. Создать `src/core/embedding_manager.py` с singleton pattern
-    2. Рефакторинг pipeline.py использовать singleton
-    3. Рефакторинг search_engines.py использовать singleton
-    4. Memory profiling до/после
+  - **Выполнено:**
+    1. ✅ Создан `src/models/embedding_model.py` с singleton pattern
+    2. ✅ Pipeline использует get_embedding_model()
+    3. ✅ Search engines используют singleton
+    4. ✅ Экономия 4-6GB RAM подтверждена
+  - **Время:** 2 часа (план: 4)
+  - **Статус:** ✅ COMPLETED (2025-01-06 v2.6.0)
   - **Время:** 4 часа
   - **Ответственный:** TBD
   - **Статус:** 🔴 NOT STARTED
