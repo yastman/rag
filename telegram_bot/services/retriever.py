@@ -1,8 +1,11 @@
 """Qdrant retrieval service."""
 
+import logging
 from typing import Any, Optional
 
 from qdrant_client import QdrantClient, models
+
+logger = logging.getLogger(__name__)
 
 
 class RetrieverService:
@@ -21,12 +24,27 @@ class RetrieverService:
             api_key: Qdrant API key (optional)
             collection_name: Collection to search
         """
-        # Only pass api_key if it's not empty (local Qdrant doesn't need auth)
-        if api_key:
-            self.client = QdrantClient(url=url, api_key=api_key)
-        else:
-            self.client = QdrantClient(url=url)
+        self.url = url
+        self.api_key = api_key
         self.collection_name = collection_name
+        self.client: Optional[QdrantClient] = None
+        self._is_healthy = False
+
+        # Initialize client with error handling
+        try:
+            if api_key:
+                self.client = QdrantClient(url=url, api_key=api_key, timeout=5.0)
+            else:
+                self.client = QdrantClient(url=url, timeout=5.0)
+
+            # Test connection
+            self.client.get_collections()
+            self._is_healthy = True
+            logger.info(f"✓ Qdrant connection established: {collection_name}")
+        except Exception as e:
+            logger.error(f"Qdrant initialization failed: {e}")
+            self.client = None
+            self._is_healthy = False
 
     def search(
         self,
@@ -36,7 +54,7 @@ class RetrieverService:
         min_score: float = 0.5,
     ) -> list[dict[str, Any]]:
         """
-        Search for relevant documents.
+        Search for relevant documents with graceful degradation.
 
         Args:
             query_vector: Query embedding vector
@@ -45,34 +63,46 @@ class RetrieverService:
             min_score: Minimum similarity score
 
         Returns:
-            List of results with text and metadata
+            List of results with text and metadata. Returns empty list on error.
         """
-        # Build filter: base (CSV rows) + dynamic filters
-        query_filter = self._build_filter(filters) if filters else self._build_base_filter()
+        # Check if client is available
+        if not self.client or not self._is_healthy:
+            logger.error("Qdrant client unavailable, returning empty results")
+            return []
 
-        # Search using dense vector
-        results = self.client.query_points(
-            collection_name=self.collection_name,
-            query=query_vector,
-            using="dense",
-            query_filter=query_filter,
-            limit=top_k,
-            score_threshold=min_score,
-            with_payload=True,
-        )
+        try:
+            # Build filter: base (CSV rows) + dynamic filters
+            query_filter = self._build_filter(filters) if filters else self._build_base_filter()
 
-        # Format results
-        formatted_results = []
-        for point in results.points:
-            formatted_results.append(
-                {
-                    "text": point.payload.get("page_content", ""),
-                    "metadata": point.payload.get("metadata", {}),
-                    "score": point.score,
-                }
+            # Search using dense vector
+            results = self.client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                using="dense",
+                query_filter=query_filter,
+                limit=top_k,
+                score_threshold=min_score,
+                with_payload=True,
             )
 
-        return formatted_results
+            # Format results
+            formatted_results = []
+            for point in results.points:
+                formatted_results.append(
+                    {
+                        "text": point.payload.get("page_content", ""),
+                        "metadata": point.payload.get("metadata", {}),
+                        "score": point.score,
+                    }
+                )
+
+            logger.info(f"Qdrant search successful: {len(formatted_results)} results")
+            return formatted_results
+
+        except Exception as e:
+            logger.error(f"Qdrant search failed: {e}", exc_info=True)
+            self._is_healthy = False
+            return []
 
     def _build_base_filter(self) -> models.Filter:
         """
