@@ -33,3 +33,6 @@ datasets>=3.0.0
 # Utilities
 aiohttp
 cachetools>=5.3.0
+
+# Reranking
+sentence-transformers>=2.2.0
