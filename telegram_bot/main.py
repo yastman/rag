@@ -3,23 +3,22 @@
 
 import asyncio
 import logging
+import os
 
 from .bot import PropertyBot
 from .config import BotConfig
-
-
-def setup_logging():
-    """Configure logging."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%H:%M:%S",
-    )
+from .logging_config import setup_logging
 
 
 async def main():
     """Run bot."""
-    setup_logging()
+    # Setup structured logging
+    # Use JSON format in production, plain text in development
+    json_format = os.getenv("LOG_FORMAT", "json") == "json"
+    log_level = os.getenv("LOG_LEVEL", "INFO")
+    log_file = os.getenv("LOG_FILE")  # Optional: write logs to file
+
+    setup_logging(level=log_level, json_format=json_format, log_file=log_file)
     logger = logging.getLogger(__name__)
 
     # Load config
