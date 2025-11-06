@@ -7,6 +7,7 @@ from aiogram.filters import Command
 from aiogram.types import Message
 
 from .config import BotConfig
+from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .services import CacheService, EmbeddingService, LLMService, QueryAnalyzer, RetrieverService
 
 
@@ -44,8 +45,21 @@ class PropertyBot:
         # Track initialization state
         self._cache_initialized = False
 
+        # Setup middlewares (before handlers)
+        self._setup_middlewares()
+
         # Register handlers
         self._register_handlers()
+
+    def _setup_middlewares(self):
+        """Setup bot middlewares."""
+        # Rate limiting: 1.5 seconds between requests
+        setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=[])
+
+        # Error handling middleware
+        setup_error_middleware(self.dp)
+
+        logger.info("Middlewares configured")
 
     def _register_handlers(self):
         """Register message handlers."""
@@ -85,85 +99,78 @@ class PropertyBot:
 
     async def handle_query(self, message: Message):
         """Handle user query with multi-level caching RAG pipeline."""
-        try:
-            query = message.text
-            logger.info(f"Query from {message.from_user.id}: {query}")
+        query = message.text
+        logger.info(f"Query from {message.from_user.id}: {query}")
 
-            # Initialize cache on first query if not done yet
-            if not self._cache_initialized:
-                await self.cache_service.initialize()
-                self._cache_initialized = True
+        # Initialize cache on first query if not done yet
+        if not self._cache_initialized:
+            await self.cache_service.initialize()
+            self._cache_initialized = True
 
-            # Show typing indicator
-            await message.bot.send_chat_action(message.chat.id, "typing")
+        # Show typing indicator
+        await message.bot.send_chat_action(message.chat.id, "typing")
 
-            # 1. Generate embedding (with embeddings cache - Tier 1)
-            query_vector = await self.cache_service.get_cached_embedding(query)
-            if query_vector is None:
-                query_vector = await self.embedding_service.embed_query(query)
-                await self.cache_service.store_embedding(query, query_vector)
-                logger.info(f"Generated embedding: {len(query_vector)}-dim")
-            else:
-                logger.info(f"✓ Using cached embedding: {len(query_vector)}-dim")
+        # 1. Generate embedding (with embeddings cache - Tier 1)
+        query_vector = await self.cache_service.get_cached_embedding(query)
+        if query_vector is None:
+            query_vector = await self.embedding_service.embed_query(query)
+            await self.cache_service.store_embedding(query, query_vector)
+            logger.info(f"Generated embedding: {len(query_vector)}-dim")
+        else:
+            logger.info(f"✓ Using cached embedding: {len(query_vector)}-dim")
 
-            # 2. Check semantic cache (Tier 1 - highest priority)
-            cached_answer = await self.cache_service.check_semantic_cache(query_vector)
-            if cached_answer:
-                await message.answer(cached_answer)
-                self.cache_service.log_metrics()
-                return
-
-            # 3. Analyze query with cache (Tier 2)
-            analysis = await self.cache_service.get_cached_analysis(query)
-            if analysis is None:
-                analysis = await self.query_analyzer.analyze(query)
-                await self.cache_service.store_analysis(query, analysis)
-
-            filters = analysis.get("filters", {})
-            semantic_query = analysis.get("semantic_query", query)
-            logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
-
-            # 4. Search in Qdrant with cache (Tier 2)
-            results = await self.cache_service.get_cached_search(query_vector, filters)
-            if results is None:
-                results = self.retriever_service.search(
-                    query_vector=query_vector,
-                    filters=filters if filters else None,
-                    top_k=self.config.top_k,
-                    min_score=self.config.min_score,
-                )
-                await self.cache_service.store_search_results(query_vector, filters, results)
-
-            logger.info(f"Found {len(results)} results")
-
-            if not results:
-                await message.answer(
-                    "😔 Ничего не нашел по вашему запросу.\n\n"
-                    "Попробуйте переформулировать запрос."
-                )
-                return
-
-            # 5. Generate answer with LLM
-            await message.bot.send_chat_action(message.chat.id, "typing")
-            answer = await self.llm_service.generate_answer(
-                question=query,
-                context_chunks=results,
-            )
-
-            # 6. Store in semantic cache for future queries
-            await self.cache_service.store_semantic_cache(query, query_vector, answer)
-
-            # 7. Send answer
-            await message.answer(answer)
-
-            # Log cache metrics
+        # 2. Check semantic cache (Tier 1 - highest priority)
+        cached_answer = await self.cache_service.check_semantic_cache(query_vector)
+        if cached_answer:
+            await message.answer(cached_answer)
             self.cache_service.log_metrics()
+            return
 
-        except Exception as e:
-            logger.error(f"Error handling query: {e}", exc_info=True)
-            await message.answer(
-                f"❌ Произошла ошибка при обработке запроса:\n{type(e).__name__}: {e}"
+        # 3. Analyze query with cache (Tier 2)
+        analysis = await self.cache_service.get_cached_analysis(query)
+        if analysis is None:
+            analysis = await self.query_analyzer.analyze(query)
+            await self.cache_service.store_analysis(query, analysis)
+
+        filters = analysis.get("filters", {})
+        semantic_query = analysis.get("semantic_query", query)
+        logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
+
+        # 4. Search in Qdrant with cache (Tier 2)
+        results = await self.cache_service.get_cached_search(query_vector, filters)
+        if results is None:
+            results = self.retriever_service.search(
+                query_vector=query_vector,
+                filters=filters if filters else None,
+                top_k=self.config.top_k,
+                min_score=self.config.min_score,
             )
+            await self.cache_service.store_search_results(query_vector, filters, results)
+
+        logger.info(f"Found {len(results)} results")
+
+        if not results:
+            await message.answer(
+                "😔 Ничего не нашел по вашему запросу.\n\n"
+                "Попробуйте переформулировать запрос."
+            )
+            return
+
+        # 5. Generate answer with LLM
+        await message.bot.send_chat_action(message.chat.id, "typing")
+        answer = await self.llm_service.generate_answer(
+            question=query,
+            context_chunks=results,
+        )
+
+        # 6. Store in semantic cache for future queries
+        await self.cache_service.store_semantic_cache(query, query_vector, answer)
+
+        # 7. Send answer
+        await message.answer(answer)
+
+        # Log cache metrics
+        self.cache_service.log_metrics()
 
     def _format_results(self, results: list[dict]) -> str:
         """Format search results for display."""
