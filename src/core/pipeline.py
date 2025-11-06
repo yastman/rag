@@ -103,24 +103,32 @@ class RAGPipeline:
         from src.retrieval import HybridRRFColBERTSearchEngine, HybridRRFSearchEngine
 
         if isinstance(self.search_engine, (HybridRRFSearchEngine, HybridRRFColBERTSearchEngine)):
-            # Pass query string directly for hybrid search with sparse/ColBERT vectors
-            search_results = self.search_engine.search(
-                query_embedding=query,  # Pass string, not embedding
-                top_k=top_k,
-                score_threshold=self.settings.score_threshold,
+            # Pass query string directly for hybrid search (async handled inside)
+            loop = asyncio.get_event_loop()
+            search_results = await loop.run_in_executor(
+                None,
+                lambda: self.search_engine.search(
+                    query_embedding=query,
+                    top_k=top_k,
+                    score_threshold=self.settings.score_threshold,
+                )
             )
         else:
-            # For other engines, generate dense embedding
-            query_embedding = self.embedding_model.encode(
-                query,
-                normalize_embeddings=True,
-            ).tolist()
+            # For other engines, generate dense embedding (async)
+            loop = asyncio.get_event_loop()
+            query_embedding = await loop.run_in_executor(
+                None,
+                lambda: self.embedding_model.encode(query, normalize_embeddings=True).tolist()
+            )
 
-            # Step 2: Search using configured search engine
-            search_results = self.search_engine.search(
-                query_embedding=query_embedding,
-                top_k=top_k,
-                score_threshold=self.settings.score_threshold,
+            # Step 2: Search using configured search engine (async)
+            search_results = await loop.run_in_executor(
+                None,
+                lambda: self.search_engine.search(
+                    query_embedding=query_embedding,
+                    top_k=top_k,
+                    score_threshold=self.settings.score_threshold,
+                )
             )
 
         # Step 3: Optional contextualization

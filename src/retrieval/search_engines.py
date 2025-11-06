@@ -4,8 +4,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional, Union
 
+import asyncio
+
+import httpx
 import numpy as np
-import requests
 from FlagEmbedding import BGEM3FlagModel
 from qdrant_client import QdrantClient
 
@@ -158,7 +160,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
         # If query is a string, generate all embeddings and use hybrid search
         if isinstance(query_embedding, str):
-            return self._search_hybrid(query_embedding, top_k, score_threshold)
+            return asyncio.run(self._search_hybrid(query_embedding, top_k, score_threshold))
 
         # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
@@ -178,7 +180,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
             for result in dense_results
         ]
 
-    def _search_hybrid(
+    async def _search_hybrid(
         self,
         query: str,
         top_k: int,
@@ -230,18 +232,19 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         # Convert all numpy types to Python types for JSON serialization
         search_payload = convert_to_python_types(search_payload)
 
-        # Execute hybrid search via Qdrant query API
-        response = requests.post(
-            f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
-            json=search_payload,
-            headers={"api-key": self.settings.qdrant_api_key or ""},
-        )
-
-        if response.status_code != 200:
+        # Execute hybrid search via Qdrant query API (async)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
+                    json=search_payload,
+                    headers={"api-key": self.settings.qdrant_api_key or ""},
+                )
+                response.raise_for_status()
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
             # Fallback to dense-only on error
-            print(
-                f"WARNING: Hybrid search failed ({response.status_code}), falling back to dense-only"
-            )
+            import logging
+            logging.warning(f"Hybrid search failed: {e}, falling back to dense-only")
             dense_embedding = query_embeddings["dense_vecs"].tolist()
             return self.search(dense_embedding, top_k, score_threshold)
 
@@ -411,24 +414,22 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         # Convert all numpy types to Python types
         search_payload = convert_to_python_types(search_payload)
 
-        # Execute 3-stage query via Qdrant query API
-        response = requests.post(
-            f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
-            json=search_payload,
-            headers={"api-key": self.settings.qdrant_api_key or ""},
-        )
-
-        if response.status_code != 200:
+        # Execute 3-stage query via Qdrant query API (async)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
+                    json=search_payload,
+                    headers={"api-key": self.settings.qdrant_api_key or ""},
+                )
+                response.raise_for_status()
+                resp_data = response.json()
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
             # Fallback to RRF without ColBERT on error
-            print(
-                f"WARNING: ColBERT rerank failed ({response.status_code}), falling back to RRF only"
-            )
-            # Create temporary HybridRRFSearchEngine for fallback
+            import logging
+            logging.warning(f"ColBERT rerank failed: {e}, falling back to RRF only")
             rrf_engine = HybridRRFSearchEngine(self.settings)
             return rrf_engine.search(query, top_k, score_threshold)
-
-        response.raise_for_status()
-        resp_data = response.json()
 
         # Parse response
         if isinstance(resp_data["result"], dict):
@@ -596,24 +597,22 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         # Convert all numpy types to Python types
         search_payload = convert_to_python_types(search_payload)
 
-        # Execute 3-stage query via Qdrant query API
-        response = requests.post(
-            f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
-            json=search_payload,
-            headers={"api-key": self.settings.qdrant_api_key or ""},
-        )
-
-        if response.status_code != 200:
+        # Execute 3-stage query via Qdrant query API (async)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
+                    json=search_payload,
+                    headers={"api-key": self.settings.qdrant_api_key or ""},
+                )
+                response.raise_for_status()
+                resp_data = response.json()
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
             # Fallback to RRF variant on error
-            print(
-                f"WARNING: DBSF ColBERT rerank failed ({response.status_code}), falling back to RRF"
-            )
-            # Create temporary HybridRRFColBERTSearchEngine for fallback
+            import logging
+            logging.warning(f"DBSF ColBERT rerank failed: {e}, falling back to RRF")
             rrf_engine = HybridRRFColBERTSearchEngine(self.settings)
             return rrf_engine.search(query, top_k, score_threshold)
-
-        response.raise_for_status()
-        resp_data = response.json()
 
         # Parse response
         if isinstance(resp_data["result"], dict):
