@@ -4,9 +4,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from sentence_transformers import SentenceTransformer
-
 from src.config import APIProvider, Settings
+from src.models import get_sentence_transformer
 from src.contextualization import (
     ClaudeContextualizer,
     GroqContextualizer,
@@ -53,8 +52,8 @@ class RAGPipeline:
         """
         self.settings = settings or Settings()
 
-        ***REMOVED*** Initialize components
-        self.embedding_model = SentenceTransformer("BAAI/bge-m3")
+        ***REMOVED*** Initialize components (singleton model - saves 2-3GB RAM)
+        self.embedding_model = get_sentence_transformer("BAAI/bge-m3")
         self.search_engine = create_search_engine(settings=self.settings)
 
         ***REMOVED*** Initialize contextualizer based on API provider

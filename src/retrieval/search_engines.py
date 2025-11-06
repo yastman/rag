@@ -8,10 +8,10 @@ import asyncio
 
 import httpx
 import numpy as np
-from FlagEmbedding import BGEM3FlagModel
 from qdrant_client import QdrantClient
 
 from src.config import SearchEngine, Settings
+from src.models import get_bge_m3_model
 
 
 @dataclass
@@ -134,7 +134,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
     def __init__(self, settings: Optional[Settings] = None):
         """Initialize hybrid RRF search engine with BGE-M3 model."""
         super().__init__(settings)
-        self.embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+        self.embedding_model = get_bge_m3_model(use_fp16=True)
 
     def search(
         self,
@@ -308,7 +308,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
     def __init__(self, settings: Optional[Settings] = None):
         """Initialize hybrid RRF + ColBERT search engine with BGE-M3 model."""
         super().__init__(settings)
-        self.embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+        self.embedding_model = get_bge_m3_model(use_fp16=True)
 
     def search(
         self,
@@ -491,7 +491,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
     def __init__(self, settings: Optional[Settings] = None):
         """Initialize hybrid DBSF + ColBERT search engine with BGE-M3 model."""
         super().__init__(settings)
-        self.embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+        self.embedding_model = get_bge_m3_model(use_fp16=True)
 
     def search(
         self,
