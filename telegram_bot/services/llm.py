@@ -1,6 +1,7 @@
 """LLM service for answer generation."""
 
-from typing import Any
+import json
+from typing import Any, AsyncGenerator
 
 import httpx
 
@@ -87,6 +88,95 @@ class LLMService:
 
         data = response.json()
         return data["choices"][0]["message"]["content"]
+
+    async def stream_answer(
+        self,
+        question: str,
+        context_chunks: list[dict[str, Any]],
+        system_prompt: str | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream answer generation token by token (Task 2.3).
+
+        Allows real-time display of LLM response in Telegram bot.
+        Reduces perceived latency - user sees first tokens in ~0.1s.
+
+        Args:
+            question: User question
+            context_chunks: Retrieved chunks from Qdrant
+            system_prompt: Custom system prompt
+
+        Yields:
+            Text chunks as they arrive from LLM
+        """
+        # Build context
+        context = self._format_context(context_chunks)
+
+        # Default system prompt
+        if not system_prompt:
+            system_prompt = """Ты - ассистент по недвижимости в Болгарии.
+
+Отвечай на вопросы пользователя на основе предоставленного контекста.
+Если информации недостаточно, честно скажи об этом.
+Всегда указывай цены в евро и расстояния в метрах.
+Будь вежливым и полезным."""
+
+        # Build messages
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": f"""Контекст:
+{context}
+
+Вопрос: {question}
+
+Ответь на вопрос на основе контекста выше.""",
+            },
+        ]
+
+        # Stream LLM response
+        async with self.client.stream(
+            "POST",
+            f"{self.base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.model,
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 1000,
+                "stream": True,  # Enable streaming
+            },
+            timeout=60.0,
+        ) as response:
+            response.raise_for_status()
+
+            # Parse SSE stream
+            async for line in response.aiter_lines():
+                if not line.strip():
+                    continue
+
+                # SSE format: "data: {...}"
+                if line.startswith("data: "):
+                    data_str = line[6:]  # Remove "data: " prefix
+
+                    # Skip [DONE] marker
+                    if data_str == "[DONE]":
+                        break
+
+                    try:
+                        data = json.loads(data_str)
+                        delta = data.get("choices", [{}])[0].get("delta", {})
+                        content = delta.get("content", "")
+
+                        if content:
+                            yield content
+
+                    except json.JSONDecodeError:
+                        continue
 
     def _format_context(self, chunks: list[dict[str, Any]]) -> str:
         """Format context chunks for LLM prompt."""
