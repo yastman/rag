@@ -6,6 +6,8 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message
 
+from src.retrieval.reranker import rerank_results
+
 from .config import BotConfig
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .services import CacheService, EmbeddingService, LLMService, QueryAnalyzer, RetrieverService
@@ -65,6 +67,8 @@ class PropertyBot:
         """Register message handlers."""
         self.dp.message(Command("start"))(self.cmd_start)
         self.dp.message(Command("help"))(self.cmd_help)
+        self.dp.message(Command("clear"))(self.cmd_clear)
+        self.dp.message(Command("stats"))(self.cmd_stats)
         self.dp.message(F.text)(self.handle_query)
 
     async def cmd_start(self, message: Message):
@@ -94,8 +98,33 @@ class PropertyBot:
             "• Солнечный берег\n\n"
             "Комбинированные:\n"
             "• 3 комнаты в Солнечный берег до 120к\n"
-            "• Студия дешевле 60000\n"
+            "• Студия дешевле 60000\n\n"
+            "Команды:\n"
+            "/clear - Очистить историю диалога\n"
+            "/stats - Показать статистику кеша\n"
         )
+
+    async def cmd_clear(self, message: Message):
+        """Handle /clear command - clear conversation history."""
+        user_id = message.from_user.id
+        await self.cache_service.clear_conversation_history(user_id)
+        await message.answer("✅ История диалога очищена.")
+
+    async def cmd_stats(self, message: Message):
+        """Handle /stats command - show cache statistics."""
+        metrics = self.cache_service.get_metrics()
+
+        stats_text = f"""📊 Статистика кеша:
+
+Общая эффективность: {metrics['overall_hit_rate']}%
+Всего запросов: {metrics['total_requests']}
+
+По типам:
+"""
+        for cache_type, stats in metrics['by_type'].items():
+            stats_text += f"• {cache_type}: {stats['hit_rate']}% ({stats['hits']}/{stats['requests']})\n"
+
+        await message.answer(stats_text)
 
     async def handle_query(self, message: Message):
         """Handle user query with multi-level caching RAG pipeline."""
@@ -149,6 +178,11 @@ class PropertyBot:
 
         logger.info(f"Found {len(results)} results")
 
+        # 4.5. Rerank top results with cross-encoder (+10-15% accuracy)
+        if results and len(results) > 1:
+            results = rerank_results(query, results, top_k=min(5, len(results)))
+            logger.info(f"Reranked top {min(5, len(results))} results")
+
         if not results:
             await message.answer(
                 "😔 Ничего не нашел по вашему запросу.\n\n"
@@ -156,18 +190,49 @@ class PropertyBot:
             )
             return
 
-        # 5. Generate answer with LLM
-        await message.bot.send_chat_action(message.chat.id, "typing")
-        answer = await self.llm_service.generate_answer(
-            question=query,
-            context_chunks=results,
-        )
+        # 5. Get conversation history for context-aware responses
+        user_id = message.from_user.id
+        conversation_history = await self.cache_service.get_conversation_history(user_id, last_n=3)
 
-        # 6. Store in semantic cache for future queries
+        # Store user query in conversation
+        await self.cache_service.store_conversation_message(user_id, "user", query)
+
+        # 6. Generate answer with LLM STREAMING
+        temp_message = await message.answer("🔍 Генерирую ответ...")
+        accumulated_text = ""
+        chunk_count = 0
+
+        try:
+            async for chunk in self.llm_service.stream_answer(
+                question=query,
+                context_chunks=results,
+            ):
+                accumulated_text += chunk
+                chunk_count += 1
+
+                # Update message every 10 chunks or when punctuation appears
+                if chunk_count % 10 == 0 or chunk in ".!?\n":
+                    try:
+                        await temp_message.edit_text(accumulated_text)
+                    except Exception:
+                        # Ignore "message not modified" errors
+                        pass
+
+            # Final update with complete answer
+            await temp_message.edit_text(accumulated_text)
+            answer = accumulated_text
+
+        except Exception as e:
+            logger.error(f"Streaming error: {e}", exc_info=True)
+            # Fallback to non-streaming
+            answer = await self.llm_service.generate_answer(query, results)
+            await temp_message.edit_text(answer)
+
+        # 7. Store assistant answer in conversation
+        await self.cache_service.store_conversation_message(user_id, "assistant", answer)
+
+        # 8. Store in semantic cache for future queries
         await self.cache_service.store_semantic_cache(query, query_vector, answer)
-
-        # 7. Send answer
-        await message.answer(answer)
 
         # Log cache metrics
         self.cache_service.log_metrics()
