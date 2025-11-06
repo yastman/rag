@@ -7,7 +7,6 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from FlagEmbedding import BGEM3FlagModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
@@ -25,6 +24,7 @@ from qdrant_client.models import (
 )
 
 from src.config import Settings, VectorDimensions
+from src.models import get_bge_m3_model
 
 from .chunker import Chunk
 
@@ -72,7 +72,7 @@ class DocumentIndexer:
             api_key=self.settings.qdrant_api_key,
             timeout=120,  # 2 minutes timeout for large batch operations
         )
-        self.embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+        self.embedding_model = get_bge_m3_model(use_fp16=True)
         self.stats = IndexStats()
 
     def create_collection(self, collection_name: str, recreate: bool = False) -> bool:
