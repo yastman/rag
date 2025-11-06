@@ -1,230 +1,283 @@
-# 📋 TODO - Daily Task Tracker
+# 📋 TODO - Current Tasks
 
-> **Дата создания:** 2025-01-06
-> **Последнее обновление:** 2025-01-06 10:00 UTC
-> **Текущая фаза:** Phase 1 - Critical Security & Performance
-
----
-
-## 🎯 Сегодня (2025-01-06)
-
-### 🔥 В работе (In Progress)
-*Нет задач в работе*
-
-### ✅ Выполнено сегодня (0/0)
-*Пусто*
-
-### ⏰ Запланировано на сегодня
-- [ ] **1.1** Ротация API ключей (30 мин) - `@unassigned`
-- [ ] **1.3** Создать полный requirements.txt (1 час) - `@unassigned`
+> **Дата:** 2025-01-06
+> **Версия:** v2.8.0 (95% Production-Ready)
+> **Статус:** Ready for VPS deployment
 
 ---
 
-## 📅 Эта неделя (06-12 Jan 2025)
+## ✅ COMPLETED (v2.6.0 - v2.8.0)
 
-### 🔴 Critical (Phase 1)
-- [ ] **1.1** Security: Ротация API ключей - `30 мин` - 🔴 NOT STARTED
-- [ ] **1.2** Performance: requests → httpx - `2 часа` - 🔴 NOT STARTED
-- [ ] **1.3** Dependencies: Полный requirements.txt - `1 час` - 🔴 NOT STARTED
-- [ ] **1.4** Performance: Fix blocking calls - `2 часа` - 🔴 NOT STARTED
+### v2.8.0 - Resilience & Observability
+- [x] Graceful degradation for all services (Qdrant, LLM, Redis)
+- [x] Structured JSON logging for production
+- [x] LLM fallback answers on API failure
+- [x] Health checks for services
 
-### 🟠 High Priority (Phase 2) - Начать после Phase 1
-- [ ] **2.1** Singleton для embedding model - `4 часа` - 🔴 NOT STARTED
-- [ ] **2.2** Distributed lock для cache - `3 часа` - 🔴 NOT STARTED
-- [ ] **2.3** Rate limiting для bot - `3 часа` - 🔴 NOT STARTED
+### v2.7.0 - User Experience
+- [x] Streaming LLM responses (0.1s TTFB)
+- [x] Conversation memory (multi-turn dialogues)
+- [x] Cross-encoder reranking (+10-15% accuracy)
+- [x] /clear and /stats commands
 
-### Прогресс недели
-```
-Mon [░░░░░░░░░░] 0% (0/4 Phase 1)
-Tue [░░░░░░░░░░] 0%
-Wed [░░░░░░░░░░] 0%
-Thu [░░░░░░░░░░] 0%
-Fri [░░░░░░░░░░] 0%
-```
+### v2.6.0 - Critical Fixes
+- [x] Security: Removed exposed API keys
+- [x] Performance: requests → httpx.AsyncClient
+- [x] Dependencies: Complete requirements.txt
+- [x] Performance: Fixed blocking async calls
+- [x] BGE-M3 singleton pattern (saves 4-6GB RAM)
 
 ---
 
-## 📊 Статистика
+## 🔥 HIGH PRIORITY (Текущая неделя)
 
-### Общий прогресс
-- **Всего задач:** 16
-- **Выполнено:** 0 (0%)
-- **В работе:** 0
-- **Не начато:** 16
+### 🖥️ SERVER TASKS (Deploy на VPS)
 
-### По фазам
-```
-Phase 1 (Critical):     ░░░░░░░░░░  0% (0/4)
-Phase 2 (High):         ░░░░░░░░░░  0% (0/4)
-Phase 3 (Medium):       ░░░░░░░░░░  0% (0/4)
-Phase 4 (Nice-to-have): ░░░░░░░░░░  0% (0/4)
+#### S1. Deploy BGE-M3 FastAPI Service ⭐ КРИТИЧНО
+**Время:** 2-3 часа
+**Порт:** 8001
+
+```bash
+# Create src/services/bge_m3_api.py
+# Create docker/bge-m3/Dockerfile
+# docker-compose integration
+Status: ⏳ Bot expects localhost:8001 but service not running
 ```
 
-### Velocity (задач/день)
-- **Цель:** 1-2 задачи/день (Phase 1-2)
-- **Факт:** 0 (данных недостаточно)
+**Действия:**
+1. Create FastAPI app with /embed endpoint
+2. Load BGE-M3 model once at startup (singleton)
+3. Add /health endpoint
+4. Create Dockerfile (CPU or CUDA)
+5. Test: curl -X POST localhost:8001/embed
 
 ---
 
-## 🚧 Блокеры
+#### S2. Deploy MLflow Server
+**Время:** 1 час
+**Порт:** 5000
 
-### Активные блокеры
-*Нет блокеров*
+```bash
+mlflow server \
+  --backend-store-uri sqlite:///mlflow.db \
+  --default-artifact-root ./mlruns \
+  --host 0.0.0.0 --port 5000
 
-### Решенные блокеры
-*Пусто*
-
----
-
-## 💡 Заметки и идеи
-
-### 2025-01-06
-- Создана система трекинга задач (ROADMAP.md, CHANGELOG.md, TODO.md)
-- Проведен глубокий анализ проекта
-- Выявлено 19 критических и важных проблем
-- Приоритизировано 16 задач в 4 фазах
-
-### Технические долги
-- [ ] Resolve TODOs в `src/evaluation/mlflow_experiments.py`
-- [ ] Add type hints для `convert_to_python_types`
-- [ ] Remove `n8n` dependency comment в indexer.py
-
-### Улучшения (backlog)
-- Implement circuit breaker pattern для external services
-- Add request/response logging middleware
-- Create admin dashboard для monitoring
-- Implement A/B testing framework для cache strategies
-
----
-
-## 🎯 Цели на неделю (KPIs)
-
-### Технические
-- [ ] RAM usage: < 4GB (current: ~6GB)
-- [ ] No exposed secrets в репозитории
-- [ ] All async methods non-blocking
-- [ ] requirements.txt полный и рабочий
-
-### Процессные
-- [ ] 100% Phase 1 completion (4/4 задач)
-- [ ] 50%+ Phase 2 completion (2+/4 задач)
-- [ ] 0 security vulnerabilities
-- [ ] Code review для всех PR
-
----
-
-## 📝 Лог изменений (Quick Log)
-
-### 2025-01-06 10:00
-- ✅ Created ROADMAP.md with 16 prioritized tasks
-- ✅ Created CHANGELOG.md following Keep a Changelog v1.1.0
-- ✅ Created TODO.md (this file)
-- ⏳ Waiting for team to start Phase 1
-
----
-
-## 🔄 Процесс работы
-
-### Начало работы над задачей
-1. Выбрать задачу из "Запланировано на сегодня"
-2. Переместить в "В работе"
-3. Обновить ROADMAP.md (статус → 🟡 IN PROGRESS)
-4. Присвоить себя в ROADMAP.md
-5. Создать ветку: `git checkout -b feature/1.2-httpx-migration`
-
-### Завершение задачи
-1. Тестирование изменений
-2. Создать PR с reference на task (e.g., `Closes #1.2`)
-3. Обновить TODO.md (переместить в "Выполнено")
-4. Обновить ROADMAP.md (статус → ✅ DONE)
-5. Обновить CHANGELOG.md (добавить в [Unreleased])
-
-### Ежедневный ритуал (EOD - End of Day)
-1. Обновить "Выполнено сегодня"
-2. Запланировать задачи на завтра
-3. Записать блокеры и заметки
-4. Commit: `git commit -m "docs(todo): update daily progress 2025-01-06"`
-5. Push: `git push origin main`
-
----
-
-## 📞 Коммуникация
-
-### Вопросы по задачам
-- Открыть issue с label `#task-question`
-- Reference task number: "Question about Task 1.2"
-
-### Reporting прогресса
-- Daily: Обновить TODO.md
-- Weekly: Team sync meeting
-- Monthly: Review ROADMAP.md и KPIs
-
-### Эскалация блокеров
-1. Добавить в раздел "Блокеры"
-2. Notify team lead
-3. Create issue с label `#blocker`
-
----
-
-## 🏷️ Статусы задач
-
-- 🔴 **NOT STARTED** - Задача не начата
-- 🟡 **IN PROGRESS** - Задача в работе
-- 🟢 **REVIEW** - Задача на ревью (PR created)
-- ✅ **DONE** - Задача завершена (PR merged)
-- ⚠️ **BLOCKED** - Задача заблокирована
-- ❌ **CANCELLED** - Задача отменена
-
----
-
-## 🎨 Template для новой задачи
-
-```markdown
-- [ ] **X.X** Title - `время` - 🔴 NOT STARTED - `@assignee`
-  - **Файл:** path/to/file.py
-  - **Проблема:** Description
-  - **Actions:**
-    1. Step 1
-    2. Step 2
-  - **Blocker:** None
-  - **PR:** N/A
+Status: ⏳ Referenced in code, unclear if running
 ```
 
 ---
 
-## 🔗 Ссылки
+#### S3. Deploy Langfuse Server
+**Время:** 1 час
+**Порт:** 3001
 
-- [ROADMAP.md](./ROADMAP.md) - Полный roadmap с деталями
-- [CHANGELOG.md](./CHANGELOG.md) - История изменений
-- [README.md](./README.md) - Документация проекта
-- [GitHub Issues](https://github.com/yastman/rag/issues) - Issue tracker
+```bash
+docker run -d --name langfuse \
+  -p 3001:3000 \
+  -e DATABASE_URL=postgresql://... \
+  langfuse/langfuse:latest
 
----
-
-**Maintained by:** Project Team
-**Update frequency:** Daily (EOD)
-**Format:** Markdown checklist
-
----
-
-## 📖 How to Use This File
-
-### Для себя (личный трекинг)
-1. Каждое утро: выбрать 1-2 задачи на день
-2. В течение дня: обновлять статусы
-3. Вечером: заполнить "Выполнено" и план на завтра
-
-### Для команды (team tracking)
-1. Все смотрят на "В работе" чтобы избежать дублирования
-2. Блокеры видны всем
-3. Progress bar показывает общий прогресс
-
-### Автоматизация (будущее)
-- GitHub Actions для auto-update из Issues
-- Bot для напоминаний в Slack/Telegram
-- Auto-generate daily report
+Status: ⏳ Code integration exists, server unknown
+```
 
 ---
 
-**Last updated:** 2025-01-06 10:00 UTC
-**Next update:** 2025-01-06 EOD
+### 💻 LOCAL TASKS (Можно делать локально)
+
+#### L1. Create docker-compose.yml ⭐ НАЧАТЬ С ЭТОГО
+**Время:** 2-3 hours
+
+```yaml
+# Include: Qdrant, Redis, BGE-M3, Bot, MLflow, Langfuse
+# Networks, volumes, health checks
+# .env integration
+
+Status: ❌ No file exists (referenced everywhere)
+Priority: 🔴 CRITICAL for easy deployment
+```
+
+**После создания:**
+- Test locally: `docker-compose up -d`
+- Push to git
+- Deploy on VPS with same command
+
+---
+
+#### L2. Setup pytest Configuration
+**Время:** 2-3 hours
+
+```bash
+Create:
+- pytest.ini (test discovery, coverage config)
+- conftest.py (shared fixtures)
+- tests/unit/ (unit tests structure)
+- tests/integration/ (integration tests)
+
+Status: ❌ Test files exist but no pytest infrastructure
+```
+
+---
+
+#### L3. GitHub Actions CI/CD
+**Время:** 3-4 hours
+
+```yaml
+Create:
+- .github/workflows/ci.yml (test + lint on PR)
+- .github/workflows/deploy.yml (build + push images)
+
+Status: ❌ No CI/CD pipeline
+```
+
+---
+
+## 🟡 MEDIUM PRIORITY (Следующая неделя)
+
+### Testing (Local)
+- [ ] Unit tests: Cache service (23 tests, 85% coverage) - 4-5h
+- [ ] Unit tests: LLM service (17 tests, 80% coverage) - 3-4h
+- [ ] Unit tests: Retriever service (14 tests, 75% coverage) - 3h
+- [ ] Integration tests: RAG pipeline (8 tests) - 4-5h
+- [ ] Integration tests: Graceful degradation (8 tests) - 3h
+
+### Monitoring (Server)
+- [ ] Prometheus + Grafana deployment - 2-3h
+- [ ] Prometheus /metrics endpoint in bot - 2-3h
+- [ ] Grafana dashboards for cache, LLM, Qdrant - 2h
+
+### Performance (Local → Server)
+- [ ] Connection pooling (Qdrant, Redis) - 3-4h
+- [ ] Migrate to AsyncQdrantClient - 3-4h
+- [ ] Distributed lock for semantic cache - 2h
+- [ ] Load testing scripts (locust) - 2-3h
+
+---
+
+## 🟢 LOW PRIORITY (Nice to Have)
+
+### Features
+- [ ] User feedback loop (👍/👎 inline buttons) - 3-4h
+- [ ] Admin dashboard for monitoring - 1 week
+- [ ] A/B testing framework for cache strategies - 1 week
+
+### Code Quality
+- [ ] Setup ruff, mypy, pre-commit hooks - 2h
+- [ ] API documentation generation (Sphinx/mkdocs) - 2-3h
+- [ ] Resolve TODOs in mlflow_experiments.py - 1-2h
+
+---
+
+## 📅 RECOMMENDED TIMELINE
+
+### Week 1: VPS Setup (Current Week)
+```bash
+День 1 (Server):
+- Morning: Deploy BGE-M3 service (S1) - 3h
+- Afternoon: Deploy MLflow (S2) - 1h
+
+День 2 (Server):
+- Morning: Deploy Langfuse (S3) - 1h
+- Afternoon: Test full integration - 2h
+
+День 3 (Local → Server):
+- Morning: Create docker-compose.yml (L1) - 3h
+- Afternoon: Deploy docker-compose on VPS - 2h
+```
+
+### Week 2: Testing & CI/CD
+```bash
+День 1-2 (Local):
+- pytest setup (L2) - 3h
+- Unit tests for cache, LLM, retriever - 10h
+
+День 3-4 (Local):
+- Integration tests - 7h
+- GitHub Actions CI/CD (L3) - 4h
+
+День 5 (Server):
+- Load testing - 4h
+```
+
+### Week 3: Monitoring & Polish
+```bash
+День 1-2 (Server):
+- Prometheus + Grafana - 5h
+- Backup strategy - 2h
+
+День 3-5 (Local + Server):
+- Performance optimizations - 10h
+- Documentation updates - 3h
+- Final testing - 4h
+```
+
+---
+
+## 🎯 SUCCESS METRICS
+
+### Before VPS Deployment
+- [x] All v2.8.0 features working
+- [ ] docker-compose.yml created
+- [ ] BGE-M3 service ready
+- [ ] All secrets in .env
+
+### After VPS Deployment
+- [ ] All services running (Qdrant, Redis, BGE-M3, Bot, MLflow, Langfuse)
+- [ ] Bot responds to queries < 2s
+- [ ] Cache hit rate > 70%
+- [ ] No exposed secrets
+- [ ] Logs in JSON format
+- [ ] Monitoring dashboards active
+
+### After Testing Phase
+- [ ] 70%+ test coverage
+- [ ] CI/CD pipeline green
+- [ ] Load test passed (10 users, 100 req/min)
+- [ ] Zero-downtime deployment tested
+
+---
+
+## 📚 Quick Links
+
+**Documentation:**
+- [VPS_QUICKSTART.md](./VPS_QUICKSTART.md) - Guide for VPS work
+- [TASK_ALLOCATION.md](./docs/TASK_ALLOCATION.md) - Full task breakdown
+- [TESTING_PLAN.md](./docs/TESTING_PLAN.md) - Testing strategy
+- [CHANGELOG.md](./CHANGELOG.md) - Version history
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment guide
+
+**Monitoring (after deployment):**
+- Qdrant: http://localhost:6333/dashboard
+- MLflow: http://localhost:5000
+- Langfuse: http://localhost:3001
+- Grafana: http://localhost:3000
+
+---
+
+## 🚀 GETTING STARTED
+
+### For Local Development:
+```bash
+cd /mnt/c/Users/user/Documents/Сайты/Раг
+git pull origin main
+
+# Start with docker-compose.yml creation
+touch docker-compose.yml
+# ... (add services)
+```
+
+### For VPS Deployment:
+```bash
+ssh admin@your-server-ip
+cd /srv/contextual_rag
+git pull origin main
+
+# Follow VPS_QUICKSTART.md
+# Start with S1: Deploy BGE-M3 service
+```
+
+---
+
+**Last Updated:** 2025-01-06
+**Status:** Ready for VPS work
+**Next Step:** Read VPS_QUICKSTART.md → Start S1 (BGE-M3 deployment)
