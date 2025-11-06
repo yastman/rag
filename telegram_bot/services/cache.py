@@ -474,6 +474,79 @@ class CacheService:
             ),
         }
 
+    # ============= Conversation Memory (Task 2.2) =============
+
+    async def store_conversation_message(
+        self,
+        user_id: int,
+        role: str,
+        content: str,
+        max_messages: int = 10,
+        ttl: int = 3600,
+    ):
+        """
+        Store conversation message in Redis for multi-turn dialogues.
+
+        Args:
+            user_id: Telegram user ID
+            role: Message role ('user' or 'assistant')
+            content: Message content
+            max_messages: Maximum messages to keep (default: 10)
+            ttl: Time to live in seconds (default: 1 hour)
+        """
+        if not self.redis_client:
+            return
+
+        key = f"conversation:{user_id}"
+        message = json.dumps({"role": role, "content": content, "timestamp": time.time()})
+
+        # Store as JSON string in Redis LIST
+        await self.redis_client.lpush(key, message)
+        # Keep only last N messages
+        await self.redis_client.ltrim(key, 0, max_messages - 1)
+        # Set expiration
+        await self.redis_client.expire(key, ttl)
+
+        logger.debug(f"Stored conversation message for user {user_id}: {role}")
+
+    async def get_conversation_history(
+        self, user_id: int, last_n: int = 5
+    ) -> list[dict[str, Any]]:
+        """
+        Get conversation history for user.
+
+        Args:
+            user_id: Telegram user ID
+            last_n: Number of last messages to retrieve
+
+        Returns:
+            List of messages [{"role": "user", "content": "...", "timestamp": 123}]
+        """
+        if not self.redis_client:
+            return []
+
+        key = f"conversation:{user_id}"
+        messages_json = await self.redis_client.lrange(key, 0, last_n - 1)
+
+        if not messages_json:
+            return []
+
+        messages = [json.loads(msg) for msg in messages_json]
+        logger.debug(f"Retrieved {len(messages)} messages for user {user_id}")
+
+        return messages
+
+    async def clear_conversation_history(self, user_id: int):
+        """Clear conversation history for user."""
+        if not self.redis_client:
+            return
+
+        key = f"conversation:{user_id}"
+        await self.redis_client.delete(key)
+        logger.info(f"Cleared conversation history for user {user_id}")
+
+    # ==========================================================
+
     def log_metrics(self):
         """Log current cache metrics."""
         metrics = self.get_metrics()
