@@ -1,0 +1,9 @@
+# deploy/sudoers-telegram-bot
+# Разрешить admin перезапускать telegram-bot без пароля
+# Установка: sudo cp deploy/sudoers-telegram-bot /etc/sudoers.d/telegram-bot
+#            sudo chmod 440 /etc/sudoers.d/telegram-bot
+
+admin ALL=(ALL) NOPASSWD: /bin/systemctl restart telegram-bot
+admin ALL=(ALL) NOPASSWD: /bin/systemctl start telegram-bot
+admin ALL=(ALL) NOPASSWD: /bin/systemctl stop telegram-bot
+admin ALL=(ALL) NOPASSWD: /bin/systemctl status telegram-bot
