@@ -57,13 +57,13 @@ class RAGModelRegistry:
 {description}
 
 **Metrics:**
-- Faithfulness: {metrics.get('faithfulness', 'N/A')}
-- Context Precision: {metrics.get('context_precision', 'N/A')}
-- Context Recall: {metrics.get('context_recall', 'N/A')}
-- Latency P95: {metrics.get('latency_p95_ms', 'N/A')}ms
+- Faithfulness: {metrics.get("faithfulness", "N/A")}
+- Context Precision: {metrics.get("context_precision", "N/A")}
+- Context Recall: {metrics.get("context_recall", "N/A")}
+- Latency P95: {metrics.get("latency_p95_ms", "N/A")}ms
 
 **Config Version:** {config_version}
-**Registered:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Registered:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 """,
         )
 

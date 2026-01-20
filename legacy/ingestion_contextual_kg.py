@@ -9,6 +9,7 @@ import time
 from typing import Optional
 
 import requests
+from contextualize_zai import ContextualRetrievalZAI
 
 from config import (
     BGE_M3_TIMEOUT,
@@ -25,7 +26,6 @@ from config import (
     ZAI_API_KEY,
     validate_config,
 )
-from contextualize_zai import ContextualRetrievalZAI
 from utils.structure_parser import add_graph_edges
 
 
