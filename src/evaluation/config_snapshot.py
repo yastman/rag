@@ -145,23 +145,23 @@ def get_config_summary() -> dict[str, Any]:
         Dictionary with key config parameters
     """
     return {
-        "version": CONFIG_SNAPSHOT["metadata"]["version"], ***REMOVED*** type: ignore[index]
-        "date": CONFIG_SNAPSHOT["metadata"]["date"], ***REMOVED*** type: ignore[index]
+        "version": CONFIG_SNAPSHOT["metadata"]["version"],  ***REMOVED*** type: ignore[index]
+        "date": CONFIG_SNAPSHOT["metadata"]["date"],  ***REMOVED*** type: ignore[index]
         "config_hash": get_config_hash(),
         "models": {
-            "embedder": CONFIG_SNAPSHOT["models"]["embedder"]["name"], ***REMOVED*** type: ignore[index]
-            "dense_dim": CONFIG_SNAPSHOT["models"]["embedder"]["dense_dim"], ***REMOVED*** type: ignore[index]
+            "embedder": CONFIG_SNAPSHOT["models"]["embedder"]["name"],  ***REMOVED*** type: ignore[index]
+            "dense_dim": CONFIG_SNAPSHOT["models"]["embedder"]["dense_dim"],  ***REMOVED*** type: ignore[index]
         },
         "collection": {
-            "name": CONFIG_SNAPSHOT["collection"]["name"], ***REMOVED*** type: ignore[index]
-            "points": CONFIG_SNAPSHOT["collection"]["points_count"], ***REMOVED*** type: ignore[index]
+            "name": CONFIG_SNAPSHOT["collection"]["name"],  ***REMOVED*** type: ignore[index]
+            "points": CONFIG_SNAPSHOT["collection"]["points_count"],  ***REMOVED*** type: ignore[index]
         },
         "best_engine": {
             "name": "dbsf_colbert",
-            "recall_at_1": CONFIG_SNAPSHOT["performance"]["dbsf_colbert_results"][ ***REMOVED*** type: ignore[index]
+            "recall_at_1": CONFIG_SNAPSHOT["performance"]["dbsf_colbert_results"][  ***REMOVED*** type: ignore[index]
                 "recall_at_1"
             ],
-            "ndcg_at_10": CONFIG_SNAPSHOT["performance"]["dbsf_colbert_results"][ ***REMOVED*** type: ignore[index]
+            "ndcg_at_10": CONFIG_SNAPSHOT["performance"]["dbsf_colbert_results"][  ***REMOVED*** type: ignore[index]
                 "ndcg_at_10"
             ],
         },
@@ -185,11 +185,11 @@ def validate_config() -> bool:
             raise ValueError(f"Missing required config key: {key}")
 
     ***REMOVED*** Validate collection points count
-    if CONFIG_SNAPSHOT["collection"]["points_count"] <= 0: ***REMOVED*** type: ignore[index]
+    if CONFIG_SNAPSHOT["collection"]["points_count"] <= 0:  ***REMOVED*** type: ignore[index]
         raise ValueError("Collection points_count must be positive")
 
     ***REMOVED*** Validate evaluation queries
-    if CONFIG_SNAPSHOT["evaluation"]["total_queries"] <= 0: ***REMOVED*** type: ignore[index]
+    if CONFIG_SNAPSHOT["evaluation"]["total_queries"] <= 0:  ***REMOVED*** type: ignore[index]
         raise ValueError("Total queries must be positive")
 
     return True
