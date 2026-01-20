@@ -1,32 +1,25 @@
-# docker-compose.local.yml
-# Локальная среда разработки для RAG проекта
-# Запуск: docker compose -f docker-compose.local.yml up -d
-
 services:
-  # Vector Database
   qdrant:
     image: qdrant/qdrant:v1.15.4
-    container_name: rag-qdrant
+    container_name: rag-qdrant-local
     ports:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - qdrant_data:/qdrant/storage
-    environment:
-      - QDRANT__SERVICE__GRPC_PORT=6334
+      - qdrant_storage:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+    restart: unless-stopped
 
-  # Redis with Vector Search
   redis:
-    image: redis/redis-stack:7.4.0-v3
-    container_name: rag-redis
+    image: redis/redis-stack:latest
+    container_name: rag-redis-local
     ports:
       - "6379:6379"
-      - "8002:8001"  # RedisInsight на 8002 (8001 занят BGE-M3)
+      - "8002:8001"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -34,36 +27,36 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    restart: unless-stopped
 
-  # BGE-M3 Embeddings API
   bge-m3:
     build:
       context: ./services/bge-m3-api
       dockerfile: Dockerfile
-    container_name: rag-bge-m3
+    container_name: rag-bge-m3-local
     ports:
       - "8001:8000"
     volumes:
-      - bge_models:/models
+      - bge_m3_models:/models
     environment:
+      - PYTHONUNBUFFERED=1
       - OMP_NUM_THREADS=4
       - MKL_NUM_THREADS=4
-      - MODEL_CACHE_DIR=/models
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 120s
+    restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 4G
+          memory: 6G
 
-  # Docling Document Parser
   docling:
-    image: ds4sd/docling-serve:latest
-    container_name: rag-docling
+    image: quay.io/docling-project/docling-serve:latest
+    container_name: rag-docling-local
     ports:
       - "5001:5001"
     healthcheck:
@@ -71,9 +64,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+    restart: unless-stopped
 
 volumes:
-  qdrant_data:
+  qdrant_storage:
   redis_data:
-  bge_models:
+  bge_m3_models:
