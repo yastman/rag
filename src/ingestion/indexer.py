@@ -263,7 +263,7 @@ class DocumentIndexer:
             embeddings = await self._embed_texts(texts)
             embed_time = time.time() - embed_start
             logger.info(
-                f"  Embeddings generated: {embed_time:.2f}s ({len(texts)/embed_time:.1f} chunks/s)"
+                f"  Embeddings generated: {embed_time:.2f}s ({len(texts) / embed_time:.1f} chunks/s)"
             )
 
             # Prepare points for Qdrant with named vectors

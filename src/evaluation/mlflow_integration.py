@@ -242,7 +242,7 @@ class MLflowRAGLogger:
         import tempfile
 
         # Create temporary file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(data, f, indent=2)
             temp_path = f.name
 
@@ -308,11 +308,7 @@ class MLflowRAGLogger:
 
         # Log as artifact
         query_id = hashlib.md5(query.encode()).hexdigest()[:8]
-        self.log_dict_artifact(
-            query_data,
-            f"query_{query_id}.json",
-            artifact_path="queries"
-        )
+        self.log_dict_artifact(query_data, f"query_{query_id}.json", artifact_path="queries")
 
     def end_run(self) -> None:
         """End the current MLflow run."""
@@ -380,7 +376,6 @@ def log_ab_test_results(
             logger.log_artifact(report_path, artifact_path="reports")
 
         return logger.get_run_url()
-
 
 
 if __name__ == "__main__":

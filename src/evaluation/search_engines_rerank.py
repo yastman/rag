@@ -20,8 +20,8 @@ import os
 spec = importlib.util.spec_from_file_location(
     "search_engines", os.path.join(os.path.dirname(__file__), "search_engines.py")
 )
-search_engines = importlib.util.module_from_spec(spec) # type: ignore[arg-type]
-spec.loader.exec_module(search_engines) # type: ignore[union-attr]
+search_engines = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+spec.loader.exec_module(search_engines)  # type: ignore[union-attr]
 BaselineSearchEngine = search_engines.BaselineSearchEngine
 
 
@@ -90,7 +90,7 @@ class RerankSearchEngine:
         # Sort by rerank score and return top-K
         candidates.sort(key=lambda x: x["score"], reverse=True)
 
-        return candidates[:top_k] # type: ignore[no-any-return]
+        return candidates[:top_k]  # type: ignore[no-any-return]
 
 
 def create_rerank_search_engine(

@@ -11,7 +11,6 @@ import time
 from typing import Optional
 
 import requests
-
 from prompts import (
     DOCUMENT_CONTEXT_PROMPT,
     format_enhanced_chunk_context,

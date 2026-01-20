@@ -103,7 +103,7 @@ def test_docling_approach():
     # Docling chunks have meta.headings instead of article_number
     chunks_with_headings = [c for c in chunks if c.meta.headings]
     print(
-        f"   With headings: {len(chunks_with_headings)} ({len(chunks_with_headings)/len(chunks)*100:.1f}%)"
+        f"   With headings: {len(chunks_with_headings)} ({len(chunks_with_headings) / len(chunks) * 100:.1f}%)"
     )
 
     # Show sample

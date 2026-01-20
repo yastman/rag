@@ -27,7 +27,7 @@ async def main():
     print()
 
     # Scroll through all points
-    points, next_offset = client.scroll(
+    points, _next_offset = client.scroll(
         collection_name=collection,
         limit=100,
         with_payload=True,
