@@ -155,7 +155,7 @@ class UniversalDocumentParser:
         elif ext in self.DOCLING_FORMATS:
             doc = self._parse_with_docling(filepath)
         else:
-            raise ValueError(f"Unsupported format: {ext}. " f"Supported: PDF, DOCX, CSV, XLSX")
+            raise ValueError(f"Unsupported format: {ext}. Supported: PDF, DOCX, CSV, XLSX")
 
         # Cache result
         if self.use_cache:

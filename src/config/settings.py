@@ -32,8 +32,7 @@ class Settings:
         'http://localhost:6333'
 
         >>> settings = Settings(
-        ...     api_provider=APIProvider.OPENAI,
-        ...     qdrant_url="https://qdrant.example.com"
+        ...     api_provider=APIProvider.OPENAI, qdrant_url="https://qdrant.example.com"
         ... )
     """
 
@@ -77,11 +76,11 @@ class Settings:
         # === API CONFIGURATION ===
         default_provider = DEFAULTS["api_provider"]
         self.api_provider = APIProvider(
-            api_provider or os.getenv("API_PROVIDER") or default_provider.value if isinstance(default_provider, APIProvider) else default_provider
+            api_provider or os.getenv("API_PROVIDER") or default_provider.value
+            if isinstance(default_provider, APIProvider)
+            else default_provider
         )
-        self.anthropic_api_key = (
-            anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
-        )
+        self.anthropic_api_key = anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
 
@@ -99,9 +98,7 @@ class Settings:
         self.retry_backoff = retry_backoff or DEFAULTS["retry_backoff"]
 
         # === VECTOR DATABASE ===
-        self.qdrant_url = qdrant_url or os.getenv(
-            "QDRANT_URL", "http://localhost:6333"
-        )
+        self.qdrant_url = qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
         self.qdrant_api_key = qdrant_api_key or os.getenv("QDRANT_API_KEY", "")
 
         # === PATHS ===
@@ -116,15 +113,15 @@ class Settings:
         # === SEARCH CONFIGURATION ===
         default_engine = DEFAULTS["search_engine"]
         self.search_engine = SearchEngine(
-            search_engine or os.getenv("SEARCH_ENGINE") or default_engine.value if isinstance(default_engine, SearchEngine) else default_engine
+            search_engine or os.getenv("SEARCH_ENGINE") or default_engine.value
+            if isinstance(default_engine, SearchEngine)
+            else default_engine
         )
         self.score_threshold = score_threshold or 0.3
         self.top_k = top_k or 10
 
         # === COLLECTION ===
-        self.collection_name = (
-            os.getenv("COLLECTION_NAME") or DEFAULT_COLLECTION
-        )
+        self.collection_name = os.getenv("COLLECTION_NAME") or DEFAULT_COLLECTION
 
         # === PROCESSING ===
         self.batch_size_embeddings = batch_size_embeddings or BatchSizes.EMBEDDINGS
@@ -137,9 +134,7 @@ class Settings:
 
         # === FEATURES ===
         self.enable_caching = os.getenv("ENABLE_CACHING", "true").lower() == "true"
-        self.enable_query_expansion = (
-            os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
-        )
+        self.enable_query_expansion = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
         self.enable_mlflow = os.getenv("ENABLE_MLFLOW", "true").lower() == "true"
         self.enable_langfuse = os.getenv("ENABLE_LANGFUSE", "true").lower() == "true"
 
