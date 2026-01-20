@@ -22,6 +22,7 @@ cp .env.example .env
 ### 2. Configure API keys
 
 Edit `.env` and set:
+
 ```bash
 OPENAI_API_KEY=sk-your-openai-key
 TELEGRAM_BOT_TOKEN=your-telegram-bot-token  # optional
@@ -45,17 +46,17 @@ All services should show "healthy" status.
 
 ## Services
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| PostgreSQL | localhost:5432 | Database (user: postgres, pass: postgres) |
-| Redis | localhost:6379 | Cache |
-| Qdrant | http://localhost:6333 | Vector database |
-| Qdrant Dashboard | http://localhost:6333/dashboard | Qdrant UI |
-| BGE-M3 | http://localhost:8000 | Embeddings API |
-| Docling | http://localhost:5001 | PDF parser |
-| LightRAG | http://localhost:9621 | RAG API |
-| Langfuse | http://localhost:3001 | LLM tracing UI |
-| MLflow | http://localhost:5000 | ML experiments UI |
+| Service          | URL                             | Purpose                                   |
+| ---------------- | ------------------------------- | ----------------------------------------- |
+| PostgreSQL       | localhost:5432                  | Database (user: postgres, pass: postgres) |
+| Redis            | localhost:6379                  | Cache                                     |
+| Qdrant           | http://localhost:6333           | Vector database                           |
+| Qdrant Dashboard | http://localhost:6333/dashboard | Qdrant UI                                 |
+| BGE-M3           | http://localhost:8000           | Embeddings API                            |
+| Docling          | http://localhost:5001           | PDF parser                                |
+| LightRAG         | http://localhost:9621           | RAG API                                   |
+| Langfuse         | http://localhost:3001           | LLM tracing UI                            |
+| MLflow           | http://localhost:5000           | ML experiments UI                         |
 
 ## Common Commands
 
@@ -117,11 +118,11 @@ The project uses a multi-vector Qdrant collection with 3 vector types for hybrid
 
 ### Vector Types
 
-| Vector | Dimensions | Purpose |
-|--------|------------|---------|
-| **dense** | 1024 | Semantic search (BGE-M3) |
-| **colbert** | 1024 × N | MaxSim reranking (multivector) |
-| **bm42** | sparse | Keyword matching (IDF) |
+| Vector      | Dimensions | Purpose                        |
+| ----------- | ---------- | ------------------------------ |
+| **dense**   | 1024       | Semantic search (BGE-M3)       |
+| **colbert** | 1024 × N   | MaxSim reranking (multivector) |
+| **bm42**    | sparse     | Keyword matching (IDF)         |
 
 ### Create Collection
 
@@ -163,13 +164,13 @@ The project uses Redis with vector search for semantic caching.
 
 ### Cache Tiers
 
-| Cache | TTL | Purpose |
-|-------|-----|---------|
-| **Semantic LLM** | 48h | Cache answers by query similarity |
-| **Embeddings** | 7d | Cache BGE-M3 vectors |
-| **Query Analysis** | 24h | Cache parsed queries |
-| **Search Results** | 2h | Cache Qdrant results |
-| **Conversation** | 1h | Multi-turn dialogue history |
+| Cache              | TTL | Purpose                           |
+| ------------------ | --- | --------------------------------- |
+| **Semantic LLM**   | 48h | Cache answers by query similarity |
+| **Embeddings**     | 7d  | Cache BGE-M3 vectors              |
+| **Query Analysis** | 24h | Cache parsed queries              |
+| **Search Results** | 2h  | Cache Qdrant results              |
+| **Conversation**   | 1h  | Multi-turn dialogue history       |
 
 ### Create Vector Index
 
@@ -193,11 +194,11 @@ To use semantic caching, update `docker-compose.dev.yml`:
 
 ```yaml
 redis:
-  image: redis/redis-stack:latest  # Instead of redis:8-alpine
+  image: redis/redis-stack:latest # Instead of redis:8-alpine
   container_name: dev-redis
   ports:
     - "6379:6379"
-    - "8001:8001"  # RedisInsight UI
+    - "8001:8001" # RedisInsight UI
 ```
 
 ### Verify Index
@@ -276,5 +277,5 @@ If ports are in use, modify `docker-compose.dev.yml` port mappings:
 
 ```yaml
 ports:
-  - "5433:5432"  # Change left side (host port)
+  - "5433:5432" # Change left side (host port)
 ```
