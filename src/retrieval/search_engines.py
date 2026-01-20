@@ -1,10 +1,9 @@
 """Search engine implementations for retrieval."""
 
+import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional, Union
-
-import asyncio
 
 import httpx
 import numpy as np
@@ -244,6 +243,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         except (httpx.HTTPError, httpx.TimeoutException) as e:
             # Fallback to dense-only on error
             import logging
+
             logging.warning(f"Hybrid search failed: {e}, falling back to dense-only")
             dense_embedding = query_embeddings["dense_vecs"].tolist()
             return self.search(dense_embedding, top_k, score_threshold)
@@ -427,6 +427,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         except (httpx.HTTPError, httpx.TimeoutException) as e:
             # Fallback to RRF without ColBERT on error
             import logging
+
             logging.warning(f"ColBERT rerank failed: {e}, falling back to RRF only")
             rrf_engine = HybridRRFSearchEngine(self.settings)
             return rrf_engine.search(query, top_k, score_threshold)
@@ -610,6 +611,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         except (httpx.HTTPError, httpx.TimeoutException) as e:
             # Fallback to RRF variant on error
             import logging
+
             logging.warning(f"DBSF ColBERT rerank failed: {e}, falling back to RRF")
             rrf_engine = HybridRRFColBERTSearchEngine(self.settings)
             return rrf_engine.search(query, top_k, score_threshold)

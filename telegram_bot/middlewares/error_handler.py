@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable
+from typing import Any, Callable
 
 from aiogram import BaseMiddleware, Dispatcher
 from aiogram.types import Message, TelegramObject
+
 
 logger = logging.getLogger(__name__)
 

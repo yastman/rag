@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from qdrant_client import QdrantClient, models
 
+
 logger = logging.getLogger(__name__)
 
 
