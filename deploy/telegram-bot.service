@@ -1,0 +1,36 @@
+# deploy/telegram-bot.service
+# Systemd unit для Telegram бота
+# Установка: sudo cp deploy/telegram-bot.service /etc/systemd/system/
+#            sudo systemctl daemon-reload
+#            sudo systemctl enable telegram-bot
+
+[Unit]
+Description=RAG Telegram Bot
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/srv/contextual_rag
+Environment=PATH=/srv/app/venv/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/srv/app/telegram_bot/.env
+
+ExecStart=/srv/app/venv/bin/python -m telegram_bot.main
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=telegram-bot
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/srv/app/telegram_bot
+
+[Install]
+WantedBy=multi-user.target
