@@ -1,0 +1,12 @@
+-- Dev Stack: Auto-create databases for services
+-- This script runs automatically on first PostgreSQL start
+
+-- Database for Langfuse (LLM tracing)
+CREATE DATABASE langfuse;
+
+-- Database for MLflow (ML experiments)
+CREATE DATABASE mlflow;
+
+-- Grant permissions (using default postgres user)
+GRANT ALL PRIVILEGES ON DATABASE langfuse TO postgres;
+GRANT ALL PRIVILEGES ON DATABASE mlflow TO postgres;

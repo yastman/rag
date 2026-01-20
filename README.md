@@ -400,6 +400,34 @@ cat .claude.md          # Для AI assistants
 
 ---
 
+## Dev Stack (Docker)
+
+Full development environment with all services:
+
+```bash
+# Clone and setup
+git clone https://github.com/yastman/rag.git
+cd rag
+cp .env.example .env
+# Edit .env: add OPENAI_API_KEY
+
+# Start all services
+docker compose -f docker-compose.dev.yml up -d
+
+# Check status
+docker compose -f docker-compose.dev.yml ps
+```
+
+Services available:
+- **Langfuse** (LLM tracing): http://localhost:3001
+- **MLflow** (experiments): http://localhost:5000
+- **LightRAG** (RAG API): http://localhost:9621
+- **Qdrant** (vectors): http://localhost:6333/dashboard
+
+See [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md) for full guide.
+
+---
+
 ## 📊 Project Status
 
 ### Completion Progress
