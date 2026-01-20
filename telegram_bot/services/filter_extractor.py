@@ -300,7 +300,7 @@ class FilterExtractor:
         """Extract furniture requirement from query."""
         query_lower = query.lower()
 
-        ***REMOVED*** "с мебелью", "меблированная"
+        ***REMOVED*** "с мебелью", "меблированная" ***REMOVED*** noqa: RUF003
         patterns = [
             r"с\s+мебелью",
             r"меблирован",
