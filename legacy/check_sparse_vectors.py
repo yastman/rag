@@ -4,11 +4,13 @@ Check if collections have sparse vectors and try to add them if possible.
 """
 
 import sys
+
 import requests
-import json
+
 
 sys.path.append("/home/admin/contextual_rag")
-from config import QDRANT_URL, QDRANT_API_KEY
+from config import QDRANT_API_KEY, QDRANT_URL
+
 
 headers = {"api-key": QDRANT_API_KEY}
 
@@ -21,9 +23,8 @@ def get_collection_info(collection_name: str):
     )
     if response.status_code == 200:
         return response.json()["result"]
-    else:
-        print(f"❌ Error getting collection info: {response.text}")
-        return None
+    print(f"❌ Error getting collection info: {response.text}")
+    return None
 
 
 def try_update_collection_with_sparse(collection_name: str):
@@ -46,11 +47,10 @@ def try_update_collection_with_sparse(collection_name: str):
     print(f"   Status code: {response.status_code}")
 
     if response.status_code == 200:
-        print(f"   ✅ SUCCESS: Sparse vectors added!")
+        print("   ✅ SUCCESS: Sparse vectors added!")
         return True
-    else:
-        print(f"   ❌ FAILED: {response.text}")
-        return False
+    print(f"   ❌ FAILED: {response.text}")
+    return False
 
 
 def main():
@@ -68,13 +68,13 @@ def main():
         # Check current configuration
         config = info["config"]["params"]
 
-        print(f"\n📊 Current configuration:")
+        print("\n📊 Current configuration:")
         print(f"   Named vectors: {list(config['vectors'].keys())}")
 
         if "sparse_vectors" in config:
             print(f"   ✅ Sparse vectors: {list(config['sparse_vectors'].keys())}")
         else:
-            print(f"   ❌ Sparse vectors: MISSING")
+            print("   ❌ Sparse vectors: MISSING")
 
             # Try to add sparse vectors (expected to fail)
             try_update_collection_with_sparse(collection_name)

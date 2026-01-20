@@ -11,7 +11,6 @@ import time
 from typing import Optional
 
 from anthropic import Anthropic
-
 from prompts import (
     DOCUMENT_CONTEXT_PROMPT,
     format_enhanced_chunk_context,
