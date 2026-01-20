@@ -509,9 +509,7 @@ class CacheService:
 
         logger.debug(f"Stored conversation message for user {user_id}: {role}")
 
-    async def get_conversation_history(
-        self, user_id: int, last_n: int = 5
-    ) -> list[dict[str, Any]]:
+    async def get_conversation_history(self, user_id: int, last_n: int = 5) -> list[dict[str, Any]]:
         """
         Get conversation history for user.
 

@@ -140,34 +140,34 @@ class SearchEvaluator:
         # Recall@K
         for k in k_values:
             col = f"recall@{k}"
-            if col in df.columns: # type: ignore[index]
-                aggregated["metrics"][col] = float(df[col].mean()) # type: ignore[index]
+            if col in df.columns:  # type: ignore[index]
+                aggregated["metrics"][col] = float(df[col].mean())  # type: ignore[index]
 
         # MRR
-        if "mrr" in df.columns: # type: ignore[index]
-            aggregated["metrics"]["mrr"] = float(df["mrr"].mean()) # type: ignore[index]
- # type: ignore[index]
+        if "mrr" in df.columns:  # type: ignore[index]
+            aggregated["metrics"]["mrr"] = float(df["mrr"].mean())  # type: ignore[index]
+        # type: ignore[index]
         # NDCG@10 # type: ignore[index]
-        if "ndcg@10" in df.columns: # type: ignore[index]
-            aggregated["metrics"]["ndcg@10"] = float(df["ndcg@10"].mean()) # type: ignore[index]
- # type: ignore[index]
+        if "ndcg@10" in df.columns:  # type: ignore[index]
+            aggregated["metrics"]["ndcg@10"] = float(df["ndcg@10"].mean())  # type: ignore[index]
+        # type: ignore[index]
         # Precision@K # type: ignore[index]
-        for k in k_values: # type: ignore[index]
-            col = f"precision@{k}" # type: ignore[index]
-            if col in df.columns: # type: ignore[index]
-                aggregated["metrics"][col] = float(df[col].mean()) # type: ignore[index]
- # type: ignore[index]
+        for k in k_values:  # type: ignore[index]
+            col = f"precision@{k}"  # type: ignore[index]
+            if col in df.columns:  # type: ignore[index]
+                aggregated["metrics"][col] = float(df[col].mean())  # type: ignore[index]
+        # type: ignore[index]
         # Failure rate: queries with no correct result in top-10 # type: ignore[index]
-        if "recall@10" in df.columns: # type: ignore[index]
-            failure_rate = 1.0 - df["recall@10"].mean() # type: ignore[index]
-            aggregated["metrics"]["failure_rate"] = float(failure_rate) # type: ignore[index]
- # type: ignore[index]
+        if "recall@10" in df.columns:  # type: ignore[index]
+            failure_rate = 1.0 - df["recall@10"].mean()  # type: ignore[index]
+            aggregated["metrics"]["failure_rate"] = float(failure_rate)  # type: ignore[index]
+        # type: ignore[index]
         # By query type # type: ignore[index]
-        if "query_type" in df.columns: # type: ignore[index]
-            aggregated["by_query_type"] = {} # type: ignore[index]
-            for qtype in df["query_type"].unique(): # type: ignore[index]
-                subset = df[df["query_type"] == qtype] # type: ignore[index]
-                aggregated["by_query_type"][qtype] = { # type: ignore[index]
+        if "query_type" in df.columns:  # type: ignore[index]
+            aggregated["by_query_type"] = {}  # type: ignore[index]
+            for qtype in df["query_type"].unique():  # type: ignore[index]
+                subset = df[df["query_type"] == qtype]  # type: ignore[index]
+                aggregated["by_query_type"][qtype] = {  # type: ignore[index]
                     "count": len(subset),
                     "recall@10": float(subset["recall@10"].mean())
                     if "recall@10" in subset.columns
@@ -183,7 +183,7 @@ class SearchEvaluator:
             aggregated["by_difficulty"] = {}
             for difficulty in df["difficulty"].unique():
                 subset = df[df["difficulty"] == difficulty]
-                aggregated["by_difficulty"][difficulty] = { # type: ignore[index]
+                aggregated["by_difficulty"][difficulty] = {  # type: ignore[index]
                     "count": len(subset),
                     "recall@10": float(subset["recall@10"].mean())
                     if "recall@10" in subset.columns
