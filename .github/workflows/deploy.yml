@@ -71,5 +71,5 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
-            cd /home/admin && docker compose up -d telegram-bot
+            cd /home/admin && docker compose up -d telegram-rag-bot
             echo "Release ${{ steps.version.outputs.VERSION }} deployed at $(date)"
