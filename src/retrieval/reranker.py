@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 from sentence_transformers import CrossEncoder
 
+
 logger = logging.getLogger(__name__)
 
 # Global singleton
@@ -106,4 +107,5 @@ def clear_cross_encoder():
         _cross_encoder = None
 
         import gc
+
         gc.collect()

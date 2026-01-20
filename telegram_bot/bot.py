@@ -1,5 +1,6 @@
 """Main Telegram bot logic."""
 
+import contextlib
 import logging
 
 from aiogram import Bot, Dispatcher, F
@@ -121,8 +122,10 @@ class PropertyBot:
 
 По типам:
 """
-        for cache_type, stats in metrics['by_type'].items():
-            stats_text += f"• {cache_type}: {stats['hit_rate']}% ({stats['hits']}/{stats['requests']})\n"
+        for cache_type, stats in metrics["by_type"].items():
+            stats_text += (
+                f"• {cache_type}: {stats['hit_rate']}% ({stats['hits']}/{stats['requests']})\n"
+            )
 
         await message.answer(stats_text)
 
@@ -185,14 +188,13 @@ class PropertyBot:
 
         if not results:
             await message.answer(
-                "😔 Ничего не нашел по вашему запросу.\n\n"
-                "Попробуйте переформулировать запрос."
+                "😔 Ничего не нашел по вашему запросу.\n\n" "Попробуйте переформулировать запрос."
             )
             return
 
         # 5. Get conversation history for context-aware responses
         user_id = message.from_user.id
-        conversation_history = await self.cache_service.get_conversation_history(user_id, last_n=3)
+        _conversation_history = await self.cache_service.get_conversation_history(user_id, last_n=3)
 
         # Store user query in conversation
         await self.cache_service.store_conversation_message(user_id, "user", query)
@@ -212,11 +214,8 @@ class PropertyBot:
 
                 # Update message every 10 chunks or when punctuation appears
                 if chunk_count % 10 == 0 or chunk in ".!?\n":
-                    try:
+                    with contextlib.suppress(Exception):
                         await temp_message.edit_text(accumulated_text)
-                    except Exception:
-                        # Ignore "message not modified" errors
-                        pass
 
             # Final update with complete answer
             await temp_message.edit_text(accumulated_text)
