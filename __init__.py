@@ -16,8 +16,8 @@ from .utils.structure_parser import (
 
 __all__ = [
     "ContextualRetrieval",
-    "parse_legal_structure",
-    "extract_related_articles",
-    "extract_contextual_prefix",
     "add_graph_edges",
+    "extract_contextual_prefix",
+    "extract_related_articles",
+    "parse_legal_structure",
 ]

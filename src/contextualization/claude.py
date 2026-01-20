@@ -53,9 +53,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         results = []
         for i, chunk in enumerate(chunks):
             try:
-                result = await self.contextualize_single(
-                    chunk, f"chunk_{i}", query
-                )
+                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
                 results.append(result)
             except Exception as e:
                 print(f"Warning: Failed to contextualize chunk {i}: {e}")
@@ -112,9 +110,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         response = await self.client.messages.create(**kwargs)
 
         # Track tokens and cost
-        self.total_tokens += (
-            response.usage.input_tokens + response.usage.output_tokens
-        )
+        self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
         # Rough cost estimation: $5/MTok input, $15/MTok output
         self.total_cost += (
             response.usage.input_tokens * 5 + response.usage.output_tokens * 15
@@ -145,9 +141,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         )
 
         # Track tokens
-        self.total_tokens += (
-            response.usage.input_tokens + response.usage.output_tokens
-        )
+        self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
 
         return ContextualizedChunk(
             original_text=text,
@@ -162,8 +156,6 @@ class ClaudeContextualizer(ContextualizeProvider):
             "total_tokens": self.total_tokens,
             "total_cost_usd": round(self.total_cost, 4),
             "avg_cost_per_chunk": (
-                round(self.total_cost / self.total_tokens * 1000, 4)
-                if self.total_tokens > 0
-                else 0
+                round(self.total_cost / self.total_tokens * 1000, 4) if self.total_tokens > 0 else 0
             ),
         }

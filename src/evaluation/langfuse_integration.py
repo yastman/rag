@@ -87,6 +87,7 @@ from langfuse import Langfuse, get_client, observe
 # Helper Functions for RAG Search Tracing
 # ============================================================================
 
+
 def initialize_langfuse(
     host: str = "http://localhost:3001",
     public_key: Optional[str] = None,
@@ -173,7 +174,7 @@ def trace_search_with_decorator(
         user_id=user_id,
         session_id=session_id,
         tags=["search", engine_name, "evaluation"],
-        metadata={"expected_article": expected_article} if expected_article else {}
+        metadata={"expected_article": expected_article} if expected_article else {},
     )
 
     # Execute search (automatically captured as nested span if search_fn is also decorated)
@@ -190,8 +191,7 @@ def trace_search_with_decorator(
     if expected_article is not None and results:
         # Extract article numbers from results
         retrieved_articles = [
-            r.payload.get("article_number") if hasattr(r, "payload") else None
-            for r in results
+            r.payload.get("article_number") if hasattr(r, "payload") else None for r in results
         ]
 
         # Calculate precision@1 and recall@10
@@ -208,12 +208,7 @@ def trace_search_with_decorator(
         langfuse.score_current_trace(name="latency_ms", value=latency_ms)
 
     # Update trace with output
-    langfuse.update_current_trace(
-        output={
-            "num_results": len(results),
-            "metrics": metrics
-        }
-    )
+    langfuse.update_current_trace(output={"num_results": len(results), "metrics": metrics})
 
     return results, metrics
 
@@ -260,33 +255,23 @@ def trace_search_with_spans(
             user_id=user_id,
             session_id=session_id,
             tags=["search", engine_name],
-            metadata={
-                "engine": engine_name,
-                "expected_article": expected_article
-            }
+            metadata={"engine": engine_name, "expected_article": expected_article},
         )
 
         # Retrieval span
         with trace.start_as_current_span(
-            name=f"retrieval-{engine_name}",
-            input={"query": query}
+            name=f"retrieval-{engine_name}", input={"query": query}
         ) as retrieval_span:
             start_time = time.time()
             results = search_fn(query)
             latency_ms = (time.time() - start_time) * 1000
 
-            retrieval_span.update(
-                output={
-                    "num_results": len(results),
-                    "latency_ms": latency_ms
-                }
-            )
+            retrieval_span.update(output={"num_results": len(results), "latency_ms": latency_ms})
 
         # Evaluation span (if expected article provided)
         if expected_article is not None and results:
             with trace.start_as_current_span(
-                name="evaluation",
-                input={"expected_article": expected_article}
+                name="evaluation", input={"expected_article": expected_article}
             ) as eval_span:
                 # Extract article numbers
                 retrieved_articles = [
@@ -302,7 +287,7 @@ def trace_search_with_spans(
                     output={
                         "precision_at_1": precision_at_1,
                         "recall_at_10": recall_at_10,
-                        "retrieved_articles": retrieved_articles[:10]
+                        "retrieved_articles": retrieved_articles[:10],
                     }
                 )
 
@@ -358,9 +343,7 @@ if __name__ == "__main__":
 
         # Update trace
         langfuse.update_current_trace(
-            input={"query": query},
-            tags=["example", "demo"],
-            user_id="demo_user"
+            input={"query": query}, tags=["example", "demo"], user_id="demo_user"
         )
 
         # Simulate search

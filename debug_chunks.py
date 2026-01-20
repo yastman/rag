@@ -32,7 +32,7 @@ print(f"CHUNKS: {len(doc_chunks)}")
 print("=" * 80)
 
 for i, chunk in enumerate(doc_chunks):
-    print(f"\n--- Chunk {i+1} ---")
+    print(f"\n--- Chunk {i + 1} ---")
     print(f"Length: {len(chunk.text)} chars")
     print("Content preview:")
     print(chunk.text[:300] + "..." if len(chunk.text) > 300 else chunk.text)

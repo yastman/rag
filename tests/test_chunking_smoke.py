@@ -56,7 +56,7 @@ class TestChunkingQuality:
 
         print("\n📊 Article number coverage:")
         print(f"   With article_number: {len(chunks_with_article)} ({coverage:.1f}%)")
-        print(f"   WITHOUT article_number: {len(chunks_without)} ({100-coverage:.1f}%)")
+        print(f"   WITHOUT article_number: {len(chunks_without)} ({100 - coverage:.1f}%)")
 
         # Should be 100% for legal documents
         assert coverage == 100.0, (
@@ -101,9 +101,9 @@ class TestChunkingQuality:
         print(f"   Large gaps (>10): {len(gaps)}")
 
         # Should have close to 564 unique articles
-        assert (
-            500 <= len(articles_in_order) <= 600
-        ), f"Found {len(articles_in_order)} unique articles, expected ~564"
+        assert 500 <= len(articles_in_order) <= 600, (
+            f"Found {len(articles_in_order)} unique articles, expected ~564"
+        )
 
         # Should not have too many large gaps (indicates scattered articles)
         assert len(gaps) < 50, (
@@ -176,9 +176,9 @@ class TestChunkingQuality:
             assert len(chunk["text"].strip()) > 0, f"Chunk {i} has empty text"
 
             # Check article_number is valid integer
-            assert isinstance(
-                chunk["article_number"], int
-            ), f"Chunk {i} article_number is not int: {type(chunk['article_number'])}"
+            assert isinstance(chunk["article_number"], int), (
+                f"Chunk {i} article_number is not int: {type(chunk['article_number'])}"
+            )
             assert chunk["article_number"] > 0, f"Chunk {i} has invalid article_number"
 
         print("\n✅ Metadata structure is correct for all chunks")
@@ -204,8 +204,7 @@ class TestChunkingQuality:
 
         # At least 70% should be in range
         assert in_range_pct >= 70, (
-            f"Only {in_range_pct:.1f}% of chunks are in target size range. "
-            f"Expected at least 70%."
+            f"Only {in_range_pct:.1f}% of chunks are in target size range. Expected at least 70%."
         )
 
 

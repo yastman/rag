@@ -32,6 +32,7 @@ from search_engines import create_search_engine
 # MLflow integration (optional - gracefully handles if not available)
 try:
     from mlflow_integration import MLflowRAGLogger
+
     MLFLOW_AVAILABLE = True
 except ImportError:
     MLFLOW_AVAILABLE = False
@@ -338,7 +339,9 @@ def run_ab_test(
             # Create run name from timestamp
             run_name = f"ab_test_{timestamp}"
 
-            with logger.start_run(run_name=run_name, tags={"type": "ab_test", "collection": collection_name}):
+            with logger.start_run(
+                run_name=run_name, tags={"type": "ab_test", "collection": collection_name}
+            ):
                 # Log common config
                 common_config = {
                     "collection": collection_name,
@@ -383,14 +386,24 @@ def run_ab_test(
 
                 # Log comparison improvements (DBSF vs Baseline)
                 improvement_metrics = {
-                    "improvement.recall_at_1_pct": comparison_dbsf["improvements"]["recall@1"]["relative_improvement_pct"],
-                    "improvement.recall_at_10_pct": comparison_dbsf["improvements"]["recall@10"]["relative_improvement_pct"],
-                    "improvement.ndcg_at_10_pct": comparison_dbsf["improvements"]["ndcg@10"]["relative_improvement_pct"],
-                    "improvement.mrr_pct": comparison_dbsf["improvements"]["mrr"]["relative_improvement_pct"],
+                    "improvement.recall_at_1_pct": comparison_dbsf["improvements"]["recall@1"][
+                        "relative_improvement_pct"
+                    ],
+                    "improvement.recall_at_10_pct": comparison_dbsf["improvements"]["recall@10"][
+                        "relative_improvement_pct"
+                    ],
+                    "improvement.ndcg_at_10_pct": comparison_dbsf["improvements"]["ndcg@10"][
+                        "relative_improvement_pct"
+                    ],
+                    "improvement.mrr_pct": comparison_dbsf["improvements"]["mrr"][
+                        "relative_improvement_pct"
+                    ],
                 }
 
                 # Log all metrics
-                logger.log_metrics({**baseline_metrics, **hybrid_metrics, **dbsf_metrics, **improvement_metrics})
+                logger.log_metrics(
+                    {**baseline_metrics, **hybrid_metrics, **dbsf_metrics, **improvement_metrics}
+                )
 
                 # Log markdown report as artifact
                 try:

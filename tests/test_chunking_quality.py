@@ -58,7 +58,7 @@ def test_criminal_code_chunking():
     coverage = len(chunks_with_article) / len(chunks) * 100
 
     print(f"With article_number: {len(chunks_with_article)} ({coverage:.1f}%)")
-    print(f"WITHOUT article_number: {len(chunks_without)} ({100-coverage:.1f}%)")
+    print(f"WITHOUT article_number: {len(chunks_without)} ({100 - coverage:.1f}%)")
 
     if coverage == 100.0:
         print("✅ PASS: 100% coverage!")
@@ -67,7 +67,7 @@ def test_criminal_code_chunking():
         if chunks_without:
             print("\nFirst 3 chunks without article_number:")
             for i, c in enumerate(chunks_without[:3]):
-                print(f"  {i+1}. Text: {c['text'][:80]}...")
+                print(f"  {i + 1}. Text: {c['text'][:80]}...")
         return False
 
     # Test 3: Article sequence

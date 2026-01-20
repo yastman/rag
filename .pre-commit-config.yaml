@@ -23,24 +23,26 @@ repos:
   # Best Practice 2025: Run linter BEFORE formatter (lint → format order)
   # Documentation: https://docs.astral.sh/ruff/integrations/
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4  # Use latest version from: https://github.com/astral-sh/ruff-pre-commit/releases
+    rev: v0.14.13  # Latest: https://github.com/astral-sh/ruff-pre-commit/releases
     hooks:
       # Step 1: Linter - checks code quality (runs FIRST)
-      - id: ruff
+      - id: ruff-check
         name: Ruff Linter (check + fix)
         args:
           - --fix           # Auto-fix issues when possible
           - --exit-non-zero-on-fix  # Fail if fixes were applied (to review changes)
         types_or: [python, pyi]
+        exclude: ^legacy/
 
       # Step 2: Formatter - formats code (runs AFTER linting)
       - id: ruff-format
         name: Ruff Formatter
         types_or: [python, pyi]
+        exclude: ^legacy/
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0  # Latest: https://github.com/pre-commit/pre-commit-hooks/releases
     hooks:
       - id: trailing-whitespace
         name: Trim trailing whitespace
