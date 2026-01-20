@@ -142,6 +142,8 @@ evaluation/evaluation/
 # Sensitive files
 .env
 .env.local
+.env.server
+.env.production
 credentials.json
 secrets.yaml
 
