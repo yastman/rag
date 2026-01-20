@@ -1,0 +1,21 @@
+# BGE-M3 Embeddings API - Dependencies
+
+# Core ML/Embeddings
+FlagEmbedding==1.2.10
+torch==2.5.1
+transformers==4.46.3
+sentence-transformers==3.3.1
+
+# FastAPI & Web Server
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# Monitoring & Metrics
+prometheus-client==0.21.0
+
+# Utilities
+numpy==1.26.4
+scipy==1.14.1
