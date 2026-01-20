@@ -117,8 +117,8 @@ class PropertyBot:
 
         stats_text = f"""📊 Статистика кеша:
 
-Общая эффективность: {metrics['overall_hit_rate']}%
-Всего запросов: {metrics['total_requests']}
+Общая эффективность: {metrics["overall_hit_rate"]}%
+Всего запросов: {metrics["total_requests"]}
 
 По типам:
 """
@@ -188,7 +188,7 @@ class PropertyBot:
 
         if not results:
             await message.answer(
-                "😔 Ничего не нашел по вашему запросу.\n\n" "Попробуйте переформулировать запрос."
+                "😔 Ничего не нашел по вашему запросу.\n\nПопробуйте переформулировать запрос."
             )
             return
 
