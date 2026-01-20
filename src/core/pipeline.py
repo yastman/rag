@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from src.config import APIProvider, Settings
-from src.models import get_sentence_transformer
 from src.contextualization import (
     ClaudeContextualizer,
     GroqContextualizer,
     OpenAIContextualizer,
 )
 from src.ingestion import DocumentChunker, DocumentIndexer, UniversalDocumentParser
+from src.models import get_sentence_transformer
 from src.retrieval import create_search_engine
 
 
@@ -110,14 +110,13 @@ class RAGPipeline:
                     query_embedding=query,
                     top_k=top_k,
                     score_threshold=self.settings.score_threshold,
-                )
+                ),
             )
         else:
             # For other engines, generate dense embedding (async)
             loop = asyncio.get_event_loop()
             query_embedding = await loop.run_in_executor(
-                None,
-                lambda: self.embedding_model.encode(query, normalize_embeddings=True).tolist()
+                None, lambda: self.embedding_model.encode(query, normalize_embeddings=True).tolist()
             )
 
             # Step 2: Search using configured search engine (async)
@@ -127,7 +126,7 @@ class RAGPipeline:
                     query_embedding=query_embedding,
                     top_k=top_k,
                     score_threshold=self.settings.score_threshold,
-                )
+                ),
             )
 
         # Step 3: Optional contextualization

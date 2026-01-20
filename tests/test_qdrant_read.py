@@ -69,7 +69,7 @@ def test_qdrant_read():
                 with_vectors=False,  # Don't load vectors (saves memory)
             )
 
-            points, next_page = scroll_result
+            points, _next_page = scroll_result
 
             print(f"   ✅ Получено точек: {len(points)}")
 
