@@ -170,3 +170,9 @@ qdrant_storage/
 .pre-commit-config.yaml~
 *.docx
 *.pdf
+
+# BGE-M3 models cache
+services/bge-m3-api/models/
+*.pt
+*.bin
+*.safetensors
