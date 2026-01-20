@@ -170,3 +170,42 @@ fix: lint-fix format ***REMOVED******REMOVED*** Fix all auto-fixable issues
 
 qa: all-checks test ***REMOVED******REMOVED*** Full quality assurance
 	@echo "$(GREEN)✓✓✓ Full QA complete! ✓✓✓$(NC)"
+
+***REMOVED*** =============================================================================
+***REMOVED*** Local Development (docker-compose.local.yml)
+***REMOVED*** =============================================================================
+
+.PHONY: local-up local-down local-logs local-ps local-build
+
+local-up:  ***REMOVED******REMOVED*** Start local Docker services
+	docker compose -f docker-compose.local.yml up -d
+
+local-down:  ***REMOVED******REMOVED*** Stop local Docker services
+	docker compose -f docker-compose.local.yml down
+
+local-logs:  ***REMOVED******REMOVED*** View local Docker logs
+	docker compose -f docker-compose.local.yml logs -f
+
+local-ps:  ***REMOVED******REMOVED*** Show local Docker status
+	docker compose -f docker-compose.local.yml ps
+
+local-build:  ***REMOVED******REMOVED*** Rebuild local Docker services
+	docker compose -f docker-compose.local.yml build
+
+***REMOVED*** =============================================================================
+***REMOVED*** Deployment
+***REMOVED*** =============================================================================
+
+.PHONY: deploy-code deploy-release
+
+deploy-code:  ***REMOVED******REMOVED*** Quick deploy (git pull only)
+	git tag -d deploy-code 2>/dev/null || true
+	git tag deploy-code
+	git push origin deploy-code --force
+
+deploy-release:  ***REMOVED******REMOVED*** Release deploy (requires VERSION, e.g., make deploy-release VERSION=2.6.0)
+ifndef VERSION
+	$(error VERSION is required. Usage: make deploy-release VERSION=2.6.0)
+endif
+	git tag v$(VERSION)
+	git push origin v$(VERSION)
