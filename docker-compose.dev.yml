@@ -1,0 +1,214 @@
+# Dev Stack for RAG Bot Development
+# Start: docker compose -f docker-compose.dev.yml up -d
+# Stop:  docker compose -f docker-compose.dev.yml down
+# Reset: docker compose -f docker-compose.dev.yml down -v
+
+services:
+  # =============================================================================
+  # DATABASES
+  # =============================================================================
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: dev-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    container_name: dev-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  qdrant:
+    image: qdrant/qdrant:v1.16
+    container_name: dev-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # =============================================================================
+  # AI SERVICES
+  # =============================================================================
+
+  bge-m3:
+    build:
+      context: ./services/bge-m3-api
+      dockerfile: Dockerfile
+    container_name: dev-bge-m3
+    ports:
+      - "8000:8000"
+    volumes:
+      - bge_models:/models
+    environment:
+      OMP_NUM_THREADS: 4
+      MKL_NUM_THREADS: 4
+      MODEL_CACHE_DIR: /models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  docling:
+    image: ghcr.io/docling-project/docling-serve-cpu:main
+    container_name: dev-docling
+    ports:
+      - "5001:5001"
+    environment:
+      UVICORN_HOST: 0.0.0.0
+      UVICORN_PORT: 5001
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  lightrag:
+    image: ghcr.io/hkuds/lightrag:v1.4.9.11
+    container_name: dev-lightrag
+    ports:
+      - "9621:9621"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      LLM_BINDING: openai
+      EMBEDDING_BINDING: openai
+      LLM_MODEL: gpt-4o-mini
+      EMBEDDING_MODEL: text-embedding-3-small
+      EMBEDDING_DIM: 1536
+    volumes:
+      - lightrag_data:/app/lightrag_data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:9621/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # =============================================================================
+  # ML PLATFORM
+  # =============================================================================
+
+  langfuse:
+    image: langfuse/langfuse:2
+    container_name: dev-langfuse
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/langfuse
+      NEXTAUTH_SECRET: dev-secret-change-in-production
+      SALT: dev-salt-change-in-production
+      NEXTAUTH_URL: http://localhost:3001
+      TELEMETRY_ENABLED: "false"
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/public/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  mlflow:
+    build:
+      context: ./docker/mlflow
+      dockerfile: Dockerfile
+    container_name: dev-mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://postgres:postgres@postgres:5432/mlflow
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    entrypoint: >
+      mlflow server
+      --backend-store-uri postgresql://postgres:postgres@postgres:5432/mlflow
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # =============================================================================
+  # BOT (optional - uncomment to run in container)
+  # =============================================================================
+
+  # bot:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: dev-bot
+  #   environment:
+  #     TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+  #     REDIS_URL: redis://redis:6379
+  #     QDRANT_URL: http://qdrant:6333
+  #     BGE_M3_URL: http://bge-m3:8000
+  #     OPENAI_API_KEY: ${OPENAI_API_KEY}
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #     qdrant:
+  #       condition: service_healthy
+  #     bge-m3:
+  #       condition: service_healthy
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  bge_models:
+  lightrag_data:
+  mlflow_artifacts:
