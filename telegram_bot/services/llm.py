@@ -243,9 +243,7 @@ class LLMService:
             Simple formatted answer with search results
         """
         if not context_chunks:
-            return (
-                "⚠️ Извините, сервис временно недоступен.\n\n" "Попробуйте повторить запрос позже."
-            )
+            return "⚠️ Извините, сервис временно недоступен.\n\nПопробуйте повторить запрос позже."
 
         # Format first 3 results as simple text
         fallback = "⚠️ Сервис генерации ответов временно недоступен.\n\n"

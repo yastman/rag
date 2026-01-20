@@ -37,9 +37,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         results = []
         for i, chunk in enumerate(chunks):
             try:
-                result = await self.contextualize_single(
-                    chunk, f"chunk_{i}", query
-                )
+                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
                 results.append(result)
             except Exception as e:
                 print(f"Warning: Failed to contextualize chunk {i}: {e}")
@@ -77,9 +75,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         usage = response.usage
         self.total_tokens += usage.total_tokens
         # OpenAI pricing: $5/MTok input (gpt-4), $15/MTok output
-        self.total_cost += (
-            usage.prompt_tokens * 5 + usage.completion_tokens * 15
-        ) / 1_000_000
+        self.total_cost += (usage.prompt_tokens * 5 + usage.completion_tokens * 15) / 1_000_000
 
         return ContextualizedChunk(
             original_text=text,
