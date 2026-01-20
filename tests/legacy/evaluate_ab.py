@@ -110,7 +110,7 @@ def evaluate_collections(
     baseline_collection: str,
     contextual_collection: str,
     queries_file: str,
-    k_values: list[int] = None,
+    k_values: list[int] | None = None,
 ):
     """
     Evaluate both collections and compare.

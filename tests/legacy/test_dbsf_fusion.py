@@ -4,12 +4,15 @@ Test: Verify if Qdrant accepts "fusion": "dbsf" or only "fusion": "rrf"
 """
 
 import sys
+
 import requests
-import json
+
 
 sys.path.append("/home/admin/contextual_rag")
-from config import QDRANT_URL, QDRANT_API_KEY
 from FlagEmbedding import BGEM3FlagModel
+
+from config import QDRANT_API_KEY, QDRANT_URL
+
 
 # Load model
 print("Loading BGE-M3...")
@@ -24,7 +27,7 @@ print(f"Query: {query}\n")
 embeddings = model.encode(query, return_dense=True, return_sparse=True, return_colbert_vecs=True)
 dense = embeddings["dense_vecs"].tolist()
 sparse = embeddings["lexical_weights"]
-sparse_indices = [int(k) for k in sparse.keys()]
+sparse_indices = [int(k) for k in sparse]
 sparse_values = [float(v) for v in sparse.values()]
 colbert = embeddings["colbert_vecs"].tolist()
 
@@ -41,7 +44,11 @@ payload_dbsf = {
         {
             "prefetch": [
                 {"query": dense, "using": "dense", "limit": 10},
-                {"query": {"values": sparse_values, "indices": sparse_indices}, "using": "sparse", "limit": 10},
+                {
+                    "query": {"values": sparse_values, "indices": sparse_indices},
+                    "using": "sparse",
+                    "limit": 10,
+                },
             ],
             "query": {"fusion": "dbsf"},  # ← DBSF
         }
@@ -77,7 +84,11 @@ payload_rrf = {
         {
             "prefetch": [
                 {"query": dense, "using": "dense", "limit": 10},
-                {"query": {"values": sparse_values, "indices": sparse_indices}, "using": "sparse", "limit": 10},
+                {
+                    "query": {"values": sparse_values, "indices": sparse_indices},
+                    "using": "sparse",
+                    "limit": 10,
+                },
             ],
             "query": {"fusion": "rrf"},  # ← RRF
         }
