@@ -3,9 +3,8 @@
 
 import asyncio
 
-from services import EmbeddingService, FilterExtractor, RetrieverService
-
 from config import BotConfig
+from services import EmbeddingService, FilterExtractor, RetrieverService
 
 
 async def test_services():
