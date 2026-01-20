@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable
+from typing import Any, Callable
 
 from aiogram import BaseMiddleware, Dispatcher
 from aiogram.types import CallbackQuery, Message, TelegramObject
 from cachetools import TTLCache
+
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +69,7 @@ class ThrottlingMiddleware(BaseMiddleware):
 
 
 def setup_throttling_middleware(
-    dp: Dispatcher,
-    rate_limit: float = 1.5,
-    admin_ids: list[int] | None = None
+    dp: Dispatcher, rate_limit: float = 1.5, admin_ids: list[int] | None = None
 ) -> None:
     """
     Setup throttling middleware for bot.
