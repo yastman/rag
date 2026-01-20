@@ -170,3 +170,42 @@ fix: lint-fix format ## Fix all auto-fixable issues
 
 qa: all-checks test ## Full quality assurance
 	@echo "$(GREEN)✓✓✓ Full QA complete! ✓✓✓$(NC)"
+
+# =============================================================================
+# Local Development (docker-compose.local.yml)
+# =============================================================================
+
+.PHONY: local-up local-down local-logs local-ps local-build
+
+local-up:  ## Start local Docker services
+	docker compose -f docker-compose.local.yml up -d
+
+local-down:  ## Stop local Docker services
+	docker compose -f docker-compose.local.yml down
+
+local-logs:  ## View local Docker logs
+	docker compose -f docker-compose.local.yml logs -f
+
+local-ps:  ## Show local Docker status
+	docker compose -f docker-compose.local.yml ps
+
+local-build:  ## Rebuild local Docker services
+	docker compose -f docker-compose.local.yml build
+
+# =============================================================================
+# Deployment
+# =============================================================================
+
+.PHONY: deploy-code deploy-release
+
+deploy-code:  ## Quick deploy (git pull only)
+	git tag -d deploy-code 2>/dev/null || true
+	git tag deploy-code
+	git push origin deploy-code --force
+
+deploy-release:  ## Release deploy (requires VERSION, e.g., make deploy-release VERSION=2.6.0)
+ifndef VERSION
+	$(error VERSION is required. Usage: make deploy-release VERSION=2.6.0)
+endif
+	git tag v$(VERSION)
+	git push origin v$(VERSION)
