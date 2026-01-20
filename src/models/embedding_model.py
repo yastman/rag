@@ -10,6 +10,7 @@ from typing import Optional
 from FlagEmbedding import BGEM3FlagModel
 from sentence_transformers import SentenceTransformer
 
+
 logger = logging.getLogger(__name__)
 
 # Global singleton instances
@@ -92,4 +93,5 @@ def clear_models():
 
     # Force garbage collection
     import gc
+
     gc.collect()
