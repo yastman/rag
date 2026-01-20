@@ -313,7 +313,7 @@ def run_smoke_test(
     print(f"\n🏃 Running {len(queries)} smoke queries...")
     for i, query_data in enumerate(queries, 1):
         query = query_data["query"]
-        expected = int(query_data["expected_article"]) # type: ignore[call-overload]
+        expected = int(query_data["expected_article"])  # type: ignore[call-overload]
 
         start_time = time.time()
         search_results = engine.search(query, limit=10)
@@ -321,9 +321,7 @@ def run_smoke_test(
         latencies.append(latency_ms)
 
         # Check if expected article in results
-        retrieved_articles = [
-            int(r.payload.get("article_number", 0)) for r in search_results
-        ]
+        retrieved_articles = [int(r.payload.get("article_number", 0)) for r in search_results]
         precision_at_1 = 1.0 if retrieved_articles and retrieved_articles[0] == expected else 0.0
         recall_at_10 = 1.0 if expected in retrieved_articles else 0.0
 
@@ -341,12 +339,12 @@ def run_smoke_test(
         print(
             f"   [{i:2d}/{len(queries)}] {status} "
             f"P@1={precision_at_1:.0%} R@10={recall_at_10:.0%} "
-            f"{latency_ms:5.0f}ms - {query[:60]}..." # type: ignore
+            f"{latency_ms:5.0f}ms - {query[:60]}..."  # type: ignore
         )
 
     # Calculate metrics
-    avg_precision_at_1 = sum(r["precision_at_1"] for r in results) / len(results) # type: ignore
-    avg_recall_at_10 = sum(r["recall_at_10"] for r in results) / len(results) # type: ignore
+    avg_precision_at_1 = sum(r["precision_at_1"] for r in results) / len(results)  # type: ignore
+    avg_recall_at_10 = sum(r["recall_at_10"] for r in results) / len(results)  # type: ignore
     failure_rate = 1.0 - avg_recall_at_10
 
     latencies_sorted = sorted(latencies)
@@ -360,9 +358,15 @@ def run_smoke_test(
     print("=" * 80)
 
     print("\n🎯 Quality Metrics:")
-    print(f"   Precision@1: {avg_precision_at_1:.1%} (target: ≥{SLO_THRESHOLDS['precision_at_1_min']:.0%})")
-    print(f"   Recall@10:   {avg_recall_at_10:.1%} (target: ≥{SLO_THRESHOLDS['recall_at_10_min']:.0%})")
-    print(f"   Failure Rate: {failure_rate:.1%} (target: ≤{SLO_THRESHOLDS['failure_rate_max']:.0%})")
+    print(
+        f"   Precision@1: {avg_precision_at_1:.1%} (target: ≥{SLO_THRESHOLDS['precision_at_1_min']:.0%})"
+    )
+    print(
+        f"   Recall@10:   {avg_recall_at_10:.1%} (target: ≥{SLO_THRESHOLDS['recall_at_10_min']:.0%})"
+    )
+    print(
+        f"   Failure Rate: {failure_rate:.1%} (target: ≤{SLO_THRESHOLDS['failure_rate_max']:.0%})"
+    )
 
     print("\n⏱️  Latency Metrics:")
     print(f"   p50: {p50_latency:6.0f}ms")
@@ -395,7 +399,7 @@ def run_smoke_test(
     for difficulty in ["easy", "medium", "hard"]:
         diff_results = [r for r in results if r["difficulty"] == difficulty]
         if diff_results:
-            diff_p1 = sum(r["precision_at_1"] for r in diff_results) / len(diff_results) # type: ignore
+            diff_p1 = sum(r["precision_at_1"] for r in diff_results) / len(diff_results)  # type: ignore
             print(f"   {difficulty.capitalize():6s}: {diff_p1:.1%} ({len(diff_results)} queries)")
 
     print("\n" + "=" * 80)

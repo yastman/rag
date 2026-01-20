@@ -38,9 +38,7 @@ class GroqContextualizer(ContextualizeProvider):
         results = []
         for i, chunk in enumerate(chunks):
             try:
-                result = await self.contextualize_single(
-                    chunk, f"chunk_{i}", query
-                )
+                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
                 results.append(result)
             except Exception as e:
                 print(f"Warning: Failed to contextualize chunk {i}: {e}")
@@ -75,7 +73,7 @@ class GroqContextualizer(ContextualizeProvider):
         )
 
         # Track tokens
-        if hasattr(response, 'usage'):
+        if hasattr(response, "usage"):
             self.total_tokens += response.usage.total_tokens
 
         return ContextualizedChunk(
@@ -105,7 +103,7 @@ class GroqContextualizer(ContextualizeProvider):
             ],
         )
 
-        if hasattr(response, 'usage'):
+        if hasattr(response, "usage"):
             self.total_tokens += response.usage.total_tokens
 
         return ContextualizedChunk(

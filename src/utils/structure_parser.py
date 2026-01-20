@@ -58,12 +58,12 @@ ROMAN_NUMERALS = {
 
 def roman_to_int(roman: str) -> int:
     """Convert Roman numeral to integer."""
-    return ROMAN_NUMERALS.get(roman.upper(), None) # type: ignore
+    return ROMAN_NUMERALS.get(roman.upper(), None)  # type: ignore
 
 
 def ukrainian_number_to_int(word: str) -> int:
     """Convert Ukrainian number word to integer."""
-    return UKRAINIAN_NUMBERS.get(word.lower(), None) # type: ignore
+    return UKRAINIAN_NUMBERS.get(word.lower(), None)  # type: ignore
 
 
 def parse_legal_structure(chunk_text: str) -> dict:
@@ -76,7 +76,7 @@ def parse_legal_structure(chunk_text: str) -> dict:
     Returns:
         Dictionary with structure metadata
     """
-    metadata = { # type: ignore
+    metadata = {  # type: ignore
         "book": None,
         "book_number": None,
         "section": None,
@@ -97,11 +97,11 @@ def parse_legal_structure(chunk_text: str) -> dict:
     for pattern in article_patterns:
         article_match = re.search(pattern, chunk_text, re.MULTILINE)
         if article_match:
-            metadata["article_number"] = int(article_match.group(1)) # type: ignore
+            metadata["article_number"] = int(article_match.group(1))  # type: ignore
             # Clean title (remove extra whitespace, newlines)
             title = article_match.group(2).strip()
             title = re.sub(r"\s+", " ", title)
-            metadata["article_title"] = title # type: ignore
+            metadata["article_title"] = title  # type: ignore
             break
 
     # Extract Chapter (Глава)
@@ -112,9 +112,9 @@ def parse_legal_structure(chunk_text: str) -> dict:
     for pattern in chapter_patterns:
         chapter_match = re.search(pattern, chunk_text, re.MULTILINE)
         if chapter_match:
-            metadata["chapter_number"] = int(chapter_match.group(1)) # type: ignore
+            metadata["chapter_number"] = int(chapter_match.group(1))  # type: ignore
             title = chapter_match.group(2).strip()
-            metadata["chapter"] = title # type: ignore
+            metadata["chapter"] = title  # type: ignore
             break
 
     # Extract Section (Розділ) - Roman numerals
@@ -126,9 +126,9 @@ def parse_legal_structure(chunk_text: str) -> dict:
         section_match = re.search(pattern, chunk_text, re.MULTILINE)
         if section_match:
             roman = section_match.group(1)
-            metadata["section_number"] = roman_to_int(roman) # type: ignore
+            metadata["section_number"] = roman_to_int(roman)  # type: ignore
             title = section_match.group(2).strip()
-            metadata["section"] = title # type: ignore
+            metadata["section"] = title  # type: ignore
             break
 
     # Extract Book (Книга) - Ukrainian number words
@@ -140,9 +140,9 @@ def parse_legal_structure(chunk_text: str) -> dict:
         book_match = re.search(pattern, chunk_text, re.IGNORECASE | re.MULTILINE)
         if book_match:
             ukrainian_num = book_match.group(1)
-            metadata["book_number"] = ukrainian_number_to_int(ukrainian_num) # type: ignore
+            metadata["book_number"] = ukrainian_number_to_int(ukrainian_num)  # type: ignore
             title = book_match.group(2).strip()
-            metadata["book"] = title # type: ignore
+            metadata["book"] = title  # type: ignore
             break
 
     # Extract related articles from text

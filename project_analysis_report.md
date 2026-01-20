@@ -60,7 +60,7 @@ tests/
 # В src/core/pipeline.py
 print(f"Warning: Failed to process {pdf_path}: {e}")
 
-# В src/contextualization/claude.py  
+# В src/contextualization/claude.py
 print(f"Warning: Failed to contextualize chunk {i}: {e}")
 ```
 
@@ -159,7 +159,7 @@ for i, chunk in enumerate(chunks):
 
 ## 🏆 Заключение
 
-Проект **Contextual RAG Pipeline** имеет **отличную архитектуру** и **высокое качество кода**, но **критически нуждается в тестировании** и **улучшении обработки ошибок** для продакшена. 
+Проект **Contextual RAG Pipeline** имеет **отличную архитектуру** и **высокое качество кода**, но **критически нуждается в тестировании** и **улучшении обработки ошибок** для продакшена.
 
 Система готова для демонстрации и прототипирования, но требует доработки для enterprise использования.
 
