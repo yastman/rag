@@ -43,10 +43,16 @@ def check_redisearch_module(client: redis.Redis) -> bool:
     """Check if RediSearch module is available."""
     try:
         modules = client.module_list()
-        module_names = [m.get("name", "").lower() for m in modules]
-        return "search" in module_names or "ft" in module_names
+        for m in modules:
+            # Handle both bytes and str keys (depends on decode_responses)
+            name = m.get("name") or m.get(b"name", b"")
+            if isinstance(name, bytes):
+                name = name.decode()
+            if name.lower() in ("search", "ft"):
+                return True
+        return False
     except Exception:
-        # Try FT.INFO as fallback check
+        # Try FT._LIST as fallback check
         try:
             client.execute_command("FT._LIST")
             return True
