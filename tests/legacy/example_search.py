@@ -10,6 +10,7 @@ import sys
 
 from FlagEmbedding import BGEM3FlagModel
 
+
 sys.path.append("/home/admin/contextual_rag")
 from config import DEFAULT_SEARCH_ENGINE
 from evaluation.search_engines import create_search_engine

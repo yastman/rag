@@ -2,9 +2,11 @@
 
 import json
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import httpx
+
 
 logger = logging.getLogger(__name__)
 
@@ -227,9 +229,7 @@ class LLMService:
 
         return "\n\n---\n\n".join(context_parts)
 
-    def _get_fallback_answer(
-        self, question: str, context_chunks: list[dict[str, Any]]
-    ) -> str:
+    def _get_fallback_answer(self, question: str, context_chunks: list[dict[str, Any]]) -> str:
         """
         Generate fallback answer when LLM API fails.
 
@@ -244,8 +244,7 @@ class LLMService:
         """
         if not context_chunks:
             return (
-                "⚠️ Извините, сервис временно недоступен.\n\n"
-                "Попробуйте повторить запрос позже."
+                "⚠️ Извините, сервис временно недоступен.\n\n" "Попробуйте повторить запрос позже."
             )
 
         # Format first 3 results as simple text
