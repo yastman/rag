@@ -84,7 +84,7 @@ async def test_model(provider: str, model: str, label: str, tier: str, chunks: l
             chunk_text = chunk["text"]
             print(f"[{i + 1}/{len(chunks)}] ", end="", flush=True)
 
-            context_text, metadata = await contextualizer.situate_context_with_metadata(chunk_text)
+            _context_text, metadata = await contextualizer.situate_context_with_metadata(chunk_text)
 
             results.append(
                 {
