@@ -1,7 +1,7 @@
 ***REMOVED*** TODO - Current Tasks
 
 > **Дата:** 2026-01-21
-> **Версия:** v2.8.0
+> **Версия:** v2.9.0
 > **Ветка:** feat/redis-stack-vector-search
 
 ---
@@ -11,6 +11,7 @@
 ```
 Local Setup:            ██████████ 100% ✅
 Telegram Bot:           ██████████ 100% ✅
+CESC Personalization:   ██████████ 100% ✅ NEW
 Contextual Retrieval:   ████████░░  80% 🟡
 Production Deploy:      ░░░░░░░░░░   0% ⏸️
 ```
@@ -28,13 +29,45 @@ Production Deploy:      ░░░░░░░░░░   0% ⏸️
 
 ---
 
-***REMOVED******REMOVED*** Completed Today
+***REMOVED******REMOVED*** Completed Today (2026-01-21)
 
+***REMOVED******REMOVED******REMOVED*** CESC Implementation (v2.9.0)
+- [x] UserContextService - извлечение preferences через LLM
+- [x] CESCPersonalizer - персонализация cache HIT
+- [x] Bot integration - handle_query с CESC
+- [x] Configuration - cesc_enabled, extraction_frequency, ttl
+- [x] Unit tests - 19 + 11 = 30 tests
+- [x] Integration tests - 3 tests
+- [x] Documentation - CHANGELOG, CACHING, README
+
+***REMOVED******REMOVED******REMOVED*** Earlier Today
 - [x] Contextual Retrieval pipeline (schema, loader, script)
 - [x] 19 tests passing for contextual modules
 - [x] Removed cross-encoder (redundant with ColBERT)
 - [x] GLM-4.7 config improvements
 - [x] index_test_data.py compatibility fix
+
+---
+
+***REMOVED******REMOVED*** CESC Feature Summary
+
+```
+┌─────────────────────────────────────────────────┐
+│  CESC (Context-Enabled Semantic Cache)          │
+├─────────────────────────────────────────────────┤
+│  User preferences extracted every 3rd query     │
+│  Stored in Redis JSON (TTL: 30 days)            │
+│  Cache HIT personalized via LLM (~100 tokens)   │
+│  Latency: ~100ms (vs 2-3s full RAG)             │
+└─────────────────────────────────────────────────┘
+```
+
+**New Files:**
+- `telegram_bot/services/user_context.py`
+- `telegram_bot/services/cesc.py`
+- `tests/test_user_context.py`
+- `tests/test_cesc.py`
+- `tests/test_cesc_integration.py`
 
 ---
 
@@ -80,6 +113,9 @@ docker compose -f docker-compose.dev.yml up -d
 
 ***REMOVED*** Run all tests
 source venv/bin/activate && pytest tests/ -v
+
+***REMOVED*** Run CESC tests only
+pytest tests/test_user_context.py tests/test_cesc.py tests/test_cesc_integration.py -v
 
 ***REMOVED*** Run contextual tests only
 pytest tests/test_contextual_*.py -v
