@@ -51,10 +51,12 @@ class PropertyBot:
             model=config.llm_model,
         )
 
-        # CESC: User context and personalization
+        # CESC: User context and personalization (configurable)
         self.user_context_service = UserContextService(
             cache_service=self.cache_service,
             llm_service=self.llm_service,
+            context_ttl=config.user_context_ttl,
+            extraction_frequency=config.cesc_extraction_frequency,
         )
         self.cesc_personalizer = CESCPersonalizer(
             llm_service=self.llm_service,
@@ -150,8 +152,9 @@ class PropertyBot:
         user_id = message.from_user.id
         logger.info(f"Query from {user_id}: {query}")
 
-        # CESC: Update user context (extracts preferences every 3rd query)
-        await self.user_context_service.update_from_query(user_id, query)
+        # CESC: Update user context (extracts preferences every Nth query)
+        if self.config.cesc_enabled:
+            await self.user_context_service.update_from_query(user_id, query)
 
         # Initialize cache on first query if not done yet
         if not self._cache_initialized:
@@ -174,14 +177,15 @@ class PropertyBot:
         # Uses langcache-embed-v1 (256-dim) for fast cache matching
         cached_answer = await self.cache_service.check_semantic_cache(query)
         if cached_answer:
-            # CESC: Personalize if user has preferences
-            user_context = await self.user_context_service.get_context(user_id)
-            if self.cesc_personalizer.should_personalize(user_context):
-                cached_answer = await self.cesc_personalizer.personalize(
-                    cached_response=cached_answer,
-                    user_context=user_context,
-                    query=query,
-                )
+            # CESC: Personalize if enabled and user has preferences
+            if self.config.cesc_enabled:
+                user_context = await self.user_context_service.get_context(user_id)
+                if self.cesc_personalizer.should_personalize(user_context):
+                    cached_answer = await self.cesc_personalizer.personalize(
+                        cached_response=cached_answer,
+                        user_context=user_context,
+                        query=query,
+                    )
             await message.answer(cached_answer)
             self.cache_service.log_metrics()
             return
