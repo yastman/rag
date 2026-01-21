@@ -38,16 +38,25 @@ class UserContextService:
 - Обновляй бюджет/комнаты если явно указаны
 - Верни ТОЛЬКО JSON без пояснений"""
 
-    def __init__(self, cache_service: Any, llm_service: Any) -> None:
+    def __init__(
+        self,
+        cache_service: Any,
+        llm_service: Any,
+        context_ttl: int = 30 * 24 * 3600,
+        extraction_frequency: int = 3,
+    ) -> None:
         """Initialize with cache and LLM services.
 
         Args:
             cache_service: Redis cache service for storing context.
             llm_service: LLM service for preference extraction.
+            context_ttl: TTL for user context in Redis (default: 30 days).
+            extraction_frequency: Extract preferences every N queries (default: 3).
         """
         self.cache = cache_service
         self.llm = llm_service
-        self.context_ttl = 30 * 24 * 3600  # 30 days
+        self.context_ttl = context_ttl
+        self.extraction_frequency = extraction_frequency
 
     def _default_context(self, user_id: int) -> dict[str, Any]:
         """Return default context for new users.
@@ -124,7 +133,7 @@ class UserContextService:
     def _should_extract(self, interaction_count: int, preferences: dict) -> bool:
         """Check if preferences should be extracted.
 
-        Extraction triggers on first query (count % 3 == 1) or if preferences empty.
+        Extraction triggers on first query (count % frequency == 1) or if preferences empty.
 
         Args:
             interaction_count: Current interaction count (already incremented).
@@ -133,7 +142,7 @@ class UserContextService:
         Returns:
             True if extraction should run.
         """
-        return interaction_count % 3 == 1 or not preferences
+        return interaction_count % self.extraction_frequency == 1 or not preferences
 
     async def get_context(self, user_id: int) -> dict[str, Any]:
         """Get full user context from Redis.
