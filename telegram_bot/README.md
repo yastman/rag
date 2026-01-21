@@ -82,7 +82,10 @@ python -m telegram_bot.main
 - **EmbeddingService** - генерация embeddings через BGE-M3 API
 - **RetrieverService** - поиск в Qdrant с фильтрами
 - **LLMService** - генерация ответов через OpenAI API
-- **FilterExtractor** - извлечение фильтров из текста
+- **CacheService** - 4-уровневое кеширование (semantic, embeddings, analyzer, search)
+- **QueryAnalyzer** - анализ запросов и извлечение фильтров через LLM
+- **UserContextService** - управление контекстом пользователя (CESC)
+- **CESCPersonalizer** - персонализация кешированных ответов (CESC)
 
 ### Фильтры
 
@@ -138,11 +141,16 @@ telegram_bot/
 ├── main.py              # Точка входа
 ├── bot.py               # Основная логика бота
 ├── config.py            # Конфигурация
+├── middlewares.py       # Throttling, error handling
 ├── services/
+│   ├── __init__.py      # Exports
 │   ├── embeddings.py    # BGE-M3 API
 │   ├── retriever.py     # Qdrant поиск
-│   ├── llm.py           # LLM генерация
-│   └── filter_extractor.py  # Парсинг фильтров
+│   ├── llm.py           # LLM генерация (streaming)
+│   ├── cache.py         # 4-tier caching
+│   ├── query_analyzer.py    # Query analysis via LLM
+│   ├── user_context.py  # CESC: User preferences (NEW)
+│   └── cesc.py          # CESC: Personalization (NEW)
 ├── requirements.txt
 └── README.md
 ```
