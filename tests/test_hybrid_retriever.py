@@ -1,6 +1,5 @@
 """Tests for HybridRetrieverService."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -11,7 +10,7 @@ class TestHybridRetrieverServiceUnit:
         """Test hybrid search uses prefetch with dense and sparse."""
         from telegram_bot.services.hybrid_retriever import HybridRetrieverService
 
-        with patch('telegram_bot.services.hybrid_retriever.QdrantClient') as mock_client_class:
+        with patch("telegram_bot.services.hybrid_retriever.QdrantClient") as mock_client_class:
             mock_client = MagicMock()
             mock_point = MagicMock()
             mock_point.payload = {"page_content": "test", "metadata": {}}
@@ -21,9 +20,7 @@ class TestHybridRetrieverServiceUnit:
             mock_client_class.return_value = mock_client
 
             service = HybridRetrieverService(
-                url="http://localhost:6333",
-                api_key="",
-                collection_name="test"
+                url="http://localhost:6333", api_key="", collection_name="test"
             )
 
             results = service.hybrid_search(
@@ -42,16 +39,14 @@ class TestHybridRetrieverServiceUnit:
         """Test RRF weights affect prefetch limits."""
         from telegram_bot.services.hybrid_retriever import HybridRetrieverService
 
-        with patch('telegram_bot.services.hybrid_retriever.QdrantClient') as mock_client_class:
+        with patch("telegram_bot.services.hybrid_retriever.QdrantClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_client.get_collections.return_value = MagicMock()
             mock_client_class.return_value = mock_client
 
             service = HybridRetrieverService(
-                url="http://localhost:6333",
-                api_key="",
-                collection_name="test"
+                url="http://localhost:6333", api_key="", collection_name="test"
             )
 
             # Sparse-favored weights (0.2, 0.8)
@@ -66,24 +61,22 @@ class TestHybridRetrieverServiceUnit:
             call_kwargs = mock_client.query_points.call_args[1]
             prefetch = call_kwargs["prefetch"]
             # With sparse-favored, sparse prefetch should have higher limit
-            dense_prefetch = [p for p in prefetch if "dense" in str(p.using)][0]
-            sparse_prefetch = [p for p in prefetch if "sparse" in str(p.using)][0]
+            dense_prefetch = next(p for p in prefetch if "dense" in str(p.using))
+            sparse_prefetch = next(p for p in prefetch if "sparse" in str(p.using))
             assert sparse_prefetch.limit >= dense_prefetch.limit
 
     def test_builds_filter_correctly(self):
         """Test filter building includes base filter."""
         from telegram_bot.services.hybrid_retriever import HybridRetrieverService
 
-        with patch('telegram_bot.services.hybrid_retriever.QdrantClient') as mock_client_class:
+        with patch("telegram_bot.services.hybrid_retriever.QdrantClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_client.get_collections.return_value = MagicMock()
             mock_client_class.return_value = mock_client
 
             service = HybridRetrieverService(
-                url="http://localhost:6333",
-                api_key="",
-                collection_name="test"
+                url="http://localhost:6333", api_key="", collection_name="test"
             )
 
             service.hybrid_search(
@@ -100,16 +93,14 @@ class TestHybridRetrieverServiceUnit:
         """Test returns empty list on error."""
         from telegram_bot.services.hybrid_retriever import HybridRetrieverService
 
-        with patch('telegram_bot.services.hybrid_retriever.QdrantClient') as mock_client_class:
+        with patch("telegram_bot.services.hybrid_retriever.QdrantClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.query_points.side_effect = Exception("Connection error")
             mock_client.get_collections.return_value = MagicMock()
             mock_client_class.return_value = mock_client
 
             service = HybridRetrieverService(
-                url="http://localhost:6333",
-                api_key="",
-                collection_name="test"
+                url="http://localhost:6333", api_key="", collection_name="test"
             )
 
             results = service.hybrid_search(
@@ -124,16 +115,14 @@ class TestHybridRetrieverServiceUnit:
         """Test fallback to dense-only search when no sparse vectors."""
         from telegram_bot.services.hybrid_retriever import HybridRetrieverService
 
-        with patch('telegram_bot.services.hybrid_retriever.QdrantClient') as mock_client_class:
+        with patch("telegram_bot.services.hybrid_retriever.QdrantClient") as mock_client_class:
             mock_client = MagicMock()
             mock_client.query_points.return_value = MagicMock(points=[])
             mock_client.get_collections.return_value = MagicMock()
             mock_client_class.return_value = mock_client
 
             service = HybridRetrieverService(
-                url="http://localhost:6333",
-                api_key="",
-                collection_name="test"
+                url="http://localhost:6333", api_key="", collection_name="test"
             )
 
             # No sparse vectors provided
