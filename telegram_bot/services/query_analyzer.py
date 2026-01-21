@@ -84,7 +84,7 @@ class QueryAnalyzer:
                     ],
                     "response_format": {"type": "json_object"},
                     "temperature": 0.0,
-                    "max_tokens": 500,
+                    "max_tokens": 1000,  # GLM-4.7 needs more for thinking mode
                 },
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
