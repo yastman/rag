@@ -23,11 +23,16 @@ class BotConfig:
     qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "contextual_bulgaria")
 
-    # LLM (OpenAI compatible API - Cerebras GLM-4.7)
+    # LLM (OpenAI compatible API - Cerebras Qwen 3 32B)
     llm_api_key: str = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
     llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.cerebras.ai/v1")
-    llm_model: str = os.getenv("LLM_MODEL", "zai-glm-4.7")
+    llm_model: str = os.getenv("LLM_MODEL", "qwen-3-32b")
 
     # RAG settings
     top_k: int = 5
     min_score: float = 0.3  # Lower threshold for better recall with filters
+
+    # CESC Configuration (Contextual Extraction and Storage of Conversation)
+    cesc_enabled: bool = os.getenv("CESC_ENABLED", "true").lower() == "true"
+    cesc_extraction_frequency: int = int(os.getenv("CESC_EXTRACTION_FREQUENCY", "3"))
+    user_context_ttl: int = int(os.getenv("USER_CONTEXT_TTL", str(30 * 24 * 3600)))
