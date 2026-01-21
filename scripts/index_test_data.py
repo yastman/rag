@@ -36,12 +36,12 @@ def create_collection(client: QdrantClient, collection_name: str, vector_size: i
         client.delete_collection(collection_name)
         print(f"Deleted existing collection: {collection_name}")
 
-    # Create new
+    # Create new with named vector "dense" (required by RetrieverService)
     client.create_collection(
         collection_name=collection_name,
-        vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+        vectors_config={"dense": VectorParams(size=vector_size, distance=Distance.COSINE)},
     )
-    print(f"Created collection: {collection_name}")
+    print(f"Created collection: {collection_name} (with named vector 'dense')")
 
 
 async def index_documents(json_path: str):
@@ -63,16 +63,18 @@ async def index_documents(json_path: str):
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
     create_collection(client, COLLECTION_NAME)
 
-    # Index points
+    # Index points with named vector and RetrieverService-compatible payload
     points = [
         PointStruct(
             id=i,
-            vector=embeddings[i],
+            vector={"dense": embeddings[i]},
             payload={
-                "id": doc["id"],
-                "title": doc["title"],
-                "content": doc["content"],
-                **doc.get("metadata", {}),
+                "page_content": doc["content"],  # RetrieverService expects this key
+                "metadata": {
+                    "id": doc["id"],
+                    "title": doc["title"],
+                    **doc.get("metadata", {}),
+                },
             },
         )
         for i, doc in enumerate(documents)
