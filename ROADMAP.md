@@ -1,9 +1,9 @@
 # RAG Project Roadmap
 
-> **Статус проекта:** Local development ready, bot working
+> **Статус проекта:** Local development ready, bot working with CESC
 > **Последнее обновление:** 2026-01-21
-> **Текущий релиз:** v2.8.0
-> **Ветка:** feat/redis-stack-vector-search (20 commits ahead of main)
+> **Текущий релиз:** v2.9.0
+> **Ветка:** feat/redis-stack-vector-search (26 commits ahead of main)
 
 ---
 
@@ -12,7 +12,7 @@
 ```
 Phase 1 (Infrastructure):  ██████████  100% ✅ COMPLETED
 Phase 2 (Configuration):   ██████████  100% ✅ COMPLETED
-Phase 3 (Data & Testing):  ████████░░   80% 🟡 IN PROGRESS
+Phase 3 (Data & Testing):  █████████░   90% 🟡 IN PROGRESS
 Phase 4 (Production):      ░░░░░░░░░░    0% ⏸️ PLANNED
 ```
 
@@ -61,6 +61,12 @@ Phase 4 (Production):      ░░░░░░░░░░    0% ⏸️ PLANNED
 - [x] Contextual Retrieval pipeline (schema, loader, script)
 - [x] Unit tests for contextual modules (19 tests)
 - [x] Cross-encoder removed (ColBERT handles reranking)
+- [x] **CESC v2.9.0** - Context-Enabled Semantic Cache
+  - [x] UserContextService (preference extraction)
+  - [x] CESCPersonalizer (cache personalization)
+  - [x] Bot integration
+  - [x] 33 tests (unit + integration)
+  - [x] Documentation updated
 
 ### ⏳ Remaining
 - [ ] Process VTT files with Contextual Retrieval
@@ -94,10 +100,25 @@ Phase 4 (Production):      ░░░░░░░░░░    0% ⏸️ PLANNED
 
 | Change | Impact |
 |--------|--------|
+| **CESC v2.9.0** | Personalized cache responses |
+| UserContextService | Extract preferences from queries |
+| CESCPersonalizer | Adapt cached answers to user context |
+| 33 new tests | Full CESC coverage |
 | Contextual Retrieval pipeline | +35-49% retrieval accuracy for VTT |
 | Removed cross-encoder | Faster startup, less RAM |
 | GLM-4.7 integration | Free LLM via Cerebras |
 | Redis Stack upgrade | Vector search support |
+
+---
+
+## Version History
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| v2.9.0 | 2026-01-21 | CESC personalization |
+| v2.8.0 | 2025-01-06 | Graceful degradation, JSON logging |
+| v2.7.0 | 2025-01-06 | Streaming LLM, conversation memory |
+| v2.6.0 | 2025-01-06 | Async migration, BGE-M3 singleton |
 
 ---
 
@@ -122,6 +143,9 @@ docker compose -f docker-compose.dev.yml up -d
 
 # Run tests
 source venv/bin/activate && pytest tests/ -v
+
+# Run CESC tests
+pytest tests/test_user_context.py tests/test_cesc.py tests/test_cesc_integration.py -v
 
 # Start bot
 python -m telegram_bot.main
