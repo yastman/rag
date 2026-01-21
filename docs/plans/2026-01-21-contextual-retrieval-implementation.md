@@ -10,6 +10,63 @@
 
 ---
 
+## Task 0: Prerequisites Check
+
+**Goal:** Убедиться что Qdrant запущен и настроен перед началом работы.
+
+**Step 1: Check environment variables**
+
+Проверить `.env` файл:
+
+```bash
+cat .env | grep -E "(QDRANT|COLLECTION)"
+```
+
+Expected output (примерно):
+```
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+COLLECTION_NAME=legal_documents
+```
+
+**Step 2: Check Qdrant is running**
+
+```bash
+curl -s http://localhost:6333/collections | python -m json.tool
+```
+
+Expected: JSON с списком коллекций (может быть пустой `{"collections": []}`)
+
+If error "Connection refused":
+```bash
+# Если Qdrant в Docker:
+docker ps | grep qdrant
+docker start qdrant  # если остановлен
+
+# Или запустить:
+docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
+```
+
+**Step 3: Run existing connection test**
+
+```bash
+pytest tests/test_qdrant_connection.py -v
+```
+
+Expected: All tests PASS
+
+**Step 4: Verify BGE-M3 model loads**
+
+```bash
+python -c "from src.models import get_bge_m3_model; m = get_bge_m3_model(); print('BGE-M3 OK')"
+```
+
+Expected: "BGE-M3 OK" (первый запуск скачает модель ~2GB)
+
+**If any step fails:** Fix before proceeding to Task 1.
+
+---
+
 ## Task 1: JSON Schema для Contextual Chunks
 
 **Files:**
@@ -1140,6 +1197,7 @@ EOF
 
 | Task | Description | Files |
 |------|-------------|-------|
+| 0 | Prerequisites Check | Qdrant, BGE-M3, .env |
 | 1 | JSON Schema | `src/ingestion/contextual_schema.py` |
 | 2 | Loader | `src/ingestion/contextual_loader.py` |
 | 3 | Indexing Script | `scripts/index_contextual.py` |
