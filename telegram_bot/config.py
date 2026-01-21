@@ -23,10 +23,10 @@ class BotConfig:
     qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "apartments_filtered")
 
-    # LLM (OpenAI compatible API)
-    llm_api_key: str = os.getenv("OPENAI_API_KEY", "")
-    llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-    llm_model: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    # LLM (OpenAI compatible API - Cerebras GLM-4.7)
+    llm_api_key: str = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+    llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.cerebras.ai/v1")
+    llm_model: str = os.getenv("LLM_MODEL", "zai-glm-4.7")
 
     # RAG settings
     top_k: int = 5

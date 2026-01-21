@@ -414,10 +414,10 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         # Convert all numpy types to Python types
         search_payload = convert_to_python_types(search_payload)
 
-        # Execute 3-stage query via Qdrant query API (async)
+        # Execute 3-stage query via Qdrant query API (sync)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(
                     f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
                     json=search_payload,
                     headers={"api-key": self.settings.qdrant_api_key or ""},
@@ -598,10 +598,10 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         # Convert all numpy types to Python types
         search_payload = convert_to_python_types(search_payload)
 
-        # Execute 3-stage query via Qdrant query API (async)
+        # Execute 3-stage query via Qdrant query API (sync)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(
                     f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
                     json=search_payload,
                     headers={"api-key": self.settings.qdrant_api_key or ""},
