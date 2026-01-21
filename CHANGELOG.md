@@ -22,6 +22,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.9.0] - 2026-01-21
+
+### ✨ Features
+- ✅ **CESC (Context-Enabled Semantic Cache)** - personalized cached responses
+  - `UserContextService` - extracts user preferences from queries via LLM
+  - `CESCPersonalizer` - adapts cached responses to user context
+  - Preferences: cities, budget, property types, rooms
+  - Extraction frequency: every 3rd query
+  - Storage: Redis JSON with 30-day TTL
+
+### ⚡ Performance
+- Cache HIT personalization: ~100ms (vs 2-3s full RAG)
+- Lightweight LLM call: ~100 tokens for personalization
+- User context stored efficiently in Redis
+
+### 🏗️ Architecture
+- New services: `telegram_bot/services/user_context.py`, `telegram_bot/services/cesc.py`
+- Configuration: `cesc_enabled`, `cesc_extraction_frequency`, `user_context_ttl`
+- Integration: `PropertyBot.handle_query` now personalizes cache hits
+
+### 🧪 Testing
+- 33 tests total for CESC components
+  - `test_user_context.py` - 19 unit tests
+  - `test_cesc.py` - 11 unit tests
+  - `test_cesc_integration.py` - 3 integration tests
+
+---
+
 ## [2.8.0] - 2025-01-06
 
 ### 🛡️ Resilience
