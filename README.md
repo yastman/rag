@@ -1,5 +1,7 @@
 # Contextual RAG Pipeline
 
+> **Full documentation:** [docs/index.md](docs/index.md)
+
 > **Production RAG система с гибридным поиском и ML платформой**
 
 **Версия:** 2.8.0
