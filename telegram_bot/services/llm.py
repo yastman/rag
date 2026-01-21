@@ -87,7 +87,7 @@ class LLMService:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.7,
-                    "max_tokens": 1000,
+                    "max_tokens": 2000,  # GLM-4.7 needs more for thinking mode
                 },
             )
             response.raise_for_status()
@@ -164,7 +164,7 @@ class LLMService:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.7,
-                    "max_tokens": 1000,
+                    "max_tokens": 2000,  # GLM-4.7 needs more for thinking mode
                     "stream": True,  # Enable streaming
                 },
                 timeout=60.0,
