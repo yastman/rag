@@ -32,6 +32,16 @@ class BotConfig:
     top_k: int = 5
     min_score: float = 0.3  # Lower threshold for better recall with filters
 
+    # Voyage AI Configuration
+    voyage_api_key: str = os.getenv("VOYAGE_API_KEY", "")
+    voyage_embed_model: str = os.getenv("VOYAGE_EMBED_MODEL", "voyage-3-large")
+    voyage_cache_model: str = os.getenv("VOYAGE_CACHE_MODEL", "voyage-3-lite")
+    voyage_rerank_model: str = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2")
+
+    # Search Configuration
+    search_top_k: int = int(os.getenv("SEARCH_TOP_K", "50"))
+    rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "5"))
+
     # CESC Configuration (Contextual Extraction and Storage of Conversation)
     cesc_enabled: bool = os.getenv("CESC_ENABLED", "true").lower() == "true"
     cesc_extraction_frequency: int = int(os.getenv("CESC_EXTRACTION_FREQUENCY", "3"))
