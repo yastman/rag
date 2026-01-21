@@ -7,6 +7,8 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__ENABLE_STATIC_CONTENT: "true"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
       interval: 10s
