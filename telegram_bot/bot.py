@@ -7,8 +7,6 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from src.retrieval.reranker import rerank_results
-
 from .config import BotConfig
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .services import CacheService, EmbeddingService, LLMService, QueryAnalyzer, RetrieverService
@@ -31,7 +29,7 @@ class PropertyBot:
         self.query_analyzer = QueryAnalyzer(
             api_key=config.llm_api_key,
             base_url=config.llm_base_url,
-            model="gpt-4o-mini",  # Cost-efficient model for filter extraction
+            model=config.llm_model,  # Use same model as LLM service
         )
         self.embedding_service = EmbeddingService(config.bge_m3_url)
         self.retriever_service = RetrieverService(
@@ -180,11 +178,6 @@ class PropertyBot:
             await self.cache_service.store_search_results(query_vector, filters, results)
 
         logger.info(f"Found {len(results)} results")
-
-        # 4.5. Rerank top results with cross-encoder (+10-15% accuracy)
-        if results and len(results) > 1:
-            results = rerank_results(query, results, top_k=min(5, len(results)))
-            logger.info(f"Reranked top {min(5, len(results))} results")
 
         if not results:
             await message.answer(
