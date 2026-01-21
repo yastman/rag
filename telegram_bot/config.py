@@ -21,7 +21,7 @@ class BotConfig:
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
     qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
-    qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "apartments_filtered")
+    qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "contextual_bulgaria")
 
     # LLM (OpenAI compatible API - Cerebras GLM-4.7)
     llm_api_key: str = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
