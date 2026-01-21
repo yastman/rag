@@ -5,8 +5,10 @@ from .cesc import CESCPersonalizer
 from .embeddings import EmbeddingService
 from .llm import LLMService
 from .query_analyzer import QueryAnalyzer
+from .query_preprocessor import QueryPreprocessor
 from .retriever import RetrieverService
 from .user_context import UserContextService
+from .voyage_client import VoyageClient
 
 
 __all__ = [
@@ -15,6 +17,8 @@ __all__ = [
     "EmbeddingService",
     "LLMService",
     "QueryAnalyzer",
+    "QueryPreprocessor",
     "RetrieverService",
     "UserContextService",
+    "VoyageClient",
 ]
