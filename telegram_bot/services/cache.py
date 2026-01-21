@@ -1,4 +1,7 @@
-"""Redis caching service for RAG pipeline."""
+"""Redis caching service for RAG pipeline.
+
+Uses native RedisVL SemanticCache for LLM response caching with vector similarity search.
+"""
 
 import hashlib
 import json
@@ -8,6 +11,9 @@ from typing import Any, Optional
 
 import redis.asyncio as redis
 from redisvl.extensions.cache.embeddings import EmbeddingsCache
+from redisvl.extensions.cache.llm import SemanticCache
+from redisvl.query.filter import Tag
+from redisvl.utils.vectorize import HFTextVectorizer
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +23,7 @@ class CacheService:
     """Multi-level caching service for RAG pipeline.
 
     Tier 1 (Critical):
-    - Semantic cache для финальных LLM ответов (векторный поиск)
+    - Semantic cache для финальных LLM ответов (RedisVL SemanticCache)
     - Embeddings cache для эмбеддингов запросов
 
     Tier 2 (Medium):
@@ -32,7 +38,7 @@ class CacheService:
         embeddings_cache_ttl: int = 7 * 24 * 3600,  # 7 days
         analyzer_cache_ttl: int = 24 * 3600,  # 24 hours
         search_cache_ttl: int = 2 * 3600,  # 2 hours
-        distance_threshold: float = 0.85,  # semantic similarity threshold
+        distance_threshold: float = 0.15,  # cosine distance threshold (0.15 ≈ 85% similarity)
     ):
         """Initialize cache service.
 
@@ -42,7 +48,7 @@ class CacheService:
             embeddings_cache_ttl: TTL for embeddings cache (seconds)
             analyzer_cache_ttl: TTL for QueryAnalyzer cache (seconds)
             search_cache_ttl: TTL for Qdrant search cache (seconds)
-            distance_threshold: Semantic similarity threshold (0.0-1.0)
+            distance_threshold: Cosine distance threshold for semantic cache (lower = stricter)
         """
         self.redis_url = redis_url
 
@@ -60,21 +66,24 @@ class CacheService:
             "search": {"hits": 0, "misses": 0},
         }
 
-        # Initialize Redis client for key-value operations
+        # Initialize Redis client for key-value operations (Tier 2)
         self.redis_client: Optional[redis.Redis] = None
 
-        # Initialize RedisVL Embeddings cache (Tier 1)
+        # Native RedisVL SemanticCache (Tier 1)
+        self.semantic_cache: Optional[SemanticCache] = None
+
+        # Native RedisVL EmbeddingsCache (Tier 1)
         self.embeddings_cache: Optional[EmbeddingsCache] = None
 
-        # Distance threshold for semantic cache
+        # Cosine distance threshold for semantic cache
         self.distance_threshold = distance_threshold
 
-        logger.info("CacheService initialized with 4-tier architecture")
+        logger.info("CacheService initialized with 4-tier architecture (RedisVL native)")
 
     async def initialize(self):
         """Initialize Redis connections and caches."""
         try:
-            # Initialize async Redis client for Tier 2
+            # Initialize async Redis client for Tier 2 (key-value caches)
             self.redis_client = redis.from_url(
                 self.redis_url,
                 encoding="utf-8",
@@ -87,26 +96,42 @@ class CacheService:
             await self.redis_client.ping()
             logger.info("✓ Redis connection established")
 
-            # Initialize Semantic Cache using Redis vector search
-            # Создаем векторный индекс для KNN поиска похожих ответов
+            # Initialize native RedisVL SemanticCache (Tier 1)
+            # Uses langcache-embed-v1 (256-dim) for fast cache matching
+            # BGE-M3 (1024-dim) is used separately for Qdrant search
             try:
-                await self._create_semantic_index()
+                vectorizer = HFTextVectorizer(model="redis/langcache-embed-v1")
+                self.semantic_cache = SemanticCache(
+                    name="rag_llm_cache",
+                    redis_url=self.redis_url,
+                    ttl=self.semantic_cache_ttl,
+                    distance_threshold=self.distance_threshold,
+                    vectorizer=vectorizer,
+                    filterable_fields=[
+                        {"name": "user_id", "type": "tag"},
+                        {"name": "language", "type": "tag"},
+                        {"name": "query_type", "type": "tag"},
+                    ],
+                )
                 logger.info(
-                    f"✓ Semantic LLM cache initialized (vector search, threshold={self.distance_threshold})"
+                    f"✓ RedisVL SemanticCache initialized "
+                    f"(vectorizer=langcache-embed-v1, distance_threshold={self.distance_threshold}, "
+                    f"filterable_fields=[user_id, language, query_type])"
                 )
             except Exception as e:
-                logger.warning(f"Semantic cache index creation warning: {e}")
+                logger.warning(f"SemanticCache initialization failed: {e}")
+                self.semantic_cache = None
 
-            # Initialize Embeddings Cache (Tier 1)
+            # Initialize native EmbeddingsCache (Tier 1)
             try:
                 self.embeddings_cache = EmbeddingsCache(
-                    name="rag:embeddings:v1",
+                    name="bge_m3_embeddings",
                     redis_url=self.redis_url,
                     ttl=self.embeddings_cache_ttl,
                 )
-                logger.info("✓ Embeddings cache initialized")
+                logger.info("✓ EmbeddingsCache initialized (native RedisVL)")
             except Exception as e:
-                logger.warning(f"Embeddings cache initialization failed: {e}")
+                logger.warning(f"EmbeddingsCache initialization failed: {e}")
                 self.embeddings_cache = None
 
         except Exception as e:
@@ -115,117 +140,70 @@ class CacheService:
 
     async def close(self):
         """Close Redis connections."""
+        if self.semantic_cache:
+            await self.semantic_cache.adisconnect()
+        if self.embeddings_cache:
+            await self.embeddings_cache.adisconnect()
         if self.redis_client:
             await self.redis_client.aclose()
-            logger.info("Redis connections closed")
+        logger.info("Redis connections closed")
 
     def _hash_key(self, data: str) -> str:
         """Generate SHA256 hash for cache key."""
         return hashlib.sha256(data.encode()).hexdigest()[:16]
 
-    async def _create_semantic_index(self):
-        """Create Redis vector index for semantic search if not exists."""
-        index_name = "idx:rag:semantic_cache"
-
-        try:
-            # Check if index exists
-            await self.redis_client.execute_command("FT.INFO", index_name)
-            logger.debug(f"Semantic cache index '{index_name}' already exists")
-        except Exception:
-            # Create index with vector field (BGE-M3 = 1024 dimensions, COSINE distance)
-            await self.redis_client.execute_command(
-                "FT.CREATE",
-                index_name,
-                "ON",
-                "HASH",
-                "PREFIX",
-                "1",
-                "rag:semantic:",
-                "SCHEMA",
-                "query_vector",
-                "VECTOR",
-                "FLAT",
-                "6",
-                "TYPE",
-                "FLOAT32",
-                "DIM",
-                "1024",
-                "DISTANCE_METRIC",
-                "COSINE",
-                "answer",
-                "TEXT",
-                "timestamp",
-                "NUMERIC",
-            )
-            logger.info(f"Created semantic cache index '{index_name}'")
-
     # ========== TIER 1: Semantic Cache (LLM Answers) ==========
 
-    async def check_semantic_cache(self, query_embedding: list[float]) -> Optional[str]:
-        """Check semantic cache using vector similarity search.
+    async def check_semantic_cache(
+        self,
+        query: str,
+        user_id: Optional[int] = None,
+        language: str = "ru",
+    ) -> Optional[str]:
+        """Check semantic cache using RedisVL with langcache-embed-v1.
+
+        Uses native langcache-embed-v1 (256-dim) for fast cache matching.
+        This is separate from BGE-M3 (1024-dim) used for Qdrant search.
+        Supports multi-user isolation via filterable_fields.
 
         Args:
-            query_embedding: Query embedding vector (1024-dim for BGE-M3)
+            query: User query text
+            user_id: Optional user ID for cache isolation (Telegram user ID)
+            language: Language code for filtering (default: "ru")
 
         Returns:
-            Cached answer if similar query found (cosine similarity > threshold), None otherwise
+            Cached answer if similar query found, None otherwise
         """
-        if not self.redis_client:
+        if not self.semantic_cache:
             return None
 
         try:
-            import numpy as np
-
-            # Convert embedding to bytes for Redis vector search
-            vector_bytes = np.array(query_embedding, dtype=np.float32).tobytes()
-
             start = time.time()
 
-            # KNN search: find most similar cached answer
-            # Using COSINE distance, threshold = distance_threshold (0.85 = high similarity)
-            result = await self.redis_client.execute_command(
-                "FT.SEARCH",
-                "idx:rag:semantic_cache",
-                "*=>[KNN 1 @query_vector $vec AS score]",
-                "PARAMS",
-                "2",
-                "vec",
-                vector_bytes,
-                "DIALECT",
-                "2",
-                "RETURN",
-                "2",
-                "answer",
-                "score",
+            # Build filter expression for multi-user isolation
+            filter_expr = Tag("language") == language
+
+            if user_id is not None:
+                filter_expr = filter_expr & (Tag("user_id") == str(user_id))
+
+            # Use native RedisVL acheck - vectorizer computes embedding internally
+            results = await self.semantic_cache.acheck(
+                prompt=query,
+                filter_expression=filter_expr,
+                num_results=1,
             )
 
             latency = (time.time() - start) * 1000
 
-            # Result format: [count, key1, [field1, value1, field2, value2, ...]]
-            if result and len(result) > 1 and int(result[0]) > 0:
-                # Parse field-value pairs from result
-                fields = result[2]
-                field_dict = {}
-                for i in range(0, len(fields), 2):
-                    field_dict[fields[i]] = fields[i + 1]
+            if results:
+                self.metrics["semantic"]["hits"] += 1
+                answer = results[0].get("response", "")
+                distance = results[0].get("vector_distance", 0)
+                logger.info(f"✓ Semantic cache HIT ({latency:.0f}ms, distance={distance:.3f})")
+                return answer
 
-                # Get similarity score (cosine distance: 0 = identical, 1 = opposite)
-                score = float(field_dict.get("score", 1.0))
-                similarity = 1 - score  # Convert distance to similarity
-
-                if similarity >= self.distance_threshold:
-                    self.metrics["semantic"]["hits"] += 1
-                    answer = field_dict.get("answer", "")
-                    logger.info(
-                        f"✓ Semantic cache HIT ({latency:.0f}ms, similarity={similarity:.3f})"
-                    )
-                    return answer
-                self.metrics["semantic"]["misses"] += 1
-                logger.debug(
-                    f"✗ Semantic cache MISS (similarity={similarity:.3f} < {self.distance_threshold})"
-                )
-                return None
             self.metrics["semantic"]["misses"] += 1
+            logger.debug("✗ Semantic cache MISS (no similar results)")
             return None
 
         except Exception as e:
@@ -233,94 +211,113 @@ class CacheService:
             self.metrics["semantic"]["misses"] += 1
             return None
 
-    async def store_semantic_cache(self, query: str, query_embedding: list[float], answer: str):
-        """Store question-answer pair in semantic cache with vector for similarity search.
+    async def store_semantic_cache(
+        self,
+        query: str,
+        answer: str,
+        user_id: Optional[int] = None,
+        language: str = "ru",
+        query_type: str = "general",
+    ):
+        """Store question-answer pair in semantic cache using RedisVL.
+
+        Uses native langcache-embed-v1 (256-dim) for cache indexing.
+        Stores with user context filters for multi-user isolation.
 
         Args:
             query: User query text
-            query_embedding: Query embedding vector (1024-dim for BGE-M3)
             answer: LLM answer
+            user_id: User ID for cache isolation (Telegram user ID)
+            language: Language code (default: "ru")
+            query_type: Query type for categorization (default: "general")
         """
-        if not self.redis_client:
+        if not self.semantic_cache:
             return
 
         try:
-            import numpy as np
-
-            # Generate unique key for this cache entry
-            key = f"rag:semantic:{self._hash_key(query)}"
-
-            # Convert embedding to bytes for Redis vector field
-            vector_bytes = np.array(query_embedding, dtype=np.float32).tobytes()
-
-            # Store as Redis Hash with vector field
-            mapping = {
-                "query_vector": vector_bytes,
-                "answer": answer,
-                "timestamp": int(time.time()),
-                "query": query,  # Store original query for debugging
+            # Build filters for multi-user isolation
+            filters = {
+                "language": language,
+                "query_type": query_type,
             }
+            if user_id is not None:
+                filters["user_id"] = str(user_id)
 
-            await self.redis_client.hset(key, mapping=mapping)
-
-            # Set TTL (48 hours)
-            await self.redis_client.expire(key, self.semantic_cache_ttl)
-
-            logger.debug(f"✓ Stored semantic cache: {query[:50]}...")
+            # Use native RedisVL astore - vectorizer computes embedding internally
+            await self.semantic_cache.astore(
+                prompt=query,
+                response=answer,
+                filters=filters,
+            )
+            logger.debug(f"✓ Stored semantic cache: {query[:50]}... (user_id={user_id})")
         except Exception as e:
             logger.error(f"Semantic cache store error: {e}")
 
-    # ========== TIER 1: Embeddings Cache ==========
+    # ========== TIER 1: Embeddings Cache (Native RedisVL) ==========
 
-    async def get_cached_embedding(self, text: str) -> Optional[list[float]]:
-        """Get cached embedding for text.
+    async def get_cached_embedding(
+        self, text: str, model_name: str = "bge-m3"
+    ) -> Optional[list[float]]:
+        """Get cached embedding using native EmbeddingsCache.
 
         Args:
             text: Text to get embedding for
+            model_name: Model name for cache key namespacing
 
         Returns:
             Cached embedding vector if found, None otherwise
         """
-        if not self.embeddings_cache or not self.redis_client:
+        if not self.embeddings_cache:
             return None
 
         try:
-            key = f"rag:emb:v1:{self._hash_key(text)}"
             start = time.time()
-            cached = await self.redis_client.get(key)
+            result = await self.embeddings_cache.aget(
+                text=text,
+                model_name=model_name,
+            )
             latency = (time.time() - start) * 1000
 
-            if cached:
+            if result:
                 self.metrics["embeddings"]["hits"] += 1
                 logger.debug(f"✓ Embedding cache HIT ({latency:.0f}ms)")
-                return json.loads(cached)
+                return result["embedding"]
+
             self.metrics["embeddings"]["misses"] += 1
             return None
         except Exception as e:
-            logger.error(f"Embedding cache error: {e}")
+            logger.error(f"EmbeddingsCache error: {e}")
             self.metrics["embeddings"]["misses"] += 1
             return None
 
-    async def store_embedding(self, text: str, embedding: list[float]):
-        """Store embedding in cache.
+    async def store_embedding(
+        self,
+        text: str,
+        embedding: list[float],
+        model_name: str = "bge-m3",
+        metadata: Optional[dict] = None,
+    ):
+        """Store embedding in native EmbeddingsCache.
 
         Args:
             text: Original text
             embedding: Embedding vector
+            model_name: Model name for cache key namespacing
+            metadata: Optional metadata to store with embedding
         """
-        if not self.redis_client:
+        if not self.embeddings_cache:
             return
 
         try:
-            key = f"rag:emb:v1:{self._hash_key(text)}"
-            await self.redis_client.setex(
-                key,
-                self.embeddings_cache_ttl,
-                json.dumps(embedding),
+            await self.embeddings_cache.aset(
+                text=text,
+                model_name=model_name,
+                embedding=embedding,
+                metadata=metadata or {},
             )
             logger.debug(f"✓ Stored embedding: {text[:50]}...")
         except Exception as e:
-            logger.error(f"Embedding cache store error: {e}")
+            logger.error(f"EmbeddingsCache store error: {e}")
 
     # ========== TIER 2: QueryAnalyzer Cache ==========
 
