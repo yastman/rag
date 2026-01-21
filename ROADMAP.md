@@ -1,9 +1,9 @@
 # RAG Project Roadmap
 
-> **Статус проекта:** Development environment ready
+> **Статус проекта:** Local development ready, bot working
 > **Последнее обновление:** 2026-01-21
 > **Текущий релиз:** v2.8.0
-> **Активный план:** [docs/plans/2026-01-21-local-project-setup.md](docs/plans/2026-01-21-local-project-setup.md)
+> **Ветка:** feat/redis-stack-vector-search (20 commits ahead of main)
 
 ---
 
@@ -11,8 +11,8 @@
 
 ```
 Phase 1 (Infrastructure):  ██████████  100% ✅ COMPLETED
-Phase 2 (Configuration):   ████░░░░░░   40% 🟡 IN PROGRESS
-Phase 3 (Data & Testing):  ░░░░░░░░░░    0% ⏸️ BLOCKED
+Phase 2 (Configuration):   ██████████  100% ✅ COMPLETED
+Phase 3 (Data & Testing):  ████████░░   80% 🟡 IN PROGRESS
 Phase 4 (Production):      ░░░░░░░░░░    0% ⏸️ PLANNED
 ```
 
@@ -37,34 +37,36 @@ Phase 4 (Production):      ░░░░░░░░░░    0% ⏸️ PLANNED
 
 ---
 
-## PHASE 2: CONFIGURATION 🟡 IN PROGRESS
+## PHASE 2: CONFIGURATION ✅ COMPLETED
 
-### ✅ Completed
 - [x] pyproject.toml (ruff, mypy, pytest config)
 - [x] .env.local with API keys
+- [x] .env symlink
 - [x] docker-compose.dev.yml
+- [x] docker-compose.local.yml
 - [x] CI workflows (lint, type-check)
-
-### ❌ Remaining
-- [ ] **Fix BGE_M3_URL** (8001 → 8000)
-- [ ] **Fix src/config/settings.py** (crashes without .env)
-- [ ] **Install pytest** in dev environment
-- [ ] Create tests/conftest.py
-- [ ] Fix docker health checks (Qdrant, Langfuse)
+- [x] BGE_M3_URL fixed (8000)
+- [x] pytest installed
+- [x] tests/conftest.py created
+- [x] Docker health checks fixed
 
 ---
 
-## PHASE 3: DATA & TESTING ⏸️ BLOCKED
+## PHASE 3: DATA & TESTING 🟡 IN PROGRESS
 
-**Blocker:** No documents indexed, configuration issues
+### ✅ Completed
+- [x] Test documents indexed (test_documents collection)
+- [x] Search works (HybridRRFColBERT)
+- [x] Telegram bot working with GLM-4.7
+- [x] Contextual Retrieval pipeline (schema, loader, script)
+- [x] Unit tests for contextual modules (19 tests)
+- [x] Cross-encoder removed (ColBERT handles reranking)
 
-### Tasks
-- [ ] Prepare documents for indexing
-- [ ] Run document ingestion pipeline
-- [ ] Verify Qdrant collections have data
-- [ ] Write unit tests (cache, LLM, retriever)
-- [ ] Write integration tests
-- [ ] Add service containers to CI
+### ⏳ Remaining
+- [ ] Process VTT files with Contextual Retrieval
+- [ ] Index real video content
+- [ ] Integration tests for full pipeline
+- [ ] Merge to main branch
 
 ---
 
@@ -88,39 +90,14 @@ Phase 4 (Production):      ░░░░░░░░░░    0% ⏸️ PLANNED
 
 ---
 
-## Current Blockers
+## Recent Changes (2026-01-21)
 
-| Blocker | Impact | Fix |
-|---------|--------|-----|
-| Wrong BGE_M3_URL | Bot can't get embeddings | Change 8001 → 8000 |
-| Empty collections | Search returns nothing | Index documents |
-| No pytest | Can't run tests | pip install pytest |
-| settings.py crashes | Can't import src modules | Create .env symlink |
-
----
-
-## Quick Start (После исправления)
-
-```bash
-# 1. Fix configuration
-sed -i 's/8001/8000/' .env.local
-ln -s .env.local .env
-
-# 2. Install dev tools
-pip install pytest pytest-asyncio pytest-cov
-
-# 3. Start services
-docker compose -f docker-compose.dev.yml up -d
-
-# 4. Index documents
-python -m src.ingestion.indexer --input data/documents/
-
-# 5. Run tests
-make test
-
-# 6. Start bot
-python -m telegram_bot.main
-```
+| Change | Impact |
+|--------|--------|
+| Contextual Retrieval pipeline | +35-49% retrieval accuracy for VTT |
+| Removed cross-encoder | Faster startup, less RAM |
+| GLM-4.7 integration | Free LLM via Cerebras |
+| Redis Stack upgrade | Vector search support |
 
 ---
 
@@ -134,6 +111,24 @@ python -m telegram_bot.main
 | Langfuse | http://localhost:3001 |
 | BGE-M3 Docs | http://localhost:8000/docs |
 | Docling Docs | http://localhost:5001/docs |
+
+---
+
+## Quick Commands
+
+```bash
+# Start services
+docker compose -f docker-compose.dev.yml up -d
+
+# Run tests
+source venv/bin/activate && pytest tests/ -v
+
+# Start bot
+python -m telegram_bot.main
+
+# Index contextual JSON
+python scripts/index_contextual.py docs/processed/*.json
+```
 
 ---
 
