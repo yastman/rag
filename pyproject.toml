@@ -27,6 +27,9 @@ dependencies = [
     "ragas>=0.2.10",          # RAG evaluation framework
     "langfuse>=3.0.0",        # LLM observability & tracing
     "datasets>=3.0.0",        # For RAGAS evaluation datasets
+    # Voyage AI Integration (2026-01-21)
+    "voyageai>=0.3.0",        # Voyage AI embeddings and reranking
+    "tenacity>=8.2.0",        # Retry logic with exponential backoff
 ]
 
 [project.optional-dependencies]
