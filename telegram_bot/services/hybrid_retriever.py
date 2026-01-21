@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 from qdrant_client import QdrantClient, models
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -130,11 +131,13 @@ class HybridRetrieverService:
             # Format results
             formatted = []
             for point in results.points:
-                formatted.append({
-                    "text": point.payload.get("page_content", ""),
-                    "metadata": point.payload.get("metadata", {}),
-                    "score": point.score,
-                })
+                formatted.append(
+                    {
+                        "text": point.payload.get("page_content", ""),
+                        "metadata": point.payload.get("metadata", {}),
+                        "score": point.score,
+                    }
+                )
 
             logger.info(f"Hybrid search: {len(formatted)} results (RRF weights: {rrf_weights})")
             return formatted
