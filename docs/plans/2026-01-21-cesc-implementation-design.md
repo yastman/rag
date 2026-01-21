@@ -1,228 +1,158 @@
-# CESC Implementation Design Plan
+# CESC (Context-Enabled Semantic Cache) Implementation Plan
 
-**Date:** 2026-01-21
-**Status:** Ready for Implementation
-**Author:** Claude + User
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-## 1. Overview
+**Goal:** Personalize cached RAG responses using user context extracted from conversation history via Cerebras LLM.
 
-Реализация Context-Enabled Semantic Cache (CESC) для персонализации кешированных ответов в Telegram боте по недвижимости Болгарии.
+**Architecture:** On cache HIT, pass the generic cached response through a lightweight LLM call (~100 tokens) that adapts the response to user preferences (cities, budget, property types). User preferences are extracted every 3rd query and stored in Redis JSON with 30-day TTL.
 
-### Цель
-
-При cache HIT — персонализировать generic ответ под контекст пользователя через Cerebras LLM (~100ms, ~100 токенов).
-
-### Ожидаемые результаты
-
-| Метрика | Без CESC | С CESC |
-|---------|----------|--------|
-| Cache HIT latency | <1ms (generic) | ~100ms (personalized) |
-| Токены на HIT | 0 | ~100 |
-| Персонализация | Нет | Да |
-| User satisfaction | Базовый | Повышенный |
+**Tech Stack:** Redis JSON for context storage, Cerebras LLM (existing provider), Python 3.12+, pytest for testing.
 
 ---
 
-## 2. Architecture
+## Task 1: Create UserContextService with Tests
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         USER QUERY                              │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  1. UPDATE USER CONTEXT                                         │
-│     └── Every 3rd query: LLM extracts preferences               │
-│     └── Store in Redis JSON (TTL: 30 days)                      │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  2. SEMANTIC CACHE CHECK                                        │
-│     └── langcache-embed-v1 (256-dim)                            │
-│     └── filter: user_id + language                              │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-              ┌─────────────┴─────────────┐
-              │                           │
-           HIT ▼                       MISS ▼
-┌─────────────────────────┐   ┌─────────────────────────┐
-│  3. CESC PERSONALIZE    │   │  4. FULL RAG PIPELINE   │
-│     └── Cerebras LLM    │   │     └── BGE-M3 embed    │
-│     └── ~100 tokens     │   │     └── Qdrant search   │
-│     └── ~100ms          │   │     └── Cerebras LLM    │
-└───────────────────────────┘ │     └── 2-3s           │
-              │                 └───────────┬─────────────┘
-              │                             │
-              │                             ▼
-              │                 ┌─────────────────────────┐
-              │                 │  5. STORE IN CACHE      │
-              │                 │     └── + user context  │
-              │                 └───────────┬─────────────┘
-              │                             │
-              └──────────────┬──────────────┘
-                             ▼
-                    [PERSONALIZED RESPONSE]
-```
+**Files:**
+- Create: `telegram_bot/services/user_context.py`
+- Create: `tests/test_user_context.py`
 
----
-
-## 3. User Context Schema
-
-### 3.1 Full Schema
+### Step 1: Write the failing tests for UserContextService
 
 ```python
-user_context = {
-    # === Identity ===
-    "user_id": 12345,
-    "language": "ru",
-    "created_at": "2026-01-15T10:00:00Z",
-    "updated_at": "2026-01-21T14:30:00Z",
+# tests/test_user_context.py
+"""Tests for UserContextService."""
 
-    # === Extracted Preferences (LLM-generated) ===
-    "preferences": {
-        "cities": ["Солнечный берег", "Несебр", "Бургас"],
-        "budget_min": 50000,
-        "budget_max": 100000,
-        "property_types": ["apartment", "studio"],
-        "distance_to_sea_max": 500,
-        "rooms_min": 1,
-        "rooms_max": 3,
-    },
+import pytest
+from telegram_bot.services.user_context import UserContextService
 
-    # === Profile Summary (LLM-generated) ===
-    "profile_summary": "Ищет 2-комнатные квартиры у моря до 100к€",
 
-    # === Interaction Stats ===
-    "interaction_count": 15,
-    "last_queries": [
-        "квартиры в Солнечном береге",
-        "студии до 60000 евро",
-        "2-комнатные у моря",
-    ],
-}
+class TestUserContextService:
+    """Tests for user context management."""
+
+    def test_default_context_structure(self):
+        """Test default context has required fields."""
+        service = UserContextService(cache_service=None, llm_service=None)
+        context = service._default_context(user_id=12345)
+
+        assert context["user_id"] == 12345
+        assert context["language"] == "ru"
+        assert context["preferences"] == {}
+        assert context["profile_summary"] == ""
+        assert context["interaction_count"] == 0
+        assert context["last_queries"] == []
+        assert "created_at" in context
+        assert "updated_at" in context
+
+    def test_merge_preferences_cities_dedup(self):
+        """Test merging cities deduplicates correctly."""
+        service = UserContextService(cache_service=None, llm_service=None)
+        old = {"cities": ["Бургас", "Несебр"]}
+        new = {"cities": ["Несебр", "Варна"]}
+
+        merged = service._merge_preferences(old, new)
+
+        assert set(merged["cities"]) == {"Бургас", "Несебр", "Варна"}
+
+    def test_merge_preferences_overwrites_scalar(self):
+        """Test scalar values are overwritten."""
+        service = UserContextService(cache_service=None, llm_service=None)
+        old = {"budget_max": 100000, "rooms": 2}
+        new = {"budget_max": 80000}
+
+        merged = service._merge_preferences(old, new)
+
+        assert merged["budget_max"] == 80000
+        assert merged["rooms"] == 2
+
+    def test_merge_preferences_ignores_none(self):
+        """Test None values are ignored."""
+        service = UserContextService(cache_service=None, llm_service=None)
+        old = {"budget_max": 100000}
+        new = {"budget_max": None, "rooms": 2}
+
+        merged = service._merge_preferences(old, new)
+
+        assert merged["budget_max"] == 100000
+        assert merged["rooms"] == 2
+
+    def test_generate_summary_full(self):
+        """Test summary generation with full preferences."""
+        service = UserContextService(cache_service=None, llm_service=None)
+        context = {
+            "preferences": {
+                "cities": ["Бургас", "Несебр", "Варна"],
+                "budget_max": 100000,
+                "rooms": 2,
+                "property_types": ["apartment", "studio"],
+            }
+        }
+
+        summary = service._generate_summary(context)
+
+        assert "Бургас" in summary
+        assert "100000" in summary
+        assert "2-комнатные" in summary
+        assert "apartment" in summary
+
+    def test_generate_summary_empty(self):
+        """Test summary generation with no preferences."""
+        service = UserContextService(cache_service=None, llm_service=None)
+        context = {"preferences": {}}
+
+        summary = service._generate_summary(context)
+
+        assert summary == "Новый пользователь"
+
+    def test_should_extract_on_first_query(self):
+        """Test extraction triggers on first query (count % 3 == 1)."""
+        service = UserContextService(cache_service=None, llm_service=None)
+
+        # interaction_count will be 1 after first query
+        assert service._should_extract(interaction_count=1, preferences={})
+
+    def test_should_extract_on_empty_prefs(self):
+        """Test extraction triggers when preferences empty."""
+        service = UserContextService(cache_service=None, llm_service=None)
+
+        assert service._should_extract(interaction_count=5, preferences={})
+
+    def test_should_not_extract_mid_cycle(self):
+        """Test extraction skipped in middle of 3-query cycle."""
+        service = UserContextService(cache_service=None, llm_service=None)
+
+        assert not service._should_extract(
+            interaction_count=2, preferences={"cities": ["Бургас"]}
+        )
+        assert not service._should_extract(
+            interaction_count=3, preferences={"cities": ["Бургас"]}
+        )
 ```
 
-### 3.2 Storage
+### Step 2: Run tests to verify they fail
 
-- **Key:** `user_context:{user_id}`
-- **Type:** Redis JSON
-- **TTL:** 30 days (2592000 seconds)
+Run: `pytest tests/test_user_context.py -v`
+Expected: FAIL with "ModuleNotFoundError: No module named 'telegram_bot.services.user_context'"
 
----
-
-## 4. Components
-
-### 4.1 UserContextService
-
-**File:** `telegram_bot/services/user_context.py`
-
-**Responsibilities:**
-- Get/store user context in Redis
-- Extract preferences via LLM (every 3rd query)
-- Generate profile summary
-- Merge preferences incrementally
-
-**Key Methods:**
+### Step 3: Write minimal UserContextService implementation
 
 ```python
-class UserContextService:
-    async def get_context(self, user_id: int) -> dict
-    async def update_from_query(self, user_id: int, query: str) -> dict
-    async def _extract_preferences(self, query: str, current: dict) -> dict
-    def _merge_preferences(self, old: dict, new: dict) -> dict
-    async def _generate_summary(self, context: dict) -> str
-```
-
-### 4.2 CESCPersonalizer
-
-**File:** `telegram_bot/services/cesc.py`
-
-**Responsibilities:**
-- Personalize cached responses using user context
-- Use Cerebras LLM (same provider as main LLM)
-- Keep responses concise (~100 tokens)
-
-**Key Methods:**
-
-```python
-class CESCPersonalizer:
-    async def personalize(
-        self,
-        cached_response: str,
-        user_context: dict,
-        query: str,
-    ) -> str
-```
-
----
-
-## 5. Prompts
-
-### 5.1 Preference Extraction Prompt
-
-```
-Проанализируй запрос пользователя и извлеки/обнови предпочтения:
-
-Текущие предпочтения:
-{current_preferences}
-
-Новый запрос: {query}
-
-Извлеки и верни JSON:
-{{
-    "cities": ["город1", "город2"],
-    "budget_max": 100000,
-    "property_types": ["apartment"],
-    "rooms": 2,
-    "distance_to_sea": 500
-}}
-
-Правила:
-- Сохраняй существующие значения если новых нет
-- Добавляй новые города к существующим
-- Обновляй бюджет/комнаты если явно указаны
-- Верни ТОЛЬКО JSON без пояснений
-```
-
-### 5.2 CESC Personalization Prompt (Structured, ~100 tokens)
-
-```
-Персонализируй ответ под пользователя:
-
-ОТВЕТ: {cached_response}
-
-КОНТЕКСТ:
-- Города: {preferences.cities}
-- Бюджет: до {preferences.budget_max}€
-- Тип: {preferences.property_types}
-- История: {profile_summary}
-
-Сохрани факты, адаптируй подачу. Русский язык.
-```
-
----
-
-## 6. Implementation Plan
-
-### Task 1: Create UserContextService
-
-**File:** `telegram_bot/services/user_context.py`
-
-```python
+# telegram_bot/services/user_context.py
 """User context management with LLM-based preference extraction."""
 
 import json
 import logging
-from datetime import datetime
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class UserContextService:
-    """Manages user context with LLM-based preference extraction."""
+    """Manages user context with LLM-based preference extraction.
+
+    Extracts user preferences (cities, budget, property types) from queries
+    every 3rd interaction using LLM. Stores context in Redis JSON with 30-day TTL.
+    """
 
     EXTRACTION_PROMPT = """Проанализируй запрос пользователя и извлеки/обнови предпочтения:
 
@@ -246,27 +176,27 @@ class UserContextService:
 - Обновляй бюджет/комнаты если явно указаны
 - Верни ТОЛЬКО JSON без пояснений"""
 
-    def __init__(self, cache_service, llm_service):
-        """Initialize with cache and LLM services."""
+    def __init__(self, cache_service: Any, llm_service: Any) -> None:
+        """Initialize with cache and LLM services.
+
+        Args:
+            cache_service: Redis cache service for storing context.
+            llm_service: LLM service for preference extraction.
+        """
         self.cache = cache_service
         self.llm = llm_service
         self.context_ttl = 30 * 24 * 3600  # 30 days
 
-    async def get_context(self, user_id: int) -> dict[str, Any]:
-        """Get full user context from Redis."""
-        if not self.cache.redis_client:
-            return self._default_context(user_id)
-
-        key = f"user_context:{user_id}"
-        data = await self.cache.redis_client.get(key)
-
-        if data:
-            return json.loads(data)
-
-        return self._default_context(user_id)
-
     def _default_context(self, user_id: int) -> dict[str, Any]:
-        """Return default context for new users."""
+        """Return default context for new users.
+
+        Args:
+            user_id: Telegram user ID.
+
+        Returns:
+            Default context dictionary with empty preferences.
+        """
+        now = datetime.now(timezone.utc).isoformat()
         return {
             "user_id": user_id,
             "language": "ru",
@@ -274,78 +204,31 @@ class UserContextService:
             "profile_summary": "",
             "interaction_count": 0,
             "last_queries": [],
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "created_at": now,
+            "updated_at": now,
         }
-
-    async def update_from_query(self, user_id: int, query: str) -> dict[str, Any]:
-        """Extract preferences from query and update context."""
-        context = await self.get_context(user_id)
-
-        # Update interaction stats
-        context["interaction_count"] += 1
-        context["last_queries"] = [query] + context["last_queries"][:4]
-        context["updated_at"] = datetime.utcnow().isoformat()
-
-        # Extract preferences every 3rd query or if empty
-        should_extract = (
-            context["interaction_count"] % 3 == 1
-            or not context["preferences"]
-        )
-
-        if should_extract:
-            try:
-                new_prefs = await self._extract_preferences(
-                    query, context["preferences"]
-                )
-                context["preferences"] = self._merge_preferences(
-                    context["preferences"], new_prefs
-                )
-                logger.info(f"Extracted preferences for user {user_id}: {new_prefs}")
-            except Exception as e:
-                logger.warning(f"Preference extraction failed: {e}")
-
-            # Update profile summary after 5+ interactions
-            if context["interaction_count"] >= 5:
-                context["profile_summary"] = self._generate_summary(context)
-
-        # Save to Redis
-        await self._save_context(user_id, context)
-
-        return context
-
-    async def _extract_preferences(
-        self, query: str, current: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Use LLM to extract preferences from query."""
-        prompt = self.EXTRACTION_PROMPT.format(
-            current_preferences=json.dumps(current, ensure_ascii=False),
-            query=query,
-        )
-
-        response = await self.llm.generate(prompt, max_tokens=200)
-
-        # Parse JSON from response
-        response_clean = response.strip()
-        # Handle markdown code blocks
-        if response_clean.startswith("```"):
-            response_clean = response_clean.split("```")[1]
-            if response_clean.startswith("json"):
-                response_clean = response_clean[4:]
-
-        return json.loads(response_clean)
 
     def _merge_preferences(
         self, old: dict[str, Any], new: dict[str, Any]
     ) -> dict[str, Any]:
-        """Merge new preferences with existing ones."""
+        """Merge new preferences with existing ones.
+
+        Cities are merged and deduplicated. Scalar values are overwritten.
+        None values in new dict are ignored.
+
+        Args:
+            old: Existing preferences.
+            new: New preferences to merge.
+
+        Returns:
+            Merged preferences dictionary.
+        """
         merged = old.copy()
 
         for key, value in new.items():
             if value is None:
                 continue
             if key == "cities" and isinstance(value, list):
-                # Merge cities, deduplicate
                 existing = set(merged.get("cities", []))
                 merged["cities"] = list(existing | set(value))
             else:
@@ -354,8 +237,15 @@ class UserContextService:
         return merged
 
     def _generate_summary(self, context: dict[str, Any]) -> str:
-        """Generate profile summary from preferences."""
-        prefs = context["preferences"]
+        """Generate profile summary from preferences.
+
+        Args:
+            context: Full user context with preferences.
+
+        Returns:
+            Human-readable summary string.
+        """
+        prefs = context.get("preferences", {})
         parts = []
 
         if prefs.get("cities"):
@@ -371,36 +261,293 @@ class UserContextService:
 
         return ". ".join(parts) if parts else "Новый пользователь"
 
-    async def _save_context(self, user_id: int, context: dict[str, Any]):
-        """Save context to Redis."""
+    def _should_extract(self, interaction_count: int, preferences: dict) -> bool:
+        """Check if preferences should be extracted.
+
+        Extraction triggers on first query (count % 3 == 1) or if preferences empty.
+
+        Args:
+            interaction_count: Current interaction count (already incremented).
+            preferences: Current user preferences.
+
+        Returns:
+            True if extraction should run.
+        """
+        return interaction_count % 3 == 1 or not preferences
+
+    async def get_context(self, user_id: int) -> dict[str, Any]:
+        """Get full user context from Redis.
+
+        Args:
+            user_id: Telegram user ID.
+
+        Returns:
+            User context dictionary. Default context if not found.
+        """
+        if not self.cache or not hasattr(self.cache, "redis_client"):
+            return self._default_context(user_id)
+
+        if not self.cache.redis_client:
+            return self._default_context(user_id)
+
+        key = f"user_context:{user_id}"
+        try:
+            data = await self.cache.redis_client.get(key)
+            if data:
+                return json.loads(data)
+        except Exception as e:
+            logger.warning(f"Failed to get user context: {e}")
+
+        return self._default_context(user_id)
+
+    async def update_from_query(
+        self, user_id: int, query: str
+    ) -> dict[str, Any]:
+        """Extract preferences from query and update context.
+
+        Updates interaction stats, extracts preferences every 3rd query,
+        and regenerates profile summary after 5+ interactions.
+
+        Args:
+            user_id: Telegram user ID.
+            query: User's query text.
+
+        Returns:
+            Updated user context dictionary.
+        """
+        context = await self.get_context(user_id)
+
+        # Update interaction stats
+        context["interaction_count"] += 1
+        context["last_queries"] = [query] + context["last_queries"][:4]
+        context["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Extract preferences every 3rd query or if empty
+        if self._should_extract(
+            context["interaction_count"], context["preferences"]
+        ):
+            try:
+                new_prefs = await self._extract_preferences(
+                    query, context["preferences"]
+                )
+                context["preferences"] = self._merge_preferences(
+                    context["preferences"], new_prefs
+                )
+                logger.info(
+                    f"Extracted preferences for user {user_id}: {new_prefs}"
+                )
+            except Exception as e:
+                logger.warning(f"Preference extraction failed: {e}")
+
+            # Update profile summary after 5+ interactions
+            if context["interaction_count"] >= 5:
+                context["profile_summary"] = self._generate_summary(context)
+
+        # Save to Redis
+        await self._save_context(user_id, context)
+
+        return context
+
+    async def _extract_preferences(
+        self, query: str, current: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Use LLM to extract preferences from query.
+
+        Args:
+            query: User's query text.
+            current: Current preferences for context.
+
+        Returns:
+            Extracted preferences dictionary.
+
+        Raises:
+            json.JSONDecodeError: If LLM response is not valid JSON.
+        """
+        prompt = self.EXTRACTION_PROMPT.format(
+            current_preferences=json.dumps(current, ensure_ascii=False),
+            query=query,
+        )
+
+        response = await self.llm.generate(prompt, max_tokens=200)
+
+        # Parse JSON from response
+        response_clean = response.strip()
+        # Handle markdown code blocks
+        if response_clean.startswith("```"):
+            lines = response_clean.split("\n")
+            # Find content between ``` markers
+            json_lines = []
+            in_block = False
+            for line in lines:
+                if line.startswith("```"):
+                    if in_block:
+                        break
+                    in_block = True
+                    continue
+                if in_block:
+                    json_lines.append(line)
+            response_clean = "\n".join(json_lines)
+
+        return json.loads(response_clean)
+
+    async def _save_context(
+        self, user_id: int, context: dict[str, Any]
+    ) -> None:
+        """Save context to Redis with TTL.
+
+        Args:
+            user_id: Telegram user ID.
+            context: Context dictionary to save.
+        """
+        if not self.cache or not hasattr(self.cache, "redis_client"):
+            return
         if not self.cache.redis_client:
             return
 
         key = f"user_context:{user_id}"
-        await self.cache.redis_client.setex(
-            key,
-            self.context_ttl,
-            json.dumps(context, ensure_ascii=False),
-        )
+        try:
+            await self.cache.redis_client.setex(
+                key,
+                self.context_ttl,
+                json.dumps(context, ensure_ascii=False),
+            )
+        except Exception as e:
+            logger.warning(f"Failed to save user context: {e}")
+```
+
+### Step 4: Run tests to verify they pass
+
+Run: `pytest tests/test_user_context.py -v`
+Expected: All 8 tests PASS
+
+### Step 5: Commit
+
+```bash
+git add telegram_bot/services/user_context.py tests/test_user_context.py
+git commit -m "feat(cesc): add UserContextService with preference extraction"
 ```
 
 ---
 
-### Task 2: Create CESCPersonalizer
+## Task 2: Create CESCPersonalizer with Tests
 
-**File:** `telegram_bot/services/cesc.py`
+**Files:**
+- Create: `telegram_bot/services/cesc.py`
+- Create: `tests/test_cesc.py`
+
+### Step 1: Write the failing tests for CESCPersonalizer
 
 ```python
+# tests/test_cesc.py
+"""Tests for CESCPersonalizer."""
+
+import pytest
+from telegram_bot.services.cesc import CESCPersonalizer
+
+
+class TestCESCPersonalizer:
+    """Tests for CESC personalization logic."""
+
+    def test_should_personalize_with_cities(self):
+        """Test personalization enabled when cities present."""
+        personalizer = CESCPersonalizer(llm_service=None)
+        context = {"preferences": {"cities": ["Бургас"]}}
+
+        assert personalizer.should_personalize(context) is True
+
+    def test_should_personalize_with_budget(self):
+        """Test personalization enabled when budget present."""
+        personalizer = CESCPersonalizer(llm_service=None)
+        context = {"preferences": {"budget_max": 100000}}
+
+        assert personalizer.should_personalize(context) is True
+
+    def test_should_personalize_with_property_types(self):
+        """Test personalization enabled when property types present."""
+        personalizer = CESCPersonalizer(llm_service=None)
+        context = {"preferences": {"property_types": ["apartment"]}}
+
+        assert personalizer.should_personalize(context) is True
+
+    def test_should_personalize_with_rooms(self):
+        """Test personalization enabled when rooms present."""
+        personalizer = CESCPersonalizer(llm_service=None)
+        context = {"preferences": {"rooms": 2}}
+
+        assert personalizer.should_personalize(context) is True
+
+    def test_should_not_personalize_empty_prefs(self):
+        """Test personalization disabled when preferences empty."""
+        personalizer = CESCPersonalizer(llm_service=None)
+        context = {"preferences": {}}
+
+        assert personalizer.should_personalize(context) is False
+
+    def test_should_not_personalize_no_prefs_key(self):
+        """Test personalization disabled when no preferences key."""
+        personalizer = CESCPersonalizer(llm_service=None)
+        context = {}
+
+        assert personalizer.should_personalize(context) is False
+
+    def test_build_prompt_with_full_context(self):
+        """Test prompt building with full user context."""
+        personalizer = CESCPersonalizer(llm_service=None)
+        context = {
+            "preferences": {
+                "cities": ["Бургас", "Несебр"],
+                "budget_max": 100000,
+                "property_types": ["apartment", "studio"],
+            },
+            "profile_summary": "Ищет квартиры у моря",
+        }
+        cached_response = "Вот информация о недвижимости."
+
+        prompt = personalizer._build_prompt(cached_response, context)
+
+        assert "Бургас" in prompt
+        assert "Несебр" in prompt
+        assert "100000" in prompt
+        assert "apartment" in prompt
+        assert "Ищет квартиры у моря" in prompt
+        assert "Вот информация о недвижимости" in prompt
+
+    def test_build_prompt_with_missing_fields(self):
+        """Test prompt building gracefully handles missing fields."""
+        personalizer = CESCPersonalizer(llm_service=None)
+        context = {"preferences": {"cities": ["Бургас"]}}
+        cached_response = "Ответ"
+
+        prompt = personalizer._build_prompt(cached_response, context)
+
+        assert "Бургас" in prompt
+        assert "не указан" in prompt  # Default for missing budget
+        assert "новый пользователь" in prompt  # Default for missing summary
+```
+
+### Step 2: Run tests to verify they fail
+
+Run: `pytest tests/test_cesc.py -v`
+Expected: FAIL with "ModuleNotFoundError: No module named 'telegram_bot.services.cesc'"
+
+### Step 3: Write minimal CESCPersonalizer implementation
+
+```python
+# telegram_bot/services/cesc.py
 """Context-Enabled Semantic Cache (CESC) personalizer."""
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class CESCPersonalizer:
-    """Personalizes cached responses using user context."""
+    """Personalizes cached responses using user context.
+
+    Uses Cerebras LLM to adapt generic cached responses to user preferences
+    (cities, budget, property types). Keeps responses concise (~100 tokens).
+    """
 
     PERSONALIZATION_PROMPT = """Персонализируй ответ под пользователя:
 
@@ -414,9 +561,57 @@ class CESCPersonalizer:
 
 Сохрани факты, адаптируй подачу. Русский язык."""
 
-    def __init__(self, llm_service):
-        """Initialize with LLM service (Cerebras)."""
+    def __init__(self, llm_service: Any) -> None:
+        """Initialize with LLM service.
+
+        Args:
+            llm_service: LLM service for personalization (Cerebras).
+        """
         self.llm = llm_service
+
+    def should_personalize(self, user_context: dict[str, Any]) -> bool:
+        """Check if personalization should be applied.
+
+        Returns True if user has meaningful preferences (cities, budget,
+        property types, or rooms).
+
+        Args:
+            user_context: User context with preferences.
+
+        Returns:
+            True if personalization should run.
+        """
+        prefs = user_context.get("preferences", {})
+        return bool(
+            prefs.get("cities")
+            or prefs.get("budget_max")
+            or prefs.get("property_types")
+            or prefs.get("rooms")
+        )
+
+    def _build_prompt(
+        self, cached_response: str, user_context: dict[str, Any]
+    ) -> str:
+        """Build personalization prompt from context.
+
+        Args:
+            cached_response: Generic cached answer.
+            user_context: User preferences and history.
+
+        Returns:
+            Formatted prompt string.
+        """
+        prefs = user_context.get("preferences", {})
+
+        return self.PERSONALIZATION_PROMPT.format(
+            cached_response=cached_response[:500],  # Limit to 500 chars
+            cities=", ".join(prefs.get("cities", ["любой"])),
+            budget=prefs.get("budget_max", "не указан"),
+            property_types=", ".join(prefs.get("property_types", ["любой"])),
+            profile_summary=user_context.get(
+                "profile_summary", "новый пользователь"
+            ),
+        )
 
     async def personalize(
         self,
@@ -427,12 +622,13 @@ class CESCPersonalizer:
         """Personalize cached response using user context.
 
         Args:
-            cached_response: Generic cached answer
-            user_context: User preferences and history
-            query: Current user query
+            cached_response: Generic cached answer.
+            user_context: User preferences and history.
+            query: Current user query (for logging).
 
         Returns:
-            Personalized response
+            Personalized response, or original if personalization fails
+            or no preferences exist.
         """
         prefs = user_context.get("preferences", {})
 
@@ -441,66 +637,129 @@ class CESCPersonalizer:
             logger.debug("No user preferences, returning cached response")
             return cached_response
 
-        # Build personalization prompt
-        prompt = self.PERSONALIZATION_PROMPT.format(
-            cached_response=cached_response[:500],  # Limit to 500 chars
-            cities=", ".join(prefs.get("cities", ["любой"])),
-            budget=prefs.get("budget_max", "не указан"),
-            property_types=", ".join(prefs.get("property_types", ["любой"])),
-            profile_summary=user_context.get("profile_summary", "новый пользователь"),
-        )
+        prompt = self._build_prompt(cached_response, user_context)
 
         try:
             personalized = await self.llm.generate(prompt, max_tokens=300)
-            logger.info(
-                f"CESC personalized response for user {user_context.get('user_id')}"
-            )
+            user_id = user_context.get("user_id", "unknown")
+            logger.info(f"CESC personalized response for user {user_id}")
             return personalized.strip()
         except Exception as e:
             logger.error(f"CESC personalization failed: {e}")
             return cached_response  # Fallback to cached
+```
 
-    def should_personalize(self, user_context: dict[str, Any]) -> bool:
-        """Check if personalization should be applied.
+### Step 4: Run tests to verify they pass
 
-        Returns True if user has meaningful preferences.
-        """
-        prefs = user_context.get("preferences", {})
-        return bool(
-            prefs.get("cities")
-            or prefs.get("budget_max")
-            or prefs.get("property_types")
-            or prefs.get("rooms")
-        )
+Run: `pytest tests/test_cesc.py -v`
+Expected: All 8 tests PASS
+
+### Step 5: Commit
+
+```bash
+git add telegram_bot/services/cesc.py tests/test_cesc.py
+git commit -m "feat(cesc): add CESCPersonalizer for cache response personalization"
 ```
 
 ---
 
-### Task 3: Update Services __init__.py
+## Task 3: Update services/__init__.py
 
-**File:** `telegram_bot/services/__init__.py`
+**Files:**
+- Modify: `telegram_bot/services/__init__.py`
 
-Add exports:
+### Step 1: Read current file to understand exports
+
+Run: `cat telegram_bot/services/__init__.py`
+
+### Step 2: Add new exports
+
+Add to `telegram_bot/services/__init__.py`:
 
 ```python
 from .user_context import UserContextService
 from .cesc import CESCPersonalizer
 ```
 
+And add to `__all__` list:
+
+```python
+__all__ = [
+    # ... existing exports ...
+    "UserContextService",
+    "CESCPersonalizer",
+]
+```
+
+### Step 3: Verify imports work
+
+Run: `python -c "from telegram_bot.services import UserContextService, CESCPersonalizer; print('OK')"`
+Expected: `OK`
+
+### Step 4: Commit
+
+```bash
+git add telegram_bot/services/__init__.py
+git commit -m "feat(cesc): export UserContextService and CESCPersonalizer"
+```
+
 ---
 
-### Task 4: Integrate into PropertyBot
+## Task 4: Add CESC Configuration
 
-**File:** `telegram_bot/bot.py`
+**Files:**
+- Modify: `telegram_bot/config.py`
 
-**Changes:**
+### Step 1: Read current config structure
 
-1. Add imports:
+Run: `cat telegram_bot/config.py`
+
+### Step 2: Add CESC settings to BotSettings class
+
+Add these fields to the settings class:
+
+```python
+# CESC Configuration
+cesc_enabled: bool = True
+cesc_extraction_frequency: int = 3  # Extract preferences every N queries
+user_context_ttl: int = 30 * 24 * 3600  # 30 days in seconds
+```
+
+### Step 3: Verify config loads
+
+Run: `python -c "from telegram_bot.config import settings; print(f'CESC enabled: {settings.cesc_enabled}')"`
+Expected: `CESC enabled: True`
+
+### Step 4: Commit
+
+```bash
+git add telegram_bot/config.py
+git commit -m "feat(cesc): add CESC configuration settings"
+```
+
+---
+
+## Task 5: Integrate CESC into PropertyBot
+
+**Files:**
+- Modify: `telegram_bot/bot.py`
+
+### Step 1: Read current bot.py to understand handle_query flow
+
+Run: Examine `telegram_bot/bot.py`, specifically the `handle_query` method.
+
+### Step 2: Add imports
+
+Add at top of file:
+
 ```python
 from .services import UserContextService, CESCPersonalizer
 ```
 
-2. Initialize services in `__init__`:
+### Step 3: Initialize CESC services in __init__
+
+Add after cache_service initialization:
+
 ```python
 self.user_context_service = UserContextService(
     cache_service=self.cache_service,
@@ -511,205 +770,212 @@ self.cesc_personalizer = CESCPersonalizer(
 )
 ```
 
-3. Update `handle_query` method:
+### Step 4: Update handle_query method
+
+In the `handle_query` method, after cache check and before returning cached response:
+
 ```python
-async def handle_query(self, message: Message):
-    user_id = message.from_user.id
-    query = message.text
-
-    # Initialize cache on first query
-    if not self._cache_initialized:
-        await self.cache_service.initialize()
-        self._cache_initialized = True
-
-    await message.bot.send_chat_action(message.chat.id, "typing")
-
-    # 1. Update user context (extracts preferences every 3rd query)
-    user_context = await self.user_context_service.update_from_query(
-        user_id, query
-    )
-
-    # 2. Check semantic cache
-    cached_answer = await self.cache_service.check_semantic_cache(
-        query,
-        user_id=user_id,
-        language=user_context.get("language", "ru"),
-    )
-
-    if cached_answer:
-        # 3. CESC: Personalize if user has preferences
-        if self.cesc_personalizer.should_personalize(user_context):
-            answer = await self.cesc_personalizer.personalize(
-                cached_response=cached_answer,
-                user_context=user_context,
-                query=query,
-            )
-        else:
-            answer = cached_answer
-
-        await message.answer(answer)
-        self.cache_service.log_metrics()
-        return
-
-    # ... rest of RAG pipeline unchanged
+# After getting cached_answer from cache_service.check_semantic_cache
+if cached_answer:
+    # CESC: Personalize if user has preferences
+    user_context = await self.user_context_service.get_context(user_id)
+    if self.cesc_personalizer.should_personalize(user_context):
+        answer = await self.cesc_personalizer.personalize(
+            cached_response=cached_answer,
+            user_context=user_context,
+            query=query,
+        )
+    else:
+        answer = cached_answer
+    # ... send answer
 ```
 
----
+Also update context on every query:
 
-### Task 5: Add Configuration
+```python
+# At start of handle_query, after getting user_id and query
+await self.user_context_service.update_from_query(user_id, query)
+```
 
-**File:** `.env`
+### Step 5: Run smoke test
+
+Run: `python -c "from telegram_bot.bot import PropertyBot; print('Import OK')"`
+Expected: `Import OK`
+
+### Step 6: Commit
 
 ```bash
-# CESC Configuration
-CESC_ENABLED=true
-CESC_EXTRACTION_FREQUENCY=3  # Extract preferences every N queries
-USER_CONTEXT_TTL=2592000     # 30 days in seconds
-```
-
-**File:** `telegram_bot/config.py`
-
-Add:
-```python
-cesc_enabled: bool = True
-cesc_extraction_frequency: int = 3
-user_context_ttl: int = 30 * 24 * 3600
+git add telegram_bot/bot.py
+git commit -m "feat(cesc): integrate CESC into PropertyBot query handling"
 ```
 
 ---
 
-### Task 6: Add Tests
+## Task 6: Add Integration Tests
 
-**File:** `tests/test_cesc.py`
+**Files:**
+- Create: `tests/test_cesc_integration.py`
+
+### Step 1: Write integration tests
 
 ```python
-"""Tests for CESC components."""
+# tests/test_cesc_integration.py
+"""Integration tests for CESC flow."""
 
 import pytest
+from unittest.mock import AsyncMock, MagicMock
+
 from telegram_bot.services.user_context import UserContextService
 from telegram_bot.services.cesc import CESCPersonalizer
 
 
-class TestUserContextService:
-    def test_merge_preferences_cities(self):
-        service = UserContextService(None, None)
-        old = {"cities": ["Бургас"]}
-        new = {"cities": ["Несебр", "Бургас"]}
-        merged = service._merge_preferences(old, new)
-        assert set(merged["cities"]) == {"Бургас", "Несебр"}
+class TestCESCIntegration:
+    """Integration tests for full CESC flow."""
 
-    def test_merge_preferences_budget(self):
-        service = UserContextService(None, None)
-        old = {"budget_max": 100000}
-        new = {"budget_max": 80000}
-        merged = service._merge_preferences(old, new)
-        assert merged["budget_max"] == 80000
+    @pytest.fixture
+    def mock_cache_service(self):
+        """Create mock cache service."""
+        cache = MagicMock()
+        cache.redis_client = AsyncMock()
+        cache.redis_client.get = AsyncMock(return_value=None)
+        cache.redis_client.setex = AsyncMock()
+        return cache
 
-    def test_generate_summary(self):
-        service = UserContextService(None, None)
-        context = {
+    @pytest.fixture
+    def mock_llm_service(self):
+        """Create mock LLM service."""
+        llm = MagicMock()
+        llm.generate = AsyncMock(
+            return_value='{"cities": ["Бургас"], "budget_max": 80000}'
+        )
+        return llm
+
+    @pytest.mark.asyncio
+    async def test_full_flow_new_user(
+        self, mock_cache_service, mock_llm_service
+    ):
+        """Test complete flow for new user."""
+        user_context_service = UserContextService(
+            cache_service=mock_cache_service,
+            llm_service=mock_llm_service,
+        )
+
+        # First query - should extract preferences
+        context = await user_context_service.update_from_query(
+            user_id=12345,
+            query="квартиры в Бургасе до 80000",
+        )
+
+        assert context["interaction_count"] == 1
+        assert "Бургас" in context["preferences"].get("cities", [])
+        assert context["preferences"].get("budget_max") == 80000
+
+    @pytest.mark.asyncio
+    async def test_personalization_applied(self, mock_llm_service):
+        """Test personalization is applied to cached response."""
+        mock_llm_service.generate = AsyncMock(
+            return_value="Персонализированный ответ для Бургаса"
+        )
+        personalizer = CESCPersonalizer(llm_service=mock_llm_service)
+
+        user_context = {
+            "user_id": 12345,
             "preferences": {
-                "cities": ["Бургас", "Несебр"],
-                "budget_max": 100000,
-                "rooms": 2,
-            }
+                "cities": ["Бургас"],
+                "budget_max": 80000,
+            },
+            "profile_summary": "Ищет квартиры в Бургасе",
         }
-        summary = service._generate_summary(context)
-        assert "Бургас" in summary
-        assert "100000" in summary
 
+        result = await personalizer.personalize(
+            cached_response="Общая информация о недвижимости",
+            user_context=user_context,
+            query="расскажи о ценах",
+        )
 
-class TestCESCPersonalizer:
-    def test_should_personalize_with_prefs(self):
-        personalizer = CESCPersonalizer(None)
-        context = {"preferences": {"cities": ["Бургас"]}}
-        assert personalizer.should_personalize(context) is True
+        assert "Персонализированный" in result
+        mock_llm_service.generate.assert_called_once()
 
-    def test_should_personalize_empty(self):
-        personalizer = CESCPersonalizer(None)
-        context = {"preferences": {}}
-        assert personalizer.should_personalize(context) is False
+    @pytest.mark.asyncio
+    async def test_personalization_skipped_no_prefs(self, mock_llm_service):
+        """Test personalization skipped when no preferences."""
+        personalizer = CESCPersonalizer(llm_service=mock_llm_service)
+
+        user_context = {"user_id": 12345, "preferences": {}}
+        cached = "Оригинальный ответ"
+
+        result = await personalizer.personalize(
+            cached_response=cached,
+            user_context=user_context,
+            query="вопрос",
+        )
+
+        assert result == cached
+        mock_llm_service.generate.assert_not_called()
+```
+
+### Step 2: Run integration tests
+
+Run: `pytest tests/test_cesc_integration.py -v`
+Expected: All 3 tests PASS
+
+### Step 3: Run full test suite
+
+Run: `pytest tests/test_user_context.py tests/test_cesc.py tests/test_cesc_integration.py -v`
+Expected: All 19 tests PASS
+
+### Step 4: Commit
+
+```bash
+git add tests/test_cesc_integration.py
+git commit -m "test(cesc): add integration tests for CESC flow"
 ```
 
 ---
 
-## 7. Metrics & Monitoring
+## Task 7: Run Full QA and Final Commit
 
-### 7.1 New Metrics
+### Step 1: Run linting
 
-```python
-metrics = {
-    "cesc": {
-        "personalizations": 0,      # Total CESC calls
-        "skipped": 0,               # No preferences, skipped
-        "errors": 0,                # Personalization failures
-        "avg_latency_ms": 0,        # Average personalization time
-    },
-    "user_context": {
-        "extractions": 0,           # LLM preference extractions
-        "extraction_errors": 0,     # Failed extractions
-        "contexts_stored": 0,       # Unique users with context
-    },
-}
-```
+Run: `make lint`
+Expected: No errors
 
-### 7.2 Logging
+### Step 2: Run type checking
 
-```python
-# On CESC personalization
-logger.info(f"CESC: personalized for user {user_id} in {latency_ms}ms")
+Run: `make type-check`
+Expected: No errors (or pre-existing errors only)
 
-# On preference extraction
-logger.info(f"Extracted preferences for user {user_id}: {new_prefs}")
+### Step 3: Run all tests
 
-# On cache hit without personalization
-logger.debug(f"Cache HIT for user {user_id}, no preferences to personalize")
+Run: `make test`
+Expected: All tests pass
+
+### Step 4: Final integration test with bot
+
+Run: `python -c "from telegram_bot.bot import PropertyBot; print('Bot loads OK')"`
+Expected: `Bot loads OK`
+
+### Step 5: Create summary commit if any fixes were needed
+
+```bash
+git add -A
+git commit -m "chore(cesc): finalize CESC implementation"
 ```
 
 ---
 
-## 8. Rollout Plan
+## Success Criteria
 
-### Phase 1: Implementation (Day 1-2)
-- [ ] Create `UserContextService`
-- [ ] Create `CESCPersonalizer`
-- [ ] Update `services/__init__.py`
-- [ ] Add unit tests
+- [ ] `UserContextService` stores/retrieves context from Redis
+- [ ] Preferences extracted every 3rd query via LLM
+- [ ] `CESCPersonalizer` personalizes cached responses
+- [ ] Integration into `PropertyBot.handle_query` complete
+- [ ] All unit tests pass (19 tests)
+- [ ] Linting and type checking pass
+- [ ] Bot imports and initializes correctly
 
-### Phase 2: Integration (Day 2-3)
-- [ ] Integrate into `PropertyBot`
-- [ ] Add configuration
-- [ ] Test end-to-end flow
-
-### Phase 3: Testing (Day 3-4)
-- [ ] Manual testing with real queries
-- [ ] Verify preference extraction
-- [ ] Verify personalization quality
-- [ ] Performance benchmarks
-
-### Phase 4: Monitoring (Day 4-5)
-- [ ] Add metrics collection
-- [ ] Set up logging
-- [ ] Monitor cache hit rates
-- [ ] Monitor personalization latency
-
----
-
-## 9. Success Criteria
-
-- [ ] User context stored in Redis (`user_context:*` keys exist)
-- [ ] Preferences extracted from queries (every 3rd query)
-- [ ] CESC personalization works on cache HIT
-- [ ] Personalization latency < 150ms
-- [ ] No regression in RAG pipeline
-- [ ] All tests pass
-
----
-
-## 10. References
+## References
 
 - [Redis CESC Blog](https://redis.io/blog/building-a-context-enabled-semantic-cache-with-redis/)
 - [Mem0 Memory Library](https://github.com/mem0ai/mem0)
 - [LangMem by LangChain](https://github.com/langchain-ai/langmem)
-- [RedisVL SemanticCache](https://docs.redisvl.com/)
-- [Personalized RAG Survey](https://arxiv.org/abs/2504.10147)
