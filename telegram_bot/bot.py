@@ -9,7 +9,15 @@ from aiogram.types import Message
 
 from .config import BotConfig
 from .middlewares import setup_error_middleware, setup_throttling_middleware
-from .services import CacheService, EmbeddingService, LLMService, QueryAnalyzer, RetrieverService
+from .services import (
+    CacheService,
+    CESCPersonalizer,
+    EmbeddingService,
+    LLMService,
+    QueryAnalyzer,
+    RetrieverService,
+    UserContextService,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -41,6 +49,15 @@ class PropertyBot:
             api_key=config.llm_api_key,
             base_url=config.llm_base_url,
             model=config.llm_model,
+        )
+
+        # CESC: User context and personalization
+        self.user_context_service = UserContextService(
+            cache_service=self.cache_service,
+            llm_service=self.llm_service,
+        )
+        self.cesc_personalizer = CESCPersonalizer(
+            llm_service=self.llm_service,
         )
 
         # Track initialization state
@@ -130,7 +147,11 @@ class PropertyBot:
     async def handle_query(self, message: Message):
         """Handle user query with multi-level caching RAG pipeline."""
         query = message.text
-        logger.info(f"Query from {message.from_user.id}: {query}")
+        user_id = message.from_user.id
+        logger.info(f"Query from {user_id}: {query}")
+
+        # CESC: Update user context (extracts preferences every 3rd query)
+        await self.user_context_service.update_from_query(user_id, query)
 
         # Initialize cache on first query if not done yet
         if not self._cache_initialized:
@@ -150,8 +171,17 @@ class PropertyBot:
             logger.info(f"✓ Using cached embedding: {len(query_vector)}-dim")
 
         # 2. Check semantic cache (Tier 1 - highest priority)
-        cached_answer = await self.cache_service.check_semantic_cache(query_vector)
+        # Uses langcache-embed-v1 (256-dim) for fast cache matching
+        cached_answer = await self.cache_service.check_semantic_cache(query)
         if cached_answer:
+            # CESC: Personalize if user has preferences
+            user_context = await self.user_context_service.get_context(user_id)
+            if self.cesc_personalizer.should_personalize(user_context):
+                cached_answer = await self.cesc_personalizer.personalize(
+                    cached_response=cached_answer,
+                    user_context=user_context,
+                    query=query,
+                )
             await message.answer(cached_answer)
             self.cache_service.log_metrics()
             return
@@ -186,7 +216,6 @@ class PropertyBot:
             return
 
         # 5. Get conversation history for context-aware responses
-        user_id = message.from_user.id
         _conversation_history = await self.cache_service.get_conversation_history(user_id, last_n=3)
 
         # Store user query in conversation
@@ -224,7 +253,8 @@ class PropertyBot:
         await self.cache_service.store_conversation_message(user_id, "assistant", answer)
 
         # 8. Store in semantic cache for future queries
-        await self.cache_service.store_semantic_cache(query, query_vector, answer)
+        # Uses langcache-embed-v1 (256-dim) for cache indexing
+        await self.cache_service.store_semantic_cache(query, answer)
 
         # Log cache metrics
         self.cache_service.log_metrics()
@@ -264,6 +294,14 @@ class PropertyBot:
     async def start(self):
         """Start bot polling."""
         logger.info("Starting bot...")
+
+        # Initialize cache at startup (loads HF model, may take time on first run)
+        if not self._cache_initialized:
+            logger.info("Initializing cache service...")
+            await self.cache_service.initialize()
+            self._cache_initialized = True
+            logger.info("Cache service ready")
+
         await self.dp.start_polling(self.bot)
 
     async def stop(self):
