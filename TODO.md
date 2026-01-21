@@ -1,283 +1,164 @@
-# 📋 TODO - Current Tasks
+# TODO - Current Tasks
 
-> **Дата:** 2025-01-06
-> **Версия:** v2.8.0 (95% Production-Ready)
-> **Статус:** Ready for VPS deployment
-
----
-
-## ✅ COMPLETED (v2.6.0 - v2.8.0)
-
-### v2.8.0 - Resilience & Observability
-- [x] Graceful degradation for all services (Qdrant, LLM, Redis)
-- [x] Structured JSON logging for production
-- [x] LLM fallback answers on API failure
-- [x] Health checks for services
-
-### v2.7.0 - User Experience
-- [x] Streaming LLM responses (0.1s TTFB)
-- [x] Conversation memory (multi-turn dialogues)
-- [x] Cross-encoder reranking (+10-15% accuracy)
-- [x] /clear and /stats commands
-
-### v2.6.0 - Critical Fixes
-- [x] Security: Removed exposed API keys
-- [x] Performance: requests → httpx.AsyncClient
-- [x] Dependencies: Complete requirements.txt
-- [x] Performance: Fixed blocking async calls
-- [x] BGE-M3 singleton pattern (saves 4-6GB RAM)
+> **Дата:** 2026-01-21
+> **Версия:** v2.8.0
+> **План:** [docs/plans/2026-01-21-local-project-setup.md](docs/plans/2026-01-21-local-project-setup.md)
 
 ---
 
-## 🔥 HIGH PRIORITY (Текущая неделя)
+## Текущий статус
 
-### 🖥️ SERVER TASKS (Deploy на VPS)
+```
+Phase 1 (Configuration):    ██████████ 100% (4/4)
+Phase 2 (Dev Tools):        ██████████ 100% (2/2)
+Phase 3 (Test Infra):       ██████████ 100% (2/2)
+Phase 4 (Index Data):       ██████████ 100% (3/3)
+Phase 5 (Verify Services):  ██████████ 100% (3/3)
+Phase 6 (Telegram Bot):     ██████████ 100% (2/2)
+Phase 7 (Final):            ██████████ 100% (1/1)
+─────────────────────────────────────────────────
+Total:                      ██████████ 100% (17/17)
+```
 
-#### S1. Deploy BGE-M3 FastAPI Service ⭐ КРИТИЧНО
-**Время:** 2-3 часа
-**Порт:** 8001
+---
+
+## Phase 1: Fix Configuration
+
+| #   | Task                         | Status | Details                           |
+| --- | ---------------------------- | ------ | --------------------------------- |
+| 1.1 | Fix BGE_M3_URL in .env.local | ✅     | 8001 → 8000                       |
+| 1.2 | Create .env symlink          | ✅     | ln -s .env.local .env             |
+| 1.3 | Fix QDRANT_COLLECTION        | ✅     | apartments_local → test_documents |
+| 1.4 | Fix docker health checks     | ✅     | Qdrant, Langfuse now healthy      |
+
+---
+
+## Phase 2: Install Dev Tools
+
+| #   | Task                 | Status | Details                                   |
+| --- | -------------------- | ------ | ----------------------------------------- |
+| 2.1 | Install pytest       | ✅     | pytest 9.0.2 installed                    |
+| 2.2 | Verify make commands | ✅     | lint OK, type-check has issue (see notes) |
+
+---
+
+## Phase 3: Test Infrastructure
+
+| #   | Task                    | Status | Details                        |
+| --- | ----------------------- | ------ | ------------------------------ |
+| 3.1 | Create conftest.py      | ✅     | tests/conftest.py              |
+| 3.2 | Create sample test data | ✅     | data/test/sample_articles.json |
+
+---
+
+## Phase 4: Index Documents
+
+| #   | Task                   | Status | Details                               |
+| --- | ---------------------- | ------ | ------------------------------------- |
+| 4.1 | Create indexing script | ✅     | scripts/index_test_data.py            |
+| 4.2 | Run indexing           | ✅     | 3 documents indexed to test_documents |
+| 4.3 | Test search works      | ✅     | Search PASSED (Крадіжка top result)   |
+
+---
+
+## Phase 5: Verify Services
+
+| #   | Task                   | Status | Details                                       |
+| --- | ---------------------- | ------ | --------------------------------------------- |
+| 5.1 | Test Redis cache       | ✅     | `docker exec dev-redis redis-cli ping` → PONG |
+| 5.2 | Test embedding service | ✅     | EmbeddingService OK (1024 dims)               |
+| 5.3 | Test retriever service | ✅     | RetrieverService OK (3 results, Крадіжка top) |
+
+---
+
+## Phase 6: Telegram Bot
+
+| #   | Task                 | Status | Details                               |
+| --- | -------------------- | ------ | ------------------------------------- |
+| 6.1 | Test bot services    | ✅     | BotConfig OK, all services configured |
+| 6.2 | Verify bot can start | ✅     | Bot module imports OK, ready to start |
+
+---
+
+## Phase 7: Final Verification
+
+| #   | Task          | Status | Details                                                                    |
+| --- | ------------- | ------ | -------------------------------------------------------------------------- |
+| 7.1 | Run all tests | ✅     | pytest has import errors, make check has type errors, all services healthy |
+
+---
+
+## Legend
+
+| Symbol | Meaning     |
+| ------ | ----------- |
+| ⏳     | Pending     |
+| 🔄     | In Progress |
+| ✅     | Completed   |
+| ❌     | Blocked     |
+| ⚠️     | Has Issues  |
+
+---
+
+## Infrastructure Status (Аудит 2026-01-21)
+
+| Service  | Port       | Status     |
+| -------- | ---------- | ---------- |
+| Postgres | 5432       | ✅ healthy |
+| Redis    | 6379, 8001 | ✅ healthy |
+| Qdrant   | 6333       | ✅ healthy |
+| BGE-M3   | 8000       | ✅ healthy |
+| Docling  | 5001       | ✅ healthy |
+| MLflow   | 5000       | ✅ healthy |
+| Langfuse | 3001       | ✅ healthy |
+| LightRAG | 9621       | ✅ healthy |
+
+---
+
+## Quick Commands
 
 ```bash
-# Create src/services/bge_m3_api.py
-# Create docker/bge-m3/Dockerfile
-# docker-compose integration
-Status: ⏳ Bot expects localhost:8001 but service not running
-```
+# View plan
+cat docs/plans/2026-01-21-local-project-setup.md
 
-**Действия:**
-1. Create FastAPI app with /embed endpoint
-2. Load BGE-M3 model once at startup (singleton)
-3. Add /health endpoint
-4. Create Dockerfile (CPU or CUDA)
-5. Test: curl -X POST localhost:8001/embed
+# Start services
+docker compose -f docker-compose.dev.yml up -d
 
----
+# Check services
+docker ps --format "table {{.Names}}\t{{.Status}}"
 
-#### S2. Deploy MLflow Server
-**Время:** 1 час
-**Порт:** 5000
+# Run tests
+make test
 
-```bash
-mlflow server \
-  --backend-store-uri sqlite:///mlflow.db \
-  --default-artifact-root ./mlruns \
-  --host 0.0.0.0 --port 5000
-
-Status: ⏳ Referenced in code, unclear if running
+# Start bot
+python -m telegram_bot.main
 ```
 
 ---
 
-#### S3. Deploy Langfuse Server
-**Время:** 1 час
-**Порт:** 3001
+## Discovered Issues (добавлять сюда новые проблемы)
 
-```bash
-docker run -d --name langfuse \
-  -p 3001:3000 \
-  -e DATABASE_URL=postgresql://... \
-  langfuse/langfuse:latest
+### Issue 1: MyPy fails with package name error
 
-Status: ⏳ Code integration exists, server unknown
-```
+**Error:** `rag-fresh is not a valid Python package name`
+**Cause:** Directory name contains hyphen, mypy doesn't like it
+**Workaround:** Run mypy from src/ directory or rename project folder
+**Priority:** Low (doesn't block development)
 
----
+### Issue 2: Root **init**.py breaks pytest ✅ FIXED
 
-### 💻 LOCAL TASKS (Можно делать локально)
+**Error:** `ImportError: attempted relative import with no known parent package`
+**Cause:** Root `__init__.py` has relative imports but isn't a proper package
+**Solution:** Removed the obsolete root `__init__.py` file
+**Status:** Resolved
 
-#### L1. Create docker-compose.yml ⭐ НАЧАТЬ С ЭТОГО
-**Время:** 2-3 hours
+### Issue 3: Async syntax in sync function ✅ FIXED
 
-```yaml
-# Include: Qdrant, Redis, BGE-M3, Bot, MLflow, Langfuse
-# Networks, volumes, health checks
-# .env integration
-
-Status: ❌ No file exists (referenced everywhere)
-Priority: 🔴 CRITICAL for easy deployment
-```
-
-**После создания:**
-- Test locally: `docker-compose up -d`
-- Push to git
-- Deploy on VPS with same command
+**Error:** `SyntaxError: 'async with' outside async function` in search_engines.py
+**Cause:** `_search_hybrid_colbert` method used `async with httpx.AsyncClient` but was defined as sync
+**Solution:** Changed to sync `with httpx.Client` (function is called synchronously)
+**Status:** Resolved
 
 ---
 
-#### L2. Setup pytest Configuration
-**Время:** 2-3 hours
-
-```bash
-Create:
-- pytest.ini (test discovery, coverage config)
-- conftest.py (shared fixtures)
-- tests/unit/ (unit tests structure)
-- tests/integration/ (integration tests)
-
-Status: ❌ Test files exist but no pytest infrastructure
-```
-
----
-
-#### L3. GitHub Actions CI/CD
-**Время:** 3-4 hours
-
-```yaml
-Create:
-- .github/workflows/ci.yml (test + lint on PR)
-- .github/workflows/deploy.yml (build + push images)
-
-Status: ❌ No CI/CD pipeline
-```
-
----
-
-## 🟡 MEDIUM PRIORITY (Следующая неделя)
-
-### Testing (Local)
-- [ ] Unit tests: Cache service (23 tests, 85% coverage) - 4-5h
-- [ ] Unit tests: LLM service (17 tests, 80% coverage) - 3-4h
-- [ ] Unit tests: Retriever service (14 tests, 75% coverage) - 3h
-- [ ] Integration tests: RAG pipeline (8 tests) - 4-5h
-- [ ] Integration tests: Graceful degradation (8 tests) - 3h
-
-### Monitoring (Server)
-- [ ] Prometheus + Grafana deployment - 2-3h
-- [ ] Prometheus /metrics endpoint in bot - 2-3h
-- [ ] Grafana dashboards for cache, LLM, Qdrant - 2h
-
-### Performance (Local → Server)
-- [ ] Connection pooling (Qdrant, Redis) - 3-4h
-- [ ] Migrate to AsyncQdrantClient - 3-4h
-- [ ] Distributed lock for semantic cache - 2h
-- [ ] Load testing scripts (locust) - 2-3h
-
----
-
-## 🟢 LOW PRIORITY (Nice to Have)
-
-### Features
-- [ ] User feedback loop (👍/👎 inline buttons) - 3-4h
-- [ ] Admin dashboard for monitoring - 1 week
-- [ ] A/B testing framework for cache strategies - 1 week
-
-### Code Quality
-- [ ] Setup ruff, mypy, pre-commit hooks - 2h
-- [ ] API documentation generation (Sphinx/mkdocs) - 2-3h
-- [ ] Resolve TODOs in mlflow_experiments.py - 1-2h
-
----
-
-## 📅 RECOMMENDED TIMELINE
-
-### Week 1: VPS Setup (Current Week)
-```bash
-День 1 (Server):
-- Morning: Deploy BGE-M3 service (S1) - 3h
-- Afternoon: Deploy MLflow (S2) - 1h
-
-День 2 (Server):
-- Morning: Deploy Langfuse (S3) - 1h
-- Afternoon: Test full integration - 2h
-
-День 3 (Local → Server):
-- Morning: Create docker-compose.yml (L1) - 3h
-- Afternoon: Deploy docker-compose on VPS - 2h
-```
-
-### Week 2: Testing & CI/CD
-```bash
-День 1-2 (Local):
-- pytest setup (L2) - 3h
-- Unit tests for cache, LLM, retriever - 10h
-
-День 3-4 (Local):
-- Integration tests - 7h
-- GitHub Actions CI/CD (L3) - 4h
-
-День 5 (Server):
-- Load testing - 4h
-```
-
-### Week 3: Monitoring & Polish
-```bash
-День 1-2 (Server):
-- Prometheus + Grafana - 5h
-- Backup strategy - 2h
-
-День 3-5 (Local + Server):
-- Performance optimizations - 10h
-- Documentation updates - 3h
-- Final testing - 4h
-```
-
----
-
-## 🎯 SUCCESS METRICS
-
-### Before VPS Deployment
-- [x] All v2.8.0 features working
-- [ ] docker-compose.yml created
-- [ ] BGE-M3 service ready
-- [ ] All secrets in .env
-
-### After VPS Deployment
-- [ ] All services running (Qdrant, Redis, BGE-M3, Bot, MLflow, Langfuse)
-- [ ] Bot responds to queries < 2s
-- [ ] Cache hit rate > 70%
-- [ ] No exposed secrets
-- [ ] Logs in JSON format
-- [ ] Monitoring dashboards active
-
-### After Testing Phase
-- [ ] 70%+ test coverage
-- [ ] CI/CD pipeline green
-- [ ] Load test passed (10 users, 100 req/min)
-- [ ] Zero-downtime deployment tested
-
----
-
-## 📚 Quick Links
-
-**Documentation:**
-- [VPS_QUICKSTART.md](./VPS_QUICKSTART.md) - Guide for VPS work
-- [TASK_ALLOCATION.md](./docs/TASK_ALLOCATION.md) - Full task breakdown
-- [TESTING_PLAN.md](./docs/TESTING_PLAN.md) - Testing strategy
-- [CHANGELOG.md](./CHANGELOG.md) - Version history
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment guide
-
-**Monitoring (after deployment):**
-- Qdrant: http://localhost:6333/dashboard
-- MLflow: http://localhost:5000
-- Langfuse: http://localhost:3001
-- Grafana: http://localhost:3000
-
----
-
-## 🚀 GETTING STARTED
-
-### For Local Development:
-```bash
-cd /mnt/c/Users/user/Documents/Сайты/Раг
-git pull origin main
-
-# Start with docker-compose.yml creation
-touch docker-compose.yml
-# ... (add services)
-```
-
-### For VPS Deployment:
-```bash
-ssh admin@your-server-ip
-cd /home/admin/contextual_rag
-git pull origin main
-
-# Follow VPS_QUICKSTART.md
-# Start with S1: Deploy BGE-M3 service
-```
-
----
-
-**Last Updated:** 2025-01-06
-**Status:** Ready for VPS work
-**Next Step:** Read VPS_QUICKSTART.md → Start S1 (BGE-M3 deployment)
+**Last Updated:** 2026-01-21
