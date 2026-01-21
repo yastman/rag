@@ -17,7 +17,7 @@ class BotConfig:
     telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
     # Services
-    bge_m3_url: str = os.getenv("BGE_M3_URL", "http://localhost:8001")
+    bge_m3_url: str = os.getenv("BGE_M3_URL", "http://localhost:8000")
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
     qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
