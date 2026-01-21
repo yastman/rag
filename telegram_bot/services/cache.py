@@ -6,6 +6,7 @@ Uses native RedisVL SemanticCache for LLM response caching with vector similarit
 import hashlib
 import json
 import logging
+import os
 import time
 from typing import Any, Optional
 
@@ -13,7 +14,7 @@ import redis.asyncio as redis
 from redisvl.extensions.cache.embeddings import EmbeddingsCache
 from redisvl.extensions.cache.llm import SemanticCache
 from redisvl.query.filter import Tag
-from redisvl.utils.vectorize import HFTextVectorizer
+from redisvl.utils.vectorize import VoyageAITextVectorizer
 
 
 logger = logging.getLogger(__name__)
@@ -97,27 +98,36 @@ class CacheService:
             logger.info("✓ Redis connection established")
 
             # Initialize native RedisVL SemanticCache (Tier 1)
-            # Uses langcache-embed-v1 (256-dim) for fast cache matching
+            # Uses VoyageAI voyage-3-lite for fast, cost-effective cache matching
             # BGE-M3 (1024-dim) is used separately for Qdrant search
             try:
-                vectorizer = HFTextVectorizer(model="redis/langcache-embed-v1")
-                self.semantic_cache = SemanticCache(
-                    name="rag_llm_cache",
-                    redis_url=self.redis_url,
-                    ttl=self.semantic_cache_ttl,
-                    distance_threshold=self.distance_threshold,
-                    vectorizer=vectorizer,
-                    filterable_fields=[
-                        {"name": "user_id", "type": "tag"},
-                        {"name": "language", "type": "tag"},
-                        {"name": "query_type", "type": "tag"},
-                    ],
-                )
-                logger.info(
-                    f"✓ RedisVL SemanticCache initialized "
-                    f"(vectorizer=langcache-embed-v1, distance_threshold={self.distance_threshold}, "
-                    f"filterable_fields=[user_id, language, query_type])"
-                )
+                voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
+                if not voyage_api_key:
+                    logger.warning("VOYAGE_API_KEY not set, SemanticCache disabled")
+                    self.semantic_cache = None
+                else:
+                    logger.info("Initializing SemanticCache with VoyageAI (voyage-3-lite)...")
+                    vectorizer = VoyageAITextVectorizer(
+                        model="voyage-3-lite",
+                        api_config={"api_key": voyage_api_key},
+                    )
+                    self.semantic_cache = SemanticCache(
+                        name="rag_llm_cache",
+                        redis_url=self.redis_url,
+                        ttl=self.semantic_cache_ttl,
+                        distance_threshold=self.distance_threshold,
+                        vectorizer=vectorizer,
+                        filterable_fields=[
+                            {"name": "user_id", "type": "tag"},
+                            {"name": "language", "type": "tag"},
+                            {"name": "query_type", "type": "tag"},
+                        ],
+                    )
+                    logger.info(
+                        f"✓ RedisVL SemanticCache initialized "
+                        f"(vectorizer=voyage-3-lite, distance_threshold={self.distance_threshold}, "
+                        f"filterable_fields=[user_id, language, query_type])"
+                    )
             except Exception as e:
                 logger.warning(f"SemanticCache initialization failed: {e}")
                 self.semantic_cache = None
@@ -159,10 +169,11 @@ class CacheService:
         query: str,
         user_id: Optional[int] = None,
         language: str = "ru",
+        threshold_override: Optional[float] = None,
     ) -> Optional[str]:
-        """Check semantic cache using RedisVL with langcache-embed-v1.
+        """Check semantic cache using RedisVL with VoyageAI voyage-3-lite.
 
-        Uses native langcache-embed-v1 (256-dim) for fast cache matching.
+        Uses VoyageAI voyage-3-lite for fast, cost-effective cache matching.
         This is separate from BGE-M3 (1024-dim) used for Qdrant search.
         Supports multi-user isolation via filterable_fields.
 
@@ -170,6 +181,7 @@ class CacheService:
             query: User query text
             user_id: Optional user ID for cache isolation (Telegram user ID)
             language: Language code for filtering (default: "ru")
+            threshold_override: Optional distance threshold override for adaptive caching
 
         Returns:
             Cached answer if similar query found, None otherwise
@@ -179,6 +191,11 @@ class CacheService:
 
         try:
             start = time.time()
+
+            # Use override if provided, otherwise use default
+            effective_threshold = (
+                threshold_override if threshold_override is not None else self.distance_threshold
+            )
 
             # Build filter expression for multi-user isolation
             filter_expr = Tag("language") == language
@@ -191,6 +208,7 @@ class CacheService:
                 prompt=query,
                 filter_expression=filter_expr,
                 num_results=1,
+                distance_threshold=effective_threshold,
             )
 
             latency = (time.time() - start) * 1000
@@ -221,7 +239,7 @@ class CacheService:
     ):
         """Store question-answer pair in semantic cache using RedisVL.
 
-        Uses native langcache-embed-v1 (256-dim) for cache indexing.
+        Uses VoyageAI voyage-3-lite for cache indexing.
         Stores with user context filters for multi-user isolation.
 
         Args:
