@@ -2,7 +2,11 @@
 
 ***REMOVED******REMOVED*** Обзор
 
-RAG-система использует 4-уровневую архитектуру кеширования на базе Redis Stack для оптимизации производительности и снижения затрат на API.
+RAG-система использует 5-уровневую архитектуру кеширования на базе Redis Stack для оптимизации производительности и снижения затрат на API:
+
+- **Tier 0 (CESC)** - Персонализация кешированных ответов под контекст пользователя (v2.9.0)
+- **Tier 1** - Semantic Cache (LLM answers) + Embeddings Cache (vectors)
+- **Tier 2** - Analyzer Cache + Search Cache (Qdrant results)
 
 ***REMOVED******REMOVED*** Архитектура
 
@@ -10,6 +14,16 @@ RAG-система использует 4-уровневую архитекту�
 ┌─────────────────────────────────────────────────────────┐
 │                   USER QUERY                            │
 └───────────────────┬─────────────────────────────────────┘
+                    │
+        ┌───────────▼──────────┐
+        │   TIER 0: CESC       │ ◄── Context-Enabled Semantic Cache
+        ├──────────────────────┤     Personalization layer (v2.9.0)
+        │ 0. User Context      │ ◄── Redis JSON, TTL: 30d
+        │    (preferences)     │     Extraction: every 3rd query
+        │                      │
+        │    CESC Personalizer │ ◄── ~100ms, ~100 tokens
+        │    (on cache HIT)    │     Adapts response to user prefs
+        └──────────────────────┘
                     │
         ┌───────────▼──────────┐
         │   TIER 1: CRITICAL   │
@@ -31,6 +45,110 @@ RAG-система использует 4-уровневую архитекту�
         │    (Qdrant results)  │     TTL: 2h, Latency: ~0.7ms
         └──────────────────────┘
 ```
+
+***REMOVED******REMOVED*** Tier 0: CESC (Context-Enabled Semantic Cache)
+
+**Новое в v2.9.0** - Персонализация кешированных ответов под контекст пользователя.
+
+***REMOVED******REMOVED******REMOVED*** Проблема
+
+Semantic Cache возвращает generic ответ, который подходит всем пользователям. Но пользователь, который ищет квартиры в Бургасе до 80k€, ожидает персонализированный ответ.
+
+***REMOVED******REMOVED******REMOVED*** Решение
+
+При cache HIT — персонализировать ответ через легковесный LLM вызов (~100 токенов):
+
+```
+Cache HIT (generic)     →  CESC Personalization  →  Personalized Response
+"Вот квартиры в базе"      ~100ms, ~100 tokens      "Вот квартиры в Бургасе
+                                                     в вашем бюджете до 80k€"
+```
+
+***REMOVED******REMOVED******REMOVED*** Компоненты
+
+***REMOVED******REMOVED******REMOVED******REMOVED*** UserContextService
+
+Извлекает и хранит предпочтения пользователя:
+
+```python
+user_context = {
+    "user_id": 12345,
+    "preferences": {
+        "cities": ["Бургас", "Несебр"],
+        "budget_max": 80000,
+        "property_types": ["apartment"],
+        "rooms": 2,
+    },
+    "profile_summary": "Ищет 2-комнатные в Бургасе до 80k€",
+    "interaction_count": 15,
+    "last_queries": ["квартиры в Бургасе", "студии до 60000"],
+}
+```
+
+**Хранение:**
+```python
+key = f"user_context:{user_id}"
+redis.setex(key, 30 * 24 * 3600, json.dumps(context))  ***REMOVED*** TTL: 30 дней
+```
+
+**Извлечение предпочтений:**
+- Происходит каждый 3-й запрос (или при пустых preferences)
+- Использует LLM для парсинга natural language запросов
+- Мержит новые preferences с существующими (cities накапливаются)
+
+***REMOVED******REMOVED******REMOVED******REMOVED*** CESCPersonalizer
+
+Адаптирует cached ответ под user context:
+
+```python
+personalizer = CESCPersonalizer(llm_service)
+
+if personalizer.should_personalize(user_context):
+    answer = await personalizer.personalize(
+        cached_response=cached_answer,
+        user_context=user_context,
+        query=query,
+    )
+```
+
+**Prompt (~100 токенов):**
+```
+Персонализируй ответ под пользователя:
+
+ОТВЕТ: {cached_response}
+
+КОНТЕКСТ:
+- Города: Бургас, Несебр
+- Бюджет: до 80000€
+- Тип: apartment
+- История: Ищет 2-комнатные в Бургасе
+
+Сохрани факты, адаптируй подачу. Русский язык.
+```
+
+***REMOVED******REMOVED******REMOVED*** Конфигурация
+
+```python
+***REMOVED*** telegram_bot/config.py
+cesc_enabled: bool = True
+cesc_extraction_frequency: int = 3  ***REMOVED*** Каждый 3-й запрос
+user_context_ttl: int = 30 * 24 * 3600  ***REMOVED*** 30 дней
+```
+
+***REMOVED******REMOVED******REMOVED*** Производительность
+
+| Метрика | Без CESC | С CESC |
+|---------|----------|--------|
+| Cache HIT latency | <5ms | ~100ms |
+| Токены на HIT | 0 | ~100 |
+| Персонализация | Нет | Да |
+
+***REMOVED******REMOVED******REMOVED*** Когда НЕ персонализировать
+
+- `preferences` пустые (новый пользователь)
+- Ошибка LLM → fallback на original cached response
+
+---
 
 ***REMOVED******REMOVED*** Tier 1: Critical Caching
 
