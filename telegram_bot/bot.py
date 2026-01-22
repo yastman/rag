@@ -190,7 +190,7 @@ class PropertyBot:
                         user_context=user_context,
                         query=query,
                     )
-            await message.answer(cached_answer)
+            await message.answer(cached_answer, parse_mode="Markdown")
             self.cache_service.log_metrics()
             return
 
@@ -265,14 +265,14 @@ class PropertyBot:
 
             # Final update with complete answer (only if different)
             if accumulated_text != last_sent_text:
-                await temp_message.edit_text(accumulated_text)
+                await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
             answer = accumulated_text
 
         except Exception as e:
             logger.error(f"Streaming error: {e}", exc_info=True)
             # Fallback to non-streaming
             answer = await self.llm_service.generate_answer(query, results)
-            await temp_message.edit_text(answer)
+            await temp_message.edit_text(answer, parse_mode="Markdown")
 
         # 7. Store assistant answer in conversation
         await self.cache_service.store_conversation_message(user_id, "assistant", answer)
