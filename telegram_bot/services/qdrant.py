@@ -72,6 +72,7 @@ class QdrantService:
         dense_weight: float = 0.6,
         sparse_weight: float = 0.4,
         prefetch_multiplier: int = 3,
+        quantization_ignore: Optional[bool] = None,
     ) -> list[dict]:
         """Hybrid search with RRF fusion (dense + sparse).
 
@@ -83,6 +84,8 @@ class QdrantService:
             dense_weight: Weight for dense vector prefetch
             sparse_weight: Weight for sparse vector prefetch
             prefetch_multiplier: Multiplier for prefetch limits
+            quantization_ignore: Override quantization per-request (None=use default,
+                True=skip quantization, False=force quantization). Useful for A/B testing.
 
         Returns:
             List of results with id, score, text, metadata
@@ -115,13 +118,21 @@ class QdrantService:
             )
 
         # Build search params with quantization
+        # quantization_ignore: None=use default, True=skip quant, False=force quant
         search_params = None
-        if self._use_quantization:
+        use_quant = self._use_quantization if quantization_ignore is None else not quantization_ignore
+        if use_quant:
             search_params = models.SearchParams(
                 quantization=models.QuantizationSearchParams(
+                    ignore=False,  # Explicitly use quantization
                     rescore=self._quantization_rescore,
                     oversampling=self._quantization_oversampling,
                 )
+            )
+        elif quantization_ignore is True:
+            # Explicitly disable quantization for this request (A/B testing)
+            search_params = models.SearchParams(
+                quantization=models.QuantizationSearchParams(ignore=True)
             )
 
         # Execute RRF fusion search
@@ -145,6 +156,7 @@ class QdrantService:
         freshness_boost: bool = True,
         freshness_field: str = "created_at",
         freshness_scale_days: int = 7,
+        quantization_ignore: Optional[bool] = None,
     ) -> list[dict]:
         """Search with score boosting using Qdrant Query API.
 
@@ -157,10 +169,28 @@ class QdrantService:
             freshness_boost: Enable freshness boosting
             freshness_field: Payload field for datetime (e.g., "created_at")
             freshness_scale_days: Decay scale in days
+            quantization_ignore: Override quantization per-request (None=use default,
+                True=skip quantization, False=force quantization). Useful for A/B testing.
 
         Returns:
             List of results with boosted scores
         """
+        # Build search params with quantization
+        search_params = None
+        use_quant = self._use_quantization if quantization_ignore is None else not quantization_ignore
+        if use_quant:
+            search_params = models.SearchParams(
+                quantization=models.QuantizationSearchParams(
+                    ignore=False,
+                    rescore=self._quantization_rescore,
+                    oversampling=self._quantization_oversampling,
+                )
+            )
+        elif quantization_ignore is True:
+            search_params = models.SearchParams(
+                quantization=models.QuantizationSearchParams(ignore=True)
+            )
+
         # Base search without boosting
         if not freshness_boost:
             result = await self._client.query_points(
@@ -170,6 +200,7 @@ class QdrantService:
                 query_filter=self._build_filter(filters),
                 limit=top_k,
                 with_payload=True,
+                search_params=search_params,
             )
             return self._format_results(result.points)
 
@@ -184,6 +215,7 @@ class QdrantService:
                 query_filter=self._build_filter(filters),
                 limit=top_k * 2,  # Overfetch for boosting
                 with_payload=True,
+                search_params=search_params,
             )
 
             # Post-process with freshness boosting
@@ -230,6 +262,7 @@ class QdrantService:
                 query_filter=self._build_filter(filters),
                 limit=top_k,
                 with_payload=True,
+                search_params=search_params,
             )
             return self._format_results(result.points)
 
