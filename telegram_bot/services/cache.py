@@ -291,7 +291,7 @@ class CacheService:
         try:
             start = time.time()
             result = await self.embeddings_cache.aget(
-                text=text,
+                content=text,
                 model_name=model_name,
             )
             latency = (time.time() - start) * 1000
@@ -328,7 +328,7 @@ class CacheService:
 
         try:
             await self.embeddings_cache.aset(
-                text=text,
+                content=text,
                 model_name=model_name,
                 embedding=embedding,
                 metadata=metadata or {},
