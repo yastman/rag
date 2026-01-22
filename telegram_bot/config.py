@@ -77,3 +77,4 @@ class BotConfig:
     qdrant_use_quantization: bool = os.getenv("QDRANT_USE_QUANTIZATION", "true").lower() == "true"
     qdrant_quantization_rescore: bool = os.getenv("QDRANT_QUANTIZATION_RESCORE", "true").lower() == "true"
     qdrant_quantization_oversampling: float = float(os.getenv("QDRANT_QUANTIZATION_OVERSAMPLING", "2.0"))
+    qdrant_quantization_always_ram: bool = os.getenv("QDRANT_QUANTIZATION_ALWAYS_RAM", "true").lower() == "true"
