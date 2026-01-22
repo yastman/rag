@@ -18,6 +18,7 @@ from .services import (
     QueryAnalyzer,
     UserContextService,
     VoyageService,
+    is_personalized_query,
 )
 
 
@@ -165,9 +166,17 @@ class PropertyBot:
         user_id = message.from_user.id
         logger.info(f"Query from {user_id}: {query}")
 
-        # CESC: Update user context (extracts preferences every Nth query)
+        # CESC: Lazy routing (2026 best practice) - only update context for personalized queries
+        user_context = None
+        needs_personalization = False
         if self.config.cesc_enabled:
-            await self.user_context_service.update_from_query(user_id, query)
+            user_context = await self.user_context_service.get_context(user_id)
+            needs_personalization = is_personalized_query(query, user_context)
+            if needs_personalization:
+                await self.user_context_service.update_from_query(user_id, query)
+                logger.debug("CESC: Query needs personalization")
+            else:
+                logger.debug("CESC: Skipping (generic query)")
 
         # Initialize cache on first query if not done yet
         if not self._cache_initialized:
@@ -190,15 +199,13 @@ class PropertyBot:
         # Uses langcache-embed-v1 (256-dim) for fast cache matching
         cached_answer = await self.cache_service.check_semantic_cache(query)
         if cached_answer:
-            # CESC: Personalize if enabled and user has preferences
-            if self.config.cesc_enabled:
-                user_context = await self.user_context_service.get_context(user_id)
-                if self.cesc_personalizer.should_personalize(user_context):
-                    cached_answer = await self.cesc_personalizer.personalize(
-                        cached_response=cached_answer,
-                        user_context=user_context,
-                        query=query,
-                    )
+            # CESC: Personalize only if lazy routing determined it's needed
+            if needs_personalization and self.cesc_personalizer.should_personalize(user_context):
+                cached_answer = await self.cesc_personalizer.personalize(
+                    cached_response=cached_answer,
+                    user_context=user_context,
+                    query=query,
+                )
             await message.answer(cached_answer, parse_mode="Markdown")
             self.cache_service.log_metrics()
             return
@@ -216,8 +223,15 @@ class PropertyBot:
         # 4. Search in Qdrant with hybrid search
         results = await self.cache_service.get_cached_search(query_vector, filters)
         if results is None:
-            # Generate sparse vector for hybrid search
-            sparse_vector = await self._get_sparse_vector(query)
+            # Generate sparse vector with cache (2026 best practice)
+            sparse_vector = await self.cache_service.get_cached_sparse_embedding(query)
+            if sparse_vector is None:
+                sparse_vector = await self._get_sparse_vector(query)
+                if sparse_vector.get("indices"):  # Only cache non-empty vectors
+                    await self.cache_service.store_sparse_embedding(query, sparse_vector)
+                    logger.debug("Generated and cached sparse embedding")
+            else:
+                logger.debug("✓ Using cached sparse embedding")
 
             # Hybrid RRF search (dense + sparse)
             results = await self.qdrant_service.hybrid_search_rrf(
@@ -243,16 +257,45 @@ class PropertyBot:
                     top_k=self.config.rerank_top_k * 2,
                 )
 
-            # Voyage rerank for final precision
+            # Voyage rerank with cache (2026 best practice)
             if results and len(results) > 1:
-                doc_texts = [r["text"] for r in results]
-                rerank_results = await self.voyage_service.rerank(
-                    query=query,
-                    documents=doc_texts,
-                    top_k=self.config.rerank_top_k,
+                doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
+
+                # Check rerank cache first
+                cached_rerank = await self.cache_service.get_cached_rerank(
+                    query_embedding=query_vector,
+                    doc_ids=doc_ids,
+                    collection=self.config.qdrant_collection,
                 )
-                results = [results[r["index"]] for r in rerank_results]
-                logger.info(f"Reranked to top {len(results)} results")
+
+                if cached_rerank:
+                    # Rebuild results from cached scores
+                    id_to_result = {r.get("id", str(i)): r for i, r in enumerate(results)}
+                    results = [id_to_result[doc_id] for doc_id, _ in cached_rerank
+                               if doc_id in id_to_result][:self.config.rerank_top_k]
+                    logger.info(f"✓ Using cached rerank ({len(results)} results)")
+                else:
+                    doc_texts = [r["text"] for r in results]
+                    rerank_results = await self.voyage_service.rerank(
+                        query=query,
+                        documents=doc_texts,
+                        top_k=self.config.rerank_top_k,
+                    )
+
+                    # Store rerank results in cache
+                    rerank_cache_data = [
+                        (doc_ids[r["index"]], r.get("score", 0.0))
+                        for r in rerank_results
+                    ]
+                    await self.cache_service.store_rerank_results(
+                        query_embedding=query_vector,
+                        doc_ids=doc_ids,
+                        results=rerank_cache_data,
+                        collection=self.config.qdrant_collection,
+                    )
+
+                    results = [results[r["index"]] for r in rerank_results]
+                    logger.info(f"Reranked to top {len(results)} results")
 
             await self.cache_service.store_search_results(query_vector, filters, results)
 
