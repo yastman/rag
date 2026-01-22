@@ -16,8 +16,7 @@ from .services import (
     QueryAnalyzer,
     RetrieverService,
     UserContextService,
-    VoyageEmbeddingService,
-    VoyageRerankerService,
+    VoyageService,
 )
 
 
@@ -40,15 +39,19 @@ class PropertyBot:
             base_url=config.llm_base_url,
             model=config.llm_model,
         )
-        # Voyage AI embeddings (replaces BGE-M3)
-        self.embedding_service = VoyageEmbeddingService(model=config.voyage_embed_model)
+        # Voyage AI unified service (embeddings + reranker)
+        # Asymmetric retrieval: voyage-4-large for docs, voyage-4-lite for queries
+        self.voyage_service = VoyageService(
+            api_key=config.voyage_api_key,
+            model_docs=config.voyage_model_docs,
+            model_queries=config.voyage_model_queries,
+            model_rerank=config.voyage_model_rerank,
+        )
         self.retriever_service = RetrieverService(
             url=config.qdrant_url,
             api_key=config.qdrant_api_key,
             collection_name=config.qdrant_collection,
         )
-        # Voyage AI reranker for better relevance
-        self.reranker_service = VoyageRerankerService(model=config.voyage_rerank_model)
         self.llm_service = LLMService(
             api_key=config.llm_api_key,
             base_url=config.llm_base_url,
@@ -171,7 +174,7 @@ class PropertyBot:
         # 1. Generate embedding (with embeddings cache - Tier 1)
         query_vector = await self.cache_service.get_cached_embedding(query)
         if query_vector is None:
-            query_vector = await self.embedding_service.embed_query(query)
+            query_vector = await self.voyage_service.embed_query(query)
             await self.cache_service.store_embedding(query, query_vector)
             logger.info(f"Generated embedding: {len(query_vector)}-dim")
         else:
@@ -215,13 +218,17 @@ class PropertyBot:
                 min_score=self.config.min_score,
             )
 
-            # Rerank with Voyage AI
+            # Rerank with Voyage AI (rerank-2.5, 32K context)
             if results and len(results) > 1:
-                results = await self.reranker_service.rerank(
+                # Extract text content for reranking
+                doc_texts = [r.get("content", r.get("text", "")) for r in results]
+                rerank_results = await self.voyage_service.rerank(
                     query=query,
-                    documents=results,
+                    documents=doc_texts,
                     top_k=self.config.rerank_top_k,
                 )
+                # Reorder results by rerank scores
+                results = [results[r["index"]] for r in rerank_results]
                 logger.info(f"Reranked to top {len(results)} results")
 
             await self.cache_service.store_search_results(query_vector, filters, results)
@@ -334,6 +341,5 @@ class PropertyBot:
         logger.info("Stopping bot...")
         await self.cache_service.close()
         await self.query_analyzer.close()
-        await self.embedding_service.close()
         await self.llm_service.close()
         await self.bot.session.close()
