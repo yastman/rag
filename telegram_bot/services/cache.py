@@ -76,6 +76,18 @@ class CacheService:
             "sparse": {"hits": 0, "misses": 0},
         }
 
+        # Latency tracking (2026 best practice)
+        # Stores last N latencies per cache type for p50/p95 calculation
+        self._latency_samples: dict[str, list[float]] = {
+            "semantic": [],
+            "embeddings": [],
+            "analyzer": [],
+            "search": [],
+            "rerank": [],
+            "sparse": [],
+        }
+        self._max_latency_samples = 1000  # Keep last 1000 samples per type
+
         # Initialize Redis client for key-value operations (Tier 2)
         self.redis_client: Optional[redis.Redis] = None
 
@@ -639,8 +651,58 @@ class CacheService:
 
     # ========== Metrics ==========
 
+    def record_latency(self, cache_type: str, latency_ms: float):
+        """Record latency sample for a cache type.
+
+        Args:
+            cache_type: Type of cache (semantic, embeddings, etc.)
+            latency_ms: Latency in milliseconds
+        """
+        if cache_type not in self._latency_samples:
+            return
+
+        samples = self._latency_samples[cache_type]
+        samples.append(latency_ms)
+
+        # Keep only last N samples
+        if len(samples) > self._max_latency_samples:
+            self._latency_samples[cache_type] = samples[-self._max_latency_samples :]
+
+    def _calculate_percentile(self, samples: list[float], percentile: int) -> float:
+        """Calculate percentile from samples.
+
+        Args:
+            samples: List of latency samples
+            percentile: Percentile to calculate (e.g., 50, 95)
+
+        Returns:
+            Percentile value or 0 if no samples
+        """
+        if not samples:
+            return 0.0
+
+        sorted_samples = sorted(samples)
+        index = int(len(sorted_samples) * percentile / 100)
+        index = min(index, len(sorted_samples) - 1)
+        return round(sorted_samples[index], 1)
+
+    def get_latency_stats(self) -> dict[str, dict[str, float]]:
+        """Get latency statistics (p50, p95) for all cache types.
+
+        Returns:
+            Dict with p50 and p95 latencies per cache type
+        """
+        stats = {}
+        for cache_type, samples in self._latency_samples.items():
+            stats[cache_type] = {
+                "p50": self._calculate_percentile(samples, 50),
+                "p95": self._calculate_percentile(samples, 95),
+                "samples": len(samples),
+            }
+        return stats
+
     def get_metrics(self) -> dict[str, Any]:
-        """Get cache metrics."""
+        """Get cache metrics including hit rates and latencies."""
         total_hits = sum(m["hits"] for m in self.metrics.values())
         total_misses = sum(m["misses"] for m in self.metrics.values())
         total_requests = sum(m["hits"] + m["misses"] for m in self.metrics.values())
@@ -664,6 +726,7 @@ class CacheService:
             "overall_hit_rate": round(
                 (total_hits / total_requests * 100) if total_requests > 0 else 0, 1
             ),
+            "latency": self.get_latency_stats(),
         }
 
     # ============= Conversation Memory (Task 2.2) =============
