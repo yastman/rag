@@ -86,6 +86,24 @@ services:
         limits:
           memory: 4G
 
+  bm42:
+    build:
+      context: ./services/bm42
+      dockerfile: Dockerfile
+    container_name: dev-bm42
+    ports:
+      - "8002:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
   docling:
     image: ghcr.io/docling-project/docling-serve-cpu:main
     container_name: dev-docling
@@ -181,27 +199,45 @@ services:
       start_period: 60s
 
   # =============================================================================
-  # BOT (optional - uncomment to run in container)
+  # TELEGRAM BOT (Voyage AI powered)
   # =============================================================================
 
-  # bot:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: dev-bot
-  #   environment:
-  #     TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-  #     REDIS_URL: redis://redis:6379
-  #     QDRANT_URL: http://qdrant:6333
-  #     BGE_M3_URL: http://bge-m3:8000
-  #     OPENAI_API_KEY: ${OPENAI_API_KEY}
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-  #     qdrant:
-  #       condition: service_healthy
-  #     bge-m3:
-  #       condition: service_healthy
+  bot:
+    build:
+      context: .
+      dockerfile: telegram_bot/Dockerfile
+    container_name: dev-bot
+    environment:
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      # Voyage AI
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+      VOYAGE_EMBED_MODEL: ${VOYAGE_EMBED_MODEL:-voyage-3-large}
+      VOYAGE_CACHE_MODEL: ${VOYAGE_CACHE_MODEL:-voyage-3-lite}
+      VOYAGE_RERANK_MODEL: ${VOYAGE_RERANK_MODEL:-rerank-2}
+      # LLM (Cerebras)
+      LLM_API_KEY: ${LLM_API_KEY:-${CEREBRAS_API_KEY}}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.cerebras.ai/v1}
+      LLM_MODEL: ${LLM_MODEL:-qwen-3-32b}
+      # Services (Docker internal network)
+      REDIS_URL: redis://redis:6379
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-contextual_bulgaria_voyage}
+      BM42_URL: http://bm42:8000
+      # Cache settings
+      CACHE_SIMILARITY_THRESHOLD: ${CACHE_SIMILARITY_THRESHOLD:-0.95}
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      bm42:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
 # =============================================================================
 # VOLUMES
