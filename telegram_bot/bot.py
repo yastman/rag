@@ -381,4 +381,5 @@ class PropertyBot:
         await self.cache_service.close()
         await self.query_analyzer.close()
         await self.llm_service.close()
+        await self.qdrant_service.close()
         await self.bot.session.close()
