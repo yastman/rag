@@ -34,6 +34,11 @@ class BotConfig:
 
     # Voyage AI Configuration
     voyage_api_key: str = os.getenv("VOYAGE_API_KEY", "")
+    # Asymmetric retrieval: documents use large model, queries use lite model
+    voyage_model_docs: str = os.getenv("VOYAGE_MODEL_DOCS", "voyage-4-large")
+    voyage_model_queries: str = os.getenv("VOYAGE_MODEL_QUERIES", "voyage-4-lite")
+    voyage_model_rerank: str = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2.5")
+    # Legacy (for backward compatibility)
     voyage_embed_model: str = os.getenv("VOYAGE_EMBED_MODEL", "voyage-3-large")
     voyage_cache_model: str = os.getenv("VOYAGE_CACHE_MODEL", "voyage-3-lite")
     voyage_rerank_model: str = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2")
