@@ -1,11 +1,25 @@
 ***REMOVED*** Telegram bot
-aiogram==3.15.0
+aiogram>=3.15.0
 
 ***REMOVED*** HTTP client
-httpx==0.28.1
+httpx>=0.28.0
 
-***REMOVED*** Qdrant client
-qdrant-client==1.12.1
+***REMOVED*** Qdrant vector database
+qdrant-client>=1.12.0
+
+***REMOVED*** Redis + Semantic Cache
+redis>=5.0.0
+redisvl>=0.3.0
+
+***REMOVED*** Voyage AI (embeddings, reranking)
+voyageai>=0.3.0
+tenacity>=8.2.0
+
+***REMOVED*** FastEmbed for sparse vectors (BM42)
+fastembed>=0.4.0
+
+***REMOVED*** Throttling middleware
+cachetools>=5.3.0
 
 ***REMOVED*** Environment variables
-python-dotenv==1.0.1
+python-dotenv>=1.0.0
