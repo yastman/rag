@@ -6,6 +6,7 @@ import logging
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message
+from fastembed import SparseTextEmbedding
 
 from .config import BotConfig
 from .middlewares import setup_error_middleware, setup_throttling_middleware
@@ -13,8 +14,8 @@ from .services import (
     CacheService,
     CESCPersonalizer,
     LLMService,
+    QdrantService,
     QueryAnalyzer,
-    RetrieverService,
     UserContextService,
     VoyageService,
 )
@@ -47,10 +48,16 @@ class PropertyBot:
             model_queries=config.voyage_model_queries,
             model_rerank=config.voyage_model_rerank,
         )
-        self.retriever_service = RetrieverService(
+        # Qdrant service with hybrid search, score boosting, MMR
+        self.qdrant_service = QdrantService(
             url=config.qdrant_url,
             api_key=config.qdrant_api_key,
             collection_name=config.qdrant_collection,
+        )
+
+        # BM42 sparse embedder for hybrid search
+        self.sparse_embedder = SparseTextEmbedding(
+            model_name="Qdrant/bm42-all-minilm-l6-v2-attentions"
         )
         self.llm_service = LLMService(
             api_key=config.llm_api_key,
@@ -290,6 +297,21 @@ class PropertyBot:
 
         # Log cache metrics
         self.cache_service.log_metrics()
+
+    def _get_sparse_vector(self, text: str) -> dict:
+        """Generate BM42 sparse vector for query.
+
+        Args:
+            text: Query text
+
+        Returns:
+            Dict with 'indices' and 'values' for Qdrant sparse vector
+        """
+        result = next(iter(self.sparse_embedder.embed([text])))
+        return {
+            "indices": result.indices.tolist(),
+            "values": result.values.tolist(),
+        }
 
     def _format_results(self, results: list[dict]) -> str:
         """Format search results for display."""
