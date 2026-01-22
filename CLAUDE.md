@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Contextual RAG Pipeline** - A production-grade Retrieval-Augmented Generation system for document search with hybrid vector search, ML platform integration, and Telegram bot interface.
 
-**Version:** 2.10.0 (VoyageService unified + voyage-4 models)
+**Version:** 2.11.0 (Binary Quantization + A/B testing)
 **Python:** 3.12+ (minimum 3.9)
 **LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API)
 **Primary use cases:** Ukrainian Criminal Code search (1,294 documents), Bulgarian property catalogs
@@ -71,6 +71,7 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 | Service | Purpose |
 |---------|---------|
 | `VoyageService` | **Unified** embeddings + reranking (voyage-4-large/lite, rerank-2.5) |
+| `QdrantService` | Smart Gateway: RRF fusion, binary quantization, MMR diversity |
 | `RetrieverService` | Dense vector search in Qdrant with dynamic filters |
 | `HybridRetrieverService` | RRF fusion search (dense + sparse) |
 | `QueryPreprocessor` | Translit normalization (Latin→Cyrillic), dynamic RRF weights |
@@ -154,6 +155,41 @@ result = pp.analyze("apartments in Sunny Beach корпус 5")
 - **Semantic queries** (no IDs): RRF weights 0.6/0.4 (dense favored), cache threshold 0.10
 - **Exact queries** (IDs, corpus, floors): RRF weights 0.2/0.8 (sparse favored), cache threshold 0.05
 
+### Qdrant Binary Quantization (2026 Best Practice)
+```python
+from telegram_bot.services import QdrantService
+
+# QdrantService with quantization (default: enabled)
+qdrant = QdrantService(
+    url="http://localhost:6333",
+    collection_name="documents",
+    use_quantization=True,           # 40x faster search
+    quantization_rescore=True,       # Maintain accuracy
+    quantization_oversampling=2.0,   # Fetch 2x candidates, rescore top_k
+)
+
+# Hybrid search with RRF fusion
+results = await qdrant.hybrid_search_rrf(
+    dense_vector=query_embedding,
+    sparse_vector={"indices": [...], "values": [...]},
+    top_k=10,
+)
+
+# A/B testing: disable quantization per-request
+results_baseline = await qdrant.hybrid_search_rrf(
+    dense_vector=query_embedding,
+    quantization_ignore=True,  # Skip quantization for this request
+)
+
+# Enable binary quantization on collection (one-time setup)
+await qdrant.enable_binary_quantization(always_ram=True)
+```
+
+**Quantization benefits (dim >= 1024):**
+- 40x faster search
+- 75% less RAM
+- Rescore with oversampling maintains accuracy
+
 ## Code Style
 
 - **Line length:** 100 characters
@@ -198,8 +234,13 @@ Check these files for current project status:
    - `VOYAGE_MODEL_DOCS=voyage-4-large`
    - `VOYAGE_MODEL_QUERIES=voyage-4-lite`
    - `VOYAGE_RERANK_MODEL=rerank-2.5`
-5. Run `make install-dev`
-6. Start services: `docker compose -f docker-compose.dev.yml up -d` (full stack with bot)
+5. Qdrant quantization config (optional, defaults shown):
+   - `QDRANT_USE_QUANTIZATION=true` - Enable binary quantization
+   - `QDRANT_QUANTIZATION_RESCORE=true` - Rescore for accuracy
+   - `QDRANT_QUANTIZATION_OVERSAMPLING=2.0` - Candidate multiplier
+   - `QDRANT_QUANTIZATION_ALWAYS_RAM=true` - Keep quantized in RAM
+6. Run `make install-dev`
+7. Start services: `docker compose -f docker-compose.dev.yml up -d` (full stack with bot)
 
 ## Testing Notes
 
