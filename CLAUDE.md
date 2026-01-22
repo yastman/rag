@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Contextual RAG Pipeline** - A production-grade Retrieval-Augmented Generation system for document search with hybrid vector search, ML platform integration, and Telegram bot interface.
 
-**Version:** 2.8.0 (95% production-ready)
+**Version:** 2.10.0 (VoyageService unified + voyage-4 models)
 **Python:** 3.12+ (minimum 3.9)
+**LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API)
 **Primary use cases:** Ukrainian Criminal Code search (1,294 documents), Bulgarian property catalogs
 
 ## Build & Development Commands
@@ -50,8 +51,9 @@ make qa               # Full QA (all checks + tests)
 
 ```
 Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
-    → BGE-M3 Embeddings (dense+sparse+ColBERT) → Qdrant Storage
-    → Hybrid RRF Search + ColBERT Rerank → LLM Contextualization → Response
+    → VoyageService Embeddings (voyage-4-large) + FastEmbed BM42 (sparse) → Qdrant Storage
+    → QueryPreprocessor (translit, RRF weights) → HybridRetrieverService (RRF fusion)
+    → VoyageService Rerank (rerank-2.5) → LLM Contextualization → Response
 ```
 
 ### Key Components
@@ -61,9 +63,25 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 | `src/core/pipeline.py` | RAG pipeline orchestrator |
 | `src/retrieval/search_engines.py` | 4 search variants (HybridRRFColBERT is default/best) |
 | `src/ingestion/` | Document parsing, chunking, indexing |
-| `src/models/embedding_model.py` | Singleton BGE-M3 model (saves 4-6GB RAM) |
-| `src/cache/redis_semantic_cache.py` | 4-tier semantic cache |
+| `telegram_bot/services/` | Voyage AI unified services (see below) |
 | `telegram_bot/` | Telegram interface with streaming LLM |
+
+### Telegram Bot Services (Voyage AI Unified)
+
+| Service | Purpose |
+|---------|---------|
+| `VoyageService` | **Unified** embeddings + reranking (voyage-4-large/lite, rerank-2.5) |
+| `RetrieverService` | Dense vector search in Qdrant with dynamic filters |
+| `HybridRetrieverService` | RRF fusion search (dense + sparse) |
+| `QueryPreprocessor` | Translit normalization (Latin→Cyrillic), dynamic RRF weights |
+| `QueryAnalyzer` | LLM-based filter extraction |
+| `CacheService` | Semantic cache with VoyageAITextVectorizer (voyage-3-lite) |
+| `SemanticMessageHistory` | Conversation context with vector similarity search |
+| `UserContextService` | Extracts user preferences from queries via LLM |
+| `CESCPersonalizer` | Adapts cached responses to user context (CESC) |
+
+**Legacy services** (backward compatibility, use VoyageService for new code):
+- `VoyageClient`, `VoyageEmbeddingService`, `VoyageRerankerService`
 
 ### Search Engine Variants
 
@@ -86,9 +104,31 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 ### Async I/O
 All I/O operations use async (`httpx.AsyncClient`, `AsyncQdrantClient`). No blocking calls in async context.
 
-### Singleton Models
+##***REMOVED***Service (Recommended)
 ```python
-from src.models.embedding_model import get_bge_m3_model, get_sentence_transformer
+from telegram_bot.services import VoyageService
+
+# Unified service for embeddings + reranking
+service = VoyageService(
+    api_key="...",
+    model_docs="voyage-4-large",     # For document indexing (1024-dim)
+    model_queries="voyage-4-lite",   # For queries (asymmetric retrieval)
+    model_rerank="rerank-2.5",       # 32K context window
+)
+
+# Async methods (recommended)
+query_vec = await service.embed_query("search text")
+doc_vecs = await service.embed_documents(["doc1", "doc2"])
+results = await service.rerank("query", documents, top_k=5)
+
+# Sync wrappers (for non-async code)
+query_vec = service.embed_query_sync("search text")
+```
+
+### Legacy Singleton Pattern
+```python
+# Legacy BGE-M3 (local model, high RAM)
+from src.models.embedding_model import get_bge_m3_model
 model = get_bge_m3_model()  # Reuses single instance, saves 4-6GB RAM
 ```
 
@@ -97,6 +137,22 @@ Central settings in `src/config/settings.py`. Uses environment variables via `.e
 
 ### Error Handling
 Graceful degradation - services fail without crashing. Qdrant: 5s timeout with empty results fallback. LLM: fallback answers from search results.
+
+### Query Preprocessing (QueryPreprocessor)
+```python
+from telegram_bot.services import QueryPreprocessor
+pp = QueryPreprocessor()
+result = pp.analyze("apartments in Sunny Beach корпус 5")
+# Returns:
+# {
+#   "normalized_query": "apartments in Солнечный берег корпус 5",  # Translit
+#   "rrf_weights": {"dense": 0.2, "sparse": 0.8},  # Exact query -> favor sparse
+#   "cache_threshold": 0.05,  # Strict for queries with IDs
+#   "is_exact": True
+# }
+```
+- **Semantic queries** (no IDs): RRF weights 0.6/0.4 (dense favored), cache threshold 0.10
+- **Exact queries** (IDs, corpus, floors): RRF weights 0.2/0.8 (sparse favored), cache threshold 0.05
 
 ## Code Style
 
@@ -136,13 +192,56 @@ Check these files for current project status:
 ## Environment Setup
 
 1. Copy `.env.example` to `.env`
-2. Fill in API keys: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `QDRANT_API_KEY`, `REDIS_PASSWORD`
-3. Run `make install-dev`
-4. Start services: `make docker-up`
+2. Fill in required keys: `VOYAGE_API_KEY`, `OPENAI_API_KEY`, `QDRANT_API_KEY`, `TELEGRAM_BOT_TOKEN`
+3. Optional keys: `ANTHROPIC_API_KEY`, `LANGFUSE_*`, `MLFLOW_TRACKING_URI`
+4. Voyage AI model config (optional, defaults shown):
+   - `VOYAGE_MODEL_DOCS=voyage-4-large`
+   - `VOYAGE_MODEL_QUERIES=voyage-4-lite`
+   - `VOYAGE_RERANK_MODEL=rerank-2.5`
+5. Run `make install-dev`
+6. Start services: `docker compose -f docker-compose.dev.yml up -d` (full stack with bot)
 
 ## Testing Notes
 
-- Tests use pytest with `asyncio_mode = "auto"`
+- Tests use pytest with `asyncio_mode = "auto"` (async tests don't need `@pytest.mark.asyncio`)
 - Coverage reports: `make test-cov` generates `htmlcov/index.html`
 - Integration tests require Docker services running
-- Smoke test: `python src/evaluation/smoke_test.py`
+- Voyage tests: `pytest tests/test_voyage*.py -v` (45 tests)
+- E2E tests: `pytest tests/test_e2e_pipeline.py -v` (requires API keys and services)
+- Run single test: `pytest tests/test_file.py::TestClass::test_method -v`
+
+## Telegram Bot (Docker)
+
+```bash
+# Start full dev stack (Qdrant, Redis, Langfuse, MLflow, bot)
+docker compose -f docker-compose.dev.yml up -d
+
+# Build and restart bot only
+docker compose -f docker-compose.dev.yml build bot
+docker compose -f docker-compose.dev.yml up -d bot
+
+# Check bot logs
+docker logs dev-bot -f
+
+# Verify bot health
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep bot
+```
+
+Bot connects to: `@test_nika_homes_bot` (configured via `TELEGRAM_BOT_TOKEN`)
+
+Bot responses use Markdown formatting (`parse_mode="Markdown"`).
+
+#***REMOVED*** Collections
+
+- `contextual_bulgaria_voyage` - Bulgarian property data (92 documents, Voyage embeddings)
+- `legal_documents` - Ukrainian Criminal Code (1,294 documents, BGE-M3 embeddings)
+
+## Deployment
+
+```bash
+# Quick deploy (git pull only on server)
+make deploy-code
+
+# Release deploy with version tag
+make deploy-release VERSION=2.9.1
+```
