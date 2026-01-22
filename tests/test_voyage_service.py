@@ -160,3 +160,68 @@ class TestVoyageServiceUnit:
 
             call_kwargs = mock_client.rerank.call_args[1]
             assert call_kwargs["model"] == "rerank-2.5"
+
+
+class TestVoyageServiceBackwardCompatibility:
+    """Tests to ensure VoyageService can replace existing services."""
+
+    @pytest.mark.asyncio
+    async def test_can_replace_voyage_embedding_service(self):
+        """Test VoyageService provides same interface as VoyageEmbeddingService."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
+            mock_client_class.return_value = mock_client
+
+            # VoyageService should have same methods as VoyageEmbeddingService
+            service = VoyageService(api_key="test-key")
+
+            # embed_query (async) - primary method used in bot.py
+            result = await service.embed_query("test")
+            assert len(result) == 1024
+
+            # embed_documents (async) - used for indexing
+            result = await service.embed_documents(["test"])
+            assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_can_replace_voyage_reranker_service(self):
+        """Test VoyageService provides same interface as VoyageRerankerService."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_result = MagicMock()
+            mock_result.index = 0
+            mock_result.relevance_score = 0.9
+            mock_result.document = "doc"
+            mock_client.rerank.return_value = MagicMock(results=[mock_result])
+            mock_client_class.return_value = mock_client
+
+            service = VoyageService(api_key="test-key")
+
+            # rerank (async) - primary method used in bot.py
+            result = await service.rerank("query", ["doc"])
+            assert len(result) == 1
+            assert "relevance_score" in result[0]
+
+    def test_sync_methods_work(self):
+        """Test sync wrappers for non-async code."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
+            mock_client_class.return_value = mock_client
+
+            service = VoyageService(api_key="test-key")
+
+            # embed_query_sync
+            result = service.embed_query_sync("test")
+            assert len(result) == 1024
+
+            # embed_documents_sync
+            result = service.embed_documents_sync(["test"])
+            assert len(result) == 1
