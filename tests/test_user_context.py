@@ -255,3 +255,64 @@ class TestUserContextServiceAsync:
         assert context["interaction_count"] == 1
         assert len(context["last_queries"]) == 1
         assert context["last_queries"][0] == "квартира в Бургасе"
+
+
+class TestExtractPreferences:
+    """Tests for LLM-based preference extraction."""
+
+    @pytest.mark.asyncio
+    async def test_parses_clean_json(self):
+        """Test parses clean JSON response from LLM."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_llm = MagicMock()
+        mock_llm.generate = AsyncMock(return_value='{"cities": ["Бургас"], "budget_max": 50000}')
+
+        service = UserContextService(cache_service=None, llm_service=mock_llm)
+
+        result = await service._extract_preferences("квартира в Бургасе до 50000", {})
+
+        assert result["cities"] == ["Бургас"]
+        assert result["budget_max"] == 50000
+
+    @pytest.mark.asyncio
+    async def test_parses_json_code_block(self):
+        """Test parses JSON from markdown code block."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_llm = MagicMock()
+        mock_llm.generate = AsyncMock(return_value='```json\n{"cities": ["Варна"]}\n```')
+
+        service = UserContextService(cache_service=None, llm_service=mock_llm)
+
+        result = await service._extract_preferences("квартира в Варне", {})
+
+        assert result["cities"] == ["Варна"]
+
+    @pytest.mark.asyncio
+    async def test_parses_plain_code_block(self):
+        """Test parses JSON from plain markdown block."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_llm = MagicMock()
+        mock_llm.generate = AsyncMock(return_value='```\n{"rooms": 3}\n```')
+
+        service = UserContextService(cache_service=None, llm_service=mock_llm)
+
+        result = await service._extract_preferences("3-комнатная квартира", {})
+
+        assert result["rooms"] == 3
+
+    @pytest.mark.asyncio
+    async def test_extracts_property_types(self):
+        """Test extracts property_types from response."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_llm = MagicMock()
+        mock_llm.generate = AsyncMock(return_value='{"property_types": ["apartment", "studio"]}')
+
+        service = UserContextService(cache_service=None, llm_service=mock_llm)
+
+        result = await service._extract_preferences("апартаменты или студия", {})
+
+        assert result["property_types"] == ["apartment", "studio"]
