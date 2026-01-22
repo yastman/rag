@@ -12,11 +12,12 @@ from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .services import (
     CacheService,
     CESCPersonalizer,
-    EmbeddingService,
     LLMService,
     QueryAnalyzer,
     RetrieverService,
     UserContextService,
+    VoyageEmbeddingService,
+    VoyageRerankerService,
 )
 
 
@@ -37,14 +38,17 @@ class PropertyBot:
         self.query_analyzer = QueryAnalyzer(
             api_key=config.llm_api_key,
             base_url=config.llm_base_url,
-            model=config.llm_model,  # Use same model as LLM service
+            model=config.llm_model,
         )
-        self.embedding_service = EmbeddingService(config.bge_m3_url)
+        ***REMOVED*** AI embeddings (replaces BGE-M3)
+        self.embedding_service = VoyageEmbeddingService(model=config.voyage_embed_model)
         self.retriever_service = RetrieverService(
             url=config.qdrant_url,
             api_key=config.qdrant_api_key,
             collection_name=config.qdrant_collection,
         )
+        ***REMOVED*** AI reranker for better relevance
+        self.reranker_service = VoyageRerankerService(model=config.voyage_rerank_model)
         self.llm_service = LLMService(
             api_key=config.llm_api_key,
             base_url=config.llm_base_url,
@@ -203,12 +207,23 @@ class PropertyBot:
         # 4. Search in Qdrant with cache (Tier 2)
         results = await self.cache_service.get_cached_search(query_vector, filters)
         if results is None:
+            # Initial retrieval (more results for reranking)
             results = self.retriever_service.search(
                 query_vector=query_vector,
                 filters=filters if filters else None,
-                top_k=self.config.top_k,
+                top_k=self.config.search_top_k,  # Get more for reranking
                 min_score=self.config.min_score,
             )
+
+            # Rerank with Voyage AI
+            if results and len(results) > 1:
+                results = await self.reranker_service.rerank(
+                    query=query,
+                    documents=results,
+                    top_k=self.config.rerank_top_k,
+                )
+                logger.info(f"Reranked to top {len(results)} results")
+
             await self.cache_service.store_search_results(query_vector, filters, results)
 
         logger.info(f"Found {len(results)} results")
@@ -228,6 +243,7 @@ class PropertyBot:
         # 6. Generate answer with LLM STREAMING
         temp_message = await message.answer("🔍 Генерирую ответ...")
         accumulated_text = ""
+        last_sent_text = ""  # Track what we last sent
         chunk_count = 0
 
         try:
@@ -239,12 +255,17 @@ class PropertyBot:
                 chunk_count += 1
 
                 # Update message every 10 chunks or when punctuation appears
-                if chunk_count % 10 == 0 or chunk in ".!?\n":
+                # Only if text actually changed
+                if (
+                    chunk_count % 10 == 0 or chunk in ".!?\n"
+                ) and accumulated_text != last_sent_text:
                     with contextlib.suppress(Exception):
                         await temp_message.edit_text(accumulated_text)
+                        last_sent_text = accumulated_text
 
-            # Final update with complete answer
-            await temp_message.edit_text(accumulated_text)
+            # Final update with complete answer (only if different)
+            if accumulated_text != last_sent_text:
+                await temp_message.edit_text(accumulated_text)
             answer = accumulated_text
 
         except Exception as e:
