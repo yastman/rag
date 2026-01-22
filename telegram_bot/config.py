@@ -48,8 +48,9 @@ class BotConfig:
     voyage_rerank_model: str = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2")
 
     # Search Configuration
-    search_top_k: int = int(os.getenv("SEARCH_TOP_K", "50"))
-    rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "5"))
+    # 2026 best practice: fewer chunks in LLM context = faster generation
+    search_top_k: int = int(os.getenv("SEARCH_TOP_K", "30"))  # Reduced from 50
+    rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "3"))  # Reduced from 5
 
     # CESC Configuration (Contextual Extraction and Storage of Conversation)
     cesc_enabled: bool = os.getenv("CESC_ENABLED", "true").lower() == "true"
