@@ -13,6 +13,7 @@ from typing import Any, Optional
 import redis.asyncio as redis
 from redisvl.extensions.cache.embeddings import EmbeddingsCache
 from redisvl.extensions.cache.llm import SemanticCache
+from redisvl.extensions.message_history import SemanticMessageHistory
 from redisvl.query.filter import Tag
 from redisvl.utils.vectorize import VoyageAITextVectorizer
 
@@ -79,6 +80,9 @@ class CacheService:
         # Cosine distance threshold for semantic cache
         self.distance_threshold = distance_threshold
 
+        # Native RedisVL SemanticMessageHistory (for conversation context)
+        self.message_history: Optional[SemanticMessageHistory] = None
+
         logger.info("CacheService initialized with 4-tier architecture (RedisVL native)")
 
     async def initialize(self):
@@ -143,6 +147,28 @@ class CacheService:
             except Exception as e:
                 logger.warning(f"EmbeddingsCache initialization failed: {e}")
                 self.embeddings_cache = None
+
+            # Initialize SemanticMessageHistory for conversation context
+            try:
+                voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
+                if voyage_api_key:
+                    history_vectorizer = VoyageAITextVectorizer(
+                        model="voyage-3-lite",
+                        api_config={"api_key": voyage_api_key},
+                    )
+                    self.message_history = SemanticMessageHistory(
+                        name="rag_conversations",
+                        redis_url=self.redis_url,
+                        vectorizer=history_vectorizer,  # Reuse voyage-3-lite
+                        distance_threshold=0.3,
+                    )
+                    logger.info("✓ SemanticMessageHistory initialized (voyage-3-lite)")
+                else:
+                    logger.warning("VOYAGE_API_KEY not set, SemanticMessageHistory disabled")
+                    self.message_history = None
+            except Exception as e:
+                logger.warning(f"SemanticMessageHistory initialization failed: {e}")
+                self.message_history = None
 
         except Exception as e:
             logger.error(f"Cache initialization error: {e}")
@@ -559,6 +585,63 @@ class CacheService:
         logger.info(f"Cleared conversation history for user {user_id}")
 
     # ==========================================================
+
+    # ============= Semantic Message History (Task 4) =============
+
+    async def get_relevant_history(
+        self, user_id: int, query: str, top_k: int = 3
+    ) -> list[dict[str, Any]]:
+        """Get semantically relevant messages from conversation history.
+
+        Uses vector similarity to find messages related to current query.
+
+        Args:
+            user_id: Telegram user ID
+            query: Current user query for similarity search
+            top_k: Number of relevant messages to return
+
+        Returns:
+            List of relevant messages [{"role": "user", "content": "..."}]
+        """
+        if not self.message_history:
+            return []
+
+        try:
+            messages = await self.message_history.aget_relevant(
+                session_tag=str(user_id),
+                prompt=query,
+                top_k=top_k,
+            )
+            logger.debug(f"Retrieved {len(messages)} relevant messages for user {user_id}")
+            return messages
+        except Exception as e:
+            logger.error(f"SemanticMessageHistory error: {e}")
+            return []
+
+    async def add_semantic_message(self, user_id: int, role: str, content: str):
+        """Add message to semantic conversation history.
+
+        Stores message with embedding for later semantic retrieval.
+
+        Args:
+            user_id: Telegram user ID
+            role: Message role ('user' or 'assistant')
+            content: Message content
+        """
+        if not self.message_history:
+            return
+
+        try:
+            await self.message_history.aadd_message(
+                session_tag=str(user_id),
+                role=role,
+                content=content,
+            )
+            logger.debug(f"Added semantic message for user {user_id}: {role}")
+        except Exception as e:
+            logger.error(f"SemanticMessageHistory add error: {e}")
+
+    # =============================================================
 
     def log_metrics(self):
         """Log current cache metrics."""
