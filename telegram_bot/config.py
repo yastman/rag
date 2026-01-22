@@ -68,6 +68,7 @@ class BotConfig:
     freshness_field: str = os.getenv("FRESHNESS_FIELD", "created_at")
     freshness_scale_days: int = int(os.getenv("FRESHNESS_SCALE_DAYS", "30"))
 
-    # MMR Diversity Configuration
-    mmr_enabled: bool = os.getenv("MMR_ENABLED", "true").lower() == "true"
+    # MMR Diversity Configuration (disabled by default - Voyage rerank is sufficient)
+    # Enable only for diversity-focused use cases via MMR_ENABLED=true
+    mmr_enabled: bool = os.getenv("MMR_ENABLED", "false").lower() == "true"
     mmr_lambda: float = float(os.getenv("MMR_LAMBDA", "0.7"))
