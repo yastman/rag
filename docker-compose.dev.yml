@@ -104,6 +104,24 @@ services:
         limits:
           memory: 1G
 
+  user-base:
+    build:
+      context: ./services/user-base
+      dockerfile: Dockerfile
+    container_name: dev-user-base
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
   docling:
     image: ghcr.io/docling-project/docling-serve-cpu:main
     container_name: dev-docling
@@ -224,6 +242,7 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-contextual_bulgaria_voyage}
       BM42_URL: http://bm42:8000
+      USER_BASE_URL: http://user-base:8000
       # Cache settings
       CACHE_SIMILARITY_THRESHOLD: ${CACHE_SIMILARITY_THRESHOLD:-0.95}
     depends_on:
@@ -232,6 +251,8 @@ services:
       qdrant:
         condition: service_healthy
       bm42:
+        condition: service_healthy
+      user-base:
         condition: service_healthy
     restart: unless-stopped
     deploy:
