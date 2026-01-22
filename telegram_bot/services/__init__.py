@@ -3,7 +3,6 @@
 from .cache import CacheService
 from .cesc import CESCPersonalizer
 from .embeddings import EmbeddingService
-from .hybrid_retriever import HybridRetrieverService
 from .llm import LLMService
 from .qdrant import QdrantService
 from .query_analyzer import QueryAnalyzer
@@ -11,24 +10,17 @@ from .query_preprocessor import QueryPreprocessor
 from .retriever import RetrieverService
 from .user_context import UserContextService
 from .voyage import VoyageService
-from .voyage_client import VoyageClient
-from .voyage_embeddings import VoyageEmbeddingService
-from .voyage_reranker import VoyageRerankerService
 
 
 __all__ = [
     "CESCPersonalizer",
     "CacheService",
     "EmbeddingService",
-    "HybridRetrieverService",
     "LLMService",
     "QdrantService",
     "QueryAnalyzer",
     "QueryPreprocessor",
     "RetrieverService",
     "UserContextService",
-    "VoyageClient",
-    "VoyageEmbeddingService",
-    "VoyageRerankerService",
     "VoyageService",
 ]
