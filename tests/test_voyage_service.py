@@ -225,3 +225,123 @@ class TestVoyageServiceBackwardCompatibility:
             # embed_documents_sync
             result = service.embed_documents_sync(["test"])
             assert len(result) == 1
+
+
+class TestVoyageServiceMatryoshka:
+    """Tests for Matryoshka embedding support."""
+
+    def test_matryoshka_dims_constant(self):
+        """Test supported dimensions are defined."""
+        from telegram_bot.services.voyage import VoyageService
+
+        assert VoyageService.MATRYOSHKA_DIMS == (2048, 1024, 512, 256)
+        assert VoyageService.DEFAULT_DIM == 1024
+
+    @pytest.mark.asyncio
+    async def test_embed_documents_matryoshka_passes_output_dimension(self):
+        """Test embed_documents_matryoshka passes output_dimension to API."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.embed.return_value = MagicMock(embeddings=[[0.1] * 512])
+            mock_client_class.return_value = mock_client
+
+            service = VoyageService(api_key="test-key")
+            await service.embed_documents_matryoshka(["test"], output_dimension=512)
+
+            call_kwargs = mock_client.embed.call_args[1]
+            assert call_kwargs["output_dimension"] == 512
+
+    @pytest.mark.asyncio
+    async def test_embed_query_matryoshka_passes_output_dimension(self):
+        """Test embed_query_matryoshka passes output_dimension to API."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.embed.return_value = MagicMock(embeddings=[[0.1] * 256])
+            mock_client_class.return_value = mock_client
+
+            service = VoyageService(api_key="test-key")
+            await service.embed_query_matryoshka("test query", output_dimension=256)
+
+            call_kwargs = mock_client.embed.call_args[1]
+            assert call_kwargs["output_dimension"] == 256
+
+    @pytest.mark.asyncio
+    async def test_embed_documents_matryoshka_invalid_dimension_raises(self):
+        """Test embed_documents_matryoshka raises for invalid dimensions."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client"):
+            service = VoyageService(api_key="test-key")
+
+            with pytest.raises(ValueError) as exc_info:
+                await service.embed_documents_matryoshka(["test"], output_dimension=999)
+
+            assert "Invalid output_dimension 999" in str(exc_info.value)
+            assert "Supported: (2048, 1024, 512, 256)" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_embed_query_matryoshka_invalid_dimension_raises(self):
+        """Test embed_query_matryoshka raises for invalid dimensions."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client"):
+            service = VoyageService(api_key="test-key")
+
+            with pytest.raises(ValueError) as exc_info:
+                await service.embed_query_matryoshka("test", output_dimension=100)
+
+            assert "Invalid output_dimension 100" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_embed_documents_matryoshka_empty_list(self):
+        """Test embed_documents_matryoshka with empty list returns empty."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client"):
+            service = VoyageService(api_key="test-key")
+            result = await service.embed_documents_matryoshka([])
+
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_embed_documents_matryoshka_batches_correctly(self):
+        """Test embed_documents_matryoshka batches like embed_documents."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.embed.side_effect = [
+                MagicMock(embeddings=[[0.1] * 512] * 128),
+                MagicMock(embeddings=[[0.1] * 512] * 22),
+            ]
+            mock_client_class.return_value = mock_client
+
+            service = VoyageService(api_key="test-key")
+            texts = [f"text_{i}" for i in range(150)]
+            result = await service.embed_documents_matryoshka(texts, output_dimension=512)
+
+            assert len(result) == 150
+            assert mock_client.embed.call_count == 2
+
+    def test_matryoshka_sync_methods_work(self):
+        """Test sync wrappers for Matryoshka methods."""
+        from telegram_bot.services.voyage import VoyageService
+
+        with patch("voyageai.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.embed.return_value = MagicMock(embeddings=[[0.1] * 512])
+            mock_client_class.return_value = mock_client
+
+            service = VoyageService(api_key="test-key")
+
+            # embed_documents_matryoshka_sync
+            result = service.embed_documents_matryoshka_sync(["test"], output_dimension=512)
+            assert len(result) == 1
+
+            # embed_query_matryoshka_sync
+            result = service.embed_query_matryoshka_sync("test", output_dimension=512)
+            assert len(result) == 512
