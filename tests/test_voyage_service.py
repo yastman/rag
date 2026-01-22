@@ -43,8 +43,11 @@ class TestVoyageServiceUnit:
 
         with patch("voyageai.Client") as mock_client_class:
             mock_client = MagicMock()
-            ***REMOVED*** Return different embeddings for each batch
-            mock_client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024] * 128)
+            ***REMOVED*** Return different number of embeddings for each batch
+            mock_client.embed.side_effect = [
+                MagicMock(embeddings=[[0.1] * 1024] * 128),  ***REMOVED*** First batch: 128
+                MagicMock(embeddings=[[0.1] * 1024] * 72),  ***REMOVED*** Second batch: 72
+            ]
             mock_client_class.return_value = mock_client
 
             service = VoyageService(api_key="test-key")
