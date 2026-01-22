@@ -214,27 +214,44 @@ class PropertyBot:
         semantic_query = analysis.get("semantic_query", query)
         logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
 
-        # 4. Search in Qdrant with cache (Tier 2)
+        # 4. Search in Qdrant with hybrid search
         results = await self.cache_service.get_cached_search(query_vector, filters)
         if results is None:
-            # Initial retrieval (more results for reranking)
-            results = self.retriever_service.search(
-                query_vector=query_vector,
+            # Generate sparse vector for hybrid search
+            sparse_vector = self._get_sparse_vector(query)
+
+            # Hybrid RRF search (dense + sparse)
+            results = await self.qdrant_service.hybrid_search_rrf(
+                dense_vector=query_vector,
+                sparse_vector=sparse_vector,
                 filters=filters if filters else None,
-                top_k=self.config.search_top_k,  # Get more for reranking
-                min_score=self.config.min_score,
+                top_k=self.config.search_top_k,
+                dense_weight=self.config.hybrid_dense_weight,
+                sparse_weight=self.config.hybrid_sparse_weight,
             )
 
-            # Rerank with Voyage AI (rerank-2.5, 32K context)
+            # MMR diversity reranking (if enabled and enough results)
+            if self.config.mmr_enabled and len(results) > self.config.rerank_top_k:
+                # Get embeddings for MMR calculation
+                result_embeddings = [
+                    await self.voyage_service.embed_query(r["text"])
+                    for r in results[:20]  # Limit for performance
+                ]
+                results = self.qdrant_service.mmr_rerank(
+                    points=results[:20],
+                    embeddings=result_embeddings,
+                    lambda_mult=self.config.mmr_lambda,
+                    top_k=self.config.rerank_top_k * 2,
+                )
+
+            # Voyage rerank for final precision
             if results and len(results) > 1:
-                # Extract text content for reranking
-                doc_texts = [r.get("content", r.get("text", "")) for r in results]
+                doc_texts = [r["text"] for r in results]
                 rerank_results = await self.voyage_service.rerank(
                     query=query,
                     documents=doc_texts,
                     top_k=self.config.rerank_top_k,
                 )
-                # Reorder results by rerank scores
                 results = [results[r["index"]] for r in rerank_results]
                 logger.info(f"Reranked to top {len(results)} results")
 
