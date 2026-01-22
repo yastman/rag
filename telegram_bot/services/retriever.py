@@ -105,23 +105,20 @@ class RetrieverService:
             self._is_healthy = False
             return []
 
-    def _build_base_filter(self) -> models.Filter:
+    def _build_base_filter(self) -> Optional[models.Filter]:
         """
-        Build base Qdrant Filter that only returns CSV rows (real apartments).
+        Build base Qdrant Filter.
+
+        Returns None to search all documents without restriction.
+        Override this method to add collection-specific filters.
 
         Returns:
-            Qdrant Filter object with source_type=csv_row condition
+            None (no filter) or Qdrant Filter object
         """
-        return models.Filter(
-            must=[
-                models.FieldCondition(
-                    key="metadata.source_type",
-                    match=models.MatchValue(value="csv_row"),
-                )
-            ]
-        )
+        # No base filter - search all documents in collection
+        return None
 
-    def _build_filter(self, filters: dict[str, Any]) -> models.Filter:
+    def _build_filter(self, filters: dict[str, Any]) -> Optional[models.Filter]:
         """
         Build Qdrant Filter from extracted filters dict.
 
@@ -130,15 +127,12 @@ class RetrieverService:
                      Example: {"price": {"lt": 100000}, "city": "Несебр", "rooms": 2}
 
         Returns:
-            Qdrant Filter object combining base filter + dynamic filters
+            Qdrant Filter object with dynamic filters, or None if no filters
         """
-        conditions = [
-            # Always include base filter: only CSV rows
-            models.FieldCondition(
-                key="metadata.source_type",
-                match=models.MatchValue(value="csv_row"),
-            )
-        ]
+        if not filters:
+            return None
+
+        conditions = []
 
         for field, value in filters.items():
             # Exact match for strings and integers
@@ -168,5 +162,9 @@ class RetrieverService:
                             range=models.Range(**range_params),
                         )
                     )
+
+        # Return None if no conditions were built
+        if not conditions:
+            return None
 
         return models.Filter(must=conditions)
