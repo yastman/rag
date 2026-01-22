@@ -1,7 +1,12 @@
-"""Qdrant service with Query API, Score Boosting, and MMR.
+"""Qdrant service with Query API, Score Boosting, MMR, and Quantization.
 
 Smart Gateway pattern for Qdrant vector database.
-Features: RRF fusion, freshness boosting, MMR diversity.
+Features: RRF fusion, freshness boosting, MMR diversity, binary quantization.
+
+2026 best practices:
+- Binary Quantization: 40x faster, -75% RAM (for dim >= 1024)
+- Prefetch: dense + sparse in single RPC
+- Rescore with oversampling for accuracy
 """
 
 import logging
@@ -32,6 +37,9 @@ class QdrantService:
         collection_name: str = "documents",
         dense_vector_name: str = "dense",
         sparse_vector_name: str = "bm42",
+        use_quantization: bool = True,
+        quantization_rescore: bool = True,
+        quantization_oversampling: float = 2.0,
     ):
         """Initialize Qdrant service.
 
@@ -41,13 +49,19 @@ class QdrantService:
             collection_name: Default collection name
             dense_vector_name: Name of dense vector field
             sparse_vector_name: Name of sparse vector field
+            use_quantization: Enable quantized search (faster, less accurate)
+            quantization_rescore: Rescore with original vectors for accuracy
+            quantization_oversampling: Fetch N*limit candidates, rescore top limit
         """
         self._client = AsyncQdrantClient(url=url, api_key=api_key)
         self._collection_name = collection_name
         self._dense_vector_name = dense_vector_name
         self._sparse_vector_name = sparse_vector_name
+        self._use_quantization = use_quantization
+        self._quantization_rescore = quantization_rescore
+        self._quantization_oversampling = quantization_oversampling
 
-        logger.info(f"QdrantService initialized: {collection_name}")
+        logger.info(f"QdrantService initialized: {collection_name} (quantization={use_quantization})")
 
     async def hybrid_search_rrf(
         self,
@@ -100,6 +114,16 @@ class QdrantService:
                 )
             )
 
+        # Build search params with quantization
+        search_params = None
+        if self._use_quantization:
+            search_params = models.SearchParams(
+                quantization=models.QuantizationSearchParams(
+                    rescore=self._quantization_rescore,
+                    oversampling=self._quantization_oversampling,
+                )
+            )
+
         # Execute RRF fusion search
         result = await self._client.query_points(
             collection_name=self._collection_name,
@@ -108,6 +132,7 @@ class QdrantService:
             query_filter=self._build_filter(filters),
             limit=top_k,
             with_payload=True,
+            search_params=search_params,
         )
 
         return self._format_results(result.points)
@@ -337,6 +362,62 @@ class QdrantService:
             }
             for p in points
         ]
+
+    async def enable_binary_quantization(
+        self,
+        collection_name: Optional[str] = None,
+        always_ram: bool = True,
+    ) -> bool:
+        """Enable binary quantization on collection for 40x faster search.
+
+        Binary quantization reduces each dimension to 1 bit, achieving:
+        - 32x memory compression
+        - Up to 40x faster search
+        - Works best with dim >= 1024 (voyage-4-large is 1024)
+
+        Args:
+            collection_name: Collection to update (default: self._collection_name)
+            always_ram: Keep quantized vectors in RAM for speed
+
+        Returns:
+            True if successful
+        """
+        coll = collection_name or self._collection_name
+        try:
+            await self._client.update_collection(
+                collection_name=coll,
+                quantization_config=models.BinaryQuantization(
+                    binary=models.BinaryQuantizationConfig(always_ram=always_ram),
+                ),
+            )
+            logger.info(f"Binary quantization enabled for {coll}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to enable binary quantization: {e}")
+            return False
+
+    async def get_collection_info(self, collection_name: Optional[str] = None) -> dict:
+        """Get collection info including quantization status.
+
+        Args:
+            collection_name: Collection to check
+
+        Returns:
+            Dict with collection info
+        """
+        coll = collection_name or self._collection_name
+        try:
+            info = await self._client.get_collection(collection_name=coll)
+            return {
+                "name": coll,
+                "points_count": info.points_count,
+                "vectors_count": info.vectors_count,
+                "status": info.status.value,
+                "quantization": str(info.config.quantization_config) if info.config.quantization_config else None,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get collection info: {e}")
+            return {}
 
     async def close(self):
         """Close the client connection."""
