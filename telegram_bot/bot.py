@@ -3,10 +3,10 @@
 import contextlib
 import logging
 
+import httpx
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message
-from fastembed import SparseTextEmbedding
 
 from .config import BotConfig
 from .middlewares import setup_error_middleware, setup_throttling_middleware
@@ -55,10 +55,9 @@ class PropertyBot:
             collection_name=config.qdrant_collection,
         )
 
-        # BM42 sparse embedder for hybrid search
-        self.sparse_embedder = SparseTextEmbedding(
-            model_name="Qdrant/bm42-all-minilm-l6-v2-attentions"
-        )
+        # BM42 sparse embedding service (HTTP client)
+        self.bm42_url = config.bm42_url
+        self._http_client: httpx.AsyncClient | None = None
         self.llm_service = LLMService(
             api_key=config.llm_api_key,
             base_url=config.llm_base_url,
@@ -218,7 +217,7 @@ class PropertyBot:
         results = await self.cache_service.get_cached_search(query_vector, filters)
         if results is None:
             # Generate sparse vector for hybrid search
-            sparse_vector = self._get_sparse_vector(query)
+            sparse_vector = await self._get_sparse_vector(query)
 
             # Hybrid RRF search (dense + sparse)
             results = await self.qdrant_service.hybrid_search_rrf(
@@ -315,8 +314,8 @@ class PropertyBot:
         # Log cache metrics
         self.cache_service.log_metrics()
 
-    def _get_sparse_vector(self, text: str) -> dict:
-        """Generate BM42 sparse vector for query.
+    async def _get_sparse_vector(self, text: str) -> dict:
+        """Generate BM42 sparse vector via HTTP service.
 
         Args:
             text: Query text
@@ -324,11 +323,19 @@ class PropertyBot:
         Returns:
             Dict with 'indices' and 'values' for Qdrant sparse vector
         """
-        result = next(iter(self.sparse_embedder.embed([text])))
-        return {
-            "indices": result.indices.tolist(),
-            "values": result.values.tolist(),
-        }
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(timeout=10.0)
+
+        try:
+            response = await self._http_client.post(
+                f"{self.bm42_url}/embed",
+                json={"text": text},
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.warning(f"BM42 service error: {e}, returning empty sparse vector")
+            return {"indices": [], "values": []}
 
     def _format_results(self, results: list[dict]) -> str:
         """Format search results for display."""
@@ -382,4 +389,6 @@ class PropertyBot:
         await self.query_analyzer.close()
         await self.llm_service.close()
         await self.qdrant_service.close()
+        if self._http_client:
+            await self._http_client.aclose()
         await self.bot.session.close()
