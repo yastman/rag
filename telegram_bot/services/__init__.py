@@ -9,6 +9,7 @@ from .query_analyzer import QueryAnalyzer
 from .query_preprocessor import QueryPreprocessor
 from .retriever import RetrieverService
 from .user_context import UserContextService
+from .voyage import VoyageService
 from .voyage_client import VoyageClient
 from .voyage_embeddings import VoyageEmbeddingService
 from .voyage_reranker import VoyageRerankerService
@@ -27,4 +28,5 @@ __all__ = [
     "VoyageClient",
     "VoyageEmbeddingService",
     "VoyageRerankerService",
+    "VoyageService",
 ]
