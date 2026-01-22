@@ -56,6 +56,9 @@ class BotConfig:
     cesc_extraction_frequency: int = int(os.getenv("CESC_EXTRACTION_FREQUENCY", "3"))
     user_context_ttl: int = int(os.getenv("USER_CONTEXT_TTL", str(30 * 24 * 3600)))
 
+    # BM42 Sparse Embedding Service
+    bm42_url: str = os.getenv("BM42_URL", "http://localhost:8002")
+
     # Hybrid Search Configuration
     hybrid_dense_weight: float = float(os.getenv("HYBRID_DENSE_WEIGHT", "0.6"))
     hybrid_sparse_weight: float = float(os.getenv("HYBRID_SPARSE_WEIGHT", "0.4"))
