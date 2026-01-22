@@ -55,3 +55,16 @@ class BotConfig:
     cesc_enabled: bool = os.getenv("CESC_ENABLED", "true").lower() == "true"
     cesc_extraction_frequency: int = int(os.getenv("CESC_EXTRACTION_FREQUENCY", "3"))
     user_context_ttl: int = int(os.getenv("USER_CONTEXT_TTL", str(30 * 24 * 3600)))
+
+    # Hybrid Search Configuration
+    hybrid_dense_weight: float = float(os.getenv("HYBRID_DENSE_WEIGHT", "0.6"))
+    hybrid_sparse_weight: float = float(os.getenv("HYBRID_SPARSE_WEIGHT", "0.4"))
+
+    # Score Boosting Configuration
+    freshness_boost_enabled: bool = os.getenv("FRESHNESS_BOOST", "false").lower() == "true"
+    freshness_field: str = os.getenv("FRESHNESS_FIELD", "created_at")
+    freshness_scale_days: int = int(os.getenv("FRESHNESS_SCALE_DAYS", "30"))
+
+    # MMR Diversity Configuration
+    mmr_enabled: bool = os.getenv("MMR_ENABLED", "true").lower() == "true"
+    mmr_lambda: float = float(os.getenv("MMR_LAMBDA", "0.7"))
