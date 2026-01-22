@@ -38,6 +38,10 @@ class BotConfig:
     voyage_model_docs: str = os.getenv("VOYAGE_MODEL_DOCS", "voyage-4-large")
     voyage_model_queries: str = os.getenv("VOYAGE_MODEL_QUERIES", "voyage-4-lite")
     voyage_model_rerank: str = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2.5")
+    # Matryoshka embedding dimensions (2048, 1024, 512, 256)
+    # Lower dimensions = less storage, faster search, slightly lower quality
+    voyage_embedding_dim: int = int(os.getenv("VOYAGE_EMBEDDING_DIM", "1024"))
+
     # Legacy (for backward compatibility)
     voyage_embed_model: str = os.getenv("VOYAGE_EMBED_MODEL", "voyage-3-large")
     voyage_cache_model: str = os.getenv("VOYAGE_CACHE_MODEL", "voyage-3-lite")
