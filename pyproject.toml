@@ -273,20 +273,23 @@ addopts = """
     --strict-markers
     --strict-config
     --showlocals
-    --cov=src
-    --cov-report=html
-    --cov-report=term-missing:skip-covered
 """
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests with mocks (fast, no external deps)",
+    "integration: Integration tests (requires Docker/API keys)",
+    "slow: Tests taking > 5 seconds",
+]
 
 # =============================================================================
 # COVERAGE CONFIGURATION
 # =============================================================================
 
 [tool.coverage.run]
-source = ["src"]
+source = ["src", "telegram_bot"]
+branch = true
 omit = [
     "*/tests/*",
     "*/legacy/*",
@@ -295,6 +298,7 @@ omit = [
 ]
 
 [tool.coverage.report]
+fail_under = 80
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
