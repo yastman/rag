@@ -272,6 +272,42 @@ class LLMService:
 
         return fallback
 
+    async def generate(self, prompt: str, max_tokens: int = 200) -> str:
+        """Simple text generation for internal use (CESC, preference extraction).
+
+        Uses low temperature for more deterministic/structured output.
+
+        Args:
+            prompt: Text prompt to send to LLM
+            max_tokens: Maximum tokens in response (default: 200)
+
+        Returns:
+            Generated text from LLM
+
+        Raises:
+            Exception: If LLM API call fails
+        """
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": max_tokens,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"LLM generate failed: {e}")
+            raise
+
     async def close(self):
         """Close HTTP client."""
         await self.client.aclose()
