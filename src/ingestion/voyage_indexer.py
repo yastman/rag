@@ -27,9 +27,8 @@ from qdrant_client.models import (
     VectorParams,
 )
 
+from src.ingestion.chunker import Chunk
 from telegram_bot.services import VoyageService
-
-from .chunker import Chunk
 
 
 logger = logging.getLogger(__name__)
