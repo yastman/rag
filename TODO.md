@@ -1,7 +1,7 @@
 # TODO - Current Tasks
 
-> **Дата:** 2026-01-21
-> **Версия:** v2.9.0
+> **Дата:** 2026-01-22
+> **Версия:** v2.9.0 (Voyage AI unified)
 > **Ветка:** feat/redis-stack-vector-search
 
 ---
@@ -11,10 +11,32 @@
 ```
 Local Setup:            ██████████ 100% ✅
 Telegram Bot:           ██████████ 100% ✅
-CESC Personalization:   ██████████ 100% ✅ NEW
+CESC Personalization:   ██████████ 100% ✅
+Voyage AI Migration:    ██████████ 100% ✅ NEW
 Contextual Retrieval:   ████████░░  80% 🟡
 Production Deploy:      ░░░░░░░░░░   0% ⏸️
 ```
+
+---
+
+## Voyage AI Migration (Completed 2026-01-22)
+
+| Phase | Task | Status |
+|-------|------|--------|
+| 1 | VoyageEmbeddingService | ✅ Complete |
+| 2 | VoyageRerankerService | ✅ Complete |
+| 3 | HybridRetrieverService (RRF fusion) | ✅ Complete |
+| 4 | SemanticCache (VoyageAITextVectorizer) | ✅ Complete |
+| 5 | QueryPreprocessor integration | ✅ Complete |
+| 6 | Collection migration (contextual_bulgaria_voyage) | ✅ Complete |
+| 7 | Integration tests (52 tests) | ✅ Complete |
+| 8 | Documentation updates | ✅ Complete |
+
+**Key Changes:**
+- Collection: `contextual_bulgaria_voyage` (Voyage 1024-dim + BM42 sparse)
+- Embeddings: voyage-3-large (1024-dim)
+- Cache: voyage-3-lite via VoyageAITextVectorizer
+- Reranking: rerank-2
 
 ---
 
@@ -22,14 +44,31 @@ Production Deploy:      ░░░░░░░░░░   0% ⏸️
 
 | # | Task | Status | Priority |
 |---|------|--------|----------|
-| 1 | Process VTT files → JSON | ⏳ | High |
-| 2 | Index contextual chunks | ⏳ | High |
-| 3 | Test search quality | ⏳ | High |
-| 4 | Merge to main | ⏳ | Medium |
+| 1 | Merge to main | ⏳ | High |
+| 2 | Production deployment | ⏳ | Medium |
 
 ---
 
-## Completed Today (2026-01-21)
+## Completed Today (2026-01-22)
+
+### Cache Bugfixes & Features (v2.9.1)
+- [x] Fix EmbeddingsCache API - `text` → `content` parameter
+- [x] Add LLMService.generate() - for CESC preference extraction
+- [x] Fix streaming duplicate edit - prevent Telegram "message not modified" error
+- [x] Add SemanticMessageHistory - semantic conversation context retrieval
+- [x] Tests - 8 new tests passing
+
+### Voyage AI Migration (v2.9.0)
+- [x] VoyageEmbeddingService - dense embeddings via voyage-3-large
+- [x] VoyageRerankerService - reranking via rerank-2
+- [x] HybridRetrieverService - RRF fusion (dense + sparse)
+- [x] SemanticCache migration - VoyageAITextVectorizer (voyage-3-lite)
+- [x] QueryPreprocessor - translit, dynamic RRF weights
+- [x] Collection indexed - contextual_bulgaria_voyage (92 chunks)
+- [x] Integration tests - 52 tests passing
+- [x] Documentation updates - CLAUDE.md, TODO.md
+
+### Completed 2026-01-21
 
 ### CESC Implementation (v2.9.0)
 - [x] UserContextService - извлечение preferences через LLM
@@ -126,4 +165,4 @@ python -m telegram_bot.main
 
 ---
 
-**Last Updated:** 2026-01-21
+**Last Updated:** 2026-01-22
