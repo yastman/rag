@@ -1,7 +1,7 @@
 """Services for Telegram RAG bot."""
 
 from .cache import CacheService
-from .cesc import CESCPersonalizer
+from .cesc import CESCPersonalizer, is_personalized_query
 from .embeddings import EmbeddingService
 from .llm import LLMService
 from .qdrant import QdrantService
@@ -23,4 +23,5 @@ __all__ = [
     "RetrieverService",
     "UserContextService",
     "VoyageService",
+    "is_personalized_query",
 ]
