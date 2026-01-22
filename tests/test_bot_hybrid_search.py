@@ -1,7 +1,7 @@
 """Integration tests for bot hybrid search pipeline."""
 
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -39,7 +39,6 @@ class TestBotHybridSearch:
             patch("telegram_bot.bot.CacheService"),
             patch("telegram_bot.bot.LLMService"),
             patch("telegram_bot.bot.QueryAnalyzer"),
-            patch("telegram_bot.bot.SparseTextEmbedding"),
             patch("telegram_bot.bot.UserContextService"),
             patch("telegram_bot.bot.CESCPersonalizer"),
         ):
@@ -53,8 +52,8 @@ class TestBotHybridSearch:
             mock_qdrant.assert_called_once()
             assert hasattr(bot, "qdrant_service")
 
-    def test_bot_initializes_sparse_embedder(self):
-        """Bot should initialize SparseTextEmbedding for BM42."""
+    def test_bot_has_bm42_url(self):
+        """Bot should have bm42_url for HTTP sparse embedding service."""
         with (
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_middleware"),
@@ -63,7 +62,6 @@ class TestBotHybridSearch:
             patch("telegram_bot.bot.CacheService"),
             patch("telegram_bot.bot.LLMService"),
             patch("telegram_bot.bot.QueryAnalyzer"),
-            patch("telegram_bot.bot.SparseTextEmbedding") as mock_sparse,
             patch("telegram_bot.bot.UserContextService"),
             patch("telegram_bot.bot.CESCPersonalizer"),
         ):
@@ -72,24 +70,19 @@ class TestBotHybridSearch:
 
             config = BotConfig()
             config.telegram_token = "test:token"
+            config.bm42_url = "http://bm42:8000"
             bot = PropertyBot(config)
 
-            mock_sparse.assert_called_once_with(
-                model_name="Qdrant/bm42-all-minilm-l6-v2-attentions"
-            )
-            assert hasattr(bot, "sparse_embedder")
+            assert hasattr(bot, "bm42_url")
+            assert bot.bm42_url == "http://bm42:8000"
 
 
 class TestBotGetSparseVector:
-    """Test sparse vector generation."""
+    """Test sparse vector generation via HTTP."""
 
-    def test_get_sparse_vector_returns_dict(self):
-        """_get_sparse_vector should return dict with indices and values."""
-        # Mock sparse embedding result
-        mock_result = MagicMock()
-        mock_result.indices.tolist.return_value = [1, 5, 10]
-        mock_result.values.tolist.return_value = [0.5, 0.3, 0.2]
-
+    @pytest.mark.asyncio
+    async def test_get_sparse_vector_calls_http_service(self):
+        """_get_sparse_vector should call BM42 HTTP service."""
         with (
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_middleware"),
@@ -98,22 +91,59 @@ class TestBotGetSparseVector:
             patch("telegram_bot.bot.CacheService"),
             patch("telegram_bot.bot.LLMService"),
             patch("telegram_bot.bot.QueryAnalyzer"),
-            patch("telegram_bot.bot.SparseTextEmbedding") as mock_sparse,
             patch("telegram_bot.bot.UserContextService"),
             patch("telegram_bot.bot.CESCPersonalizer"),
+            patch("telegram_bot.bot.httpx.AsyncClient") as mock_client,
         ):
-            mock_sparse.return_value.embed.return_value = iter([mock_result])
+            # Mock HTTP response
+            mock_response = MagicMock()
+            mock_response.json.return_value = {
+                "indices": [1, 5, 10],
+                "values": [0.5, 0.3, 0.2],
+            }
+            mock_response.raise_for_status = MagicMock()
+            mock_client.return_value.post = AsyncMock(return_value=mock_response)
 
             from telegram_bot.bot import PropertyBot
             from telegram_bot.config import BotConfig
 
             config = BotConfig()
             config.telegram_token = "test:token"
+            config.bm42_url = "http://bm42:8000"
             bot = PropertyBot(config)
 
-            result = bot._get_sparse_vector("test query")
+            result = await bot._get_sparse_vector("test query")
 
-            assert "indices" in result
-            assert "values" in result
             assert result["indices"] == [1, 5, 10]
             assert result["values"] == [0.5, 0.3, 0.2]
+
+    @pytest.mark.asyncio
+    async def test_get_sparse_vector_handles_error_gracefully(self):
+        """_get_sparse_vector should return empty vector on error."""
+        with (
+            patch("telegram_bot.bot.setup_throttling_middleware"),
+            patch("telegram_bot.bot.setup_error_middleware"),
+            patch("telegram_bot.bot.QdrantService"),
+            patch("telegram_bot.bot.VoyageService"),
+            patch("telegram_bot.bot.CacheService"),
+            patch("telegram_bot.bot.LLMService"),
+            patch("telegram_bot.bot.QueryAnalyzer"),
+            patch("telegram_bot.bot.UserContextService"),
+            patch("telegram_bot.bot.CESCPersonalizer"),
+            patch("telegram_bot.bot.httpx.AsyncClient") as mock_client,
+        ):
+            # Mock HTTP error
+            mock_client.return_value.post = AsyncMock(side_effect=Exception("Connection refused"))
+
+            from telegram_bot.bot import PropertyBot
+            from telegram_bot.config import BotConfig
+
+            config = BotConfig()
+            config.telegram_token = "test:token"
+            config.bm42_url = "http://bm42:8000"
+            bot = PropertyBot(config)
+
+            result = await bot._get_sparse_vector("test query")
+
+            # Should return empty vector, not raise
+            assert result == {"indices": [], "values": []}
