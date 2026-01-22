@@ -90,19 +90,24 @@ test: ***REMOVED******REMOVED*** Run tests with pytest
 
 test-cov: ***REMOVED******REMOVED*** Run tests with coverage
 	@echo "$(BLUE)Running tests with coverage...$(NC)"
-	pytest tests/ --cov=src --cov-report=html --cov-report=term
+	pytest tests/ --cov=src --cov=telegram_bot --cov-report=html --cov-report=term
 	@echo "$(GREEN)✓ Tests with coverage complete$(NC)"
 	@echo "$(YELLOW)Open htmlcov/index.html to view coverage report$(NC)"
 
-test-unit: ***REMOVED******REMOVED*** Run only unit tests
+test-unit: ***REMOVED******REMOVED*** Run only unit tests (fast, no external deps)
 	@echo "$(BLUE)Running unit tests...$(NC)"
-	pytest tests/unit/
+	pytest tests/unit/ -v
 	@echo "$(GREEN)✓ Unit tests complete$(NC)"
 
-test-integration: ***REMOVED******REMOVED*** Run only integration tests
+test-integration: ***REMOVED******REMOVED*** Run only integration tests (requires Docker/API keys)
 	@echo "$(BLUE)Running integration tests...$(NC)"
-	pytest tests/integration/
+	pytest tests/integration/ -v
 	@echo "$(GREEN)✓ Integration tests complete$(NC)"
+
+test-all: ***REMOVED******REMOVED*** Run all tests with coverage threshold (CI mode)
+	@echo "$(BLUE)Running all tests with coverage...$(NC)"
+	pytest tests/ -v --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
+	@echo "$(GREEN)✓ All tests passed with 80%+ coverage$(NC)"
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** PROJECT MANAGEMENT
