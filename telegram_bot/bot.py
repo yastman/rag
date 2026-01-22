@@ -16,9 +16,13 @@ from .services import (
     LLMService,
     QdrantService,
     QueryAnalyzer,
+    QueryType,
     UserContextService,
     VoyageService,
+    classify_query,
+    get_chitchat_response,
     is_personalized_query,
+    needs_rerank,
 )
 
 
@@ -166,6 +170,15 @@ class PropertyBot:
         user_id = message.from_user.id
         logger.info(f"Query from {user_id}: {query}")
 
+        # Query routing (2026 best practice) - skip RAG for chit-chat
+        query_type = classify_query(query)
+        if query_type == QueryType.CHITCHAT:
+            chitchat_response = get_chitchat_response(query)
+            if chitchat_response:
+                logger.info("Query routed to CHITCHAT (skipping RAG)")
+                await message.answer(chitchat_response)
+                return
+
         # CESC: Lazy routing (2026 best practice) - only update context for personalized queries
         user_context = None
         needs_personalization = False
@@ -258,7 +271,8 @@ class PropertyBot:
                 )
 
             # Voyage rerank with cache (2026 best practice)
-            if results and len(results) > 1:
+            # Skip rerank for simple queries or few results
+            if results and needs_rerank(query_type, len(results)):
                 doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
 
                 # Check rerank cache first
