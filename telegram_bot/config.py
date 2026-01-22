@@ -71,3 +71,9 @@ class BotConfig:
     # MMR Diversity Configuration
     mmr_enabled: bool = os.getenv("MMR_ENABLED", "true").lower() == "true"
     mmr_lambda: float = float(os.getenv("MMR_LAMBDA", "0.7"))
+
+    ***REMOVED*** Quantization Configuration (2026 best practice)
+    # Binary quantization: 40x faster, -75% RAM for dim >= 1024
+    qdrant_use_quantization: bool = os.getenv("QDRANT_USE_QUANTIZATION", "true").lower() == "true"
+    qdrant_quantization_rescore: bool = os.getenv("QDRANT_QUANTIZATION_RESCORE", "true").lower() == "true"
+    qdrant_quantization_oversampling: float = float(os.getenv("QDRANT_QUANTIZATION_OVERSAMPLING", "2.0"))
