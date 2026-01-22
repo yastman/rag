@@ -113,3 +113,75 @@ class TestQueryPreprocessorAnalyze:
         assert "Солнечный берег" in result["normalized_query"]
         assert result["rrf_weights"]["sparse"] == 0.8
         assert result["is_exact"] is True
+
+
+class TestQueryPreprocessorHasExactIdentifier:
+    """Tests for exact identifier detection."""
+
+    def test_detects_id_pattern(self):
+        """Test detects ID pattern."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("квартира ID 12345") is True
+
+    def test_detects_long_number(self):
+        """Test detects long numbers (IDs)."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("объект 123456") is True
+
+    def test_detects_corpus_number(self):
+        """Test detects корпус with number."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("корпус 5") is True
+
+    def test_detects_corpus_letter(self):
+        """Test detects корпус with letter."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("корпус А") is True
+
+    def test_detects_block(self):
+        """Test detects блок pattern."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("блок B") is True
+
+    def test_detects_section(self):
+        """Test detects секция pattern."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("секция 2") is True
+
+    def test_detects_floor(self):
+        """Test detects этаж pattern."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("этаж 5") is True
+
+    def test_detects_zhk(self):
+        """Test detects ЖК pattern."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("ЖК Елените") is True
+
+    def test_returns_false_for_semantic_query(self):
+        """Test returns False for semantic queries."""
+        preprocessor = QueryPreprocessor()
+        assert preprocessor.has_exact_identifier("красивая квартира у моря") is False
+
+
+class TestQueryPreprocessorTranslitAdditional:
+    """Additional transliteration tests."""
+
+    def test_normalize_multiple_cities(self):
+        """Test multiple cities in one query."""
+        preprocessor = QueryPreprocessor()
+        result = preprocessor.normalize_translit("apartments in Burgas or Varna")
+        assert "Бургас" in result
+        assert "Варна" in result
+
+    def test_normalize_golden_sands(self):
+        """Test Golden Sands transliteration."""
+        preprocessor = QueryPreprocessor()
+        result = preprocessor.normalize_translit("Golden Sands hotel")
+        assert "Золотые пески" in result
+
+    def test_normalize_nessebar_variant(self):
+        """Test Nessebar spelling variant."""
+        preprocessor = QueryPreprocessor()
+        result = preprocessor.normalize_translit("Nessebar old town")
+        assert "Несебър" in result
