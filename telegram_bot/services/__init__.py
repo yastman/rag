@@ -5,6 +5,7 @@ from .cesc import CESCPersonalizer
 from .embeddings import EmbeddingService
 from .hybrid_retriever import HybridRetrieverService
 from .llm import LLMService
+from .qdrant import QdrantService
 from .query_analyzer import QueryAnalyzer
 from .query_preprocessor import QueryPreprocessor
 from .retriever import RetrieverService
@@ -21,6 +22,7 @@ __all__ = [
     "EmbeddingService",
     "HybridRetrieverService",
     "LLMService",
+    "QdrantService",
     "QueryAnalyzer",
     "QueryPreprocessor",
     "RetrieverService",
