@@ -27,6 +27,7 @@ class VoyageService:
     - Embeddings for documents (voyage-4-large by default)
     - Embeddings for queries (voyage-4-lite by default, asymmetric retrieval)
     - Reranking (rerank-2.5 by default, 32K context)
+    - Matryoshka embeddings (variable dimensions: 2048, 1024, 512, 256)
 
     Features:
     - Automatic batching (128 texts per request)
@@ -36,6 +37,10 @@ class VoyageService:
 
     # Batch size for embeddings (Voyage AI recommendation)
     BATCH_SIZE = 128
+
+    # Supported Matryoshka dimensions (voyage-4 series)
+    MATRYOSHKA_DIMS = (2048, 1024, 512, 256)
+    DEFAULT_DIM = 1024
 
     def __init__(
         self,
@@ -200,6 +205,121 @@ class VoyageService:
             for r in response.results
         ]
 
+    # Matryoshka embeddings (variable dimensions)
+
+    @retry(
+        retry=retry_if_exception_type(
+            (
+                voyageai.error.RateLimitError,
+                voyageai.error.ServiceUnavailableError,
+                voyageai.error.Timeout,
+            )
+        ),
+        wait=wait_random_exponential(multiplier=1, max=60),
+        stop=stop_after_attempt(6),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
+    async def embed_documents_matryoshka(
+        self,
+        texts: list[str],
+        output_dimension: int = 1024,
+        input_type: str = "document",
+    ) -> list[list[float]]:
+        """Generate Matryoshka embeddings with reduced dimensions.
+
+        Voyage-4 supports Matryoshka embeddings that can be truncated
+        to smaller dimensions while preserving semantic quality.
+
+        Trade-offs:
+            - 2048 dim: 100% quality, 100% storage
+            - 1024 dim: ~98% quality, 50% storage (default)
+            - 512 dim: ~95% quality, 25% storage
+            - 256 dim: ~90% quality, 12.5% storage
+
+        Args:
+            texts: List of document texts to embed
+            output_dimension: Target dimension (2048, 1024, 512, or 256)
+            input_type: Voyage input type ("document" or "query")
+
+        Returns:
+            List of embedding vectors with specified dimension
+
+        Raises:
+            ValueError: If output_dimension is not supported
+        """
+        if output_dimension not in self.MATRYOSHKA_DIMS:
+            raise ValueError(
+                f"Invalid output_dimension {output_dimension}. Supported: {self.MATRYOSHKA_DIMS}"
+            )
+
+        if not texts:
+            return []
+
+        all_embeddings = []
+
+        for i in range(0, len(texts), self.BATCH_SIZE):
+            batch = texts[i : i + self.BATCH_SIZE]
+
+            response = await asyncio.to_thread(
+                self._client.embed,
+                texts=batch,
+                model=self._model_docs,
+                input_type=input_type,
+                output_dimension=output_dimension,
+            )
+            all_embeddings.extend(response.embeddings)
+
+        logger.info(
+            f"Embedded {len(all_embeddings)} documents with {self._model_docs} "
+            f"(dim={output_dimension})"
+        )
+        return all_embeddings
+
+    @retry(
+        retry=retry_if_exception_type(
+            (
+                voyageai.error.RateLimitError,
+                voyageai.error.ServiceUnavailableError,
+                voyageai.error.Timeout,
+            )
+        ),
+        wait=wait_random_exponential(multiplier=1, max=60),
+        stop=stop_after_attempt(6),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+    )
+    async def embed_query_matryoshka(
+        self,
+        text: str,
+        output_dimension: int = 1024,
+    ) -> list[float]:
+        """Generate Matryoshka embedding for a query with reduced dimensions.
+
+        Must use the same output_dimension as the indexed documents!
+
+        Args:
+            text: Query text to embed
+            output_dimension: Target dimension (must match document index)
+
+        Returns:
+            Single embedding vector with specified dimension
+
+        Raises:
+            ValueError: If output_dimension is not supported
+        """
+        if output_dimension not in self.MATRYOSHKA_DIMS:
+            raise ValueError(
+                f"Invalid output_dimension {output_dimension}. Supported: {self.MATRYOSHKA_DIMS}"
+            )
+
+        response = await asyncio.to_thread(
+            self._client.embed,
+            texts=[text],
+            model=self._model_queries,
+            input_type="query",
+            output_dimension=output_dimension,
+        )
+        return response.embeddings[0]
+
     # Sync methods for compatibility with existing code
     def embed_documents_sync(
         self,
@@ -221,3 +341,20 @@ class VoyageService:
     ) -> list[dict]:
         """Sync wrapper for rerank."""
         return asyncio.run(self.rerank(query, documents, top_k))
+
+    def embed_documents_matryoshka_sync(
+        self,
+        texts: list[str],
+        output_dimension: int = 1024,
+        input_type: str = "document",
+    ) -> list[list[float]]:
+        """Sync wrapper for embed_documents_matryoshka."""
+        return asyncio.run(self.embed_documents_matryoshka(texts, output_dimension, input_type))
+
+    def embed_query_matryoshka_sync(
+        self,
+        text: str,
+        output_dimension: int = 1024,
+    ) -> list[float]:
+        """Sync wrapper for embed_query_matryoshka."""
+        return asyncio.run(self.embed_query_matryoshka(text, output_dimension))
