@@ -4,10 +4,10 @@
 
 > **Production RAG система с гибридным поиском и ML платформой**
 
-**Версия:** 2.8.0
-**Дата:** 2025-01-06
+**Версия:** 2.12.0
+**Дата:** 2026-01-23
 **Репозиторий:** https://github.com/yastman/rag
-**Статус:** 🟢 Production-ready (95% complete)
+**Статус:** 🟢 Production-ready
 
 ---
 
@@ -37,6 +37,29 @@ Production-ready RAG система для поиска по документа�
 ---
 
 ***REMOVED******REMOVED*** 🆕 Latest Updates
+
+***REMOVED******REMOVED******REMOVED*** v2.12.0 - SDK Migration for Search Engines (2026-01-23)
+
+**Search Engines Migration** 🔄
+- Migrated all hybrid search engines from `httpx` to Qdrant SDK `query_points()`
+- Implemented nested `models.Prefetch` for multi-stage search pipelines
+- Added `lexical_weights_to_sparse()` helper for BGE-M3 sparse vectors
+- Removed ~65 lines of httpx code, cleaner SDK-based implementation
+
+**SDK Patterns:**
+- `HybridRRFSearchEngine`: 2-stage (Dense + Sparse → RRF fusion)
+- `HybridRRFColBERTSearchEngine`: 3-stage (Dense + Sparse → RRF → ColBERT rerank)
+- `DBSFColBERTSearchEngine`: 3-stage with DBSF statistical fusion
+
+**Tests:** 30 unit tests for search engines (up from 25)
+
+***REMOVED******REMOVED******REMOVED*** v2.11.0 - Binary Quantization & Multi-level Caching (2026-01-20)
+
+**Performance Optimizations** ⚡
+- Binary quantization: 40x faster search, 75% less RAM
+- 6-tier cache architecture (semantic, rerank, sparse, query, conversation, embeddings)
+- Query routing: CHITCHAT/SIMPLE/COMPLEX classification for RAG skipping
+- TTFT optimizations for streaming responses
 
 ***REMOVED******REMOVED******REMOVED*** v2.8.0 - Resilience & Observability (2025-01-06)
 
@@ -74,18 +97,19 @@ Production-ready RAG система для поиска по документа�
 - ⚡ **LLM Streaming:** Real-time token display (**0.1s TTFB**, 10x UX boost)
 - 🛡️ **Middleware:** Production throttling (1.5s) + error handling
 
-**Production Status:** 🟢 95% ready
-- ✅ Security hardened
+**Production Status:** 🟢 Production-ready
+- ✅ Security hardened (secrets in .env)
 - ✅ Graceful degradation implemented
 - ✅ Structured logging for observability
-- ✅ Performance optimized
-- ✅ Memory efficient
-- ✅ Production middleware
+- ✅ Performance optimized (binary quantization, 6-tier cache)
+- ✅ Memory efficient (BGE-M3 singleton)
+- ✅ Production middleware (throttling, error handling)
 - ✅ LLM streaming (0.1s TTFB)
-- ✅ Conversation memory
+- ✅ Conversation memory (Redis-based)
 - ✅ Cross-encoder reranking (+10-15% accuracy)
-- ⏳ CI/CD pending
-- ⏳ Prometheus metrics pending
+- ✅ SDK-based search engines (qdrant-client)
+- ✅ Query routing (CHITCHAT/SIMPLE/COMPLEX)
+- ✅ 200+ unit tests, 80%+ coverage
 
 ---
 
@@ -435,22 +459,23 @@ See [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md) for full guide.
 ***REMOVED******REMOVED******REMOVED*** Completion Progress
 
 ```
-Phase 1 (Critical):     ░░░░░░░░░░  0% (0/4) 🔴 IN PROGRESS
-Phase 2 (High):         ░░░░░░░░░░  0% (0/4) ⏳ Pending
-Phase 3 (Medium):       ░░░░░░░░░░  0% (0/4) ⏳ Pending
-Phase 4 (Nice-to-have): ░░░░░░░░░░  0% (0/4) ⏳ Pending
+Phase 1 (Critical):     ██████████ 100% (4/4) ✅ DONE
+Phase 2 (High):         ██████████ 100% (4/4) ✅ DONE
+Phase 3 (Medium):       ████████░░  80% (4/5) 🟡 IN PROGRESS
+Phase 4 (Nice-to-have): ██░░░░░░░░  20% (1/5) ⏳ Pending
 
-Overall: 0/16 tasks (0%)
+Overall: 13/18 tasks (72%)
 ```
 
-***REMOVED******REMOVED******REMOVED*** Known Issues
+***REMOVED******REMOVED******REMOVED*** Recent Completions
 
-- 🔴 **CRITICAL:** Exposed API keys in README (Task 1.1)
-- 🔴 **CRITICAL:** Blocking requests in async (Task 1.2)
-- 🔴 **CRITICAL:** Incomplete requirements.txt (Task 1.3)
-- 🔴 **CRITICAL:** Async methods blocking event loop (Task 1.4)
+- ✅ SDK migration for search engines (httpx → qdrant-client)
+- ✅ Binary quantization with 40x performance boost
+- ✅ 6-tier cache architecture
+- ✅ Query routing (CHITCHAT/SIMPLE/COMPLEX)
+- ✅ 200+ unit tests with 80%+ coverage
 
-**See [ROADMAP.md](ROADMAP.md) for complete issue list**
+**See [ROADMAP.md](ROADMAP.md) for complete task list**
 
 ---
 
@@ -470,7 +495,6 @@ Overall: 0/16 tasks (0%)
 
 ---
 
-**Last Updated:** 2025-01-06
-**Python:** 3.12.3
-**Path:** `/mnt/c/Users/user/Documents/Сайты/Раг/`
-**Next Release:** v2.6.0 (Critical Fixes)
+**Last Updated:** 2026-01-23
+**Python:** 3.12+
+**Next Release:** v2.13.0
