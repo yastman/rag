@@ -178,3 +178,4 @@ services/bge-m3-api/models/
 *.pt
 *.bin
 *.safetensors
+reports/
