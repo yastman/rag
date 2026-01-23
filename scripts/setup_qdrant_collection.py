@@ -3,7 +3,7 @@
 Setup Qdrant collection for local development.
 
 Creates a collection with optimized vector configuration for RAG:
-- Dense vectors (1024-dim) with INT8 scalar quantization
+- Dense vectors (1024-dim) with Binary Quantization (40x faster search)
 - ColBERT multivectors for reranking
 - BM42 sparse vectors with IDF modifier
 
@@ -20,15 +20,14 @@ import sys
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import (
+    BinaryQuantization,
+    BinaryQuantizationConfig,
     Distance,
     HnswConfigDiff,
     Modifier,
     MultiVectorComparator,
     MultiVectorConfig,
     OptimizersConfigDiff,
-    ScalarQuantization,
-    ScalarQuantizationConfig,
-    ScalarType,
     SparseVectorParams,
     VectorParams,
 )
@@ -74,7 +73,7 @@ def create_collection(client: QdrantClient, collection_name: str) -> None:
     Create Qdrant collection with optimized vector configuration.
 
     Configuration based on Qdrant best practices:
-    - Scalar Int8 quantization: 4x compression, 0.99 accuracy, 2x faster
+    - Binary quantization: 32x compression, 40x faster search
     - BM42 sparse vectors: +9% Precision@10 vs BM25 for short chunks
     - Original vectors on disk: RAM savings with fast rescoring
     - HNSW optimized: m=16 (balance), ef_construct=200 (quality)
@@ -93,11 +92,9 @@ def create_collection(client: QdrantClient, collection_name: str) -> None:
                     ef_construct=200,  # Build quality (higher = better graph)
                     on_disk=False,  # HNSW graph in RAM for fast traversal
                 ),
-                quantization_config=ScalarQuantization(
-                    scalar=ScalarQuantizationConfig(
-                        type=ScalarType.INT8,  # 4x compression, 0.99 accuracy
-                        quantile=0.99,  # Exclude top 1% outliers
-                        always_ram=True,  # Quantized vectors in RAM (fast search)
+                quantization_config=BinaryQuantization(
+                    binary=BinaryQuantizationConfig(
+                        always_ram=True,  # Quantized vectors in RAM (40x faster)
                     )
                 ),
                 on_disk=True,  # Original vectors on disk (RAM savings + rescoring)
