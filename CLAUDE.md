@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Contextual RAG Pipeline** - A production-grade Retrieval-Augmented Generation system for document search with hybrid vector search, ML platform integration, and Telegram bot interface.
 
-**Version:** 2.10.0 (VoyageService unified + voyage-4 models)
+**Version:** 2.11.0 (2026 TTFT optimizations + multi-level caching)
 **Python:** 3.12+ (minimum 3.9)
-**LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API)
+**LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API, streaming)
 **Primary use cases:** Ukrainian Criminal Code search (1,294 documents), Bulgarian property catalogs
 
 ## Build & Development Commands
@@ -75,10 +75,11 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 | `HybridRetrieverService` | RRF fusion search (dense + sparse) |
 | `QueryPreprocessor` | Translit normalization (Latin→Cyrillic), dynamic RRF weights |
 | `QueryAnalyzer` | LLM-based filter extraction |
-| `CacheService` | Semantic cache with VoyageAITextVectorizer (voyage-3-lite) |
+| `QueryRouter` | **2026** Query classification (CHITCHAT/SIMPLE/COMPLEX) for RAG skipping |
+| `CacheService` | Multi-level cache: semantic, rerank, sparse, conversation (Redis) |
 | `SemanticMessageHistory` | Conversation context with vector similarity search |
 | `UserContextService` | Extracts user preferences from queries via LLM |
-| `CESCPersonalizer` | Adapts cached responses to user context (CESC) |
+| `CESCPersonalizer` | **Lazy** personalization with marker detection (`is_personalized_query`) |
 
 **Legacy services** (backward compatibility, use VoyageService for new code):
 - `VoyageClient`, `VoyageEmbeddingService`, `VoyageRerankerService`
@@ -154,6 +155,40 @@ result = pp.analyze("apartments in Sunny Beach корпус 5")
 - **Semantic queries** (no IDs): RRF weights 0.6/0.4 (dense favored), cache threshold 0.10
 - **Exact queries** (IDs, corpus, floors): RRF weights 0.2/0.8 (sparse favored), cache threshold 0.05
 
+### Query Routing (2026 Best Practice)
+```python
+from telegram_bot.services import classify_query, QueryType, get_chitchat_response
+
+query_type = classify_query("Привет!")  # Returns QueryType.CHITCHAT
+if query_type == QueryType.CHITCHAT:
+    response = get_chitchat_response(query)  # Skip RAG entirely
+
+# QueryType.SIMPLE  → Light RAG, skip rerank
+# QueryType.COMPLEX → Full RAG + rerank
+```
+
+### Lazy CESC Personalization
+```python
+from telegram_bot.services import is_personalized_query
+
+# Only run CESC when query has personal markers or user has preferences
+if is_personalized_query("найди мне квартиру", user_context):
+    # Run personalization
+else:
+    # Skip CESC, return generic response
+```
+
+### 2026 Performance Defaults
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `search_top_k` | 20 | Fewer candidates → faster Qdrant |
+| `rerank_top_k` | 3 | Fewer chunks in LLM context |
+| `max_tokens` | 1024 | Faster generation |
+| `MMR_ENABLED` | false | Voyage rerank is sufficient |
+| Rerank cache TTL | 2h | Skip API calls for repeated queries |
+| Sparse cache TTL | 7d | BM42 embeddings cached long-term |
+
 ## Code Style
 
 - **Line length:** 100 characters
@@ -186,8 +221,10 @@ Check these files for current project status:
 |----------|---------|
 | `docs/PIPELINE_OVERVIEW.md` | Complete architecture |
 | `docs/QDRANT_STACK.md` | Qdrant configuration |
-| `CACHING.md` | 4-tier cache architecture |
+| `CACHING.md` | 6-tier cache architecture (semantic, rerank, sparse, query, conversation, embeddings) |
 | `src/evaluation/README.md` | MLflow, Langfuse, RAGAS |
+| `telegram_bot/services/query_router.py` | Query classification patterns (CHITCHAT/SIMPLE/COMPLEX) |
+| `telegram_bot/services/cesc.py` | CESC personalizer + `is_personalized_query()` |
 
 ## Environment Setup
 
