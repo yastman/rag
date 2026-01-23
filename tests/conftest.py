@@ -8,6 +8,9 @@ import pytest
 from dotenv import load_dotenv
 
 
+# Set testing flag to prevent heavy imports in src/__init__.py
+os.environ["RAG_TESTING"] = "true"
+
 # Load environment variables before any imports
 load_dotenv()
 
