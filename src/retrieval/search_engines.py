@@ -7,10 +7,27 @@ from typing import Any, Optional, Union
 
 import httpx
 import numpy as np
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 
 from src.config import SearchEngine, Settings
 from src.models import get_bge_m3_model
+
+
+def lexical_weights_to_sparse(lexical_weights: dict) -> models.SparseVector:
+    """Convert BGE-M3 lexical weights to Qdrant SparseVector.
+
+    Args:
+        lexical_weights: Dict with string token IDs as keys, weights as values.
+
+    Returns:
+        Qdrant SparseVector for use in query_points.
+    """
+    if not lexical_weights:
+        return models.SparseVector(indices=[], values=[])
+
+    indices = [int(k) for k in lexical_weights]
+    values = list(lexical_weights.values())
+    return models.SparseVector(indices=indices, values=values)
 
 
 @dataclass
