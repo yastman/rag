@@ -48,8 +48,9 @@ class BotConfig:
     voyage_rerank_model: str = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2")
 
     ***REMOVED*** Search Configuration
-    search_top_k: int = int(os.getenv("SEARCH_TOP_K", "50"))
-    rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "5"))
+    ***REMOVED*** 2026 best practice: fewer chunks in LLM context = faster generation
+    search_top_k: int = int(os.getenv("SEARCH_TOP_K", "20"))  ***REMOVED*** Reduced from 50→30→20
+    rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "3"))  ***REMOVED*** Reduced from 5
 
     ***REMOVED*** CESC Configuration (Contextual Extraction and Storage of Conversation)
     cesc_enabled: bool = os.getenv("CESC_ENABLED", "true").lower() == "true"
@@ -68,6 +69,7 @@ class BotConfig:
     freshness_field: str = os.getenv("FRESHNESS_FIELD", "created_at")
     freshness_scale_days: int = int(os.getenv("FRESHNESS_SCALE_DAYS", "30"))
 
-    ***REMOVED*** MMR Diversity Configuration
-    mmr_enabled: bool = os.getenv("MMR_ENABLED", "true").lower() == "true"
+    ***REMOVED*** MMR Diversity Configuration (disabled by default - Voyage rerank is sufficient)
+    ***REMOVED*** Enable only for diversity-focused use cases via MMR_ENABLED=true
+    mmr_enabled: bool = os.getenv("MMR_ENABLED", "false").lower() == "true"
     mmr_lambda: float = float(os.getenv("MMR_LAMBDA", "0.7"))
