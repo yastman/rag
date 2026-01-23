@@ -97,7 +97,7 @@ class MetricsResult:
 def analyze_metrics(
     metrics: LoadMetrics,
     baseline: Optional[dict] = None,
-    skip_ttft: bool = True,  # Skip TTFT check if not measured
+    require_ttft: bool = False,  # If True, fail when TTFT not measured
 ) -> MetricsResult:
     """Analyze collected metrics against thresholds."""
     warnings = []
@@ -123,8 +123,10 @@ def analyze_metrics(
         ("full_rag", full_rag_p95, THRESHOLDS["full_rag"]),
     ]
 
-    # Only check TTFT if we have measurements
-    if metrics.ttft_latencies and not skip_ttft:
+    # TTFT check: mandatory if require_ttft=True
+    if require_ttft and not metrics.ttft_latencies:
+        failures.append("TTFT required but not measured (streaming not used?)")
+    elif metrics.ttft_latencies:
         checks.append(("ttft", ttft_p95, THRESHOLDS["ttft"]))
 
     for name, value, threshold in checks:
