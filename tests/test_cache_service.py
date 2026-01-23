@@ -1,7 +1,7 @@
 """Tests for CacheService with all cache tiers."""
 
 import os
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -249,3 +249,151 @@ class TestSemanticMessageHistory:
         relevant = await cache_service.get_relevant_history(user_id, "квартиры в Бургасе", top_k=2)
 
         assert isinstance(relevant, list)
+
+
+class TestCacheServiceVectorizer:
+    """Tests verifying CacheService uses VoyageAITextVectorizer."""
+
+    @pytest.mark.asyncio
+    async def test_cache_service_uses_voyage_vectorizer_for_semantic_cache(self):
+        """Verify VoyageAITextVectorizer is created for SemanticCache during initialization."""
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+        with (
+            patch.dict(os.environ, {"VOYAGE_API_KEY": "test-api-key"}),
+            patch("telegram_bot.services.cache.VoyageAITextVectorizer") as mock_vectorizer_class,
+            patch("telegram_bot.services.cache.SemanticCache") as mock_semantic_cache_class,
+            patch("telegram_bot.services.cache.EmbeddingsCache"),
+            patch("telegram_bot.services.cache.SemanticMessageHistory"),
+            patch("telegram_bot.services.cache.redis") as mock_redis,
+        ):
+            # Setup mock Redis client
+            mock_redis_client = AsyncMock()
+            mock_redis_client.ping = AsyncMock()
+            mock_redis.from_url.return_value = mock_redis_client
+
+            # Setup mock vectorizer
+            mock_vectorizer = MagicMock()
+            mock_vectorizer_class.return_value = mock_vectorizer
+
+            service = CacheService(redis_url=redis_url)
+            await service.initialize()
+
+            # Verify VoyageAITextVectorizer was created with correct parameters
+            # First call is for SemanticCache, second is for SemanticMessageHistory
+            assert mock_vectorizer_class.call_count >= 1
+
+            # Check first call (SemanticCache vectorizer)
+            first_call_kwargs = mock_vectorizer_class.call_args_list[0][1]
+            assert first_call_kwargs["model"] == "voyage-3-lite"
+            assert first_call_kwargs["api_config"] == {"api_key": "test-api-key"}
+
+            # Verify SemanticCache was created with the vectorizer
+            mock_semantic_cache_class.assert_called_once()
+            semantic_cache_kwargs = mock_semantic_cache_class.call_args[1]
+            assert semantic_cache_kwargs["vectorizer"] == mock_vectorizer
+
+            await service.close()
+
+    @pytest.mark.asyncio
+    async def test_cache_service_uses_voyage_vectorizer_for_message_history(self):
+        """Verify VoyageAITextVectorizer is created for SemanticMessageHistory."""
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+        with (
+            patch.dict(os.environ, {"VOYAGE_API_KEY": "test-api-key"}),
+            patch("telegram_bot.services.cache.VoyageAITextVectorizer") as mock_vectorizer_class,
+            patch("telegram_bot.services.cache.SemanticCache"),
+            patch("telegram_bot.services.cache.EmbeddingsCache"),
+            patch(
+                "telegram_bot.services.cache.SemanticMessageHistory"
+            ) as mock_message_history_class,
+            patch("telegram_bot.services.cache.redis") as mock_redis,
+        ):
+            # Setup mock Redis client
+            mock_redis_client = AsyncMock()
+            mock_redis_client.ping = AsyncMock()
+            mock_redis.from_url.return_value = mock_redis_client
+
+            # Setup mock vectorizers
+            mock_vectorizer1 = MagicMock(name="semantic_cache_vectorizer")
+            mock_vectorizer2 = MagicMock(name="message_history_vectorizer")
+            mock_vectorizer_class.side_effect = [mock_vectorizer1, mock_vectorizer2]
+
+            service = CacheService(redis_url=redis_url)
+            await service.initialize()
+
+            # Verify VoyageAITextVectorizer was created twice
+            assert mock_vectorizer_class.call_count == 2
+
+            # Check second call (SemanticMessageHistory vectorizer)
+            second_call_kwargs = mock_vectorizer_class.call_args_list[1][1]
+            assert second_call_kwargs["model"] == "voyage-3-lite"
+            assert second_call_kwargs["api_config"] == {"api_key": "test-api-key"}
+
+            # Verify SemanticMessageHistory was created with the vectorizer
+            mock_message_history_class.assert_called_once()
+            history_kwargs = mock_message_history_class.call_args[1]
+            assert history_kwargs["vectorizer"] == mock_vectorizer2
+
+            await service.close()
+
+    @pytest.mark.asyncio
+    async def test_cache_service_no_vectorizer_without_voyage_key(self):
+        """Without VOYAGE_API_KEY, VoyageAITextVectorizer is not created."""
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+        with (
+            patch.dict(os.environ, {"VOYAGE_API_KEY": ""}),
+            patch("telegram_bot.services.cache.VoyageAITextVectorizer") as mock_vectorizer_class,
+            patch("telegram_bot.services.cache.SemanticCache"),
+            patch("telegram_bot.services.cache.EmbeddingsCache"),
+            patch("telegram_bot.services.cache.SemanticMessageHistory"),
+            patch("telegram_bot.services.cache.redis") as mock_redis,
+        ):
+            # Setup mock Redis client
+            mock_redis_client = AsyncMock()
+            mock_redis_client.ping = AsyncMock()
+            mock_redis.from_url.return_value = mock_redis_client
+
+            service = CacheService(redis_url=redis_url)
+            await service.initialize()
+
+            # VoyageAITextVectorizer should NOT be called without API key
+            mock_vectorizer_class.assert_not_called()
+
+            # SemanticCache should be None
+            assert service.semantic_cache is None
+            # MessageHistory should be None
+            assert service.message_history is None
+
+            await service.close()
+
+    @pytest.mark.asyncio
+    async def test_vectorizer_model_is_voyage_3_lite(self):
+        """Verify the vectorizer uses voyage-3-lite model specifically."""
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+        with (
+            patch.dict(os.environ, {"VOYAGE_API_KEY": "my-api-key"}),
+            patch("telegram_bot.services.cache.VoyageAITextVectorizer") as mock_vectorizer_class,
+            patch("telegram_bot.services.cache.SemanticCache"),
+            patch("telegram_bot.services.cache.EmbeddingsCache"),
+            patch("telegram_bot.services.cache.SemanticMessageHistory"),
+            patch("telegram_bot.services.cache.redis") as mock_redis,
+        ):
+            # Setup mock Redis client
+            mock_redis_client = AsyncMock()
+            mock_redis_client.ping = AsyncMock()
+            mock_redis.from_url.return_value = mock_redis_client
+
+            mock_vectorizer_class.return_value = MagicMock()
+
+            service = CacheService(redis_url=redis_url)
+            await service.initialize()
+
+            # Both vectorizer creations should use voyage-3-lite
+            for call in mock_vectorizer_class.call_args_list:
+                assert call[1]["model"] == "voyage-3-lite"
+
+            await service.close()
