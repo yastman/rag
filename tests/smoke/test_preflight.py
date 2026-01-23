@@ -97,16 +97,33 @@ class TestPreflightRedis:
 
     @pytest.mark.asyncio
     async def test_redis_semantic_cache_index_exists(self, redis_client):
-        """Semantic cache RediSearch index should exist."""
+        """Semantic cache RediSearch index should exist.
+
+        Set REQUIRE_REDIS_FT_INDEX=1 for strict mode (FAIL instead of SKIP).
+        Use strict mode in staging/production-like environments.
+        """
+        require_index = os.getenv("REQUIRE_REDIS_FT_INDEX", "0") == "1"
+
         try:
             # List all FT indexes
             indexes = await redis_client.execute_command("FT._LIST")
             # Check for any rag/llm cache index
             has_cache_index = any("cache" in idx.lower() or "rag" in idx.lower() for idx in indexes)
             if not has_cache_index:
-                pytest.skip("No semantic cache index found (may not be configured)")
+                if require_index:
+                    pytest.fail(
+                        "REQUIRE_REDIS_FT_INDEX=1 but no semantic cache index found. "
+                        "Indexes present: " + str(indexes)
+                    )
+                else:
+                    pytest.skip(
+                        "No semantic cache index found (set REQUIRE_REDIS_FT_INDEX=1 for strict)"
+                    )
         except Exception as e:
-            pytest.skip(f"RediSearch not available: {e}")
+            if require_index:
+                pytest.fail(f"REQUIRE_REDIS_FT_INDEX=1 but RediSearch not available: {e}")
+            else:
+                pytest.skip(f"RediSearch not available: {e}")
 
 
 class TestPreflightReport:
