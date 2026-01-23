@@ -184,7 +184,9 @@ class CacheService:
         embeddings_cache_ttl: int = 7 * 24 * 3600,  # 7 days
         analyzer_cache_ttl: int = 24 * 3600,  # 24 hours
         search_cache_ttl: int = 2 * 3600,  # 2 hours
-        distance_threshold: float = 0.15,  # cosine distance threshold (0.15 = tight matching, USER-base handles Russian morphology)
+        rerank_cache_ttl: int = 2 * 3600,  # 2 hours (same as search)
+        sparse_cache_ttl: int = 7 * 24 * 3600,  # 7 days (same as embeddings)
+        distance_threshold: float = 0.15,  # cosine distance threshold (0.15 = tight, USER-base handles Russian morphology)
     ):
         """Initialize cache service.
 
@@ -194,6 +196,8 @@ class CacheService:
             embeddings_cache_ttl: TTL for embeddings cache (seconds)
             analyzer_cache_ttl: TTL for QueryAnalyzer cache (seconds)
             search_cache_ttl: TTL for Qdrant search cache (seconds)
+            rerank_cache_ttl: TTL for Voyage rerank cache (seconds)
+            sparse_cache_ttl: TTL for sparse embeddings cache (seconds)
             distance_threshold: Cosine distance threshold for semantic cache (lower = stricter)
         """
         self.redis_url = redis_url
@@ -203,6 +207,8 @@ class CacheService:
         self.embeddings_cache_ttl = embeddings_cache_ttl
         self.analyzer_cache_ttl = analyzer_cache_ttl
         self.search_cache_ttl = search_cache_ttl
+        self.rerank_cache_ttl = rerank_cache_ttl
+        self.sparse_cache_ttl = sparse_cache_ttl
 
         # Metrics
         self.metrics = {
@@ -210,7 +216,21 @@ class CacheService:
             "embeddings": {"hits": 0, "misses": 0},
             "analyzer": {"hits": 0, "misses": 0},
             "search": {"hits": 0, "misses": 0},
+            "rerank": {"hits": 0, "misses": 0},
+            "sparse": {"hits": 0, "misses": 0},
         }
+
+        # Latency tracking (2026 best practice)
+        # Stores last N latencies per cache type for p50/p95 calculation
+        self._latency_samples: dict[str, list[float]] = {
+            "semantic": [],
+            "embeddings": [],
+            "analyzer": [],
+            "search": [],
+            "rerank": [],
+            "sparse": [],
+        }
+        self._max_latency_samples = 1000  # Keep last 1000 samples per type
 
         # Initialize Redis client for key-value operations (Tier 2)
         self.redis_client: Optional[redis.Redis] = None
@@ -619,10 +639,203 @@ class CacheService:
         except Exception as e:
             logger.error(f"Search cache store error: {e}")
 
+    # ========== TIER 2: Voyage Rerank Cache (2026 best practice) ==========
+
+    async def get_cached_rerank(
+        self,
+        query_embedding: list[float],
+        doc_ids: list[str],
+        collection: str = "default",
+        model_version: str = "v1",
+    ) -> Optional[list[tuple[str, float]]]:
+        """Get cached Voyage rerank results.
+
+        Uses semantic key based on query_embedding_hash for paraphrase matching.
+
+        Args:
+            query_embedding: Query embedding vector (for semantic key)
+            doc_ids: List of document IDs being reranked
+            collection: Collection name for namespace isolation
+            model_version: Rerank model version for cache invalidation
+
+        Returns:
+            List of (doc_id, score) tuples if cached, None otherwise
+        """
+        if not self.redis_client:
+            return None
+
+        try:
+            # Semantic key: use embedding hash for paraphrase matching
+            q_emb_hash = self._hash_key(str(query_embedding[:16]))[:16]
+            doc_ids_hash = self._hash_key(json.dumps(sorted(doc_ids)))[:16]
+            key = f"voyage_rerank:{model_version}:{collection}:{q_emb_hash}:{doc_ids_hash}"
+
+            start = time.time()
+            cached = await self.redis_client.get(key)
+            latency = (time.time() - start) * 1000
+
+            if cached:
+                self.metrics["rerank"]["hits"] += 1
+                logger.info(f"✓ Rerank cache HIT ({latency:.0f}ms)")
+                return json.loads(cached)
+
+            self.metrics["rerank"]["misses"] += 1
+            return None
+        except Exception as e:
+            logger.error(f"Rerank cache error: {e}")
+            self.metrics["rerank"]["misses"] += 1
+            return None
+
+    async def store_rerank_results(
+        self,
+        query_embedding: list[float],
+        doc_ids: list[str],
+        results: list[tuple[str, float]],
+        collection: str = "default",
+        model_version: str = "v1",
+    ):
+        """Store Voyage rerank results in cache.
+
+        Args:
+            query_embedding: Query embedding vector
+            doc_ids: List of document IDs that were reranked
+            results: List of (doc_id, score) tuples
+            collection: Collection name
+            model_version: Rerank model version
+        """
+        if not self.redis_client:
+            return
+
+        try:
+            q_emb_hash = self._hash_key(str(query_embedding[:16]))[:16]
+            doc_ids_hash = self._hash_key(json.dumps(sorted(doc_ids)))[:16]
+            key = f"voyage_rerank:{model_version}:{collection}:{q_emb_hash}:{doc_ids_hash}"
+
+            await self.redis_client.setex(
+                key,
+                self.rerank_cache_ttl,
+                json.dumps(results),
+            )
+            logger.debug(f"✓ Stored rerank results ({len(results)} items)")
+        except Exception as e:
+            logger.error(f"Rerank cache store error: {e}")
+
+    # ========== TIER 2: Sparse Embeddings Cache (BM42) ==========
+
+    async def get_cached_sparse_embedding(
+        self, text: str, model_name: str = "bm42"
+    ) -> Optional[dict[str, Any]]:
+        """Get cached sparse embedding (BM42).
+
+        Args:
+            text: Text to get sparse embedding for
+            model_name: Sparse model name for cache key namespacing
+
+        Returns:
+            Cached sparse embedding dict {indices: [...], values: [...]} if found
+        """
+        if not self.redis_client:
+            return None
+
+        try:
+            key = f"sparse_emb:{model_name}:{self._hash_key(text)}"
+            start = time.time()
+            cached = await self.redis_client.get(key)
+            latency = (time.time() - start) * 1000
+
+            if cached:
+                self.metrics["sparse"]["hits"] += 1
+                logger.debug(f"✓ Sparse embedding cache HIT ({latency:.0f}ms)")
+                return json.loads(cached)
+
+            self.metrics["sparse"]["misses"] += 1
+            return None
+        except Exception as e:
+            logger.error(f"Sparse embedding cache error: {e}")
+            self.metrics["sparse"]["misses"] += 1
+            return None
+
+    async def store_sparse_embedding(
+        self,
+        text: str,
+        sparse_embedding: dict[str, Any],
+        model_name: str = "bm42",
+    ):
+        """Store sparse embedding in cache.
+
+        Args:
+            text: Original text
+            sparse_embedding: Sparse embedding dict {indices: [...], values: [...]}
+            model_name: Sparse model name
+        """
+        if not self.redis_client:
+            return
+
+        try:
+            key = f"sparse_emb:{model_name}:{self._hash_key(text)}"
+            await self.redis_client.setex(
+                key,
+                self.sparse_cache_ttl,
+                json.dumps(sparse_embedding),
+            )
+            logger.debug(f"✓ Stored sparse embedding: {text[:50]}...")
+        except Exception as e:
+            logger.error(f"Sparse embedding cache store error: {e}")
+
     # ========== Metrics ==========
 
+    def record_latency(self, cache_type: str, latency_ms: float):
+        """Record latency sample for a cache type.
+
+        Args:
+            cache_type: Type of cache (semantic, embeddings, etc.)
+            latency_ms: Latency in milliseconds
+        """
+        if cache_type not in self._latency_samples:
+            return
+
+        samples = self._latency_samples[cache_type]
+        samples.append(latency_ms)
+
+        # Keep only last N samples
+        if len(samples) > self._max_latency_samples:
+            self._latency_samples[cache_type] = samples[-self._max_latency_samples :]
+
+    def _calculate_percentile(self, samples: list[float], percentile: int) -> float:
+        """Calculate percentile from samples.
+
+        Args:
+            samples: List of latency samples
+            percentile: Percentile to calculate (e.g., 50, 95)
+
+        Returns:
+            Percentile value or 0 if no samples
+        """
+        if not samples:
+            return 0.0
+
+        sorted_samples = sorted(samples)
+        index = int(len(sorted_samples) * percentile / 100)
+        index = min(index, len(sorted_samples) - 1)
+        return round(sorted_samples[index], 1)
+
+    def get_latency_stats(self) -> dict[str, dict[str, float]]:
+        """Get latency statistics (p50, p95) for all cache types.
+
+        Returns:
+            Dict with p50 and p95 latencies per cache type
+        """
+        stats = {}
+        for cache_type, samples in self._latency_samples.items():
+            stats[cache_type] = {
+                "p50": self._calculate_percentile(samples, 50),
+                "p95": self._calculate_percentile(samples, 95),
+                "samples": len(samples),
+            }
+        return stats
+
     def get_metrics(self) -> dict[str, Any]:
-        """Get cache metrics."""
+        """Get cache metrics including hit rates and latencies."""
         total_hits = sum(m["hits"] for m in self.metrics.values())
         total_misses = sum(m["misses"] for m in self.metrics.values())
         total_requests = sum(m["hits"] + m["misses"] for m in self.metrics.values())
@@ -646,6 +859,7 @@ class CacheService:
             "overall_hit_rate": round(
                 (total_hits / total_requests * 100) if total_requests > 0 else 0, 1
             ),
+            "latency": self.get_latency_stats(),
         }
 
     # ============= Conversation Memory (Task 2.2) =============
