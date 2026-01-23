@@ -1,0 +1,8 @@
+{
+  "routing": 15,
+  "cache_hit": 15,
+  "qdrant": 100,
+  "full_rag": 2500,
+  "ttft": 0,
+  "timestamp": 1737619200
+}
