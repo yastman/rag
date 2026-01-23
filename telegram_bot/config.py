@@ -49,7 +49,7 @@ class BotConfig:
 
     ***REMOVED*** Search Configuration
     ***REMOVED*** 2026 best practice: fewer chunks in LLM context = faster generation
-    search_top_k: int = int(os.getenv("SEARCH_TOP_K", "20"))  ***REMOVED*** Reduced from 50→30→20
+    search_top_k: int = int(os.getenv("SEARCH_TOP_K", "20"))  ***REMOVED*** Reduced from 50->30->20
     rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "3"))  ***REMOVED*** Reduced from 5
 
     ***REMOVED*** CESC Configuration (Contextual Extraction and Storage of Conversation)
