@@ -10,159 +10,15 @@ import os
 import time
 from typing import Any, Optional
 
-import httpx
 import redis.asyncio as redis
 from redisvl.extensions.cache.embeddings import EmbeddingsCache
 from redisvl.extensions.cache.llm import SemanticCache
 from redisvl.extensions.message_history import SemanticMessageHistory
 from redisvl.query.filter import Tag
-from redisvl.utils.vectorize.base import BaseVectorizer
+from redisvl.utils.vectorize import VoyageAITextVectorizer
 
 
 logger = logging.getLogger(__name__)
-
-
-class UserBaseVectorizer(BaseVectorizer):
-    """HTTP-based vectorizer for deepvk/USER-base service.
-
-    Calls external user-base service for embeddings instead of loading model locally.
-    Best-in-class Russian semantic matching (STS 74.35 on ruMTEB).
-    """
-
-    # Pydantic fields (BaseVectorizer is a Pydantic model)
-    service_url: str = "http://localhost:8003"
-
-    def __init__(self, url: str = "http://localhost:8003", **kwargs):
-        """Initialize vectorizer with service URL.
-
-        Args:
-            url: URL of user-base embedding service
-        """
-        super().__init__(model="deepvk/USER-base", dims=768, service_url=url.rstrip("/"), **kwargs)
-        self._client: Optional[httpx.Client] = None
-
-    @property
-    def client(self) -> httpx.Client:
-        """Lazy init HTTP client."""
-        if self._client is None:
-            self._client = httpx.Client(timeout=30.0)
-        return self._client
-
-    def embed(
-        self,
-        text: str,
-        preprocess: Optional[callable] = None,
-        as_buffer: bool = False,
-        **kwargs,
-    ) -> list[float]:
-        """Generate embedding for single text via HTTP service."""
-        if preprocess:
-            text = preprocess(text)
-
-        try:
-            response = self.client.post(
-                f"{self.service_url}/embed",
-                json={"text": text},
-            )
-            response.raise_for_status()
-            embedding = response.json()["embedding"]
-
-            if as_buffer:
-                import numpy as np
-
-                return np.array(embedding, dtype=np.float32).tobytes()
-            return embedding
-        except Exception as e:
-            logger.error(f"UserBaseVectorizer embed error: {e}")
-            raise
-
-    def embed_many(
-        self,
-        texts: list[str],
-        preprocess: Optional[callable] = None,
-        batch_size: int = 10,
-        as_buffer: bool = False,
-        **kwargs,
-    ) -> list[list[float]]:
-        """Generate embeddings for multiple texts via HTTP service."""
-        if preprocess:
-            texts = [preprocess(t) for t in texts]
-
-        try:
-            response = self.client.post(
-                f"{self.service_url}/embed_batch",
-                json={"texts": texts},
-            )
-            response.raise_for_status()
-            embeddings = response.json()["embeddings"]
-
-            if as_buffer:
-                import numpy as np
-
-                return [np.array(e, dtype=np.float32).tobytes() for e in embeddings]
-            return embeddings
-        except Exception as e:
-            logger.error(f"UserBaseVectorizer embed_many error: {e}")
-            raise
-
-    async def aembed(
-        self,
-        text: str,
-        preprocess: Optional[callable] = None,
-        as_buffer: bool = False,
-        **kwargs,
-    ) -> list[float]:
-        """Async generate embedding for single text."""
-        if preprocess:
-            text = preprocess(text)
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    f"{self.service_url}/embed",
-                    json={"text": text},
-                )
-                response.raise_for_status()
-                embedding = response.json()["embedding"]
-
-                if as_buffer:
-                    import numpy as np
-
-                    return np.array(embedding, dtype=np.float32).tobytes()
-                return embedding
-        except Exception as e:
-            logger.error(f"UserBaseVectorizer aembed error: {e}")
-            raise
-
-    async def aembed_many(
-        self,
-        texts: list[str],
-        preprocess: Optional[callable] = None,
-        batch_size: int = 10,
-        as_buffer: bool = False,
-        **kwargs,
-    ) -> list[list[float]]:
-        """Async generate embeddings for multiple texts."""
-        if preprocess:
-            texts = [preprocess(t) for t in texts]
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    f"{self.service_url}/embed_batch",
-                    json={"texts": texts},
-                )
-                response.raise_for_status()
-                embeddings = response.json()["embeddings"]
-
-                if as_buffer:
-                    import numpy as np
-
-                    return [np.array(e, dtype=np.float32).tobytes() for e in embeddings]
-                return embeddings
-        except Exception as e:
-            logger.error(f"UserBaseVectorizer aembed_many error: {e}")
-            raise
 
 
 class CacheService:
@@ -184,9 +40,7 @@ class CacheService:
         embeddings_cache_ttl: int = 7 * 24 * 3600,  # 7 days
         analyzer_cache_ttl: int = 24 * 3600,  # 24 hours
         search_cache_ttl: int = 2 * 3600,  # 2 hours
-        rerank_cache_ttl: int = 2 * 3600,  # 2 hours (same as search)
-        sparse_cache_ttl: int = 7 * 24 * 3600,  # 7 days (same as embeddings)
-        distance_threshold: float = 0.15,  # cosine distance threshold (0.15 = tight, USER-base handles Russian morphology)
+        distance_threshold: float = 0.15,  # cosine distance threshold (0.15 ≈ 85% similarity)
     ):
         """Initialize cache service.
 
@@ -196,8 +50,6 @@ class CacheService:
             embeddings_cache_ttl: TTL for embeddings cache (seconds)
             analyzer_cache_ttl: TTL for QueryAnalyzer cache (seconds)
             search_cache_ttl: TTL for Qdrant search cache (seconds)
-            rerank_cache_ttl: TTL for Voyage rerank cache (seconds)
-            sparse_cache_ttl: TTL for sparse embeddings cache (seconds)
             distance_threshold: Cosine distance threshold for semantic cache (lower = stricter)
         """
         self.redis_url = redis_url
@@ -207,8 +59,6 @@ class CacheService:
         self.embeddings_cache_ttl = embeddings_cache_ttl
         self.analyzer_cache_ttl = analyzer_cache_ttl
         self.search_cache_ttl = search_cache_ttl
-        self.rerank_cache_ttl = rerank_cache_ttl
-        self.sparse_cache_ttl = sparse_cache_ttl
 
         # Metrics
         self.metrics = {
@@ -217,20 +67,7 @@ class CacheService:
             "analyzer": {"hits": 0, "misses": 0},
             "search": {"hits": 0, "misses": 0},
             "rerank": {"hits": 0, "misses": 0},
-            "sparse": {"hits": 0, "misses": 0},
         }
-
-        # Latency tracking (2026 best practice)
-        # Stores last N latencies per cache type for p50/p95 calculation
-        self._latency_samples: dict[str, list[float]] = {
-            "semantic": [],
-            "embeddings": [],
-            "analyzer": [],
-            "search": [],
-            "rerank": [],
-            "sparse": [],
-        }
-        self._max_latency_samples = 1000  # Keep last 1000 samples per type
 
         # Initialize Redis client for key-value operations (Tier 2)
         self.redis_client: Optional[redis.Redis] = None
@@ -266,31 +103,36 @@ class CacheService:
             logger.info("✓ Redis connection established")
 
             # Initialize native RedisVL SemanticCache (Tier 1)
-            # Uses external user-base service for high-quality Russian semantic matching
-            # Best-in-class STS score (74.35 on ruMTEB) for Russian morphology
+            # Uses VoyageAI voyage-3-lite for fast, cost-effective cache matching
+            # BGE-M3 (1024-dim) is used separately for Qdrant search
             try:
-                user_base_url = os.getenv("USER_BASE_URL", "http://localhost:8003")
-                logger.info(
-                    f"Initializing SemanticCache with user-base service ({user_base_url})..."
-                )
-                vectorizer = UserBaseVectorizer(url=user_base_url)
-                self.semantic_cache = SemanticCache(
-                    name="rag_llm_cache",
-                    redis_url=self.redis_url,
-                    ttl=self.semantic_cache_ttl,
-                    distance_threshold=self.distance_threshold,
-                    vectorizer=vectorizer,
-                    filterable_fields=[
-                        {"name": "user_id", "type": "tag"},
-                        {"name": "language", "type": "tag"},
-                        {"name": "query_type", "type": "tag"},
-                    ],
-                )
-                logger.info(
-                    f"✓ RedisVL SemanticCache initialized "
-                    f"(vectorizer=user-base@{user_base_url}, distance_threshold={self.distance_threshold}, "
-                    f"filterable_fields=[user_id, language, query_type])"
-                )
+                voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
+                if not voyage_api_key:
+                    logger.warning("VOYAGE_API_KEY not set, SemanticCache disabled")
+                    self.semantic_cache = None
+                else:
+                    logger.info("Initializing SemanticCache with VoyageAI (voyage-3-lite)...")
+                    vectorizer = VoyageAITextVectorizer(
+                        model="voyage-3-lite",
+                        api_config={"api_key": voyage_api_key},
+                    )
+                    self.semantic_cache = SemanticCache(
+                        name="rag_llm_cache",
+                        redis_url=self.redis_url,
+                        ttl=self.semantic_cache_ttl,
+                        distance_threshold=self.distance_threshold,
+                        vectorizer=vectorizer,
+                        filterable_fields=[
+                            {"name": "user_id", "type": "tag"},
+                            {"name": "language", "type": "tag"},
+                            {"name": "query_type", "type": "tag"},
+                        ],
+                    )
+                    logger.info(
+                        f"✓ RedisVL SemanticCache initialized "
+                        f"(vectorizer=voyage-3-lite, distance_threshold={self.distance_threshold}, "
+                        f"filterable_fields=[user_id, language, query_type])"
+                    )
             except Exception as e:
                 logger.warning(f"SemanticCache initialization failed: {e}")
                 self.semantic_cache = None
@@ -308,17 +150,23 @@ class CacheService:
                 self.embeddings_cache = None
 
             # Initialize SemanticMessageHistory for conversation context
-            # Uses same user-base service for consistency
             try:
-                user_base_url = os.getenv("USER_BASE_URL", "http://localhost:8003")
-                history_vectorizer = UserBaseVectorizer(url=user_base_url)
-                self.message_history = SemanticMessageHistory(
-                    name="rag_conversations",
-                    redis_url=self.redis_url,
-                    vectorizer=history_vectorizer,
-                    distance_threshold=0.15,  # Tighter threshold for conversation matching
-                )
-                logger.info(f"✓ SemanticMessageHistory initialized (user-base@{user_base_url})")
+                voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
+                if voyage_api_key:
+                    history_vectorizer = VoyageAITextVectorizer(
+                        model="voyage-3-lite",
+                        api_config={"api_key": voyage_api_key},
+                    )
+                    self.message_history = SemanticMessageHistory(
+                        name="rag_conversations",
+                        redis_url=self.redis_url,
+                        vectorizer=history_vectorizer,  # Reuse voyage-3-lite
+                        distance_threshold=0.3,
+                    )
+                    logger.info("✓ SemanticMessageHistory initialized (voyage-3-lite)")
+                else:
+                    logger.warning("VOYAGE_API_KEY not set, SemanticMessageHistory disabled")
+                    self.message_history = None
             except Exception as e:
                 logger.warning(f"SemanticMessageHistory initialization failed: {e}")
                 self.message_history = None
@@ -350,10 +198,10 @@ class CacheService:
         language: str = "ru",
         threshold_override: Optional[float] = None,
     ) -> Optional[str]:
-        """Check semantic cache using RedisVL with deepvk/USER-base.
+        """Check semantic cache using RedisVL with VoyageAI voyage-3-lite.
 
-        Uses local deepvk/USER-base model for high-quality Russian semantic matching.
-        STS score 74.35 on ruMTEB - best for Russian morphology.
+        Uses VoyageAI voyage-3-lite for fast, cost-effective cache matching.
+        This is separate from BGE-M3 (1024-dim) used for Qdrant search.
         Supports multi-user isolation via filterable_fields.
 
         Args:
@@ -418,7 +266,7 @@ class CacheService:
     ):
         """Store question-answer pair in semantic cache using RedisVL.
 
-        Uses deepvk/USER-base model for cache indexing.
+        Uses VoyageAI voyage-3-lite for cache indexing.
         Stores with user context filters for multi-user isolation.
 
         Args:
@@ -639,36 +487,28 @@ class CacheService:
         except Exception as e:
             logger.error(f"Search cache store error: {e}")
 
-    # ========== TIER 2: Voyage Rerank Cache (2026 best practice) ==========
+    # ========== TIER 2: Rerank Cache ==========
 
     async def get_cached_rerank(
         self,
-        query_embedding: list[float],
-        doc_ids: list[str],
-        collection: str = "default",
-        model_version: str = "v1",
-    ) -> Optional[list[tuple[str, float]]]:
+        query_hash: str,
+        chunk_ids: list[str],
+    ) -> Optional[list[dict[str, Any]]]:
         """Get cached Voyage rerank results.
 
-        Uses semantic key based on query_embedding_hash for paraphrase matching.
-
         Args:
-            query_embedding: Query embedding vector (for semantic key)
-            doc_ids: List of document IDs being reranked
-            collection: Collection name for namespace isolation
-            model_version: Rerank model version for cache invalidation
+            query_hash: Hash of query embedding
+            chunk_ids: List of chunk IDs that were reranked
 
         Returns:
-            List of (doc_id, score) tuples if cached, None otherwise
+            Cached rerank results or None
         """
         if not self.redis_client:
             return None
 
         try:
-            # Semantic key: use embedding hash for paraphrase matching
-            q_emb_hash = self._hash_key(str(query_embedding[:16]))[:16]
-            doc_ids_hash = self._hash_key(json.dumps(sorted(doc_ids)))[:16]
-            key = f"voyage_rerank:{model_version}:{collection}:{q_emb_hash}:{doc_ids_hash}"
+            chunk_hash = self._hash_key(json.dumps(sorted(chunk_ids)))
+            key = f"rag:rerank:v1:{query_hash}:{chunk_hash}"
 
             start = time.time()
             cached = await self.redis_client.get(key)
@@ -688,154 +528,28 @@ class CacheService:
 
     async def store_rerank_results(
         self,
-        query_embedding: list[float],
-        doc_ids: list[str],
-        results: list[tuple[str, float]],
-        collection: str = "default",
-        model_version: str = "v1",
+        query_hash: str,
+        chunk_ids: list[str],
+        results: list[dict[str, Any]],
+        ttl: int = 7200,
     ):
-        """Store Voyage rerank results in cache.
-
-        Args:
-            query_embedding: Query embedding vector
-            doc_ids: List of document IDs that were reranked
-            results: List of (doc_id, score) tuples
-            collection: Collection name
-            model_version: Rerank model version
-        """
+        """Store Voyage rerank results (TTL 2 hours)."""
         if not self.redis_client:
             return
 
         try:
-            q_emb_hash = self._hash_key(str(query_embedding[:16]))[:16]
-            doc_ids_hash = self._hash_key(json.dumps(sorted(doc_ids)))[:16]
-            key = f"voyage_rerank:{model_version}:{collection}:{q_emb_hash}:{doc_ids_hash}"
+            chunk_hash = self._hash_key(json.dumps(sorted(chunk_ids)))
+            key = f"rag:rerank:v1:{query_hash}:{chunk_hash}"
 
-            await self.redis_client.setex(
-                key,
-                self.rerank_cache_ttl,
-                json.dumps(results),
-            )
-            logger.debug(f"✓ Stored rerank results ({len(results)} items)")
+            await self.redis_client.setex(key, ttl, json.dumps(results))
+            logger.debug(f"✓ Stored rerank ({len(results)} items)")
         except Exception as e:
             logger.error(f"Rerank cache store error: {e}")
 
-    # ========== TIER 2: Sparse Embeddings Cache (BM42) ==========
-
-    async def get_cached_sparse_embedding(
-        self, text: str, model_name: str = "bm42"
-    ) -> Optional[dict[str, Any]]:
-        """Get cached sparse embedding (BM42).
-
-        Args:
-            text: Text to get sparse embedding for
-            model_name: Sparse model name for cache key namespacing
-
-        Returns:
-            Cached sparse embedding dict {indices: [...], values: [...]} if found
-        """
-        if not self.redis_client:
-            return None
-
-        try:
-            key = f"sparse_emb:{model_name}:{self._hash_key(text)}"
-            start = time.time()
-            cached = await self.redis_client.get(key)
-            latency = (time.time() - start) * 1000
-
-            if cached:
-                self.metrics["sparse"]["hits"] += 1
-                logger.debug(f"✓ Sparse embedding cache HIT ({latency:.0f}ms)")
-                return json.loads(cached)
-
-            self.metrics["sparse"]["misses"] += 1
-            return None
-        except Exception as e:
-            logger.error(f"Sparse embedding cache error: {e}")
-            self.metrics["sparse"]["misses"] += 1
-            return None
-
-    async def store_sparse_embedding(
-        self,
-        text: str,
-        sparse_embedding: dict[str, Any],
-        model_name: str = "bm42",
-    ):
-        """Store sparse embedding in cache.
-
-        Args:
-            text: Original text
-            sparse_embedding: Sparse embedding dict {indices: [...], values: [...]}
-            model_name: Sparse model name
-        """
-        if not self.redis_client:
-            return
-
-        try:
-            key = f"sparse_emb:{model_name}:{self._hash_key(text)}"
-            await self.redis_client.setex(
-                key,
-                self.sparse_cache_ttl,
-                json.dumps(sparse_embedding),
-            )
-            logger.debug(f"✓ Stored sparse embedding: {text[:50]}...")
-        except Exception as e:
-            logger.error(f"Sparse embedding cache store error: {e}")
-
     # ========== Metrics ==========
 
-    def record_latency(self, cache_type: str, latency_ms: float):
-        """Record latency sample for a cache type.
-
-        Args:
-            cache_type: Type of cache (semantic, embeddings, etc.)
-            latency_ms: Latency in milliseconds
-        """
-        if cache_type not in self._latency_samples:
-            return
-
-        samples = self._latency_samples[cache_type]
-        samples.append(latency_ms)
-
-        # Keep only last N samples
-        if len(samples) > self._max_latency_samples:
-            self._latency_samples[cache_type] = samples[-self._max_latency_samples :]
-
-    def _calculate_percentile(self, samples: list[float], percentile: int) -> float:
-        """Calculate percentile from samples.
-
-        Args:
-            samples: List of latency samples
-            percentile: Percentile to calculate (e.g., 50, 95)
-
-        Returns:
-            Percentile value or 0 if no samples
-        """
-        if not samples:
-            return 0.0
-
-        sorted_samples = sorted(samples)
-        index = int(len(sorted_samples) * percentile / 100)
-        index = min(index, len(sorted_samples) - 1)
-        return round(sorted_samples[index], 1)
-
-    def get_latency_stats(self) -> dict[str, dict[str, float]]:
-        """Get latency statistics (p50, p95) for all cache types.
-
-        Returns:
-            Dict with p50 and p95 latencies per cache type
-        """
-        stats = {}
-        for cache_type, samples in self._latency_samples.items():
-            stats[cache_type] = {
-                "p50": self._calculate_percentile(samples, 50),
-                "p95": self._calculate_percentile(samples, 95),
-                "samples": len(samples),
-            }
-        return stats
-
     def get_metrics(self) -> dict[str, Any]:
-        """Get cache metrics including hit rates and latencies."""
+        """Get cache metrics."""
         total_hits = sum(m["hits"] for m in self.metrics.values())
         total_misses = sum(m["misses"] for m in self.metrics.values())
         total_requests = sum(m["hits"] + m["misses"] for m in self.metrics.values())
@@ -859,7 +573,6 @@ class CacheService:
             "overall_hit_rate": round(
                 (total_hits / total_requests * 100) if total_requests > 0 else 0, 1
             ),
-            "latency": self.get_latency_stats(),
         }
 
     # ============= Conversation Memory (Task 2.2) =============
