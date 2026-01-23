@@ -1,4 +1,6 @@
-.PHONY: help install install-dev lint format type-check security test test-cov clean all-checks
+.PHONY: help install install-dev lint format type-check security test test-cov clean all-checks \
+	test-preflight test-smoke test-smoke-routing test-load test-load-ci test-load-eviction \
+	test-load-update-baseline test-all-smoke-load
 
 # Default target
 .DEFAULT_GOAL := help
@@ -108,6 +110,48 @@ test-all: ## Run all tests with coverage threshold (CI mode)
 	@echo "$(BLUE)Running all tests with coverage...$(NC)"
 	pytest tests/ -v --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
 	@echo "$(GREEN)✓ All tests passed with 80%+ coverage$(NC)"
+
+# =============================================================================
+# SMOKE & LOAD TESTS
+# =============================================================================
+
+test-preflight: ## Run preflight checks (Qdrant/Redis config)
+	@echo "$(BLUE)Running preflight checks...$(NC)"
+	pytest tests/smoke/test_preflight.py -v -s
+	@echo "$(GREEN)✓ Preflight complete$(NC)"
+
+test-smoke: ## Run smoke tests (requires live services)
+	@echo "$(BLUE)Running smoke tests...$(NC)"
+	pytest tests/smoke/ -v --tb=short
+	@echo "$(GREEN)✓ Smoke tests complete$(NC)"
+
+test-smoke-routing: ## Run smoke routing tests only (no deps)
+	@echo "$(BLUE)Running smoke routing tests...$(NC)"
+	pytest tests/smoke/test_smoke_routing.py -v
+	@echo "$(GREEN)✓ Routing tests complete$(NC)"
+
+test-load: ## Run load tests (live services)
+	@echo "$(BLUE)Running load tests...$(NC)"
+	pytest tests/load/test_load_conversations.py -v -s
+	@echo "$(GREEN)✓ Load tests complete$(NC)"
+
+test-load-ci: ## Run load tests in CI (mocked, fast)
+	@echo "$(BLUE)Running load tests (CI mode)...$(NC)"
+	LOAD_USE_MOCKS=1 LOAD_CHAT_COUNT=5 pytest tests/load/test_load_conversations.py -v
+	@echo "$(GREEN)✓ Load tests (CI) complete$(NC)"
+
+test-load-eviction: ## Run Redis eviction tests
+	@echo "$(BLUE)Running Redis eviction tests...$(NC)"
+	pytest tests/load/test_load_redis_eviction.py -v -s
+	@echo "$(GREEN)✓ Redis eviction tests complete$(NC)"
+
+test-load-update-baseline: ## Update load test baseline
+	@echo "$(BLUE)Updating baseline...$(NC)"
+	pytest tests/load/test_load_conversations.py -v --update-baseline
+	@echo "$(GREEN)✓ Baseline updated$(NC)"
+
+test-all-smoke-load: test-preflight test-smoke test-load ## Full smoke+load suite
+	@echo "$(GREEN)✓✓✓ All smoke+load tests complete$(NC)"
 
 # =============================================================================
 # PROJECT MANAGEMENT
