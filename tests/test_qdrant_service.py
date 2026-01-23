@@ -1,8 +1,429 @@
-"""Tests for QdrantService with Query API, Score Boosting, and MMR."""
+"""Tests for QdrantService with Query API, Score Boosting, MMR, and Binary Quantization."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+# =============================================================================
+# Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def mock_qdrant_client():
+    """Create a mocked AsyncQdrantClient."""
+    mock_client = AsyncMock()
+    mock_client.query_points.return_value = MagicMock(points=[])
+    mock_client.update_collection.return_value = None
+    mock_client.get_collection.return_value = MagicMock(
+        points_count=100,
+        vectors_count=100,
+        status=MagicMock(value="green"),
+        config=MagicMock(quantization_config=None),
+    )
+    mock_client.close.return_value = None
+    return mock_client
+
+
+@pytest.fixture
+def qdrant_service(mock_qdrant_client):
+    """Create QdrantService with mocked client."""
+    with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+        mock_class.return_value = mock_qdrant_client
+        from telegram_bot.services.qdrant import QdrantService
+
+        service = QdrantService(
+            url="http://localhost:6333",
+            api_key="test-key",
+            collection_name="test_collection",
+        )
+        # Expose mock for assertions
+        service._mock_client = mock_qdrant_client
+        yield service
+
+
+# =============================================================================
+# TestQdrantServiceInit - Initialization and Quantization Defaults
+# =============================================================================
+
+
+class TestQdrantServiceInit:
+    """Tests for QdrantService initialization and quantization settings."""
+
+    def test_default_quantization_enabled(self):
+        """Test default quantization parameters are True, True, 2.0."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            assert service._use_quantization is True
+            assert service._quantization_rescore is True
+            assert service._quantization_oversampling == 2.0
+
+    def test_quantization_disabled(self):
+        """Test service can be created with quantization disabled."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+                use_quantization=False,
+            )
+
+            assert service._use_quantization is False
+
+    def test_custom_quantization_params(self):
+        """Test service accepts custom quantization parameters."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+                use_quantization=True,
+                quantization_rescore=False,
+                quantization_oversampling=3.0,
+            )
+
+            assert service._use_quantization is True
+            assert service._quantization_rescore is False
+            assert service._quantization_oversampling == 3.0
+
+
+# =============================================================================
+# TestHybridSearchRRFQuantization - Quantization in hybrid search
+# =============================================================================
+
+
+class TestHybridSearchRRFQuantization:
+    """Tests for quantization parameters in hybrid_search_rrf."""
+
+    @pytest.mark.asyncio
+    async def test_search_with_quantization_enabled(self):
+        """Test quantization params are passed when enabled (default)."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+                use_quantization=True,
+                quantization_rescore=True,
+                quantization_oversampling=2.0,
+            )
+
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+
+            # Verify search_params has quantization config
+            assert call_kwargs["search_params"] is not None
+            quant_params = call_kwargs["search_params"].quantization
+            assert quant_params.ignore is False  # Use quantization
+            assert quant_params.rescore is True
+            assert quant_params.oversampling == 2.0
+
+    @pytest.mark.asyncio
+    async def test_search_with_quantization_disabled_at_init(self):
+        """Test no quantization params when disabled at service init."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+                use_quantization=False,
+            )
+
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+            # Should not have search_params when quantization disabled
+            assert call_kwargs["search_params"] is None
+
+    @pytest.mark.asyncio
+    async def test_search_with_quantization_ignore_true(self):
+        """Test A/B testing: quantization_ignore=True skips quantization."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            mock_class.return_value = mock_client
+
+            # Service has quantization enabled by default
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+                use_quantization=True,
+            )
+
+            # But we override per-request to ignore quantization
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+                quantization_ignore=True,  # A/B test: skip quantization
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+
+            # Should have search_params with ignore=True
+            assert call_kwargs["search_params"] is not None
+            assert call_kwargs["search_params"].quantization.ignore is True
+
+    @pytest.mark.asyncio
+    async def test_search_with_quantization_ignore_false(self):
+        """Test A/B testing: quantization_ignore=False forces quantization."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            mock_class.return_value = mock_client
+
+            # Service has quantization disabled
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+                use_quantization=False,
+            )
+
+            # But we override per-request to force quantization
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+                quantization_ignore=False,  # A/B test: force quantization
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+
+            # Should have search_params with quantization enabled
+            assert call_kwargs["search_params"] is not None
+            assert call_kwargs["search_params"].quantization.ignore is False
+
+    @pytest.mark.asyncio
+    async def test_search_with_quantization_ignore_none_uses_default(self):
+        """Test quantization_ignore=None uses service default."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.query_points.return_value = MagicMock(points=[])
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+                use_quantization=True,
+                quantization_oversampling=4.0,  # Custom value
+            )
+
+            await service.hybrid_search_rrf(
+                dense_vector=[0.1] * 1024,
+                top_k=10,
+                quantization_ignore=None,  # Use default
+            )
+
+            call_kwargs = mock_client.query_points.call_args[1]
+
+            # Should use service defaults
+            assert call_kwargs["search_params"].quantization.oversampling == 4.0
+
+
+# =============================================================================
+# TestBinaryQuantization - enable_binary_quantization and get_collection_info
+# =============================================================================
+
+
+class TestBinaryQuantization:
+    """Tests for binary quantization management methods."""
+
+    @pytest.mark.asyncio
+    async def test_enable_binary_quantization_success(self):
+        """Test enable_binary_quantization returns True on success."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.update_collection.return_value = None  # Success
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+            )
+
+            result = await service.enable_binary_quantization()
+
+            assert result is True
+            mock_client.update_collection.assert_called_once()
+            call_kwargs = mock_client.update_collection.call_args[1]
+            assert call_kwargs["collection_name"] == "test_collection"
+            assert call_kwargs["quantization_config"] is not None
+
+    @pytest.mark.asyncio
+    async def test_enable_binary_quantization_custom_collection(self):
+        """Test enable_binary_quantization works with custom collection name."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.update_collection.return_value = None
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="default_collection",
+            )
+
+            result = await service.enable_binary_quantization(collection_name="custom_collection")
+
+            assert result is True
+            call_kwargs = mock_client.update_collection.call_args[1]
+            assert call_kwargs["collection_name"] == "custom_collection"
+
+    @pytest.mark.asyncio
+    async def test_enable_binary_quantization_always_ram_false(self):
+        """Test enable_binary_quantization with always_ram=False."""
+        from qdrant_client import models
+
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.update_collection.return_value = None
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            result = await service.enable_binary_quantization(always_ram=False)
+
+            assert result is True
+            call_kwargs = mock_client.update_collection.call_args[1]
+            # Verify BinaryQuantization config
+            quant_config = call_kwargs["quantization_config"]
+            assert isinstance(quant_config, models.BinaryQuantization)
+
+    @pytest.mark.asyncio
+    async def test_enable_binary_quantization_failure(self):
+        """Test enable_binary_quantization returns False on failure."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.update_collection.side_effect = Exception("Connection failed")
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            result = await service.enable_binary_quantization()
+
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_get_collection_info_success(self):
+        """Test get_collection_info returns correct dict."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_info = MagicMock()
+            mock_info.points_count = 1000
+            mock_info.vectors_count = 1000
+            mock_info.status.value = "green"
+            mock_info.config.quantization_config = MagicMock()
+            mock_info.config.quantization_config.__str__ = lambda _: "BinaryQuantization"
+            mock_client.get_collection.return_value = mock_info
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+            )
+
+            result = await service.get_collection_info()
+
+            assert result["name"] == "test_collection"
+            assert result["points_count"] == 1000
+            assert result["vectors_count"] == 1000
+            assert result["status"] == "green"
+            assert result["quantization"] is not None
+
+    @pytest.mark.asyncio
+    async def test_get_collection_info_custom_collection(self):
+        """Test get_collection_info with custom collection name."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_info = MagicMock()
+            mock_info.points_count = 500
+            mock_info.vectors_count = 500
+            mock_info.status.value = "yellow"
+            mock_info.config.quantization_config = None
+            mock_client.get_collection.return_value = mock_info
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="default",
+            )
+
+            result = await service.get_collection_info(collection_name="other_collection")
+
+            assert result["name"] == "other_collection"
+            assert result["quantization"] is None
+            mock_client.get_collection.assert_called_once_with(collection_name="other_collection")
+
+    @pytest.mark.asyncio
+    async def test_get_collection_info_failure(self):
+        """Test get_collection_info returns empty dict on failure."""
+        from telegram_bot.services.qdrant import QdrantService
+
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_class:
+            mock_client = AsyncMock()
+            mock_client.get_collection.side_effect = Exception("Collection not found")
+            mock_class.return_value = mock_client
+
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test",
+            )
+
+            result = await service.get_collection_info()
+
+            assert result == {}
+
+
+# =============================================================================
+# Original tests (TestQdrantServiceUnit)
+# =============================================================================
 
 
 class TestQdrantServiceUnit:
@@ -151,7 +572,7 @@ class TestMMRRerank:
         """Test MMR rerank balances relevance and diversity."""
         from telegram_bot.services.qdrant import QdrantService
 
-        with patch("qdrant_client.AsyncQdrantClient"):
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -188,7 +609,7 @@ class TestMMRRerank:
         """Test MMR with high lambda prefers relevance over diversity."""
         from telegram_bot.services.qdrant import QdrantService
 
-        with patch("qdrant_client.AsyncQdrantClient"):
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -221,7 +642,7 @@ class TestMMRRerank:
         """Test MMR returns all points if fewer than top_k."""
         from telegram_bot.services.qdrant import QdrantService
 
-        with patch("qdrant_client.AsyncQdrantClient"):
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -248,7 +669,7 @@ class TestFilterBuilding:
         """Test filter building with exact match values."""
         from telegram_bot.services.qdrant import QdrantService
 
-        with patch("qdrant_client.AsyncQdrantClient"):
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -263,7 +684,7 @@ class TestFilterBuilding:
         """Test filter building with range values."""
         from telegram_bot.services.qdrant import QdrantService
 
-        with patch("qdrant_client.AsyncQdrantClient"):
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
@@ -278,7 +699,7 @@ class TestFilterBuilding:
         """Test filter building returns None for empty filters."""
         from telegram_bot.services.qdrant import QdrantService
 
-        with patch("qdrant_client.AsyncQdrantClient"):
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
             service = QdrantService(
                 url="http://localhost:6333",
                 collection_name="test",
