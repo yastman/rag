@@ -1,0 +1,27 @@
+[
+  {
+    "query": "апартаменты в Солнечном берегу до 50000 евро",
+    "relevant_ids": ["doc_placeholder_1", "doc_placeholder_2", "doc_placeholder_3"],
+    "note": "Replace with actual document IDs from your collection"
+  },
+  {
+    "query": "студия с видом на море Несебр",
+    "relevant_ids": ["doc_placeholder_4", "doc_placeholder_5"],
+    "note": "Replace with actual document IDs from your collection"
+  },
+  {
+    "query": "двухкомнатная квартира Бургас центр",
+    "relevant_ids": ["doc_placeholder_6", "doc_placeholder_7", "doc_placeholder_8"],
+    "note": "Replace with actual document IDs from your collection"
+  },
+  {
+    "query": "новостройка Святой Влас бассейн",
+    "relevant_ids": ["doc_placeholder_9", "doc_placeholder_10"],
+    "note": "Replace with actual document IDs from your collection"
+  },
+  {
+    "query": "дом у моря Поморие",
+    "relevant_ids": ["doc_placeholder_11", "doc_placeholder_12", "doc_placeholder_13"],
+    "note": "Replace with actual document IDs from your collection"
+  }
+]
