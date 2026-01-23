@@ -1,12 +1,7 @@
-"""Qdrant service with Query API, Score Boosting, MMR, and Quantization.
+"""Qdrant service with Query API, Score Boosting, and MMR.
 
 Smart Gateway pattern for Qdrant vector database.
-Features: RRF fusion, freshness boosting, MMR diversity, binary quantization.
-
-2026 best practices:
-- Binary Quantization: 40x faster, -75% RAM (for dim >= 1024)
-- Prefetch: dense + sparse in single RPC
-- Rescore with oversampling for accuracy
+Features: RRF fusion, freshness boosting, MMR diversity.
 """
 
 import logging
@@ -37,9 +32,6 @@ class QdrantService:
         collection_name: str = "documents",
         dense_vector_name: str = "dense",
         sparse_vector_name: str = "bm42",
-        use_quantization: bool = True,
-        quantization_rescore: bool = True,
-        quantization_oversampling: float = 2.0,
     ):
         """Initialize Qdrant service.
 
@@ -49,19 +41,13 @@ class QdrantService:
             collection_name: Default collection name
             dense_vector_name: Name of dense vector field
             sparse_vector_name: Name of sparse vector field
-            use_quantization: Enable quantized search (faster, less accurate)
-            quantization_rescore: Rescore with original vectors for accuracy
-            quantization_oversampling: Fetch N*limit candidates, rescore top limit
         """
         self._client = AsyncQdrantClient(url=url, api_key=api_key)
         self._collection_name = collection_name
         self._dense_vector_name = dense_vector_name
         self._sparse_vector_name = sparse_vector_name
-        self._use_quantization = use_quantization
-        self._quantization_rescore = quantization_rescore
-        self._quantization_oversampling = quantization_oversampling
 
-        logger.info(f"QdrantService initialized: {collection_name} (quantization={use_quantization})")
+        logger.info(f"QdrantService initialized: {collection_name}")
 
     async def hybrid_search_rrf(
         self,
@@ -72,7 +58,10 @@ class QdrantService:
         dense_weight: float = 0.6,
         sparse_weight: float = 0.4,
         prefetch_multiplier: int = 3,
+        # Quantization A/B testing params
         quantization_ignore: Optional[bool] = None,
+        quantization_rescore: bool = True,
+        quantization_oversampling: float = 2.0,
     ) -> list[dict]:
         """Hybrid search with RRF fusion (dense + sparse).
 
@@ -84,8 +73,9 @@ class QdrantService:
             dense_weight: Weight for dense vector prefetch
             sparse_weight: Weight for sparse vector prefetch
             prefetch_multiplier: Multiplier for prefetch limits
-            quantization_ignore: Override quantization per-request (None=use default,
-                True=skip quantization, False=force quantization). Useful for A/B testing.
+            quantization_ignore: If True, skip quantization (use full vectors)
+            quantization_rescore: If True, rescore with original vectors
+            quantization_oversampling: Oversampling factor for quantized search
 
         Returns:
             List of results with id, score, text, metadata
@@ -117,22 +107,15 @@ class QdrantService:
                 )
             )
 
-        # Build search params with quantization
-        # quantization_ignore: None=use default, True=skip quant, False=force quant
+        # Build search params for quantization A/B testing
         search_params = None
-        use_quant = self._use_quantization if quantization_ignore is None else not quantization_ignore
-        if use_quant:
+        if quantization_ignore is not None:
             search_params = models.SearchParams(
                 quantization=models.QuantizationSearchParams(
-                    ignore=False,  # Explicitly use quantization
-                    rescore=self._quantization_rescore,
-                    oversampling=self._quantization_oversampling,
+                    ignore=quantization_ignore,
+                    rescore=quantization_rescore,
+                    oversampling=quantization_oversampling,
                 )
-            )
-        elif quantization_ignore is True:
-            # Explicitly disable quantization for this request (A/B testing)
-            search_params = models.SearchParams(
-                quantization=models.QuantizationSearchParams(ignore=True)
             )
 
         # Execute RRF fusion search
@@ -156,7 +139,6 @@ class QdrantService:
         freshness_boost: bool = True,
         freshness_field: str = "created_at",
         freshness_scale_days: int = 7,
-        quantization_ignore: Optional[bool] = None,
     ) -> list[dict]:
         """Search with score boosting using Qdrant Query API.
 
@@ -169,28 +151,10 @@ class QdrantService:
             freshness_boost: Enable freshness boosting
             freshness_field: Payload field for datetime (e.g., "created_at")
             freshness_scale_days: Decay scale in days
-            quantization_ignore: Override quantization per-request (None=use default,
-                True=skip quantization, False=force quantization). Useful for A/B testing.
 
         Returns:
             List of results with boosted scores
         """
-        # Build search params with quantization
-        search_params = None
-        use_quant = self._use_quantization if quantization_ignore is None else not quantization_ignore
-        if use_quant:
-            search_params = models.SearchParams(
-                quantization=models.QuantizationSearchParams(
-                    ignore=False,
-                    rescore=self._quantization_rescore,
-                    oversampling=self._quantization_oversampling,
-                )
-            )
-        elif quantization_ignore is True:
-            search_params = models.SearchParams(
-                quantization=models.QuantizationSearchParams(ignore=True)
-            )
-
         # Base search without boosting
         if not freshness_boost:
             result = await self._client.query_points(
@@ -200,7 +164,6 @@ class QdrantService:
                 query_filter=self._build_filter(filters),
                 limit=top_k,
                 with_payload=True,
-                search_params=search_params,
             )
             return self._format_results(result.points)
 
@@ -215,7 +178,6 @@ class QdrantService:
                 query_filter=self._build_filter(filters),
                 limit=top_k * 2,  # Overfetch for boosting
                 with_payload=True,
-                search_params=search_params,
             )
 
             # Post-process with freshness boosting
@@ -262,7 +224,6 @@ class QdrantService:
                 query_filter=self._build_filter(filters),
                 limit=top_k,
                 with_payload=True,
-                search_params=search_params,
             )
             return self._format_results(result.points)
 
@@ -395,62 +356,6 @@ class QdrantService:
             }
             for p in points
         ]
-
-    async def enable_binary_quantization(
-        self,
-        collection_name: Optional[str] = None,
-        always_ram: bool = True,
-    ) -> bool:
-        """Enable binary quantization on collection for 40x faster search.
-
-        Binary quantization reduces each dimension to 1 bit, achieving:
-        - 32x memory compression
-        - Up to 40x faster search
-        - Works best with dim >= 1024 (voyage-4-large is 1024)
-
-        Args:
-            collection_name: Collection to update (default: self._collection_name)
-            always_ram: Keep quantized vectors in RAM for speed
-
-        Returns:
-            True if successful
-        """
-        coll = collection_name or self._collection_name
-        try:
-            await self._client.update_collection(
-                collection_name=coll,
-                quantization_config=models.BinaryQuantization(
-                    binary=models.BinaryQuantizationConfig(always_ram=always_ram),
-                ),
-            )
-            logger.info(f"Binary quantization enabled for {coll}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to enable binary quantization: {e}")
-            return False
-
-    async def get_collection_info(self, collection_name: Optional[str] = None) -> dict:
-        """Get collection info including quantization status.
-
-        Args:
-            collection_name: Collection to check
-
-        Returns:
-            Dict with collection info
-        """
-        coll = collection_name or self._collection_name
-        try:
-            info = await self._client.get_collection(collection_name=coll)
-            return {
-                "name": coll,
-                "points_count": info.points_count,
-                "vectors_count": info.vectors_count,
-                "status": info.status.value,
-                "quantization": str(info.config.quantization_config) if info.config.quantization_config else None,
-            }
-        except Exception as e:
-            logger.error(f"Failed to get collection info: {e}")
-            return {}
 
     async def close(self):
         """Close the client connection."""
