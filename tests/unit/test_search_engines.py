@@ -248,6 +248,55 @@ class TestHybridRRFSearchEngine:
         # Should call dense-only search when embedding provided
         mock_client.search.assert_called_once()
 
+    @patch("src.retrieval.search_engines.get_bge_m3_model")
+    @patch("src.retrieval.search_engines.QdrantClient")
+    @patch("src.retrieval.search_engines.Settings")
+    def test_hybrid_search_uses_query_points(self, mock_settings_cls, mock_qdrant, mock_bge):
+        """Test that hybrid search uses SDK query_points with prefetch."""
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings.collection_name = "test_collection"
+        mock_settings_cls.return_value = mock_settings
+
+        # Mock embedding model
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2, 0.3]),
+            "lexical_weights": {"100": 0.5, "200": 0.8},
+        }
+        mock_bge.return_value = mock_model
+
+        # Mock query_points response
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "metadata": {"article_number": "115"},
+            "page_content": "Test content",
+        }
+        mock_point.score = 0.95
+
+        mock_client = MagicMock()
+        mock_query_response = MagicMock()
+        mock_query_response.points = [mock_point]
+        mock_client.query_points.return_value = mock_query_response
+        mock_qdrant.return_value = mock_client
+
+        engine = HybridRRFSearchEngine(mock_settings)
+        results = engine.search("test query", top_k=5)
+
+        # Verify query_points was called (not httpx)
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args[1]
+
+        # Verify prefetch structure
+        assert "prefetch" in call_kwargs
+        assert call_kwargs["collection_name"] == "test_collection"
+
+        # Verify results
+        assert len(results) == 1
+        assert results[0].article_number == "115"
+        assert results[0].score == 0.95
+
 
 class TestHybridRRFColBERTSearchEngine:
     """Test HybridRRFColBERTSearchEngine."""
