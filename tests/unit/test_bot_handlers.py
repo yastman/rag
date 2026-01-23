@@ -1,8 +1,12 @@
 """Unit tests for telegram_bot/bot.py handlers."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+
+
+# Skip entire module if aiogram not installed
+pytest.importorskip("aiogram", reason="aiogram not installed")
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
@@ -295,8 +299,7 @@ class TestFormatResults:
         bot = PropertyBot(mock_config)
 
         results = [
-            {"metadata": {"title": f"Квартира {i}"}, "score": 0.9 - i * 0.1}
-            for i in range(5)
+            {"metadata": {"title": f"Квартира {i}"}, "score": 0.9 - i * 0.1} for i in range(5)
         ]
 
         formatted = bot._format_results(results)
