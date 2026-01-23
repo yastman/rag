@@ -3,9 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 
 class TestQueryMetrics:
@@ -15,7 +13,7 @@ class TestQueryMetrics:
         """Test QueryMetrics creation with all fields."""
         from src.evaluation.metrics_logger import QueryMetrics
 
-        with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc123"):
+        with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc123"):
             metrics = QueryMetrics(
                 query_id="test_1",
                 engine="hybrid",
@@ -102,8 +100,8 @@ class TestMetricsLogger:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_dir = Path(tmpdir) / "logs"
 
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
-                logger = MetricsLogger(log_dir=str(log_dir))
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
+                MetricsLogger(log_dir=str(log_dir))
 
             assert log_dir.exists()
 
@@ -112,7 +110,7 @@ class TestMetricsLogger:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 metrics = logger.log_query(
@@ -131,7 +129,7 @@ class TestMetricsLogger:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 # Log multiple queries
@@ -147,7 +145,7 @@ class TestMetricsLogger:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 logger.log_query("q1", "hybrid", 400.0, 1.0)
@@ -165,7 +163,7 @@ class TestMetricsLogger:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 logger.log_query("q1", "hybrid", 400.0, 1.0)
@@ -182,7 +180,7 @@ class TestMetricsLogger:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 # Log 10 queries for percentile calculation
@@ -205,7 +203,7 @@ class TestSLOTracking:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 assert logger.slo_thresholds["p50_latency_ms"] == 400
@@ -217,7 +215,7 @@ class TestSLOTracking:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 # Log queries with poor latency
@@ -237,7 +235,7 @@ class TestAnomalyDetection:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 # Log query with anomalous latency (> p99 threshold)
@@ -253,7 +251,7 @@ class TestAnomalyDetection:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
                 # Override threshold to trigger anomaly
                 logger.slo_thresholds["precision_at_1_min"] = 1.0
@@ -271,7 +269,7 @@ class TestAnomalyDetection:
         from src.evaluation.metrics_logger import MetricsLogger
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.evaluation.metrics_logger.get_config_hash", return_value="abc"):
+            with patch("src.evaluation.config_snapshot.get_config_hash", return_value="abc"):
                 logger = MetricsLogger(log_dir=tmpdir)
 
                 # Log query with zero results
