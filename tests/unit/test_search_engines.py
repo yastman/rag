@@ -401,6 +401,46 @@ class TestDBSFColBERTSearchEngine:
 
         assert engine.get_name() == "dbsf_colbert"
 
+    @patch("src.retrieval.search_engines.get_bge_m3_model")
+    @patch("src.retrieval.search_engines.QdrantClient")
+    @patch("src.retrieval.search_engines.Settings")
+    def test_dbsf_search_uses_dbsf_fusion(self, mock_settings_cls, mock_qdrant, mock_bge):
+        """Test that DBSF search uses DBSF fusion instead of RRF."""
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings.collection_name = "test_collection"
+        mock_settings_cls.return_value = mock_settings
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2, 0.3]),
+            "lexical_weights": {"100": 0.5},
+            "colbert_vecs": np.array([[0.1, 0.2]]),
+        }
+        mock_bge.return_value = mock_model
+
+        mock_point = MagicMock()
+        mock_point.payload = {"page_content": "Test"}
+        mock_point.score = 0.9
+
+        mock_client = MagicMock()
+        mock_query_response = MagicMock()
+        mock_query_response.points = [mock_point]
+        mock_client.query_points.return_value = mock_query_response
+        mock_qdrant.return_value = mock_client
+
+        engine = DBSFColBERTSearchEngine(mock_settings)
+        engine.search("test query", top_k=5)
+
+        # Verify query_points was called with DBSF fusion
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args[1]
+
+        # Verify nested prefetch with DBSF fusion
+        assert "prefetch" in call_kwargs
+        assert call_kwargs["using"] == "colbert"
+
 
 class TestCreateSearchEngine:
     """Test search engine factory function."""
