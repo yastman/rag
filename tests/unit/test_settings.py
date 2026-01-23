@@ -66,21 +66,24 @@ class TestAPIKeyValidation:
 
     def test_claude_provider_requires_anthropic_key(self):
         """Test that Claude provider requires ANTHROPIC_API_KEY."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY not set"):
-                Settings(api_provider="claude")
+        with patch("src.config.settings.load_dotenv"):  # Don't load .env
+            with patch.dict(os.environ, {}, clear=True):
+                with pytest.raises(ValueError, match="ANTHROPIC_API_KEY not set"):
+                    Settings(api_provider="claude")
 
     def test_openai_provider_requires_openai_key(self):
         """Test that OpenAI provider requires OPENAI_API_KEY."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="OPENAI_API_KEY not set"):
-                Settings(api_provider="openai")
+        with patch("src.config.settings.load_dotenv"):  # Don't load .env
+            with patch.dict(os.environ, {}, clear=True):
+                with pytest.raises(ValueError, match="OPENAI_API_KEY not set"):
+                    Settings(api_provider="openai")
 
     def test_groq_provider_requires_groq_key(self):
         """Test that Groq provider requires GROQ_API_KEY."""
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="GROQ_API_KEY not set"):
-                Settings(api_provider="groq")
+        with patch("src.config.settings.load_dotenv"):  # Don't load .env
+            with patch.dict(os.environ, {}, clear=True):
+                with pytest.raises(ValueError, match="GROQ_API_KEY not set"):
+                    Settings(api_provider="groq")
 
     def test_valid_api_key_does_not_raise(self):
         """Test that valid API key does not raise error."""

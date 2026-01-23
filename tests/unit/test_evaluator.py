@@ -2,8 +2,6 @@
 
 import json
 import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -152,7 +150,7 @@ class TestEvaluateQuery:
 
             # Only one relevant result at position 1
             assert metrics["precision@1"] == 1.0
-            assert metrics["precision@3"] == pytest.approx(1/3)
+            assert metrics["precision@3"] == pytest.approx(1 / 3)
 
 
 class TestCalculateNDCG:
@@ -278,6 +276,7 @@ class TestEvaluateQueries:
 class TestCompareEngines:
     """Test compare_engines method."""
 
+    @pytest.mark.filterwarnings("ignore:.*sample.*too small.*")
     def test_compare_engines_improvements(self):
         """Test improvement calculation between engines."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -307,7 +306,9 @@ class TestCompareEngines:
             comparison = evaluator.compare_engines(baseline_results, hybrid_results)
 
             assert comparison["improvements"]["recall@1"]["absolute_diff"] == 0.10
-            assert comparison["improvements"]["recall@1"]["relative_improvement_pct"] == pytest.approx(12.5)
+            assert comparison["improvements"]["recall@1"][
+                "relative_improvement_pct"
+            ] == pytest.approx(12.5)
 
     def test_compare_engines_failure_rate_improvement(self):
         """Test failure rate improvement (lower is better)."""
