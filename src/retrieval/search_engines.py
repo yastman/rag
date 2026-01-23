@@ -1,6 +1,5 @@
 """Search engine implementations for retrieval."""
 
-import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional, Union
@@ -176,7 +175,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
         # If query is a string, generate all embeddings and use hybrid search
         if isinstance(query_embedding, str):
-            return asyncio.run(self._search_hybrid(query_embedding, top_k, score_threshold))
+            return self._search_hybrid(query_embedding, top_k, score_threshold)
 
         # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
@@ -196,95 +195,68 @@ class HybridRRFSearchEngine(BaseSearchEngine):
             for result in dense_results
         ]
 
-    async def _search_hybrid(
+    def _search_hybrid(
         self,
         query: str,
         top_k: int,
         score_threshold: float,
     ) -> list[SearchResult]:
         """
-        Internal hybrid search using dense + sparse + RRF.
+        Hybrid search using dense + sparse + RRF via SDK query_points.
 
-        Uses Qdrant's query API with prefetch for optimal performance:
+        Uses Qdrant's native query API with prefetch:
         1. Prefetch dense vector search (100 candidates)
-        2. Prefetch sparse BM25 search (100 candidates)
+        2. Prefetch sparse BM42 search (100 candidates)
         3. RRF fusion combines both result sets
         """
+        import logging
+
         # Generate all embeddings for query
         query_embeddings = self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=False
         )
 
-        # Convert sparse to Qdrant format
-        lexical_weights = query_embeddings["lexical_weights"]
-        sparse_indices = [int(k) for k in lexical_weights]
-        sparse_values = list(lexical_weights.values())
+        # Convert to Python/Qdrant types
+        dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
+        sparse_vector = lexical_weights_to_sparse(query_embeddings["lexical_weights"])
 
-        # Build hybrid search with RRF using query API
-        search_payload = {
-            "prefetch": [
-                # Prefetch 1: Dense vector search
-                {
-                    "query": query_embeddings["dense_vecs"].tolist(),
-                    "using": "dense",
-                    "limit": 100,  # Get more candidates for fusion
-                },
-                # Prefetch 2: Sparse BM42 search (better than BM25 for chunks)
-                {
-                    "query": {
-                        "values": sparse_values,
-                        "indices": sparse_indices,
-                    },
-                    "using": "bm42",  # Using BM42 instead of "sparse"
-                    "limit": 100,
-                },
-            ],
-            "query": {"fusion": "rrf"},  # Reciprocal Rank Fusion
-            "limit": top_k,
-            "with_payload": True,
-            "with_vector": False,
-        }
-
-        # Convert all numpy types to Python types for JSON serialization
-        search_payload = convert_to_python_types(search_payload)
-
-        # Execute hybrid search via Qdrant query API (async)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
-                    json=search_payload,
-                    headers={"api-key": self.settings.qdrant_api_key or ""},
-                )
-                response.raise_for_status()
-        except (httpx.HTTPError, httpx.TimeoutException) as e:
-            # Fallback to dense-only on error
-            import logging
-
-            logging.warning(f"Hybrid search failed: {e}, falling back to dense-only")
-            dense_embedding = query_embeddings["dense_vecs"].tolist()
-            return self.search(dense_embedding, top_k, score_threshold)
-
-        response.raise_for_status()
-        resp_data = response.json()
-
-        # Query API returns dict with 'points' key
-        if isinstance(resp_data["result"], dict):
-            points_list = resp_data["result"].get("points", [])
-        elif isinstance(resp_data["result"], list):
-            points_list = resp_data["result"]
-        else:
-            points_list = []
-
-        return [
-            SearchResult(
-                article_number=point["payload"].get("metadata", {}).get("article_number", ""),
-                text=point["payload"].get("page_content", ""),
-                score=point["score"],
-                metadata=point["payload"].get("metadata", {}),
+            # SDK query_points with nested prefetch
+            response = self.client.query_points(
+                collection_name=self.settings.collection_name,
+                prefetch=[
+                    # Dense vector prefetch
+                    models.Prefetch(
+                        query=dense_vector,
+                        using="dense",
+                        limit=100,
+                    ),
+                    # Sparse BM42 prefetch
+                    models.Prefetch(
+                        query=sparse_vector,
+                        using="bm42",
+                        limit=100,
+                    ),
+                ],
+                query=models.FusionQuery(fusion=models.Fusion.RRF),
+                limit=top_k,
+                with_payload=True,
             )
-            for point in points_list
-        ]
+
+            return [
+                SearchResult(
+                    article_number=point.payload.get("metadata", {}).get("article_number", ""),
+                    text=point.payload.get("page_content", ""),
+                    score=point.score,
+                    metadata=point.payload.get("metadata", {}),
+                )
+                for point in response.points
+            ]
+
+        except Exception as e:
+            logging.warning(f"Hybrid search failed: {e}, falling back to dense-only")
+            dense_embedding = convert_to_python_types(query_embeddings["dense_vecs"])
+            return self.search(dense_embedding, top_k, score_threshold)
 
     def get_name(self) -> str:
         """Get search engine name."""
