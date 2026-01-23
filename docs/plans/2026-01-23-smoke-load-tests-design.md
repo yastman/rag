@@ -1,8 +1,63 @@
 # Smoke + Load Tests Design
 
 **Дата:** 2026-01-23
-**Статус:** Approved
+**Статус:** In Progress (v2)
 **Цель:** Добавить smoke (20 запросов) и load (20-50 параллельных чатов) тесты для проверки routing, caching, quantization A/B и streaming.
+
+---
+
+## Critical Updates (v2)
+
+### TTFT Measurement (MANDATORY)
+
+**Правило:** Если streaming включён — TTFT обязателен. Тест падает, если TTFT не может быть измерен.
+
+```python
+# In analyze_metrics()
+if require_ttft and not metrics.ttft_latencies:
+    failures.append("TTFT required but not measured (streaming not used?)")
+```
+
+### Golden Baseline Procedure
+
+**Первый baseline создаётся вручную:**
+```bash
+make test-load-create-baseline  # Создать начальный baseline
+```
+
+**Baseline format:**
+```json
+{
+  "routing": 15,
+  "cache_hit": 15,
+  "qdrant": 100,
+  "full_rag": 2500,
+  "ttft": 600,
+  "timestamp": 1737619200,
+  "environment": {
+    "qdrant_collection": "contextual_bulgaria_voyage4",
+    "llm_model": "zai-glm-4.7"
+  }
+}
+```
+
+**Обновление baseline** — только вручную, по флагу `--update-baseline`.
+
+### Implementation Status
+
+| Component | Status | File |
+|-----------|--------|------|
+| Test structure | Done | tests/smoke/, tests/load/ |
+| Query definitions | Done | tests/smoke/queries.py |
+| Metrics collector | **Updated** | tests/load/metrics_collector.py (TTFT mandatory) |
+| Chat simulator | Done | tests/load/chat_simulator.py |
+| Smoke routing | Done | tests/smoke/test_smoke_routing.py |
+| Smoke cache | Done | tests/smoke/test_smoke_cache.py |
+| Smoke quantization | **TODO** | tests/smoke/test_smoke_quantization.py |
+| Load conversations | **TODO** | tests/load/test_load_conversations.py |
+| Load eviction | **TODO** | tests/load/test_load_redis_eviction.py |
+| Golden baseline | **TODO** | tests/load/baseline.json |
+| Makefile commands | **TODO** | Makefile |
 
 ---
 
@@ -281,13 +336,174 @@ aioredis>=2.0.0     # async Redis
 
 ---
 
-## 10. Следующие шаги
+## 10. Remaining Implementation Tasks
 
-1. Создать структуру файлов
-2. Реализовать `queries.py` и `chat_simulator.py`
-3. Реализовать `metrics_collector.py` и `thresholds.py`
-4. Написать `test_smoke_pipeline.py`
-5. Написать `test_load_conversations.py`
-6. Написать `test_load_redis_eviction.py`
-7. Добавить команды в Makefile
-8. Первый прогон и создание `baseline.json`
+### Task 7: test_smoke_quantization.py
+
+**Purpose:** Verify A/B quantization switching + TTFT measurement for COMPLEX queries.
+
+**Tests:**
+1. `test_search_with_quantization_returns_results` — Results returned with quantization
+2. `test_search_without_quantization_returns_results` — Results returned without quantization
+3. `test_quantization_results_overlap_60_percent` — >= 60% same IDs
+4. `test_quantization_latency_comparison` — Quantization not >50% slower (p95)
+5. `test_ttft_measurement_for_complex_query` — **NEW:** TTFT measured via LLMService.stream_answer()
+
+**TTFT Measurement Logic:**
+```python
+start = time.time()
+async for chunk in llm_service.stream_answer(query, results):
+    ttft_ms = (time.time() - start) * 1000
+    # Record only first chunk as TTFT
+    break
+assert ttft_ms < 1200, f"TTFT too high: {ttft_ms}ms"
+```
+
+---
+
+### Task 8: test_load_conversations.py
+
+**Purpose:** Run parallel chats, measure p95 latencies, detect regressions.
+
+**Key Changes from v1:**
+- `require_ttft=True` for COMPLEX queries
+- TTFT measured during streaming response
+
+**Test Flow:**
+1. Load baseline from `tests/load/baseline.json`
+2. Run N parallel chats (configurable via `LOAD_CHAT_COUNT`)
+3. For each COMPLEX query, call `stream_answer()` and record TTFT
+4. Analyze metrics with `require_ttft=True`
+5. Save report to `reports/load_summary.json`
+6. FAIL if TTFT not measured for any COMPLEX query
+
+---
+
+### Task 9: test_load_redis_eviction.py
+
+**Purpose:** Verify LFU eviction behavior under memory pressure.
+
+**Tests:**
+1. `test_redis_lfu_policy_configured` — Policy is allkeys-lfu
+2. `test_redis_maxmemory_set` — maxmemory > 0
+3. `test_eviction_under_pressure` — Write EVICTION_TEST_MB, verify evictions occur
+4. `test_hit_rate_under_zipf_access` — Hit-rate >= 50% under realistic access pattern
+
+**Configurable Pressure:**
+```bash
+EVICTION_TEST_MB=10 pytest tests/load/test_load_redis_eviction.py -v
+```
+
+---
+
+### Task 10: Makefile Commands
+
+```makefile
+# Pre-flight
+test-preflight:
+	pytest tests/smoke/test_preflight.py -v -s
+
+# Smoke
+test-smoke:
+	pytest tests/smoke/ -v --tb=short
+
+test-smoke-routing:
+	pytest tests/smoke/test_smoke_routing.py -v
+
+# Load
+test-load:
+	REQUIRE_TTFT=1 pytest tests/load/test_load_conversations.py -v -s
+
+test-load-ci:
+	LOAD_USE_MOCKS=1 LOAD_CHAT_COUNT=5 pytest tests/load/test_load_conversations.py -v
+
+test-load-eviction:
+	pytest tests/load/test_load_redis_eviction.py -v -s
+
+# Baseline management
+test-load-create-baseline:
+	REQUIRE_TTFT=1 pytest tests/load/test_load_conversations.py -v --create-baseline
+
+test-load-update-baseline:
+	REQUIRE_TTFT=1 pytest tests/load/test_load_conversations.py -v --update-baseline
+
+# Full suite
+test-all-smoke-load: test-preflight test-smoke test-load
+	@echo "All smoke+load tests complete"
+```
+
+---
+
+### Task 11: Golden Baseline Creation
+
+**Procedure:**
+1. Ensure stable environment (no other load)
+2. Run: `make test-load-create-baseline`
+3. Verify `tests/load/baseline.json` created
+4. Commit baseline to git
+
+**Baseline includes environment metadata:**
+```json
+{
+  "routing": 15,
+  "cache_hit": 15,
+  "qdrant": 100,
+  "full_rag": 2500,
+  "ttft": 600,
+  "timestamp": 1737619200,
+  "environment": {
+    "qdrant_collection": "contextual_bulgaria_voyage4",
+    "redis_maxmemory": "512mb",
+    "llm_model": "zai-glm-4.7",
+    "voyage_model": "voyage-4-lite"
+  }
+}
+```
+
+---
+
+## 11. Success Criteria
+
+**ТЗ считается выполненным, если:**
+
+1. `make test-preflight` → PASS
+2. `make test-smoke` → PASS (20/20 queries)
+3. `make test-load` → PASS (p95 within thresholds)
+4. `make test-load-eviction` → PASS (hit-rate >= 50%)
+5. **TTFT measured** for all COMPLEX queries
+6. **No regression** >20% vs baseline
+7. All artifacts in `reports/`:
+   - `preflight.json`
+   - `load_summary.json`
+   - `redis_stats_timeseries.json`
+
+---
+
+## Appendix: TTFT Architecture
+
+```
+COMPLEX Query
+    │
+    ▼
+┌─────────────────────┐
+│ Embedding + Search  │  (not measured for TTFT)
+│ Rerank              │
+└─────────────────────┘
+    │
+    ▼
+┌─────────────────────┐
+│ LLMService          │
+│ .stream_answer()    │
+│   │                 │
+│   ├─ start = time() │ ◄── TTFT timer starts
+│   │                 │
+│   ├─ yield chunk[0] │ ◄── TTFT = time() - start
+│   ├─ yield chunk[1] │
+│   └─ yield chunk[N] │
+└─────────────────────┘
+    │
+    ▼
+Response accumulated + Telegram edit_message()
+```
+
+**TTFT Threshold:** warn 800ms, fail 1200ms (GLM-4 via Cerebras)

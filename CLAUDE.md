@@ -58,31 +58,32 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 
 ### Key Components
 
-| Module | Purpose |
-|--------|---------|
-| `src/core/pipeline.py` | RAG pipeline orchestrator |
+| Module                            | Purpose                                              |
+| --------------------------------- | ---------------------------------------------------- |
+| `src/core/pipeline.py`            | RAG pipeline orchestrator                            |
 | `src/retrieval/search_engines.py` | 4 search variants (HybridRRFColBERT is default/best) |
-| `src/ingestion/` | Document parsing, chunking, indexing |
-| `telegram_bot/services/` | Voyage AI unified services (see below) |
-| `telegram_bot/` | Telegram interface with streaming LLM |
+| `src/ingestion/`                  | Document parsing, chunking, indexing                 |
+| `telegram_bot/services/`          | Voyage AI unified services (see below)               |
+| `telegram_bot/`                   | Telegram interface with streaming LLM                |
 
 ### Telegram Bot Services (Voyage AI Unified)
 
-| Service | Purpose |
-|---------|---------|
-| `VoyageService` | **Unified** embeddings + reranking (voyage-4-large/lite, rerank-2.5) |
-| `QdrantService` | Smart Gateway: RRF fusion, binary quantization, MMR diversity |
-| `RetrieverService` | Dense vector search in Qdrant with dynamic filters |
-| `HybridRetrieverService` | RRF fusion search (dense + sparse) |
-| `QueryPreprocessor` | Translit normalization (Latin→Cyrillic), dynamic RRF weights |
-| `QueryAnalyzer` | LLM-based filter extraction |
-| `QueryRouter` | **2026** Query classification (CHITCHAT/SIMPLE/COMPLEX) for RAG skipping |
-| `CacheService` | Multi-level cache: semantic, rerank, sparse, conversation (Redis) |
-| `SemanticMessageHistory` | Conversation context with vector similarity search |
-| `UserContextService` | Extracts user preferences from queries via LLM |
-| `CESCPersonalizer` | **Lazy** personalization with marker detection (`is_personalized_query`) |
+| Service                  | Purpose                                                                  |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `VoyageService`          | **Unified** embeddings + reranking (voyage-4-large/lite, rerank-2.5)     |
+| `QdrantService`          | Smart Gateway: RRF fusion, binary quantization, MMR diversity            |
+| `RetrieverService`       | Dense vector search in Qdrant with dynamic filters                       |
+| `HybridRetrieverService` | RRF fusion search (dense + sparse)                                       |
+| `QueryPreprocessor`      | Translit normalization (Latin→Cyrillic), dynamic RRF weights             |
+| `QueryAnalyzer`          | LLM-based filter extraction                                              |
+| `QueryRouter`            | **2026** Query classification (CHITCHAT/SIMPLE/COMPLEX) for RAG skipping |
+| `CacheService`           | Multi-level cache: semantic, rerank, sparse, conversation (Redis)        |
+| `SemanticMessageHistory` | Conversation context with vector similarity search                       |
+| `UserContextService`     | Extracts user preferences from queries via LLM                           |
+| `CESCPersonalizer`       | **Lazy** personalization with marker detection (`is_personalized_query`) |
 
 **Legacy services** (backward compatibility, use VoyageService for new code):
+
 - `VoyageClient`, `VoyageEmbeddingService`, `VoyageRerankerService`
 
 ### Search Engine Variants
@@ -94,19 +95,21 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 
 ### External Services
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| Qdrant | 6333 | Vector database |
+| Service     | Port       | Purpose                     |
+| ----------- | ---------- | --------------------------- |
+| Qdrant      | 6333       | Vector database             |
 | Redis Stack | 6379, 8001 | Semantic cache (RediSearch) |
-| MLflow | 5000 | Experiment tracking |
-| Langfuse | 3001 | LLM tracing |
+| MLflow      | 5000       | Experiment tracking         |
+| Langfuse    | 3001       | LLM tracing                 |
 
 ## Code Patterns
 
 ### Async I/O
+
 All I/O operations use async (`httpx.AsyncClient`, `AsyncQdrantClient`). No blocking calls in async context.
 
 ##***REMOVED***Service (Recommended)
+
 ```python
 from telegram_bot.services import VoyageService
 
@@ -128,6 +131,7 @@ query_vec = service.embed_query_sync("search text")
 ```
 
 ### Legacy Singleton Pattern
+
 ```python
 # Legacy BGE-M3 (local model, high RAM)
 from src.models.embedding_model import get_bge_m3_model
@@ -135,12 +139,15 @@ model = get_bge_m3_model()  # Reuses single instance, saves 4-6GB RAM
 ```
 
 ### Configuration
+
 Central settings in `src/config/settings.py`. Uses environment variables via `.env` file.
 
 ### Error Handling
+
 Graceful degradation - services fail without crashing. Qdrant: 5s timeout with empty results fallback. LLM: fallback answers from search results.
 
 ### Query Preprocessing (QueryPreprocessor)
+
 ```python
 from telegram_bot.services import QueryPreprocessor
 pp = QueryPreprocessor()
@@ -153,10 +160,12 @@ result = pp.analyze("apartments in Sunny Beach корпус 5")
 #   "is_exact": True
 # }
 ```
+
 - **Semantic queries** (no IDs): RRF weights 0.6/0.4 (dense favored), cache threshold 0.10
 - **Exact queries** (IDs, corpus, floors): RRF weights 0.2/0.8 (sparse favored), cache threshold 0.05
 
 ### Query Routing (2026 Best Practice)
+
 ```python
 from telegram_bot.services import classify_query, QueryType, get_chitchat_response
 
@@ -169,6 +178,7 @@ if query_type == QueryType.CHITCHAT:
 ```
 
 ##***REMOVED*** Binary Quantization (2026 Best Practice)
+
 ```python
 from telegram_bot.services import QdrantService
 
@@ -190,13 +200,13 @@ results_baseline = await qdrant.hybrid_search_rrf(
 
 ### 2026 Performance Defaults
 
-| Parameter | Value | Purpose |
-|-----------|-------|---------|
-| `search_top_k` | 20 | Fewer candidates → faster Qdrant |
-| `use_quantization` | true | 40x faster, 75% less RAM |
-| `rerank_top_k` | 3 | Fewer chunks in LLM context |
-| `max_tokens` | 1024 | Faster generation |
-| Rerank cache TTL | 2h | Skip API calls for repeated queries |
+| Parameter          | Value | Purpose                             |
+| ------------------ | ----- | ----------------------------------- |
+| `search_top_k`     | 20    | Fewer candidates → faster Qdrant    |
+| `use_quantization` | true  | 40x faster, 75% less RAM            |
+| `rerank_top_k`     | 3     | Fewer chunks in LLM context         |
+| `max_tokens`       | 1024  | Faster generation                   |
+| Rerank cache TTL   | 2h    | Skip API calls for repeated queries |
 
 ## Code Style
 
@@ -207,6 +217,7 @@ results_baseline = await qdrant.hybrid_search_rrf(
 - **Imports:** Sorted via Ruff isort
 
 ### Commit Messages (Conventional Commits)
+
 ```
 feat(search): add new search variant
 fix(cache): resolve race condition
@@ -220,21 +231,22 @@ chore(deps): update dependencies
 ## Task Management
 
 Check these files for current project status:
+
 - `TODO.md` - Daily task tracking
 - `ROADMAP.md` - Strategic plan (4 phases, 16 tasks)
 - `CHANGELOG.md` - Version history (Keep a Changelog format)
 
 ## Key Documentation
 
-| Document | Content |
-|----------|---------|
-| `docs/PIPELINE_OVERVIEW.md` | Complete architecture |
-| `docs/QDRANT_STACK.md` | Qdrant configuration |
-| `CACHING.md` | 6-tier cache architecture (semantic, rerank, sparse, query, conversation, embeddings) |
-| `src/evaluation/README.md` | MLflow, Langfuse, RAGAS |
-| `telegram_bot/services/query_router.py` | Query classification patterns (CHITCHAT/SIMPLE/COMPLEX) |
-| `telegram_bot/services/cesc.py` | CESC personalizer + `is_personalized_query()` |
-| `scripts/test_quantization_ab.py` | Binary quantization A/B testing with precision@k |
+| Document                                | Content                                                                               |
+| --------------------------------------- | ------------------------------------------------------------------------------------- |
+| `docs/PIPELINE_OVERVIEW.md`             | Complete architecture                                                                 |
+| `docs/QDRANT_STACK.md`                  | Qdrant configuration                                                                  |
+| `CACHING.md`                            | 6-tier cache architecture (semantic, rerank, sparse, query, conversation, embeddings) |
+| `src/evaluation/README.md`              | MLflow, Langfuse, RAGAS                                                               |
+| `telegram_bot/services/query_router.py` | Query classification patterns (CHITCHAT/SIMPLE/COMPLEX)                               |
+| `telegram_bot/services/cesc.py`         | CESC personalizer + `is_personalized_query()`                                         |
+| `scripts/test_quantization_ab.py`       | Binary quantization A/B testing with precision@k                                      |
 
 ## Environment Setup
 
@@ -329,6 +341,7 @@ make test-all-smoke-load   # preflight + smoke + load
 ```
 
 **Environment variables for load tests:**
+
 - `LOAD_USE_MOCKS=1` - Use mocked services (for CI)
 - `LOAD_CHAT_COUNT=30` - Number of parallel chats
 - `EVICTION_TEST_MB=10` - Redis pressure test volume
@@ -337,12 +350,12 @@ make test-all-smoke-load   # preflight + smoke + load
 
 ### Test Coverage Targets
 
-| Module | Coverage |
-|--------|----------|
-| `src/config/` | ~90% |
-| `src/ingestion/` | ~85% |
-| `src/retrieval/` | ~80% |
-| `telegram_bot/services/` | ~85% |
+| Module                   | Coverage |
+| ------------------------ | -------- |
+| `src/config/`            | ~90%     |
+| `src/ingestion/`         | ~85%     |
+| `src/retrieval/`         | ~80%     |
+| `telegram_bot/services/` | ~85%     |
 
 ## Telegram Bot (Docker)
 
