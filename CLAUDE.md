@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Contextual RAG Pipeline** - A production-grade Retrieval-Augmented Generation system for document search with hybrid vector search, ML platform integration, and Telegram bot interface.
 
-**Version:** 2.11.0 (2026 TTFT optimizations + multi-level caching)
+**Version:** 2.11.0 (Binary Quantization, TTFT optimizations, multi-level caching)
 **Python:** 3.12+ (minimum 3.9)
 **LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API, streaming)
 **Primary use cases:** Ukrainian Criminal Code search (1,294 documents), Bulgarian property catalogs
@@ -71,6 +71,7 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 | Service | Purpose |
 |---------|---------|
 | `VoyageService` | **Unified** embeddings + reranking (voyage-4-large/lite, rerank-2.5) |
+| `QdrantService` | Smart Gateway: RRF fusion, binary quantization, MMR diversity |
 | `RetrieverService` | Dense vector search in Qdrant with dynamic filters |
 | `HybridRetrieverService` | RRF fusion search (dense + sparse) |
 | `QueryPreprocessor` | Translit normalization (Latin→Cyrillic), dynamic RRF weights |
@@ -167,15 +168,24 @@ if query_type == QueryType.CHITCHAT:
 # QueryType.COMPLEX → Full RAG + rerank
 ```
 
-### Lazy CESC Personalization
+### Qdrant Binary Quantization (2026 Best Practice)
 ```python
-from telegram_bot.services import is_personalized_query
+from telegram_bot.services import QdrantService
 
-# Only run CESC when query has personal markers or user has preferences
-if is_personalized_query("найди мне квартиру", user_context):
-    # Run personalization
-else:
-    # Skip CESC, return generic response
+# QdrantService with quantization (default: enabled)
+qdrant = QdrantService(
+    url="http://localhost:6333",
+    collection_name="documents",
+    use_quantization=True,           # 40x faster search
+    quantization_rescore=True,       # Maintain accuracy
+    quantization_oversampling=2.0,   # Fetch 2x candidates, rescore top_k
+)
+
+# A/B testing: disable quantization per-request
+results_baseline = await qdrant.hybrid_search_rrf(
+    dense_vector=query_embedding,
+    quantization_ignore=True,  # Skip quantization for this request
+)
 ```
 
 ### 2026 Performance Defaults
@@ -183,11 +193,10 @@ else:
 | Parameter | Value | Purpose |
 |-----------|-------|---------|
 | `search_top_k` | 20 | Fewer candidates → faster Qdrant |
+| `use_quantization` | true | 40x faster, 75% less RAM |
 | `rerank_top_k` | 3 | Fewer chunks in LLM context |
 | `max_tokens` | 1024 | Faster generation |
-| `MMR_ENABLED` | false | Voyage rerank is sufficient |
 | Rerank cache TTL | 2h | Skip API calls for repeated queries |
-| Sparse cache TTL | 7d | BM42 embeddings cached long-term |
 
 ## Code Style
 
@@ -235,8 +244,13 @@ Check these files for current project status:
    - `VOYAGE_MODEL_DOCS=voyage-4-large`
    - `VOYAGE_MODEL_QUERIES=voyage-4-lite`
    - `VOYAGE_RERANK_MODEL=rerank-2.5`
-5. Run `make install-dev`
-6. Start services: `docker compose -f docker-compose.dev.yml up -d` (full stack with bot)
+5. Qdrant quantization config (optional, defaults shown):
+   - `QDRANT_USE_QUANTIZATION=true` - Enable binary quantization
+   - `QDRANT_QUANTIZATION_RESCORE=true` - Rescore for accuracy
+   - `QDRANT_QUANTIZATION_OVERSAMPLING=2.0` - Candidate multiplier
+   - `QDRANT_QUANTIZATION_ALWAYS_RAM=true` - Keep quantized in RAM
+6. Run `make install-dev`
+7. Start services: `docker compose -f docker-compose.dev.yml up -d` (full stack with bot)
 
 ## Testing Notes
 
