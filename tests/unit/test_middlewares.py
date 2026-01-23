@@ -1,8 +1,13 @@
 """Unit tests for telegram_bot/middlewares/."""
 
+import pytest
+
+
+# Skip entire module if aiogram not installed
+pytest.importorskip("aiogram", reason="aiogram not installed")
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from aiogram import Dispatcher
 from aiogram.types import Message, User
 
@@ -66,9 +71,7 @@ class TestErrorHandlerMiddleware:
         event.answer = AsyncMock()
         data = {}
 
-        with patch(
-            "telegram_bot.middlewares.error_handler.logger"
-        ) as mock_logger:
+        with patch("telegram_bot.middlewares.error_handler.logger") as mock_logger:
             with pytest.raises(ValueError):
                 await middleware(handler, event, data)
 
