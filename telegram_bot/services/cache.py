@@ -66,6 +66,7 @@ class CacheService:
             "embeddings": {"hits": 0, "misses": 0},
             "analyzer": {"hits": 0, "misses": 0},
             "search": {"hits": 0, "misses": 0},
+            "rerank": {"hits": 0, "misses": 0},
         }
 
         # Initialize Redis client for key-value operations (Tier 2)
@@ -485,6 +486,65 @@ class CacheService:
             logger.debug(f"✓ Stored search results ({len(results)} items)")
         except Exception as e:
             logger.error(f"Search cache store error: {e}")
+
+    # ========== TIER 2: Rerank Cache ==========
+
+    async def get_cached_rerank(
+        self,
+        query_hash: str,
+        chunk_ids: list[str],
+    ) -> Optional[list[dict[str, Any]]]:
+        """Get cached Voyage rerank results.
+
+        Args:
+            query_hash: Hash of query embedding
+            chunk_ids: List of chunk IDs that were reranked
+
+        Returns:
+            Cached rerank results or None
+        """
+        if not self.redis_client:
+            return None
+
+        try:
+            chunk_hash = self._hash_key(json.dumps(sorted(chunk_ids)))
+            key = f"rag:rerank:v1:{query_hash}:{chunk_hash}"
+
+            start = time.time()
+            cached = await self.redis_client.get(key)
+            latency = (time.time() - start) * 1000
+
+            if cached:
+                self.metrics["rerank"]["hits"] += 1
+                logger.info(f"✓ Rerank cache HIT ({latency:.0f}ms)")
+                return json.loads(cached)
+
+            self.metrics["rerank"]["misses"] += 1
+            return None
+        except Exception as e:
+            logger.error(f"Rerank cache error: {e}")
+            self.metrics["rerank"]["misses"] += 1
+            return None
+
+    async def store_rerank_results(
+        self,
+        query_hash: str,
+        chunk_ids: list[str],
+        results: list[dict[str, Any]],
+        ttl: int = 7200,
+    ):
+        """Store Voyage rerank results (TTL 2 hours)."""
+        if not self.redis_client:
+            return
+
+        try:
+            chunk_hash = self._hash_key(json.dumps(sorted(chunk_ids)))
+            key = f"rag:rerank:v1:{query_hash}:{chunk_hash}"
+
+            await self.redis_client.setex(key, ttl, json.dumps(results))
+            logger.debug(f"✓ Stored rerank ({len(results)} items)")
+        except Exception as e:
+            logger.error(f"Rerank cache store error: {e}")
 
     # ========== Metrics ==========
 
