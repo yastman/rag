@@ -350,97 +350,74 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         score_threshold: float,
     ) -> list[SearchResult]:
         """
-        Internal 3-stage hybrid search with ColBERT rerank.
+        3-stage hybrid search with ColBERT rerank via SDK query_points.
 
         Pipeline:
         1. Prefetch dense (100) + sparse (100) candidates
         2. RRF fusion combines both
-        3. ColBERT multivector rerank on fused results → top-K
+        3. ColBERT multivector rerank on fused results -> top-K
         """
+        import logging
+
         # Generate all embeddings for query (dense + sparse + colbert)
         query_embeddings = self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
 
-        # Convert sparse to Qdrant format
-        lexical_weights = query_embeddings["lexical_weights"]
-        sparse_indices = [int(k) for k in lexical_weights]
-        sparse_values = list(lexical_weights.values())
+        # Convert to Python/Qdrant types
+        dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
+        sparse_vector = lexical_weights_to_sparse(query_embeddings["lexical_weights"])
+        colbert_vectors = convert_to_python_types(query_embeddings["colbert_vecs"])
 
-        # Build 3-stage query: Prefetch → RRF → ColBERT rerank
-        search_payload = {
-            "prefetch": [
-                {
-                    "prefetch": [
-                        # Stage 1a: Dense vector search
-                        {
-                            "query": query_embeddings["dense_vecs"].tolist(),
-                            "using": "dense",
-                            "limit": 100,
-                        },
-                        # Stage 1b: BM42 sparse search (better for short chunks)
-                        {
-                            "query": {
-                                "values": sparse_values,
-                                "indices": sparse_indices,
-                            },
-                            "using": "bm42",  # Using BM42 instead of "sparse"
-                            "limit": 100,
-                        },
-                    ],
-                    # Stage 2: RRF fusion
-                    "query": {"fusion": "rrf"},
-                }
-            ],
-            # Stage 3: ColBERT multivector rerank
-            "query": query_embeddings["colbert_vecs"].tolist(),
-            "using": "colbert",
-            "limit": top_k,
-            "with_payload": True,
-            "with_vector": False,
-        }
-
-        # Convert all numpy types to Python types
-        search_payload = convert_to_python_types(search_payload)
-
-        # Execute 3-stage query via Qdrant query API (sync)
         try:
-            with httpx.Client(timeout=10.0) as client:
-                response = client.post(
-                    f"{self.settings.qdrant_url}/collections/{self.settings.collection_name}/points/query",
-                    json=search_payload,
-                    headers={"api-key": self.settings.qdrant_api_key or ""},
-                )
-                response.raise_for_status()
-                resp_data = response.json()
-        except (httpx.HTTPError, httpx.TimeoutException) as e:
-            # Fallback to RRF without ColBERT on error
-            import logging
+            # SDK query_points with nested prefetch for 3-stage pipeline
+            response = self.client.query_points(
+                collection_name=self.settings.collection_name,
+                prefetch=[
+                    # Outer prefetch: RRF fusion of dense + sparse
+                    models.Prefetch(
+                        prefetch=[
+                            # Stage 1a: Dense vector search
+                            models.Prefetch(
+                                query=dense_vector,
+                                using="dense",
+                                limit=100,
+                            ),
+                            # Stage 1b: BM42 sparse search
+                            models.Prefetch(
+                                query=sparse_vector,
+                                using="bm42",
+                                limit=100,
+                            ),
+                        ],
+                        # Stage 2: RRF fusion
+                        query=models.FusionQuery(fusion=models.Fusion.RRF),
+                    ),
+                ],
+                # Stage 3: ColBERT multivector rerank
+                query=colbert_vectors,
+                using="colbert",
+                limit=top_k,
+                with_payload=True,
+            )
 
+            return [
+                SearchResult(
+                    article_number=point.payload.get("article_number", ""),
+                    text=point.payload.get("page_content", ""),
+                    score=point.score,
+                    metadata={
+                        **point.payload,
+                        "search_method": "hybrid_rrf_colbert",
+                    },
+                )
+                for point in response.points
+            ]
+
+        except Exception as e:
             logging.warning(f"ColBERT rerank failed: {e}, falling back to RRF only")
             rrf_engine = HybridRRFSearchEngine(self.settings)
             return rrf_engine.search(query, top_k, score_threshold)
-
-        # Parse response
-        if isinstance(resp_data["result"], dict):
-            points_list = resp_data["result"].get("points", [])
-        elif isinstance(resp_data["result"], list):
-            points_list = resp_data["result"]
-        else:
-            points_list = []
-
-        return [
-            SearchResult(
-                article_number=point["payload"].get("article_number", ""),
-                text=point["payload"].get("page_content", ""),
-                score=point["score"],
-                metadata={
-                    **point["payload"],
-                    "search_method": "hybrid_rrf_colbert",
-                },
-            )
-            for point in points_list
-        ]
 
     def get_name(self) -> str:
         """Get search engine name."""
