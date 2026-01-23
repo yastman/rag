@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from qdrant_client import models
 
 from src.config.constants import SearchEngine
 from src.retrieval.search_engines import (
@@ -14,6 +15,7 @@ from src.retrieval.search_engines import (
     SearchResult,
     convert_to_python_types,
     create_search_engine,
+    lexical_weights_to_sparse,
 )
 
 
@@ -390,3 +392,26 @@ class TestCreateSearchEngine:
         engine = create_search_engine(settings=mock_settings)
 
         assert isinstance(engine, BaselineSearchEngine)
+
+
+class TestSparseVectorConversion:
+    """Test sparse vector conversion to Qdrant models."""
+
+    def test_convert_lexical_weights_to_sparse_vector(self):
+        """Test converting BGE-M3 lexical weights to Qdrant SparseVector."""
+        # BGE-M3 returns dict with string keys
+        lexical_weights = {"123": 0.5, "456": 0.8, "789": 0.3}
+
+        sparse = lexical_weights_to_sparse(lexical_weights)
+
+        assert isinstance(sparse, models.SparseVector)
+        assert sparse.indices == [123, 456, 789]
+        assert sparse.values == [0.5, 0.8, 0.3]
+
+    def test_convert_empty_lexical_weights(self):
+        """Test converting empty lexical weights."""
+        sparse = lexical_weights_to_sparse({})
+
+        assert isinstance(sparse, models.SparseVector)
+        assert sparse.indices == []
+        assert sparse.values == []
