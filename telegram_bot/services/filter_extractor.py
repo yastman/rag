@@ -75,13 +75,22 @@ class FilterExtractor:
         """Extract price filter from query."""
         query_lower = query.lower()
 
+        # Range FIRST: "от 80000 до 150000" (must check before single patterns)
+        range_pattern = r"от\s+(\d+[\s\d]*к?)\s+до\s+(\d+[\s\d]*к?)"
+        match = re.search(range_pattern, query_lower)
+        if match:
+            min_price = self._parse_number(match.group(1))
+            max_price = self._parse_number(match.group(2))
+            if min_price and max_price:
+                return {"gte": min_price, "lte": max_price}
+
         # "дешевле 100000", "до 100к", "< 100000"
         patterns_lt = [
-            r"дешевле\s+(\d+[\s\d]*)",
-            r"до\s+(\d+[\s\d]*)",
-            r"меньше\s+(\d+[\s\d]*)",
-            r"<\s*(\d+[\s\d]*)",
-            r"не\s+дороже\s+(\d+[\s\d]*)",
+            r"дешевле\s+(\d+[\s\d]*к?)",
+            r"до\s+(\d+[\s\d]*к?)",
+            r"меньше\s+(\d+[\s\d]*к?)",
+            r"<\s*(\d+[\s\d]*к?)",
+            r"не\s+дороже\s+(\d+[\s\d]*к?)",
         ]
 
         for pattern in patterns_lt:
@@ -93,10 +102,10 @@ class FilterExtractor:
 
         # "дороже 100000", "от 100000", "> 100000"
         patterns_gt = [
-            r"дороже\s+(\d+[\s\d]*)",
-            r"от\s+(\d+[\s\d]*)",
-            r"больше\s+(\d+[\s\d]*)",
-            r">\s*(\d+[\s\d]*)",
+            r"дороже\s+(\d+[\s\d]*к?)",
+            r"от\s+(\d+[\s\d]*к?)",
+            r"больше\s+(\d+[\s\d]*к?)",
+            r">\s*(\d+[\s\d]*к?)",
         ]
 
         for pattern in patterns_gt:
@@ -105,15 +114,6 @@ class FilterExtractor:
                 price = self._parse_number(match.group(1))
                 if price:
                     return {"gt": price}
-
-        # Range: "от 80000 до 150000"
-        range_pattern = r"от\s+(\d+[\s\d]*)\s+до\s+(\d+[\s\d]*)"
-        match = re.search(range_pattern, query_lower)
-        if match:
-            min_price = self._parse_number(match.group(1))
-            max_price = self._parse_number(match.group(2))
-            if min_price and max_price:
-                return {"gte": min_price, "lte": max_price}
 
         return None
 
@@ -226,21 +226,23 @@ class FilterExtractor:
         """Extract distance to sea filter from query."""
         query_lower = query.lower()
 
+        # Check "первая линия" and "у моря" first (fixed pattern matching)  # noqa: RUF003
+        if re.search(r"первая\s+линия", query_lower):
+            return {"lte": 200}
+        if re.search(r"у\s+моря", query_lower):
+            return {"lte": 200}
+
         # "до 500м до моря", "не дальше 600м", "в 400м от моря"
         patterns = [
             r"до\s+(\d+)\s*(?:м|метр).*?(?:до\s+)?(?:моря|пляжа)",
             r"не\s+дальше\s+(\d+)\s*(?:м|метр)",
             r"в\s+(\d+)\s*(?:м|метр).*?от\s+(?:моря|пляжа)",
             r"(?:моря|пляжа).*?(\d+)\s*(?:м|метр)",
-            r"первая\s+линия",
-            r"у\s+моря",
         ]
 
         for pattern in patterns:
             match = re.search(pattern, query_lower)
             if match:
-                if "первая линия" in pattern or "у моря" in pattern:
-                    return {"lte": 200}
                 try:
                     distance = int(match.group(1))
                     return {"lte": distance}
@@ -277,10 +279,12 @@ class FilterExtractor:
         """Extract number of bathrooms from query."""
         query_lower = query.lower()
 
-        # "2 санузла", "два санузла"
+        # "2 санузла", "два санузла", "один санузел"
+        # Note: санузел (nom.) vs санузла/санузлов (gen.) - different stems
         patterns = [
             r"(\d+)\s*санузл",
-            r"(один|два|три)\s*санузл",
+            r"(один|два|три)\s+санузл",  # word form + санузла/санузлов
+            r"(один|два|три)\s+санузел",  # word form + санузел (nominative)
         ]
 
         num_map = {"один": 1, "два": 2, "три": 3}
