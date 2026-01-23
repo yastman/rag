@@ -234,6 +234,7 @@ Check these files for current project status:
 | `src/evaluation/README.md` | MLflow, Langfuse, RAGAS |
 | `telegram_bot/services/query_router.py` | Query classification patterns (CHITCHAT/SIMPLE/COMPLEX) |
 | `telegram_bot/services/cesc.py` | CESC personalizer + `is_personalized_query()` |
+| `scripts/test_quantization_ab.py` | Binary quantization A/B testing with precision@k |
 
 ## Environment Setup
 
@@ -265,18 +266,23 @@ Check these files for current project status:
 tests/
 ├── unit/                    # Unit tests (~200 test cases)
 │   ├── test_settings.py     # Settings, API validation, defaults
-│   ├── test_constants.py    # Enums, dataclasses, config values
 │   ├── test_chunker.py      # DocumentChunker, CSV chunking
-│   ├── test_document_parser.py  # PDF/Docling parsing, caching
-│   ├── test_indexer.py      # DocumentIndexer, Qdrant collections
-│   ├── test_contextual_schema.py  # Chunk/Document serialization
 │   ├── test_search_engines.py    # All search engine variants
-│   ├── test_query_preprocessor_unit.py  # Translit, RRF weights
 │   ├── test_voyage_service.py    # Embeddings, reranking
-│   ├── test_retriever_service.py # Qdrant retrieval, filters
-│   └── test_llm_service.py       # Answer generation, streaming
+│   └── ...
+├── smoke/                   # Smoke tests (20 queries, live services)
+│   ├── test_preflight.py    # Qdrant/Redis config verification
+│   ├── test_smoke_routing.py    # Query classification (no deps)
+│   ├── test_smoke_cache.py      # Redis cache operations
+│   ├── test_smoke_quantization.py  # Binary quantization A/B
+│   └── queries.py           # 6 CHITCHAT + 6 SIMPLE + 8 COMPLEX
+├── load/                    # Load tests (parallel chats, p95 metrics)
+│   ├── test_load_conversations.py  # Parallel chat simulation
+│   ├── test_load_redis_eviction.py # LFU eviction behavior
+│   ├── metrics_collector.py # p95 latency analysis
+│   ├── chat_simulator.py    # 6-message conversation template
+│   └── baseline.json        # Regression detection baseline
 ├── test_voyage*.py          # Voyage AI integration tests
-├── test_*_integration.py    # Integration tests (require services)
 └── legacy/                  # Deprecated tests
 ```
 
@@ -298,7 +304,36 @@ pytest tests/test_e2e_pipeline.py -v
 
 # Exclude legacy tests
 pytest tests/ --ignore=tests/legacy -v
+
+# Test specific services (after modifications)
+pytest tests/unit/test_qdrant_service.py tests/unit/test_cache_service.py -v
 ```
+
+### Smoke & Load Tests
+
+```bash
+# Preflight: verify Qdrant/Redis configuration
+make test-preflight        # Checks binary quantization, allkeys-lfu, maxmemory
+
+# Smoke tests (20 queries: 6 CHITCHAT + 6 SIMPLE + 8 COMPLEX)
+make test-smoke-routing    # Query routing only (no external deps)
+make test-smoke            # Full smoke suite (requires Qdrant/Redis)
+
+# Load tests (parallel chat simulation)
+make test-load-ci          # Mocked mode for CI (fast, no deps)
+make test-load             # Live services (requires Qdrant/Redis/Voyage)
+make test-load-eviction    # Redis LFU eviction behavior
+
+# Full suite
+make test-all-smoke-load   # preflight + smoke + load
+```
+
+**Environment variables for load tests:**
+- `LOAD_USE_MOCKS=1` - Use mocked services (for CI)
+- `LOAD_CHAT_COUNT=30` - Number of parallel chats
+- `EVICTION_TEST_MB=10` - Redis pressure test volume
+
+**Generated reports:** `reports/preflight.json`, `reports/load_summary.json`, `reports/redis_stats_timeseries.json`
 
 ### Test Coverage Targets
 
@@ -332,7 +367,7 @@ Bot responses use Markdown formatting (`parse_mode="Markdown"`).
 
 ## Qdrant Collections
 
-- `contextual_bulgaria_voyage` - Bulgarian property data (92 documents, Voyage embeddings)
+- `contextual_bulgaria_voyage4` - Bulgarian property data (92 documents, Voyage-4 embeddings, Binary Quantization)
 - `legal_documents` - Ukrainian Criminal Code (1,294 documents, BGE-M3 embeddings)
 
 ## Deployment
