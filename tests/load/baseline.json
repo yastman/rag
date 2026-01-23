@@ -1,8 +1,15 @@
 {
   "routing": 15,
-  "cache_hit": 15,
+  "cache_hit": 20,
   "qdrant": 100,
   "full_rag": 2500,
-  "ttft": 0,
-  "timestamp": 1737619200
+  "ttft": 800,
+  "timestamp": 1737640800,
+  "environment": {
+    "qdrant_collection": "contextual_bulgaria_voyage4",
+    "redis_maxmemory": "512mb",
+    "llm_model": "zai-glm-4.7",
+    "voyage_model": "voyage-4-lite",
+    "note": "Initial baseline - update with make test-load-update-baseline"
+  }
 }
