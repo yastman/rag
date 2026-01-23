@@ -335,6 +335,54 @@ class TestHybridRRFColBERTSearchEngine:
         # Should call dense-only search when embedding provided
         mock_client.search.assert_called_once()
 
+    @patch("src.retrieval.search_engines.get_bge_m3_model")
+    @patch("src.retrieval.search_engines.QdrantClient")
+    @patch("src.retrieval.search_engines.Settings")
+    def test_colbert_search_uses_nested_prefetch(self, mock_settings_cls, mock_qdrant, mock_bge):
+        """Test that ColBERT search uses SDK with nested prefetch for 3-stage query."""
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings.collection_name = "test_collection"
+        mock_settings_cls.return_value = mock_settings
+
+        # Mock embedding model with ColBERT vectors
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2, 0.3]),
+            "lexical_weights": {"100": 0.5, "200": 0.8},
+            "colbert_vecs": np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]),
+        }
+        mock_bge.return_value = mock_model
+
+        # Mock query_points response
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "article_number": "115",
+            "page_content": "Test content",
+        }
+        mock_point.score = 0.95
+
+        mock_client = MagicMock()
+        mock_query_response = MagicMock()
+        mock_query_response.points = [mock_point]
+        mock_client.query_points.return_value = mock_query_response
+        mock_qdrant.return_value = mock_client
+
+        engine = HybridRRFColBERTSearchEngine(mock_settings)
+        results = engine.search("test query", top_k=5)
+
+        # Verify query_points was called with nested prefetch
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args[1]
+
+        # Verify nested prefetch structure (outer prefetch contains inner prefetch with RRF)
+        assert "prefetch" in call_kwargs
+        assert call_kwargs["using"] == "colbert"  # Final stage uses ColBERT
+
+        assert len(results) == 1
+        assert results[0].score == 0.95
+
 
 class TestDBSFColBERTSearchEngine:
     """Test DBSFColBERTSearchEngine."""
