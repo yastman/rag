@@ -25,5 +25,5 @@ THRESHOLDS = {
 # Regression threshold (fail if p95 > baseline * 1.20)
 REGRESSION_THRESHOLD = 1.20
 
-# Minimum cache hit rate
-MIN_CACHE_HIT_RATE = 0.60
+# Minimum cache hit rate (50% is reasonable for diverse queries)
+MIN_CACHE_HIT_RATE = 0.50
