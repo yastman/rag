@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Contextual RAG Pipeline** - A production-grade Retrieval-Augmented Generation system for document search with hybrid vector search, ML platform integration, and Telegram bot interface.
 
-**Version:** 2.11.0 (Binary Quantization, TTFT optimizations, multi-level caching)
+**Version:** 2.12.0 (SDK migration for search engines, Binary Quantization, multi-level caching)
 **Python:** 3.12+ (minimum 3.9)
 **LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API, streaming)
 **Primary use cases:** Ukrainian Criminal Code search (1,294 documents), Bulgarian property catalogs
@@ -93,6 +93,41 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 - **HybridRRFSearchEngine**: Dense + Sparse without ColBERT
 - **BaselineSearchEngine**: Dense only (91.3% Recall@1)
 
+All hybrid engines use Qdrant SDK `query_points()` with nested prefetch (no httpx):
+
+```python
+from qdrant_client import models
+from src.retrieval.search_engines import lexical_weights_to_sparse
+
+# 2-stage: Dense + Sparse → RRF fusion
+response = client.query_points(
+    collection_name="...",
+    prefetch=[
+        models.Prefetch(query=dense_vector, using="dense", limit=100),
+        models.Prefetch(query=sparse_vector, using="bm42", limit=100),
+    ],
+    query=models.FusionQuery(fusion=models.Fusion.RRF),
+    limit=top_k,
+)
+
+# 3-stage: Dense + Sparse → RRF → ColBERT rerank
+response = client.query_points(
+    collection_name="...",
+    prefetch=[
+        models.Prefetch(
+            prefetch=[
+                models.Prefetch(query=dense_vector, using="dense", limit=100),
+                models.Prefetch(query=sparse_vector, using="bm42", limit=100),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+        ),
+    ],
+    query=colbert_vectors,
+    using="colbert",
+    limit=top_k,
+)
+```
+
 ### External Services
 
 | Service     | Port       | Purpose                     |
@@ -104,9 +139,11 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 
 ## Code Patterns
 
-### Async I/O
+### I/O Patterns
 
-All I/O operations use async (`httpx.AsyncClient`, `AsyncQdrantClient`). No blocking calls in async context.
+- **Telegram Bot services**: Async (`httpx.AsyncClient`, `AsyncQdrantClient`)
+- **Search Engines**: Sync Qdrant SDK (`QdrantClient.query_points()`) with `models.Prefetch` for nested prefetch
+- No blocking calls in async context for bot handlers
 
 ##***REMOVED***Service (Recommended)
 
