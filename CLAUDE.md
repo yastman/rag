@@ -257,9 +257,57 @@ Check these files for current project status:
 - Tests use pytest with `asyncio_mode = "auto"` (async tests don't need `@pytest.mark.asyncio`)
 - Coverage reports: `make test-cov` generates `htmlcov/index.html`
 - Integration tests require Docker services running
-- Voyage tests: `pytest tests/test_voyage*.py -v` (45 tests)
-- E2E tests: `pytest tests/test_e2e_pipeline.py -v` (requires API keys and services)
 - Run single test: `pytest tests/test_file.py::TestClass::test_method -v`
+
+### Test Structure
+
+```
+tests/
+├── unit/                    # Unit tests (~200 test cases)
+│   ├── test_settings.py     # Settings, API validation, defaults
+│   ├── test_constants.py    # Enums, dataclasses, config values
+│   ├── test_chunker.py      # DocumentChunker, CSV chunking
+│   ├── test_document_parser.py  # PDF/Docling parsing, caching
+│   ├── test_indexer.py      # DocumentIndexer, Qdrant collections
+│   ├── test_contextual_schema.py  # Chunk/Document serialization
+│   ├── test_search_engines.py    # All search engine variants
+│   ├── test_query_preprocessor_unit.py  # Translit, RRF weights
+│   ├── test_voyage_service.py    # Embeddings, reranking
+│   ├── test_retriever_service.py # Qdrant retrieval, filters
+│   └── test_llm_service.py       # Answer generation, streaming
+├── test_voyage*.py          # Voyage AI integration tests
+├── test_*_integration.py    # Integration tests (require services)
+└── legacy/                  # Deprecated tests
+```
+
+### Running Tests
+
+```bash
+# All unit tests (fast, no external services needed)
+pytest tests/unit/ -v
+
+# Specific module
+pytest tests/unit/test_settings.py -v
+
+# With coverage
+pytest tests/unit/ --cov=src --cov=telegram_bot --cov-report=term-missing
+
+# Integration tests (require Docker services)
+pytest tests/test_voyage*.py -v
+pytest tests/test_e2e_pipeline.py -v
+
+# Exclude legacy tests
+pytest tests/ --ignore=tests/legacy -v
+```
+
+### Test Coverage Targets
+
+| Module | Coverage |
+|--------|----------|
+| `src/config/` | ~90% |
+| `src/ingestion/` | ~85% |
+| `src/retrieval/` | ~80% |
+| `telegram_bot/services/` | ~85% |
 
 ## Telegram Bot (Docker)
 
