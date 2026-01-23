@@ -1,0 +1,76 @@
+import aiohttp
+import asyncpg
+import pytest
+import redis.asyncio as redis
+from qdrant_client import QdrantClient
+
+
+@pytest.mark.asyncio
+async def test_postgres_connection():
+    # Defaults from docker-compose
+    conn = await asyncpg.connect(
+        user="postgres", password="postgres", database="postgres", host="localhost", port=5432
+    )
+    version = await conn.fetchval("SELECT version()")
+    await conn.close()
+    assert "PostgreSQL" in version
+
+
+@pytest.mark.asyncio
+async def test_redis_connection():
+    r = redis.from_url("redis://localhost:6379")
+    assert await r.ping() is True
+    await r.close()
+
+
+def test_qdrant_health():
+    ***REMOVED*** client uses sync HTTP by default or async
+    client = QdrantClient(url="http://localhost:6333")
+    collections = client.get_collections()
+    assert collections is not None
+
+
+@pytest.mark.asyncio
+async def test_bge_m3_health():
+    async with aiohttp.ClientSession() as session:
+        async with session.get("http://localhost:8000/health") as resp:
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_bm42_health():
+    async with aiohttp.ClientSession() as session:
+        async with session.get("http://localhost:8002/health") as resp:
+            # Note: BM42 service in docker-compose.dev.yml maps 8002:8000
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_lightrag_health():
+    async with aiohttp.ClientSession() as session:
+        async with session.get("http://localhost:9621/health") as resp:
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "healthy"
+
+
+@pytest.mark.asyncio
+async def test_mlflow_health():
+    async with aiohttp.ClientSession() as session:
+        async with session.get("http://localhost:5000/health") as resp:
+            assert resp.status == 200
+            text = await resp.text()
+            assert "OK" in text or "healthy" in text
+
+
+@pytest.mark.asyncio
+async def test_docling_health():
+    async with aiohttp.ClientSession() as session:
+        async with session.get("http://localhost:5001/health") as resp:
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["status"] == "ok"
