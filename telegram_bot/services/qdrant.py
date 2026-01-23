@@ -58,6 +58,10 @@ class QdrantService:
         dense_weight: float = 0.6,
         sparse_weight: float = 0.4,
         prefetch_multiplier: int = 3,
+        # Quantization A/B testing params
+        quantization_ignore: Optional[bool] = None,
+        quantization_rescore: bool = True,
+        quantization_oversampling: float = 2.0,
     ) -> list[dict]:
         """Hybrid search with RRF fusion (dense + sparse).
 
@@ -69,6 +73,9 @@ class QdrantService:
             dense_weight: Weight for dense vector prefetch
             sparse_weight: Weight for sparse vector prefetch
             prefetch_multiplier: Multiplier for prefetch limits
+            quantization_ignore: If True, skip quantization (use full vectors)
+            quantization_rescore: If True, rescore with original vectors
+            quantization_oversampling: Oversampling factor for quantized search
 
         Returns:
             List of results with id, score, text, metadata
@@ -100,6 +107,17 @@ class QdrantService:
                 )
             )
 
+        # Build search params for quantization A/B testing
+        search_params = None
+        if quantization_ignore is not None:
+            search_params = models.SearchParams(
+                quantization=models.QuantizationSearchParams(
+                    ignore=quantization_ignore,
+                    rescore=quantization_rescore,
+                    oversampling=quantization_oversampling,
+                )
+            )
+
         # Execute RRF fusion search
         result = await self._client.query_points(
             collection_name=self._collection_name,
@@ -108,6 +126,7 @@ class QdrantService:
             query_filter=self._build_filter(filters),
             limit=top_k,
             with_payload=True,
+            search_params=search_params,
         )
 
         return self._format_results(result.points)
