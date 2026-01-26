@@ -6,25 +6,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Contextual RAG Pipeline** - A production-grade Retrieval-Augmented Generation system for document search with hybrid vector search, ML platform integration, and Telegram bot interface.
 
-**Version:** 2.12.0 (SDK migration for search engines, Binary Quantization, multi-level caching)
+**Version:** 2.13.0 (Release Please automation, Binary Quantization, multi-level caching)
 **Python:** 3.12+ (minimum 3.9)
 **LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API, streaming)
 **Primary use cases:** Ukrainian Criminal Code search (1,294 documents), Bulgarian property catalogs
 
 ## Current Sprint
 
-**Focus:** Documentation System + Binary Quantization
-**Version:** 2.12.0
+**Focus:** Binary Quantization A/B Testing
+**Version:** 2.13.0
 **Started:** 2026-01-26
 
 ### Active Work
-- Documentation system v2 (Release Please, TODO reset)
 - Binary quantization A/B testing (`scripts/test_quantization_ab.py`)
 
 ### Recently Completed
+- Documentation system v2 with Release Please (2026-01-26)
 - SDK migration for search engines (2026-01-26)
 - DBSF fusion implementation
-- Query routing (CHITCHAT/SIMPLE/COMPLEX)
 
 ### Blockers
 None
@@ -392,6 +391,52 @@ make deploy-code
 # Release deploy with version tag
 make deploy-release VERSION=2.12.0
 ```
+
+## Parallel Claude Workers (spawn-claude)
+
+Запуск автономных Claude-агентов в отдельных табах WezTerm.
+
+### Использование
+
+```bash
+# Базовый синтаксис
+spawn-claude "промпт"
+
+# С указанием директории проекта
+spawn-claude "промпт" /path/to/project
+```
+
+### Примеры
+
+```bash
+# Простой вопрос
+spawn-claude "Объясни что делает функция main в этом проекте"
+
+# Задача на выполнение
+spawn-claude "Выполни Task 4.2 из TODO.md"
+
+# Код-ревью
+spawn-claude "Сделай ревью последнего коммита"
+
+# Рефакторинг
+spawn-claude "Отрефактори файл src/utils.py - убери дублирование"
+
+# В другом проекте
+spawn-claude "Запусти тесты и исправь ошибки" ~/projects/other-app
+```
+
+### Параллельные воркеры
+
+```bash
+# Запуск нескольких агентов одновременно
+spawn-claude "Напиши тесты для модуля auth"
+spawn-claude "Обнови документацию в README"
+spawn-claude "Исправь линтер ошибки"
+```
+
+Каждый откроется в отдельном табе и будет работать независимо.
+
+**Расположение скрипта:** `/mnt/c/Users/user/bin/spawn-claude`
 
 ## Troubleshooting
 
