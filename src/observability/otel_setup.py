@@ -113,6 +113,18 @@ class TracedRAGPipeline:
             unit="s",
         )
 
+    async def _embed(self, query_text: str) -> list[float]:
+        """Embed query text. Override in subclass or mock in tests."""
+        raise NotImplementedError("Subclass must implement _embed")
+
+    async def _search(self, embedding: list[float], top_k: int) -> list[dict]:
+        """Search for results. Override in subclass or mock in tests."""
+        raise NotImplementedError("Subclass must implement _search")
+
+    async def _rerank(self, results: list[dict]) -> list[dict]:
+        """Rerank results. Override in subclass or mock in tests."""
+        raise NotImplementedError("Subclass must implement _rerank")
+
     async def query(self, query_text: str, top_k: int = 10):
         """Execute query with full OTEL tracing."""
 
