@@ -4,49 +4,66 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+def reset_otel_mocks():
+    """Reset all OpenTelemetry mocks to fresh state."""
+    mocks = {
+        "opentelemetry": MagicMock(),
+        "opentelemetry.metrics": MagicMock(),
+        "opentelemetry.trace": MagicMock(),
+        "opentelemetry.exporter": MagicMock(),
+        "opentelemetry.exporter.otlp": MagicMock(),
+        "opentelemetry.exporter.otlp.proto": MagicMock(),
+        "opentelemetry.exporter.otlp.proto.grpc": MagicMock(),
+        "opentelemetry.exporter.otlp.proto.grpc.metric_exporter": MagicMock(),
+        "opentelemetry.exporter.otlp.proto.grpc.trace_exporter": MagicMock(),
+        "opentelemetry.instrumentation": MagicMock(),
+        "opentelemetry.instrumentation.aiohttp_client": MagicMock(),
+        "opentelemetry.instrumentation.redis": MagicMock(),
+        "opentelemetry.sdk": MagicMock(),
+        "opentelemetry.sdk.metrics": MagicMock(),
+        "opentelemetry.sdk.metrics.export": MagicMock(),
+        "opentelemetry.sdk.resources": MagicMock(),
+        "opentelemetry.sdk.trace": MagicMock(),
+        "opentelemetry.sdk.trace.export": MagicMock(),
+    }
+    sys.modules.update(mocks)
+    return mocks
+
+
 # Pre-mock opentelemetry to avoid import side effects
-mock_otel = MagicMock()
-sys.modules["opentelemetry"] = mock_otel
-sys.modules["opentelemetry.metrics"] = MagicMock()
-sys.modules["opentelemetry.trace"] = MagicMock()
-sys.modules["opentelemetry.exporter"] = MagicMock()
-sys.modules["opentelemetry.exporter.otlp"] = MagicMock()
-sys.modules["opentelemetry.exporter.otlp.proto"] = MagicMock()
-sys.modules["opentelemetry.exporter.otlp.proto.grpc"] = MagicMock()
-sys.modules["opentelemetry.exporter.otlp.proto.grpc.metric_exporter"] = MagicMock()
-sys.modules["opentelemetry.exporter.otlp.proto.grpc.trace_exporter"] = MagicMock()
-sys.modules["opentelemetry.instrumentation"] = MagicMock()
-sys.modules["opentelemetry.instrumentation.aiohttp_client"] = MagicMock()
-sys.modules["opentelemetry.instrumentation.redis"] = MagicMock()
-sys.modules["opentelemetry.sdk"] = MagicMock()
-sys.modules["opentelemetry.sdk.metrics"] = MagicMock()
-sys.modules["opentelemetry.sdk.metrics.export"] = MagicMock()
-sys.modules["opentelemetry.sdk.resources"] = MagicMock()
-sys.modules["opentelemetry.sdk.trace"] = MagicMock()
-sys.modules["opentelemetry.sdk.trace.export"] = MagicMock()
+reset_otel_mocks()
 
 from src.observability.otel_setup import TracedRAGPipeline, setup_opentelemetry
 
 
 def test_setup_opentelemetry():
-    setup_opentelemetry("test-service")
+    """Test OpenTelemetry setup creates providers and configures exporters."""
+    # Use patching on the module's imported names
+    with (
+        patch("src.observability.otel_setup.trace") as mock_trace,
+        patch("src.observability.otel_setup.metrics"),
+        patch("src.observability.otel_setup.TracerProvider") as mock_tracer_provider,
+        patch("src.observability.otel_setup.MeterProvider"),
+        patch("src.observability.otel_setup.OTLPSpanExporter") as mock_span_exporter,
+        patch("src.observability.otel_setup.OTLPMetricExporter"),
+        patch("src.observability.otel_setup.BatchSpanProcessor"),
+        patch("src.observability.otel_setup.PeriodicExportingMetricReader"),
+        patch("src.observability.otel_setup.Resource"),
+        patch("src.observability.otel_setup.AioHttpClientInstrumentor") as mock_aiohttp,
+        patch("src.observability.otel_setup.RedisInstrumentor") as mock_redis,
+    ):
+        setup_opentelemetry("test-service")
 
-    # Check trace provider setup
-    sys.modules["opentelemetry.sdk.trace"].TracerProvider.assert_called_once()
-    sys.modules["opentelemetry.trace"].set_tracer_provider.assert_called_once()
+        # Check trace provider setup
+        mock_tracer_provider.assert_called_once()
+        mock_trace.set_tracer_provider.assert_called_once()
 
-    # Check exporters
-    sys.modules[
-        "opentelemetry.exporter.otlp.proto.grpc.trace_exporter"
-    ].OTLPSpanExporter.assert_called_with(endpoint="http://localhost:4317", insecure=True)
+        # Check exporters
+        mock_span_exporter.assert_called_with(endpoint="http://localhost:4317", insecure=True)
 
-    # Check instrumentation
-    sys.modules[
-        "opentelemetry.instrumentation.aiohttp_client"
-    ].AioHttpClientInstrumentor.return_value.instrument.assert_called_once()
-    sys.modules[
-        "opentelemetry.instrumentation.redis"
-    ].RedisInstrumentor.return_value.instrument.assert_called_once()
+        # Check instrumentation
+        mock_aiohttp.return_value.instrument.assert_called_once()
+        mock_redis.return_value.instrument.assert_called_once()
 
 
 @pytest.mark.asyncio
