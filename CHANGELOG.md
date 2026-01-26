@@ -7,21 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
-
-### 🔧 Infrastructure
-- [ ] Add connection pooling for Qdrant and Redis (#3.1)
-- [ ] Create `docker-compose.yml` for all services (#3.2)
-- [ ] Setup CI/CD pipeline with GitHub Actions (#3.3)
-- [ ] Migrate to `AsyncQdrantClient` (#3.4)
-
-### ✨ Features
-- [ ] Implement distributed lock for semantic cache (#2.2)
-- [ ] Add Prometheus metrics endpoint (#4.1)
-- [ ] User feedback loop (👍/👎 buttons)
-
----
-
 ## [2.9.0] - 2026-01-21
 
 ### ✨ Features
