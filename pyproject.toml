@@ -1,6 +1,6 @@
 [project]
 name = "contextual-rag"
-version = "2.3.1"
+version = "2.13.0"
 description = "Contextual RAG Pipeline with DBSF + ColBERT hybrid search"
 requires-python = ">=3.9"
 dependencies = [
