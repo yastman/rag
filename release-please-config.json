@@ -11,7 +11,7 @@
         {"type": "feat", "section": "Features", "hidden": false},
         {"type": "fix", "section": "Bug Fixes", "hidden": false},
         {"type": "perf", "section": "Performance", "hidden": false},
-        {"type": "docs", "section": "Documentation", "hidden": true},
+        {"type": "docs", "section": "Documentation", "hidden": false},
         {"type": "chore", "section": "Miscellaneous", "hidden": true},
         {"type": "refactor", "section": "Code Refactoring", "hidden": true},
         {"type": "test", "section": "Tests", "hidden": true}
