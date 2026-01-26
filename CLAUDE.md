@@ -11,6 +11,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API, streaming)
 **Primary use cases:** Ukrainian Criminal Code search (1,294 documents), Bulgarian property catalogs
 
+## Current Sprint
+
+**Focus:** Documentation System + Binary Quantization
+**Version:** 2.12.0
+**Started:** 2026-01-26
+
+### Active Work
+- Documentation system v2 (Release Please, TODO reset)
+- Binary quantization A/B testing (`scripts/test_quantization_ab.py`)
+
+### Recently Completed
+- SDK migration for search engines (2026-01-26)
+- DBSF fusion implementation
+- Query routing (CHITCHAT/SIMPLE/COMPLEX)
+
+### Blockers
+None
+
+---
+*Updated: 2026-01-26 | Next review: 2026-02-02*
+
 ## Build & Development Commands
 
 ```bash
