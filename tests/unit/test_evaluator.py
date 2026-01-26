@@ -305,7 +305,7 @@ class TestCompareEngines:
 
             comparison = evaluator.compare_engines(baseline_results, hybrid_results)
 
-            assert comparison["improvements"]["recall@1"]["absolute_diff"] == 0.10
+            assert comparison["improvements"]["recall@1"]["absolute_diff"] == pytest.approx(0.10)
             assert comparison["improvements"]["recall@1"][
                 "relative_improvement_pct"
             ] == pytest.approx(12.5)
