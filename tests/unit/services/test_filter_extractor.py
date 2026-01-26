@@ -69,17 +69,15 @@ class TestFilterExtractorPrice:
         result = extractor.extract_filters("квартира >90000")
         assert result == {"price": {"gt": 90000}}
 
-    # Range pattern - Note: current implementation checks 'до' first, so range only works
-    # when no individual lt/gt patterns match. Testing actual behavior here.
+    # Range pattern - range "от X до Y" is checked FIRST before individual patterns
     def test_price_range_pattern_order(self, extractor: FilterExtractor) -> None:
-        """Test that 'до' pattern takes priority over range in current implementation.
+        """Test that range pattern 'от X до Y' extracts both min and max.
 
-        Note: This documents actual behavior - 'до' is checked before range pattern.
+        Implementation correctly checks range pattern FIRST before individual patterns.
         """
-        # 'до 100000' matches first, so we get lt instead of range
         result = extractor.extract_filters("квартира от 50000 до 100000")
-        # Current behavior: 'до' pattern matches first
-        assert result["price"] == {"lt": 100000}
+        # Range pattern is checked first, so we get both bounds
+        assert result["price"] == {"gte": 50000, "lte": 100000}
 
     def test_price_range_using_dashes(self, extractor: FilterExtractor) -> None:
         """Test that dashes don't work for range (only 'от X до Y')."""
@@ -87,16 +85,16 @@ class TestFilterExtractorPrice:
         # No valid pattern matches
         assert "price" not in result
 
-    # K suffix - Note: current regex doesn't capture 'к', only digits
-    def test_price_k_suffix_not_captured_by_regex(self, extractor: FilterExtractor) -> None:
-        """Test 'к' suffix behavior - regex only captures digits before 'к'.
+    # K suffix - regex correctly captures 'к' and _parse_number converts it
+    def test_price_k_suffix_captured_by_regex(self, extractor: FilterExtractor) -> None:
+        """Test 'к' suffix is correctly captured and parsed.
 
-        Note: The regex r'\\d+[\\s\\d]*' doesn't include 'к', so '100к' captures only '100'.
-        The _parse_number method would handle 'к' but it never sees it.
+        The regex r'\\d+[\\s\\d]*к?' captures the 'к' suffix, and _parse_number
+        correctly converts '100к' to 100000.
         """
         result = extractor.extract_filters("квартира до 100к")
-        # Only '100' is captured, not '100к', so result is 100, not 100000
-        assert result == {"price": {"lt": 100}}
+        # '100к' is captured and converted to 100000
+        assert result == {"price": {"lt": 100000}}
 
     # Numbers with spaces
     def test_price_with_spaces_in_number(self, extractor: FilterExtractor) -> None:
