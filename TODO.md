@@ -1,10 +1,9 @@
 # TODO
 
 ## In Progress
-- [ ] docs: implement documentation system v2
+- [ ] feat(search): binary quantization A/B testing
 
 ## Next Up
-- [ ] feat(search): binary quantization A/B testing
 - [ ] feat(bot): voice message support
 - [ ] fix(cache): Redis connection pooling
 
