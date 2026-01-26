@@ -1,8 +1,117 @@
-"""Tests for CESCPersonalizer."""
+"""Tests for CESCPersonalizer and is_personalized_query."""
 
 import pytest
 
-from telegram_bot.services.cesc import CESCPersonalizer
+from telegram_bot.services.cesc import CESCPersonalizer, is_personalized_query
+
+
+class TestIsPersonalizedQuery:
+    """Tests for is_personalized_query function."""
+
+    # Test personal markers (Russian)
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "покажи мне квартиры",
+            "мне подойдёт",
+            "Я предпочитаю большие комнаты",
+            "как в прошлый раз",
+            "для моего бюджета",
+            "мой бюджет 50000",
+            "моя квартира",
+            "мои предпочтения",
+            "по моим критериям",
+            "исходя из моих требований",
+            "учитывая мои пожелания",
+            "под мои нужды",
+        ],
+    )
+    def test_russian_personal_markers(self, query):
+        """Test Russian personal markers trigger personalization."""
+        assert is_personalized_query(query) is True
+
+    # Test personal markers (English)
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "find apartments for me",
+            "I prefer large rooms",
+            "my budget is 50000",
+            "like last time please",
+        ],
+    )
+    def test_english_personal_markers(self, query):
+        """Test English personal markers trigger personalization."""
+        assert is_personalized_query(query) is True
+
+    # Test generic queries (no markers)
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "квартиры в Бургасе",
+            "двухкомнатная квартира",
+            "недвижимость у моря",
+            "цены на квартиры",
+            "apartments in Burgas",
+            "two bedroom flat",
+        ],
+    )
+    def test_generic_queries_no_markers(self, query):
+        """Test generic queries without markers don't trigger personalization."""
+        assert is_personalized_query(query) is False
+
+    def test_generic_query_with_user_preferences(self):
+        """Test generic query triggers personalization when user has preferences."""
+        context = {"preferences": {"cities": ["Бургас"]}}
+
+        # Generic query but user has preferences
+        assert is_personalized_query("квартиры", context) is True
+
+    def test_generic_query_with_budget_preference(self):
+        """Test generic query triggers personalization when user has budget."""
+        context = {"preferences": {"budget_max": 100000}}
+
+        assert is_personalized_query("квартиры", context) is True
+
+    def test_generic_query_with_property_types(self):
+        """Test generic query triggers personalization when user has property types."""
+        context = {"preferences": {"property_types": ["apartment"]}}
+
+        assert is_personalized_query("квартиры", context) is True
+
+    def test_generic_query_empty_context(self):
+        """Test generic query with empty context doesn't trigger personalization."""
+        context = {"preferences": {}}
+
+        assert is_personalized_query("квартиры", context) is False
+
+    def test_generic_query_no_context(self):
+        """Test generic query with None context doesn't trigger personalization."""
+        assert is_personalized_query("квартиры", None) is False
+
+    def test_marker_takes_priority_over_empty_context(self):
+        """Test personal marker triggers even with empty context."""
+        context = {"preferences": {}}
+
+        # Has marker but no preferences - should still trigger
+        assert is_personalized_query("покажи мне квартиры", context) is True
+
+    def test_case_insensitive_markers(self):
+        """Test markers are case insensitive."""
+        assert is_personalized_query("МНЕ нужна квартира") is True
+        assert is_personalized_query("MY budget is 50000") is True
+
+    def test_marker_in_middle_of_query(self):
+        """Test markers work when not at start of query."""
+        assert is_personalized_query("найди квартиру для моего бюджета") is True
+
+    def test_partial_marker_not_matched(self):
+        """Test partial word match doesn't trigger (word boundaries)."""
+        # "мне" shouldn't match in "именно"
+        # Actually "мне" could match as a standalone word - let's use better example
+        # "моя" shouldn't match in "немоям" (if such word existed)
+        # Testing with actual word boundary behavior
+        assert is_personalized_query("именно такой вариант") is False
 
 
 class TestCESCPersonalizer:
