@@ -40,7 +40,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from config_snapshot import get_config_hash
+from .config_snapshot import get_config_hash
 
 
 @dataclass
