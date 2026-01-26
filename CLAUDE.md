@@ -332,32 +332,6 @@ chore(deps): update dependencies
 - Integration tests require Docker services running
 - Run single test: `pytest tests/test_file.py::TestClass::test_method -v`
 
-### Test Structure
-
-```
-tests/
-├── unit/                    # Unit tests (~200 test cases)
-│   ├── test_settings.py     # Settings, API validation, defaults
-│   ├── test_chunker.py      # DocumentChunker, CSV chunking
-│   ├── test_search_engines.py    # All search engine variants
-│   ├── test_voyage_service.py    # Embeddings, reranking
-│   └── ...
-├── smoke/                   # Smoke tests (20 queries, live services)
-│   ├── test_preflight.py    ***REMOVED***/Redis config verification
-│   ├── test_smoke_routing.py    # Query classification (no deps)
-│   ├── test_smoke_cache.py      # Redis cache operations
-│   ├── test_smoke_quantization.py  # Binary quantization A/B
-│   └── queries.py           # 6 CHITCHAT + 6 SIMPLE + 8 COMPLEX
-├── load/                    # Load tests (parallel chats, p95 metrics)
-│   ├── test_load_conversations.py  # Parallel chat simulation
-│   ├── test_load_redis_eviction.py # LFU eviction behavior
-│   ├── metrics_collector.py # p95 latency analysis
-│   ├── chat_simulator.py    # 6-message conversation template
-│   └── baseline.json        # Regression detection baseline
-├── test_voyage*.py          ***REMOVED*** AI integration tests
-└── legacy/                  # Deprecated tests
-```
-
 ### Running Tests
 
 ```bash
@@ -377,45 +351,11 @@ pytest tests/test_e2e_pipeline.py -v
 # Exclude legacy tests
 pytest tests/ --ignore=tests/legacy -v
 
-# Test specific services (after modifications)
-pytest tests/unit/test_qdrant_service.py tests/unit/test_cache_service.py -v
+# Smoke & load tests (require Docker services)
+make test-preflight        # Verify Qdrant/Redis config
+make test-smoke            # 20 queries smoke suite
+make test-load             # Parallel chat simulation
 ```
-
-### Smoke & Load Tests
-
-```bash
-# Preflight: verify Qdrant/Redis configuration
-make test-preflight        # Checks binary quantization, allkeys-lfu, maxmemory
-
-# Smoke tests (20 queries: 6 CHITCHAT + 6 SIMPLE + 8 COMPLEX)
-make test-smoke-routing    # Query routing only (no external deps)
-make test-smoke            # Full smoke suite (requires Qdrant/Redis)
-
-# Load tests (parallel chat simulation)
-make test-load-ci          # Mocked mode for CI (fast, no deps)
-make test-load             # Live services (requires Qdrant/Redis/Voyage)
-make test-load-eviction    # Redis LFU eviction behavior
-
-# Full suite
-make test-all-smoke-load   # preflight + smoke + load
-```
-
-**Environment variables for load tests:**
-
-- `LOAD_USE_MOCKS=1` - Use mocked services (for CI)
-- `LOAD_CHAT_COUNT=30` - Number of parallel chats
-- `EVICTION_TEST_MB=10` - Redis pressure test volume
-
-**Generated reports:** `reports/preflight.json`, `reports/load_summary.json`, `reports/redis_stats_timeseries.json`
-
-### Test Coverage Targets
-
-| Module                   | Coverage |
-| ------------------------ | -------- |
-| `src/config/`            | ~90%     |
-| `src/ingestion/`         | ~85%     |
-| `src/retrieval/`         | ~80%     |
-| `telegram_bot/services/` | ~85%     |
 
 ## Telegram Bot (Docker)
 
@@ -450,5 +390,19 @@ Bot responses use Markdown formatting (`parse_mode="Markdown"`).
 make deploy-code
 
 # Release deploy with version tag
-make deploy-release VERSION=2.9.1
+make deploy-release VERSION=2.12.0
 ```
+
+## Troubleshooting
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Redis connection refused` | Redis not running | `docker compose up -d redis` |
+| `Qdrant timeout` | Collection too large or no quantization | Enable `use_quantization=True` |
+| `Voyage API 429` | Rate limit exceeded | Add delays in batch operations, use cache |
+| `BGE-M3 OOM` | Not using singleton | Use `get_bge_m3_model()` singleton |
+
+## API Rate Limits
+
+- **Voyage AI**: 300 RPM (embeddings), 100 RPM (rerank). Use `CacheService` to reduce calls.
+- **GLM-4**: 60 RPM. Streaming enabled by default to improve UX.
