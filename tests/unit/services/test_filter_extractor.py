@@ -285,28 +285,18 @@ class TestFilterExtractorDistanceToSea:
         result = extractor.extract_filters("до 200м до пляжа")
         assert result["distance_to_sea"] == {"lte": 200}
 
-    # First line / near sea - BUG: patterns use \s+ but condition checks literal string
-    def test_distance_pervaya_liniya_bug(self, extractor: FilterExtractor) -> None:
-        """Test 'первая линия' pattern - BUG: doesn't work.
-
-        Note: The pattern r"первая\\s+линия" matches, but the condition
-        'if "первая линия" in pattern' is False because pattern has \\s+ not space.
-        This is a bug in the implementation - the regex matches but the return
-        condition fails.
-        """
+    # First line / near sea - correctly maps to distance <= 200m
+    def test_distance_pervaya_liniya(self, extractor: FilterExtractor) -> None:
+        """Test 'первая линия' pattern correctly maps to distance <= 200m."""
         result = extractor.extract_filters("квартира на первая линия")
-        # BUG: pattern matches but condition fails, so no distance_to_sea
-        assert "distance_to_sea" not in result
+        # "первая линия" correctly maps to distance_to_sea <= 200m
+        assert result["distance_to_sea"] == {"lte": 200}
 
-    def test_distance_u_morya_bug(self, extractor: FilterExtractor) -> None:
-        """Test 'у моря' pattern - BUG: doesn't work.
-
-        Note: Same bug as 'первая линия' - the pattern r"у\\s+моря" matches,
-        but the condition 'if "у моря" in pattern' is False.
-        """
+    def test_distance_u_morya(self, extractor: FilterExtractor) -> None:
+        """Test 'у моря' pattern correctly maps to distance <= 200m."""
         result = extractor.extract_filters("квартира у моря")
-        # BUG: pattern matches but condition fails
-        assert "distance_to_sea" not in result
+        # "у моря" correctly maps to distance_to_sea <= 200m  # noqa: RUF003
+        assert result["distance_to_sea"] == {"lte": 200}
 
     # No distance filter
     def test_no_distance_filter(self, extractor: FilterExtractor) -> None:
