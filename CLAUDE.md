@@ -409,49 +409,159 @@ make deploy-release VERSION=2.12.0
 
 ## Parallel Claude Workers (spawn-claude)
 
-Запуск автономных Claude-агентов в отдельных табах WezTerm.
+Запуск автономных Claude-агентов в отдельных табах WezTerm для ускорения работы.
 
-### Использование
+### Базовый синтаксис
 
 ```bash
-# Базовый синтаксис
-spawn-claude "промпт"
-
-# С указанием директории проекта
 spawn-claude "промпт" /path/to/project
 ```
 
-### Примеры
+**ОБЯЗАТЕЛЬНО:** Всегда передавай путь к проекту вторым аргументом при вызове из оркестратора.
 
-```bash
-# Простой вопрос
-spawn-claude "Объясни что делает функция main в этом проекте"
+### Правила параллелизации (ВАЖНО)
 
-# Задача на выполнение
-spawn-claude "Выполни Task 4.2 из TODO.md"
+**Главный принцип:** 1 воркер = 1 набор независимых файлов. Никогда не делить один файл между воркерами.
 
-# Код-ревью
-spawn-claude "Сделай ревью последнего коммита"
+| Правило | Хорошо | Плохо |
+|---------|--------|-------|
+| 1 воркер = 1 модуль | W1: cache.py, W2: qdrant.py | W1: cache.py строки 1-100, W2: cache.py строки 101-200 |
+| Группируй мелкое | W1: metrics + otel + eval | W1: metrics, W2: otel, W3: eval (оверхед) |
+| Тесты с кодом | W1: auth.py + test_auth.py | W1: auth.py, W2: test_auth.py |
+| Общий файл — только чтение | Все читают план, оркестратор обновляет | Все пишут в один файл |
 
-# Рефакторинг
-spawn-claude "Отрефактори файл src/utils.py - убери дублирование"
+### Количество воркеров
 
-# В другом проекте
-spawn-claude "Запусти тесты и исправь ошибки" ~/projects/other-app
+Количество воркеров не ограничено — зависит от сложности задачи и количества независимых файлов.
+
+**Принцип:** 1 независимый набор файлов = 1 воркер. Чем больше независимых частей, тем больше воркеров можно запустить параллельно.
+
+### Архитектура: Оркестратор + Воркеры
+
+```
+┌─────────────────────────────────────────────────────┐
+│              ОРКЕСТРАТОР (главный Claude)           │
+│  - Создаёт план: docs/plans/YYYY-MM-DD-task.md      │
+│  - Дробит на независимые задачи                     │
+│  - Запускает spawn-claude для каждого воркера       │
+│  - Мониторит прогресс                               │
+│  - Финальная проверка                               │
+└──────────────────────┬──────────────────────────────┘
+                       │
+     ┌─────────┬───────┴───────┬─────────┐
+     ▼         ▼               ▼         ▼
+┌────────┐ ┌────────┐     ┌────────┐ ┌────────┐
+│Worker 1│ │Worker 2│ ... │Worker N│ │Worker M│
+│File: A │ │File: B │     │File: X │ │File: Y │
+└────────┘ └────────┘     └────────┘ └────────┘
 ```
 
-### Параллельные воркеры
+### Шаблон промпта для воркера
 
 ```bash
-# Запуск нескольких агентов одновременно
-spawn-claude "Напиши тесты для модуля auth"
-spawn-claude "Обнови документацию в README"
-spawn-claude "Исправь линтер ошибки"
+spawn-claude "Ты Worker N. REQUIRED: используй superpowers:executing-plans
+
+План: docs/plans/YYYY-MM-DD-task.md
+Задачи: Tasks X.1-X.N (секция Track N)
+
+Твои файлы (ТОЛЬКО ЭТИ):
+- module.py
+- test_module.py
+
+Алгоритм:
+1. Прочитай план, найди свои задачи
+2. Выполни каждый Step по порядку
+3. git commit после каждой задачи
+4. НЕ ТРОГАЙ файлы других воркеров
+
+Команда проверки: . venv/bin/activate && pytest tests/unit/ -q"
 ```
 
-Каждый откроется в отдельном табе и будет работать независимо.
+### Пример: дробление задачи на 6 воркеров
+
+**Задача:** Достичь 80% test coverage для 5 модулей + исправить 22 failing теста
+
+```bash
+PROJECT="/mnt/c/Users/user/Documents/Сайты/rag-fresh"
+
+# Worker 1: filter_extractor (свои файлы)
+spawn-claude "W1: fix filter_extractor. Files: telegram_bot/services/filter_extractor.py, tests/unit/services/test_filter_extractor.py" $PROJECT
+
+# Worker 2: metrics + otel + evaluator (сгруппированы — мелкие)
+spawn-claude "W2: fix metrics_logger + otel + evaluator. Files: tests/unit/test_metrics_logger.py, test_otel_setup.py, test_evaluator.py" $PROJECT
+
+# Worker 3: cache.py (большой модуль — отдельно)
+spawn-claude "W3: write cache.py tests to 80%. Files: telegram_bot/services/cache.py, tests/unit/test_cache_service.py" $PROJECT
+
+# Worker 4: user_context.py
+spawn-claude "W4: write user_context tests. Files: telegram_bot/services/user_context.py, tests/unit/test_user_context_service.py" $PROJECT
+
+# Worker 5: qdrant + cesc (связанные)
+spawn-claude "W5: write qdrant + cesc tests. Files: telegram_bot/services/qdrant.py, cesc.py, tests/unit/test_qdrant_service.py, test_cesc.py" $PROJECT
+
+# Worker 6: query_router
+spawn-claude "W6: write query_router tests. Files: telegram_bot/services/query_router.py, tests/unit/test_query_router_full.py" $PROJECT
+```
+
+### Автоматический запуск (для оркестратора)
+
+Когда у тебя есть план с независимыми задачами, запускай воркеров через Bash с путём к проекту:
+
+```bash
+# Оркестратор выполняет (ОБЯЗАТЕЛЬНО с путём):
+spawn-claude "W1: ..." /mnt/c/Users/user/Documents/Сайты/rag-fresh  # → pane 66
+spawn-claude "W2: ..." /mnt/c/Users/user/Documents/Сайты/rag-fresh  # → pane 67
+spawn-claude "W3: ..." /mnt/c/Users/user/Documents/Сайты/rag-fresh  # → pane 68
+# ... и так далее
+```
+
+Каждый воркер получит свой терминал в правильной директории проекта.
+
+### Мониторинг прогресса
+
+```bash
+# Проверить статус задач
+grep -c "\[x\]" docs/plans/*-tasks.md
+
+# Проверить git commits от воркеров
+git log --oneline -20
+
+# Финальная проверка
+. venv/bin/activate && pytest tests/unit/ -q
+```
 
 **Расположение скрипта:** `/mnt/c/Users/user/bin/spawn-claude`
+
+## Superpowers Skills
+
+Скиллы из [obra/superpowers](https://github.com/obra/superpowers). Вызов: `/superpowers:<skill-name>` или через Skill tool.
+
+| Скилл | Когда использовать |
+|-------|-------------------|
+| `using-superpowers` | **Старт любой задачи.** Проверить какие скиллы применимы перед действием |
+| `brainstorming` | **Перед созданием фич.** Превращает идеи в дизайн через диалог |
+| `writing-plans` | **Есть спек/требования.** Пишет детальный план до кода (TDD, bite-sized tasks) |
+| `executing-plans` | **Есть готовый план.** Выполняет план батчами по 3 задачи с checkpoint'ами |
+| `subagent-driven-development` | **План + независимые задачи.** Dispatch субагентов на каждую задачу в текущей сессии |
+| `dispatching-parallel-agents` | **2+ независимых задач.** Параллельные агенты без shared state |
+| `test-driven-development` | **Любая фича/багфикс.** Тест → fail → минимальный код → pass |
+| `systematic-debugging` | **Баг/падающий тест.** Найти root cause ДО попытки исправить |
+| `verification-before-completion` | **Перед "готово".** Запустить проверку перед коммитом/PR |
+| `requesting-code-review` | **Завершил задачу.** Запросить ревью перед мержем |
+| `receiving-code-review` | **Получил фидбек.** Верификация предложений, не слепое согласие |
+| `using-git-worktrees` | **Нужна изоляция.** Работа в отдельном worktree без переключения веток |
+| `finishing-a-development-branch` | **Код готов.** Выбор: merge / PR / cleanup worktree |
+| `writing-skills` | **Создание скилла.** TDD для документации процессов |
+
+**Порядок для новой фичи:**
+```
+brainstorming → writing-plans → using-git-worktrees → executing-plans/subagent-driven-development → verification-before-completion → requesting-code-review → finishing-a-development-branch
+```
+
+**Для дебага:**
+```
+systematic-debugging → test-driven-development → verification-before-completion
+```
 
 ## Troubleshooting
 
