@@ -287,7 +287,22 @@ chore(deps): update dependencies
 
 ## Task Management
 
-**Active tasks:** `TODO.md` (max 20 lines, delete when done)
+**Active tasks:** `TODO.md` (Claude reads automatically)
+
+**Backlog:** GitHub Issues with labels:
+- `next` — следующие к работе
+- `backlog` — на будущее
+- `idea` — идеи
+
+**Useful commands:**
+```bash
+gh issue list                      # All open issues
+gh issue list --label "next"       # Next to work on
+gh issue create --title "..." --label "idea"  # New idea
+gh issue close N                   # Close issue
+```
+
+**Auto-close:** Use `Closes #N` in commit message.
 
 **History:**
 - `git log --oneline --grep="feat\|fix"` - Completed tasks
