@@ -1,180 +1,165 @@
-# Contextual RAG Pipeline - Полный Overview
+# Contextual RAG Pipeline - Overview
 
 > **Быстрая справка для понимания всего flow системы**
 
-**Версия:** 2.4.0
-**Дата:** 2025-11-05
-**Цель:** Быстро понять как работает вся система, чтобы не повторять действия
+**Версия:** 2.13.0
+**Дата:** 2026-01-26
+**Python:** 3.12+ (minimum 3.9)
+**LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API, streaming)
 
 ---
 
-## 🎯 Что это за система?
+## Что это за система?
 
 **Contextual RAG Pipeline** - production система для поиска по документам с:
-- Гибридным поиском (RRF + ColBERT)
-- ML платформой (MLflow, Langfuse)
-- Redis кэшем
-- Security (PII redaction, budget guards)
+- Гибридным поиском (RRF/DBSF + ColBERT rerank)
+- Voyage AI embeddings (voyage-4-large/lite) + FastEmbed BM42
+- Binary Quantization (40x ускорение, 75% экономия RAM)
+- 6-уровневым кэшированием (Redis Stack)
+- Query routing (CHITCHAT/SIMPLE/COMPLEX)
+- ML платформой (MLflow, Langfuse, RAGAS)
+- Telegram bot интерфейсом со streaming
 
-**Основной use case:** Поиск по Уголовному кодексу Украины
-**Новый use case:** Любые документы + CSV данные (недвижимость, каталоги и т.д.)
+**Use cases:**
+- Уголовный кодекс Украины (1,294 документа, BGE-M3)
+- Болгарская недвижимость (92 документа, Voyage-4)
 
 ---
 
-## 📊 Архитектура High-Level
+## Архитектура High-Level
 
 ```
 ┌─────────────────┐
-│  Input Source   │  ← PDF, CSV, DOCX, URLs
+│  Input Source   │  ← PDF, CSV, DOCX
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│   Ingestion     │  ← Docling + Chunker
-│   (парсинг)     │
+│   Ingestion     │  ← UniversalDocumentParser + DocumentChunker (1024 chars)
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│   Embeddings    │  ← BGE-M3 (dense + sparse + ColBERT)
-│   (векторизация)│     1024-dim vectors
+│   Embeddings    │  ← VoyageService (voyage-4-large) или BGE-M3
+│                 │     + FastEmbed BM42 (sparse)
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│   Qdrant DB     │  ← Vector database
-│   (хранение)    │     Collections + metadata
+│   Qdrant DB     │  ← Binary Quantization, Named vectors
+│                 │     (dense + sparse + colbert)
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│   Retrieval     │  ← Hybrid RRF + ColBERT rerank
-│   (поиск)       │     Variant A (default) / Variant B
+│ Query Processing│  ← QueryPreprocessor (translit, RRF weights)
+│                 │     QueryRouter (CHITCHAT/SIMPLE/COMPLEX)
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│ Contextualization│ ← LLM processing (Claude/GPT)
-│   (обработка)   │     + Redis cache
+│   Retrieval     │  ← HybridRRFColBERT (default) или DBSF
+│                 │     4 search engine варианта
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│    Response     │  ← Final answer
+│   6-Tier Cache  │  ← Semantic, Embeddings, Analyzer, Search, Rerank, Conv
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Contextualization│ ← LLM streaming (GLM-4/Claude/GPT)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│    Response     │  ← Telegram bot / API
 └─────────────────┘
 ```
 
 ---
 
-## 🔄 Data Flow: От источника до ответа
+## Data Flow: От источника до ответа
 
 ### Step 1: Ingestion (Загрузка документов)
 
 **Модуль:** `src/ingestion/`
 
-**Поддерживаемые форматы:**
-- PDF → `pdf_parser.py` (через Docling)
-- CSV → `csv_to_qdrant.py` (новый, через Docling)
-- DOCX, HTML → (через Docling)
-
 **Компоненты:**
 
-1. **Docling Document Converter**
-   - Парсит любые форматы в единый формат
-   - Извлекает структуру, таблицы, изображения
-   - Конвертирует в Docling Document
+| Класс | Назначение |
+|-------|-----------|
+| `UniversalDocumentParser` | PDF/DOCX/CSV парсинг через PyMuPDF/Docling |
+| `DocumentChunker` | Hybrid chunking (1024 chars, overlap) |
+| `VoyageIndexer` | Индексация через Voyage AI |
+| `DocumentIndexer` | Индексация через BGE-M3 (legacy) |
 
-2. **Chunker** (`chunker.py`)
-   - Режет документ на chunks
-   - Стратегии:
-     - `FIXED_SIZE` - фиксированный размер (512 chars, 128 overlap)
-     - `SEMANTIC` - по семантическим границам (параграфы, секции)
-     - `SLIDING_WINDOW` - скользящее окно
-
-3. **Metadata Extraction**
-   - Извлекает метаданные: article_number, chapter, section
-   - Для CSV: все поля как metadata
-
-**Пример для CSV:**
+**Схема данных:**
 
 ```python
-# src/ingestion/csv_to_qdrant.py
-indexer = CSVToQdrantIndexer()
-records = indexer.read_csv("demo_BG.csv")
-# Каждая строка CSV → текст + metadata
-# "Недвижимость: Квартира... Город: Солнечный берег..."
+ContextualDocument(
+    topic="Недвижимость в Болгарии",
+    context="Обзор рынка...",
+    chunks=[
+        ContextualChunk(text="...", metadata={...}),
+        ...
+    ]
+)
 ```
-
-**Output:** Список `Chunk` объектов с text + metadata
 
 ---
 
 ### Step 2: Embeddings (Векторизация)
 
-**Модуль:** `src/ingestion/indexer.py`
+**Два варианта:**
 
-**Модель:** `BAAI/bge-m3` (через FlagEmbedding BGEM3FlagModel)
-
-BGE-M3 генерирует **три типа эмбеддингов за один проход**:
-- **Dense vectors:** 1024-dim (семантический поиск)
-- **Sparse vectors:** Learned BM42 (keyword matching, лучше BM25)
-- **ColBERT:** Multi-vector для token-level reranking
-
-**Процесс:**
+#### Voyage AI (рекомендуется)
 
 ```python
-# В indexer.py (обновлено 2025-11-05)
-from FlagEmbedding import BGEM3FlagModel
+from telegram_bot.services import VoyageService
 
-embedding_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
-output = embedding_model.encode(
+service = VoyageService(
+    model_docs="voyage-4-large",     # 1024-dim, для документов
+    model_queries="voyage-4-lite",   # Для запросов (asymmetric)
+    model_rerank="rerank-2.5",       # 32K context window
+)
+
+# Embeddings
+doc_vecs = await service.embed_documents(["doc1", "doc2"])
+query_vec = await service.embed_query("поисковый запрос")
+
+# Reranking
+results = await service.rerank("query", documents, top_k=5)
+```
+
+**Matryoshka dimensions:** 2048, 1024, 512, 256 (настраиваемо)
+
+#### BGE-M3 (локально, high RAM)
+
+```python
+from src.models import get_bge_m3_model
+
+model = get_bge_m3_model()  # Singleton, экономит 4-6GB RAM
+output = model.encode(
     texts,
-    batch_size=32,
     return_dense=True,
     return_sparse=True,
     return_colbert_vecs=True
 )
-# Returns: {
-#   "dense_vecs": [1024],
-#   "lexical_weights": {token_id: weight},
-#   "colbert_vecs": [N, 1024]
-# }
+# Returns: dense (1024-dim) + sparse (BM42) + ColBERT multi-vectors
 ```
-
-**Батчинг:**
-- Batch size: 32 (configurable)
-- FP16 precision для скорости
-
-**Output:** Three vector types для каждого chunk
-
-📖 **Детали:** См. `docs/QDRANT_STACK.md` для полной конфигурации
 
 ---
 
 ### Step 3: Indexing (Сохранение в Qdrant)
 
-**Модуль:** `src/ingestion/indexer.py`
+**Коллекции:**
 
-**Qdrant Version:** v1.15.4 (с оптимизациями)
-
-**Qdrant Collections:**
-
-1. **`legal_documents`** (основная)
-   - **Points:** 1,294 chunks (Criminal Code of Ukraine)
-   - **Vectors:** Named vectors architecture
-     - `dense` (1024-dim) - с Scalar Int8 quantization
-     - `colbert` (N×1024) - multivector для reranking
-     - `bm42` (sparse) - learned sparse с IDF modifier
-   - **Metadata:** article_number, chapter, section, document_name
-   - **Created:** 2025-11-05 (recreated with optimizations)
-
-**Ключевые оптимизации (v2.4.0):**
-
-- ✅ **Scalar Int8 quantization**: 4x compression, 0.99 accuracy
-- ✅ **Original vectors on disk**: ~75% RAM savings
-- ✅ **HNSW optimized**: m=16, ef_construct=200
-- ✅ **BM42 sparse vectors**: +9% Precision@10 vs BM25
-- ✅ **ColBERT MaxSim**: Token-level reranking
+| Collection | Documents | Embeddings | Quantization |
+|-----------|-----------|------------|--------------|
+| `contextual_bulgaria_voyage4` | 92 | Voyage-4 | Binary |
+| `legal_documents` | 1,294 | BGE-M3 | Scalar Int8 |
 
 **Структура Point:**
 
@@ -182,506 +167,302 @@ output = embedding_model.encode(
 PointStruct(
     id=uuid.uuid4(),
     vector={
-        "dense": [1024 floats],           # Semantic search
-        "colbert": [[N×1024] floats],     # Reranking
-        "bm42": {                          # Keyword search
-            "indices": [token_ids],
-            "values": [weights]
-        }
+        "dense": [1024 floats],        # Semantic search
+        "bm42": SparseVector(...),     # Keyword search
+        "colbert": [[N×1024] floats],  # Reranking (optional)
     },
     payload={
-        "page_content": chunk.text,  # n8n LangChain format
+        "page_content": chunk.text,
         "metadata": {
             "document_name": "...",
             "article_number": "...",
-            "chapter": "...",
-            "section": "...",
-            "chunk_id": "...",
-            "order": 0
+            ...
         }
     }
 )
 ```
 
-**Payload Indexes (fast filtering):**
-- `article_number` (keyword)
-- `document_name` (keyword)
-
-📖 **Детали:** См. `docs/QDRANT_STACK.md` для архитектуры и бенчмарков
-
----
-
-### Step 4: Retrieval (Поиск)
-
-**Модуль:** `src/retrieval/`
-
-**Два варианта (Variant A - default, Variant B - experimental):**
-
-#### **Variant A: Hybrid RRF + ColBERT**
-
-`src/retrieval/hybrid_rrf_colbert_search_engine.py`
-
-**3-stage pipeline:**
-
-1. **Prefetch** (100 docs)
-   - Dense search (top 100)
-   - Sparse search (top 100)
-
-2. **RRF Fusion** (Reciprocal Rank Fusion)
-   ```
-   score = Σ 1/(k + rank_i)
-   k = 60 (константа)
-   ```
-   - Объединяет результаты dense + sparse
-   - Top 20 после fusion
-
-3. **ColBERT Rerank** (server-side)
-   - Multi-vector reranking на Qdrant
-   - Max-sim scoring
-   - Final top 10
-
-**Performance:**
-- Recall@1: ~94%
-- NDCG@10: ~0.97
-- Latency: ~1.0s
-
-#### **Variant B: Hybrid DBSF + ColBERT**
-
-`src/retrieval/dbsf_colbert_search_engine.py`
-
-**Отличие:** DBSF вместо RRF
-- DBSF (Distribution-Based Score Fusion)
-- Statistical normalization
-- 7% faster (0.937s)
-- Top result agreement: 66.7% с Variant A
-
-**Когда использовать:**
-- Variant A: production default
-- Variant B: experimentation, faster processing
-
-**Config:**
+**Binary Quantization (v2.13.0):**
 
 ```python
-# src/config/constants.py
-DEFAULT_SEARCH_ENGINE = SearchEngine.HYBRID_RRF_COLBERT
-# или
-DEFAULT_SEARCH_ENGINE = SearchEngine.DBSF_COLBERT
+from telegram_bot.services import QdrantService
+
+qdrant = QdrantService(
+    use_quantization=True,           # 40x faster
+    quantization_rescore=True,       # Maintain accuracy
+    quantization_oversampling=2.0,   # Fetch 2x, rescore top_k
+)
+
+# A/B testing: disable per-request
+results = await qdrant.hybrid_search_rrf(
+    dense_vector=query_embedding,
+    quantization_ignore=True,  # Skip quantization
+)
 ```
 
 ---
 
-### Step 5: Cache (Redis)
+### Step 4: Query Processing
 
-**Модуль:** `src/cache/`
+**Модуль:** `telegram_bot/services/`
 
-**2-уровневый кэш:**
-
-1. **Embedding Cache** (Level 1)
-   - TTL: 30 дней
-   - Ключ: hash(query text)
-   - Значение: embedding vector
-   - Экономия: GPU compute
-
-2. **Response Cache** (Level 2)
-   - TTL: 5-60 минут (зависит от типа запроса)
-   - Ключ: hash(query + search_params)
-   - Значение: полный response
-   - Экономия: LLM calls (90% cost savings)
-
-**Versioning:**
-- Schema version: `v1`
-- Автоматическая инвалидация при изменении
-
-**Пример:**
+#### QueryPreprocessor (Translit + RRF Weights)
 
 ```python
-from src.cache import RedisSemanticCache
+from telegram_bot.services import QueryPreprocessor
 
-cache = RedisSemanticCache()
-# Проверка кэша
-cached = cache.get(query="как наказывается кража?")
-if cached:
-    return cached
+pp = QueryPreprocessor()
+result = pp.analyze("apartments in Sunny Beach корпус 5")
+# Returns:
+# {
+#   "normalized_query": "apartments in Солнечный берег корпус 5",
+#   "rrf_weights": {"dense": 0.2, "sparse": 0.8},  # Exact → sparse
+#   "cache_threshold": 0.05,
+#   "is_exact": True
+# }
+```
 
-# ... выполнить поиск + LLM ...
+| Тип запроса | RRF weights | Cache threshold |
+|-------------|-------------|-----------------|
+| Semantic (без IDs) | 0.6/0.4 (dense) | 0.10 |
+| Exact (IDs, корпус) | 0.2/0.8 (sparse) | 0.05 |
 
-# Сохранить в кэш
-cache.set(query="...", response="...", ttl=3600)
+#### QueryRouter (RAG Skipping)
+
+```python
+from telegram_bot.services import classify_query, QueryType, get_chitchat_response
+
+query_type = classify_query("Привет!")  # QueryType.CHITCHAT
+if query_type == QueryType.CHITCHAT:
+    response = get_chitchat_response(query)  # Skip RAG entirely
+
+# QueryType.SIMPLE  → Light RAG, skip rerank
+# QueryType.COMPLEX → Full RAG + rerank
 ```
 
 ---
 
-### Step 6: LLM Processing (Contextualization)
+### Step 5: Retrieval (Поиск)
+
+**Модуль:** `src/retrieval/search_engines.py`
+
+**4 варианта:**
+
+| Engine | Pipeline | Recall@1 | Latency |
+|--------|----------|----------|---------|
+| **HybridRRFColBERT** (default) | Dense + Sparse → RRF → ColBERT | 0.94 | ~1.0s |
+| DBSFColBERT | Dense + Sparse → DBSF → ColBERT | 0.93 | ~0.93s |
+| HybridRRF | Dense + Sparse → RRF | 0.91 | ~0.7s |
+| Baseline | Dense only | 0.91 | ~0.5s |
+
+**SDK Pattern (v2.13.0):**
+
+```python
+from qdrant_client import models
+
+# 3-stage: Dense + Sparse → RRF → ColBERT rerank
+response = client.query_points(
+    collection_name="...",
+    prefetch=[
+        models.Prefetch(
+            prefetch=[
+                models.Prefetch(query=dense_vector, using="dense", limit=100),
+                models.Prefetch(query=sparse_vector, using="bm42", limit=100),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+        ),
+    ],
+    query=colbert_vectors,
+    using="colbert",
+    limit=top_k,
+)
+```
+
+---
+
+### Step 6: Cache (6-Tier)
+
+**Модуль:** `telegram_bot/services/cache.py`
+
+| Уровень | TTL | Назначение |
+|---------|-----|-----------|
+| Semantic | 2h | Похожие запросы (cosine 0.15) |
+| Embeddings | 7d | Voyage/BGE-M3 vectors |
+| Analyzer | 24h | LLM filter extraction |
+| Search | 2h | Qdrant results |
+| Rerank | 2h | Voyage rerank results |
+| Conversation | Session | Message history |
+
+```python
+from telegram_bot.services import CacheService
+
+cache = CacheService()
+# Auto-caches: embeddings, search results, rerank, analyzer
+```
+
+---
+
+### Step 7: LLM Contextualization
 
 **Модуль:** `src/contextualization/`
 
 **Провайдеры:**
-- Anthropic (Claude) - default
-- OpenAI (GPT)
-- Groq
 
-**Процесс:**
+| Provider | Model | Use case |
+|----------|-------|----------|
+| Z.AI | GLM-4 (zai-glm-4.7) | Default, streaming |
+| Anthropic | Claude 3.5 Sonnet | High quality |
+| OpenAI | GPT-4 Turbo | Fallback |
+| Groq | Mixtral | Fast, cheap |
 
-1. Получить топ chunks из retrieval
-2. Построить промпт с контекстом
-3. Отправить в LLM
-4. PII redaction (если нужно)
-5. Budget guards (проверка лимитов)
-
-**Security:**
+**Streaming response:**
 
 ```python
-# src/security/
-- pii_redaction.py: Ukrainian patterns (phone, email, passport)
-- budget_guards.py: $10/day, $300/month limits
+from telegram_bot.services import LLMService
+
+llm = LLMService()
+async for chunk in llm.stream_response(query, context):
+    yield chunk  # Real-time streaming to Telegram
 ```
 
 ---
 
-### Step 7: Observability (Мониторинг)
+## Telegram Bot Services
 
-**Модуль:** `src/observability/`
+**Модуль:** `telegram_bot/services/`
 
-**Стек:**
-- OpenTelemetry → traces
-- Tempo → trace storage
-- Prometheus → metrics
-- Grafana → dashboards
-
-**Traced operations:**
-- Document parsing
-- Embedding generation
-- Vector search
-- LLM calls
-- Cache hits/misses
-
-**Langfuse:**
-- LLM tracing
-- Cost tracking
-- Quality metrics
+| Service | Purpose |
+|---------|---------|
+| `VoyageService` | Unified embeddings + reranking |
+| `QdrantService` | Smart Gateway: RRF, quantization, MMR |
+| `CacheService` | 6-tier multi-level cache |
+| `QueryPreprocessor` | Translit, RRF weights |
+| `QueryRouter` | CHITCHAT/SIMPLE/COMPLEX classification |
+| `QueryAnalyzer` | LLM-based filter extraction |
+| `RetrieverService` | Dense vector search |
+| `CESCPersonalizer` | Lazy personalization |
+| `UserContextService` | User preferences extraction |
+| `LLMService` | Streaming LLM responses |
 
 ---
 
-## 🗂️ Структура проекта (детально)
+## External Services
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| Qdrant | 6333 | Vector database |
+| Redis Stack | 6379, 8001 | Semantic cache (RediSearch) |
+| MLflow | 5000 | Experiment tracking |
+| Langfuse | 3001 | LLM tracing |
+
+---
+
+## Структура проекта
 
 ```
-contextual_rag/
+rag-fresh/
+├── src/                          # Core RAG pipeline
+│   ├── ingestion/                # Document parsing, chunking, indexing
+│   ├── retrieval/                # 4 search engine variants
+│   ├── contextualization/        # LLM providers (Claude, OpenAI, Groq)
+│   ├── cache/                    # RedisSemanticCache
+│   ├── config/                   # Settings, enums
+│   ├── evaluation/               # RAGAS, MLflow, Langfuse
+│   ├── models/                   # BGE-M3 singleton
+│   └── core/                     # RAGPipeline orchestrator
 │
-├── src/
-│   ├── ingestion/           ← Загрузка и парсинг
-│   │   ├── pdf_parser.py    ← PDF через Docling
-│   │   ├── csv_to_qdrant.py ← CSV через Docling (NEW)
-│   │   ├── chunker.py       ← Стратегии чанкинга
-│   │   └── indexer.py       ← Индексация в Qdrant
-│   │
-│   ├── retrieval/           ← Поиск
-│   │   ├── hybrid_rrf_colbert_search_engine.py  ← Variant A (default)
-│   │   ├── dbsf_colbert_search_engine.py        ← Variant B
-│   │   └── base_search_engine.py                ← Base interface
-│   │
-│   ├── cache/               ← Redis кэш
-│   │   ├── redis_semantic_cache.py  ← 2-level cache
-│   │   └── README.md
-│   │
-│   ├── contextualization/   ← LLM обработка
-│   │   ├── llm_client.py    ← Anthropic/OpenAI/Groq
-│   │   └── prompts.py       ← Промпт темплейты
-│   │
-│   ├── evaluation/          ← ML платформа
-│   │   ├── mlflow_tracker.py    ← Эксперименты
-│   │   ├── langfuse_tracer.py   ← LLM tracing
-│   │   └── ragas_evaluator.py   ← Quality metrics
-│   │
-│   ├── governance/          ← Model Registry
-│   │   └── model_registry.py    ← Staging → Production
-│   │
-│   ├── security/            ← Безопасность
-│   │   ├── pii_redaction.py     ← PII фильтрация
-│   │   └── budget_guards.py     ← Лимиты
-│   │
-│   ├── observability/       ← Мониторинг
-│   │   └── tracing.py           ← OpenTelemetry
-│   │
-│   ├── config/              ← Конфигурация
-│   │   ├── settings.py          ← Settings class
-│   │   └── constants.py         ← Defaults
-│   │
-│   └── core/                ← Main pipeline
-│       └── rag_pipeline.py      ← Orchestration
+├── telegram_bot/                 # Bot + 13 unified services
+│   ├── services/                 # VoyageService, QdrantService, etc.
+│   └── bot.py                    # Main handler
 │
-├── scripts/                 ← Утилиты
-│   ├── qdrant_backup.sh     ← Backup Qdrant
-│   └── qdrant_restore.sh    ← Restore
+├── scripts/                      # Utilities
+│   ├── test_quantization_ab.py   # Binary quantization A/B testing
+│   └── index_contextual.py       # Document indexing
 │
-├── tests/
-│   ├── data/golden_test_set.json  ← 150 test queries
-│   └── test_*.py
-│
-├── docs/
-│   ├── PIPELINE_OVERVIEW.md       ← ВОТ ЭТОТ ДОКУМЕНТ
-│   ├── ML_PLATFORM_INTEGRATION_PLAN.md
-│   └── architecture/
-│
-├── .env                     ← Секреты (НЕ в Git!)
-├── pyproject.toml           ← Зависимости
-└── README.md                ← Главный README
+├── tests/                        # pytest (unit, integration, e2e, smoke, load)
+├── docs/                         # Documentation
+├── CLAUDE.md                     # Full technical context (17KB)
+└── pyproject.toml                # Dependencies, Ruff, MyPy
 ```
 
 ---
 
-## 🚀 Как запустить каждый компонент
-
-### 1. Добавить PDF документы
-
-```bash
-python src/ingestion/pdf_parser.py --input data/document.pdf
-python src/ingestion/indexer.py --collection legal_documents
-```
-
-### 2. Добавить CSV данные
-
-```bash
-python src/ingestion/csv_to_qdrant.py \
-    --input demo_BG.csv \
-    --collection bulgarian_properties \
-    --recreate
-```
-
-### 3. Поисковый запрос (Variant A)
-
-```python
-from src.retrieval import HybridRRFColBERTSearchEngine
-
-engine = HybridRRFColBERTSearchEngine()
-results = engine.search(
-    query="квартира в Несебре",
-    collection_name="bulgarian_properties",
-    limit=5
-)
-```
-
-### 4. Полный RAG pipeline
-
-```python
-from src.core import RAGPipeline
-
-pipeline = RAGPipeline()
-response = pipeline.query(
-    question="какая средняя цена квартиры в Солнечном берегу?",
-    collection="bulgarian_properties"
-)
-```
-
-### 5. Мониторинг
-
-```bash
-# Prometheus metrics
-curl http://localhost:9090/metrics
-
-# Grafana dashboards
-open http://localhost:3000
-
-# MLflow experiments
-open http://localhost:5000
-
-# Langfuse traces
-open http://localhost:3001
-```
-
----
-
-## 🔧 Конфигурация
+## Конфигурация
 
 ### Environment Variables (.env)
 
 ```bash
-# API Keys
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
+# Required
+VOYAGE_API_KEY=...
+OPENAI_API_KEY=...
+QDRANT_API_KEY=...
+TELEGRAM_BOT_TOKEN=...
 
-# Qdrant
-QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=REDACTED_QDRANT...
+# Optional
+ANTHROPIC_API_KEY=...
+LANGFUSE_PUBLIC_KEY=...
+MLFLOW_TRACKING_URI=...
 
-# Redis
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=...
+# Voyage models (defaults)
+VOYAGE_MODEL_DOCS=voyage-4-large
+VOYAGE_MODEL_QUERIES=voyage-4-lite
+VOYAGE_RERANK_MODEL=rerank-2.5
 
-# MLflow
-MLFLOW_TRACKING_URI=http://localhost:5000
-
-# Langfuse
-LANGFUSE_PUBLIC_KEY=pk-...
-LANGFUSE_SECRET_KEY=sk-...
-LANGFUSE_HOST=http://localhost:3001
-```
-
-### Settings (Python)
-
-```python
-from src.config import Settings
-
-settings = Settings(
-    # Search
-    search_engine=SearchEngine.HYBRID_RRF_COLBERT,  # или DBSF_COLBERT
-    top_k=10,
-    score_threshold=0.7,
-
-    # LLM
-    api_provider=APIProvider.ANTHROPIC,
-    model_name="claude-3-5-sonnet-20241022",
-    temperature=0.0,
-
-    # Processing
-    batch_size_embeddings=32,
-    batch_size_documents=10,
-)
+# Qdrant quantization (defaults)
+QDRANT_USE_QUANTIZATION=true
+QDRANT_QUANTIZATION_RESCORE=true
+QDRANT_QUANTIZATION_OVERSAMPLING=2.0
 ```
 
 ---
 
-## 📈 Метрики и Performance
+## Performance (2026 Defaults)
 
-### Качество (RAGAS)
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `search_top_k` | 20 | Fewer candidates → faster Qdrant |
+| `use_quantization` | true | 40x faster, 75% less RAM |
+| `rerank_top_k` | 3 | Fewer chunks in LLM context |
+| `max_tokens` | 1024 | Faster generation |
+| Rerank cache TTL | 2h | Skip API calls |
+| Semantic threshold | 0.15 | 85% similarity |
 
-- **Faithfulness:** ≥ 0.85 (точность ответов)
-- **Precision:** ≥ 0.80 (релевантность chunks)
-- **Recall:** ≥ 0.90 (полнота покрытия)
-
-### Скорость
-
-| Operation | Latency |
-|-----------|---------|
-| Embedding generation | 50-100ms (batch 32) |
-| Vector search (Variant A) | ~1.0s |
-| Vector search (Variant B) | ~0.94s |
-| LLM call (Claude) | 2-5s |
-| Redis cache hit | <10ms |
-
-### Экономия
-
-- **Cache hit rate:** 70-80%
-- **Cost savings:** 90% (через cache)
-- **Token usage:** Tracked in Langfuse
+**Search latency:** ~1.0s (HybridRRFColBERT)
+**Recall@1:** 0.94
 
 ---
 
-## 🐛 Troubleshooting
-
-### Проблема: "Must provide API key" (Qdrant)
-
-```python
-# Решение: Добавить API key
-client = QdrantClient(
-    url="http://localhost:6333",
-    api_key=os.getenv("QDRANT_API_KEY")
-)
-```
-
-### Проблема: Redis connection error
+## Quick Commands
 
 ```bash
-# Проверить контейнер
-docker ps | grep redis
+# Install
+make install-dev
 
-# Проверить пароль
-echo $REDIS_PASSWORD
-```
+# Start services
+docker compose -f docker-compose.dev.yml up -d
 
-### Проблема: Slow search
+# Run tests
+make test
+make test-cov
 
-```python
-# Использовать Variant B (быстрее на 7%)
-settings = Settings(
-    search_engine=SearchEngine.DBSF_COLBERT
-)
-```
+# Code quality
+make check    # lint + types
+make fix      # auto-fix
 
----
-
-## 🎓 Обучающие материалы
-
-### Для понимания компонентов:
-
-1. **Docling:** Парсинг документов
-   - https://github.com/docling-project/docling
-   - Supports: PDF, DOCX, CSV, HTML
-
-2. **BGE-M3:** Embeddings (обновлено 2025-11-05)
-   - https://huggingface.co/BAAI/bge-m3
-   - https://github.com/FlagOpen/FlagEmbedding
-   - Dense + Sparse (learned BM42) + ColBERT multi-functionality
-
-3. **Qdrant:** Vector DB (v1.15.4)
-   - https://qdrant.tech/documentation/
-   - https://qdrant.tech/documentation/guides/quantization/
-   - https://qdrant.tech/documentation/guides/optimize/
-   - Hybrid search, multivector, quantization
-
-4. **RRF vs DBSF:**
-   - RRF: Reciprocal Rank Fusion (default)
-   - DBSF: Distribution-Based Score Fusion (faster)
-
-5. **Внутренняя документация:**
-   - `docs/QDRANT_STACK.md` - детальная конфигурация Qdrant
-   - `docs/PIPELINE_OVERVIEW.md` - этот документ
-   - `docs/architecture/ARCHITECTURE.md` - общая архитектура
-
----
-
-## 📝 Quick Reference
-
-**Добавить новый тип документа:**
-
-1. Создать parser в `src/ingestion/`
-2. Использовать `DocumentChunker` для chunks
-3. Индексировать через `DocumentIndexer`
-4. Profit!
-
-**Поменять search engine:**
-
-```python
-# В src/config/constants.py
-DEFAULT_SEARCH_ENGINE = SearchEngine.DBSF_COLBERT  # вместо HYBRID_RRF_COLBERT
-```
-
-**Добавить новую коллекцию:**
-
-```python
-indexer = DocumentIndexer()
-indexer.create_collection("new_collection")
-```
-
-**Очистить Redis кэш:**
-
-```bash
-docker exec ai-redis-secure redis-cli -a $REDIS_PASSWORD FLUSHDB
+# Deploy
+make deploy-code
 ```
 
 ---
 
-## ✅ Checklist: Что нужно знать
+## См. также
 
-- [x] Ingestion flow: Document → Chunks → Embeddings → Qdrant
-- [x] BGE-M3: Три типа векторов за один проход (dense + sparse + ColBERT)
-- [x] Qdrant v1.15.4: Scalar Int8 quantization, BM42 sparse, ColBERT
-- [x] Retrieval: Variant A (RRF) vs Variant B (DBSF)
-- [x] Cache: 2-level (embeddings + responses)
-- [x] Security: PII + budget guards
-- [x] Monitoring: OpenTelemetry + Langfuse + MLflow
-- [x] Collections: `legal_documents` (1,294 points с оптимизациями)
-- [x] Performance: ~75% RAM savings, +9% Precision@10
+- `CLAUDE.md` - полный технический контекст (17KB)
+- `docs/QDRANT_STACK.md` - конфигурация Qdrant
+- `docs/LOCAL-DEVELOPMENT.md` - локальная разработка
+- `CACHING.md` - 6-tier cache architecture
 
 ---
 
-**Этот документ должен дать полное понимание системы за 10-15 минут чтения.**
-**При добавлении новых компонентов - обновить этот файл!**
-
-**См. также:**
-- 📖 `docs/QDRANT_STACK.md` - детальная конфигурация vector database
-- 📖 `docs/architecture/ARCHITECTURE.md` - архитектура всей системы
-- 📖 `docs/ML_PLATFORM_INTEGRATION_PLAN.md` - ML платформа и эксперименты
-
-**Last Updated:** 2025-11-05
-**Maintainer:** yastman
+**Last Updated:** 2026-01-26
+**Version:** 2.13.0
