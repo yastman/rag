@@ -104,3 +104,162 @@ class TestQdrantServiceQuantization:
         assert search_params.quantization.ignore is False
         assert search_params.quantization.rescore is True  # default
         assert search_params.quantization.oversampling == 2.0  # default
+
+
+class TestQdrantServiceMMR:
+    """Tests for MMR (Maximal Marginal Relevance) reranking."""
+
+    @pytest.fixture
+    def service(self):
+        """Create QdrantService with mocked client."""
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+            return QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+            )
+
+    def test_mmr_rerank_basic(self, service):
+        """Test basic MMR reranking returns correct number of results."""
+        points = [
+            {"id": "1", "text": "doc1", "score": 0.9},
+            {"id": "2", "text": "doc2", "score": 0.8},
+            {"id": "3", "text": "doc3", "score": 0.7},
+            {"id": "4", "text": "doc4", "score": 0.6},
+            {"id": "5", "text": "doc5", "score": 0.5},
+        ]
+        embeddings = [
+            [1.0, 0.0, 0.0],
+            [0.9, 0.1, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.9, 0.1],
+            [0.0, 0.0, 1.0],
+        ]
+
+        result = service.mmr_rerank(points=points, embeddings=embeddings, top_k=3)
+
+        assert len(result) == 3
+        # First should be highest score
+        assert result[0]["id"] == "1"
+
+    def test_mmr_rerank_diversity(self, service):
+        """Test MMR promotes diversity over pure relevance."""
+        points = [
+            {"id": "1", "text": "doc1", "score": 0.9},
+            {"id": "2", "text": "doc2", "score": 0.85},  # High score but similar to 1
+            {"id": "3", "text": "doc3", "score": 0.7},  # Lower score but very different
+        ]
+        # Doc 2 is very similar to doc 1, doc 3 is orthogonal
+        embeddings = [
+            [1.0, 0.0],  # doc1
+            [0.99, 0.01],  # doc2 - nearly identical to doc1
+            [0.0, 1.0],  # doc3 - completely different
+        ]
+
+        result = service.mmr_rerank(points=points, embeddings=embeddings, lambda_mult=0.5, top_k=2)
+
+        # First should be highest score (doc1)
+        assert result[0]["id"] == "1"
+        # Second should prefer diversity - doc3 over doc2 despite lower score
+        assert result[1]["id"] == "3"
+
+    def test_mmr_rerank_lambda_1_relevance_only(self, service):
+        """Test lambda=1.0 results in pure relevance ranking."""
+        points = [
+            {"id": "1", "text": "doc1", "score": 0.9},
+            {"id": "2", "text": "doc2", "score": 0.8},
+            {"id": "3", "text": "doc3", "score": 0.7},
+        ]
+        embeddings = [
+            [1.0, 0.0],
+            [0.99, 0.01],  # Very similar to doc1
+            [0.0, 1.0],  # Very different
+        ]
+
+        result = service.mmr_rerank(points=points, embeddings=embeddings, lambda_mult=1.0, top_k=3)
+
+        # With lambda=1.0, should be pure relevance order
+        assert result[0]["id"] == "1"
+        assert result[1]["id"] == "2"
+        assert result[2]["id"] == "3"
+
+    def test_mmr_rerank_lambda_0_diversity_only(self, service):
+        """Test lambda=0.0 results in maximum diversity."""
+        points = [
+            {"id": "1", "text": "doc1", "score": 0.9},
+            {"id": "2", "text": "doc2", "score": 0.85},
+            {"id": "3", "text": "doc3", "score": 0.7},
+        ]
+        embeddings = [
+            [1.0, 0.0],  # doc1
+            [0.99, 0.01],  # doc2 - similar to doc1
+            [0.0, 1.0],  # doc3 - different
+        ]
+
+        result = service.mmr_rerank(points=points, embeddings=embeddings, lambda_mult=0.0, top_k=2)
+
+        # First is still highest score
+        assert result[0]["id"] == "1"
+        # With lambda=0, should strongly prefer diversity
+        assert result[1]["id"] == "3"
+
+    def test_mmr_rerank_empty_input(self, service):
+        """Test MMR with empty input returns empty."""
+        result = service.mmr_rerank(points=[], embeddings=[], top_k=5)
+
+        assert result == []
+
+    def test_mmr_rerank_fewer_points_than_top_k(self, service):
+        """Test MMR returns all points when fewer than top_k."""
+        points = [
+            {"id": "1", "text": "doc1", "score": 0.9},
+            {"id": "2", "text": "doc2", "score": 0.8},
+        ]
+        embeddings = [[1.0, 0.0], [0.0, 1.0]]
+
+        result = service.mmr_rerank(points=points, embeddings=embeddings, top_k=10)
+
+        # Should return all points unchanged
+        assert len(result) == 2
+        assert result == points
+
+    def test_mmr_rerank_equal_points_and_top_k(self, service):
+        """Test MMR with exactly top_k points returns all unchanged."""
+        points = [
+            {"id": "1", "text": "doc1", "score": 0.9},
+            {"id": "2", "text": "doc2", "score": 0.8},
+            {"id": "3", "text": "doc3", "score": 0.7},
+        ]
+        embeddings = [[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]]
+
+        result = service.mmr_rerank(points=points, embeddings=embeddings, top_k=3)
+
+        assert len(result) == 3
+
+    def test_mmr_rerank_single_point(self, service):
+        """Test MMR with single point returns that point."""
+        points = [{"id": "1", "text": "doc1", "score": 0.9}]
+        embeddings = [[1.0, 0.0]]
+
+        result = service.mmr_rerank(points=points, embeddings=embeddings, top_k=5)
+
+        assert len(result) == 1
+        assert result[0]["id"] == "1"
+
+    def test_mmr_rerank_preserves_point_structure(self, service):
+        """Test MMR preserves full point structure."""
+        points = [
+            {"id": "1", "text": "doc1", "score": 0.9, "metadata": {"source": "a"}},
+            {"id": "2", "text": "doc2", "score": 0.8, "metadata": {"source": "b"}},
+            {"id": "3", "text": "doc3", "score": 0.7, "metadata": {"source": "c"}},
+            {"id": "4", "text": "doc4", "score": 0.6, "metadata": {"source": "d"}},
+        ]
+        embeddings = [[1.0, 0.0], [0.5, 0.5], [0.0, 1.0], [0.3, 0.7]]
+
+        result = service.mmr_rerank(points=points, embeddings=embeddings, top_k=2)
+
+        # Should preserve all fields
+        for point in result:
+            assert "id" in point
+            assert "text" in point
+            assert "score" in point
+            assert "metadata" in point
