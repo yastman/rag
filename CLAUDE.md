@@ -2,34 +2,36 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Quick Reference
+
+```bash
+make check              # Lint + types
+make test               # All tests
+pytest tests/unit/ -v   # Unit tests only
+make docker-up          # Start Qdrant, Redis, MLflow
+. venv/bin/activate     # Activate venv
+```
+
 ## Project Overview
 
-**Contextual RAG Pipeline** - A production-grade Retrieval-Augmented Generation system for document search with hybrid vector search, ML platform integration, and Telegram bot interface.
+**Contextual RAG Pipeline** - Production RAG system with hybrid search (RRF + ColBERT), Voyage AI embeddings, multi-level caching, and Telegram bot.
 
-**Version:** 2.13.0 (Release Please automation, Binary Quantization, multi-level caching)
-**Python:** 3.12+ (minimum 3.9)
-**LLM:** zai-glm-4.7 (GLM-4, OpenAI-compatible API, streaming)
-**Primary use cases:** Ukrainian Criminal Code search (1,294 documents), Bulgarian property catalogs
+**Version:** 2.13.0 | **Python:** 3.12+ | **LLM:** GLM-4 (OpenAI-compatible)
+**Use cases:** Ukrainian Criminal Code (1,294 docs), Bulgarian property catalogs (92 docs)
 
 ## Current Sprint
 
-**Focus:** Binary Quantization A/B Testing
+**Status:** Complete
 **Version:** 2.13.0
-**Started:** 2026-01-26
 
-### Active Work
-- Binary quantization A/B testing (`scripts/test_quantization_ab.py`)
-
-### Recently Completed
-- Documentation system v2 with Release Please (2026-01-26)
-- SDK migration for search engines (2026-01-26)
-- DBSF fusion implementation
-
-### Blockers
-None
+### Recently Completed (2026-01-26)
+- Test coverage 80% (1105 tests, 82% coverage, 0 failures)
+- Parallel workers documentation (spawn-claude)
+- Superpowers skills reference (14 skills)
+- Binary quantization A/B testing
 
 ---
-*Updated: 2026-01-26 | Next review: 2026-02-02*
+*Updated: 2026-01-26*
 
 ## Build & Development Commands
 
@@ -339,37 +341,31 @@ gh issue close N                   # Close issue
 6. Run `make install-dev`
 7. Start services: `docker compose -f docker-compose.dev.yml up -d` (full stack with bot)
 
-## Testing Notes
-
-- Tests use pytest with `asyncio_mode = "auto"` (async tests don't need `@pytest.mark.asyncio`)
-- Coverage reports: `make test-cov` generates `htmlcov/index.html`
-- Integration tests require Docker services running
-- Run single test: `pytest tests/test_file.py::TestClass::test_method -v`
-
-### Running Tests
+## Testing
 
 ```bash
-# All unit tests (fast, no external services needed)
+# Unit tests (fast, no Docker needed)
 pytest tests/unit/ -v
-
-# Specific module
-pytest tests/unit/test_settings.py -v
+pytest tests/unit/test_settings.py -v          # Single module
+pytest tests/unit/test_file.py::test_method -v # Single test
 
 # With coverage
-pytest tests/unit/ --cov=src --cov=telegram_bot --cov-report=term-missing
+pytest tests/unit/ --cov=telegram_bot/services --cov-report=term-missing
+make test-cov                                   # Opens htmlcov/index.html
 
 # Integration tests (require Docker services)
 pytest tests/test_voyage*.py -v
 pytest tests/test_e2e_pipeline.py -v
 
-# Exclude legacy tests
-pytest tests/ --ignore=tests/legacy -v
-
-# Smoke & load tests (require Docker services)
+# Smoke & load tests
 make test-preflight        # Verify Qdrant/Redis config
 make test-smoke            # 20 queries smoke suite
 make test-load             # Parallel chat simulation
 ```
+
+**Notes:**
+- `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
+- Integration tests require: `make docker-up`
 
 ## Telegram Bot (Docker)
 
@@ -407,17 +403,67 @@ make deploy-code
 make deploy-release VERSION=2.12.0
 ```
 
-## Parallel Claude Workers (spawn-claude)
+## Parallel Claude Workers (tmux + spawn-claude)
 
-Запуск автономных Claude-агентов в отдельных табах WezTerm для ускорения работы.
+Запуск нескольких Claude-агентов одновременно для ускорения работы.
 
-### Базовый синтаксис
+### Архитектура
 
-```bash
-spawn-claude "промпт" /path/to/project
+```
+tmux session "claude"
+├── Окно 1: Основной Claude (оркестратор)
+│   └── Создаёт план и запускает воркеров через spawn-claude
+├── Окно 2: Worker 1 (независимая Claude сессия)
+├── Окно 3: Worker 2 (независимая Claude сессия)
+├── Окно 4: Worker 3 (независимая Claude сессия)
+└── Окно 5+: Дополнительные воркеры по мере необходимости
 ```
 
-**ОБЯЗАТЕЛЬНО:** Всегда передавай путь к проекту вторым аргументом при вызове из оркестратора.
+**Результат:** N Claude-агентов работают **параллельно**, каждый на своей задаче, в одной tmux сессии.
+
+### Быстрый старт (3 шага)
+
+**1. Открыть tmux сессию в проекте**
+```bash
+cd /mnt/c/Users/user/Documents/Сайты/rag-fresh
+tmux new -s claude
+# Или через WezTerm (Ctrl+Shift+M) → выбрать проект
+```
+
+**2. Запустить основную Claude сессию**
+```bash
+claude
+```
+
+**3. Из Claude запустить воркеров**
+```bash
+spawn-claude "W1: Task description" "$(pwd)"
+spawn-claude "W2: Another task" "$(pwd)"
+spawn-claude "W3: Third task" "$(pwd)"
+```
+
+### Переключение между воркерами (tmux)
+
+| Комбо | Действие |
+|-------|----------|
+| `Ctrl+A, 1` | Основной Claude (оркестратор) |
+| `Ctrl+A, 2/3/4` | Worker 1/2/3 |
+| `Ctrl+A, n/p` | Следующее/предыдущее окно |
+| `Ctrl+A, w` | Список всех окон |
+| `Ctrl+A, d` | Отсоединиться (session stays) |
+
+### Синтаксис spawn-claude
+
+```bash
+spawn-claude "ПРОМПТ" "ПУТЬ"
+```
+
+| Параметр | Значение | Пример |
+|----------|----------|--------|
+| **ПРОМПТ** | Задача для Claude | `"W1: Implement feature X"` |
+| **ПУТЬ** | Путь к проекту | `"$(pwd)"` или абсолютный путь |
+
+**ОБЯЗАТЕЛЬНО:** Всегда передавай путь к проекту вторым аргументом.
 
 ### Правила параллелизации (ВАЖНО)
 
@@ -428,41 +474,19 @@ spawn-claude "промпт" /path/to/project
 | 1 воркер = 1 модуль | W1: cache.py, W2: qdrant.py | W1: cache.py строки 1-100, W2: cache.py строки 101-200 |
 | Группируй мелкое | W1: metrics + otel + eval | W1: metrics, W2: otel, W3: eval (оверхед) |
 | Тесты с кодом | W1: auth.py + test_auth.py | W1: auth.py, W2: test_auth.py |
-| Общий файл — только чтение | Все читают план, оркестратор обновляет | Все пишут в один файл |
-
-### Количество воркеров
-
-Количество воркеров не ограничено — зависит от сложности задачи и количества независимых файлов.
-
-**Принцип:** 1 независимый набор файлов = 1 воркер. Чем больше независимых частей, тем больше воркеров можно запустить параллельно.
-
-### Архитектура: Оркестратор + Воркеры
-
-```
-┌─────────────────────────────────────────────────────┐
-│              ОРКЕСТРАТОР (главный Claude)           │
-│  - Создаёт план: docs/plans/YYYY-MM-DD-task.md      │
-│  - Дробит на независимые задачи                     │
-│  - Запускает spawn-claude для каждого воркера       │
-│  - Мониторит прогресс                               │
-│  - Финальная проверка                               │
-└──────────────────────┬──────────────────────────────┘
-                       │
-     ┌─────────┬───────┴───────┬─────────┐
-     ▼         ▼               ▼         ▼
-┌────────┐ ┌────────┐     ┌────────┐ ┌────────┐
-│Worker 1│ │Worker 2│ ... │Worker N│ │Worker M│
-│File: A │ │File: B │     │File: X │ │File: Y │
-└────────┘ └────────┘     └────────┘ └────────┘
-```
+| Общий файл — только чтение | Все читают план | Все пишут в один файл |
 
 ### Шаблон промпта для воркера
 
 ```bash
-spawn-claude "Ты Worker N. REQUIRED: используй superpowers:executing-plans
+spawn-claude "W{N}: {Краткое описание задачи}.
+
+REQUIRED SKILLS:
+- superpowers:executing-plans
+- superpowers:verification-before-completion
 
 План: docs/plans/YYYY-MM-DD-task.md
-Задачи: Tasks X.1-X.N (секция Track N)
+Задачи: Task N (секция из плана)
 
 Твои файлы (ТОЛЬКО ЭТИ):
 - module.py
@@ -471,64 +495,80 @@ spawn-claude "Ты Worker N. REQUIRED: используй superpowers:executing-
 Алгоритм:
 1. Прочитай план, найди свои задачи
 2. Выполни каждый Step по порядку
-3. git commit после каждой задачи
-4. НЕ ТРОГАЙ файлы других воркеров
-
-Команда проверки: . venv/bin/activate && pytest tests/unit/ -q"
+3. VERIFY: команда для проверки
+4. git commit после каждой задачи
+5. НЕ ТРОГАЙ файлы других воркеров" "$(pwd)"
 ```
 
-### Пример: дробление задачи на 6 воркеров
-
-**Задача:** Достичь 80% test coverage для 5 модулей + исправить 22 failing теста
+### Пример: E2E Testing (4 воркера)
 
 ```bash
 PROJECT="/mnt/c/Users/user/Documents/Сайты/rag-fresh"
 
-# Worker 1: filter_extractor (свои файлы)
-spawn-claude "W1: fix filter_extractor. Files: telegram_bot/services/filter_extractor.py, tests/unit/services/test_filter_extractor.py" $PROJECT
+# Worker 1: Test Scenarios
+spawn-claude "W1: Task 3 - Test Scenarios.
+REQUIRED: superpowers:executing-plans
+План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
+Задача: Task 3 - создать scripts/e2e/test_scenarios.py
+git commit после завершения" $PROJECT
 
-# Worker 2: metrics + otel + evaluator (сгруппированы — мелкие)
-spawn-claude "W2: fix metrics_logger + otel + evaluator. Files: tests/unit/test_metrics_logger.py, test_otel_setup.py, test_evaluator.py" $PROJECT
+# Worker 2: Telethon Client
+spawn-claude "W2: Task 4 - Telethon Client.
+REQUIRED: superpowers:executing-plans
+План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
+Задача: Task 4 - создать scripts/e2e/telegram_client.py" $PROJECT
 
-# Worker 3: cache.py (большой модуль — отдельно)
-spawn-claude "W3: write cache.py tests to 80%. Files: telegram_bot/services/cache.py, tests/unit/test_cache_service.py" $PROJECT
+# Worker 3: Claude Judge
+spawn-claude "W3: Task 5 - Claude Judge.
+REQUIRED: superpowers:executing-plans
+План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
+Задача: Task 5 - создать scripts/e2e/claude_judge.py" $PROJECT
 
-# Worker 4: user_context.py
-spawn-claude "W4: write user_context tests. Files: telegram_bot/services/user_context.py, tests/unit/test_user_context_service.py" $PROJECT
-
-# Worker 5: qdrant + cesc (связанные)
-spawn-claude "W5: write qdrant + cesc tests. Files: telegram_bot/services/qdrant.py, cesc.py, tests/unit/test_qdrant_service.py, test_cesc.py" $PROJECT
-
-# Worker 6: query_router
-spawn-claude "W6: write query_router tests. Files: telegram_bot/services/query_router.py, tests/unit/test_query_router_full.py" $PROJECT
+# Worker 4: Data Generator + Reports
+spawn-claude "W4: Tasks 6+8 - Data Generator + Reports.
+REQUIRED: superpowers:executing-plans
+План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
+Задачи: Task 6 + Task 8" $PROJECT
 ```
-
-### Автоматический запуск (для оркестратора)
-
-Когда у тебя есть план с независимыми задачами, запускай воркеров через Bash с путём к проекту:
-
-```bash
-# Оркестратор выполняет (ОБЯЗАТЕЛЬНО с путём):
-spawn-claude "W1: ..." /mnt/c/Users/user/Documents/Сайты/rag-fresh  # → pane 66
-spawn-claude "W2: ..." /mnt/c/Users/user/Documents/Сайты/rag-fresh  # → pane 67
-spawn-claude "W3: ..." /mnt/c/Users/user/Documents/Сайты/rag-fresh  # → pane 68
-# ... и так далее
-```
-
-Каждый воркер получит свой терминал в правильной директории проекта.
 
 ### Мониторинг прогресса
 
 ```bash
-# Проверить статус задач
-grep -c "\[x\]" docs/plans/*-tasks.md
+# git log (обновляется каждые 2 сек)
+watch -n 2 "git log --oneline -10"
 
-# Проверить git commits от воркеров
-git log --oneline -20
+# Какие файлы изменены
+git diff --name-only HEAD~5
 
 # Финальная проверка
 . venv/bin/activate && pytest tests/unit/ -q
 ```
+
+### Обработка ошибок
+
+| Проблема | Решение |
+|----------|---------|
+| "Not inside tmux session" | `Ctrl+Shift+M` (войти в tmux) или `tmux new -s claude` |
+| Worker зависает | `Ctrl+A, {номер}` → `Ctrl+C` → `claude` |
+| Конфликт в git | `git status` → `git add .` → `git commit -m "Merge workers"` |
+
+### Шпаргалка tmux
+
+| Комбо | Действие |
+|-------|----------|
+| `Ctrl+A, c` | Новое окно |
+| `Ctrl+A, n/p` | Следующее/предыдущее |
+| `Ctrl+A, 1/2/3` | Перейти на окно |
+| `Ctrl+A, w` | Список окон |
+| `Ctrl+A, d` | Отсоединиться (session stays) |
+| `Ctrl+A, \|` | Вертикальный сплит |
+| `Ctrl+A, -` | Горизонтальный сплит |
+
+### Когда использовать
+
+**Используй:** много независимых задач (3+), каждому свои файлы, план готов
+
+**Не используй:** зависимые задачи, один файл для всех, нужна координация
 
 **Расположение скрипта:** `/mnt/c/Users/user/bin/spawn-claude`
 
