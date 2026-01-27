@@ -367,6 +367,49 @@ make test-load             # Parallel chat simulation
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Integration tests require: `make docker-up`
 
+## E2E Testing (Telegram Bot)
+
+End-to-end testing with real Telegram bot and Claude Judge evaluation.
+
+### Setup
+
+```bash
+# 1. Get Telegram API credentials from https://my.telegram.org
+# 2. Add to .env:
+#    TELEGRAM_API_ID=12345
+#    TELEGRAM_API_HASH=abcdef...
+#    ANTHROPIC_API_KEY=sk-ant-...
+
+# 3. Install dependencies and generate test data
+make e2e-setup
+```
+
+### Running Tests
+
+```bash
+make e2e-test                              # All 25 tests
+make e2e-test-group GROUP=price_filters    # Specific group
+python scripts/e2e/runner.py --scenario 3.1  # Single test
+```
+
+### Test Groups
+
+| Group | Tests | Description |
+|-------|-------|-------------|
+| `commands` | 4 | /start, /help, /clear, /stats |
+| `chitchat` | 4 | Greetings, thanks, goodbyes |
+| `price_filters` | 4 | Price range queries |
+| `room_filters` | 4 | Room count queries |
+| `location_filters` | 3 | City and distance queries |
+| `search` | 3 | Semantic and complex search |
+| `edge_cases` | 3 | Empty results, long queries, special chars |
+
+### Reports
+
+Reports saved to `reports/` directory:
+- `e2e_YYYY-MM-DD_HH-MM-SS.json` — Machine-readable results
+- `e2e_YYYY-MM-DD_HH-MM-SS.html` — Visual report with expandable details
+
 ## Telegram Bot (Docker)
 
 ```bash
