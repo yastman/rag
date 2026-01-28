@@ -14,6 +14,7 @@ import time
 from typing import TYPE_CHECKING, Any, Optional
 
 import redis.asyncio as redis
+from langfuse import observe
 
 
 # Lazy imports for redisvl (heavy dependency chain via voyageai SDK)
@@ -255,6 +256,7 @@ class CacheService:
 
     # ========== TIER 1: Semantic Cache (LLM Answers) ==========
 
+    @observe(name="cache-semantic-check")
     async def check_semantic_cache(
         self,
         query: str,
@@ -323,6 +325,7 @@ class CacheService:
             self.metrics["semantic"]["misses"] += 1
             return None
 
+    @observe(name="cache-semantic-store")
     async def store_semantic_cache(
         self,
         query: str,
@@ -558,6 +561,7 @@ class CacheService:
 
     # ========== TIER 2: Qdrant Search Cache ==========
 
+    @observe(name="cache-search-check")
     async def get_cached_search(
         self, embedding: list[float], filters: Optional[dict[str, Any]], index_version: str = "v1"
     ) -> Optional[list[dict[str, Any]]]:
@@ -629,6 +633,7 @@ class CacheService:
 
     # ========== TIER 2: Rerank Cache ==========
 
+    @observe(name="cache-rerank-check")
     async def get_cached_rerank(
         self,
         query_hash: str,
