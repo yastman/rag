@@ -18,4 +18,4 @@ prometheus-client==0.21.0
 
 # Utilities
 numpy==1.26.4
-scipy==1.14.1
+scipy==1.17.0
