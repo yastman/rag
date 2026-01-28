@@ -2,12 +2,15 @@
 
 Smart Gateway pattern - single entry point for all Voyage AI operations.
 Validated by: Voyage AI official documentation (January 2026)
+
+Instrumented with Langfuse @observe for LLM observability (2026-01-28).
 """
 
 import asyncio
 import logging
 
 import voyageai
+from langfuse import get_client, observe
 from tenacity import (
     before_sleep_log,
     retry,
@@ -71,6 +74,7 @@ class VoyageService:
             f"queries={model_queries}, rerank={model_rerank}"
         )
 
+    @observe(name="voyage-embed-documents", as_type="generation")
     @retry(
         retry=retry_if_exception_type(
             (
@@ -100,10 +104,17 @@ class VoyageService:
         Returns:
             List of embedding vectors (1024-dim for voyage-4-large)
         """
+        # Update Langfuse with input metadata
+        get_client().update_current_generation(
+            model=self._model_docs,
+            input={"count": len(texts), "input_type": input_type},
+        )
+
         if not texts:
             return []
 
         all_embeddings = []
+        total_tokens = 0
 
         for i in range(0, len(texts), self.BATCH_SIZE):
             batch = texts[i : i + self.BATCH_SIZE]
@@ -116,10 +127,22 @@ class VoyageService:
                 input_type=input_type,
             )
             all_embeddings.extend(response.embeddings)
+            if hasattr(response, "usage") and response.usage:
+                total_tokens += getattr(response.usage, "total_tokens", 0)
+
+        # Update Langfuse with output metadata
+        get_client().update_current_generation(
+            usage_details={"input": total_tokens},
+            output={
+                "count": len(all_embeddings),
+                "dimensions": len(all_embeddings[0]) if all_embeddings else 0,
+            },
+        )
 
         logger.info(f"Embedded {len(all_embeddings)} documents with {self._model_docs}")
         return all_embeddings
 
+    @observe(name="voyage-embed-query", as_type="generation")
     @retry(
         retry=retry_if_exception_type(
             (
@@ -147,14 +170,32 @@ class VoyageService:
         Returns:
             Single embedding vector
         """
+        # Update Langfuse with input metadata
+        get_client().update_current_generation(
+            model=self._model_queries,
+            input={"text": text[:200]},  # Truncate for logging
+        )
+
         response = await asyncio.to_thread(
             self._client.embed,
             texts=[text],
             model=self._model_queries,
             input_type="query",
         )
+
+        # Update Langfuse with output metadata
+        total_tokens = 0
+        if hasattr(response, "usage") and response.usage:
+            total_tokens = getattr(response.usage, "total_tokens", 0)
+
+        get_client().update_current_generation(
+            usage_details={"input": total_tokens},
+            output={"dimensions": len(response.embeddings[0])},
+        )
+
         return response.embeddings[0]
 
+    @observe(name="voyage-rerank", as_type="generation")
     @retry(
         retry=retry_if_exception_type(
             (
@@ -185,6 +226,12 @@ class VoyageService:
             List of dicts with 'index', 'relevance_score', 'document' keys,
             sorted by relevance (highest first).
         """
+        # Update Langfuse with input metadata
+        get_client().update_current_generation(
+            model=self._model_rerank,
+            input={"query": query[:200], "documents_count": len(documents), "top_k": top_k},
+        )
+
         if not documents:
             return []
 
@@ -196,7 +243,7 @@ class VoyageService:
             top_k=top_k,
         )
 
-        return [
+        results = [
             {
                 "index": r.index,
                 "relevance_score": r.relevance_score,
@@ -205,8 +252,19 @@ class VoyageService:
             for r in response.results
         ]
 
+        # Update Langfuse with output metadata
+        get_client().update_current_generation(
+            output={
+                "results_count": len(results),
+                "top_score": results[0]["relevance_score"] if results else 0,
+            },
+        )
+
+        return results
+
     # Matryoshka embeddings (variable dimensions)
 
+    @observe(name="voyage-embed-documents-matryoshka", as_type="generation")
     @retry(
         retry=retry_if_exception_type(
             (
@@ -247,6 +305,16 @@ class VoyageService:
         Raises:
             ValueError: If output_dimension is not supported
         """
+        # Update Langfuse with input metadata
+        get_client().update_current_generation(
+            model=self._model_docs,
+            input={
+                "count": len(texts),
+                "output_dimension": output_dimension,
+                "input_type": input_type,
+            },
+        )
+
         if output_dimension not in self.MATRYOSHKA_DIMS:
             raise ValueError(
                 f"Invalid output_dimension {output_dimension}. Supported: {self.MATRYOSHKA_DIMS}"
@@ -256,6 +324,7 @@ class VoyageService:
             return []
 
         all_embeddings = []
+        total_tokens = 0
 
         for i in range(0, len(texts), self.BATCH_SIZE):
             batch = texts[i : i + self.BATCH_SIZE]
@@ -268,6 +337,14 @@ class VoyageService:
                 output_dimension=output_dimension,
             )
             all_embeddings.extend(response.embeddings)
+            if hasattr(response, "usage") and response.usage:
+                total_tokens += getattr(response.usage, "total_tokens", 0)
+
+        # Update Langfuse with output metadata
+        get_client().update_current_generation(
+            usage_details={"input": total_tokens},
+            output={"count": len(all_embeddings), "dimensions": output_dimension},
+        )
 
         logger.info(
             f"Embedded {len(all_embeddings)} documents with {self._model_docs} "
@@ -275,6 +352,7 @@ class VoyageService:
         )
         return all_embeddings
 
+    @observe(name="voyage-embed-query-matryoshka", as_type="generation")
     @retry(
         retry=retry_if_exception_type(
             (
@@ -306,6 +384,12 @@ class VoyageService:
         Raises:
             ValueError: If output_dimension is not supported
         """
+        # Update Langfuse with input metadata
+        get_client().update_current_generation(
+            model=self._model_queries,
+            input={"text": text[:200], "output_dimension": output_dimension},
+        )
+
         if output_dimension not in self.MATRYOSHKA_DIMS:
             raise ValueError(
                 f"Invalid output_dimension {output_dimension}. Supported: {self.MATRYOSHKA_DIMS}"
@@ -318,6 +402,17 @@ class VoyageService:
             input_type="query",
             output_dimension=output_dimension,
         )
+
+        # Update Langfuse with output metadata
+        total_tokens = 0
+        if hasattr(response, "usage") and response.usage:
+            total_tokens = getattr(response.usage, "total_tokens", 0)
+
+        get_client().update_current_generation(
+            usage_details={"input": total_tokens},
+            output={"dimensions": output_dimension},
+        )
+
         return response.embeddings[0]
 
     # Sync methods for compatibility with existing code
