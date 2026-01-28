@@ -981,6 +981,28 @@ class TestCacheServiceUserBase:
         assert cache.distance_threshold == 0.20
 
 
+class TestCacheVersioning:
+    """Tests for cache key versioning."""
+
+    def test_cache_schema_version_exists(self):
+        """CACHE_SCHEMA_VERSION constant should be defined."""
+        from telegram_bot.services.cache import CACHE_SCHEMA_VERSION
+
+        assert CACHE_SCHEMA_VERSION == "v2"
+
+    def test_get_vectorizer_id_local(self):
+        """_get_vectorizer_id returns userbase768 when USE_LOCAL_EMBEDDINGS=true."""
+        with patch.dict("os.environ", {"USE_LOCAL_EMBEDDINGS": "true"}):
+            service = CacheService(redis_url="redis://localhost:6379")
+            assert service._get_vectorizer_id() == "userbase768"
+
+    def test_get_vectorizer_id_voyage(self):
+        """_get_vectorizer_id returns voyage1024 when USE_LOCAL_EMBEDDINGS=false."""
+        with patch.dict("os.environ", {"USE_LOCAL_EMBEDDINGS": "false"}):
+            service = CacheService(redis_url="redis://localhost:6379")
+            assert service._get_vectorizer_id() == "voyage1024"
+
+
 class TestCloseExtended:
     """Extended tests for CacheService.close()."""
 
