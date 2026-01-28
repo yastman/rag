@@ -50,7 +50,7 @@ class TestDocumentIndexerInit:
         mock_settings.qdrant_api_key = "test-key"
         mock_settings_cls.return_value = mock_settings
 
-        indexer = DocumentIndexer(mock_settings)
+        DocumentIndexer(mock_settings)
 
         mock_qdrant.assert_called_once_with(
             "http://localhost:6333",
@@ -233,7 +233,7 @@ class TestIndexChunks:
         indexer = DocumentIndexer(mock_settings)
 
         # Mock _index_batch to avoid actual embedding
-        with patch.object(indexer, "_index_batch") as mock_index_batch:
+        with patch.object(indexer, "_index_batch"):
             chunks = [
                 Chunk(text="Text 1", chunk_id=0, document_name="doc.pdf", article_number="1"),
                 Chunk(text="Text 2", chunk_id=1, document_name="doc.pdf", article_number="2"),
@@ -290,3 +290,192 @@ class TestGetCollectionStats:
         stats = indexer.get_collection_stats("nonexistent")
 
         assert stats == {}
+
+
+class TestCreatePayloadIndexesError:
+    """Test payload index creation error handling."""
+
+    @patch("src.ingestion.indexer.get_bge_m3_model")
+    @patch("src.ingestion.indexer.QdrantClient")
+    @patch("src.ingestion.indexer.Settings")
+    def test_create_payload_indexes_handles_errors(
+        self, mock_settings_cls, mock_qdrant, mock_bge, capsys
+    ):
+        """Test that payload index creation errors are caught and logged."""
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings_cls.return_value = mock_settings
+
+        mock_client = MagicMock()
+        # Make create_payload_index fail
+        mock_client.create_payload_index.side_effect = Exception("Index creation failed")
+        mock_qdrant.return_value = mock_client
+
+        indexer = DocumentIndexer(mock_settings)
+        # Should not raise, just print warning
+        indexer._create_payload_indexes("test_collection")
+
+        captured = capsys.readouterr()
+        assert "Warning: Could not create payload indexes" in captured.out
+
+
+class TestIndexBatch:
+    """Test _index_batch method."""
+
+    @pytest.mark.asyncio
+    @patch("src.ingestion.indexer.get_bge_m3_model")
+    @patch("src.ingestion.indexer.QdrantClient")
+    @patch("src.ingestion.indexer.Settings")
+    async def test_index_batch_success(self, mock_settings_cls, mock_qdrant, mock_bge, capsys):
+        """Test successful batch indexing."""
+        import numpy as np
+
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.batch_size_embeddings = 8
+        mock_settings_cls.return_value = mock_settings
+
+        mock_client = MagicMock()
+        mock_qdrant.return_value = mock_client
+
+        mock_model = MagicMock()
+        mock_bge.return_value = mock_model
+
+        indexer = DocumentIndexer(mock_settings)
+
+        # Mock embedding output
+        mock_dense = np.array([0.1] * 1024)
+        mock_colbert = np.array([[0.1] * 1024])
+        mock_lexical = {1: 0.5, 2: 0.3}
+
+        with patch.object(indexer, "_embed_texts") as mock_embed:
+            mock_embed.return_value = [
+                {
+                    "dense_vecs": mock_dense,
+                    "colbert_vecs": mock_colbert,
+                    "lexical_weights": mock_lexical,
+                }
+            ]
+
+            chunks = [
+                Chunk(
+                    text="Test text",
+                    chunk_id=0,
+                    document_name="doc.pdf",
+                    article_number="1",
+                    chapter="Chapter 1",
+                    section="Section 1",
+                    order=0,
+                    extra_metadata={"city": "Sofia"},
+                )
+            ]
+
+            await indexer._index_batch(chunks, "test_collection")
+
+            # Should have called upsert
+            mock_client.upsert.assert_called_once()
+            assert indexer.stats.indexed_chunks == 1
+
+        captured = capsys.readouterr()
+        assert "Indexed 1 chunks" in captured.out
+
+    @pytest.mark.asyncio
+    @patch("src.ingestion.indexer.get_bge_m3_model")
+    @patch("src.ingestion.indexer.QdrantClient")
+    @patch("src.ingestion.indexer.Settings")
+    async def test_index_batch_handles_errors(
+        self, mock_settings_cls, mock_qdrant, mock_bge, capsys
+    ):
+        """Test batch indexing error handling."""
+        import numpy as np
+
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.batch_size_embeddings = 8
+        mock_settings_cls.return_value = mock_settings
+
+        mock_client = MagicMock()
+        mock_client.upsert.side_effect = Exception("Qdrant error")
+        mock_qdrant.return_value = mock_client
+
+        mock_model = MagicMock()
+        mock_bge.return_value = mock_model
+
+        indexer = DocumentIndexer(mock_settings)
+
+        # Mock embedding output
+        mock_dense = np.array([0.1] * 1024)
+        mock_colbert = np.array([[0.1] * 1024])
+        mock_lexical = {1: 0.5, 2: 0.3}
+
+        with patch.object(indexer, "_embed_texts") as mock_embed:
+            mock_embed.return_value = [
+                {
+                    "dense_vecs": mock_dense,
+                    "colbert_vecs": mock_colbert,
+                    "lexical_weights": mock_lexical,
+                }
+            ]
+
+            chunks = [
+                Chunk(
+                    text="Test text",
+                    chunk_id=0,
+                    document_name="doc.pdf",
+                    article_number="1",
+                )
+            ]
+
+            await indexer._index_batch(chunks, "test_collection")
+
+            # Should have recorded failure
+            assert indexer.stats.failed_chunks == 1
+            assert indexer.stats.indexed_chunks == 0
+
+        captured = capsys.readouterr()
+        assert "Failed to index batch" in captured.out
+
+
+class TestEmbedTexts:
+    """Test _embed_texts method."""
+
+    @pytest.mark.asyncio
+    @patch("src.ingestion.indexer.get_bge_m3_model")
+    @patch("src.ingestion.indexer.QdrantClient")
+    @patch("src.ingestion.indexer.Settings")
+    async def test_embed_texts_returns_embeddings(self, mock_settings_cls, mock_qdrant, mock_bge):
+        """Test _embed_texts returns properly formatted embeddings."""
+        import numpy as np
+
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.batch_size_embeddings = 8
+        mock_settings_cls.return_value = mock_settings
+
+        mock_client = MagicMock()
+        mock_qdrant.return_value = mock_client
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([[0.1] * 1024, [0.2] * 1024]),
+            "lexical_weights": [{1: 0.5, 2: 0.3}, {3: 0.4, 4: 0.2}],
+            "colbert_vecs": [np.array([[0.1] * 1024]), np.array([[0.2] * 1024])],
+        }
+        mock_bge.return_value = mock_model
+
+        indexer = DocumentIndexer(mock_settings)
+
+        result = await indexer._embed_texts(["text 1", "text 2"])
+
+        assert len(result) == 2
+        assert "dense_vecs" in result[0]
+        assert "lexical_weights" in result[0]
+        assert "colbert_vecs" in result[0]
+
+        # Verify model.encode was called correctly
+        mock_model.encode.assert_called_once()
+        call_args = mock_model.encode.call_args
+        assert call_args[0][0] == ["text 1", "text 2"]
+        assert call_args[1]["return_dense"] is True
+        assert call_args[1]["return_sparse"] is True
+        assert call_args[1]["return_colbert_vecs"] is True
