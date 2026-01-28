@@ -1,0 +1,27 @@
+# tests/baseline/thresholds.yaml
+# Regression = current > baseline * factor
+# Based on 2026 best practices: AIMultiple, Braintrust, Evidently AI
+
+latency:
+  llm_p95_factor: 1.20        # 20% tolerance
+  full_rag_p95_factor: 1.20
+  qdrant_p95_factor: 1.30     # Vector DB has more variance
+  ttft_p95_factor: 1.25       # Time to first token
+
+cost:
+  total_factor: 1.10          # 10% tolerance on total cost
+  tokens_input_factor: 1.15   # 15% on input tokens
+  tokens_output_factor: 1.15
+
+cache:
+  hit_rate_min_drop: 0.10     # Alert if drops >10% absolute
+  semantic_hit_rate_min: 0.30 # Minimum semantic cache effectiveness
+
+calls:
+  llm_factor: 1.05            # 5% - should be very stable
+  voyage_embed_factor: 1.10
+  voyage_rerank_factor: 1.10
+
+infrastructure:
+  redis_memory_factor: 1.50   # 50% tolerance
+  qdrant_vectors_factor: 1.20
