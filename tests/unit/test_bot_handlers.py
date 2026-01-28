@@ -442,3 +442,594 @@ class TestBotLifecycle:
         mock_analyzer_instance.close.assert_called_once()
         mock_llm_instance.close.assert_called_once()
         mock_qdrant_instance.close.assert_called_once()
+
+
+class TestHandleQuery:
+    """Test handle_query method - main RAG pipeline."""
+
+    @pytest.mark.asyncio
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    @patch("telegram_bot.bot.classify_query")
+    @patch("telegram_bot.bot.get_chitchat_response")
+    async def test_handle_query_chitchat_routing(
+        self,
+        mock_chitchat_response,
+        mock_classify,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test chitchat queries skip RAG pipeline."""
+        from telegram_bot.services import QueryType
+
+        mock_classify.return_value = QueryType.CHITCHAT
+        mock_chitchat_response.return_value = "Привет! Чем могу помочь?"
+
+        bot = PropertyBot(mock_config)
+
+        message = MagicMock()
+        message.text = "Привет!"
+        message.from_user = MagicMock()
+        message.from_user.id = 12345
+        message.answer = AsyncMock()
+
+        await bot.handle_query(message)
+
+        message.answer.assert_called_once()
+        # RAG pipeline should not be called (voyage.embed_query)
+        bot.voyage_service.embed_query.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    @patch("telegram_bot.bot.classify_query")
+    @patch("telegram_bot.bot.is_personalized_query")
+    async def test_handle_query_semantic_cache_hit(
+        self,
+        mock_is_personalized,
+        mock_classify,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test semantic cache hit returns cached answer."""
+        from telegram_bot.services import QueryType
+
+        mock_classify.return_value = QueryType.SIMPLE
+        mock_is_personalized.return_value = False
+
+        cache_instance = MagicMock()
+        cache_instance.initialize = AsyncMock()
+        cache_instance.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
+        cache_instance.check_semantic_cache = AsyncMock(
+            return_value="Cached answer from semantic cache"
+        )
+        cache_instance.log_metrics = MagicMock()
+        mock_cache.return_value = cache_instance
+
+        user_ctx_instance = MagicMock()
+        user_ctx_instance.get_context = AsyncMock(return_value={})
+        mock_user_ctx.return_value = user_ctx_instance
+
+        bot = PropertyBot(mock_config)
+
+        message = MagicMock()
+        message.text = "Квартиры в Несебр"
+        message.from_user = MagicMock()
+        message.from_user.id = 12345
+        message.answer = AsyncMock()
+        message.bot = MagicMock()
+        message.bot.send_chat_action = AsyncMock()
+
+        await bot.handle_query(message)
+
+        # Cached answer should be returned
+        call_args = message.answer.call_args[0][0]
+        assert "Cached answer" in call_args
+
+    @pytest.mark.asyncio
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    @patch("telegram_bot.bot.classify_query")
+    @patch("telegram_bot.bot.is_personalized_query")
+    async def test_handle_query_no_results(
+        self,
+        mock_is_personalized,
+        mock_classify,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test handling when search returns no results."""
+        from telegram_bot.services import QueryType
+
+        mock_classify.return_value = QueryType.SIMPLE
+        mock_is_personalized.return_value = False
+
+        # Setup cache service
+        cache_instance = MagicMock()
+        cache_instance.initialize = AsyncMock()
+        cache_instance.get_cached_embedding = AsyncMock(return_value=None)
+        cache_instance.store_embedding = AsyncMock()
+        cache_instance.check_semantic_cache = AsyncMock(return_value=None)
+        cache_instance.get_cached_analysis = AsyncMock(return_value=None)
+        cache_instance.store_analysis = AsyncMock()
+        cache_instance.get_cached_search = AsyncMock(return_value=None)
+        cache_instance.get_cached_sparse_embedding = AsyncMock(return_value=None)
+        cache_instance.store_sparse_embedding = AsyncMock()
+        cache_instance.store_search_results = AsyncMock()
+        mock_cache.return_value = cache_instance
+
+        # Setup voyage
+        voyage_instance = MagicMock()
+        voyage_instance.embed_query = AsyncMock(return_value=[0.1] * 1024)
+        mock_voyage.return_value = voyage_instance
+
+        # Setup analyzer
+        analyzer_instance = MagicMock()
+        analyzer_instance.analyze = AsyncMock(return_value={"filters": {}})
+        mock_analyzer.return_value = analyzer_instance
+
+        # Setup qdrant to return empty results
+        qdrant_instance = MagicMock()
+        qdrant_instance.hybrid_search_rrf = AsyncMock(return_value=[])
+        mock_qdrant.return_value = qdrant_instance
+
+        # Setup user context
+        user_ctx_instance = MagicMock()
+        user_ctx_instance.get_context = AsyncMock(return_value={})
+        mock_user_ctx.return_value = user_ctx_instance
+
+        bot = PropertyBot(mock_config)
+
+        # Mock _get_sparse_vector
+        async def mock_sparse(text):
+            return {"indices": [1, 2], "values": [0.5, 0.5]}
+
+        bot._get_sparse_vector = mock_sparse
+
+        message = MagicMock()
+        message.text = "Несуществующий запрос"
+        message.from_user = MagicMock()
+        message.from_user.id = 12345
+        message.answer = AsyncMock()
+        message.bot = MagicMock()
+        message.bot.send_chat_action = AsyncMock()
+        message.chat = MagicMock()
+        message.chat.id = 12345
+
+        await bot.handle_query(message)
+
+        # Should show "nothing found" message
+        call_args = message.answer.call_args[0][0]
+        assert "Ничего не нашел" in call_args
+
+
+class TestBotStart:
+    """Test bot start method."""
+
+    @pytest.mark.asyncio
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    async def test_start_initializes_cache(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test that start() initializes cache."""
+        mock_cache_instance = MagicMock()
+        mock_cache_instance.initialize = AsyncMock()
+        mock_cache.return_value = mock_cache_instance
+
+        bot = PropertyBot(mock_config)
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+
+        await bot.start()
+
+        mock_cache_instance.initialize.assert_called_once()
+        bot.dp.start_polling.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    async def test_start_skips_reinit_if_already_initialized(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test that start() skips cache init if already done."""
+        mock_cache_instance = MagicMock()
+        mock_cache_instance.initialize = AsyncMock()
+        mock_cache.return_value = mock_cache_instance
+
+        bot = PropertyBot(mock_config)
+        bot._cache_initialized = True  # Already initialized
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+
+        await bot.start()
+
+        # Should not reinitialize
+        mock_cache_instance.initialize.assert_not_called()
+
+
+class TestSetupMiddlewares:
+    """Test middleware setup."""
+
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    @patch("telegram_bot.bot.setup_throttling_middleware")
+    @patch("telegram_bot.bot.setup_error_middleware")
+    def test_middlewares_configured(
+        self,
+        mock_error_mw,
+        mock_throttle_mw,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test that middlewares are configured on init."""
+        PropertyBot(mock_config)
+
+        mock_throttle_mw.assert_called_once()
+        mock_error_mw.assert_called_once()
+
+
+class TestRegisterHandlers:
+    """Test handler registration."""
+
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    def test_handlers_registered(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test that handlers are registered on init."""
+        bot = PropertyBot(mock_config)
+
+        # Dispatcher should have message handlers registered
+        # We can't easily check the exact handlers without more complex mocking,
+        # but we can verify the bot has the expected methods
+        assert hasattr(bot, "cmd_start")
+        assert hasattr(bot, "cmd_help")
+        assert hasattr(bot, "cmd_clear")
+        assert hasattr(bot, "cmd_stats")
+        assert hasattr(bot, "handle_query")
+
+
+class TestFormatResultsEdgeCases:
+    """Additional edge case tests for _format_results."""
+
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    def test_format_results_empty(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test formatting empty results."""
+        bot = PropertyBot(mock_config)
+
+        formatted = bot._format_results([])
+        assert formatted == ""
+
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    def test_format_results_with_distance_to_sea(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test formatting with distance_to_sea field."""
+        bot = PropertyBot(mock_config)
+
+        results = [
+            {
+                "metadata": {
+                    "title": "Beach apartment",
+                    "distance_to_sea": 150,
+                },
+                "score": 0.9,
+            }
+        ]
+
+        formatted = bot._format_results(results)
+        assert "150 м до моря" in formatted
+
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    def test_format_results_with_area(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test formatting with area field."""
+        bot = PropertyBot(mock_config)
+
+        results = [
+            {
+                "metadata": {
+                    "title": "Spacious apartment",
+                    "area": 85,
+                },
+                "score": 0.85,
+            }
+        ]
+
+        formatted = bot._format_results(results)
+        assert "85 м²" in formatted
+
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    def test_format_results_string_price(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test formatting with string price (non-numeric)."""
+        bot = PropertyBot(mock_config)
+
+        results = [
+            {
+                "metadata": {
+                    "title": "Apartment",
+                    "price": "По запросу",
+                },
+                "score": 0.9,
+            }
+        ]
+
+        formatted = bot._format_results(results)
+        assert "По запросу€" in formatted
+
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    def test_format_results_missing_title(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test formatting with missing title."""
+        bot = PropertyBot(mock_config)
+
+        results = [
+            {
+                "metadata": {"price": 50000},
+                "score": 0.9,
+            }
+        ]
+
+        formatted = bot._format_results(results)
+        assert "N/A" in formatted
+
+
+class TestCESCIntegration:
+    """Test CESC personalization integration."""
+
+    @pytest.mark.asyncio
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    @patch("telegram_bot.bot.classify_query")
+    @patch("telegram_bot.bot.is_personalized_query")
+    async def test_personalization_applied_to_cached_answer(
+        self,
+        mock_is_personalized,
+        mock_classify,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test CESC personalizes cached answers."""
+        from telegram_bot.services import QueryType
+
+        mock_classify.return_value = QueryType.SIMPLE
+        mock_is_personalized.return_value = True
+
+        # Enable CESC in config
+        mock_config.cesc_enabled = True
+
+        # Setup cache service
+        cache_instance = MagicMock()
+        cache_instance.initialize = AsyncMock()
+        cache_instance.check_semantic_cache = AsyncMock(return_value="Cached answer")
+        cache_instance.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
+        cache_instance.log_metrics = MagicMock()
+        mock_cache.return_value = cache_instance
+
+        # Setup user context
+        user_ctx_instance = MagicMock()
+        user_ctx_instance.get_context = AsyncMock(return_value={"preferred_city": "Nesebar"})
+        user_ctx_instance.update_from_query = AsyncMock()
+        mock_user_ctx.return_value = user_ctx_instance
+
+        # Setup CESC personalizer
+        cesc_instance = MagicMock()
+        cesc_instance.should_personalize = MagicMock(return_value=True)
+        cesc_instance.personalize = AsyncMock(return_value="Personalized answer")
+        mock_cesc.return_value = cesc_instance
+
+        bot = PropertyBot(mock_config)
+
+        message = MagicMock()
+        message.text = "Покажи квартиры"
+        message.from_user = MagicMock()
+        message.from_user.id = 12345
+        message.answer = AsyncMock()
+        message.bot = MagicMock()
+        message.bot.send_chat_action = AsyncMock()
+
+        await bot.handle_query(message)
+
+        # CESC should personalize
+        cesc_instance.personalize.assert_called_once()
+
+        # Personalized answer should be sent
+        call_args = message.answer.call_args[0][0]
+        assert "Personalized" in call_args
