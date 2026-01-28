@@ -1,6 +1,6 @@
 .PHONY: help install install-dev lint format type-check security test test-cov clean all-checks \
 	test-preflight test-smoke test-smoke-routing test-load test-load-ci test-load-eviction \
-	test-load-update-baseline test-all-smoke-load
+	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo
 
 # Default target
 .DEFAULT_GOAL := help
@@ -152,6 +152,16 @@ test-load-update-baseline: ## Update load test baseline
 
 test-all-smoke-load: test-preflight test-smoke test-load ## Full smoke+load suite
 	@echo "$(GREEN)✓✓✓ All smoke+load tests complete$(NC)"
+
+smoke-fast: ## Quick zoo smoke (~30 sec, bash only)
+	@echo "$(BLUE)Running quick zoo smoke...$(NC)"
+	./scripts/smoke-zoo.sh
+	@echo "$(GREEN)✓ Zoo smoke complete$(NC)"
+
+smoke-zoo: ## Run zoo smoke tests (pytest)
+	@echo "$(BLUE)Running zoo smoke tests...$(NC)"
+	pytest tests/smoke/test_zoo_smoke.py -v
+	@echo "$(GREEN)✓ Zoo smoke tests complete$(NC)"
 
 # =============================================================================
 # REDIS VERIFICATION
