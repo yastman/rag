@@ -164,8 +164,9 @@ class CacheService:
                         )
 
                 if vectorizer is not None:
+                    cache_name = f"sem:{CACHE_SCHEMA_VERSION}:{self._get_vectorizer_id()}"
                     self.semantic_cache = SemanticCache(
-                        name="rag_llm_cache",
+                        name=cache_name,
                         redis_url=self.redis_url,
                         ttl=self.semantic_cache_ttl,
                         distance_threshold=self.distance_threshold,
@@ -189,7 +190,7 @@ class CacheService:
             # Initialize native EmbeddingsCache (Tier 1)
             try:
                 self.embeddings_cache = EmbeddingsCache(
-                    name="bge_m3_embeddings",
+                    name=f"emb:{CACHE_SCHEMA_VERSION}",
                     redis_url=self.redis_url,
                     ttl=self.embeddings_cache_ttl,
                 )
@@ -451,7 +452,7 @@ class CacheService:
 
         try:
             start = time.time()
-            key = f"sparse:{model_name}:{self._hash_key(text)}"
+            key = f"sparse:{CACHE_SCHEMA_VERSION}:{model_name}:{self._hash_key(text)}"
             cached = await self.redis_client.hgetall(key)
             latency = (time.time() - start) * 1000
 
@@ -490,7 +491,7 @@ class CacheService:
             return
 
         try:
-            key = f"sparse:{model_name}:{self._hash_key(text)}"
+            key = f"sparse:{CACHE_SCHEMA_VERSION}:{model_name}:{self._hash_key(text)}"
             await self.redis_client.hset(
                 key,
                 mapping={
@@ -518,7 +519,7 @@ class CacheService:
             return None
 
         try:
-            key = f"rag:analysis:v1:{self._hash_key(query)}"
+            key = f"analysis:{CACHE_SCHEMA_VERSION}:{self._hash_key(query)}"
             start = time.time()
             cached = await self.redis_client.get(key)
             latency = (time.time() - start) * 1000
@@ -545,7 +546,7 @@ class CacheService:
             return
 
         try:
-            key = f"rag:analysis:v1:{self._hash_key(query)}"
+            key = f"analysis:{CACHE_SCHEMA_VERSION}:{self._hash_key(query)}"
             await self.redis_client.setex(
                 key,
                 self.analyzer_cache_ttl,
@@ -577,7 +578,7 @@ class CacheService:
             # Build cache key from embedding hash + filters + index version
             embedding_hash = self._hash_key(str(embedding[:10]))  # use first 10 dims
             filters_hash = self._hash_key(json.dumps(filters, sort_keys=True) if filters else "")
-            key = f"rag:search:v1:{index_version}:{embedding_hash}:{filters_hash}"
+            key = f"search:{CACHE_SCHEMA_VERSION}:{index_version}:{embedding_hash}:{filters_hash}"
 
             start = time.time()
             cached = await self.redis_client.get(key)
@@ -615,7 +616,7 @@ class CacheService:
         try:
             embedding_hash = self._hash_key(str(embedding[:10]))
             filters_hash = self._hash_key(json.dumps(filters, sort_keys=True) if filters else "")
-            key = f"rag:search:v1:{index_version}:{embedding_hash}:{filters_hash}"
+            key = f"search:{CACHE_SCHEMA_VERSION}:{index_version}:{embedding_hash}:{filters_hash}"
 
             await self.redis_client.setex(
                 key,
@@ -647,7 +648,7 @@ class CacheService:
 
         try:
             chunk_hash = self._hash_key(json.dumps(sorted(chunk_ids)))
-            key = f"rag:rerank:v1:{query_hash}:{chunk_hash}"
+            key = f"rerank:{CACHE_SCHEMA_VERSION}:{query_hash}:{chunk_hash}"
 
             start = time.time()
             cached = await self.redis_client.get(key)
@@ -678,7 +679,7 @@ class CacheService:
 
         try:
             chunk_hash = self._hash_key(json.dumps(sorted(chunk_ids)))
-            key = f"rag:rerank:v1:{query_hash}:{chunk_hash}"
+            key = f"rerank:{CACHE_SCHEMA_VERSION}:{query_hash}:{chunk_hash}"
 
             await self.redis_client.setex(key, ttl, json.dumps(results))
             logger.debug(f"✓ Stored rerank ({len(results)} items)")
@@ -713,6 +714,33 @@ class CacheService:
                 (total_hits / total_requests * 100) if total_requests > 0 else 0, 1
             ),
         }
+
+    async def get_full_metrics(self) -> dict[str, Any]:
+        """Get comprehensive cache metrics including Redis stats.
+
+        Returns:
+            Dict with cache hit rates and Redis memory/eviction stats
+        """
+        base_metrics = self.get_metrics()
+
+        if not self.redis_client:
+            return base_metrics
+
+        try:
+            memory_info = await self.redis_client.info("memory")
+            stats_info = await self.redis_client.info("stats")
+
+            base_metrics["redis"] = {
+                "used_memory_human": memory_info.get("used_memory_human"),
+                "maxmemory_human": memory_info.get("maxmemory_human"),
+                "evicted_keys": stats_info.get("evicted_keys", 0),
+                "keyspace_hits": stats_info.get("keyspace_hits", 0),
+                "keyspace_misses": stats_info.get("keyspace_misses", 0),
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get Redis stats: {e}")
+
+        return base_metrics
 
     # ============= Conversation Memory (Task 2.2) =============
 
