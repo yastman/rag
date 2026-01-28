@@ -214,6 +214,24 @@ embedding = vectorizer.embed("двухкомнатная квартира")
 
 **Environment:** Set `USE_LOCAL_EMBEDDINGS=true` to use USER-base instead of Voyage API for semantic cache.
 
+### Cache Key Versioning
+
+Cache keys include `CACHE_SCHEMA_VERSION` to prevent pollution when models change:
+
+```python
+from telegram_bot.services.cache import CACHE_SCHEMA_VERSION  # "v2"
+
+# Cache key patterns:
+# sem:v2:{vectorizer_id}  - SemanticCache (e.g., sem:v2:voyage1024)
+# emb:v2                   - EmbeddingsCache
+# search:v2:{index_ver}    - Search results
+# analysis:v2              - QueryAnalyzer
+# rerank:v2                - Rerank results
+# sparse:v2:{model}        - Sparse embeddings
+```
+
+Bump version when changing models. Old keys expire naturally (TTL 2h-7d).
+
 ### Legacy Singleton Pattern
 
 ```python
