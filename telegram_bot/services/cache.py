@@ -45,7 +45,7 @@ class CacheService:
         embeddings_cache_ttl: int = 7 * 24 * 3600,  ***REMOVED*** 7 days
         analyzer_cache_ttl: int = 24 * 3600,  ***REMOVED*** 24 hours
         search_cache_ttl: int = 2 * 3600,  ***REMOVED*** 2 hours
-        distance_threshold: float = 0.15,  ***REMOVED*** cosine distance threshold (0.15 ≈ 85% similarity)
+        distance_threshold: float = 0.20,  ***REMOVED*** cosine distance threshold (0.20 ≈ 80% similarity, better for RU paraphrases)
     ):
         """Initialize cache service.
 
@@ -118,19 +118,37 @@ class CacheService:
             logger.info("✓ Redis connection established")
 
             ***REMOVED*** Initialize native RedisVL SemanticCache (Tier 1)
-            ***REMOVED*** Uses VoyageAI voyage-3-lite for fast, cost-effective cache matching
-            ***REMOVED*** BGE-M3 (1024-dim) is used separately for Qdrant search
+            ***REMOVED*** Supports local USER-base (best for RU) or Voyage API fallback
+            use_local = os.getenv("USE_LOCAL_EMBEDDINGS", "false").lower() == "true"
+
             try:
-                voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
-                if not voyage_api_key:
-                    logger.warning("VOYAGE_API_KEY not set, SemanticCache disabled")
-                    self.semantic_cache = None
+                if use_local:
+                    ***REMOVED*** Use local USER-base for Russian semantic matching (ruMTEB ***REMOVED***1)
+                    from telegram_bot.services.vectorizers import UserBaseVectorizer
+
+                    user_base_url = os.getenv("USER_BASE_URL", "http://localhost:8003")
+                    logger.info(f"Initializing SemanticCache with USER-base ({user_base_url})...")
+                    vectorizer = UserBaseVectorizer(base_url=user_base_url)
                 else:
-                    logger.info("Initializing SemanticCache with VoyageAI (voyage-3-lite)...")
-                    vectorizer = VoyageAITextVectorizer(
-                        model="voyage-3-lite",
-                        api_config={"api_key": voyage_api_key},
-                    )
+                    ***REMOVED*** Fallback to Voyage API
+                    voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
+                    if not voyage_api_key:
+                        logger.warning(
+                            "VOYAGE_API_KEY not set and USE_LOCAL_EMBEDDINGS=false, "
+                            "SemanticCache disabled"
+                        )
+                        self.semantic_cache = None
+                        vectorizer = None
+                    else:
+                        logger.info(
+                            "Initializing SemanticCache with VoyageAI (voyage-multilingual-2)..."
+                        )
+                        vectorizer = VoyageAITextVectorizer(
+                            model="voyage-multilingual-2",  ***REMOVED*** Better RU support than voyage-3-lite
+                            api_config={"api_key": voyage_api_key},
+                        )
+
+                if vectorizer is not None:
                     self.semantic_cache = SemanticCache(
                         name="rag_llm_cache",
                         redis_url=self.redis_url,
@@ -143,9 +161,10 @@ class CacheService:
                             {"name": "query_type", "type": "tag"},
                         ],
                     )
+                    vectorizer_name = "USER-base" if use_local else "voyage-multilingual-2"
                     logger.info(
                         f"✓ RedisVL SemanticCache initialized "
-                        f"(vectorizer=voyage-3-lite, distance_threshold={self.distance_threshold}, "
+                        f"(vectorizer={vectorizer_name}, distance_threshold={self.distance_threshold}, "
                         f"filterable_fields=[user_id, language, query_type])"
                     )
             except Exception as e:
@@ -166,22 +185,36 @@ class CacheService:
 
             ***REMOVED*** Initialize SemanticMessageHistory for conversation context
             try:
-                voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
-                if voyage_api_key:
-                    history_vectorizer = VoyageAITextVectorizer(
-                        model="voyage-3-lite",
-                        api_config={"api_key": voyage_api_key},
-                    )
+                if use_local:
+                    ***REMOVED*** Reuse USER-base for conversation history
+                    from telegram_bot.services.vectorizers import UserBaseVectorizer
+
+                    user_base_url = os.getenv("USER_BASE_URL", "http://localhost:8003")
+                    history_vectorizer = UserBaseVectorizer(base_url=user_base_url)
                     self.message_history = SemanticMessageHistory(
                         name="rag_conversations",
                         redis_url=self.redis_url,
-                        vectorizer=history_vectorizer,  ***REMOVED*** Reuse voyage-3-lite
+                        vectorizer=history_vectorizer,
                         distance_threshold=0.3,
                     )
-                    logger.info("✓ SemanticMessageHistory initialized (voyage-3-lite)")
+                    logger.info("✓ SemanticMessageHistory initialized (USER-base)")
                 else:
-                    logger.warning("VOYAGE_API_KEY not set, SemanticMessageHistory disabled")
-                    self.message_history = None
+                    voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
+                    if voyage_api_key:
+                        history_vectorizer = VoyageAITextVectorizer(
+                            model="voyage-multilingual-2",  ***REMOVED*** Better RU support
+                            api_config={"api_key": voyage_api_key},
+                        )
+                        self.message_history = SemanticMessageHistory(
+                            name="rag_conversations",
+                            redis_url=self.redis_url,
+                            vectorizer=history_vectorizer,
+                            distance_threshold=0.3,
+                        )
+                        logger.info("✓ SemanticMessageHistory initialized (voyage-multilingual-2)")
+                    else:
+                        logger.warning("VOYAGE_API_KEY not set, SemanticMessageHistory disabled")
+                        self.message_history = None
             except Exception as e:
                 logger.warning(f"SemanticMessageHistory initialization failed: {e}")
                 self.message_history = None
