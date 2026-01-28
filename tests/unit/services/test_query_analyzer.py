@@ -81,11 +81,18 @@ class TestQueryAnalyzerAnalyze:
 
     @pytest.fixture
     def analyzer_with_mock_client(self, mock_client):
-        """Create QueryAnalyzer with mocked client."""
+        """Create QueryAnalyzer with mocked client.
+
+        Note: We directly assign the mock client after creation to ensure
+        test isolation even when other tests pollute sys.modules with patches.
+        """
         with patch("httpx.AsyncClient", return_value=mock_client):
-            return QueryAnalyzer(
+            analyzer = QueryAnalyzer(
                 api_key="test-api-key", base_url="http://localhost:8000", model="gpt-4o-mini"
             )
+        # Ensure we have our mock client regardless of any module pollution
+        analyzer.client = mock_client
+        return analyzer
 
     async def test_analyze_returns_filters_and_semantic_query(
         self, analyzer_with_mock_client, mock_client
@@ -400,6 +407,8 @@ class TestQueryAnalyzerClose:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             analyzer = QueryAnalyzer(api_key="test-key", base_url="http://localhost:8000")
+        # Ensure we have our mock client regardless of any module pollution
+        analyzer.client = mock_client
 
         await analyzer.close()
 
@@ -411,6 +420,8 @@ class TestQueryAnalyzerClose:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             analyzer = QueryAnalyzer(api_key="test-key", base_url="http://localhost:8000")
+        # Ensure we have our mock client regardless of any module pollution
+        analyzer.client = mock_client
 
         # Call close multiple times
         await analyzer.close()
@@ -446,18 +457,20 @@ class TestQueryAnalyzerFlow:
             analyzer = QueryAnalyzer(
                 api_key="test-key", base_url="http://localhost:8000", model="gpt-4o"
             )
-            assert analyzer.api_key == "test-key"
-            assert analyzer.base_url == "http://localhost:8000"
-            assert analyzer.model == "gpt-4o"
+        # Ensure we have our mock client regardless of any module pollution
+        analyzer.client = mock_client
+        assert analyzer.api_key == "test-key"
+        assert analyzer.base_url == "http://localhost:8000"
+        assert analyzer.model == "gpt-4o"
 
-            # Use
-            result = await analyzer.analyze("квартира до 75000 евро у моря")
-            assert result["filters"] == {"price": {"lt": 75000}}
-            assert result["semantic_query"] == "квартира у моря"
+        # Use
+        result = await analyzer.analyze("квартира до 75000 евро у моря")
+        assert result["filters"] == {"price": {"lt": 75000}}
+        assert result["semantic_query"] == "квартира у моря"
 
-            # Close
-            await analyzer.close()
-            mock_client.aclose.assert_called_once()
+        # Close
+        await analyzer.close()
+        mock_client.aclose.assert_called_once()
 
     async def test_multiple_queries(self):
         """Test making multiple queries with the same analyzer."""
@@ -483,15 +496,17 @@ class TestQueryAnalyzerFlow:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             analyzer = QueryAnalyzer(api_key="test-key", base_url="http://localhost:8000")
+        # Ensure we have our mock client regardless of any module pollution
+        analyzer.client = mock_client
 
-            result1 = await analyzer.analyze("студия в Несебре")
-            result2 = await analyzer.analyze("двухкомнатная квартира")
-            result3 = await analyzer.analyze("апартамент у моря")
+        result1 = await analyzer.analyze("студия в Несебре")
+        result2 = await analyzer.analyze("двухкомнатная квартира")
+        result3 = await analyzer.analyze("апартамент у моря")
 
-            assert result1["filters"] == {"city": "Несебр"}
-            assert result2["filters"] == {"rooms": 2}
-            assert result3["filters"] == {}
-            assert mock_client.post.call_count == 3
+        assert result1["filters"] == {"city": "Несебр"}
+        assert result2["filters"] == {"rooms": 2}
+        assert result3["filters"] == {}
+        assert mock_client.post.call_count == 3
 
     async def test_error_recovery(self):
         """Test that analyzer continues working after error."""
@@ -521,13 +536,15 @@ class TestQueryAnalyzerFlow:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             analyzer = QueryAnalyzer(api_key="test-key", base_url="http://localhost:8000")
+        # Ensure we have our mock client regardless of any module pollution
+        analyzer.client = mock_client
 
-            # First call fails, should return fallback
-            result1 = await analyzer.analyze("query1")
-            assert result1["filters"] == {}
-            assert result1["semantic_query"] == "query1"
+        # First call fails, should return fallback
+        result1 = await analyzer.analyze("query1")
+        assert result1["filters"] == {}
+        assert result1["semantic_query"] == "query1"
 
-            # Second call succeeds
-            result2 = await analyzer.analyze("query2")
-            assert result2["filters"] == {"city": "Бургас"}
-            assert result2["semantic_query"] == "квартира"
+        # Second call succeeds
+        result2 = await analyzer.analyze("query2")
+        assert result2["filters"] == {"city": "Бургас"}
+        assert result2["semantic_query"] == "квартира"
