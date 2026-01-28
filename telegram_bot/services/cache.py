@@ -1,6 +1,9 @@
 """Redis caching service for RAG pipeline.
 
 Uses native RedisVL SemanticCache for LLM response caching with vector similarity search.
+
+NOTE: redisvl imports are lazy-loaded in initialize() to avoid ~7.5s import overhead
+from voyageai SDK (pandas, scipy.stats) during test collection.
 """
 
 import hashlib
@@ -8,15 +11,17 @@ import json
 import logging
 import os
 import time
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import redis.asyncio as redis
-from redisvl.extensions.cache.embeddings import EmbeddingsCache
-from redisvl.extensions.cache.llm import SemanticCache
-from redisvl.extensions.message_history import SemanticMessageHistory
-from redisvl.query.filter import Tag
-from redisvl.utils.vectorize import VoyageAITextVectorizer
 
+
+# Lazy imports for redisvl (heavy dependency chain via voyageai SDK)
+# These are imported inside initialize() to speed up test collection
+if TYPE_CHECKING:
+    from redisvl.extensions.cache.embeddings import EmbeddingsCache
+    from redisvl.extensions.cache.llm import SemanticCache
+    from redisvl.extensions.message_history import SemanticMessageHistory
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +92,17 @@ class CacheService:
         logger.info("CacheService initialized with 4-tier architecture (RedisVL native)")
 
     async def initialize(self):
-        """Initialize Redis connections and caches."""
+        """Initialize Redis connections and caches.
+
+        NOTE: redisvl imports happen here (lazy loading) to avoid ~7.5s import
+        overhead during test collection. The voyageai SDK pulls in pandas/scipy.
+        """
+        # Lazy import redisvl components (heavy dependency chain)
+        from redisvl.extensions.cache.embeddings import EmbeddingsCache
+        from redisvl.extensions.cache.llm import SemanticCache
+        from redisvl.extensions.message_history import SemanticMessageHistory
+        from redisvl.utils.vectorize import VoyageAITextVectorizer
+
         try:
             # Initialize async Redis client for Tier 2 (key-value caches)
             self.redis_client = redis.from_url(
@@ -217,6 +232,9 @@ class CacheService:
             return None
 
         try:
+            # Lazy import Tag (redisvl dependency chain is heavy)
+            from redisvl.query.filter import Tag
+
             start = time.time()
 
             # Use override if provided, otherwise use default
@@ -363,6 +381,79 @@ class CacheService:
             logger.debug(f"✓ Stored embedding: {text[:50]}...")
         except Exception as e:
             logger.error(f"EmbeddingsCache store error: {e}")
+
+    # ========== TIER 1.5: Sparse Embedding Cache ==========
+
+    async def get_cached_sparse_embedding(
+        self, text: str, model_name: str = "bm42"
+    ) -> Optional[dict[str, Any]]:
+        """Get cached sparse embedding.
+
+        Sparse embeddings are stored as JSON in Redis hash.
+
+        Args:
+            text: Text to get sparse embedding for
+            model_name: Model name for cache key namespacing
+
+        Returns:
+            Cached sparse embedding dict (indices, values) if found, None otherwise
+        """
+        if not self.redis_client:
+            return None
+
+        try:
+            start = time.time()
+            key = f"sparse:{model_name}:{self._hash_key(text)}"
+            cached = await self.redis_client.hgetall(key)
+            latency = (time.time() - start) * 1000
+
+            if cached:
+                self.metrics["embeddings"]["hits"] += 1
+                logger.debug(f"✓ Sparse cache HIT ({latency:.0f}ms)")
+                # Decode from Redis hash format
+                return {
+                    "indices": json.loads(cached.get("indices", "[]")),
+                    "values": json.loads(cached.get("values", "[]")),
+                }
+
+            self.metrics["embeddings"]["misses"] += 1
+            return None
+        except Exception as e:
+            logger.error(f"Sparse cache get error: {e}")
+            self.metrics["embeddings"]["misses"] += 1
+            return None
+
+    async def store_sparse_embedding(
+        self,
+        text: str,
+        sparse_vector: dict[str, Any],
+        model_name: str = "bm42",
+        ttl: int = 86400,  # 24 hours default
+    ):
+        """Store sparse embedding in Redis hash.
+
+        Args:
+            text: Original text
+            sparse_vector: Sparse vector dict with indices and values
+            model_name: Model name for cache key namespacing
+            ttl: Time to live in seconds
+        """
+        if not self.redis_client:
+            return
+
+        try:
+            key = f"sparse:{model_name}:{self._hash_key(text)}"
+            await self.redis_client.hset(
+                key,
+                mapping={
+                    "indices": json.dumps(sparse_vector.get("indices", [])),
+                    "values": json.dumps(sparse_vector.get("values", [])),
+                },
+            )
+            await self.redis_client.expire(key, ttl)
+            logger.debug(f"✓ Stored sparse embedding: {text[:50]}...")
+        except Exception as e:
+            logger.error(f"Sparse cache store error: {e}")
 
     # ========== TIER 2: QueryAnalyzer Cache ==========
 
