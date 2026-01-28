@@ -17,11 +17,15 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis/redis-stack:latest
+    image: redis:8.4.0
     container_name: rag-redis-local
     ports:
       - "6379:6379"
-      - "8002:8001"
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lfu
+      --appendonly yes
     volumes:
       - redis_data:/data
     healthcheck:
