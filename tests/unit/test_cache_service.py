@@ -1,10 +1,19 @@
 """Tests for CacheService including RerankCache."""
 
-from unittest.mock import AsyncMock, patch
+import json
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from telegram_bot.services.cache import CacheService
+
+
+# Create mock modules for redisvl to avoid heavy imports
+_mock_semantic_cache = MagicMock()
+_mock_embeddings_cache = MagicMock()
+_mock_message_history = MagicMock()
+_mock_vectorizer = MagicMock()
 
 
 class TestCacheServiceInitialize:
@@ -14,28 +23,54 @@ class TestCacheServiceInitialize:
     def cache_service(self):
         return CacheService(redis_url="redis://localhost:6379")
 
+    @pytest.fixture
+    def mock_redisvl_modules(self):
+        """Mock redisvl modules in sys.modules before import."""
+        mock_llm = MagicMock()
+        mock_llm.SemanticCache = _mock_semantic_cache
+        mock_embeddings = MagicMock()
+        mock_embeddings.EmbeddingsCache = _mock_embeddings_cache
+        mock_history = MagicMock()
+        mock_history.SemanticMessageHistory = _mock_message_history
+        mock_vectorize = MagicMock()
+        mock_vectorize.VoyageAITextVectorizer = _mock_vectorizer
+
+        modules_to_mock = {
+            "redisvl": MagicMock(),
+            "redisvl.extensions": MagicMock(),
+            "redisvl.extensions.cache": MagicMock(),
+            "redisvl.extensions.cache.llm": mock_llm,
+            "redisvl.extensions.cache.embeddings": mock_embeddings,
+            "redisvl.extensions.message_history": mock_history,
+            "redisvl.utils": MagicMock(),
+            "redisvl.utils.vectorize": mock_vectorize,
+        }
+
+        with patch.dict(sys.modules, modules_to_mock):
+            yield {
+                "SemanticCache": _mock_semantic_cache,
+                "EmbeddingsCache": _mock_embeddings_cache,
+                "SemanticMessageHistory": _mock_message_history,
+                "VoyageAITextVectorizer": _mock_vectorizer,
+            }
+
     @pytest.mark.asyncio
-    async def test_initialize_connects_to_redis(self, cache_service):
+    async def test_initialize_connects_to_redis(self, cache_service, mock_redisvl_modules):
         """Test that initialize() connects to Redis."""
         mock_redis_client = AsyncMock()
         mock_redis_client.ping = AsyncMock(return_value=True)
 
         with patch("telegram_bot.services.cache.redis") as mock_redis_module:
             mock_redis_module.from_url.return_value = mock_redis_client
-
-            # Mock SemanticCache and EmbeddingsCache to avoid external dependencies
-            with patch("telegram_bot.services.cache.SemanticCache"):
-                with patch("telegram_bot.services.cache.EmbeddingsCache"):
-                    with patch("telegram_bot.services.cache.SemanticMessageHistory"):
-                        with patch.dict("os.environ", {"VOYAGE_API_KEY": ""}):
-                            await cache_service.initialize()
+            with patch.dict("os.environ", {"VOYAGE_API_KEY": ""}):
+                await cache_service.initialize()
 
             mock_redis_module.from_url.assert_called_once()
             mock_redis_client.ping.assert_called_once()
             assert cache_service.redis_client is mock_redis_client
 
     @pytest.mark.asyncio
-    async def test_initialize_handles_connection_error(self, cache_service):
+    async def test_initialize_handles_connection_error(self, cache_service, mock_redisvl_modules):
         """Test that initialize() handles connection errors gracefully."""
         with patch("telegram_bot.services.cache.redis") as mock_redis_module:
             mock_redis_module.from_url.side_effect = Exception("Connection refused")
@@ -46,22 +81,22 @@ class TestCacheServiceInitialize:
             assert cache_service.redis_client is None
 
     @pytest.mark.asyncio
-    async def test_initialize_sets_up_semantic_cache_with_api_key(self, cache_service):
+    async def test_initialize_sets_up_semantic_cache_with_api_key(
+        self, cache_service, mock_redisvl_modules
+    ):
         """Test that initialize() sets up SemanticCache when API key is available."""
         mock_redis_client = AsyncMock()
         mock_redis_client.ping = AsyncMock(return_value=True)
 
+        # Reset the mock to track calls
+        mock_redisvl_modules["SemanticCache"].reset_mock()
+
         with patch("telegram_bot.services.cache.redis") as mock_redis_module:
             mock_redis_module.from_url.return_value = mock_redis_client
+            with patch.dict("os.environ", {"VOYAGE_API_KEY": "test-api-key"}):
+                await cache_service.initialize()
 
-            with patch("telegram_bot.services.cache.SemanticCache") as mock_semantic_cache:
-                with patch("telegram_bot.services.cache.EmbeddingsCache"):
-                    with patch("telegram_bot.services.cache.SemanticMessageHistory"):
-                        with patch("telegram_bot.services.cache.VoyageAITextVectorizer"):
-                            with patch.dict("os.environ", {"VOYAGE_API_KEY": "test-api-key"}):
-                                await cache_service.initialize()
-
-                mock_semantic_cache.assert_called_once()
+            mock_redisvl_modules["SemanticCache"].assert_called_once()
 
 
 class TestSemanticCache:
@@ -460,3 +495,506 @@ class TestRerankCache:
 
         cache_service.redis_client.setex.assert_called_once()
         assert cache_service.redis_client.setex.call_args[0][1] == 7200
+
+
+class TestQueryAnalyzerCache:
+    """Tests for QueryAnalyzer cache operations."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.redis_client = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_get_cached_analysis_hit(self, cache_service):
+        """Test QueryAnalyzer cache hit."""
+        analysis = {"filters": {"city": "Burgas"}, "semantic_query": "apartments"}
+        cache_service.redis_client.get = AsyncMock(return_value=json.dumps(analysis))
+
+        result = await cache_service.get_cached_analysis("test query")
+
+        assert result == analysis
+        assert cache_service.metrics["analyzer"]["hits"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_cached_analysis_miss(self, cache_service):
+        """Test QueryAnalyzer cache miss."""
+        cache_service.redis_client.get = AsyncMock(return_value=None)
+
+        result = await cache_service.get_cached_analysis("test query")
+
+        assert result is None
+        assert cache_service.metrics["analyzer"]["misses"] == 1
+
+    @pytest.mark.asyncio
+    async def test_store_analysis(self, cache_service):
+        """Test storing analysis result."""
+        cache_service.redis_client.setex = AsyncMock()
+        analysis = {"filters": {}}
+
+        await cache_service.store_analysis("query", analysis)
+
+        cache_service.redis_client.setex.assert_called_once()
+
+
+class TestSearchCache:
+    """Tests for Search cache operations."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.redis_client = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_get_cached_search_hit(self, cache_service):
+        """Test Search cache hit."""
+        results = [{"id": 1, "text": "result"}]
+        cache_service.redis_client.get = AsyncMock(return_value=json.dumps(results))
+
+        result = await cache_service.get_cached_search(
+            embedding=[0.1] * 10, filters={"city": "Burgas"}
+        )
+
+        assert result == results
+        assert cache_service.metrics["search"]["hits"] == 1
+
+    @pytest.mark.asyncio
+    async def test_store_search_results(self, cache_service):
+        """Test storing search results."""
+        cache_service.redis_client.setex = AsyncMock()
+
+        await cache_service.store_search_results(
+            embedding=[0.1] * 10, filters={}, results=[{"id": 1}]
+        )
+
+        cache_service.redis_client.setex.assert_called_once()
+
+
+class TestSemanticMessageHistory:
+    """Tests for Semantic Message History operations."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.message_history = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_get_relevant_history(self, cache_service):
+        """Test getting relevant history messages."""
+        messages = [{"role": "user", "content": "hello"}]
+        cache_service.message_history.aget_relevant = AsyncMock(return_value=messages)
+
+        result = await cache_service.get_relevant_history(user_id=123, query="hi")
+
+        assert result == messages
+        cache_service.message_history.aget_relevant.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_relevant_history_disabled(self, cache_service):
+        """Test get_relevant_history returns empty list when disabled."""
+        cache_service.message_history = None
+
+        result = await cache_service.get_relevant_history(user_id=123, query="hi")
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_relevant_history_error_handling(self, cache_service):
+        """Test get_relevant_history handles errors gracefully."""
+        cache_service.message_history.aget_relevant = AsyncMock(
+            side_effect=Exception("Redis error")
+        )
+
+        result = await cache_service.get_relevant_history(user_id=123, query="hi")
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_add_semantic_message(self, cache_service):
+        """Test adding message to semantic history."""
+        cache_service.message_history.aadd_message = AsyncMock()
+
+        await cache_service.add_semantic_message(user_id=123, role="user", content="hello")
+
+        cache_service.message_history.aadd_message.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_add_semantic_message_disabled(self, cache_service):
+        """Test add_semantic_message does nothing when disabled."""
+        cache_service.message_history = None
+
+        # Should not raise
+        await cache_service.add_semantic_message(user_id=123, role="user", content="hello")
+
+    @pytest.mark.asyncio
+    async def test_add_semantic_message_error_handling(self, cache_service):
+        """Test add_semantic_message handles errors gracefully."""
+        cache_service.message_history.aadd_message = AsyncMock(side_effect=Exception("Redis error"))
+
+        # Should not raise
+        await cache_service.add_semantic_message(user_id=123, role="user", content="hello")
+
+
+class TestHashKey:
+    """Tests for _hash_key private method."""
+
+    @pytest.fixture
+    def cache_service(self):
+        return CacheService(redis_url="redis://localhost:6379")
+
+    def test_hash_key_returns_16_chars(self, cache_service):
+        """Test _hash_key returns 16 character hash."""
+        result = cache_service._hash_key("test data")
+
+        assert len(result) == 16
+
+    def test_hash_key_deterministic(self, cache_service):
+        """Test _hash_key returns same hash for same input."""
+        result1 = cache_service._hash_key("test data")
+        result2 = cache_service._hash_key("test data")
+
+        assert result1 == result2
+
+    def test_hash_key_different_for_different_input(self, cache_service):
+        """Test _hash_key returns different hash for different input."""
+        result1 = cache_service._hash_key("test data 1")
+        result2 = cache_service._hash_key("test data 2")
+
+        assert result1 != result2
+
+
+class TestLogMetrics:
+    """Tests for log_metrics method."""
+
+    @pytest.fixture
+    def cache_service(self):
+        return CacheService(redis_url="redis://localhost:6379")
+
+    def test_log_metrics_does_not_raise(self, cache_service):
+        """Test log_metrics doesn't raise with empty metrics."""
+        # Should not raise
+        cache_service.log_metrics()
+
+    def test_log_metrics_with_data(self, cache_service):
+        """Test log_metrics with actual metrics data."""
+        cache_service.metrics["semantic"]["hits"] = 10
+        cache_service.metrics["semantic"]["misses"] = 5
+
+        # Should not raise
+        cache_service.log_metrics()
+
+
+class TestRerankCacheExtended:
+    """Extended tests for Rerank cache operations."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.redis_client = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_get_cached_rerank_disabled(self, cache_service):
+        """Test get_cached_rerank returns None when Redis disabled."""
+        cache_service.redis_client = None
+
+        result = await cache_service.get_cached_rerank(
+            query_hash="abc123",
+            chunk_ids=["chunk1"],
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cached_rerank_error_handling(self, cache_service):
+        """Test get_cached_rerank handles errors gracefully."""
+        cache_service.redis_client.get = AsyncMock(side_effect=Exception("Redis error"))
+
+        result = await cache_service.get_cached_rerank(
+            query_hash="abc123",
+            chunk_ids=["chunk1"],
+        )
+
+        assert result is None
+        assert cache_service.metrics["rerank"]["misses"] == 1
+
+    @pytest.mark.asyncio
+    async def test_store_rerank_results_disabled(self, cache_service):
+        """Test store_rerank_results does nothing when Redis disabled."""
+        cache_service.redis_client = None
+
+        # Should not raise
+        await cache_service.store_rerank_results(
+            query_hash="abc123",
+            chunk_ids=["chunk1"],
+            results=[{"id": "1", "score": 0.9}],
+        )
+
+    @pytest.mark.asyncio
+    async def test_store_rerank_results_error_handling(self, cache_service):
+        """Test store_rerank_results handles errors gracefully."""
+        cache_service.redis_client.setex = AsyncMock(side_effect=Exception("Redis error"))
+
+        # Should not raise
+        await cache_service.store_rerank_results(
+            query_hash="abc123",
+            chunk_ids=["chunk1"],
+            results=[{"id": "1", "score": 0.9}],
+        )
+
+    @pytest.mark.asyncio
+    async def test_store_rerank_results_custom_ttl(self, cache_service):
+        """Test store_rerank_results with custom TTL."""
+        cache_service.redis_client.setex = AsyncMock()
+
+        await cache_service.store_rerank_results(
+            query_hash="abc123",
+            chunk_ids=["chunk1"],
+            results=[{"id": "1", "score": 0.9}],
+            ttl=3600,
+        )
+
+        cache_service.redis_client.setex.assert_called_once()
+        assert cache_service.redis_client.setex.call_args[0][1] == 3600
+
+
+class TestSearchCacheExtended:
+    """Extended tests for Search cache operations."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.redis_client = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_get_cached_search_miss(self, cache_service):
+        """Test Search cache miss."""
+        cache_service.redis_client.get = AsyncMock(return_value=None)
+
+        result = await cache_service.get_cached_search(
+            embedding=[0.1] * 10, filters={"city": "Burgas"}
+        )
+
+        assert result is None
+        assert cache_service.metrics["search"]["misses"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_cached_search_disabled(self, cache_service):
+        """Test get_cached_search returns None when Redis disabled."""
+        cache_service.redis_client = None
+
+        result = await cache_service.get_cached_search(embedding=[0.1] * 10, filters=None)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cached_search_error_handling(self, cache_service):
+        """Test get_cached_search handles errors gracefully."""
+        cache_service.redis_client.get = AsyncMock(side_effect=Exception("Redis error"))
+
+        result = await cache_service.get_cached_search(embedding=[0.1] * 10, filters=None)
+
+        assert result is None
+        assert cache_service.metrics["search"]["misses"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_cached_search_with_index_version(self, cache_service):
+        """Test get_cached_search with custom index version."""
+        cache_service.redis_client.get = AsyncMock(return_value=None)
+
+        await cache_service.get_cached_search(
+            embedding=[0.1] * 10, filters=None, index_version="v2"
+        )
+
+        cache_service.redis_client.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_store_search_results_disabled(self, cache_service):
+        """Test store_search_results does nothing when Redis disabled."""
+        cache_service.redis_client = None
+
+        # Should not raise
+        await cache_service.store_search_results(
+            embedding=[0.1] * 10, filters={}, results=[{"id": 1}]
+        )
+
+    @pytest.mark.asyncio
+    async def test_store_search_results_error_handling(self, cache_service):
+        """Test store_search_results handles errors gracefully."""
+        cache_service.redis_client.setex = AsyncMock(side_effect=Exception("Redis error"))
+
+        # Should not raise
+        await cache_service.store_search_results(
+            embedding=[0.1] * 10, filters={}, results=[{"id": 1}]
+        )
+
+    @pytest.mark.asyncio
+    async def test_store_search_results_with_none_filters(self, cache_service):
+        """Test store_search_results with None filters."""
+        cache_service.redis_client.setex = AsyncMock()
+
+        await cache_service.store_search_results(
+            embedding=[0.1] * 10, filters=None, results=[{"id": 1}]
+        )
+
+        cache_service.redis_client.setex.assert_called_once()
+
+
+class TestQueryAnalyzerCacheExtended:
+    """Extended tests for QueryAnalyzer cache operations."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.redis_client = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_get_cached_analysis_disabled(self, cache_service):
+        """Test get_cached_analysis returns None when Redis disabled."""
+        cache_service.redis_client = None
+
+        result = await cache_service.get_cached_analysis("test query")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cached_analysis_error_handling(self, cache_service):
+        """Test get_cached_analysis handles errors gracefully."""
+        cache_service.redis_client.get = AsyncMock(side_effect=Exception("Redis error"))
+
+        result = await cache_service.get_cached_analysis("test query")
+
+        assert result is None
+        assert cache_service.metrics["analyzer"]["misses"] == 1
+
+    @pytest.mark.asyncio
+    async def test_store_analysis_disabled(self, cache_service):
+        """Test store_analysis does nothing when Redis disabled."""
+        cache_service.redis_client = None
+
+        # Should not raise
+        await cache_service.store_analysis("query", {"filters": {}})
+
+    @pytest.mark.asyncio
+    async def test_store_analysis_error_handling(self, cache_service):
+        """Test store_analysis handles errors gracefully."""
+        cache_service.redis_client.setex = AsyncMock(side_effect=Exception("Redis error"))
+
+        # Should not raise
+        await cache_service.store_analysis("query", {"filters": {}})
+
+
+class TestConversationHistoryExtended:
+    """Extended tests for conversation history operations."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.redis_client = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_store_conversation_message_with_pipeline(self, cache_service):
+        """Test store_conversation_message executes Redis pipeline operations."""
+        cache_service.redis_client.lpush = AsyncMock()
+        cache_service.redis_client.ltrim = AsyncMock()
+        cache_service.redis_client.expire = AsyncMock()
+
+        await cache_service.store_conversation_message(123, "assistant", "goodbye")
+
+        # Verify all pipeline operations were called
+        cache_service.redis_client.lpush.assert_called_once()
+        cache_service.redis_client.ltrim.assert_called_once()
+        cache_service.redis_client.expire.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_history_json_parsing(self, cache_service):
+        """Test get_conversation_history parses JSON messages correctly."""
+        cache_service.redis_client.lrange = AsyncMock(
+            return_value=['{"role": "user", "content": "test message", "timestamp": 1234567890.0}']
+        )
+
+        result = await cache_service.get_conversation_history(user_id=456)
+
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        assert result[0]["content"] == "test message"
+        assert result[0]["timestamp"] == 1234567890.0
+
+
+class TestCacheServiceInitExtended:
+    """Extended tests for CacheService constructor."""
+
+    def test_init_with_custom_ttls(self):
+        """Test CacheService initializes with custom TTL values."""
+        service = CacheService(
+            redis_url="redis://localhost:6379",
+            semantic_cache_ttl=7200,
+            embeddings_cache_ttl=14400,
+            analyzer_cache_ttl=3600,
+            search_cache_ttl=1800,
+            distance_threshold=0.10,
+        )
+
+        assert service.semantic_cache_ttl == 7200
+        assert service.embeddings_cache_ttl == 14400
+        assert service.analyzer_cache_ttl == 3600
+        assert service.search_cache_ttl == 1800
+        assert service.distance_threshold == 0.10
+
+    def test_init_default_ttls(self):
+        """Test CacheService initializes with default TTL values."""
+        service = CacheService(redis_url="redis://localhost:6379")
+
+        assert service.semantic_cache_ttl == 48 * 3600  # 48 hours
+        assert service.embeddings_cache_ttl == 7 * 24 * 3600  # 7 days
+        assert service.analyzer_cache_ttl == 24 * 3600  # 24 hours
+        assert service.search_cache_ttl == 2 * 3600  # 2 hours
+        assert service.distance_threshold == 0.15
+
+    def test_init_creates_empty_metrics(self):
+        """Test CacheService initializes with empty metrics for all cache types."""
+        service = CacheService(redis_url="redis://localhost:6379")
+
+        assert "semantic" in service.metrics
+        assert "embeddings" in service.metrics
+        assert "analyzer" in service.metrics
+        assert "search" in service.metrics
+        assert "rerank" in service.metrics
+
+        for cache_type in service.metrics:
+            assert service.metrics[cache_type]["hits"] == 0
+            assert service.metrics[cache_type]["misses"] == 0
+
+
+class TestCloseExtended:
+    """Extended tests for CacheService.close()."""
+
+    @pytest.mark.asyncio
+    async def test_close_handles_none_clients(self):
+        """Test close() handles None clients gracefully."""
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.semantic_cache = None
+        service.embeddings_cache = None
+        service.redis_client = None
+
+        # Should not raise
+        await service.close()
+
+    @pytest.mark.asyncio
+    async def test_close_handles_partial_clients(self):
+        """Test close() handles partially initialized clients."""
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.semantic_cache = AsyncMock()
+        service.embeddings_cache = None
+        service.redis_client = AsyncMock()
+
+        await service.close()
+
+        service.semantic_cache.adisconnect.assert_called_once()
+        service.redis_client.aclose.assert_called_once()
