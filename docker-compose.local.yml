@@ -1,6 +1,6 @@
 services:
   qdrant:
-    image: qdrant/qdrant:v1.15.4
+    image: qdrant/qdrant:v1.16
     container_name: rag-qdrant-local
     ports:
       - "6333:6333"
