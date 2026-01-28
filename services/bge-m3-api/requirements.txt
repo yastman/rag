@@ -9,7 +9,7 @@ sentence-transformers==3.3.1
 # FastAPI & Web Server
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-python-multipart==0.0.12
+python-multipart==0.0.22
 pydantic==2.9.2
 pydantic-settings==2.6.1
 
