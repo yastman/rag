@@ -60,7 +60,7 @@ make qa               # Full QA (all checks + tests)
 ```
 Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
     → VoyageService Embeddings (voyage-4-large) + FastEmbed BM42 (sparse) → Qdrant Storage
-    → QueryPreprocessor (translit, RRF weights) → HybridRetrieverService (RRF fusion)
+    → QueryPreprocessor (translit, RRF weights) → QdrantService (RRF fusion)
     → VoyageService Rerank (rerank-2.5) → LLM Contextualization → Response
 ```
 
@@ -76,24 +76,23 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 
 ### Telegram Bot Services (Voyage AI Unified)
 
-| Service                  | Purpose                                                                  |
-| ------------------------ | ------------------------------------------------------------------------ |
-| `VoyageService`          | **Unified** embeddings + reranking (voyage-4-large/lite, rerank-2.5)     |
-| `QdrantService`          | Smart Gateway: RRF fusion, binary quantization, MMR diversity            |
-| `RetrieverService`       | Dense vector search in Qdrant with dynamic filters                       |
-| `HybridRetrieverService` | RRF fusion search (dense + sparse)                                       |
-| `QueryPreprocessor`      | Translit normalization (Latin→Cyrillic), dynamic RRF weights             |
-| `QueryAnalyzer`          | LLM-based filter extraction                                              |
-| `QueryRouter`            | **2026** Query classification (CHITCHAT/SIMPLE/COMPLEX) for RAG skipping |
-| `CacheService`           | Multi-level cache: semantic, rerank, sparse, conversation (Redis)        |
-| `SemanticMessageHistory` | Conversation context with vector similarity search                       |
-| `UserContextService`     | Extracts user preferences from queries via LLM                           |
-| `CESCPersonalizer`       | **Lazy** personalization with marker detection (`is_personalized_query`) |
-| `UserBaseVectorizer`     | Local Russian embeddings (deepvk/USER-base, ruMTEB #1)                   |
+| Service              | Purpose                                                                  |
+| -------------------- | ------------------------------------------------------------------------ |
+| `VoyageService`      | **Unified** embeddings + reranking (voyage-4-large/lite, rerank-2.5)     |
+| `QdrantService`      | Smart Gateway: RRF fusion, binary quantization, MMR diversity            |
+| `RetrieverService`   | Dense vector search in Qdrant with dynamic filters                       |
+| `QueryPreprocessor`  | Translit normalization (Latin→Cyrillic), dynamic RRF weights             |
+| `QueryAnalyzer`      | LLM-based filter extraction                                              |
+| `QueryRouter`        | **2026** Query classification (CHITCHAT/SIMPLE/COMPLEX) for RAG skipping |
+| `CacheService`       | Multi-level cache: semantic, rerank, sparse, conversation (Redis)        |
+| `UserContextService` | Extracts user preferences from queries via LLM                           |
+| `CESCPersonalizer`   | **Lazy** personalization with marker detection (`is_personalized_query`) |
+| `LLMService`         | LLM interaction with streaming and fallbacks via LiteLLM                 |
+| `UserBaseVectorizer` | Local Russian embeddings (deepvk/USER-base, ruMTEB #1)                   |
 
 **Legacy services** (backward compatibility, use VoyageService for new code):
 
-- `VoyageClient`, `VoyageEmbeddingService`, `VoyageRerankerService`
+- `EmbeddingService` (use VoyageService instead)
 
 ### Search Engine Variants
 
@@ -142,7 +141,7 @@ response = client.query_points(
 | Service     | Port       | Purpose                                         |
 | ----------- | ---------- | ----------------------------------------------- |
 | Qdrant      | 6333       | Vector database                                 |
-| Redis Stack | 6379, 8001 | Semantic cache (RediSearch)                     |
+| Redis       | 6379       | Semantic cache (Redis 8.4 + Query Engine)       |
 | LiteLLM     | 4000       | LLM Gateway (Cerebras → Groq → OpenAI fallback) |
 | Langfuse    | 3001       | LLM tracing                                     |
 | MLflow      | 5000       | Experiment tracking                             |
@@ -468,68 +467,6 @@ make deploy-code
 make deploy-release VERSION=2.12.0
 ```
 
-## Parallel Claude Workers
-
-Запуск нескольких Claude-агентов для параллельной работы над независимыми задачами.
-
-**Подробная документация:** [docs/PARALLEL-WORKERS.md](docs/PARALLEL-WORKERS.md)
-
-### Быстрый старт
-
-```bash
-# 1. tmux сессия
-tmux new -s claude
-
-# 2. Запустить воркеров из Claude
-spawn-claude "W1: Task description" "$(pwd)"
-spawn-claude "W2: Another task" "$(pwd)"
-```
-
-### Короткий синтаксис
-
-```
-/parallel docs/plans/2026-01-28-feature.md
-W1: 1,2,5
-W2: 3,4
-```
-
-Claude автоматически запустит воркеров с правильными скиллами (`executing-plans`, `verification-before-completion`).
-
-### Главное правило
-
-**1 воркер = 1 набор файлов.** Никогда не делить один файл между воркерами.
-
-## Superpowers Skills
-
-Скиллы из [obra/superpowers](https://github.com/obra/superpowers). Вызов: `/superpowers:<skill-name>` или через Skill tool.
-
-| Скилл | Когда использовать |
-|-------|-------------------|
-| `using-superpowers` | **Старт любой задачи.** Проверить какие скиллы применимы перед действием |
-| `brainstorming` | **Перед созданием фич.** Превращает идеи в дизайн через диалог |
-| `writing-plans` | **Есть спек/требования.** Пишет детальный план до кода (TDD, bite-sized tasks) |
-| `executing-plans` | **Есть готовый план.** Выполняет план батчами по 3 задачи с checkpoint'ами |
-| `subagent-driven-development` | **План + независимые задачи.** Dispatch субагентов на каждую задачу в текущей сессии |
-| `dispatching-parallel-agents` | **2+ независимых задач.** Параллельные агенты без shared state |
-| `test-driven-development` | **Любая фича/багфикс.** Тест → fail → минимальный код → pass |
-| `systematic-debugging` | **Баг/падающий тест.** Найти root cause ДО попытки исправить |
-| `verification-before-completion` | **Перед "готово".** Запустить проверку перед коммитом/PR |
-| `requesting-code-review` | **Завершил задачу.** Запросить ревью перед мержем |
-| `receiving-code-review` | **Получил фидбек.** Верификация предложений, не слепое согласие |
-| `using-git-worktrees` | **Нужна изоляция.** Работа в отдельном worktree без переключения веток |
-| `finishing-a-development-branch` | **Код готов.** Выбор: merge / PR / cleanup worktree |
-| `writing-skills` | **Создание скилла.** TDD для документации процессов |
-
-**Порядок для новой фичи:**
-```
-brainstorming → writing-plans → using-git-worktrees → executing-plans/subagent-driven-development → verification-before-completion → requesting-code-review → finishing-a-development-branch
-```
-
-**Для дебага:**
-```
-systematic-debugging → test-driven-development → verification-before-completion
-```
-
 ## Troubleshooting
 
 | Error | Cause | Fix |
@@ -545,26 +482,3 @@ systematic-debugging → test-driven-development → verification-before-complet
 - **Cerebras**: High throughput, no strict RPM limits. `reasoning_format: hidden` reduces token usage.
 - **Voyage AI**: 300 RPM (embeddings), 100 RPM (rerank). Use `CacheService` to reduce calls.
 - **Groq/OpenAI** (fallbacks): Standard limits apply, used only when Cerebras fails.
-
-## Dependency Updates (Renovate)
-
-Renovate Bot automatically creates PRs for Docker image updates.
-
-**Configuration:** `renovate.json`
-
-**Schedule:** Monday before 9:00 AM (Europe/Kiev)
-
-**Auto-merge:** Patch versions merge automatically after CI passes.
-
-**Manual actions:**
-- Check "Dependency Dashboard" issue for pending updates
-- Tick checkbox to trigger immediate PR creation
-- Review and merge minor/major version PRs manually
-
-**Groups:**
-- `databases`: postgres, redis, qdrant
-- `ml-platform`: litellm, langfuse, mlflow
-- `ai-services`: docling, lightrag
-- `python-base`: Python base images in Dockerfiles
-
-**Disable temporarily:** Delete `renovate.json` or add `"enabled": false`.
