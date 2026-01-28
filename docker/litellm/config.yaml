@@ -1,0 +1,40 @@
+# LiteLLM Proxy Configuration
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+# Version: v1.81.3.rc.3
+
+model_list:
+  # Primary: Cerebras (текущий провайдер)
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/zai-glm-4.7
+      api_base: https://api.cerebras.ai/v1
+      api_key: os.environ/CEREBRAS_API_KEY
+
+  # Fallback 1: Groq (быстрый, бесплатный tier)
+  - model_name: gpt-4o-mini-fallback
+    litellm_params:
+      model: groq/llama-3.1-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+
+  # Fallback 2: OpenAI (надёжный)
+  - model_name: gpt-4o-mini-openai
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+# Автоматический fallback при ошибках
+router_settings:
+  fallbacks:
+    - gpt-4o-mini: [gpt-4o-mini-fallback, gpt-4o-mini-openai]
+  retry_policy:
+    retry_count: 2
+
+# Langfuse интеграция
+litellm_settings:
+  callbacks: ["langfuse"]
+
+# Environment variables для Langfuse
+environment_variables:
+  LANGFUSE_PUBLIC_KEY: os.environ/LANGFUSE_PUBLIC_KEY
+  LANGFUSE_SECRET_KEY: os.environ/LANGFUSE_SECRET_KEY
+  LANGFUSE_HOST: os.environ/LANGFUSE_HOST
