@@ -14,7 +14,7 @@ pydantic==2.9.2
 pydantic-settings==2.6.1
 
 # Monitoring & Metrics
-prometheus-client==0.21.0
+prometheus-client==0.24.1
 
 # Utilities
 numpy==1.26.4
