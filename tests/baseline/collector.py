@@ -1,9 +1,12 @@
-"""Collect metrics from Langfuse v3 API."""
+"""Collect metrics from Langfuse v3 API, Qdrant, and Redis."""
 
 import json
+import re
 from datetime import datetime
 from typing import Any
 
+import httpx
+import redis
 from langfuse import Langfuse
 
 
@@ -187,3 +190,64 @@ class LangfuseMetricsCollector:
             "total": total,
             "hit_rate": hit_rate,
         }
+
+    # ========== Infrastructure Metrics ==========
+
+    @staticmethod
+    def get_qdrant_metrics(qdrant_url: str = "http://localhost:6333") -> dict[str, Any]:
+        """Scrape Qdrant Prometheus /metrics endpoint.
+
+        Args:
+            qdrant_url: Qdrant base URL
+
+        Returns:
+            Dict with key Qdrant metrics
+        """
+        try:
+            resp = httpx.get(f"{qdrant_url}/metrics", timeout=5.0)
+            resp.raise_for_status()
+            text = resp.text
+
+            def extract(name: str) -> float:
+                match = re.search(rf"^{name}\s+([\d.e+-]+)", text, re.MULTILINE)
+                return float(match.group(1)) if match else 0.0
+
+            return {
+                "grpc_responses_total": extract("app_info_grpc_responses_total"),
+                "rest_responses_total": extract("app_info_rest_responses_total"),
+                "collections_total": extract("app_info_collections_total"),
+                "points_total": extract("app_info_points_total"),
+                "available": True,
+            }
+        except Exception:
+            return {"available": False}
+
+    @staticmethod
+    def get_redis_metrics(
+        redis_url: str = "redis://localhost:6379",
+    ) -> dict[str, Any]:
+        """Collect Redis INFO memory and stats.
+
+        Args:
+            redis_url: Redis connection URL
+
+        Returns:
+            Dict with memory usage, evictions, hit/miss stats
+        """
+        try:
+            r = redis.from_url(redis_url, decode_responses=True)
+            info_memory = r.info("memory")
+            info_stats = r.info("stats")
+            r.close()
+
+            return {
+                "used_memory_mb": info_memory.get("used_memory", 0) / (1024 * 1024),
+                "used_memory_peak_mb": info_memory.get("used_memory_peak", 0) / (1024 * 1024),
+                "maxmemory_mb": info_memory.get("maxmemory", 0) / (1024 * 1024),
+                "evicted_keys": info_stats.get("evicted_keys", 0),
+                "keyspace_hits": info_stats.get("keyspace_hits", 0),
+                "keyspace_misses": info_stats.get("keyspace_misses", 0),
+                "available": True,
+            }
+        except Exception:
+            return {"available": False}
