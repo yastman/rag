@@ -258,3 +258,35 @@ ifndef VERSION
 endif
 	git tag v$(VERSION)
 	git push origin v$(VERSION)
+
+# =============================================================================
+# E2E TESTING
+# =============================================================================
+
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-group e2e-setup
+
+e2e-install: ## Install E2E testing dependencies
+	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
+	pip install -r requirements-e2e.txt
+	@echo "$(GREEN)✓ E2E dependencies installed$(NC)"
+
+e2e-generate-data: ## Generate test property data
+	@echo "$(BLUE)Generating test properties...$(NC)"
+	python scripts/generate_test_properties.py
+	@echo "$(GREEN)✓ Test data generated$(NC)"
+
+e2e-index-data: ## Index test data into Qdrant
+	@echo "$(BLUE)Indexing test properties...$(NC)"
+	python scripts/index_test_properties.py
+	@echo "$(GREEN)✓ Test data indexed$(NC)"
+
+e2e-test: ## Run E2E tests against Telegram bot
+	@echo "$(BLUE)Running E2E tests...$(NC)"
+	python scripts/e2e/runner.py
+	@echo "$(GREEN)✓ E2E tests complete$(NC)"
+
+e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=filters)
+	python scripts/e2e/runner.py --group $(GROUP)
+
+e2e-setup: e2e-install e2e-generate-data e2e-index-data ## Full E2E setup
+	@echo "$(GREEN)✓ E2E setup complete$(NC)"
