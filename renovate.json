@@ -1,0 +1,61 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "docker:enableMajor"],
+
+  "schedule": ["before 9am on monday"],
+  "timezone": "Europe/Kiev",
+
+  "dependencyDashboard": true,
+  "platformAutomerge": true,
+  "prHourlyLimit": 5,
+  "labels": ["dependencies", "docker"],
+
+  "packageRules": [
+    {
+      "description": "Auto-merge patch updates",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "description": "Databases - stable, auto-merge minor",
+      "matchPackageNames": ["pgvector/pgvector", "redis/redis-stack", "qdrant/qdrant"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "groupName": "databases"
+    },
+    {
+      "description": "ML Platform - group together",
+      "matchPackageNames": ["ghcr.io/berriai/litellm", "langfuse/langfuse", "ghcr.io/mlflow/mlflow"],
+      "groupName": "ml-platform"
+    },
+    {
+      "description": "LiteLLM - allow unstable versions (they use rc tags)",
+      "matchPackageNames": ["ghcr.io/berriai/litellm"],
+      "ignoreUnstable": false
+    },
+    {
+      "description": "AI Services - group docling and lightrag",
+      "matchPackageNames": [
+        "ghcr.io/docling-project/docling-serve-cpu",
+        "quay.io/docling-project/docling-serve",
+        "ghcr.io/hkuds/lightrag"
+      ],
+      "groupName": "ai-services"
+    },
+    {
+      "description": "Base images - Python",
+      "matchPackageNames": ["python"],
+      "groupName": "python-base"
+    },
+    {
+      "description": "Skip release candidates except for litellm",
+      "matchPackagePatterns": ["^(?!ghcr\\.io/berriai/litellm).*$"],
+      "allowedVersions": "!/^.*(-rc|-alpha|-beta).*$/"
+    },
+    {
+      "description": "Pin floating tags to digest",
+      "matchCurrentVersion": "/^latest$/",
+      "pinDigests": true
+    }
+  ]
+}
