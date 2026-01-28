@@ -19,6 +19,7 @@ class LLMService:
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o-mini",
+        client: httpx.AsyncClient | None = None,
     ):
         """Initialize LLM service.
 
@@ -26,11 +27,13 @@ class LLMService:
             api_key: OpenAI API key
             base_url: API base URL (for OpenAI-compatible APIs)
             model: Model name
+            client: Optional httpx.AsyncClient for dependency injection (testing)
         """
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.client = httpx.AsyncClient(timeout=60.0)
+        self._owns_client = client is None
+        self.client = client or httpx.AsyncClient(timeout=60.0)
 
     async def generate_answer(
         self,
@@ -313,5 +316,6 @@ class LLMService:
             raise
 
     async def close(self):
-        """Close HTTP client."""
-        await self.client.aclose()
+        """Close HTTP client if owned by this instance."""
+        if self._owns_client:
+            await self.client.aclose()
