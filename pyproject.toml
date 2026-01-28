@@ -43,6 +43,7 @@ dev = [
     "pytest>=8.3.0",         # Testing framework
     "pytest-cov>=5.0.0",     # Coverage plugin
     "pytest-asyncio>=0.24.0",# Async testing
+    "pytest-httpx>=0.35.0",  # HTTPX mocking (2026 best practice)
     "pre-commit>=3.8.0",     # Git hooks
 ]
 
@@ -296,6 +297,22 @@ omit = [
     "*/legacy/*",
     "*/__pycache__/*",
     "*/.venv/*",
+    # Scripts directory (not production code)
+    "scripts/*",
+    "scripts/**/*",
+    # Evaluation scripts (not production code)
+    "src/evaluation/create_golden_set.py",
+    "src/evaluation/generate_test_queries.py",
+    "src/evaluation/run_ab_test.py",
+    "src/evaluation/smoke_test.py",
+    "src/evaluation/test_mlflow_ab.py",
+    "src/evaluation/search_engines_rerank.py",
+    "src/evaluation/evaluate_with_ragas.py",
+    "src/evaluation/langfuse_integration.py",
+    # One-off setup scripts
+    "telegram_bot/setup_qdrant_indexes.py",
+    # Test/debug scripts in wrong location
+    "telegram_bot/test_*.py",
 ]
 
 [tool.coverage.report]
