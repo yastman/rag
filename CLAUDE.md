@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make check              # Lint + types
 make test               # All tests
+make test-redis         # Verify Redis Query Engine
 pytest tests/unit/ -v   # Unit tests only
 make docker-up          # Start Qdrant, Redis, MLflow
 . venv/bin/activate     # Activate venv
@@ -346,6 +347,23 @@ gh issue close N                   # Close issue
 | `docker/litellm/config.yaml`            | LLM Gateway configuration (models, fallbacks, Langfuse)                               |
 | `CACHING.md`                            | 6-tier cache architecture (semantic, rerank, sparse, query, conversation, embeddings) |
 | `telegram_bot/services/query_router.py` | Query classification patterns (CHITCHAT/SIMPLE/COMPLEX)                               |
+
+## Parallel Claude Workers
+
+Запуск нескольких Claude-агентов для параллельной работы над независимыми задачами.
+
+**Документация:** [docs/PARALLEL-WORKERS.md](docs/PARALLEL-WORKERS.md)
+
+**Короткий синтаксис (из Claude):**
+```
+/parallel docs/plans/2026-01-28-feature.md
+W1: 1,2,5
+W2: 3,4
+```
+
+Claude понимает: прочитать план, запустить `spawn-claude` для каждого воркера с правильными скиллами. Оркестратор (основной Claude) не делает задачи сам — только коммитит после воркеров.
+
+**Правило:** 1 воркер = 1 набор независимых файлов. Никогда не делить один файл между воркерами.
 
 ## Environment Setup
 
