@@ -98,6 +98,40 @@ class TestCacheServiceInitialize:
 
             mock_redisvl_modules["SemanticCache"].assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_semantic_cache_name_includes_version(self, cache_service, mock_redisvl_modules):
+        """SemanticCache name should include version and vectorizer."""
+        mock_redis_client = AsyncMock()
+        mock_redis_client.ping = AsyncMock(return_value=True)
+        mock_redisvl_modules["SemanticCache"].reset_mock()
+
+        with patch("telegram_bot.services.cache.redis") as mock_redis_module:
+            mock_redis_module.from_url.return_value = mock_redis_client
+            with patch.dict(
+                "os.environ", {"VOYAGE_API_KEY": "test-key", "USE_LOCAL_EMBEDDINGS": "false"}
+            ):
+                await cache_service.initialize()
+
+        call_kwargs = mock_redisvl_modules["SemanticCache"].call_args[1]
+        assert call_kwargs["name"] == "sem:v2:voyage1024"
+
+    @pytest.mark.asyncio
+    async def test_embeddings_cache_name_includes_version(
+        self, cache_service, mock_redisvl_modules
+    ):
+        """EmbeddingsCache name should include version."""
+        mock_redis_client = AsyncMock()
+        mock_redis_client.ping = AsyncMock(return_value=True)
+        mock_redisvl_modules["EmbeddingsCache"].reset_mock()
+
+        with patch("telegram_bot.services.cache.redis") as mock_redis_module:
+            mock_redis_module.from_url.return_value = mock_redis_client
+            with patch.dict("os.environ", {"VOYAGE_API_KEY": ""}):
+                await cache_service.initialize()
+
+        call_kwargs = mock_redisvl_modules["EmbeddingsCache"].call_args[1]
+        assert call_kwargs["name"] == "emb:v2"
+
 
 class TestSemanticCache:
     """Tests for semantic cache operations."""
@@ -572,6 +606,30 @@ class TestSearchCache:
         cache_service.redis_client.setex.assert_called_once()
 
 
+class TestSearchCacheKeys:
+    """Tests for search cache key format."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.redis_client = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_search_cache_key_no_double_version(self, cache_service):
+        """Search cache key should not have double v1:v1."""
+        cache_service.redis_client.get = AsyncMock(return_value=None)
+
+        await cache_service.get_cached_search(
+            embedding=[0.1] * 10, filters=None, index_version="v1"
+        )
+
+        call_args = cache_service.redis_client.get.call_args[0][0]
+        # Should be search:v2:v1:hash:hash, not search:v1:v1:hash:hash
+        assert call_args.startswith("search:v2:")
+        assert ":v1:v1:" not in call_args
+
+
 class TestSemanticMessageHistory:
     """Tests for Semantic Message History operations."""
 
@@ -636,6 +694,32 @@ class TestSemanticMessageHistory:
 
         # Should not raise
         await cache_service.add_semantic_message(user_id=123, role="user", content="hello")
+
+
+class TestCacheMetrics:
+    """Tests for cache metrics."""
+
+    @pytest.fixture
+    def cache_service(self):
+        service = CacheService(redis_url="redis://localhost:6379")
+        service.redis_client = AsyncMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_get_full_metrics_includes_redis_stats(self, cache_service):
+        """get_full_metrics should include Redis memory and eviction stats."""
+        cache_service.redis_client.info = AsyncMock(
+            side_effect=[
+                {"used_memory_human": "10M", "maxmemory_human": "512M"},  # memory
+                {"evicted_keys": 5, "keyspace_hits": 100, "keyspace_misses": 20},  # stats
+            ]
+        )
+
+        metrics = await cache_service.get_full_metrics()
+
+        assert "redis" in metrics
+        assert metrics["redis"]["used_memory_human"] == "10M"
+        assert metrics["redis"]["evicted_keys"] == 5
 
 
 class TestHashKey:
