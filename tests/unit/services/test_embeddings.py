@@ -76,9 +76,16 @@ class TestEmbeddingServiceEmbedQuery:
 
     @pytest.fixture
     def service_with_mock_client(self, mock_client):
-        """Create EmbeddingService with mocked client."""
+        """Create EmbeddingService with mocked client.
+
+        Note: We directly assign the mock client after creation to ensure
+        test isolation even when other tests pollute sys.modules with patches.
+        """
         with patch("httpx.AsyncClient", return_value=mock_client):
-            return EmbeddingService("http://localhost:8001")
+            service = EmbeddingService("http://localhost:8001")
+        # Ensure we have our mock client regardless of any module pollution
+        service.client = mock_client
+        return service
 
     async def test_embed_query_returns_vector(self, service_with_mock_client, mock_client):
         """Test that embed_query returns the embedding vector."""
@@ -211,6 +218,8 @@ class TestEmbeddingServiceClose:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             service = EmbeddingService("http://localhost:8001")
+        # Ensure we have our mock client regardless of any module pollution
+        service.client = mock_client
 
         await service.close()
 
@@ -222,6 +231,8 @@ class TestEmbeddingServiceClose:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             service = EmbeddingService("http://localhost:8001")
+        # Ensure we have our mock client regardless of any module pollution
+        service.client = mock_client
 
         # Call close multiple times
         await service.close()
@@ -250,15 +261,17 @@ class TestEmbeddingServiceFlow:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Create
             service = EmbeddingService("http://localhost:8001/")
-            assert service.base_url == "http://localhost:8001"
+        # Ensure we have our mock client regardless of any module pollution
+        service.client = mock_client
+        assert service.base_url == "http://localhost:8001"
 
-            # Use
-            result = await service.embed_query("test")
-            assert result == [0.1, 0.2, 0.3]
+        # Use
+        result = await service.embed_query("test")
+        assert result == [0.1, 0.2, 0.3]
 
-            # Close
-            await service.close()
-            mock_client.aclose.assert_called_once()
+        # Close
+        await service.close()
+        mock_client.aclose.assert_called_once()
 
     async def test_multiple_queries(self):
         """Test making multiple queries with the same service."""
@@ -282,12 +295,14 @@ class TestEmbeddingServiceFlow:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             service = EmbeddingService("http://localhost:8001")
+        # Ensure we have our mock client regardless of any module pollution
+        service.client = mock_client
 
-            result1 = await service.embed_query("query1")
-            result2 = await service.embed_query("query2")
-            result3 = await service.embed_query("query3")
+        result1 = await service.embed_query("query1")
+        result2 = await service.embed_query("query2")
+        result3 = await service.embed_query("query3")
 
-            assert result1 == [0.1, 0.2]
-            assert result2 == [0.3, 0.4]
-            assert result3 == [0.5, 0.6]
-            assert mock_client.post.call_count == 3
+        assert result1 == [0.1, 0.2]
+        assert result2 == [0.3, 0.4]
+        assert result3 == [0.5, 0.6]
+        assert mock_client.post.call_count == 3
