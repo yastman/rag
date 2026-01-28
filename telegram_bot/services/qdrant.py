@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import numpy as np
+from langfuse import observe
 from qdrant_client import AsyncQdrantClient, models
 
 
@@ -49,6 +50,7 @@ class QdrantService:
 
         logger.info(f"QdrantService initialized: {collection_name}")
 
+    @observe(name="qdrant-hybrid-search-rrf")
     async def hybrid_search_rrf(
         self,
         dense_vector: list[float],
@@ -131,6 +133,7 @@ class QdrantService:
 
         return self._format_results(result.points)
 
+    @observe(name="qdrant-search-score-boosting")
     async def search_with_score_boosting(
         self,
         dense_vector: list[float],
