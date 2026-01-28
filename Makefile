@@ -154,6 +154,21 @@ test-all-smoke-load: test-preflight test-smoke test-load ***REMOVED******REMOVED
 	@echo "$(GREEN)✓✓✓ All smoke+load tests complete$(NC)"
 
 ***REMOVED*** =============================================================================
+***REMOVED*** REDIS VERIFICATION
+***REMOVED*** =============================================================================
+
+.PHONY: test-redis
+
+test-redis: ***REMOVED******REMOVED*** Verify Redis Query Engine is available
+	@echo "$(BLUE)Testing Redis Query Engine...$(NC)"
+	@docker exec dev-redis redis-cli FT._LIST > /dev/null 2>&1 || \
+		(echo "$(RED)FAIL: FT._LIST not available - Query Engine missing$(NC)" && exit 1)
+	@docker exec dev-redis redis-cli FT.CREATE __test_idx ON HASH PREFIX 1 __test: SCHEMA name TEXT > /dev/null 2>&1 || \
+		(echo "$(RED)FAIL: Cannot create test index$(NC)" && exit 1)
+	@docker exec dev-redis redis-cli FT.DROPINDEX __test_idx > /dev/null 2>&1 || true
+	@echo "$(GREEN)✓ Redis Query Engine OK$(NC)"
+
+***REMOVED*** =============================================================================
 ***REMOVED*** PROJECT MANAGEMENT
 ***REMOVED*** =============================================================================
 
