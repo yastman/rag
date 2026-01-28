@@ -16,22 +16,8 @@ make docker-up          # Start Qdrant, Redis, MLflow
 
 **Contextual RAG Pipeline** - Production RAG system with hybrid search (RRF + ColBERT), Voyage AI embeddings, multi-level caching, and Telegram bot.
 
-**Version:** 2.13.0 | **Python:** 3.12+ | **LLM:** GLM-4 (OpenAI-compatible)
-**Use cases:** Ukrainian Criminal Code (1,294 docs), Bulgarian property catalogs (92 docs)
-
-## Current Sprint
-
-**Status:** Complete
-**Version:** 2.13.0
-
-### Recently Completed (2026-01-26)
-- Test coverage 80% (1105 tests, 82% coverage, 0 failures)
-- Parallel workers documentation (spawn-claude)
-- Superpowers skills reference (14 skills)
-- Binary quantization A/B testing
-
----
-*Updated: 2026-01-26*
+**Python:** 3.12+ | **LLM:** Cerebras gpt-oss-120b via LiteLLM | **Embeddings:** Voyage AI
+**Use cases:** Bulgarian property catalogs (192 docs), Ukrainian Criminal Code (1,294 docs)
 
 ## Build & Development Commands
 
@@ -152,12 +138,30 @@ response = client.query_points(
 
 ### External Services
 
-| Service     | Port       | Purpose                     |
-| ----------- | ---------- | --------------------------- |
-| Qdrant      | 6333       | Vector database             |
-| Redis Stack | 6379, 8001 | Semantic cache (RediSearch) |
-| MLflow      | 5000       | Experiment tracking         |
-| Langfuse    | 3001       | LLM tracing                 |
+| Service     | Port       | Purpose                                         |
+| ----------- | ---------- | ----------------------------------------------- |
+| Qdrant      | 6333       | Vector database                                 |
+| Redis Stack | 6379, 8001 | Semantic cache (RediSearch)                     |
+| LiteLLM     | 4000       | LLM Gateway (Cerebras → Groq → OpenAI fallback) |
+| Langfuse    | 3001       | LLM tracing                                     |
+| MLflow      | 5000       | Experiment tracking                             |
+
+### LLM Gateway (LiteLLM)
+
+```
+Bot → LiteLLM Proxy (:4000) → Cerebras/Groq/OpenAI → Langfuse tracing
+```
+
+**Config:** `docker/litellm/config.yaml`
+
+| Model | Provider | Purpose |
+|-------|----------|---------|
+| `gpt-oss-120b` | Cerebras | Production (reasoning model) |
+| `gpt-4o-mini` | Cerebras GLM-4.7 | Dev/Test (fast) |
+| `gpt-4o-mini-fallback` | Groq | Fallback 1 |
+| `gpt-4o-mini-openai` | OpenAI | Fallback 2 |
+
+**Key setting:** `reasoning_format: hidden` — removes model's internal reasoning from responses.
 
 ## Code Patterns
 
@@ -318,28 +322,22 @@ gh issue close N                   # Close issue
 | --------------------------------------- | ------------------------------------------------------------------------------------- |
 | `docs/PIPELINE_OVERVIEW.md`             | Complete architecture                                                                 |
 | `docs/QDRANT_STACK.md`                  | Qdrant configuration                                                                  |
+| `docs/PARALLEL-WORKERS.md`              | tmux + spawn-claude parallel execution                                                |
+| `docker/litellm/config.yaml`            | LLM Gateway configuration (models, fallbacks, Langfuse)                               |
 | `CACHING.md`                            | 6-tier cache architecture (semantic, rerank, sparse, query, conversation, embeddings) |
-| `src/evaluation/README.md`              | MLflow, Langfuse, RAGAS                                                               |
 | `telegram_bot/services/query_router.py` | Query classification patterns (CHITCHAT/SIMPLE/COMPLEX)                               |
-| `telegram_bot/services/cesc.py`         | CESC personalizer + `is_personalized_query()`                                         |
-| `scripts/test_quantization_ab.py`       | Binary quantization A/B testing with precision@k                                      |
 
 ## Environment Setup
 
 1. Copy `.env.example` to `.env`
-2. Fill in required keys: `VOYAGE_API_KEY`, `OPENAI_API_KEY`, `QDRANT_API_KEY`, `TELEGRAM_BOT_TOKEN`
-3. Optional keys: `ANTHROPIC_API_KEY`, `LANGFUSE_*`, `MLFLOW_TRACKING_URI`
-4. Voyage AI model config (optional, defaults shown):
-   - `VOYAGE_MODEL_DOCS=voyage-4-large`
-   - `VOYAGE_MODEL_QUERIES=voyage-4-lite`
-   - `VOYAGE_RERANK_MODEL=rerank-2.5`
-5. Qdrant quantization config (optional, defaults shown):
-   - `QDRANT_USE_QUANTIZATION=true` - Enable binary quantization
-   - `QDRANT_QUANTIZATION_RESCORE=true` - Rescore for accuracy
-   - `QDRANT_QUANTIZATION_OVERSAMPLING=2.0` - Candidate multiplier
-   - `QDRANT_QUANTIZATION_ALWAYS_RAM=true` - Keep quantized in RAM
-6. Run `make install-dev`
-7. Start services: `docker compose -f docker-compose.dev.yml up -d` (full stack with bot)
+2. Fill in required keys:
+   - `TELEGRAM_BOT_TOKEN` — Telegram bot
+   - `VOYAGE_API_KEY` — Embeddings & rerank
+   - `CEREBRAS_API_KEY` — Primary LLM (via LiteLLM)
+   - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` — LLM tracing
+3. Optional keys: `GROQ_API_KEY`, `OPENAI_API_KEY` (fallbacks), `ANTHROPIC_API_KEY` (E2E tests)
+4. Run `make install-dev`
+5. Start services: `docker compose -f docker-compose.dev.yml up -d`
 
 ## Testing
 
@@ -387,9 +385,10 @@ make e2e-setup
 ### Running Tests
 
 ```bash
-make e2e-test                              # All 25 tests
-make e2e-test-group GROUP=price_filters    # Specific group
+make e2e-test                                # All 25 tests
+make e2e-test-group GROUP=price_filters      # Specific group
 python scripts/e2e/runner.py --scenario 3.1  # Single test
+python scripts/e2e/runner.py --skip-judge    # Skip Claude evaluation (no Anthropic credits needed)
 ```
 
 ### Test Groups
@@ -433,7 +432,9 @@ Bot responses use Markdown formatting (`parse_mode="Markdown"`).
 
 ## Qdrant Collections
 
-- `contextual_bulgaria_voyage4` - Bulgarian property data (92 documents, Voyage-4 embeddings, Binary Quantization)
+- `contextual_bulgaria_voyage4` - Bulgarian property data (192 documents: 92 real + 100 test, Voyage-4 embeddings, Binary Quantization)
+  - Test data marked with `is_test_data: true` payload field
+  - Test data IDs: 900000-900099
 - `legal_documents` - Ukrainian Criminal Code (1,294 documents, BGE-M3 embeddings)
 
 ## Deployment
@@ -446,174 +447,36 @@ make deploy-code
 make deploy-release VERSION=2.12.0
 ```
 
-## Parallel Claude Workers (tmux + spawn-claude)
+## Parallel Claude Workers
 
-Запуск нескольких Claude-агентов одновременно для ускорения работы.
+Запуск нескольких Claude-агентов для параллельной работы над независимыми задачами.
 
-### Архитектура
+**Подробная документация:** [docs/PARALLEL-WORKERS.md](docs/PARALLEL-WORKERS.md)
 
-```
-tmux session "claude"
-├── Окно 1: Основной Claude (оркестратор)
-│   └── Создаёт план и запускает воркеров через spawn-claude
-├── Окно 2: Worker 1 (независимая Claude сессия)
-├── Окно 3: Worker 2 (независимая Claude сессия)
-├── Окно 4: Worker 3 (независимая Claude сессия)
-└── Окно 5+: Дополнительные воркеры по мере необходимости
-```
+### Быстрый старт
 
-**Результат:** N Claude-агентов работают **параллельно**, каждый на своей задаче, в одной tmux сессии.
-
-### Быстрый старт (3 шага)
-
-**1. Открыть tmux сессию в проекте**
 ```bash
-cd /mnt/c/Users/user/Documents/Сайты/rag-fresh
+# 1. tmux сессия
 tmux new -s claude
-# Или через WezTerm (Ctrl+Shift+M) → выбрать проект
-```
 
-**2. Запустить основную Claude сессию**
-```bash
-claude
-```
-
-**3. Из Claude запустить воркеров**
-```bash
+# 2. Запустить воркеров из Claude
 spawn-claude "W1: Task description" "$(pwd)"
 spawn-claude "W2: Another task" "$(pwd)"
-spawn-claude "W3: Third task" "$(pwd)"
 ```
 
-### Переключение между воркерами (tmux)
+### Короткий синтаксис
 
-| Комбо | Действие |
-|-------|----------|
-| `Ctrl+A, 1` | Основной Claude (оркестратор) |
-| `Ctrl+A, 2/3/4` | Worker 1/2/3 |
-| `Ctrl+A, n/p` | Следующее/предыдущее окно |
-| `Ctrl+A, w` | Список всех окон |
-| `Ctrl+A, d` | Отсоединиться (session stays) |
-
-### Синтаксис spawn-claude
-
-```bash
-spawn-claude "ПРОМПТ" "ПУТЬ"
+```
+/parallel docs/plans/2026-01-28-feature.md
+W1: 1,2,5
+W2: 3,4
 ```
 
-| Параметр | Значение | Пример |
-|----------|----------|--------|
-| **ПРОМПТ** | Задача для Claude | `"W1: Implement feature X"` |
-| **ПУТЬ** | Путь к проекту | `"$(pwd)"` или абсолютный путь |
+Claude автоматически запустит воркеров с правильными скиллами (`executing-plans`, `verification-before-completion`).
 
-**ОБЯЗАТЕЛЬНО:** Всегда передавай путь к проекту вторым аргументом.
+### Главное правило
 
-### Правила параллелизации (ВАЖНО)
-
-**Главный принцип:** 1 воркер = 1 набор независимых файлов. Никогда не делить один файл между воркерами.
-
-| Правило | Хорошо | Плохо |
-|---------|--------|-------|
-| 1 воркер = 1 модуль | W1: cache.py, W2: qdrant.py | W1: cache.py строки 1-100, W2: cache.py строки 101-200 |
-| Группируй мелкое | W1: metrics + otel + eval | W1: metrics, W2: otel, W3: eval (оверхед) |
-| Тесты с кодом | W1: auth.py + test_auth.py | W1: auth.py, W2: test_auth.py |
-| Общий файл — только чтение | Все читают план | Все пишут в один файл |
-
-### Шаблон промпта для воркера
-
-```bash
-spawn-claude "W{N}: {Краткое описание задачи}.
-
-REQUIRED SKILLS:
-- superpowers:executing-plans
-- superpowers:verification-before-completion
-
-План: docs/plans/YYYY-MM-DD-task.md
-Задачи: Task N (секция из плана)
-
-Твои файлы (ТОЛЬКО ЭТИ):
-- module.py
-- test_module.py
-
-Алгоритм:
-1. Прочитай план, найди свои задачи
-2. Выполни каждый Step по порядку
-3. VERIFY: команда для проверки
-4. git commit после каждой задачи
-5. НЕ ТРОГАЙ файлы других воркеров" "$(pwd)"
-```
-
-### Пример: E2E Testing (4 воркера)
-
-```bash
-PROJECT="/mnt/c/Users/user/Documents/Сайты/rag-fresh"
-
-# Worker 1: Test Scenarios
-spawn-claude "W1: Task 3 - Test Scenarios.
-REQUIRED: superpowers:executing-plans
-План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
-Задача: Task 3 - создать scripts/e2e/test_scenarios.py
-git commit после завершения" $PROJECT
-
-# Worker 2: Telethon Client
-spawn-claude "W2: Task 4 - Telethon Client.
-REQUIRED: superpowers:executing-plans
-План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
-Задача: Task 4 - создать scripts/e2e/telegram_client.py" $PROJECT
-
-# Worker 3: Claude Judge
-spawn-claude "W3: Task 5 - Claude Judge.
-REQUIRED: superpowers:executing-plans
-План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
-Задача: Task 5 - создать scripts/e2e/claude_judge.py" $PROJECT
-
-# Worker 4: Data Generator + Reports
-spawn-claude "W4: Tasks 6+8 - Data Generator + Reports.
-REQUIRED: superpowers:executing-plans
-План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
-Задачи: Task 6 + Task 8" $PROJECT
-```
-
-### Мониторинг прогресса
-
-```bash
-# git log (обновляется каждые 2 сек)
-watch -n 2 "git log --oneline -10"
-
-# Какие файлы изменены
-git diff --name-only HEAD~5
-
-# Финальная проверка
-. venv/bin/activate && pytest tests/unit/ -q
-```
-
-### Обработка ошибок
-
-| Проблема | Решение |
-|----------|---------|
-| "Not inside tmux session" | `Ctrl+Shift+M` (войти в tmux) или `tmux new -s claude` |
-| Worker зависает | `Ctrl+A, {номер}` → `Ctrl+C` → `claude` |
-| Конфликт в git | `git status` → `git add .` → `git commit -m "Merge workers"` |
-
-### Шпаргалка tmux
-
-| Комбо | Действие |
-|-------|----------|
-| `Ctrl+A, c` | Новое окно |
-| `Ctrl+A, n/p` | Следующее/предыдущее |
-| `Ctrl+A, 1/2/3` | Перейти на окно |
-| `Ctrl+A, w` | Список окон |
-| `Ctrl+A, d` | Отсоединиться (session stays) |
-| `Ctrl+A, \|` | Вертикальный сплит |
-| `Ctrl+A, -` | Горизонтальный сплит |
-
-### Когда использовать
-
-**Используй:** много независимых задач (3+), каждому свои файлы, план готов
-
-**Не используй:** зависимые задачи, один файл для всех, нужна координация
-
-**Расположение скрипта:** `/mnt/c/Users/user/bin/spawn-claude`
+**1 воркер = 1 набор файлов.** Никогда не делить один файл между воркерами.
 
 ## Superpowers Skills
 
@@ -651,11 +514,36 @@ systematic-debugging → test-driven-development → verification-before-complet
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `Redis connection refused` | Redis not running | `docker compose up -d redis` |
-| `Qdrant timeout` | Collection too large or no quantization | Enable `use_quantization=True` |
-| `Voyage API 429` | Rate limit exceeded | Add delays in batch operations, use cache |
-| `BGE-M3 OOM` | Not using singleton | Use `get_bge_m3_model()` singleton |
+| `Qdrant timeout` | Collection too large | Enable `use_quantization=True` |
+| `LiteLLM unhealthy` | Slow startup | Wait 30s, check `docker logs dev-litellm` |
+| `Langfuse invalid credentials` | Wrong keys | Get keys from Langfuse UI → Settings → API Keys |
+| `Voyage API 429` | Rate limit | Use `CacheService`, add delays in batch ops |
 
 ## API Rate Limits
 
+- **Cerebras**: High throughput, no strict RPM limits. `reasoning_format: hidden` reduces token usage.
 - **Voyage AI**: 300 RPM (embeddings), 100 RPM (rerank). Use `CacheService` to reduce calls.
-- **GLM-4**: 60 RPM. Streaming enabled by default to improve UX.
+- **Groq/OpenAI** (fallbacks): Standard limits apply, used only when Cerebras fails.
+
+## Dependency Updates (Renovate)
+
+Renovate Bot automatically creates PRs for Docker image updates.
+
+**Configuration:** `renovate.json`
+
+**Schedule:** Monday before 9:00 AM (Europe/Kiev)
+
+**Auto-merge:** Patch versions merge automatically after CI passes.
+
+**Manual actions:**
+- Check "Dependency Dashboard" issue for pending updates
+- Tick checkbox to trigger immediate PR creation
+- Review and merge minor/major version PRs manually
+
+**Groups:**
+- `databases`: postgres, redis, qdrant
+- `ml-platform`: litellm, langfuse, mlflow
+- `ai-services`: docling, lightrag
+- `python-base`: Python base images in Dockerfiles
+
+**Disable temporarily:** Delete `renovate.json` or add `"enabled": false`.
