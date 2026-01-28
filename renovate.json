@@ -18,6 +18,7 @@
     },
     {
       "description": "Databases - stable, auto-merge minor",
+      "matchDatasources": ["docker"],
       "matchPackageNames": ["pgvector/pgvector", "redis/redis-stack", "qdrant/qdrant"],
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
@@ -25,16 +26,19 @@
     },
     {
       "description": "ML Platform - group together",
+      "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/berriai/litellm", "langfuse/langfuse", "ghcr.io/mlflow/mlflow"],
       "groupName": "ml-platform"
     },
     {
       "description": "LiteLLM - allow unstable versions (they use rc tags)",
+      "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/berriai/litellm"],
       "ignoreUnstable": false
     },
     {
       "description": "AI Services - group docling and lightrag",
+      "matchDatasources": ["docker"],
       "matchPackageNames": [
         "ghcr.io/docling-project/docling-serve-cpu",
         "quay.io/docling-project/docling-serve",
@@ -44,18 +48,9 @@
     },
     {
       "description": "Base images - Python",
+      "matchDatasources": ["docker"],
       "matchPackageNames": ["python"],
       "groupName": "python-base"
-    },
-    {
-      "description": "Skip release candidates except for litellm",
-      "matchPackagePatterns": ["^(?!ghcr\\.io/berriai/litellm).*$"],
-      "allowedVersions": "!/^.*(-rc|-alpha|-beta).*$/"
-    },
-    {
-      "description": "Pin floating tags to digest",
-      "matchCurrentVersion": "/^latest$/",
-      "pinDigests": true
     }
   ]
 }
