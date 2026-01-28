@@ -398,6 +398,8 @@ Claude понимает: прочитать план, запустить `spawn-
 
 ## Testing
 
+**Coverage:** 91% (1626 unit tests)
+
 ```bash
 # Unit tests (fast, no Docker needed)
 pytest tests/unit/ -v
