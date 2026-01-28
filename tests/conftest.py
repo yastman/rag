@@ -1,6 +1,7 @@
 """Shared pytest fixtures for all tests."""
 
 import os
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -13,6 +14,37 @@ os.environ["RAG_TESTING"] = "true"
 
 # Load environment variables before any imports
 load_dotenv()
+
+
+# =============================================================================
+# MOCK HEAVY IMPORTS FOR UNIT TESTS
+# =============================================================================
+# These modules are slow to import due to model loading. Mock them at startup
+# to allow fast unit test collection and execution.
+
+
+def _setup_mock_heavy_imports():
+    """Mock slow-to-import ML libraries at startup."""
+    # Skip if already mocked
+    if "sentence_transformers" in sys.modules and not isinstance(
+        sys.modules["sentence_transformers"], MagicMock
+    ):
+        return
+
+    # Mock sentence_transformers
+    mock_st = MagicMock()
+    mock_st.CrossEncoder = MagicMock()
+    mock_st.SentenceTransformer = MagicMock()
+    sys.modules["sentence_transformers"] = mock_st
+
+    # Mock FlagEmbedding
+    mock_flag = MagicMock()
+    mock_flag.BGEM3FlagModel = MagicMock()
+    sys.modules["FlagEmbedding"] = mock_flag
+
+
+# Run at conftest load time to prevent slow imports during test collection
+_setup_mock_heavy_imports()
 
 
 # =============================================================================
