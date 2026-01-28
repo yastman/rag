@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Cache versioning - bump when changing cache structure or models
+CACHE_SCHEMA_VERSION = "v2"
+
 
 class CacheService:
     """Multi-level caching service for RAG pipeline.
@@ -90,6 +93,18 @@ class CacheService:
         self.message_history: Optional[SemanticMessageHistory] = None
 
         logger.info("CacheService initialized with 4-tier architecture (RedisVL native)")
+
+    def _get_vectorizer_id(self) -> str:
+        """Get vectorizer identifier for cache namespacing.
+
+        Returns:
+            'userbase768' for local USER-base model (768-dim)
+            'voyage1024' for Voyage API (1024-dim)
+        """
+        use_local = os.getenv("USE_LOCAL_EMBEDDINGS", "false").lower() == "true"
+        if use_local:
+            return "userbase768"
+        return "voyage1024"
 
     async def initialize(self):
         """Initialize Redis connections and caches.
