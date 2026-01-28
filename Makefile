@@ -315,3 +315,62 @@ e2e-test-group: ***REMOVED******REMOVED*** Run specific test group (usage: make 
 
 e2e-setup: e2e-install e2e-generate-data e2e-index-data ***REMOVED******REMOVED*** Full E2E setup
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
+
+***REMOVED*** =============================================================================
+***REMOVED*** BASELINE & OBSERVABILITY
+***REMOVED*** =============================================================================
+
+.PHONY: baseline-smoke baseline-load baseline-compare baseline-set baseline-report baseline-check
+
+***REMOVED*** Generate unique session ID from git commit
+BASELINE_SESSION := smoke-$(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d%H%M%S)
+LOAD_SESSION := load-$(shell git rev-parse --short HEAD)-$(shell date +%Y%m%d%H%M%S)
+
+baseline-smoke: ***REMOVED******REMOVED*** Run smoke tests with Langfuse tracing
+	@echo "$(BLUE)Running smoke tests with Langfuse tracing...$(NC)"
+	@echo "$(YELLOW)Session: $(BASELINE_SESSION)$(NC)"
+	LANGFUSE_SESSION_ID="$(BASELINE_SESSION)" \
+	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
+	pytest tests/smoke/ -v --tb=short -x
+	@echo ""
+	@echo "$(GREEN)Results tagged as: $(BASELINE_SESSION)$(NC)"
+	@echo "$(YELLOW)View in Langfuse: http://localhost:3001$(NC)"
+
+baseline-load: ***REMOVED******REMOVED*** Run load tests with Langfuse tracing
+	@echo "$(BLUE)Running load tests with Langfuse tracing...$(NC)"
+	@echo "$(YELLOW)Session: $(LOAD_SESSION)$(NC)"
+	LANGFUSE_SESSION_ID="$(LOAD_SESSION)" \
+	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
+	pytest tests/load/ -v --tb=short
+	@echo ""
+	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
+
+baseline-compare: ***REMOVED******REMOVED*** Compare current run against baseline (usage: make baseline-compare BASELINE_TAG=... CURRENT_TAG=...)
+ifndef BASELINE_TAG
+	$(error BASELINE_TAG is required. Usage: make baseline-compare BASELINE_TAG=smoke-abc1234-20260128 CURRENT_TAG=...)
+endif
+ifndef CURRENT_TAG
+	$(error CURRENT_TAG is required. Usage: make baseline-compare BASELINE_TAG=... CURRENT_TAG=...)
+endif
+	@echo "$(BLUE)Comparing $(CURRENT_TAG) against baseline $(BASELINE_TAG)...$(NC)"
+	python3 -m tests.baseline.cli compare \
+		--baseline="$(BASELINE_TAG)" \
+		--current="$(CURRENT_TAG)" \
+		--thresholds=tests/baseline/thresholds.yaml
+
+baseline-set: ***REMOVED******REMOVED*** Set a run as the new baseline (usage: make baseline-set TAG=...)
+ifndef TAG
+	$(error TAG is required. Usage: make baseline-set TAG=smoke-abc1234-20260128)
+endif
+	@echo "$(BLUE)Setting $(TAG) as baseline...$(NC)"
+	python3 -m tests.baseline.cli set-baseline --tag="$(TAG)"
+
+baseline-report: ***REMOVED******REMOVED*** Generate HTML baseline report
+	@echo "$(BLUE)Generating baseline report...$(NC)"
+	python3 -m tests.baseline.cli report \
+		--output=reports/baseline-$(shell date +%Y%m%d-%H%M%S).html
+	@echo "$(GREEN)Report saved to reports/$(NC)"
+
+baseline-check: baseline-smoke ***REMOVED******REMOVED*** Quick baseline check (smoke + compare with main)
+	@echo "$(BLUE)Comparing with main baseline...$(NC)"
+	make baseline-compare BASELINE_TAG=main-latest CURRENT_TAG=$(BASELINE_SESSION)
