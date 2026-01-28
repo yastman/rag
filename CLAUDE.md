@@ -7,9 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 make check              # Lint + types
 make test               # All tests
-make test-redis         # Verify Redis Query Engine
-pytest tests/unit/ -v   # Unit tests only
+make test-unit          # Unit tests only (fast, no deps)
+pytest tests/unit/ -v   # Unit tests with verbose
 make docker-up          # Start Qdrant, Redis, MLflow
+make test-redis         # Verify Redis Query Engine
 . venv/bin/activate     # Activate venv
 ```
 
