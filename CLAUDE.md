@@ -89,6 +89,7 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 | `SemanticMessageHistory` | Conversation context with vector similarity search                       |
 | `UserContextService`     | Extracts user preferences from queries via LLM                           |
 | `CESCPersonalizer`       | **Lazy** personalization with marker detection (`is_personalized_query`) |
+| `UserBaseVectorizer`     | Local Russian embeddings (deepvk/USER-base, ruMTEB #1)                   |
 
 **Legacy services** (backward compatibility, use VoyageService for new code):
 
@@ -145,6 +146,7 @@ response = client.query_points(
 | LiteLLM     | 4000       | LLM Gateway (Cerebras → Groq → OpenAI fallback) |
 | Langfuse    | 3001       | LLM tracing                                     |
 | MLflow      | 5000       | Experiment tracking                             |
+| user-base   | 8003       | Local Russian embeddings (deepvk/USER-base)     |
 
 ### LLM Gateway (LiteLLM)
 
@@ -192,6 +194,25 @@ results = await service.rerank("query", documents, top_k=5)
 # Sync wrappers (for non-async code)
 query_vec = service.embed_query_sync("search text")
 ```
+
+### Local Russian Embeddings (UserBaseVectorizer)
+
+```python
+from telegram_bot.services import UserBaseVectorizer
+
+# For semantic cache with Russian text optimization
+vectorizer = UserBaseVectorizer(
+    base_url="http://localhost:8003",  # or http://user-base:8000 in Docker
+)
+
+# Async (recommended)
+embedding = await vectorizer.aembed("двухкомнатная квартира")
+
+# Sync wrapper
+embedding = vectorizer.embed("двухкомнатная квартира")
+```
+
+**Environment:** Set `USE_LOCAL_EMBEDDINGS=true` to use USER-base instead of Voyage API for semantic cache.
 
 ### Legacy Singleton Pattern
 
