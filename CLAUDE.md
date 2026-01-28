@@ -424,6 +424,52 @@ make test-load             # Parallel chat simulation
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Integration tests require: `make docker-up`
 
+## Baseline & Observability
+
+**Langfuse v3** — single source of truth for LLM metrics, cost tracking, and regression detection.
+
+### Quick Commands
+
+```bash
+# Run smoke tests with Langfuse tracing
+make baseline-smoke
+
+# Run load tests with Langfuse tracing
+make baseline-load
+
+# Compare current run against baseline
+make baseline-compare BASELINE_TAG=smoke-abc-20260128 CURRENT_TAG=smoke-def-20260128
+
+# Set current as new baseline
+make baseline-set TAG=smoke-abc-20260128
+```
+
+### Langfuse UI
+
+- **Local:** http://localhost:3001
+- **Traces:** See all LLM calls, latency, cost
+- **Sessions:** Group traces by test run (smoke-*, load-*)
+
+### Thresholds (regression detection)
+
+| Metric | Threshold | Description |
+|--------|-----------|-------------|
+| LLM p95 latency | +20% | Alert if latency increases |
+| Total cost | +10% | Alert if cost increases |
+| Cache hit rate | -10% | Alert if cache effectiveness drops |
+| LLM calls | +5% | Alert if call count increases |
+
+Config: `tests/baseline/thresholds.yaml`
+
+### Instrumented Services
+
+| Service | Trace Name | Tracked |
+|---------|------------|---------|
+| VoyageService.embed_query | voyage-embed-query | tokens, latency |
+| VoyageService.embed_documents | voyage-embed-documents | tokens, latency |
+| VoyageService.rerank | voyage-rerank | latency, top_k |
+| LLMService (via LiteLLM) | Auto | tokens, cost, latency |
+
 ## E2E Testing (Telegram Bot)
 
 End-to-end testing with real Telegram bot and Claude Judge evaluation.
