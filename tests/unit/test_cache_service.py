@@ -955,7 +955,7 @@ class TestCacheServiceInitExtended:
         assert service.embeddings_cache_ttl == 7 * 24 * 3600  # 7 days
         assert service.analyzer_cache_ttl == 24 * 3600  # 24 hours
         assert service.search_cache_ttl == 2 * 3600  # 2 hours
-        assert service.distance_threshold == 0.15
+        assert service.distance_threshold == 0.20  # Relaxed for RU paraphrases
 
     def test_init_creates_empty_metrics(self):
         """Test CacheService initializes with empty metrics for all cache types."""
@@ -970,6 +970,15 @@ class TestCacheServiceInitExtended:
         for cache_type in service.metrics:
             assert service.metrics[cache_type]["hits"] == 0
             assert service.metrics[cache_type]["misses"] == 0
+
+
+class TestCacheServiceUserBase:
+    """Tests for USER-base integration in CacheService."""
+
+    def test_default_threshold_is_relaxed(self):
+        """Should use 0.20 threshold for better RU paraphrase matching."""
+        cache = CacheService(redis_url="redis://localhost:6379")
+        assert cache.distance_threshold == 0.20
 
 
 class TestCloseExtended:
