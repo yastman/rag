@@ -1,240 +1,177 @@
-# Langfuse Full Observability Design
+# Langfuse Full Observability Implementation Plan
 
-**Date:** 2026-01-29
-**Status:** Ready for implementation
-**Author:** Claude + User collaboration
+> Execute tasks sequentially; keep each task green (tests passing) before moving on.
 
-## Overview
+**Goal:** Complete Langfuse observability with root trace, all spans connected, PII masking, and regression gate (cache calibration is optional follow-up).
 
-Complete observability setup with **cache-first pipeline**: all Docker services running locally, full Langfuse tracing across the RAG pipeline, quality scores for baseline comparison, and e2e test validation.
+**Architecture:** SDK-first approach with `@observe` decorators. Root trace on `handle_query()`, child spans auto-connect. LiteLLM OTEL as separate telemetry layer. Semantic cache calibration is a follow-up task (not required for observability correctness).
 
-**Key principle:** "Log everything, but with masking" — all inputs/outputs go through PII redaction before Langfuse.
+**Tech Stack:** Langfuse SDK v3 (`get_client()`, `@observe`), Redis Query Engine, Qdrant `/metrics`, pytest for TDD.
 
-## Cache-First Pipeline (User → Response)
+---
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  TELEGRAM UPDATE (Entry Span)                                               │
-│  request_id, chat_id, lang, tenant, pipeline_version                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  1. QUERY ROUTER                                                            │
-│  CHITCHAT → instant response (skip RAG)                                     │
-│  SIMPLE/COMPLEX → continue pipeline                                         │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  2. EXACT CACHE (KV)                                                        │
-│  Fast GET for deterministic queries (commands, identical filters)           │
-│  HIT → immediate response                                                   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │ MISS
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  3. SEMANTIC CACHE (RedisVL)                                                │
-│  check(query, num_results=k) + metadata filter (tenant/lang/version)        │
-│  HIT (distance < threshold) → response                                      │
-│  BORDERLINE → continue to validation                                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │ MISS
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  4. EMBEDDINGS CACHE                                                        │
-│  Exact-match embedding lookup (avoid Voyage API cost)                       │
-│  HIT → use cached vector                                                    │
-│  MISS → call Voyage API, cache result                                       │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  5. RETRIEVAL (Qdrant)                                                      │
-│  Hybrid search (dense + sparse + RRF fusion)                                │
-│  Cache results with short TTL (retrieval_cache)                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  6. RERANK (Voyage)                                                         │
-│  Rerank top candidates, cache results (rerank_cache, TTL 2h)                │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  7. LLM GENERATION                                                          │
-│  Via LiteLLM → auto-traced to Langfuse (langfuse_otel callback)             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  8. STORE-BACK                                                              │
-│  Save response to semantic cache (with metadata/versions)                   │
-│  Update "hot" TTLs if needed                                                │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+## Current State Summary
 
-## Observability Strategy
-
-### Decision: SDK-First with OTel Bridge Validation
-
-**Problem:** LiteLLM uses OTel callback (`langfuse_otel`), our code uses Langfuse SDK.
-Without explicit validation, we may get **two separate trace trees** (OTel spans orphaned from SDK spans).
-
-**Solution:** SDK-first approach with OTel bridge as acceptance test.
-
-| Layer | Instrumentation | Method |
-|-------|-----------------|--------|
-| **Bot handler** | Langfuse SDK | `@observe(name="telegram-message")` → root trace |
-| **Cache/Qdrant/Router** | Langfuse SDK | `@observe()` → child spans |
-| **VoyageService** | Langfuse SDK | Already instrumented with `@observe()` |
-| **LLM via LiteLLM** | OTel → Langfuse | Auto via `langfuse_otel` callback |
-
-**Acceptance Criteria (Phase 4):**
-- [ ] Single trace tree contains BOTH SDK spans AND LiteLLM OTel span
-- [ ] LLM span (`llm-generate` or similar) appears as child of `telegram-message`
-- [ ] If OTel spans are orphaned → fix by passing `trace_id` in LiteLLM metadata
-
-**Fallback (if OTel bridge fails):**
-```python
-# Pass trace context to LiteLLM manually
-response = await self.client.post(
-    f"{self.base_url}/chat/completions",
-    headers={...},
-    json={
-        "model": self.model,
-        "messages": messages,
-        "metadata": {
-            "trace_id": langfuse.get_current_trace_id(),  # Bridge SDK → OTel
-            "session_id": session_id,
-        },
-    },
-)
-```
-
-**Reference:** [LiteLLM Langfuse OTEL Integration](https://docs.litellm.ai/docs/observability/langfuse_otel_integration)
-
-### Metrics to Track (Minimal, Useful)
-
-| Layer | Span Attributes | Purpose |
-|-------|-----------------|---------|
-| **Cache spans** | `hit` (0/1), `layer` (semantic/emb/retr/rer), `ttl`, `key_prefix`, `distance`, `threshold`, `num_results` | Tune cache thresholds |
-| **Redis health** | `keyspace_hits`, `keyspace_misses`, `evicted_keys`, `hit_rate` | Baseline/regression |
-| **Qdrant** | `/metrics` (prometheus), search latency as span attribute | Baseline/regression |
-
-## Current State
-
-### Docker Services (15 containers)
-
-| Service | Port | Status |
-|---------|------|--------|
-| PostgreSQL | 5432 | ✅ Ready |
-| Redis | 6379 | ✅ Ready |
-| Qdrant | 6333 | ✅ Ready |
-| BGE-M3 | 8000 | ✅ Ready |
-| BM42 | 8002 | ✅ Ready |
-| USER-base | 8003 | ✅ Ready |
-| Docling | 5001 | ✅ Ready |
-| LightRAG | 9621 | ✅ Ready |
-| ClickHouse | 8123 | ✅ Ready |
-| MinIO | 9090 | ✅ Ready |
-| Redis-Langfuse | 6380 | ✅ Ready |
-| Langfuse Worker | - | ✅ Ready |
-| Langfuse Web | 3001 | ✅ Ready |
-| MLflow | 5000 | ✅ Ready |
-| LiteLLM | 4000 | ✅ Ready |
-
-### Langfuse Integration Status
-
-**Already instrumented (11 spans):**
-
-| Service | Spans | Type |
-|---------|-------|------|
-| VoyageService | 5 | `as_type="generation"` + `update_current_generation()` |
-| QdrantService | 2 | `@observe` |
-| CacheService | 4 | `@observe` |
+**Instrumented (11 spans):**
+- VoyageService: 5 spans (`voyage-embed-*`, `voyage-rerank`)
+- QdrantService: 2 spans (`qdrant-hybrid-search-rrf`, `qdrant-search-score-boosting`)
+- CacheService: 4 spans (`cache-semantic-check`, `cache-semantic-store`, `cache-search-check`, `cache-rerank-check`)
 
 **NOT instrumented (critical gaps):**
+- Bot handlers: `handle_query()` — no root trace, spans disconnected
+- LLMService: `generate_answer()`, `stream_answer()` — no LLM cost visibility
+- QueryAnalyzer: `analyze()` — no filter extraction tracing
+- QueryRouter: `classify_query()` — no classification tracing
 
-| Service | Methods | Impact |
-|---------|---------|--------|
-| Bot handlers | `handle_query()` | No root trace — spans are disconnected |
-| LLMService | `stream_answer()`, `generate_answer()` | No LLM latency/tokens visibility |
-| QueryAnalyzer | `analyze()` | No filter extraction tracing |
-| QueryRouter | `classify_query()` | No classification decision tracing |
+---
 
-**Main problem:** `handle_query()` in `bot.py:167` has no `@observe` — all child spans are currently disconnected, not forming a unified trace.
+## Task 0: Bootstrap Langfuse Client With Masking (CRITICAL)
 
-## Best Practices 2026 (from Exa + Langfuse docs)
+**Why:** `get_client()` returns the first initialized Langfuse client. If the process creates a client without `mask=...` first, masking will not apply reliably.
 
-### 1. Root Trace on Entry Point
+**Files:**
+- Modify: `telegram_bot/main.py`
+- Create/Use: `telegram_bot/observability.py`
 
-```python
-from langfuse.decorators import observe, langfuse_context
+### Step 1: Minimal implementation
 
-@observe()  # Root trace - all child spans auto-connect
-async def handle_query(message: Message):
-    langfuse_context.update_current_trace(
-        name="telegram-message",
-        user_id=str(message.from_user.id),
-        session_id=f"chat:{message.chat.id}",
-        tags=["telegram", "rag"],
-    )
-```
-
-### 2. Nested Spans with `as_type`
+In `telegram_bot/main.py`, initialize Langfuse before creating the bot:
 
 ```python
-@observe(name="llm-generate", as_type="generation")  # LLM calls
-@observe(name="qdrant-search", as_type="retrieval")   # Vector search
-@observe(name="cache-check")                          # Generic spans
+from .observability import get_langfuse_client
+
+# near the start of main()
+_langfuse = get_langfuse_client()  # registers SDK singleton with mask=...
 ```
 
-### 3. LiteLLM Auto-Integration
+### Step 2: Manual check
 
-Already configured in `docker/litellm/config.yaml`:
-```yaml
-litellm_settings:
-  callbacks: ["langfuse_otel"]
-```
+- Start bot locally, send a message containing an email/phone.
+- In Langfuse UI verify the trace input/output is masked.
 
-### 4. Scores for Quality Tracking
+---
+
+## Task 1: Create PII Masking Module
+
+**Files:**
+- Create: `telegram_bot/observability.py`
+- Test: `tests/unit/test_observability.py`
+
+### Step 1: Write the failing test
 
 ```python
-langfuse.score(
-    trace_id=langfuse_context.get_current_trace_id(),
-    name="cache_hit",
-    value=1.0 if cache_hit else 0.0,
-)
+# tests/unit/test_observability.py
+"""Unit tests for PII masking and Langfuse client initialization."""
+
+import importlib.util
+
+import pytest
+
+
+class TestMaskPii:
+    """Tests for mask_pii function."""
+
+    def test_mask_user_id_in_string(self):
+        """Mask 9-10 digit user IDs in strings."""
+        from telegram_bot.observability import mask_pii
+
+        result = mask_pii("User 123456789 sent a message")
+        assert "123456789" not in result
+        assert "[USER_ID]" in result
+
+    def test_mask_phone_number(self):
+        """Mask phone numbers in international format."""
+        from telegram_bot.observability import mask_pii
+
+        result = mask_pii("Call me at +79161234567")
+        assert "+79161234567" not in result
+        assert "[PHONE]" in result
+
+    def test_mask_email(self):
+        """Mask email addresses."""
+        from telegram_bot.observability import mask_pii
+
+        result = mask_pii("Contact test@example.com for info")
+        assert "test@example.com" not in result
+        assert "[EMAIL]" in result
+
+    def test_truncate_long_text(self):
+        """Truncate texts longer than 500 chars."""
+        from telegram_bot.observability import mask_pii
+
+        long_text = "x" * 1000
+        result = mask_pii(long_text)
+        assert len(result) <= 520  # 500 + "... [TRUNCATED]"
+        assert "[TRUNCATED]" in result
+
+    def test_mask_dict_recursively(self):
+        """Mask PII in nested dicts."""
+        from telegram_bot.observability import mask_pii
+
+        data = {"user_id": "123456789", "nested": {"email": "test@example.com"}}
+        result = mask_pii(data)
+        assert result["user_id"] == "[USER_ID]"
+        assert result["nested"]["email"] == "[EMAIL]"
+
+    def test_mask_list_items(self):
+        """Mask PII in list items."""
+        from telegram_bot.observability import mask_pii
+
+        data = ["User 123456789", "Call +79161234567"]
+        result = mask_pii(data)
+        assert "[USER_ID]" in result[0]
+        assert "[PHONE]" in result[1]
+
+    def test_preserve_non_pii_data(self):
+        """Non-PII data should remain unchanged."""
+        from telegram_bot.observability import mask_pii
+
+        result = mask_pii("квартира 3 комнаты 50000 евро")
+        assert result == "квартира 3 комнаты 50000 евро"
 ```
 
-## Data Masking (CRITICAL - Before Any Tracing)
+### Step 2: Run test to verify it fails
 
-**Rule 2026:** "Log everything, but only with masking enabled first."
+Run: `pytest tests/unit/test_observability.py -v`
+Expected: ModuleNotFoundError: No module named 'telegram_bot.observability'
 
-Before sending ANY data to Langfuse, enable SDK-side masking:
+### Step 3: Write minimal implementation
 
 ```python
 # telegram_bot/observability.py
+"""Langfuse observability with PII masking.
+
+2026 best practice: "Log everything, but with masking enabled first."
+All inputs/outputs go through PII redaction before Langfuse.
+"""
+
 import re
 from typing import Any
+
+from langfuse import Langfuse
+
 
 def mask_pii(data: Any) -> Any:
     """Mask PII before sending to Langfuse.
 
     Applied to all inputs/outputs/metadata automatically.
+
+    Masks:
+    - Telegram user IDs (9-10 digits)
+    - Phone numbers (10-15 digits with optional +)
+    - Email addresses
+    - Long texts (>500 chars truncated)
     """
     if isinstance(data, str):
-        # Mask Telegram user IDs (9-10 digits)
-        data = re.sub(r'\b\d{9,10}\b', '[USER_ID]', data)
+        # Mask Telegram user IDs (9-10 digits not part of larger number)
+        data = re.sub(r"\b\d{9,10}\b", "[USER_ID]", data)
         # Mask phone numbers
-        data = re.sub(r'\+?\d{10,15}', '[PHONE]', data)
+        data = re.sub(r"\+?\d{10,15}", "[PHONE]", data)
         # Mask emails
-        data = re.sub(r'[\w.-]+@[\w.-]+\.\w+', '[EMAIL]', data)
-        # Truncate long texts (>500 chars)
+        data = re.sub(r"[\w.-]+@[\w.-]+\.\w+", "[EMAIL]", data)
+        # Truncate long texts
         if len(data) > 500:
-            data = data[:500] + '... [TRUNCATED]'
+            data = data[:500] + "... [TRUNCATED]"
         return data
     elif isinstance(data, dict):
         return {k: mask_pii(v) for k, v in data.items()}
@@ -242,46 +179,170 @@ def mask_pii(data: Any) -> Any:
         return [mask_pii(item) for item in data]
     return data
 
-# Initialize Langfuse with masking
-from langfuse import Langfuse
 
 def get_langfuse_client() -> Langfuse:
-    """Get Langfuse client with PII masking enabled."""
+    """Get Langfuse client with PII masking enabled.
+
+    Returns:
+        Langfuse client configured with:
+        - mask_pii callback for all data
+        - Batch size 50, flush interval 5s
+    """
     return Langfuse(
         mask=mask_pii,
-        flush_at=50,      # Batch size
-        flush_interval=5,  # Seconds
+        flush_at=50,
+        flush_interval=5,
     )
 ```
 
-**Reference:** [Langfuse Masking Docs](https://langfuse.com/docs/observability/features/masking)
+### Step 4: Run test to verify it passes
 
-## Implementation Phases
+Run: `pytest tests/unit/test_observability.py -v`
+Expected: All 7 tests PASS
 
-### Phase 0: Preflight + Masking + Root Trace (1 hour)
+### Step 5: Commit
 
-**Goal:** All spans connect to single trace, PII masked before Langfuse.
+```bash
+git add telegram_bot/observability.py tests/unit/test_observability.py
+git commit -m "$(cat <<'EOF'
+feat(observability): add PII masking module for Langfuse
 
-| Task | File | Change |
-|------|------|--------|
-| Start Docker stack | - | `docker compose -f docker-compose.dev.yml up -d` |
-| Create API keys | `.env` | `pk-lf-*`, `sk-lf-*` from Langfuse UI |
-| Create masking module | `telegram_bot/observability.py` | `mask_pii()` + `get_langfuse_client()` |
-| **Root trace** | `telegram_bot/bot.py:167` | `@observe(name="telegram-message")` on `handle_query()` |
-| **Context fingerprint** | `telegram_bot/bot.py:170` | See below |
+- mask_pii() masks user IDs, phone numbers, emails
+- Truncates long texts to 500 chars
+- get_langfuse_client() returns pre-configured client
 
-**Context Fingerprint (critical for cache isolation):**
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Task 2: Add Root Trace to Bot Handler
+
+**Files:**
+- Modify: `telegram_bot/bot.py:167-175`
+- Test: `tests/unit/test_bot_observability.py`
+
+### Step 1: Write the failing test
 
 ```python
-from langfuse import observe, get_client
-from telegram_bot.services.cache import CACHE_SCHEMA_VERSION
+# tests/unit/test_bot_observability.py
+"""Unit tests for bot handler observability."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+class TestHandleQueryObservability:
+    """Tests for handle_query Langfuse instrumentation."""
+
+    @pytest.fixture
+    def mock_message(self):
+        """Create mock Telegram message."""
+        message = MagicMock()
+        message.text = "квартиры до 100000 евро"
+        message.from_user.id = 123456789
+        message.chat.id = 987654321
+        message.message_id = 42
+        message.answer = AsyncMock()
+        message.bot.send_chat_action = AsyncMock()
+        return message
+
+    @pytest.fixture
+    def bot_handler(self):
+        """Create PropertyBot handler with mocked services."""
+        from telegram_bot.bot import PropertyBot
+        from telegram_bot.config import BotConfig
+        from telegram_bot.services import QueryType
+
+        # Avoid running PropertyBot.__init__ in unit tests (aiogram + real services)
+        handler = PropertyBot.__new__(PropertyBot)
+
+        handler.config = BotConfig(
+            telegram_token="test",
+            voyage_api_key="test",
+            llm_api_key="test",
+            llm_model="test-model",
+            cesc_enabled=False,  # keep handle_query on the simplest path
+        )
+        handler._cache_initialized = True
+
+        # Mock services used by handle_query
+        handler.cache_service = MagicMock()
+        handler.cache_service.initialize = AsyncMock()
+        handler.cache_service.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
+        handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
+        handler.cache_service.log_metrics = MagicMock()
+
+        # Router decision is external; make it deterministic
+        handler._test_query_type = QueryType.COMPLEX
+
+        return handler
+
+    @pytest.mark.asyncio
+    async def test_handle_query_updates_trace(self, bot_handler, mock_message):
+        """handle_query should call langfuse.update_current_trace."""
+        with patch("telegram_bot.bot.get_client") as mock_get_client, patch(
+            "telegram_bot.bot.classify_query", autospec=True
+        ) as mock_classify_query:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+            mock_classify_query.return_value = bot_handler._test_query_type
+
+            await bot_handler.handle_query(mock_message)
+
+            mock_langfuse.update_current_trace.assert_called_once()
+            call_kwargs = mock_langfuse.update_current_trace.call_args.kwargs
+            assert call_kwargs["user_id"] == "123456789"
+            assert call_kwargs["session_id"] == "chat:987654321"
+            assert "telegram" in call_kwargs["tags"]
+
+    @pytest.mark.asyncio
+    async def test_handle_query_includes_context_fingerprint(self, bot_handler, mock_message):
+        """handle_query should include context_fingerprint in metadata."""
+        with patch("telegram_bot.bot.get_client") as mock_get_client, patch(
+            "telegram_bot.bot.classify_query", autospec=True
+        ) as mock_classify_query:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+            mock_classify_query.return_value = bot_handler._test_query_type
+
+            await bot_handler.handle_query(mock_message)
+
+            call_kwargs = mock_langfuse.update_current_trace.call_args.kwargs
+            metadata = call_kwargs["metadata"]
+            assert "tenant" in metadata
+            assert "cache_schema" in metadata
+            assert "retrieval_version" in metadata
+```
+
+### Step 2: Run test to verify it fails
+
+Run: `pytest tests/unit/test_bot_observability.py -v`
+Expected: FAIL — `get_client` not imported or called in bot.py
+
+### Step 3: Write minimal implementation
+
+Add imports and decorator to `telegram_bot/bot.py`:
+
+```python
+# At top of file, add:
+from langfuse import get_client, observe
+
+from .services.cache import CACHE_SCHEMA_VERSION
+
+# At line ~167, add decorator and trace update:
 @observe(name="telegram-message")
 async def handle_query(self, message: Message):
-    query = message.text
+    """Handle user query with multi-level caching RAG pipeline."""
+    query = message.text or ""
     user_id = message.from_user.id
+    logger.info(f"Query from {user_id}: {query}")
 
     # Context fingerprint for cache isolation + trace filtering
+    request_id = f"tg:{message.chat.id}:{message.message_id}"
     context_fingerprint = {
         "tenant": "default",
         "lang": "ru",
@@ -289,308 +350,896 @@ async def handle_query(self, message: Message):
         "retrieval_version": f"{self.config.voyage_model_queries}-bm42-rrf",
         "rerank_version": self.config.voyage_model_rerank,
         "model_id": self.config.llm_model,
-        "cache_schema": CACHE_SCHEMA_VERSION,  # "v2"
+        "cache_schema": CACHE_SCHEMA_VERSION,
+        "request_id": request_id,
     }
 
-    # Native Langfuse SDK API (v3.x)
+    # Update trace with user context
     langfuse = get_client()
     langfuse.update_current_trace(
-        input={"query": query[:200]},  # Truncate for masking
+        name="telegram-rag-query",
         user_id=str(user_id),
         session_id=f"chat:{message.chat.id}",
+        input={"query": query[:200]},
         metadata=context_fingerprint,
         tags=["telegram", "rag", context_fingerprint["retrieval_version"]],
     )
+
+    # ... rest of the function unchanged ...
 ```
 
-**Note on SDK API:** Project uses `langfuse>=3.0.0`. Correct imports:
-```python
-from langfuse import observe, get_client, Langfuse
+### Step 4: Run test to verify it passes
 
-# NOT: from langfuse.decorators import observe, langfuse_context
-# NOT: langfuse_context.update_current_trace(...)
+Run: `pytest tests/unit/test_bot_observability.py -v`
+Expected: All tests PASS
 
-# CORRECT:
-langfuse = get_client()
-langfuse.update_current_trace(...)
-langfuse.score_current_trace(name="...", value=...)
+### Step 5: Commit
+
+```bash
+git add telegram_bot/bot.py tests/unit/test_bot_observability.py
+git commit -m "$(cat <<'EOF'
+feat(bot): add root trace with @observe decorator
+
+- Root trace on handle_query() connects all child spans
+- Context fingerprint for cache isolation (tenant, lang, versions)
+- Session tracking via chat_id
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
 ```
 
-**Test:** Send message → verify trace in Langfuse UI with all child spans connected.
+---
 
-### Phase 1: Close CacheService Blind Spots (1 hour)
+## Task 3: Instrument LLMService
 
-**Goal:** All 12 CacheService methods instrumented with consistent attributes.
+**Files:**
+- Modify: `telegram_bot/services/llm.py:1-5, 38-60`
+- Test: `tests/unit/services/test_llm_observability.py`
 
-| Method | Current | Add | Key Attributes |
-|--------|---------|-----|----------------|
-| `check_semantic_cache` | ✅ | enhance | `layer`, `hit`, `distance`, `threshold`, `num_results`, `filters_applied` |
-| `store_semantic_cache` | ✅ | enhance | `layer`, `ttl`, `key_prefix` |
-| `get_cached_embedding` | ❌ | **add** | `layer=embeddings`, `hit`, `model_name`, `dim` |
-| `store_embedding` | ❌ | **add** | `layer=embeddings`, `model_name`, `dim` |
-| `get_cached_sparse_embedding` | ❌ | **add** | `layer=sparse`, `hit`, `model_name` |
-| `store_sparse_embedding` | ❌ | **add** | `layer=sparse`, `ttl` |
-| `get_cached_analysis` | ❌ | **add** | `layer=analyzer`, `hit` |
-| `store_analysis` | ❌ | **add** | `layer=analyzer`, `ttl` |
-| `get_cached_search` | ✅ | enhance | `layer=retrieval`, `hit`, `index_version` |
-| `store_search_results` | ❌ | **add** | `layer=retrieval`, `ttl`, `results_count` |
-| `get_cached_rerank` | ✅ | enhance | `layer=rerank`, `hit` |
-| `store_rerank_results` | ❌ | **add** | `layer=rerank`, `ttl` |
-
-**Span attribute standard (all cache spans):**
+### Step 1: Write the failing test
 
 ```python
-from langfuse import get_client
+# tests/unit/services/test_llm_observability.py
+"""Unit tests for LLMService Langfuse instrumentation."""
 
-# Inside @observe decorated method:
-langfuse = get_client()
-langfuse.update_current_span(
-    output={
-        "layer": "semantic",      # semantic/embeddings/sparse/analyzer/retrieval/rerank
-        "hit": True,              # bool
-        "ttl": 7200,              # seconds
-        "key_prefix": "sem:v2:",  # for debugging
-        # Layer-specific:
-        "distance": 0.12,         # semantic only
-        "threshold": 0.20,        # semantic only
-        "filters_applied": ["lang=ru", "tenant=default"],  # semantic only
-    }
-)
+from unittest.mock import AsyncMock, MagicMock, patch
 
-# For generation spans (LLM, embeddings):
-langfuse.update_current_generation(
-    model="voyage-4-lite",
-    usage_details={"input": 150, "output": 1024},
-    output={"dimensions": 1024},
-)
+import pytest
+
+
+class TestLLMServiceObservability:
+    """Tests for LLMService @observe decorators."""
+
+    @pytest.fixture
+    def llm_service(self):
+        """Create LLMService with mocked HTTP client."""
+        from telegram_bot.services.llm import LLMService
+
+        service = LLMService(
+            api_key="test-key",
+            base_url="http://localhost:4000",
+            model="gpt-4o-mini",
+        )
+        service.client = MagicMock()
+        return service
+
+    @pytest.mark.asyncio
+    async def test_generate_answer_updates_generation(self, llm_service):
+        """generate_answer should call update_current_generation."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "Test answer"}}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+        }
+        llm_service.client.post = AsyncMock(return_value=mock_response)
+
+        with patch("telegram_bot.services.llm.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            result = await llm_service.generate_answer(
+                question="Test question",
+                context_chunks=[{"text": "Context"}],
+            )
+
+            # Should be called twice: once at start, once with usage
+            assert mock_langfuse.update_current_generation.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_generate_answer_tracks_model(self, llm_service):
+        """generate_answer should track model name."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "Answer"}}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+        }
+        llm_service.client.post = AsyncMock(return_value=mock_response)
+
+        with patch("telegram_bot.services.llm.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            await llm_service.generate_answer("Test", [{"text": "Context"}])
+
+            first_call = mock_langfuse.update_current_generation.call_args_list[0]
+            assert first_call.kwargs["model"] == "gpt-4o-mini"
 ```
 
-### Phase 2: LLM + Router + Analyzer Observability (1 hour)
+### Step 2: Run test to verify it fails
 
-**Goal:** Complete visibility into LLM costs and query preprocessing.
+Run: `pytest tests/unit/services/test_llm_observability.py -v`
+Expected: FAIL — `get_client` not imported in llm.py
 
-| File | Method | Decorator | Key Attributes |
-|------|--------|-----------|----------------|
-| `llm.py` | `generate_answer` | `@observe(name="llm-generate", as_type="generation")` | `model`, `input_tokens`, `output_tokens`, `latency_ms` |
-| `llm.py` | `stream_answer` | `@observe(name="llm-stream", as_type="generation")` | `model`, `chunks_count`, `latency_ms` |
-| `query_analyzer.py` | `analyze` | `@observe(name="query-analyzer", as_type="generation")` | `model`, `filters_extracted`, `has_semantic` |
-| `query_router.py` | `classify_query` | `@observe(name="query-router")` | `query_type`, `confidence` |
+### Step 3: Write minimal implementation
 
-**Note:** LLM calls via LiteLLM are auto-traced (`langfuse_otel` callback). These decorators add app-level context.
-
-**Test:** `pytest tests/unit/services/test_llm_observability.py -v`
-
-### Phase 2.5: Cache Calibration (NEW - 1 hour)
-
-**Goal:** Two-threshold logic to reduce false-hits without losing recall.
-
-**Problem:** Single threshold = either too many false-hits (low threshold) or too many cache misses (high threshold).
-
-**Solution:** Two thresholds + borderline validation.
+Modify `telegram_bot/services/llm.py`:
 
 ```python
-# telegram_bot/services/cache.py
+# At top of file, add:
+from langfuse import get_client, observe
 
-# Thresholds (configurable via env)
-STRICT_THRESHOLD = 0.10      # Distance < 0.10 → confident hit, return immediately
-BORDERLINE_THRESHOLD = 0.20  # Distance 0.10-0.20 → validate before returning
-# Distance > 0.20 → miss, go to retrieval
+# Add decorator and instrumentation to generate_answer:
+@observe(name="llm-generate-answer", as_type="generation")
+async def generate_answer(
+    self,
+    question: str,
+    context_chunks: list[dict[str, Any]],
+    system_prompt: str | None = None,
+) -> str:
+    """Generate answer with Langfuse tracing."""
+    langfuse = get_client()
 
+    # Track generation start
+    langfuse.update_current_generation(
+        input={"question_preview": question[:100], "context_count": len(context_chunks)},
+        model=self.model,
+    )
+
+    try:
+        # ... existing code to build context and messages ...
+        context = self._format_context(context_chunks)
+        # ... build messages list ...
+
+        response = await self.client.post(
+            f"{self.base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"model": self.model, "messages": messages},
+        )
+
+        if response.status_code != 200:
+            return self._fallback_response(context_chunks)
+
+        data = response.json()
+        answer = data["choices"][0]["message"]["content"]
+
+        # Track completion with usage
+        langfuse.update_current_generation(
+            output={"answer_length": len(answer)},
+            usage_details={
+                "input": data.get("usage", {}).get("prompt_tokens", 0),
+                "output": data.get("usage", {}).get("completion_tokens", 0),
+            },
+        )
+
+        return answer
+    except Exception as e:
+        logger.error(f"LLM error: {e}")
+        return self._fallback_response(context_chunks)
+```
+
+### Step 4: Run test to verify it passes
+
+Run: `pytest tests/unit/services/test_llm_observability.py -v`
+Expected: All tests PASS
+
+### Step 5: Commit
+
+```bash
+git add telegram_bot/services/llm.py tests/unit/services/test_llm_observability.py
+git commit -m "$(cat <<'EOF'
+feat(llm): add @observe instrumentation to generate_answer
+
+- Track model, input/output tokens, answer length
+- as_type="generation" for LLM visibility in Langfuse
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Task 4: Instrument QueryRouter
+
+**Files:**
+- Modify: `telegram_bot/services/query_router.py:7-8, 70-85`
+- Test: `tests/unit/services/test_query_router_observability.py`
+
+### Step 1: Write the failing test
+
+```python
+# tests/unit/services/test_query_router_observability.py
+"""Unit tests for QueryRouter Langfuse instrumentation."""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+
+class TestQueryRouterObservability:
+    """Tests for classify_query @observe decorator."""
+
+    def test_classify_query_updates_span(self):
+        """classify_query should call update_current_span."""
+        with patch("telegram_bot.services.query_router.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            from telegram_bot.services.query_router import QueryType, classify_query
+
+            result = classify_query("Привет!")
+
+            assert result == QueryType.CHITCHAT
+            mock_langfuse.update_current_span.assert_called_once()
+            call_kwargs = mock_langfuse.update_current_span.call_args.kwargs
+            assert call_kwargs["output"]["type"] == "chitchat"
+
+    def test_classify_complex_query(self):
+        """Complex queries should be tracked with type."""
+        with patch("telegram_bot.services.query_router.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            from telegram_bot.services.query_router import QueryType, classify_query
+
+            result = classify_query("квартиры до 100000 евро с двумя спальнями")
+
+            assert result == QueryType.COMPLEX
+            call_kwargs = mock_langfuse.update_current_span.call_args.kwargs
+            assert call_kwargs["output"]["type"] == "complex"
+```
+
+### Step 2: Run test to verify it fails
+
+Run: `pytest tests/unit/services/test_query_router_observability.py -v`
+Expected: FAIL — `get_client` not called in query_router.py
+
+### Step 3: Write minimal implementation
+
+Modify `telegram_bot/services/query_router.py`:
+
+```python
+# At top, add imports:
+from langfuse import get_client, observe
+
+# Add decorator to classify_query function:
+@observe(name="query-router")
+def classify_query(query: str) -> QueryType:
+    """Classify query type for routing decisions.
+
+    Returns:
+        QueryType.CHITCHAT: Skip RAG entirely
+        QueryType.SIMPLE: Light RAG, skip rerank
+        QueryType.COMPLEX: Full RAG + rerank
+    """
+    query_lower = query.lower().strip()
+
+    # Check chit-chat patterns
+    for pattern in CHITCHAT_PATTERNS:
+        if re.match(pattern, query_lower, re.IGNORECASE):
+            result = QueryType.CHITCHAT
+            break
+    else:
+        # Check complexity markers
+        if _has_complexity_markers(query):
+            result = QueryType.COMPLEX
+        else:
+            result = QueryType.SIMPLE
+
+    # Track classification
+    langfuse = get_client()
+    langfuse.update_current_span(
+        input={"query_preview": query[:50]},
+        output={"type": result.value},
+    )
+
+    return result
+```
+
+### Step 4: Run test to verify it passes
+
+Run: `pytest tests/unit/services/test_query_router_observability.py -v`
+Expected: All tests PASS
+
+### Step 5: Commit
+
+```bash
+git add telegram_bot/services/query_router.py tests/unit/services/test_query_router_observability.py
+git commit -m "$(cat <<'EOF'
+feat(query_router): add @observe instrumentation
+
+- Track query classification decisions (CHITCHAT/SIMPLE/COMPLEX)
+- Input preview + output type logged to Langfuse
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Task 5: Instrument QueryAnalyzer
+
+**Files:**
+- Modify: `telegram_bot/services/query_analyzer.py:4-5, 29-45`
+- Test: `tests/unit/services/test_query_analyzer_observability.py`
+
+### Step 1: Write the failing test
+
+```python
+# tests/unit/services/test_query_analyzer_observability.py
+"""Unit tests for QueryAnalyzer Langfuse instrumentation."""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+class TestQueryAnalyzerObservability:
+    """Tests for QueryAnalyzer.analyze @observe decorator."""
+
+    @pytest.fixture
+    def analyzer(self):
+        """Create QueryAnalyzer with mocked HTTP client."""
+        from telegram_bot.services.query_analyzer import QueryAnalyzer
+
+        analyzer = QueryAnalyzer(
+            api_key="test-key",
+            base_url="http://localhost:4000",
+            model="gpt-4o-mini",
+        )
+        analyzer.client = MagicMock()
+        return analyzer
+
+    @pytest.mark.asyncio
+    async def test_analyze_updates_generation(self, analyzer):
+        """analyze should call update_current_generation."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"filters": {"price": {"lt": 100000}}, "semantic_query": "квартиры"}'
+                    }
+                }
+            ],
+            "usage": {"prompt_tokens": 50, "completion_tokens": 30},
+        }
+        analyzer.client.post = AsyncMock(return_value=mock_response)
+
+        with patch("telegram_bot.services.query_analyzer.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            result = await analyzer.analyze("квартиры до 100000")
+
+            assert mock_langfuse.update_current_generation.call_count == 2
+            second_call = mock_langfuse.update_current_generation.call_args_list[1]
+            assert "filters" in second_call.kwargs["output"]
+```
+
+### Step 2: Run test to verify it fails
+
+Run: `pytest tests/unit/services/test_query_analyzer_observability.py -v`
+Expected: FAIL — `get_client` not called in query_analyzer.py
+
+### Step 3: Write minimal implementation
+
+Modify `telegram_bot/services/query_analyzer.py`:
+
+```python
+# At top, add imports:
+from langfuse import get_client, observe
+
+# Add decorator to analyze method:
+@observe(name="query-analyzer", as_type="generation")
+async def analyze(self, query: str) -> dict[str, Any]:
+    """Analyze query with Langfuse tracing."""
+    langfuse = get_client()
+
+    # Track at start
+    langfuse.update_current_generation(
+        input={"query_preview": query[:100]},
+        model=self.model,
+    )
+
+    # ... existing LLM call logic ...
+
+    try:
+        response = await self.client.post(...)
+        data = response.json()
+        result_str = data["choices"][0]["message"]["content"]
+        result = json.loads(result_str)
+
+        # Track completion
+        langfuse.update_current_generation(
+            output={
+                "filters": result.get("filters", {}),
+                "has_semantic": bool(result.get("semantic_query")),
+            },
+            usage_details={
+                "input": data.get("usage", {}).get("prompt_tokens", 0),
+                "output": data.get("usage", {}).get("completion_tokens", 0),
+            },
+        )
+
+        return result
+    except Exception as e:
+        logger.error(f"QueryAnalyzer error: {e}")
+        return {"filters": {}, "semantic_query": query}
+```
+
+### Step 4: Run test to verify it passes
+
+Run: `pytest tests/unit/services/test_query_analyzer_observability.py -v`
+Expected: All tests PASS
+
+### Step 5: Commit
+
+```bash
+git add telegram_bot/services/query_analyzer.py tests/unit/services/test_query_analyzer_observability.py
+git commit -m "$(cat <<'EOF'
+feat(query_analyzer): add @observe instrumentation
+
+- as_type="generation" for LLM visibility
+- Track extracted filters and semantic query presence
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Task 6: Enhance CacheService Spans with Layer Metadata
+
+**Files:**
+- Modify: `telegram_bot/services/cache.py:259-330, 564-600, 636-680`
+- Test: `tests/unit/services/test_cache_observability.py`
+
+### Step 1: Write the failing test
+
+```python
+# tests/unit/services/test_cache_observability.py
+"""Unit tests for CacheService enhanced Langfuse spans."""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+class TestCacheServiceSpanMetadata:
+    """Tests for CacheService span layer attributes."""
+
+    @pytest.fixture
+    def cache_service(self):
+        """Create CacheService with mocked dependencies."""
+        from telegram_bot.services.cache import CacheService
+
+        service = CacheService.__new__(CacheService)
+        service.redis_client = MagicMock()
+        service.semantic_cache = MagicMock()
+        service._initialized = True
+        return service
+
+    @pytest.mark.asyncio
+    async def test_check_semantic_cache_includes_layer(self, cache_service):
+        """check_semantic_cache should include layer=semantic in span."""
+        cache_service.semantic_cache.acheck = AsyncMock(return_value=None)
+
+        with patch("telegram_bot.services.cache.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            await cache_service.check_semantic_cache("test query")
+
+            mock_langfuse.update_current_span.assert_called_once()
+            call_kwargs = mock_langfuse.update_current_span.call_args.kwargs
+            assert call_kwargs["output"]["layer"] == "semantic"
+            assert call_kwargs["output"]["hit"] is False
+
+    @pytest.mark.asyncio
+    async def test_check_semantic_cache_hit_includes_distance(self, cache_service):
+        """Semantic cache hit should include distance in span."""
+        cache_service.semantic_cache.acheck = AsyncMock(
+            return_value=[{"response": "cached", "vector_distance": 0.05}]
+        )
+
+        with patch("telegram_bot.services.cache.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            result = await cache_service.check_semantic_cache("test query")
+
+            assert result == "cached"
+            call_kwargs = mock_langfuse.update_current_span.call_args.kwargs
+            assert call_kwargs["output"]["hit"] is True
+            assert call_kwargs["output"]["distance"] == 0.05
+
+    @pytest.mark.asyncio
+    async def test_get_cached_search_includes_layer(self, cache_service):
+        """get_cached_search should include layer=retrieval in span."""
+        cache_service.redis_client.get = AsyncMock(return_value=None)
+
+        with patch("telegram_bot.services.cache.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            await cache_service.get_cached_search([0.1] * 1024, None)
+
+            call_kwargs = mock_langfuse.update_current_span.call_args.kwargs
+            assert call_kwargs["output"]["layer"] == "retrieval"
+
+    @pytest.mark.asyncio
+    async def test_get_cached_rerank_includes_layer(self, cache_service):
+        """get_cached_rerank should include layer=rerank in span."""
+        cache_service.redis_client.get = AsyncMock(return_value=None)
+
+        with patch("telegram_bot.services.cache.get_client") as mock_get_client:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+
+            await cache_service.get_cached_rerank([0.1] * 1024, ["doc1"], "test")
+
+            call_kwargs = mock_langfuse.update_current_span.call_args.kwargs
+            assert call_kwargs["output"]["layer"] == "rerank"
+```
+
+### Step 2: Run test to verify it fails
+
+Run: `pytest tests/unit/services/test_cache_observability.py -v`
+Expected: FAIL — `update_current_span` not called with layer metadata
+
+### Step 3: Write minimal implementation
+
+Modify `telegram_bot/services/cache.py`:
+
+```python
+# At top, update imports:
+from langfuse import get_client, observe
+
+# Enhance check_semantic_cache (line ~259):
 @observe(name="cache-semantic-check")
 async def check_semantic_cache(
     self,
     query: str,
     user_id: Optional[int] = None,
     language: str = "ru",
-    context_fingerprint: Optional[dict] = None,  # NEW: for cache isolation
 ) -> Optional[str]:
-    if not self.semantic_cache:
-        return None
-
-    # Build metadata filter from context_fingerprint
-    filter_expr = Tag("language") == language
-    if context_fingerprint:
-        if "tenant" in context_fingerprint:
-            filter_expr &= Tag("tenant") == context_fingerprint["tenant"]
-        if "cache_schema" in context_fingerprint:
-            filter_expr &= Tag("cache_schema") == context_fingerprint["cache_schema"]
-
-    # Check with BORDERLINE threshold (wider net)
-    results = await self.semantic_cache.acheck(
-        prompt=query,
-        filter_expression=filter_expr,
-        num_results=3,  # Get top-3 for validation
-        distance_threshold=BORDERLINE_THRESHOLD,
-    )
-
+    """Check semantic cache with Langfuse tracing."""
     langfuse = get_client()
 
-    if not results:
+    if not self.semantic_cache:
         langfuse.update_current_span(
-            output={"hit": False, "layer": "semantic", "reason": "no_candidates"}
+            output={"hit": False, "layer": "semantic", "reason": "not_initialized"}
         )
         return None
 
-    distance = results[0].get("vector_distance", 1.0)
-
-    # STRICT HIT: confident, return immediately
-    if distance < STRICT_THRESHOLD:
-        langfuse.update_current_span(
-            output={
-                "hit": True,
-                "layer": "semantic",
-                "hit_type": "strict",
-                "distance": distance,
-                "threshold": STRICT_THRESHOLD,
-            }
+    try:
+        results = await self.semantic_cache.acheck(
+            prompt=query,
+            num_results=1,
+            distance_threshold=self.semantic_threshold,
         )
-        return results[0].get("response")
 
-    # BORDERLINE HIT: validate with light rerank
-    if distance < BORDERLINE_THRESHOLD:
-        is_valid = await self._validate_borderline_hit(query, results[0])
-        if is_valid:
+        if results:
+            distance = results[0].get("vector_distance", 0)
             langfuse.update_current_span(
                 output={
                     "hit": True,
                     "layer": "semantic",
-                    "hit_type": "borderline_validated",
                     "distance": distance,
+                    "threshold": self.semantic_threshold,
                 }
             )
             return results[0].get("response")
 
-    # MISS: go to retrieval
-    langfuse.update_current_span(
-        output={
-            "hit": False,
-            "layer": "semantic",
-            "reason": "borderline_rejected" if distance < BORDERLINE_THRESHOLD else "distance_too_high",
-            "distance": distance,
-        }
-    )
-    return None
-
-async def _validate_borderline_hit(self, query: str, cached_result: dict) -> bool:
-    """Light validation for borderline cache hits.
-
-    Uses rerank score to verify semantic match.
-    Cheaper than full retrieval, catches false positives.
-    """
-    try:
-        # Quick rerank check (single doc)
-        rerank_result = await self.voyage_service.rerank(
-            query=query,
-            documents=[cached_result.get("response", "")[:500]],  # Truncate
-            top_k=1,
+        langfuse.update_current_span(
+            output={"hit": False, "layer": "semantic", "reason": "no_match"}
         )
-        # If rerank score > 0.7, consider valid
-        if rerank_result and rerank_result[0].get("score", 0) > 0.7:
-            return True
+        return None
     except Exception as e:
-        logger.warning(f"Borderline validation failed: {e}")
-    return False
+        logger.error(f"Semantic cache error: {e}")
+        langfuse.update_current_span(
+            output={"hit": False, "layer": "semantic", "error": str(e)}
+        )
+        return None
+
+# Similar enhancements for get_cached_search and get_cached_rerank
+# with layer="retrieval" and layer="rerank" respectively
 ```
 
-**Threshold Tuning (RedisVL helper):**
+### Step 4: Run test to verify it passes
 
-```python
-# scripts/tune_cache_threshold.py
-from redisvl.extensions.cache.llm import SemanticCache
+Run: `pytest tests/unit/services/test_cache_observability.py -v`
+Expected: All tests PASS
 
-async def tune_threshold(cache: SemanticCache, test_queries: list[dict]):
-    """Find optimal threshold using golden test set."""
-    from redisvl.extensions.cache.utils import optimize_threshold
+### Step 5: Commit
 
-    # test_queries: [{"query": "...", "expected_hit": True/False}, ...]
-    optimal = await optimize_threshold(
-        cache=cache,
-        test_data=test_queries,
-        min_threshold=0.05,
-        max_threshold=0.30,
-        step=0.02,
-    )
-    print(f"Optimal threshold: {optimal}")
+```bash
+git add telegram_bot/services/cache.py tests/unit/services/test_cache_observability.py
+git commit -m "$(cat <<'EOF'
+feat(cache): enhance spans with layer metadata
+
+- All cache spans include layer (semantic/retrieval/rerank)
+- Semantic cache tracks distance and threshold
+- Better debugging via Langfuse UI filters
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
 ```
 
-**Test:** `pytest tests/unit/services/test_cache_calibration.py -v`
+---
 
-### Phase 3: Baseline with Cold/Warm Paths + Infrastructure Metrics (1.5 hours)
+## Task 7: Add Scores to Bot Handler
 
-**Goal:** Prove cache works (warm < cold), detect regressions via infra metrics.
+**Files:**
+- Modify: `telegram_bot/bot.py:~350` (end of handle_query)
+- Test: `tests/unit/test_bot_scores.py`
 
-#### 3.1 Cold vs Warm Path Tests
-
-**Main contract:** "Second identical query is faster/cheaper than first."
+### Step 1: Write the failing test
 
 ```python
-# tests/baseline/test_cache_paths.py
+# tests/unit/test_bot_scores.py
+"""Unit tests for bot handler Langfuse scores."""
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from tests.baseline.collector import LangfuseMetricsCollector
 
-GOLDEN_QUERIES = [
-    "квартиры до 100000 евро",
-    "3-комнатные в Солнечный берег",
-    "студии рядом с морем",
-]
 
-@pytest.fixture
-async def clean_caches(cache_service):
-    """Flush all caches before cold-path test."""
-    await cache_service.redis_client.flushdb()
-    yield
-    # Don't clean after - warm path needs data
+class TestHandleQueryScores:
+    """Tests for handle_query Langfuse scores."""
 
-@pytest.mark.parametrize("query", GOLDEN_QUERIES)
-class TestCachePaths:
+    @pytest.fixture
+    def mock_message(self):
+        """Create mock Telegram message."""
+        message = MagicMock()
+        message.text = "квартиры до 100000 евро"
+        message.from_user.id = 123456789
+        message.chat.id = 987654321
+        message.message_id = 42
+        message.answer = AsyncMock()
+        message.bot.send_chat_action = AsyncMock()
+        return message
 
-    @pytest.mark.order(1)
-    async def test_cold_path(self, query, pipeline, clean_caches, collector):
-        """First query: all cache misses, full pipeline."""
-        result = await pipeline.process(query)
+    @pytest.fixture
+    def bot_handler(self):
+        """Create PropertyBot handler with mocked services."""
+        from telegram_bot.bot import PropertyBot
+        from telegram_bot.config import BotConfig
+        from telegram_bot.services import QueryType
 
-        # Verify cold-path behavior
-        assert result.cache_hits["semantic"] == 0
-        assert result.cache_hits["embeddings"] == 0
-        assert result.latency_ms > 800  # Full pipeline is slow
+        handler = PropertyBot.__new__(PropertyBot)
+        handler.config = BotConfig(
+            telegram_token="test",
+            voyage_api_key="test",
+            llm_api_key="test",
+            llm_model="test-model",
+            cesc_enabled=False,
+        )
+        handler._cache_initialized = True
 
-        # Log to Langfuse for baseline
-        collector.log_cold_path_metrics(query, result)
+        handler.cache_service = MagicMock()
+        handler.cache_service.initialize = AsyncMock()
+        handler.cache_service.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
+        handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
+        handler.cache_service.log_metrics = MagicMock()
 
-    @pytest.mark.order(2)
-    async def test_warm_path(self, query, pipeline, collector):
-        """Second query: cache hits, fast response."""
-        result = await pipeline.process(query)
+        handler._test_query_type = QueryType.COMPLEX
+        return handler
 
-        # Verify warm-path behavior
-        assert result.cache_hits["semantic"] >= 1 or result.cache_hits["embeddings"] >= 1
-        assert result.latency_ms < 200  # 4x+ faster
+    @pytest.mark.asyncio
+    async def test_scores_cache_hit(self, bot_handler, mock_message):
+        """Should score semantic_cache_hit=1.0 on cache hit."""
+        with patch("telegram_bot.bot.get_client") as mock_get_client, patch(
+            "telegram_bot.bot.classify_query", autospec=True
+        ) as mock_classify_query:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+            mock_classify_query.return_value = bot_handler._test_query_type
 
-        # Calculate speedup
-        cold_latency = collector.get_cold_path_latency(query)
-        speedup = cold_latency / result.latency_ms
+            await bot_handler.handle_query(mock_message)
 
-        # Log to Langfuse for baseline
-        collector.log_warm_path_metrics(query, result, speedup)
+            # Find the semantic_cache_hit score call
+            score_calls = [
+                c for c in mock_langfuse.score_current_trace.call_args_list
+                if c.kwargs.get("name") == "semantic_cache_hit"
+            ]
+            assert len(score_calls) == 1
+            assert score_calls[0].kwargs["value"] == 1.0
 
-        # Fail if speedup is too low
-        assert speedup > 3.0, f"Cache speedup too low: {speedup:.1f}x (expected >3x)"
+    @pytest.mark.asyncio
+    async def test_scores_query_type(self, bot_handler, mock_message):
+        """Should score query_type based on classification."""
+        with patch("telegram_bot.bot.get_client") as mock_get_client, patch(
+            "telegram_bot.bot.classify_query", autospec=True
+        ) as mock_classify_query:
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+            mock_classify_query.return_value = bot_handler._test_query_type
+
+            await bot_handler.handle_query(mock_message)
+
+            # Find the query_type score call
+            score_calls = [
+                c for c in mock_langfuse.score_current_trace.call_args_list
+                if c.kwargs.get("name") == "query_type"
+            ]
+            assert len(score_calls) == 1
+            # COMPLEX = 2.0
+            assert score_calls[0].kwargs["value"] == 2.0
 ```
 
-#### 3.2 Infrastructure Metrics Collection
+### Step 2: Run test to verify it fails
+
+Run: `pytest tests/unit/test_bot_scores.py -v`
+Expected: FAIL — `score_current_trace` not called
+
+### Step 3: Write minimal implementation
+
+Add scores at end of `handle_query` in `telegram_bot/bot.py`:
 
 ```python
-# tests/baseline/collector.py
+# At end of handle_query, before final return:
 
-class LangfuseMetricsCollector:
+# Log scores to Langfuse
+langfuse = get_client()
 
-    async def collect_infrastructure_metrics(self) -> dict:
-        """Collect Redis INFO + Qdrant /metrics for baseline."""
-        metrics = {"timestamp": datetime.utcnow().isoformat()}
+# Cache effectiveness
+langfuse.score_current_trace(
+    name="semantic_cache_hit",
+    value=1.0 if cached_answer else 0.0,
+)
 
-        # Redis INFO stats
-        if self.redis:
+# Query complexity
+query_type_map = {"chitchat": 0, "simple": 1, "complex": 2}
+langfuse.score_current_trace(
+    name="query_type",
+    value=float(query_type_map.get(query_type.value, 1)),
+)
+
+# Results count (0 if cache hit)
+langfuse.score_current_trace(
+    name="results_count",
+    value=float(len(results)) if not cached_answer and results else 0.0,
+)
+```
+
+### Step 4: Run test to verify it passes
+
+Run: `pytest tests/unit/test_bot_scores.py -v`
+Expected: All tests PASS
+
+### Step 5: Commit
+
+```bash
+git add telegram_bot/bot.py tests/unit/test_bot_scores.py
+git commit -m "$(cat <<'EOF'
+feat(bot): add Langfuse scores for cache and query metrics
+
+- semantic_cache_hit: 1.0/0.0 for cache effectiveness
+- query_type: 0/1/2 for chitchat/simple/complex
+- results_count: retrieval quality tracking
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+## Task 8: Add Infrastructure Metrics Collector
+
+**Files:**
+- Modify: `tests/baseline/collector.py`
+- Test: `tests/baseline/test_collector_infra.py`
+
+### Step 1: Write the failing test
+
+```python
+# tests/baseline/test_collector_infra.py
+"""Unit tests for infrastructure metrics collection."""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+class TestInfrastructureMetrics:
+    """Tests for collect_infrastructure_metrics."""
+
+    @pytest.fixture
+    def collector(self):
+        """Create LangfuseMetricsCollector with mocked deps."""
+        from tests.baseline.collector import LangfuseMetricsCollector
+
+        collector = LangfuseMetricsCollector(
+            langfuse_client=MagicMock(),
+            redis_url="redis://localhost:6379",
+            qdrant_url="http://localhost:6333",
+        )
+        return collector
+
+    @pytest.mark.asyncio
+    async def test_collects_redis_stats(self, collector):
+        """Should collect Redis INFO stats."""
+        mock_info = {
+            "keyspace_hits": 1000,
+            "keyspace_misses": 200,
+            "evicted_keys": 5,
+            "used_memory_human": "10M",
+        }
+        collector.redis = MagicMock()
+        collector.redis.info = AsyncMock(return_value=mock_info)
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+            mock_client.return_value.__aexit__ = AsyncMock()
+
+            metrics = await collector.collect_infrastructure_metrics()
+
+        assert metrics["redis"]["keyspace_hits"] == 1000
+        assert metrics["redis"]["hit_rate"] == 83.33  # 1000/(1000+200)*100
+
+    @pytest.mark.asyncio
+    async def test_collects_qdrant_metrics(self, collector):
+        """Should fetch Qdrant /metrics endpoint."""
+        collector.redis = MagicMock()
+        collector.redis.info = AsyncMock(return_value={})
+
+        mock_response = MagicMock()
+        mock_response.text = "qdrant_points_total 1000\nqdrant_search_seconds_sum 5.0"
+
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_instance = MagicMock()
+            mock_instance.get = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_client.return_value.__aexit__ = AsyncMock()
+
+            metrics = await collector.collect_infrastructure_metrics()
+
+        assert "qdrant_raw" in metrics or "qdrant" in metrics
+```
+
+### Step 2: Run test to verify it fails
+
+Run: `pytest tests/baseline/test_collector_infra.py -v`
+Expected: FAIL — `collect_infrastructure_metrics` method not found
+
+### Step 3: Write minimal implementation
+
+Add to `tests/baseline/collector.py`:
+
+```python
+async def collect_infrastructure_metrics(self) -> dict:
+    """Collect Redis INFO + Qdrant /metrics for baseline.
+
+    Returns:
+        Dict with redis and qdrant metrics.
+    """
+    import httpx
+
+    metrics = {"timestamp": datetime.utcnow().isoformat()}
+
+    # Redis INFO stats
+    if self.redis:
+        try:
             info = await self.redis.info("stats")
             memory = await self.redis.info("memory")
 
@@ -603,722 +1252,175 @@ class LangfuseMetricsCollector:
                 "keyspace_misses": misses,
                 "hit_rate": round(hits / total * 100, 2) if total > 0 else 0,
                 "evicted_keys": info.get("evicted_keys", 0),
-                "expired_keys": info.get("expired_keys", 0),
                 "used_memory_human": memory.get("used_memory_human"),
-                "maxmemory_human": memory.get("maxmemory_human"),
-                "fragmentation_ratio": memory.get("mem_fragmentation_ratio"),
             }
-
-            # Alert if eviction is eating cache effectiveness
-            if metrics["redis"]["evicted_keys"] > 100:
-                logger.warning(f"High eviction count: {metrics['redis']['evicted_keys']}")
-
-        # Qdrant /metrics (Prometheus format)
-        if self.qdrant_url:
-            async with httpx.AsyncClient() as client:
-                try:
-                    resp = await client.get(f"{self.qdrant_url}/metrics", timeout=5)
-                    raw_metrics = resp.text
-
-                    # Parse key metrics
-                    metrics["qdrant"] = {
-                        "raw": raw_metrics[:3000],  # Store for baseline diff
-                        "search_latency_p95": self._parse_histogram_p95(
-                            raw_metrics, "qdrant_search_seconds"
-                        ),
-                        "points_total": self._parse_gauge(
-                            raw_metrics, "qdrant_points_total"
-                        ),
-                    }
-                except Exception as e:
-                    metrics["qdrant"] = {"error": str(e)}
-
-        return metrics
-
-    def _parse_histogram_p95(self, raw: str, metric_name: str) -> Optional[float]:
-        """Parse p95 from Prometheus histogram."""
-        import re
-        pattern = rf'{metric_name}_bucket{{le="0.95".*?}}\s+(\d+\.?\d*)'
-        match = re.search(pattern, raw)
-        return float(match.group(1)) if match else None
-
-    def _parse_gauge(self, raw: str, metric_name: str) -> Optional[int]:
-        """Parse gauge value from Prometheus format."""
-        import re
-        pattern = rf'{metric_name}\s+(\d+)'
-        match = re.search(pattern, raw)
-        return int(match.group(1)) if match else None
-```
-
-#### 3.3 Scores in Bot Handler
-
-```python
-# telegram_bot/bot.py (at end of handle_query)
-
-from langfuse import get_client
-import time
-
-# At start of handle_query:
-start_time = time.time()
-
-# ... pipeline code ...
-
-# At end, before return:
-latency_ms = (time.time() - start_time) * 1000
-langfuse = get_client()
-
-# Native SDK API: score_current_trace() (no trace_id needed)
-# Cache effectiveness
-langfuse.score_current_trace(
-    name="semantic_cache_hit",
-    value=1.0 if cached_answer else 0.0
-)
-langfuse.score_current_trace(
-    name="embeddings_cache_hit",
-    value=1.0 if embedding_from_cache else 0.0
-)
-
-# Quality metrics
-langfuse.score_current_trace(
-    name="results_count",
-    value=float(len(results)) if results else 0.0
-)
-langfuse.score_current_trace(
-    name="query_type",
-    value=float({"CHITCHAT": 0, "SIMPLE": 1, "COMPLEX": 2}[query_type.value])
-)
-
-# Performance
-langfuse.score_current_trace(
-    name="latency_total_ms",
-    value=latency_ms
-)
-langfuse.score_current_trace(
-    name="cache_layers_hit",
-    value=float(sum([
-        1 if cached_answer else 0,
-        1 if embedding_from_cache else 0,
-        1 if search_from_cache else 0,
-    ]))
-)
-```
-
-**Scores Summary:**
-
-| Score | Type | Purpose |
-|-------|------|---------|
-| `semantic_cache_hit` | BOOLEAN | Track semantic cache effectiveness |
-| `embeddings_cache_hit` | BOOLEAN | Track embedding cache effectiveness |
-| `results_count` | NUMERIC | Monitor retrieval quality |
-| `query_type` | NUMERIC | Segment by complexity |
-| `latency_total_ms` | NUMERIC | Overall performance |
-| `cache_layers_hit` | NUMERIC | How many cache layers contributed |
-
-### Phase 4: E2E Validation + Regression Gate (1 hour)
-
-**Goal:** E2E tests verify trace structure, baseline-compare blocks regressions.
-
-#### 4.1 Trace Structure Validation
-
-```python
-# tests/e2e/test_langfuse_traces.py
-
-import asyncio
-import pytest
-from langfuse import Langfuse
-
-EXPECTED_SPANS = {
-    "telegram-message",      # Root
-    "query-router",          # Classification
-    "cache-semantic-check",  # Semantic cache
-    "cache-embeddings-get",  # Embeddings cache
-    "voyage-embed-query",    # Embedding generation
-    "qdrant-hybrid-search-rrf",  # Retrieval
-    "voyage-rerank",         # Reranking
-    "llm-generate",          # Answer generation (or via LiteLLM)
-}
-
-EXPECTED_SCORES = {
-    "semantic_cache_hit",
-    "results_count",
-    "latency_total_ms",
-}
-
-@pytest.fixture
-def langfuse_client():
-    """Langfuse client for E2E tests."""
-    return Langfuse()
-
-@pytest.mark.e2e
-async def test_trace_structure(bot_client, langfuse_client):
-    """Verify e2e query creates complete trace with expected structure."""
-    # 1. Send test message
-    await bot_client.send_message("квартиры до 100000 евро")
-    await asyncio.sleep(5)  # Wait for Langfuse processing
-
-    # 2. Fetch recent traces via API (Langfuse v3.x)
-    # NOTE: langfuse_client.api.trace.list() returns paginated response
-    traces_response = langfuse_client.api.trace.list(
-        limit=10,
-        order_by="timestamp",
-        order="desc",
-    )
-
-    # Filter by tags (if API supports) or manually
-    traces = [
-        t for t in traces_response.data
-        if "telegram" in (t.tags or []) and "rag" in (t.tags or [])
-    ]
-    assert len(traces) > 0, "No traces found in Langfuse"
-
-    # 3. Get full trace with observations
-    trace_id = traces[0].id
-    trace = langfuse_client.api.trace.get(trace_id)
-
-    # 4. Verify spans (observations)
-    span_names = {obs.name for obs in trace.observations}
-    missing_spans = EXPECTED_SPANS - span_names
-    assert not missing_spans, f"Missing spans: {missing_spans}"
-
-    # 5. Verify scores
-    scores_response = langfuse_client.api.score.list(trace_id=trace_id)
-    score_names = {s.name for s in scores_response.data}
-    missing_scores = EXPECTED_SCORES - score_names
-    assert not missing_scores, f"Missing scores: {missing_scores}"
-
-    # 6. Verify context_fingerprint in metadata
-    assert trace.metadata is not None
-    assert "retrieval_version" in trace.metadata
-    assert "cache_schema" in trace.metadata
-
-@pytest.mark.e2e
-async def test_cold_warm_trace_comparison(bot_client, langfuse_client, cache_service):
-    """Verify cold and warm paths produce different metrics."""
-    query = "тестовый запрос для cold/warm"
-
-    # Cold path
-    await cache_service.redis_client.flushdb()
-    await bot_client.send_message(query)
-    await asyncio.sleep(5)
-
-    # Fetch cold trace
-    traces = langfuse_client.api.trace.list(limit=1, order_by="timestamp", order="desc")
-    cold_trace_id = traces.data[0].id
-    cold_scores = langfuse_client.api.score.list(trace_id=cold_trace_id)
-    cold_latency = next(s.value for s in cold_scores.data if s.name == "latency_total_ms")
-    cold_cache_hit = next(s.value for s in cold_scores.data if s.name == "semantic_cache_hit")
-
-    # Warm path
-    await bot_client.send_message(query)
-    await asyncio.sleep(5)
-
-    # Fetch warm trace
-    traces = langfuse_client.api.trace.list(limit=1, order_by="timestamp", order="desc")
-    warm_trace_id = traces.data[0].id
-    warm_scores = langfuse_client.api.score.list(trace_id=warm_trace_id)
-    warm_latency = next(s.value for s in warm_scores.data if s.name == "latency_total_ms")
-    warm_cache_hit = next(s.value for s in warm_scores.data if s.name == "semantic_cache_hit")
-
-    # Assertions
-    assert cold_cache_hit == 0.0, "Cold path should have cache miss"
-    assert warm_cache_hit == 1.0, "Warm path should have cache hit"
-    assert warm_latency < cold_latency * 0.5, f"Warm should be 2x+ faster: {warm_latency} vs {cold_latency}"
-```
-
-#### 4.2 Baseline Comparison as Regression Gate
-
-```python
-# tests/baseline/test_regression_gate.py
-
-import pytest
-from tests.baseline.manager import BaselineManager
-
-REGRESSION_THRESHOLDS = {
-    "latency_p95_increase": 0.20,    # Max 20% latency increase
-    "cache_hit_rate_decrease": 0.10, # Max 10% hit rate decrease
-    "cost_increase": 0.10,           # Max 10% cost increase
-    "error_rate_increase": 0.05,     # Max 5% error rate increase
-}
-
-@pytest.mark.baseline
-async def test_no_regressions(baseline_manager: BaselineManager):
-    """Block release if performance regressed vs baseline."""
-    current = await baseline_manager.collect_current_metrics()
-    baseline = await baseline_manager.load_baseline("latest")
-
-    regressions = []
-
-    # Check latency
-    if current["latency_p95"] > baseline["latency_p95"] * (1 + REGRESSION_THRESHOLDS["latency_p95_increase"]):
-        regressions.append(
-            f"Latency p95 regressed: {baseline['latency_p95']:.0f}ms → {current['latency_p95']:.0f}ms"
-        )
-
-    # Check cache hit rate
-    if current["cache_hit_rate"] < baseline["cache_hit_rate"] * (1 - REGRESSION_THRESHOLDS["cache_hit_rate_decrease"]):
-        regressions.append(
-            f"Cache hit rate dropped: {baseline['cache_hit_rate']:.1f}% → {current['cache_hit_rate']:.1f}%"
-        )
-
-    # Check cost
-    if current["total_cost"] > baseline["total_cost"] * (1 + REGRESSION_THRESHOLDS["cost_increase"]):
-        regressions.append(
-            f"Cost increased: ${baseline['total_cost']:.2f} → ${current['total_cost']:.2f}"
-        )
-
-    assert not regressions, "Regressions detected:\n" + "\n".join(regressions)
-```
-
-#### 4.3 Makefile Targets
-
-```makefile
-# Makefile additions
-
-# E2E trace validation
-test-e2e-traces:
-	pytest tests/e2e/test_langfuse_traces.py -v --tb=short
-
-# Baseline management
-baseline-create:
-	python -m tests.baseline.cli create --tag $(shell date +%Y%m%d-%H%M%S)
-
-baseline-compare:
-	python -m tests.baseline.cli compare \
-		--baseline $(BASELINE_TAG) \
-		--current $(CURRENT_TAG) \
-		--thresholds tests/baseline/thresholds.yaml
-
-baseline-gate:
-	pytest tests/baseline/test_regression_gate.py -v
-
-# Pre-release check (blocks on regression)
-pre-release: test-unit test-smoke baseline-gate
-	@echo "✅ All checks passed, ready for release"
-```
-
-### Phase 5: Data Masking (Already in Phase 0)
-
-**Note:** Masking is configured in Phase 0 (`telegram_bot/observability.py`). This phase just verifies it works.
-
-```python
-# tests/unit/test_observability_masking.py
-
-import pytest
-from telegram_bot.observability import mask_pii
-
-def test_mask_user_id():
-    data = {"user_id": "123456789", "text": "Hello"}
-    masked = mask_pii(data)
-    assert masked["user_id"] == "[USER_ID]"
-    assert masked["text"] == "Hello"
-
-def test_mask_phone():
-    data = "Позвоните мне +79161234567"
-    masked = mask_pii(data)
-    assert "+79161234567" not in masked
-    assert "[PHONE]" in masked
-
-def test_mask_email():
-    data = "Напишите на test@example.com"
-    masked = mask_pii(data)
-    assert "test@example.com" not in masked
-    assert "[EMAIL]" in masked
-
-def test_truncate_long_text():
-    data = "x" * 1000
-    masked = mask_pii(data)
-    assert len(masked) <= 520  # 500 + "... [TRUNCATED]"
-    assert "[TRUNCATED]" in masked
-```
-
-## Files to Modify
-
-```
-telegram_bot/
-├── bot.py                          # Phase 1, 3: Root trace + scores
-├── main.py                         # Phase 5: Masking config
-└── services/
-    ├── llm.py                      # Phase 2: @observe on generate/stream
-    ├── query_analyzer.py           # Phase 2: @observe on analyze
-    └── query_router.py             # Phase 2: @observe on classify_query
-
-tests/
-├── baseline/
-│   ├── collector.py                # Phase 3: Infrastructure metrics
-│   └── test_e2e_baseline.py        # Phase 4: Baseline comparison
-├── e2e/
-│   └── test_langfuse_traces.py     # Phase 4: Trace validation (NEW)
-└── unit/services/
-    └── test_llm_observability.py   # Phase 2: Unit tests (NEW)
-
-Makefile                            # Phase 4: New targets
-```
-
-## Target Trace Structure
-
-```
-telegram-rag-query (TRACE)
-│
-├── Metadata:
-│   ├── user_id: "123456789"
-│   ├── session_id: "chat:987654321"
-│   └── tags: ["telegram", "rag", "production"]
-│
-├── query-router (SPAN)
-│   └── output: {type: "COMPLEX"}
-│
-├── cache-semantic-check (SPAN)
-│   └── output: {hit: false, latency_ms: 12}
-│
-├── voyage-embed-query (GENERATION)
-│   ├── model: "voyage-4-lite"
-│   └── usage: {input: 15, output: 1024}
-│
-├── cache-search-check (SPAN)
-│   └── output: {hit: false}
-│
-├── qdrant-hybrid-search-rrf (SPAN)
-│   └── output: {results: 10, latency_ms: 45}
-│
-├── voyage-rerank (GENERATION)
-│   ├── model: "rerank-2.5"
-│   └── output: {reranked: 3}
-│
-├── llm-generate-answer (GENERATION)  ← Via LiteLLM OTEL
-│   ├── model: "gpt-oss-120b"
-│   └── usage: {input: 1200, output: 350, cost: 0.002}
-│
-├── cache-semantic-store (SPAN)
-│   └── latency_ms: 8
-│
-└── Scores:
-    ├── semantic_cache_hit: 0.0
-    ├── results_count: 10.0
-    ├── query_type: 2.0 (COMPLEX)
-    └── latency_total_ms: 1250.0
-```
-
-## Definition of Done
-
-| Criterion | How to Verify |
-|-----------|---------------|
-| All Docker services healthy | `docker ps --format "{{.Names}}: {{.Status}}"` |
-| Langfuse UI accessible | `curl http://localhost:3001/api/public/health` |
-| Root trace created | Send bot message → trace in UI |
-| All 8 spans in trace | Langfuse UI → Trace → Observations |
-| LLM calls traced | Span `llm-generate-answer` with usage |
-| Scores recorded | Langfuse UI → Trace → Scores tab |
-| E2E test passes | `pytest tests/e2e/test_langfuse_traces.py` |
-| Baseline comparison | `make baseline-compare` no regressions |
-| Unit tests | `pytest tests/unit/ -v` (1584+ tests) |
-
-## Concrete TODO List (by file, in order)
-
-### Step 1: Masking Module (NEW FILE)
-
-**File:** `telegram_bot/observability.py` (NEW)
-
-```python
-# Create this file with:
-# - mask_pii() function
-# - get_langfuse_client() with masking enabled
-# - configure_observability() initialization function
-```
-
-**Test:** `pytest tests/unit/test_observability_masking.py`
-
----
-
-### Step 2: Root Trace in Bot Handler
-
-**File:** `telegram_bot/bot.py`
-
-```python
-# Line ~1: Add imports
-from langfuse.decorators import observe, langfuse_context
-from .observability import get_langfuse_client
-
-# Line ~167: Add decorator to handle_query
-@observe()
-async def handle_query(self, message: Message):
-    # Line ~170: Add trace metadata (AFTER query = message.text)
-    langfuse_context.update_current_trace(
-        name="telegram-rag-query",
-        user_id=str(message.from_user.id),
-        session_id=f"chat:{message.chat.id}",
-        metadata={
-            "pipeline_version": "2.0",
-            "lang": "ru",
-        },
-        tags=["telegram", "rag", "production"],
-    )
-```
-
-**Test:** Send message to bot → verify trace in Langfuse UI.
-
----
-
-### Step 3: Cache Spans Enhancement
-
-**File:** `telegram_bot/services/cache.py`
-
-Existing `@observe` decorators need enhanced metadata:
-
-```python
-# Line ~259: check_semantic_cache - add layer info
-@observe(name="cache-semantic-check")
-async def check_semantic_cache(...):
-    # After line ~310 (after results check):
-    langfuse_context.update_current_observation(
-        output={
-            "hit": bool(results),
-            "layer": "semantic",
-            "distance": results[0].get("vector_distance") if results else None,
-            "threshold": effective_threshold,
-        }
-    )
-
-# Similar for: cache-search-check, cache-rerank-check
-# Add: layer, hit, ttl, key_prefix
-```
-
----
-
-### Step 4: LLM Service Instrumentation
-
-**File:** `telegram_bot/services/llm.py`
-
-```python
-# Line ~1: Add imports
-from langfuse.decorators import observe, langfuse_context
-
-# Line ~38: Add decorator
-@observe(name="llm-generate-answer", as_type="generation")
-async def generate_answer(self, question: str, context_chunks: list, ...):
-    # Line ~55 (after building messages):
-    langfuse_context.update_current_observation(
-        input={"question_preview": question[:100], "context_count": len(context_chunks)},
-        model=self.model,
-    )
-
-    # Line ~100 (after response):
-    langfuse_context.update_current_observation(
-        usage={
-            "input": data.get("usage", {}).get("prompt_tokens", 0),
-            "output": data.get("usage", {}).get("completion_tokens", 0),
-        },
-        output={"answer_length": len(answer)},
-    )
-
-# Line ~113: Similar for stream_answer
-@observe(name="llm-stream-answer", as_type="generation")
-async def stream_answer(...):
-    # Track at start and end of stream
-```
-
----
-
-### Step 5: QueryAnalyzer Instrumentation
-
-**File:** `telegram_bot/services/query_analyzer.py`
-
-```python
-# Add imports at top
-from langfuse.decorators import observe, langfuse_context
-
-# Find analyze() method, add decorator:
-@observe(name="query-analyzer", as_type="generation")
-async def analyze(self, query: str) -> dict:
-    langfuse_context.update_current_observation(
-        input={"query_preview": query[:100]},
-        model=self.model,
-    )
-    # ... existing code ...
-    langfuse_context.update_current_observation(
-        output={"filters": result.get("filters", {}), "has_semantic": bool(result.get("semantic_query"))},
-    )
-    return result
-```
-
----
-
-### Step 6: QueryRouter Instrumentation
-
-**File:** `telegram_bot/services/query_router.py`
-
-```python
-# Add imports at top
-from langfuse.decorators import observe, langfuse_context
-
-# Find classify_query function, add decorator:
-@observe(name="query-router")
-def classify_query(query: str) -> QueryType:
-    result = _classify(query)
-    langfuse_context.update_current_observation(
-        input={"query_preview": query[:50]},
-        output={"type": result.value},
-    )
-    return result
-```
-
----
-
-### Step 7: Scores in Bot Handler
-
-**File:** `telegram_bot/bot.py`
-
-```python
-# At end of handle_query (before final return), add:
-from langfuse import get_client
-
-# After line ~370 (after cache_service.store_semantic_cache):
-langfuse = get_client()
-trace_id = langfuse_context.get_current_trace_id()
-
-if trace_id:
-    langfuse.score(trace_id=trace_id, name="semantic_cache_hit", value=1.0 if cached_answer else 0.0)
-    langfuse.score(trace_id=trace_id, name="results_count", value=float(len(results)) if results else 0.0)
-    langfuse.score(trace_id=trace_id, name="query_type", value=float({"CHITCHAT": 0, "SIMPLE": 1, "COMPLEX": 2}.get(query_type.value, 1)))
-```
-
----
-
-### Step 8: Infrastructure Metrics Collector
-
-**File:** `tests/baseline/collector.py`
-
-```python
-# Add method to LangfuseMetricsCollector class:
-
-async def collect_infrastructure_metrics(self) -> dict:
-    """Collect Redis INFO + Qdrant /metrics for baseline."""
-    import httpx
-
-    metrics = {}
-
-    # Redis INFO
-    if self.redis:
-        info = await self.redis.info()
-        hits = info.get("keyspace_hits", 0)
-        misses = info.get("keyspace_misses", 0)
-        metrics["redis"] = {
-            "keyspace_hits": hits,
-            "keyspace_misses": misses,
-            "evicted_keys": info.get("evicted_keys", 0),
-            "used_memory_human": info.get("used_memory_human"),
-            "hit_rate": round(hits / (hits + misses) * 100, 2) if (hits + misses) > 0 else 0,
-        }
+        except Exception as e:
+            metrics["redis"] = {"error": str(e)}
 
     # Qdrant /metrics
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.get(f"{self.qdrant_url}/metrics", timeout=5)
-            metrics["qdrant_raw"] = resp.text[:2000]  # Store raw for baseline
-        except Exception as e:
-            metrics["qdrant_error"] = str(e)
+    if self.qdrant_url:
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(f"{self.qdrant_url}/metrics", timeout=5)
+                metrics["qdrant_raw"] = resp.text[:2000]
+            except Exception as e:
+                metrics["qdrant_error"] = str(e)
 
     return metrics
 ```
 
+### Step 4: Run test to verify it passes
+
+Run: `pytest tests/baseline/test_collector_infra.py -v`
+Expected: All tests PASS
+
+### Step 5: Commit
+
+```bash
+git add tests/baseline/collector.py tests/baseline/test_collector_infra.py
+git commit -m "$(cat <<'EOF'
+feat(baseline): add infrastructure metrics collection
+
+- Redis INFO: hit_rate, evicted_keys, memory
+- Qdrant /metrics endpoint (Prometheus format)
+
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+EOF
+)"
+```
+
 ---
 
-### Step 9: E2E Trace Validation Test (NEW FILE)
+## Task 9: E2E Trace Validation (Use Existing Telethon Runner)
 
-**File:** `tests/e2e/test_langfuse_traces.py` (NEW)
+**Best practice (per `CLAUDE.md`):** Keep “real Telegram E2E” in `scripts/e2e/` (Telethon userbot). Do not make Telegram a hard dependency for pytest CI runs.
+
+**Files:**
+- Create: `scripts/e2e/langfuse_trace_validator.py`
+- Modify: `scripts/e2e/runner.py`
+- (Optional) Modify: `scripts/e2e/config.py` (flag)
+- (Optional) Modify: `Makefile` (target)
+
+### Step 1: Add a small Langfuse validator module
 
 ```python
-"""E2E test: verify Langfuse traces are created correctly."""
-import asyncio
-import pytest
+# scripts/e2e/langfuse_trace_validator.py
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
 from langfuse import Langfuse
 
-@pytest.mark.e2e
-async def test_rag_query_creates_full_trace():
-    """Verify e2e query creates complete Langfuse trace."""
-    # 1. Send message via Telethon (or direct bot call)
-    # 2. Wait for Langfuse processing
-    await asyncio.sleep(3)
 
-    # 3. Fetch recent traces
+EXPECTED_SPANS = {
+    "telegram-message",
+    "query-router",
+    "cache-semantic-check",
+    "voyage-embed-query",
+    "qdrant-hybrid-search-rrf",
+}
+
+EXPECTED_SCORES = {
+    "semantic_cache_hit",
+    "query_type",
+}
+
+
+@dataclass(frozen=True)
+class TraceValidationResult:
+    ok: bool
+    trace_id: str | None
+    missing_spans: set[str]
+    missing_scores: set[str]
+
+
+def validate_latest_trace(*, started_at: datetime) -> TraceValidationResult:
     langfuse = Langfuse()
-    traces = langfuse.fetch_traces(tags=["telegram", "rag"], limit=1)
+    traces_page = langfuse.api.trace.list(
+        tags=["telegram", "rag"],
+        from_timestamp=started_at - timedelta(seconds=5),
+        order_by="timestamp.desc",
+        limit=5,
+    )
+    if not traces_page.data:
+        return TraceValidationResult(
+            ok=False,
+            trace_id=None,
+            missing_spans=set(EXPECTED_SPANS),
+            missing_scores=set(EXPECTED_SCORES),
+        )
 
-    assert len(traces) > 0, "No traces found"
-    trace = traces[0]
+    trace_id = traces_page.data[0].id
+    trace = langfuse.api.trace.get(trace_id)
 
-    # 4. Verify span structure
     span_names = {obs.name for obs in trace.observations}
-    expected_spans = {
-        "query-router",
-        "cache-semantic-check",
-        "voyage-embed-query",
-        "qdrant-hybrid-search-rrf",
-    }
-    assert expected_spans.issubset(span_names), f"Missing spans: {expected_spans - span_names}"
-
-    # 5. Verify scores
     score_names = {s.name for s in trace.scores}
-    assert "semantic_cache_hit" in score_names
-    assert "results_count" in score_names
+
+    missing_spans = set(EXPECTED_SPANS - span_names)
+    missing_scores = set(EXPECTED_SCORES - score_names)
+
+    return TraceValidationResult(
+        ok=(not missing_spans and not missing_scores),
+        trace_id=trace_id,
+        missing_spans=missing_spans,
+        missing_scores=missing_scores,
+    )
+```
+
+### Step 2: Wire into `scripts/e2e/runner.py`
+
+In `run_single_test(...)`:
+- Record `started_at = datetime.utcnow()` right before `send_and_wait(...)`.
+- After the bot reply is received, if `E2E_VALIDATE_LANGFUSE=1` (or config flag) then call `validate_latest_trace(started_at=started_at)`.
+- If validation fails, mark the scenario as failed (or add a dedicated field like `observability_ok=false`).
+
+### Step 3: Run
+
+- Normal E2E: `make e2e-test`
+- With trace validation: `E2E_VALIDATE_LANGFUSE=1 make e2e-test`
+
+---
+
+## Task 10: Add Makefile Targets
+
+**Files:**
+- Modify: `Makefile`
+
+### Step 1: Use existing Makefile targets
+
+This repository already provides (see `CLAUDE.md`):
+- `make e2e-test` (Telethon runner)
+- `make baseline-smoke`, `make baseline-load`
+- `make baseline-compare`, `make baseline-set`, `make baseline-report`, `make baseline-check`
+
+Add a small convenience target (optional):
+
+```makefile
+e2e-test-traces: ## Run E2E tests + validate Langfuse traces
+	E2E_VALIDATE_LANGFUSE=1 python scripts/e2e/runner.py
 ```
 
 ---
 
-### Step 10: Makefile Targets
+## Definition of Done
 
-**File:** `Makefile`
+| Criterion | Verification Command |
+|-----------|---------------------|
+| Unit tests pass | `pytest tests/unit/ -v` |
+| PII masking works | `pytest tests/unit/test_observability.py -v` |
+| Root trace created | Send message → trace in Langfuse UI |
+| All spans connected | Langfuse UI → Trace → single tree |
+| Scores recorded | Langfuse UI → Trace → Scores tab |
+| E2E tests pass | `make e2e-test` |
+| E2E traces validated | `E2E_VALIDATE_LANGFUSE=1 make e2e-test` |
+| Baseline targets work | `make baseline-smoke` and `make baseline-compare ...` |
 
-```makefile
-# Add these targets:
-
-test-e2e-traces:
-	pytest tests/e2e/test_langfuse_traces.py -v
-
-baseline-create:
-	python -m tests.baseline.cli create --tag $(TAG)
-
-baseline-compare:
-	python -m tests.baseline.cli compare --baseline $(BASELINE_TAG) --current $(CURRENT_TAG)
-```
-
-## Execution Order Summary
-
-| Phase | Order | File | Change | Depends On |
-|-------|-------|------|--------|------------|
-| **0** | 1 | `telegram_bot/observability.py` | NEW: `mask_pii()` + `get_langfuse_client()` | - |
-| **0** | 2 | `telegram_bot/bot.py:167` | `@observe(name="telegram-message")` + context_fingerprint | Step 1 |
-| **1** | 3 | `telegram_bot/services/cache.py` | Add `@observe` to 8 missing methods | Step 2 |
-| **1** | 4 | `telegram_bot/services/cache.py` | Enhance 4 existing spans with layer/hit/ttl | Step 3 |
-| **2** | 5 | `telegram_bot/services/llm.py` | `@observe` on generate/stream | Step 2 |
-| **2** | 6 | `telegram_bot/services/query_analyzer.py` | `@observe` on analyze | Step 2 |
-| **2** | 7 | `telegram_bot/services/query_router.py` | `@observe` on classify_query | Step 2 |
-| **2.5** | 8 | `telegram_bot/services/cache.py` | Two-threshold logic + borderline validation | Steps 3-4 |
-| **3** | 9 | `telegram_bot/bot.py` | Add 6 scores at end of handle_query | Steps 5-7 |
-| **3** | 10 | `tests/baseline/collector.py` | `collect_infrastructure_metrics()` | - |
-| **3** | 11 | `tests/baseline/test_cache_paths.py` | NEW: cold/warm path tests | Step 10 |
-| **4** | 12 | `tests/e2e/test_langfuse_traces.py` | NEW: trace structure validation | Steps 1-9 |
-| **4** | 13 | `tests/baseline/test_regression_gate.py` | NEW: regression blocking | Steps 10-11 |
-| **4** | 14 | `Makefile` | `baseline-*`, `pre-release` targets | Steps 11-13 |
-| **5** | 15 | `tests/unit/test_observability_masking.py` | NEW: masking unit tests | Step 1 |
-
-## PR Strategy (Suggested)
-
-| PR | Files | Description |
-|----|-------|-------------|
-| **PR #1** | observability.py, bot.py | Root trace + masking + context_fingerprint |
-| **PR #2** | cache.py | All 12 methods instrumented + two-threshold |
-| **PR #3** | llm.py, query_analyzer.py, query_router.py | LLM + preprocessing spans |
-| **PR #4** | bot.py (scores), collector.py | Scores + infrastructure metrics |
-| **PR #5** | tests/baseline/*, tests/e2e/* | Cold/warm tests + trace validation + regression gate |
-| **PR #6** | Makefile | `baseline-*`, `pre-release` targets |
+---
 
 ## References
 
-- [Langfuse Python Decorators](https://langfuse.com/docs/sdk/python/decorators)
-- [Langfuse Trace IDs & Distributed Tracing](https://langfuse.com/docs/observability/features/trace-ids-and-distributed-tracing)
+- [Langfuse Python SDK v3](https://langfuse.com/docs/observability/sdk/python/instrumentation)
+- [Langfuse @observe Decorator](https://langfuse.com/docs/observability/sdk/python/instrumentation#custom-instrumentation)
 - [Langfuse Masking](https://langfuse.com/docs/observability/features/masking)
 - [LiteLLM Langfuse OTEL Integration](https://docs.litellm.ai/docs/observability/langfuse_otel_integration)
-- [Redis Semantic Cache Optimization](https://redis.io/blog/10-techniques-for-semantic-cache-optimization/)
-- [Redis INFO Command](https://redis.io/docs/latest/commands/info/)
-- [Qdrant Cluster Monitoring](https://qdrant.tech/documentation/cloud/cluster-monitoring/)
-- [Best Practices: LLM Evaluation and Observability](https://github.com/Dicklesworthstone/claude_code_agent_farm/blob/main/best_practices_guides/LLM_EVALUATION_AND_OBSERVABILITY_BEST_PRACTICES.md)
