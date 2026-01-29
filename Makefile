@@ -336,6 +336,7 @@ baseline-smoke: ## Run smoke tests with Langfuse tracing
 	@echo "$(YELLOW)Session: $(BASELINE_SESSION)$(NC)"
 	LANGFUSE_SESSION_ID="$(BASELINE_SESSION)" \
 	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
+	LANGFUSE_TRACING_ENABLED=true \
 	pytest tests/smoke/ -v --tb=short -x
 	@echo ""
 	@echo "$(GREEN)Results tagged as: $(BASELINE_SESSION)$(NC)"
@@ -346,6 +347,7 @@ baseline-load: ## Run load tests with Langfuse tracing
 	@echo "$(YELLOW)Session: $(LOAD_SESSION)$(NC)"
 	LANGFUSE_SESSION_ID="$(LOAD_SESSION)" \
 	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
+	LANGFUSE_TRACING_ENABLED=true \
 	pytest tests/load/ -v --tb=short
 	@echo ""
 	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
