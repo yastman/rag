@@ -6,6 +6,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
+from langfuse import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class LLMService:
         self._owns_client = client is None
         self.client = client or httpx.AsyncClient(timeout=60.0)
 
+    @observe(name="llm-generate-answer", as_type="generation")
     async def generate_answer(
         self,
         question: str,
@@ -52,6 +54,14 @@ class LLMService:
         Returns:
             Generated answer. Returns fallback message on error.
         """
+        langfuse = get_client()
+
+        # Track generation start
+        langfuse.update_current_generation(
+            input={"question_preview": question[:100], "context_count": len(context_chunks)},
+            model=self.model,
+        )
+
         try:
             # Build context from chunks
             context = self._format_context(context_chunks)
@@ -98,7 +108,18 @@ class LLMService:
             response.raise_for_status()
 
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            answer = data["choices"][0]["message"]["content"]
+
+            # Track completion with usage
+            langfuse.update_current_generation(
+                output={"answer_length": len(answer)},
+                usage_details={
+                    "input": data.get("usage", {}).get("prompt_tokens", 0),
+                    "output": data.get("usage", {}).get("completion_tokens", 0),
+                },
+            )
+
+            return answer
 
         except httpx.TimeoutException as e:
             logger.error(f"LLM API timeout: {e}")
