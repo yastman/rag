@@ -20,19 +20,30 @@ class LangfuseMetricsCollector:
     Reference: https://langfuse.com/docs/metrics/features/metrics-api
     """
 
-    def __init__(self, public_key: str, secret_key: str, host: str):
+    def __init__(
+        self,
+        public_key: str,
+        secret_key: str,
+        host: str,
+        redis_url: str = "redis://localhost:6379",
+        qdrant_url: str = "http://localhost:6333",
+    ):
         """Initialize collector with Langfuse credentials.
 
         Args:
             public_key: Langfuse public key (pk-lf-...)
             secret_key: Langfuse secret key (sk-lf-...)
             host: Langfuse host URL (e.g., http://localhost:3001)
+            redis_url: Redis connection URL for infrastructure metrics
+            qdrant_url: Qdrant base URL for infrastructure metrics
         """
         self.client = Langfuse(
             public_key=public_key,
             secret_key=secret_key,
             host=host,
         )
+        self.redis_url = redis_url
+        self.qdrant_url = qdrant_url
 
     def get_daily_metrics(
         self,
@@ -192,6 +203,49 @@ class LangfuseMetricsCollector:
         }
 
     # ========== Infrastructure Metrics ==========
+
+    async def collect_infrastructure_metrics(self) -> dict[str, Any]:
+        """Collect Redis INFO + Qdrant /metrics for baseline.
+
+        Returns:
+            Dict with redis and qdrant metrics, plus timestamp.
+        """
+        metrics: dict[str, Any] = {"timestamp": datetime.now().isoformat()}
+
+        # Redis INFO stats
+        if self.redis_url:
+            try:
+                r = redis.from_url(self.redis_url, decode_responses=True)
+                info_memory = r.info("memory")
+                info_stats = r.info("stats")
+                r.close()
+
+                hits = info_stats.get("keyspace_hits", 0)
+                misses = info_stats.get("keyspace_misses", 0)
+                total = hits + misses
+
+                metrics["redis"] = {
+                    "keyspace_hits": hits,
+                    "keyspace_misses": misses,
+                    "hit_rate": round(hits / total * 100, 2) if total > 0 else 0,
+                    "evicted_keys": info_stats.get("evicted_keys", 0),
+                    "used_memory_mb": info_memory.get("used_memory", 0) / (1024 * 1024),
+                    "used_memory_peak_mb": info_memory.get("used_memory_peak", 0) / (1024 * 1024),
+                    "maxmemory_mb": info_memory.get("maxmemory", 0) / (1024 * 1024),
+                }
+            except Exception as e:
+                metrics["redis"] = {"error": str(e)}
+
+        # Qdrant /metrics endpoint
+        if self.qdrant_url:
+            async with httpx.AsyncClient() as client:
+                try:
+                    resp = await client.get(f"{self.qdrant_url}/metrics", timeout=5.0)
+                    metrics["qdrant_raw"] = resp.text[:2000]
+                except Exception as e:
+                    metrics["qdrant_error"] = str(e)
+
+        return metrics
 
     @staticmethod
     def get_qdrant_metrics(qdrant_url: str = "http://localhost:6333") -> dict[str, Any]:
