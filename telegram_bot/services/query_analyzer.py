@@ -5,6 +5,7 @@ import logging
 from typing import Any
 
 import httpx
+from langfuse import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class QueryAnalyzer:
         self.model = model
         self.client = httpx.AsyncClient(timeout=30.0)
 
+    @observe(name="query-analyzer", as_type="generation")
     async def analyze(self, query: str) -> dict[str, Any]:
         """
         Analyze query and extract filters + semantic query.
@@ -40,6 +42,14 @@ class QueryAnalyzer:
                 "semantic_query": "недорогие квартиры с хорошим ремонтом"
             }
         """
+        langfuse = get_client()
+
+        # Track at start
+        langfuse.update_current_generation(
+            input={"query_preview": query[:100]},
+            model=self.model,
+        )
+
         system_prompt = """Ты QueryAnalyzer для системы поиска недвижимости в Болгарии.
 Твоя задача: извлечь структурированные фильтры и семантический запрос из текста пользователя.
 
@@ -103,6 +113,18 @@ class QueryAnalyzer:
                 semantic_query = analysis.get("semantic_query", query)
 
                 logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
+
+                # Track completion
+                langfuse.update_current_generation(
+                    output={
+                        "filters": filters,
+                        "has_semantic": bool(semantic_query),
+                    },
+                    usage_details={
+                        "input": result.get("usage", {}).get("prompt_tokens", 0),
+                        "output": result.get("usage", {}).get("completion_tokens", 0),
+                    },
+                )
 
                 return {"filters": filters, "semantic_query": semantic_query}
 
