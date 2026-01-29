@@ -14,7 +14,7 @@ import time
 from typing import TYPE_CHECKING, Any, Optional
 
 import redis.asyncio as redis
-from langfuse import observe
+from langfuse import get_client, observe
 
 
 # Lazy imports for redisvl (heavy dependency chain via voyageai SDK)
@@ -309,20 +309,43 @@ class CacheService:
 
             latency = (time.time() - start) * 1000
 
+            langfuse = get_client()
+
             if results:
                 self.metrics["semantic"]["hits"] += 1
                 answer = results[0].get("response", "")
                 distance = results[0].get("vector_distance", 0)
                 logger.info(f"✓ Semantic cache HIT ({latency:.0f}ms, distance={distance:.3f})")
+
+                langfuse.update_current_span(
+                    output={
+                        "hit": True,
+                        "layer": "semantic",
+                        "distance": distance,
+                        "threshold": effective_threshold,
+                    }
+                )
+
                 return answer
 
             self.metrics["semantic"]["misses"] += 1
             logger.debug("✗ Semantic cache MISS (no similar results)")
+
+            langfuse.update_current_span(
+                output={"hit": False, "layer": "semantic", "reason": "no_match"}
+            )
+
             return None
 
         except Exception as e:
             logger.error(f"Semantic cache error: {e}")
             self.metrics["semantic"]["misses"] += 1
+
+            langfuse = get_client()
+            langfuse.update_current_span(
+                output={"hit": False, "layer": "semantic", "error": str(e)}
+            )
+
             return None
 
     @observe(name="cache-semantic-store")
@@ -588,15 +611,24 @@ class CacheService:
             cached = await self.redis_client.get(key)
             latency = (time.time() - start) * 1000
 
+            langfuse = get_client()
+
             if cached:
                 self.metrics["search"]["hits"] += 1
                 logger.info(f"✓ Search cache HIT ({latency:.0f}ms)")
+                langfuse.update_current_span(output={"hit": True, "layer": "retrieval"})
                 return json.loads(cached)
+
             self.metrics["search"]["misses"] += 1
+            langfuse.update_current_span(output={"hit": False, "layer": "retrieval"})
             return None
         except Exception as e:
             logger.error(f"Search cache error: {e}")
             self.metrics["search"]["misses"] += 1
+            langfuse = get_client()
+            langfuse.update_current_span(
+                output={"hit": False, "layer": "retrieval", "error": str(e)}
+            )
             return None
 
     async def store_search_results(
@@ -659,16 +691,22 @@ class CacheService:
             cached = await self.redis_client.get(key)
             latency = (time.time() - start) * 1000
 
+            langfuse = get_client()
+
             if cached:
                 self.metrics["rerank"]["hits"] += 1
                 logger.info(f"✓ Rerank cache HIT ({latency:.0f}ms)")
+                langfuse.update_current_span(output={"hit": True, "layer": "rerank"})
                 return json.loads(cached)
 
             self.metrics["rerank"]["misses"] += 1
+            langfuse.update_current_span(output={"hit": False, "layer": "rerank"})
             return None
         except Exception as e:
             logger.error(f"Rerank cache error: {e}")
             self.metrics["rerank"]["misses"] += 1
+            langfuse = get_client()
+            langfuse.update_current_span(output={"hit": False, "layer": "rerank", "error": str(e)})
             return None
 
     async def store_rerank_results(
