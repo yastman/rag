@@ -90,6 +90,7 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 | `UserContextService` | Extracts user preferences from queries via LLM                           |
 | `CESCPersonalizer`   | **Lazy** personalization with marker detection (`is_personalized_query`) |
 | `LLMService`         | LLM interaction with streaming and fallbacks via LiteLLM                 |
+| `observability`      | PII masking + Langfuse client initialization (`mask_pii`, `get_langfuse_client`) |
 | `UserBaseVectorizer` | Local Russian embeddings (deepvk/USER-base, ruMTEB #1)                   |
 
 **Legacy services** (backward compatibility, use VoyageService for new code):
@@ -400,7 +401,7 @@ Claude понимает: прочитать план, запустить `spawn-
 
 ## Testing
 
-**Coverage:** 91% (1584 unit tests)
+**Coverage:** 91% (1657 unit tests)
 
 ```bash
 # Unit tests (fast, no Docker needed)
@@ -475,8 +476,20 @@ Config: `tests/baseline/thresholds.yaml`
 | CacheService.check_semantic_cache | cache-semantic-check | hit/miss, latency |
 | CacheService.store_semantic_cache | cache-semantic-store | latency |
 | CacheService.get_cached_search | cache-search-check | hit/miss, latency |
-| CacheService.get_cached_rerank | cache-rerank-check | hit/miss, latency |
+| CacheService.get_cached_rerank | cache-rerank-check | hit/miss, latency, layer |
+| LLMService.generate_answer | llm-generate-answer | model, tokens, latency |
+| QueryRouter.classify_query | query-router | query_type (CHITCHAT/SIMPLE/COMPLEX) |
+| QueryAnalyzer.analyze | query-analyzer | filters, tokens |
+| PropertyBot.handle_query | telegram-message | root trace, user_id, session_id |
 | LLMService (via LiteLLM) | Auto (OTEL) | tokens, cost, latency |
+
+### Langfuse Scores
+
+| Score | Values | Purpose |
+|-------|--------|---------|
+| `semantic_cache_hit` | 0.0/1.0 | Cache effectiveness |
+| `query_type` | 0/1/2 | CHITCHAT/SIMPLE/COMPLEX |
+| `results_count` | 0-N | Retrieval quality |
 
 ### Langfuse v3 Stack (docker-compose.dev.yml)
 
@@ -524,6 +537,8 @@ make e2e-test                                # All 25 tests
 make e2e-test-group GROUP=price_filters      # Specific group
 python scripts/e2e/runner.py --scenario 3.1  # Single test
 python scripts/e2e/runner.py --skip-judge    # Skip Claude evaluation (no Anthropic credits needed)
+make e2e-test-traces                         # E2E + Langfuse trace validation
+E2E_VALIDATE_LANGFUSE=1 make e2e-test        # Alternative
 ```
 
 ### Test Groups
