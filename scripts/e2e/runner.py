@@ -19,6 +19,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from scripts.e2e.claude_judge import ClaudeJudge, CriterionScore, JudgeResult
 from scripts.e2e.config import E2EConfig
+from scripts.e2e.langfuse_trace_validator import (
+    is_validation_enabled,
+    validate_latest_trace,
+)
 from scripts.e2e.report_generator import ReportGenerator, TestReport, TestResult
 from scripts.e2e.telegram_client import E2ETelegramClient
 from scripts.e2e.test_scenarios import (
@@ -40,16 +44,29 @@ async def run_single_test(
     scenario,
     progress,
     task_id,
+    validate_traces: bool = False,
 ) -> TestResult:
     """Run single test scenario."""
     progress.update(task_id, description=f"[cyan]{scenario.id}[/] {scenario.name}")
 
     try:
+        # Record start time for trace validation
+        test_started_at = datetime.utcnow()
+
         # Send message and get response
         response = await client.send_and_wait(
             query=scenario.query,
             timeout=scenario.timeout,
         )
+
+        # Validate Langfuse trace if enabled
+        trace_validation = None
+        if validate_traces:
+            # Small delay to ensure trace is flushed
+            await asyncio.sleep(2)
+            trace_validation = validate_latest_trace(started_at=test_started_at)
+            if not trace_validation.ok:
+                logger.warning(f"Trace validation failed: {trace_validation}")
 
         # Judge the response
         judge_result = await judge.evaluate(
@@ -104,10 +121,14 @@ async def run_single_test(
 async def run_tests(
     config: E2EConfig,
     scenarios: list,
+    validate_traces: bool = False,
 ) -> TestReport:
     """Run all test scenarios."""
     results = []
     start_time = time.time()
+
+    if validate_traces:
+        console.print("[yellow]Langfuse trace validation enabled[/]")
 
     async with E2ETelegramClient(config) as client:
         judge = ClaudeJudge(config)
@@ -126,6 +147,7 @@ async def run_tests(
                     scenario=scenario,
                     progress=progress,
                     task_id=task_id,
+                    validate_traces=validate_traces,
                 )
                 results.append(result)
 
@@ -209,8 +231,11 @@ def main():
 
     console.print(f"\n[bold]Running {len(scenarios)} E2E tests against {config.bot_username}[/]\n")
 
+    # Check if trace validation is enabled
+    validate_traces = is_validation_enabled()
+
     # Run tests
-    report = asyncio.run(run_tests(config, scenarios))
+    report = asyncio.run(run_tests(config, scenarios, validate_traces=validate_traces))
 
     # Generate reports
     generator = ReportGenerator(config.reports_dir)
