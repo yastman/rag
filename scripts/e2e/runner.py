@@ -62,9 +62,12 @@ async def run_single_test(
         # Validate Langfuse trace if enabled
         trace_validation = None
         if validate_traces:
-            # Small delay to ensure trace is flushed
-            await asyncio.sleep(2)
-            trace_validation = validate_latest_trace(started_at=test_started_at)
+            trace_validation = validate_latest_trace(
+                started_at=test_started_at,
+                should_skip_rag=bool(getattr(scenario, "should_skip_rag", False)),
+                is_command=bool(getattr(scenario, "group", None) == TestGroup.COMMANDS),
+                timeout_s=20.0,
+            )
             if not trace_validation.ok:
                 logger.warning(f"Trace validation failed: {trace_validation}")
 
@@ -74,12 +77,32 @@ async def run_single_test(
             bot_response=response.text,
         )
 
-        return TestResult(
+        result = TestResult(
             scenario=scenario,
             bot_response=response.text,
             response_time_ms=response.response_time_ms,
             judge_result=judge_result,
         )
+        if trace_validation is not None:
+            result.langfuse_trace_id = trace_validation.trace_id
+            result.observability_ok = trace_validation.ok
+            result.missing_spans = sorted(trace_validation.missing_spans)
+            result.missing_scores = sorted(trace_validation.missing_scores)
+            if not trace_validation.ok:
+                details = []
+                if trace_validation.error:
+                    details.append(trace_validation.error)
+                if trace_validation.missing_spans:
+                    details.append(f"missing_spans={sorted(trace_validation.missing_spans)}")
+                if trace_validation.missing_scores:
+                    details.append(f"missing_scores={sorted(trace_validation.missing_scores)}")
+                result.error = (
+                    (result.error + " | " if result.error else "")
+                    + "Langfuse: "
+                    + "; ".join(details)
+                )
+
+        return result
 
     except asyncio.TimeoutError:
         return TestResult(

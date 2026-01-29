@@ -168,6 +168,11 @@ langfuse_logs/
 # Qdrant
 qdrant_storage/
 
+# Telethon (E2E)
+*.session
+*.session-journal
+.e2e_auth_hash.json
+
 # Pre-commit
 .pre-commit-config.yaml~
 *.docx
