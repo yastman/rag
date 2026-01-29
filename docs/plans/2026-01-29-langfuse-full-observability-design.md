@@ -77,8 +77,43 @@ Complete observability setup with **cache-first pipeline**: all Docker services 
 
 ## Observability Strategy
 
-**LLM calls:** LiteLLM → Langfuse via OTel callback `langfuse_otel` (auto-instrumentation)
-**Everything else:** Manual spans via Langfuse SDK (caches, Qdrant, router, analyzer)
+### Decision: SDK-First with OTel Bridge Validation
+
+**Problem:** LiteLLM uses OTel callback (`langfuse_otel`), our code uses Langfuse SDK.
+Without explicit validation, we may get **two separate trace trees** (OTel spans orphaned from SDK spans).
+
+**Solution:** SDK-first approach with OTel bridge as acceptance test.
+
+| Layer | Instrumentation | Method |
+|-------|-----------------|--------|
+| **Bot handler** | Langfuse SDK | `@observe(name="telegram-message")` → root trace |
+| **Cache/Qdrant/Router** | Langfuse SDK | `@observe()` → child spans |
+| **VoyageService** | Langfuse SDK | Already instrumented with `@observe()` |
+| **LLM via LiteLLM** | OTel → Langfuse | Auto via `langfuse_otel` callback |
+
+**Acceptance Criteria (Phase 4):**
+- [ ] Single trace tree contains BOTH SDK spans AND LiteLLM OTel span
+- [ ] LLM span (`llm-generate` or similar) appears as child of `telegram-message`
+- [ ] If OTel spans are orphaned → fix by passing `trace_id` in LiteLLM metadata
+
+**Fallback (if OTel bridge fails):**
+```python
+# Pass trace context to LiteLLM manually
+response = await self.client.post(
+    f"{self.base_url}/chat/completions",
+    headers={...},
+    json={
+        "model": self.model,
+        "messages": messages,
+        "metadata": {
+            "trace_id": langfuse.get_current_trace_id(),  # Bridge SDK → OTel
+            "session_id": session_id,
+        },
+    },
+)
+```
+
+**Reference:** [LiteLLM Langfuse OTEL Integration](https://docs.litellm.ai/docs/observability/langfuse_otel_integration)
 
 ### Metrics to Track (Minimal, Useful)
 
@@ -238,6 +273,9 @@ def get_langfuse_client() -> Langfuse:
 **Context Fingerprint (critical for cache isolation):**
 
 ```python
+from langfuse import observe, get_client
+from telegram_bot.services.cache import CACHE_SCHEMA_VERSION
+
 @observe(name="telegram-message")
 async def handle_query(self, message: Message):
     query = message.text
@@ -254,13 +292,28 @@ async def handle_query(self, message: Message):
         "cache_schema": CACHE_SCHEMA_VERSION,  # "v2"
     }
 
-    langfuse_context.update_current_trace(
-        name="telegram-rag-query",
+    # Native Langfuse SDK API (v3.x)
+    langfuse = get_client()
+    langfuse.update_current_trace(
+        input={"query": query[:200]},  # Truncate for masking
         user_id=str(user_id),
         session_id=f"chat:{message.chat.id}",
         metadata=context_fingerprint,
         tags=["telegram", "rag", context_fingerprint["retrieval_version"]],
     )
+```
+
+**Note on SDK API:** Project uses `langfuse>=3.0.0`. Correct imports:
+```python
+from langfuse import observe, get_client, Langfuse
+
+# NOT: from langfuse.decorators import observe, langfuse_context
+# NOT: langfuse_context.update_current_trace(...)
+
+# CORRECT:
+langfuse = get_client()
+langfuse.update_current_trace(...)
+langfuse.score_current_trace(name="...", value=...)
 ```
 
 **Test:** Send message → verify trace in Langfuse UI with all child spans connected.
@@ -287,7 +340,11 @@ async def handle_query(self, message: Message):
 **Span attribute standard (all cache spans):**
 
 ```python
-langfuse_context.update_current_observation(
+from langfuse import get_client
+
+# Inside @observe decorated method:
+langfuse = get_client()
+langfuse.update_current_span(
     output={
         "layer": "semantic",      # semantic/embeddings/sparse/analyzer/retrieval/rerank
         "hit": True,              # bool
@@ -298,6 +355,13 @@ langfuse_context.update_current_observation(
         "threshold": 0.20,        # semantic only
         "filters_applied": ["lang=ru", "tenant=default"],  # semantic only
     }
+)
+
+# For generation spans (LLM, embeddings):
+langfuse.update_current_generation(
+    model="voyage-4-lite",
+    usage_details={"input": 150, "output": 1024},
+    output={"dimensions": 1024},
 )
 ```
 
@@ -359,8 +423,10 @@ async def check_semantic_cache(
         distance_threshold=BORDERLINE_THRESHOLD,
     )
 
+    langfuse = get_client()
+
     if not results:
-        langfuse_context.update_current_observation(
+        langfuse.update_current_span(
             output={"hit": False, "layer": "semantic", "reason": "no_candidates"}
         )
         return None
@@ -369,7 +435,7 @@ async def check_semantic_cache(
 
     # STRICT HIT: confident, return immediately
     if distance < STRICT_THRESHOLD:
-        langfuse_context.update_current_observation(
+        langfuse.update_current_span(
             output={
                 "hit": True,
                 "layer": "semantic",
@@ -384,7 +450,7 @@ async def check_semantic_cache(
     if distance < BORDERLINE_THRESHOLD:
         is_valid = await self._validate_borderline_hit(query, results[0])
         if is_valid:
-            langfuse_context.update_current_observation(
+            langfuse.update_current_span(
                 output={
                     "hit": True,
                     "layer": "semantic",
@@ -395,7 +461,7 @@ async def check_semantic_cache(
             return results[0].get("response")
 
     # MISS: go to retrieval
-    langfuse_context.update_current_observation(
+    langfuse.update_current_span(
         output={
             "hit": False,
             "layer": "semantic",
@@ -600,30 +666,41 @@ start_time = time.time()
 # At end, before return:
 latency_ms = (time.time() - start_time) * 1000
 langfuse = get_client()
-trace_id = langfuse_context.get_current_trace_id()
 
-if trace_id:
-    # Cache effectiveness
-    langfuse.score(trace_id=trace_id, name="semantic_cache_hit",
-                   value=1.0 if cached_answer else 0.0)
-    langfuse.score(trace_id=trace_id, name="embeddings_cache_hit",
-                   value=1.0 if embedding_from_cache else 0.0)
+# Native SDK API: score_current_trace() (no trace_id needed)
+# Cache effectiveness
+langfuse.score_current_trace(
+    name="semantic_cache_hit",
+    value=1.0 if cached_answer else 0.0
+)
+langfuse.score_current_trace(
+    name="embeddings_cache_hit",
+    value=1.0 if embedding_from_cache else 0.0
+)
 
-    # Quality metrics
-    langfuse.score(trace_id=trace_id, name="results_count",
-                   value=float(len(results)) if results else 0.0)
-    langfuse.score(trace_id=trace_id, name="query_type",
-                   value=float({"CHITCHAT": 0, "SIMPLE": 1, "COMPLEX": 2}[query_type.value]))
+# Quality metrics
+langfuse.score_current_trace(
+    name="results_count",
+    value=float(len(results)) if results else 0.0
+)
+langfuse.score_current_trace(
+    name="query_type",
+    value=float({"CHITCHAT": 0, "SIMPLE": 1, "COMPLEX": 2}[query_type.value])
+)
 
-    # Performance
-    langfuse.score(trace_id=trace_id, name="latency_total_ms",
-                   value=latency_ms)
-    langfuse.score(trace_id=trace_id, name="cache_layers_hit",
-                   value=float(sum([
-                       1 if cached_answer else 0,
-                       1 if embedding_from_cache else 0,
-                       1 if search_from_cache else 0,
-                   ])))
+# Performance
+langfuse.score_current_trace(
+    name="latency_total_ms",
+    value=latency_ms
+)
+langfuse.score_current_trace(
+    name="cache_layers_hit",
+    value=float(sum([
+        1 if cached_answer else 0,
+        1 if embedding_from_cache else 0,
+        1 if search_from_cache else 0,
+    ]))
+)
 ```
 
 **Scores Summary:**
@@ -646,6 +723,7 @@ if trace_id:
 ```python
 # tests/e2e/test_langfuse_traces.py
 
+import asyncio
 import pytest
 from langfuse import Langfuse
 
@@ -666,6 +744,11 @@ EXPECTED_SCORES = {
     "latency_total_ms",
 }
 
+@pytest.fixture
+def langfuse_client():
+    """Langfuse client for E2E tests."""
+    return Langfuse()
+
 @pytest.mark.e2e
 async def test_trace_structure(bot_client, langfuse_client):
     """Verify e2e query creates complete trace with expected structure."""
@@ -673,26 +756,38 @@ async def test_trace_structure(bot_client, langfuse_client):
     await bot_client.send_message("квартиры до 100000 евро")
     await asyncio.sleep(5)  # Wait for Langfuse processing
 
-    # 2. Fetch recent trace
-    traces = langfuse_client.fetch_traces(
-        tags=["telegram", "rag"],
-        limit=1,
+    # 2. Fetch recent traces via API (Langfuse v3.x)
+    # NOTE: langfuse_client.api.trace.list() returns paginated response
+    traces_response = langfuse_client.api.trace.list(
+        limit=10,
+        order_by="timestamp",
+        order="desc",
     )
+
+    # Filter by tags (if API supports) or manually
+    traces = [
+        t for t in traces_response.data
+        if "telegram" in (t.tags or []) and "rag" in (t.tags or [])
+    ]
     assert len(traces) > 0, "No traces found in Langfuse"
 
-    trace = traces[0]
+    # 3. Get full trace with observations
+    trace_id = traces[0].id
+    trace = langfuse_client.api.trace.get(trace_id)
 
-    # 3. Verify spans
+    # 4. Verify spans (observations)
     span_names = {obs.name for obs in trace.observations}
     missing_spans = EXPECTED_SPANS - span_names
     assert not missing_spans, f"Missing spans: {missing_spans}"
 
-    # 4. Verify scores
-    score_names = {s.name for s in trace.scores}
+    # 5. Verify scores
+    scores_response = langfuse_client.api.score.list(trace_id=trace_id)
+    score_names = {s.name for s in scores_response.data}
     missing_scores = EXPECTED_SCORES - score_names
     assert not missing_scores, f"Missing scores: {missing_scores}"
 
-    # 5. Verify context_fingerprint in metadata
+    # 6. Verify context_fingerprint in metadata
+    assert trace.metadata is not None
     assert "retrieval_version" in trace.metadata
     assert "cache_schema" in trace.metadata
 
@@ -706,17 +801,23 @@ async def test_cold_warm_trace_comparison(bot_client, langfuse_client, cache_ser
     await bot_client.send_message(query)
     await asyncio.sleep(5)
 
-    cold_trace = langfuse_client.fetch_traces(limit=1)[0]
-    cold_latency = next(s.value for s in cold_trace.scores if s.name == "latency_total_ms")
-    cold_cache_hit = next(s.value for s in cold_trace.scores if s.name == "semantic_cache_hit")
+    # Fetch cold trace
+    traces = langfuse_client.api.trace.list(limit=1, order_by="timestamp", order="desc")
+    cold_trace_id = traces.data[0].id
+    cold_scores = langfuse_client.api.score.list(trace_id=cold_trace_id)
+    cold_latency = next(s.value for s in cold_scores.data if s.name == "latency_total_ms")
+    cold_cache_hit = next(s.value for s in cold_scores.data if s.name == "semantic_cache_hit")
 
     # Warm path
     await bot_client.send_message(query)
     await asyncio.sleep(5)
 
-    warm_trace = langfuse_client.fetch_traces(limit=1)[0]
-    warm_latency = next(s.value for s in warm_trace.scores if s.name == "latency_total_ms")
-    warm_cache_hit = next(s.value for s in warm_trace.scores if s.name == "semantic_cache_hit")
+    # Fetch warm trace
+    traces = langfuse_client.api.trace.list(limit=1, order_by="timestamp", order="desc")
+    warm_trace_id = traces.data[0].id
+    warm_scores = langfuse_client.api.score.list(trace_id=warm_trace_id)
+    warm_latency = next(s.value for s in warm_scores.data if s.name == "latency_total_ms")
+    warm_cache_hit = next(s.value for s in warm_scores.data if s.name == "semantic_cache_hit")
 
     # Assertions
     assert cold_cache_hit == 0.0, "Cold path should have cache miss"
