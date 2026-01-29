@@ -1,6 +1,6 @@
 # Core Dependencies
 aiogram==3.24.0
-httpx==0.27.2
+httpx==0.28.1
 qdrant-client==1.16.2
 redisvl==0.9.0
 python-dotenv==1.2.1
