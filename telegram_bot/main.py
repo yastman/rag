@@ -8,6 +8,7 @@ import os
 from .bot import PropertyBot
 from .config import BotConfig
 from .logging_config import setup_logging
+from .observability import get_langfuse_client
 
 
 async def main():
@@ -20,6 +21,11 @@ async def main():
 
     setup_logging(level=log_level, json_format=json_format, log_file=log_file)
     logger = logging.getLogger(__name__)
+
+    # Initialize Langfuse client with PII masking FIRST
+    # This registers the SDK singleton with mask=... before any other code uses it
+    _langfuse = get_langfuse_client()
+    logger.debug("Langfuse client initialized with PII masking")
 
     # Load config
     config = BotConfig()
