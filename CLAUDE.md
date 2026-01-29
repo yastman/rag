@@ -483,13 +483,22 @@ Config: `tests/baseline/thresholds.yaml`
 | PropertyBot.handle_query | telegram-message | root trace, user_id, session_id |
 | LLMService (via LiteLLM) | Auto (OTEL) | tokens, cost, latency |
 
-### Langfuse Scores
+### Langfuse Scores (All Exit Paths)
+
+All 10 scores written via try/finally accumulator pattern in `handle_query`:
 
 | Score | Values | Purpose |
 |-------|--------|---------|
-| `semantic_cache_hit` | 0.0/1.0 | Cache effectiveness |
 | `query_type` | 0/1/2 | CHITCHAT/SIMPLE/COMPLEX |
-| `results_count` | 0-N | Retrieval quality |
+| `latency_total_ms` | float | End-to-end request latency |
+| `semantic_cache_hit` | 0.0/1.0 | Semantic cache effectiveness |
+| `embeddings_cache_hit` | 0.0/1.0 | Embeddings cache effectiveness |
+| `search_cache_hit` | 0.0/1.0 | Search results cache |
+| `rerank_applied` | 0.0/1.0 | Whether reranking was performed |
+| `rerank_cache_hit` | 0.0/1.0 | Rerank cache effectiveness |
+| `results_count` | 0-N | Number of retrieved documents |
+| `no_results` | 0.0/1.0 | Query returned empty results |
+| `llm_used` | 0.0/1.0 | LLM generation was invoked |
 
 ### Langfuse v3 Stack (docker-compose.dev.yml)
 
