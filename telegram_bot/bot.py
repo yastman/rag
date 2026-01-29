@@ -7,6 +7,7 @@ import httpx
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message
+from langfuse import get_client, observe
 
 from .config import BotConfig
 from .middlewares import setup_error_middleware, setup_throttling_middleware
@@ -24,6 +25,7 @@ from .services import (
     is_personalized_query,
     needs_rerank,
 )
+from .services.cache import CACHE_SCHEMA_VERSION
 
 
 logger = logging.getLogger(__name__)
@@ -164,11 +166,36 @@ class PropertyBot:
 
         await message.answer(stats_text)
 
+    @observe(name="telegram-message")
     async def handle_query(self, message: Message):
         """Handle user query with multi-level caching RAG pipeline."""
-        query = message.text
+        query = message.text or ""
         user_id = message.from_user.id
         logger.info(f"Query from {user_id}: {query}")
+
+        # Context fingerprint for cache isolation + trace filtering
+        request_id = f"tg:{message.chat.id}:{message.message_id}"
+        context_fingerprint = {
+            "tenant": "default",
+            "lang": "ru",
+            "prompt_version": "v2.1",
+            "retrieval_version": f"{self.config.voyage_model_queries}-bm42-rrf",
+            "rerank_version": self.config.voyage_model_rerank,
+            "model_id": self.config.llm_model,
+            "cache_schema": CACHE_SCHEMA_VERSION,
+            "request_id": request_id,
+        }
+
+        # Update trace with user context
+        langfuse = get_client()
+        langfuse.update_current_trace(
+            name="telegram-rag-query",
+            user_id=str(user_id),
+            session_id=f"chat:{message.chat.id}",
+            input={"query": query[:200]},
+            metadata=context_fingerprint,
+            tags=["telegram", "rag", context_fingerprint["retrieval_version"]],
+        )
 
         # Query routing (2026 best practice) - skip RAG for chit-chat
         query_type = classify_query(query)
@@ -285,8 +312,11 @@ class PropertyBot:
                 if cached_rerank:
                     # Rebuild results from cached scores
                     id_to_result = {r.get("id", str(i)): r for i, r in enumerate(results)}
-                    results = [id_to_result[doc_id] for doc_id, _ in cached_rerank
-                               if doc_id in id_to_result][:self.config.rerank_top_k]
+                    results = [
+                        id_to_result[doc_id]
+                        for doc_id, _ in cached_rerank
+                        if doc_id in id_to_result
+                    ][: self.config.rerank_top_k]
                     logger.info(f"✓ Using cached rerank ({len(results)} results)")
                 else:
                     doc_texts = [r["text"] for r in results]
@@ -298,8 +328,7 @@ class PropertyBot:
 
                     # Store rerank results in cache
                     rerank_cache_data = [
-                        (doc_ids[r["index"]], r.get("score", 0.0))
-                        for r in rerank_results
+                        (doc_ids[r["index"]], r.get("score", 0.0)) for r in rerank_results
                     ]
                     await self.cache_service.store_rerank_results(
                         query_embedding=query_vector,
