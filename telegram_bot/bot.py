@@ -2,6 +2,7 @@
 
 import contextlib
 import logging
+import time
 
 import httpx
 from aiogram import Bot, Dispatcher, F
@@ -169,246 +170,278 @@ class PropertyBot:
     @observe(name="telegram-message")
     async def handle_query(self, message: Message):
         """Handle user query with multi-level caching RAG pipeline."""
+        start_time = time.time()
         query = message.text or ""
         user_id = message.from_user.id
         logger.info(f"Query from {user_id}: {query}")
 
-        # Context fingerprint for cache isolation + trace filtering
-        request_id = f"tg:{message.chat.id}:{message.message_id}"
-        context_fingerprint = {
-            "tenant": "default",
-            "lang": "ru",
-            "prompt_version": "v2.1",
-            "retrieval_version": f"{self.config.voyage_model_queries}-bm42-rrf",
-            "rerank_version": self.config.voyage_model_rerank,
-            "model_id": self.config.llm_model,
-            "cache_schema": CACHE_SCHEMA_VERSION,
-            "request_id": request_id,
+        # Scores accumulator - defaults are "miss" / "not applied"
+        scores = {
+            "semantic_cache_hit": 0.0,
+            "embeddings_cache_hit": 0.0,
+            "search_cache_hit": 0.0,
+            "rerank_applied": 0.0,
+            "rerank_cache_hit": 0.0,
+            "llm_used": 0.0,
+            "no_results": 0.0,
+            "results_count": 0.0,
         }
+        query_type = QueryType.SIMPLE  # Default for early exceptions
 
-        # Update trace with user context
-        langfuse = get_client()
-        langfuse.update_current_trace(
-            name="telegram-rag-query",
-            user_id=str(user_id),
-            session_id=f"chat:{message.chat.id}",
-            input={"query": query[:200]},
-            metadata=context_fingerprint,
-            tags=["telegram", "rag", context_fingerprint["retrieval_version"]],
-        )
+        try:
+            # Context fingerprint for cache isolation + trace filtering
+            request_id = f"tg:{message.chat.id}:{message.message_id}"
+            context_fingerprint = {
+                "tenant": "default",
+                "lang": "ru",
+                "prompt_version": "v2.1",
+                "retrieval_version": f"{self.config.voyage_model_queries}-bm42-rrf",
+                "rerank_version": self.config.voyage_model_rerank,
+                "model_id": self.config.llm_model,
+                "cache_schema": CACHE_SCHEMA_VERSION,
+                "request_id": request_id,
+            }
 
-        # Query routing (2026 best practice) - skip RAG for chit-chat
-        query_type = classify_query(query)
-        if query_type == QueryType.CHITCHAT:
-            chitchat_response = get_chitchat_response(query)
-            if chitchat_response:
-                logger.info("Query routed to CHITCHAT (skipping RAG)")
-                await message.answer(chitchat_response)
-                return
+            # Update trace with user context
+            langfuse = get_client()
+            langfuse.update_current_trace(
+                name="telegram-rag-query",
+                user_id=str(user_id),
+                session_id=f"chat:{message.chat.id}",
+                input={"query": query[:200]},
+                metadata=context_fingerprint,
+                tags=["telegram", "rag", context_fingerprint["retrieval_version"]],
+            )
 
-        # CESC: Lazy routing (2026 best practice) - only update context for personalized queries
-        user_context = None
-        needs_personalization = False
-        if self.config.cesc_enabled:
-            user_context = await self.user_context_service.get_context(user_id)
-            needs_personalization = is_personalized_query(query, user_context)
-            if needs_personalization:
-                await self.user_context_service.update_from_query(user_id, query)
-                logger.debug("CESC: Query needs personalization")
+            # Query routing (2026 best practice) - skip RAG for chit-chat
+            query_type = classify_query(query)
+            if query_type == QueryType.CHITCHAT:
+                chitchat_response = get_chitchat_response(query)
+                if chitchat_response:
+                    logger.info("Query routed to CHITCHAT (skipping RAG)")
+                    await message.answer(chitchat_response)
+                    return
+
+            # CESC: Lazy routing (2026 best practice) - only update context for personalized queries
+            user_context = None
+            needs_personalization = False
+            if self.config.cesc_enabled:
+                user_context = await self.user_context_service.get_context(user_id)
+                needs_personalization = is_personalized_query(query, user_context)
+                if needs_personalization:
+                    await self.user_context_service.update_from_query(user_id, query)
+                    logger.debug("CESC: Query needs personalization")
+                else:
+                    logger.debug("CESC: Skipping (generic query)")
+
+            # Initialize cache on first query if not done yet
+            if not self._cache_initialized:
+                await self.cache_service.initialize()
+                self._cache_initialized = True
+
+            # Show typing indicator
+            await message.bot.send_chat_action(message.chat.id, "typing")
+
+            # 1. Generate embedding (with embeddings cache - Tier 1)
+            query_vector = await self.cache_service.get_cached_embedding(query)
+            if query_vector is None:
+                query_vector = await self.voyage_service.embed_query(query)
+                await self.cache_service.store_embedding(query, query_vector)
+                logger.info(f"Generated embedding: {len(query_vector)}-dim")
             else:
-                logger.debug("CESC: Skipping (generic query)")
+                scores["embeddings_cache_hit"] = 1.0
+                logger.info(f"✓ Using cached embedding: {len(query_vector)}-dim")
 
-        # Initialize cache on first query if not done yet
-        if not self._cache_initialized:
-            await self.cache_service.initialize()
-            self._cache_initialized = True
+            # 2. Check semantic cache (Tier 1 - highest priority)
+            # Uses langcache-embed-v1 (256-dim) for fast cache matching
+            cached_answer = await self.cache_service.check_semantic_cache(query)
+            if cached_answer:
+                scores["semantic_cache_hit"] = 1.0
+                # CESC: Personalize only if lazy routing determined it's needed
+                if needs_personalization and self.cesc_personalizer.should_personalize(
+                    user_context
+                ):
+                    cached_answer = await self.cesc_personalizer.personalize(
+                        cached_response=cached_answer,
+                        user_context=user_context,
+                        query=query,
+                    )
+                await message.answer(cached_answer, parse_mode="Markdown")
+                return  # finally block writes scores
 
-        # Show typing indicator
-        await message.bot.send_chat_action(message.chat.id, "typing")
+            # 3. Analyze query with cache (Tier 2)
+            analysis = await self.cache_service.get_cached_analysis(query)
+            if analysis is None:
+                analysis = await self.query_analyzer.analyze(query)
+                await self.cache_service.store_analysis(query, analysis)
 
-        # 1. Generate embedding (with embeddings cache - Tier 1)
-        query_vector = await self.cache_service.get_cached_embedding(query)
-        if query_vector is None:
-            query_vector = await self.voyage_service.embed_query(query)
-            await self.cache_service.store_embedding(query, query_vector)
-            logger.info(f"Generated embedding: {len(query_vector)}-dim")
-        else:
-            logger.info(f"✓ Using cached embedding: {len(query_vector)}-dim")
+            filters = analysis.get("filters", {})
+            semantic_query = analysis.get("semantic_query", query)
+            logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
 
-        # 2. Check semantic cache (Tier 1 - highest priority)
-        # Uses langcache-embed-v1 (256-dim) for fast cache matching
-        cached_answer = await self.cache_service.check_semantic_cache(query)
-        if cached_answer:
-            # CESC: Personalize only if lazy routing determined it's needed
-            if needs_personalization and self.cesc_personalizer.should_personalize(user_context):
-                cached_answer = await self.cesc_personalizer.personalize(
-                    cached_response=cached_answer,
-                    user_context=user_context,
-                    query=query,
+            # 4. Search in Qdrant with hybrid search
+            results = await self.cache_service.get_cached_search(query_vector, filters)
+            if results is None:
+                # Generate sparse vector with cache (2026 best practice)
+                sparse_vector = await self.cache_service.get_cached_sparse_embedding(query)
+                if sparse_vector is None:
+                    sparse_vector = await self._get_sparse_vector(query)
+                    if sparse_vector.get("indices"):  # Only cache non-empty vectors
+                        await self.cache_service.store_sparse_embedding(query, sparse_vector)
+                        logger.debug("Generated and cached sparse embedding")
+                else:
+                    logger.debug("✓ Using cached sparse embedding")
+
+                # Hybrid RRF search (dense + sparse)
+                results = await self.qdrant_service.hybrid_search_rrf(
+                    dense_vector=query_vector,
+                    sparse_vector=sparse_vector,
+                    filters=filters if filters else None,
+                    top_k=self.config.search_top_k,
+                    dense_weight=self.config.hybrid_dense_weight,
+                    sparse_weight=self.config.hybrid_sparse_weight,
                 )
-            await message.answer(cached_answer, parse_mode="Markdown")
 
-            # Log scores to Langfuse (cache hit path)
+                # MMR diversity reranking (if enabled and enough results)
+                if self.config.mmr_enabled and len(results) > self.config.rerank_top_k:
+                    # Get embeddings for MMR calculation
+                    result_embeddings = [
+                        await self.voyage_service.embed_query(r["text"])
+                        for r in results[:20]  # Limit for performance
+                    ]
+                    results = self.qdrant_service.mmr_rerank(
+                        points=results[:20],
+                        embeddings=result_embeddings,
+                        lambda_mult=self.config.mmr_lambda,
+                        top_k=self.config.rerank_top_k * 2,
+                    )
+
+                # Voyage rerank with cache (2026 best practice)
+                # Skip rerank for simple queries or few results
+                if results and needs_rerank(query_type, len(results)):
+                    scores["rerank_applied"] = 1.0
+                    doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
+
+                    # Check rerank cache first
+                    cached_rerank = await self.cache_service.get_cached_rerank(
+                        query_embedding=query_vector,
+                        doc_ids=doc_ids,
+                        collection=self.config.qdrant_collection,
+                    )
+
+                    if cached_rerank:
+                        scores["rerank_cache_hit"] = 1.0
+                        # Rebuild results from cached scores
+                        id_to_result = {r.get("id", str(i)): r for i, r in enumerate(results)}
+                        results = [
+                            id_to_result[doc_id]
+                            for doc_id, _ in cached_rerank
+                            if doc_id in id_to_result
+                        ][: self.config.rerank_top_k]
+                        logger.info(f"✓ Using cached rerank ({len(results)} results)")
+                    else:
+                        doc_texts = [r["text"] for r in results]
+                        rerank_results = await self.voyage_service.rerank(
+                            query=query,
+                            documents=doc_texts,
+                            top_k=self.config.rerank_top_k,
+                        )
+
+                        # Store rerank results in cache
+                        rerank_cache_data = [
+                            (doc_ids[r["index"]], r.get("score", 0.0)) for r in rerank_results
+                        ]
+                        await self.cache_service.store_rerank_results(
+                            query_embedding=query_vector,
+                            doc_ids=doc_ids,
+                            results=rerank_cache_data,
+                            collection=self.config.qdrant_collection,
+                        )
+
+                        results = [results[r["index"]] for r in rerank_results]
+                        logger.info(f"Reranked to top {len(results)} results")
+
+                await self.cache_service.store_search_results(query_vector, filters, results)
+            else:
+                scores["search_cache_hit"] = 1.0
+
+            scores["results_count"] = float(len(results)) if results else 0.0
+            logger.info(f"Found {len(results)} results")
+
+            if not results:
+                scores["no_results"] = 1.0
+                await message.answer(
+                    "😔 Ничего не нашел по вашему запросу.\n\nПопробуйте переформулировать запрос."
+                )
+                return  # finally block writes scores
+
+            # 5. Get conversation history for context-aware responses
+            _conversation_history = await self.cache_service.get_conversation_history(
+                user_id, last_n=3
+            )
+
+            # Store user query in conversation
+            await self.cache_service.store_conversation_message(user_id, "user", query)
+
+            scores["llm_used"] = 1.0
+
+            # 6. Generate answer with LLM STREAMING
+            temp_message = await message.answer("🔍 Генерирую ответ...")
+            accumulated_text = ""
+            last_sent_text = ""  # Track what we last sent
+            chunk_count = 0
+
+            try:
+                async for chunk in self.llm_service.stream_answer(
+                    question=query,
+                    context_chunks=results,
+                ):
+                    accumulated_text += chunk
+                    chunk_count += 1
+
+                    # Update message every 10 chunks or when punctuation appears
+                    # Only if text actually changed
+                    if (
+                        chunk_count % 10 == 0 or chunk in ".!?\n"
+                    ) and accumulated_text != last_sent_text:
+                        with contextlib.suppress(Exception):
+                            await temp_message.edit_text(accumulated_text)
+                            last_sent_text = accumulated_text
+
+                # Final update with complete answer (only if different)
+                if accumulated_text != last_sent_text:
+                    await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
+                answer = accumulated_text
+
+            except Exception as e:
+                logger.error(f"Streaming error: {e}", exc_info=True)
+                # Fallback to non-streaming
+                answer = await self.llm_service.generate_answer(query, results)
+                await temp_message.edit_text(answer, parse_mode="Markdown")
+
+            # 7. Store assistant answer in conversation
+            await self.cache_service.store_conversation_message(user_id, "assistant", answer)
+
+            # 8. Store in semantic cache for future queries
+            # Uses langcache-embed-v1 (256-dim) for cache indexing
+            await self.cache_service.store_semantic_cache(query, answer)
+
+        finally:
+            # Write all scores - guaranteed on ALL exit paths
+            langfuse = get_client()
             query_type_map = {"chitchat": 0, "simple": 1, "complex": 2}
-            langfuse.score_current_trace(name="semantic_cache_hit", value=1.0)
             langfuse.score_current_trace(
                 name="query_type",
                 value=float(query_type_map.get(query_type.value, 1)),
             )
-            langfuse.score_current_trace(name="results_count", value=0.0)
+            langfuse.score_current_trace(
+                name="latency_total_ms",
+                value=(time.time() - start_time) * 1000,
+            )
+            for name, value in scores.items():
+                langfuse.score_current_trace(name=name, value=value)
 
             self.cache_service.log_metrics()
-            return
-
-        # 3. Analyze query with cache (Tier 2)
-        analysis = await self.cache_service.get_cached_analysis(query)
-        if analysis is None:
-            analysis = await self.query_analyzer.analyze(query)
-            await self.cache_service.store_analysis(query, analysis)
-
-        filters = analysis.get("filters", {})
-        semantic_query = analysis.get("semantic_query", query)
-        logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
-
-        # 4. Search in Qdrant with hybrid search
-        results = await self.cache_service.get_cached_search(query_vector, filters)
-        if results is None:
-            # Generate sparse vector with cache (2026 best practice)
-            sparse_vector = await self.cache_service.get_cached_sparse_embedding(query)
-            if sparse_vector is None:
-                sparse_vector = await self._get_sparse_vector(query)
-                if sparse_vector.get("indices"):  # Only cache non-empty vectors
-                    await self.cache_service.store_sparse_embedding(query, sparse_vector)
-                    logger.debug("Generated and cached sparse embedding")
-            else:
-                logger.debug("✓ Using cached sparse embedding")
-
-            # Hybrid RRF search (dense + sparse)
-            results = await self.qdrant_service.hybrid_search_rrf(
-                dense_vector=query_vector,
-                sparse_vector=sparse_vector,
-                filters=filters if filters else None,
-                top_k=self.config.search_top_k,
-                dense_weight=self.config.hybrid_dense_weight,
-                sparse_weight=self.config.hybrid_sparse_weight,
-            )
-
-            # MMR diversity reranking (if enabled and enough results)
-            if self.config.mmr_enabled and len(results) > self.config.rerank_top_k:
-                # Get embeddings for MMR calculation
-                result_embeddings = [
-                    await self.voyage_service.embed_query(r["text"])
-                    for r in results[:20]  # Limit for performance
-                ]
-                results = self.qdrant_service.mmr_rerank(
-                    points=results[:20],
-                    embeddings=result_embeddings,
-                    lambda_mult=self.config.mmr_lambda,
-                    top_k=self.config.rerank_top_k * 2,
-                )
-
-            # Voyage rerank with cache (2026 best practice)
-            # Skip rerank for simple queries or few results
-            if results and needs_rerank(query_type, len(results)):
-                doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
-
-                # Check rerank cache first
-                cached_rerank = await self.cache_service.get_cached_rerank(
-                    query_embedding=query_vector,
-                    doc_ids=doc_ids,
-                    collection=self.config.qdrant_collection,
-                )
-
-                if cached_rerank:
-                    # Rebuild results from cached scores
-                    id_to_result = {r.get("id", str(i)): r for i, r in enumerate(results)}
-                    results = [
-                        id_to_result[doc_id]
-                        for doc_id, _ in cached_rerank
-                        if doc_id in id_to_result
-                    ][: self.config.rerank_top_k]
-                    logger.info(f"✓ Using cached rerank ({len(results)} results)")
-                else:
-                    doc_texts = [r["text"] for r in results]
-                    rerank_results = await self.voyage_service.rerank(
-                        query=query,
-                        documents=doc_texts,
-                        top_k=self.config.rerank_top_k,
-                    )
-
-                    # Store rerank results in cache
-                    rerank_cache_data = [
-                        (doc_ids[r["index"]], r.get("score", 0.0)) for r in rerank_results
-                    ]
-                    await self.cache_service.store_rerank_results(
-                        query_embedding=query_vector,
-                        doc_ids=doc_ids,
-                        results=rerank_cache_data,
-                        collection=self.config.qdrant_collection,
-                    )
-
-                    results = [results[r["index"]] for r in rerank_results]
-                    logger.info(f"Reranked to top {len(results)} results")
-
-            await self.cache_service.store_search_results(query_vector, filters, results)
-
-        logger.info(f"Found {len(results)} results")
-
-        if not results:
-            await message.answer(
-                "😔 Ничего не нашел по вашему запросу.\n\nПопробуйте переформулировать запрос."
-            )
-            return
-
-        # 5. Get conversation history for context-aware responses
-        _conversation_history = await self.cache_service.get_conversation_history(user_id, last_n=3)
-
-        # Store user query in conversation
-        await self.cache_service.store_conversation_message(user_id, "user", query)
-
-        # 6. Generate answer with LLM STREAMING
-        temp_message = await message.answer("🔍 Генерирую ответ...")
-        accumulated_text = ""
-        last_sent_text = ""  # Track what we last sent
-        chunk_count = 0
-
-        try:
-            async for chunk in self.llm_service.stream_answer(
-                question=query,
-                context_chunks=results,
-            ):
-                accumulated_text += chunk
-                chunk_count += 1
-
-                # Update message every 10 chunks or when punctuation appears
-                # Only if text actually changed
-                if (
-                    chunk_count % 10 == 0 or chunk in ".!?\n"
-                ) and accumulated_text != last_sent_text:
-                    with contextlib.suppress(Exception):
-                        await temp_message.edit_text(accumulated_text)
-                        last_sent_text = accumulated_text
-
-            # Final update with complete answer (only if different)
-            if accumulated_text != last_sent_text:
-                await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
-            answer = accumulated_text
-
-        except Exception as e:
-            logger.error(f"Streaming error: {e}", exc_info=True)
-            # Fallback to non-streaming
-            answer = await self.llm_service.generate_answer(query, results)
-            await temp_message.edit_text(answer, parse_mode="Markdown")
-
-        # 7. Store assistant answer in conversation
-        await self.cache_service.store_conversation_message(user_id, "assistant", answer)
-
-        # 8. Store in semantic cache for future queries
-        # Uses langcache-embed-v1 (256-dim) for cache indexing
-        await self.cache_service.store_semantic_cache(query, answer)
-
-        # Log cache metrics
-        self.cache_service.log_metrics()
 
     async def _get_sparse_vector(self, text: str) -> dict:
         """Generate BM42 sparse vector via HTTP service.
