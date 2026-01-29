@@ -288,7 +288,7 @@ endif
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-group e2e-setup
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-traces e2e-test-group e2e-setup
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -309,6 +309,11 @@ e2e-test: ## Run E2E tests against Telegram bot
 	@echo "$(BLUE)Running E2E tests...$(NC)"
 	python scripts/e2e/runner.py
 	@echo "$(GREEN)✓ E2E tests complete$(NC)"
+
+e2e-test-traces: ## Run E2E tests + validate Langfuse traces
+	@echo "$(BLUE)Running E2E tests with Langfuse trace validation...$(NC)"
+	E2E_VALIDATE_LANGFUSE=1 python scripts/e2e/runner.py
+	@echo "$(GREEN)✓ E2E tests with trace validation complete$(NC)"
 
 e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=filters)
 	python scripts/e2e/runner.py --group $(GROUP)
