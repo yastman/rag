@@ -247,6 +247,16 @@ class PropertyBot:
                     query=query,
                 )
             await message.answer(cached_answer, parse_mode="Markdown")
+
+            # Log scores to Langfuse (cache hit path)
+            query_type_map = {"chitchat": 0, "simple": 1, "complex": 2}
+            langfuse.score_current_trace(name="semantic_cache_hit", value=1.0)
+            langfuse.score_current_trace(
+                name="query_type",
+                value=float(query_type_map.get(query_type.value, 1)),
+            )
+            langfuse.score_current_trace(name="results_count", value=0.0)
+
             self.cache_service.log_metrics()
             return
 
