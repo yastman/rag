@@ -145,7 +145,9 @@ response = client.query_points(
 | Qdrant      | 6333       | Vector database                                 |
 | Redis       | 6379       | Semantic cache (Redis 8.4 + Query Engine)       |
 | LiteLLM     | 4000       | LLM Gateway (Cerebras → Groq → OpenAI fallback) |
-| Langfuse    | 3001       | LLM tracing                                     |
+| Langfuse    | 3001       | LLM observability v3 (ClickHouse + MinIO)       |
+| ClickHouse  | 8123       | Langfuse analytics storage                      |
+| MinIO       | 9090       | Langfuse S3 storage                             |
 | MLflow      | 5000       | Experiment tracking                             |
 | user-base   | 8003       | Local Russian embeddings (deepvk/USER-base)     |
 
@@ -398,7 +400,7 @@ Claude понимает: прочитать план, запустить `spawn-
 
 ## Testing
 
-**Coverage:** 91% (1626 unit tests)
+**Coverage:** 91% (1584 unit tests)
 
 ```bash
 # Unit tests (fast, no Docker needed)
@@ -468,7 +470,35 @@ Config: `tests/baseline/thresholds.yaml`
 | VoyageService.embed_query | voyage-embed-query | tokens, latency |
 | VoyageService.embed_documents | voyage-embed-documents | tokens, latency |
 | VoyageService.rerank | voyage-rerank | latency, top_k |
-| LLMService (via LiteLLM) | Auto | tokens, cost, latency |
+| QdrantService.hybrid_search_rrf | qdrant-hybrid-search-rrf | latency, results |
+| QdrantService.search_with_score_boosting | qdrant-search-score-boosting | latency, results |
+| CacheService.check_semantic_cache | cache-semantic-check | hit/miss, latency |
+| CacheService.store_semantic_cache | cache-semantic-store | latency |
+| CacheService.get_cached_search | cache-search-check | hit/miss, latency |
+| CacheService.get_cached_rerank | cache-rerank-check | hit/miss, latency |
+| LLMService (via LiteLLM) | Auto (OTEL) | tokens, cost, latency |
+
+### Langfuse v3 Stack (docker-compose.dev.yml)
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| langfuse | 3001 | Web UI + API |
+| langfuse-worker | - | Background processing |
+| clickhouse | 8123, 9009 | Analytics storage |
+| minio | 9090, 9091 | S3 events/media |
+| redis-langfuse | 6380 | Langfuse queues (separate from app Redis) |
+
+### Baseline Module
+
+```
+tests/baseline/
+├── collector.py       # LangfuseMetricsCollector (API + Qdrant + Redis)
+├── manager.py         # BaselineManager + BaselineSnapshot
+├── cli.py             # CLI: compare, set-baseline, report
+├── thresholds.yaml    # Regression detection thresholds
+├── conftest.py        # Fixtures
+└── test_*.py          # Tests (16 passing)
+```
 
 ## E2E Testing (Telegram Bot)
 
