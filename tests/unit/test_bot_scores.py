@@ -6,6 +6,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+EXPECTED_SCORE_NAMES = {
+    "query_type",
+    "latency_total_ms",
+    "semantic_cache_hit",
+    "embeddings_cache_hit",
+    "search_cache_hit",
+    "rerank_applied",
+    "rerank_cache_hit",
+    "results_count",
+    "no_results",
+    "llm_used",
+}
+
+
 class TestHandleQueryScores:
     """Tests for handle_query Langfuse scores."""
 
@@ -91,3 +105,66 @@ class TestHandleQueryScores:
             assert len(score_calls) == 1
             # COMPLEX = 2.0
             assert score_calls[0].kwargs["value"] == 2.0
+
+
+class TestHandleQueryScoresAllPaths:
+    """Tests for scores on all exit paths."""
+
+    @pytest.fixture
+    def mock_message(self):
+        """Create mock Telegram message."""
+        message = MagicMock()
+        message.text = "квартиры до 100000 евро"
+        message.from_user.id = 123456789
+        message.chat.id = 987654321
+        message.message_id = 42
+        message.answer = AsyncMock()
+        message.bot.send_chat_action = AsyncMock()
+        return message
+
+    @pytest.fixture
+    def bot_handler_full(self):
+        """Create PropertyBot handler with all services mocked."""
+        from telegram_bot.bot import PropertyBot
+        from telegram_bot.config import BotConfig
+
+        handler = PropertyBot.__new__(PropertyBot)
+        handler.config = BotConfig(
+            telegram_token="test",
+            voyage_api_key="test",
+            llm_api_key="test",
+            llm_model="test-model",
+            cesc_enabled=False,
+        )
+        handler._cache_initialized = True
+
+        # Mock all services
+        handler.cache_service = MagicMock()
+        handler.cache_service.initialize = AsyncMock()
+        handler.cache_service.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
+        handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
+        handler.cache_service.log_metrics = MagicMock()
+
+        return handler
+
+    @pytest.mark.asyncio
+    async def test_all_10_scores_on_cache_hit(self, bot_handler_full, mock_message):
+        """Cache hit path should write all 10 scores."""
+        from telegram_bot.services import QueryType
+
+        with (
+            patch("telegram_bot.bot.get_client") as mock_get_client,
+            patch("telegram_bot.bot.classify_query") as mock_classify,
+        ):
+            mock_langfuse = MagicMock()
+            mock_get_client.return_value = mock_langfuse
+            mock_classify.return_value = QueryType.COMPLEX
+
+            await bot_handler_full.handle_query(mock_message)
+
+            score_names = {
+                c.kwargs["name"] for c in mock_langfuse.score_current_trace.call_args_list
+            }
+            assert score_names == EXPECTED_SCORE_NAMES, (
+                f"Missing: {EXPECTED_SCORE_NAMES - score_names}"
+            )
