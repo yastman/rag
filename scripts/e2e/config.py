@@ -40,6 +40,12 @@ class E2EConfig:
     ***REMOVED*** Reports
     reports_dir: str = "reports"
 
+    ***REMOVED*** Observability validation (Langfuse)
+    validate_langfuse: bool = field(
+        default_factory=lambda: os.getenv("E2E_VALIDATE_LANGFUSE", "0").lower()
+        in {"1", "true", "yes"}
+    )
+
     def validate(self) -> list[str]:
         """Validate configuration, return list of errors."""
         errors = []

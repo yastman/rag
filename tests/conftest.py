@@ -12,6 +12,10 @@ from dotenv import load_dotenv
 ***REMOVED*** Set testing flag to prevent heavy imports in src/__init__.py
 os.environ["RAG_TESTING"] = "true"
 
+***REMOVED*** Disable Langfuse tracing by default for tests to avoid timeouts when Langfuse
+***REMOVED*** is not running locally. Opt-in in Makefile targets that require tracing.
+os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")
+
 ***REMOVED*** Load environment variables before any imports
 load_dotenv()
 
