@@ -8,6 +8,8 @@ import logging
 import re
 from enum import Enum
 
+from langfuse import get_client, observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +103,7 @@ CHITCHAT_RESPONSES = {
 }
 
 
+@observe(name="query-router")
 def classify_query(query: str) -> QueryType:
     """Classify query type for routing decisions.
 
@@ -111,22 +114,33 @@ def classify_query(query: str) -> QueryType:
         QueryType enum indicating how to handle the query
     """
     query_stripped = query.strip()
+    result = QueryType.COMPLEX  # Default
 
     # Check for chit-chat patterns
     for pattern in _CHITCHAT_COMPILED:
         if pattern.search(query_stripped):
             logger.debug(f"Query classified as CHITCHAT: {pattern.pattern}")
-            return QueryType.CHITCHAT
+            result = QueryType.CHITCHAT
+            break
+    else:
+        # Check for simple patterns (only if not chitchat)
+        for pattern in _SIMPLE_COMPILED:
+            if pattern.search(query_stripped):
+                logger.debug(f"Query classified as SIMPLE: {pattern.pattern}")
+                result = QueryType.SIMPLE
+                break
+        else:
+            # Default to complex (full RAG pipeline)
+            logger.debug("Query classified as COMPLEX (full RAG)")
 
-    # Check for simple patterns
-    for pattern in _SIMPLE_COMPILED:
-        if pattern.search(query_stripped):
-            logger.debug(f"Query classified as SIMPLE: {pattern.pattern}")
-            return QueryType.SIMPLE
+    # Track classification in Langfuse
+    langfuse = get_client()
+    langfuse.update_current_span(
+        input={"query_preview": query[:50]},
+        output={"type": result.value},
+    )
 
-    # Default to complex (full RAG pipeline)
-    logger.debug("Query classified as COMPLEX (full RAG)")
-    return QueryType.COMPLEX
+    return result
 
 
 def get_chitchat_response(query: str) -> str | None:
@@ -146,8 +160,15 @@ def get_chitchat_response(query: str) -> str | None:
     if any(
         re.match(p, query_lower)
         for p in [
-            r"^привет", r"^здравствуй", r"^добр", r"^хай", r"^хелло",
-            r"^hi\b", r"^hello\b", r"^hey\b", r"^good\s+(morning|afternoon|evening)",
+            r"^привет",
+            r"^здравствуй",
+            r"^добр",
+            r"^хай",
+            r"^хелло",
+            r"^hi\b",
+            r"^hello\b",
+            r"^hey\b",
+            r"^good\s+(morning|afternoon|evening)",
         ]
     ):
         return random.choice(CHITCHAT_RESPONSES["greeting"])
@@ -156,8 +177,15 @@ def get_chitchat_response(query: str) -> str | None:
     if any(
         re.match(p, query_lower)
         for p in [
-            r"^спасибо", r"^благодар", r"^круто", r"^отлично", r"^супер",
-            r"^thanks?", r"^thank you", r"^great", r"^awesome",
+            r"^спасибо",
+            r"^благодар",
+            r"^круто",
+            r"^отлично",
+            r"^супер",
+            r"^thanks?",
+            r"^thank you",
+            r"^great",
+            r"^awesome",
         ]
     ):
         return random.choice(CHITCHAT_RESPONSES["thanks"])
@@ -166,8 +194,12 @@ def get_chitchat_response(query: str) -> str | None:
     if any(
         re.match(p, query_lower)
         for p in [
-            r"^что ты (умеешь|можешь)", r"^кто ты", r"^ты бот",
-            r"^what (can you|do you) do", r"^who are you", r"^are you",
+            r"^что ты (умеешь|можешь)",
+            r"^кто ты",
+            r"^ты бот",
+            r"^what (can you|do you) do",
+            r"^who are you",
+            r"^are you",
         ]
     ):
         return random.choice(CHITCHAT_RESPONSES["bot_info"])
@@ -176,8 +208,12 @@ def get_chitchat_response(query: str) -> str | None:
     if any(
         re.match(p, query_lower)
         for p in [
-            r"^пока", r"^до свидания", r"^всего доброго",
-            r"^bye", r"^goodbye", r"^see you",
+            r"^пока",
+            r"^до свидания",
+            r"^всего доброго",
+            r"^bye",
+            r"^goodbye",
+            r"^see you",
         ]
     ):
         return random.choice(CHITCHAT_RESPONSES["farewell"])
