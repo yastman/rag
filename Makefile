@@ -173,10 +173,21 @@ test-redis: ## Verify Redis Query Engine is available
 	@echo "$(BLUE)Testing Redis Query Engine...$(NC)"
 	@docker exec dev-redis redis-cli FT._LIST > /dev/null 2>&1 || \
 		(echo "$(RED)FAIL: FT._LIST not available - Query Engine missing$(NC)" && exit 1)
-	@docker exec dev-redis redis-cli FT.CREATE __test_idx ON HASH PREFIX 1 __test: SCHEMA name TEXT > /dev/null 2>&1 || \
-		(echo "$(RED)FAIL: Cannot create test index$(NC)" && exit 1)
-	@docker exec dev-redis redis-cli FT.DROPINDEX __test_idx > /dev/null 2>&1 || true
-	@echo "$(GREEN)✓ Redis Query Engine OK$(NC)"
+	@echo "  FT._LIST: OK"
+	@docker exec dev-redis redis-cli FT.CREATE __test_vec_idx ON HASH PREFIX 1 __test_vec: SCHEMA name TEXT vec VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE > /dev/null 2>&1 || \
+		(echo "$(RED)FAIL: Cannot create VECTOR index$(NC)" && exit 1)
+	@echo "  FT.CREATE VECTOR: OK"
+	@docker exec dev-redis redis-cli FT.DROPINDEX __test_vec_idx > /dev/null 2>&1 || true
+	@echo "$(GREEN)Query Engine + Vector Search: OK$(NC)"
+	@if [ "$${REQUIRE_REDIS_JSON:-0}" = "1" ]; then \
+		docker exec dev-redis redis-cli JSON.SET __test_json '$$' '{"test":1}' > /dev/null 2>&1 || \
+			(echo "$(RED)FAIL: JSON.SET not available$(NC)" && exit 1); \
+		docker exec dev-redis redis-cli JSON.GET __test_json > /dev/null 2>&1 || \
+			(echo "$(RED)FAIL: JSON.GET not available$(NC)" && exit 1); \
+		docker exec dev-redis redis-cli DEL __test_json > /dev/null 2>&1 || true; \
+		echo "  JSON: OK"; \
+	fi
+	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"
 
 # =============================================================================
 # PROJECT MANAGEMENT
