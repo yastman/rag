@@ -16,6 +16,9 @@
 - import-time сайд-эффекты и тяжелые импорты;
 - несоответствия Docker/compose фактическому использованию RedisVL (нужен Redis Stack);
 - не герметичные тесты по observability (OTEL export пытается ходить в локальный Langfuse).
+- повышенная “поверхность атаки” dev-стека (много портов наружу) + dev-дефолты паролей/секретов;
+- риски запуска стека из-за healthcheck/depends_on (MinIO) и отсутствия restart policy у базовых сервисов;
+- риск утечки env-файлов в Docker build context из-за слабого `.dockerignore` (особенно при `COPY . .`).
 
 ---
 
@@ -58,6 +61,12 @@ Workflow’ы лежат в `.github/workflows.disabled/`. Это снижает
 Результат: семантический кэш либо не будет работать, либо будет отключаться/падать (в зависимости от конфигурации и обработки ошибок), а поведение станет “неочевидным”.
 
 **Немедленное действие:** перейти на Redis Stack образ в средах, где включен SemanticCache, либо явно выключить SemanticCache.
+
+### P0.4 Docker dev-стек может “не подниматься” из-за healthcheck/depends_on
+
+В dev compose важные части Langfuse зависят от MinIO. Если healthcheck MinIO не проходит (например, из-за отсутствия `mc` в образе), downstream сервисы могут не стартовать из-за `depends_on`.
+
+**Немедленное действие:** починить healthcheck MinIO на корректный для образа (или использовать образ/entrypoint, где есть `mc`), затем пересоздать стек из актуального compose.
 
 ---
 
@@ -167,22 +176,100 @@ Workflow’ы лежат в `.github/workflows.disabled/`. Это снижает
 
 ## 7) Дорожная карта (приоритеты)
 
-**P0 (сегодня/завтра)**
-- Удалить `.env.server` из git (и истории при необходимости), подтвердить отсутствие реальных ключей в истории/артефактах.
-- Включить CI (перенести workflow из `.github/workflows.disabled/`).
-- Добавить secret scanning (pre-commit + CI).
-- Починить Redis образ для RedisVL (Redis Stack) или выключить SemanticCache.
+Ниже — приоритизированный план работ “как серия PR”, с критериями готовности (Definition of Done).
 
-**P1 (1–2 недели)**
-- Убрать import-time `settings = Settings()` и валидацию ключей при импорте.
-- Привести dependency management к единому источнику истины + lockfile.
-- Убрать eager-import `telegram_bot/services/__init__.py`.
-- Сделать unit-тесты герметичными к внешним OTEL/Langfuse отправкам.
+### P0 (сегодня/завтра) — блокеры/риски
 
-**P2 (1–2 месяца)**
-- Перевести LLM слой на SDK (OpenAI SDK поверх LiteLLM).
-- Свести дублирующиеся gateway/clients (Qdrant/Redis/LLM).
-- Явно разделить `src/` и `telegram_bot/` как “library vs product” или унифицировать в один продуктовый путь.
+**P0.1 Секреты и env-гигиена**
+- Действия:
+  - удалить tracked `.env.server` из репозитория; при необходимости очистить историю (`git filter-repo`/BFG) и ротировать ключи;
+  - усилить `.dockerignore` (добавить `.env.*` как минимум), чтобы env не попадали в build context.
+- DoD:
+  - `git ls-files | rg '^\\.env\\.server$'` → пусто;
+  - в CI/локально есть проверка, которая падает при обнаружении секретов/ключей;
+  - `docker build` не видит `.env.*` в контексте (проверяется через временный debug build или списком файлов в контексте).
+
+**P0.2 Включить CI “минимальный gate”**
+- Действия:
+  - вернуть workflow из `.github/workflows.disabled/` в `.github/workflows/` (минимум: ruff + format-check).
+- DoD:
+  - на PR запускается workflow и блокирует merge при падении.
+
+**P0.3 Docker dev-стек: чтобы поднимался предсказуемо**
+- Действия:
+  - исправить MinIO healthcheck на корректный для образа (или сменить образ/entrypoint), иначе Langfuse может не стартовать по `depends_on`;
+  - добавить `restart: unless-stopped` для базовых сервисов dev-стека (Postgres/Redis/Qdrant/Langfuse/ClickHouse/MinIO/MLflow/LiteLLM — минимум по необходимости);
+  - пересоздать стек (устранить drift), убрать orphan’ы.
+- DoD:
+  - `docker compose -f docker-compose.dev.yml up -d` поднимает основные сервисы в `healthy` без ручного “пинка”;
+  - после рестарта Docker Desktop сервисы возвращаются автоматически.
+
+**P0.4 RedisVL SemanticCache: сделать “по-настоящему”**
+- Действия:
+  - если SemanticCache используется в продуктовой логике — заменить `redis:8.4.0` на Redis Stack образ в dev/local;
+  - иначе — отключить semantic cache явно и задокументировать.
+- DoD:
+  - `CacheService.initialize()` в dev не падает и реально создаёт индексы/использует vector search (а не просто “молча отключается”);
+  - есть smoke проверка наличия нужных модулей Redis (аналог `make test-redis`, но соответствующая текущему образу).
+
+### P1 (1–2 недели) — воспроизводимость/поддерживаемость
+
+**P1.1 Убрать import-time сайд-эффекты**
+- Действия:
+  - удалить/лениво инициализировать `settings = Settings()` в `src/config/settings.py`;
+  - разделить “загрузку настроек” и “валидацию ключей” (валидировать при использовании, не при импорте).
+- DoD:
+  - импорт `src.*` не требует наличия ключей/сервисов;
+  - unit-тесты не ломаются из-за отсутствия env.
+
+**P1.2 Ускорить/упростить импорты `telegram_bot/services`**
+- Действия:
+  - убрать eager-importы из `telegram_bot/services/__init__.py` (оставить минимум или перейти на explicit imports).
+- DoD:
+  - `python -c "import telegram_bot.services.cache"` не “висит” и не тянет тяжёлые зависимости без необходимости.
+
+**P1.3 Герметичность тестов по observability**
+- Действия:
+  - в unit-тестах по умолчанию полностью отключить OTEL/Langfuse экспорт (чтобы не было попыток ходить в `localhost:3001`);
+  - оставить opt-in режим для e2e/интеграционных тестов.
+- DoD:
+  - `pytest tests/unit` не делает внешних сетевых запросов к Langfuse/OTEL endpoint’ам.
+
+**P1.4 Dependency management: один источник истины + lock**
+- Действия:
+  - выбрать стратегию (uv / pip-tools / poetry) и зафиксировать процесс;
+  - привести Docker и локальную установку к одному пути установки зависимостей.
+- DoD:
+  - воспроизводимое окружение (одинаковые версии в CI/Docker/локально);
+  - документированная команда установки (1 путь, не 3 разных).
+
+**P1.5 Сократить поверхность атаки dev-стека**
+- Действия:
+  - биндинг портов на `127.0.0.1` (или убрать наружные порты для внутренних сервисов);
+  - вынести dev-дефолты паролей/секретов в `.env` и убрать “опасные дефолты”.
+- DoD:
+  - при поднятии dev-стека наружу торчит только то, что реально нужно разработчику (обычно UI).
+
+### P2 (1–2 месяца) — SDK-first и консолидация
+
+**P2.1 LLM слой на SDK (вместо ручного httpx/SSE)**
+- Действия:
+  - перевести `telegram_bot/services/llm.py` и `telegram_bot/services/query_analyzer.py` на официальный OpenAI SDK, направив его на LiteLLM (OpenAI-compatible).
+- DoD:
+  - исчезает ручной парсинг SSE и дублирование логики ошибок;
+  - покрытие тестами не ухудшается (или улучшается) при меньшем объёме кода.
+
+**P2.2 Один Qdrant gateway**
+- Действия:
+  - убрать дублирование `RetrieverService` vs `QdrantService`, оставить один “умный” gateway и использовать его везде в продуктовой ветке.
+- DoD:
+  - одно место, где реализованы фильтры/Prefetch/Fusion/quantization параметры.
+
+**P2.3 Явно разделить “library vs product”**
+- Действия:
+  - либо отделить `src/` как библиотеку/эксперименты (без зависимости от `telegram_bot/`), либо унифицировать продуктовый путь и удалить/заморозить лишние реализации.
+- DoD:
+  - отсутствуют дублирующиеся реализации одних и тех же концепций без явной причины.
 
 ---
 
@@ -192,3 +279,102 @@ Workflow’ы лежат в `.github/workflows.disabled/`. Это снижает
 - `venv/bin/python -m pytest -q tests/unit/test_settings.py`
 - `venv/bin/python -m pytest -q tests/unit/services/test_llm.py`
 - `docker compose -f docker-compose.dev.yml ps` (healthchecks)
+
+---
+
+## 9) Docker/Compose контейнеры (дополнение: консолидировано из `DOCKER_CONTAINERS_REPORT.md`)
+
+### 9.1 Снимок окружения (на машине аудита)
+
+- Docker Engine: `28.5.1` (Docker Desktop `4.50.0`)
+- Docker Compose: `v2.40.3-desktop.1`
+- Docker Scout CLI: `v1.18.3` (для анализа уязвимостей/quickview требует `docker login`)
+
+### 9.2 Инвентаризация: что обнаружено в репозитории
+
+Compose-файлы:
+- `docker-compose.dev.yml` — полный dev-стек
+- `docker-compose.local.yml` — минимальный локальный стек
+
+Dockerfile’ы:
+- `Dockerfile` (корень)
+- `telegram_bot/Dockerfile`
+- `docker/mlflow/Dockerfile`
+- `services/bge-m3-api/Dockerfile`
+- `services/bm42/Dockerfile`
+- `services/user-base/Dockerfile`
+
+Доп. конфиги:
+- `docker/litellm/config.yaml`
+- `docker/postgres/init/00-init-databases.sql`
+
+### 9.3 Текущее состояние контейнеров (по факту на машине аудита)
+
+Наблюдение из контейнерного отчёта:
+- проект в `docker compose ls`: `rag-fresh` — `running(1)` (из всего стека реально запущен только 1 контейнер);
+- `dev-bot` — `Up (healthy)`;
+- `dev-docling` — `Exited (137)` и `OOMKilled=true` (падение по памяти);
+- `dev-langfuse` — `Exited (1)`;
+- `dev-redis`, `dev-qdrant`, `dev-postgres`, `dev-bge-m3`, `dev-bm42`, `dev-user-base`, `dev-litellm`, `dev-mlflow`, `dev-lightrag` — `Exited (255)` примерно в один момент времени.
+
+Интерпретация:
+- массовый `Exit 255` в один момент часто похоже на “Docker/WSL/Docker Desktop был остановлен/перезапущен”;
+- у большинства сервисов compose **нет `restart:`**, поэтому они не поднялись автоматически;
+- `dev-bot` имеет `restart: unless-stopped`, поэтому он вернулся.
+
+### 9.4 Порты наружу (поверхность атаки + конфликты)
+
+Проброшены в хост почти все ключевые сервисы (Postgres/Redis/Qdrant/ClickHouse/MinIO/Langfuse/MLflow/LiteLLM и AI сервисы).
+Риск: Docker публикует на `0.0.0.0` по умолчанию; при доступном из сети хосте это становится реальной поверхностью атаки, а часть паролей/ключей — dev-дефолты.
+
+### 9.5 Лимиты ресурсов: применяются не везде
+
+В `docker-compose.dev.yml` лимиты памяти заданы через `deploy.resources.limits.memory` для `bge-m3`, `bm42`, `user-base`, `docling`, `litellm`, `bot`, но не заданы для Postgres/Redis/Qdrant/Langfuse/ClickHouse/MinIO/MLflow и т.д.
+
+Следствие:
+- возможны OOM/высокое давление на память/IO при поднятии полного стека;
+- Docling уже упал по OOM при лимите 4G.
+
+### 9.6 Dev-секреты/дефолты (важно даже в dev)
+
+Примеры значений “по умолчанию” в compose:
+- Postgres: `POSTGRES_PASSWORD=postgres`
+- MinIO: `MINIO_ROOT_PASSWORD=miniosecret`
+- ClickHouse: `CLICKHOUSE_PASSWORD=clickhouse`
+- Langfuse: `NEXTAUTH_SECRET=dev-secret-change-in-production`, `SALT=dev-salt-change-in-production`
+- LiteLLM: `LITELLM_MASTER_KEY` по умолчанию `sk-litellm-master-dev`
+
+Рекомендация: вынести в `.env` и не публиковать порты наружу (или биндинг на `127.0.0.1`) даже для dev.
+
+### 9.7 Healthchecks и зависимости (`depends_on`)
+
+Наблюдение: `bot` зависит от `redis/qdrant/bm42/user-base/litellm` по `condition: service_healthy`. Это хорошо, но повышает требования к корректности healthcheck’ов.
+
+Риск по MinIO:
+- healthcheck задан как `["CMD", "mc", "ready", "local"]`;
+- в `minio/minio:latest` утилита `mc` может отсутствовать, из-за чего healthcheck может падать всегда;
+- если MinIO будет `unhealthy`, Langfuse v3/worker (и далее LiteLLM) могут не стартовать из-за `depends_on`.
+
+### 9.8 Postgres + LiteLLM: миграции схемы
+
+`docker/postgres/init/00-init-databases.sql` создает базы `langfuse`, `mlflow`, `litellm`, но не применяет миграции схемы LiteLLM.
+
+Вероятная причина ошибок вида `relation ... does not exist`: LiteLLM использует Prisma-схему и требует миграций/инициализации. Обычно для этого включают автоприменение миграций флагом/настройкой в LiteLLM proxy.
+
+### 9.9 `.dockerignore` и риск утечки секретов в build context
+
+`.dockerignore` игнорирует `.env`, но не гарантирует игнорирование `.env.local`, `.env.server`, `.env.*`.
+
+Риск: при `docker build` env-файлы могут попасть в build context и “запечься” в слоях/кэше (особенно если где-то есть `COPY . .`).
+
+### 9.10 Рекомендации (приоритет)
+
+P0 (устойчивость запуска):
+1) Устранить drift: пересоздать контейнеры из текущего compose (`down` → `up -d --remove-orphans`).
+2) Исправить healthcheck для `minio` (иначе Langfuse v3/worker/LiteLLM могут не запускаться по `depends_on`).
+3) Добавить `restart: unless-stopped` для базовых сервисов (`postgres`, `redis`, `qdrant`, `mlflow`, `lightrag` и т.д.), иначе после рестарта Docker все останется `Exited`.
+
+P1 (безопасность и гигиена):
+4) Закрыть публикацию портов наружу: биндинг на `127.0.0.1:PORT:PORT` как минимум для Postgres/Redis/ClickHouse/MinIO.
+5) Убрать dev-секреты из compose в `.env` (или хотя бы не оставлять опасные дефолты).
+6) Усилить `.dockerignore`: добавить `.env.*` и другие чувствительные паттерны, которые не должны попадать в build context.

@@ -207,5 +207,45 @@ class Settings:
         )
 
 
-# Global settings instance (created once at import time)
-settings = Settings()
+# Lazy settings singleton
+_settings: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """
+    Get the global settings instance (lazy initialization).
+
+    Settings are created on first call, not at import time.
+    This allows importing the module without requiring API keys.
+
+    Example:
+        >>> from src.config.settings import get_settings
+        >>> settings = get_settings()
+        >>> settings.qdrant_url
+        'http://localhost:6333'
+    """
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings
+
+
+# Backward compatibility: settings is now a property-like object
+# that creates Settings on first attribute access
+class _LazySettings:
+    """Lazy proxy for backward compatibility with `from src.config.settings import settings`."""
+
+    _instance: Settings | None = None
+
+    def __getattr__(self, name: str):
+        if self._instance is None:
+            self._instance = Settings()
+        return getattr(self._instance, name)
+
+    def __repr__(self) -> str:
+        if self._instance is None:
+            return "LazySettings(not initialized)"
+        return repr(self._instance)
+
+
+settings = _LazySettings()
