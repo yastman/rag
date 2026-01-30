@@ -2,21 +2,26 @@
 
 Reranking improves retrieval accuracy by 10-15% NDCG.
 Uses lightweight cross-encoder for CPU inference (~50-100ms latency).
+
+NOTE: sentence_transformers is imported lazily to avoid pulling torch
+for bot runtime. Install with: uv sync --group indexing
 """
 
 import logging
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from sentence_transformers import CrossEncoder
+
+if TYPE_CHECKING:
+    from sentence_transformers import CrossEncoder
 
 
 logger = logging.getLogger(__name__)
 
-# Global singleton
-_cross_encoder: Optional[CrossEncoder] = None
+# Global singleton (type: CrossEncoder when loaded)
+_cross_encoder: Optional[Any] = None
 
 
-def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> CrossEncoder:
+def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> "CrossEncoder":
     """
     Get singleton cross-encoder model.
 
@@ -30,10 +35,21 @@ def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") 
 
     Returns:
         Shared CrossEncoder instance
+
+    Raises:
+        ImportError: If sentence_transformers not installed
     """
     global _cross_encoder
 
     if _cross_encoder is None:
+        try:
+            from sentence_transformers import CrossEncoder
+        except ImportError as e:
+            raise ImportError(
+                "sentence_transformers not installed. This is a heavy ML package. "
+                "Run: uv sync --group indexing"
+            ) from e
+
         logger.info(f"Loading cross-encoder: {model_name}")
         _cross_encoder = CrossEncoder(model_name, max_length=512)
         logger.info("Cross-encoder loaded successfully")
