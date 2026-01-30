@@ -16,20 +16,28 @@ class TestMainFunction:
 
     @pytest.fixture(autouse=True)
     def cleanup_modules(self):
-        """Clear module cache before and after each test."""
-        # Remove cached modules
-        modules_to_remove = [
-            k for k in list(sys.modules.keys()) if k.startswith("telegram_bot.main")
-        ]
-        for mod in modules_to_remove:
-            del sys.modules[mod]
+        """Clear module cache before and after each test.
+
+        Clears all telegram_bot and src.observability modules to ensure
+        fresh imports and prevent state pollution between tests.
+        """
+        prefixes = (
+            "telegram_bot.main",
+            "telegram_bot.bot",
+            "telegram_bot.config",
+            "telegram_bot.logging_config",
+            "telegram_bot.services",
+            "src.observability",
+        )
+
+        def _clear():
+            for key in list(sys.modules.keys()):
+                if key.startswith(prefixes):
+                    sys.modules.pop(key, None)
+
+        _clear()
         yield
-        # Cleanup after
-        modules_to_remove = [
-            k for k in list(sys.modules.keys()) if k.startswith("telegram_bot.main")
-        ]
-        for mod in modules_to_remove:
-            del sys.modules[mod]
+        _clear()
 
     @pytest.mark.asyncio
     async def test_main_success_flow(self):

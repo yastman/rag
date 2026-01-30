@@ -4,6 +4,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def fresh_otel_setup_module():
+    """Clear src.observability.otel_setup from cache to ensure fresh import.
+
+    NOTE: We do NOT mock opentelemetry hierarchy in sys.modules - that's fragile.
+    Instead, we rely on targeted patches inside test functions.
+    """
+    # Clear only our module, not opentelemetry itself
+    sys.modules.pop("src.observability.otel_setup", None)
+    sys.modules.pop("src.observability", None)
+    yield
+    sys.modules.pop("src.observability.otel_setup", None)
+    sys.modules.pop("src.observability", None)
+
+
 def reset_otel_mocks():
     """Reset all OpenTelemetry mocks to fresh state."""
     mocks = {
@@ -33,11 +48,13 @@ def reset_otel_mocks():
 # Pre-mock opentelemetry to avoid import side effects
 reset_otel_mocks()
 
-from src.observability.otel_setup import TracedRAGPipeline, setup_opentelemetry
-
 
 def test_setup_opentelemetry():
     """Test OpenTelemetry setup creates providers and configures exporters."""
+    # Import INSIDE test to get fresh module after fixture clears cache
+    # Then patches on module attributes will take effect
+    from src.observability.otel_setup import setup_opentelemetry
+
     # Use patching on the module's imported names
     with (
         patch("src.observability.otel_setup.trace") as mock_trace,
@@ -68,6 +85,9 @@ def test_setup_opentelemetry():
 
 @pytest.mark.asyncio
 async def test_traced_pipeline_query():
+    # Import INSIDE test to get fresh module after fixture clears cache
+    from src.observability.otel_setup import TracedRAGPipeline
+
     pipeline = TracedRAGPipeline()
 
     # Mock internal methods using patches on instance

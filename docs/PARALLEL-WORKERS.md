@@ -76,9 +76,7 @@ spawn-claude "ПРОМПТ" "ПУТЬ"
 ```bash
 spawn-claude "W{N}: {Краткое описание задачи}.
 
-REQUIRED SKILLS:
-- superpowers:executing-plans
-- superpowers:verification-before-completion
+REQUIRED SKILL: superpowers:executing-plans
 
 План: docs/plans/YYYY-MM-DD-task.md
 Задачи: Task N
@@ -90,6 +88,7 @@ REQUIRED SKILLS:
 - Не дублируй содержимое плана в промпте — воркер сам прочитает
 - Указывай только номера задач, не пересказывай шаги
 - Скилл `executing-plans` обеспечит правильное выполнение
+- **Verification:** Оркестратор вызывает `superpowers:verification-before-completion` ПОСЛЕ завершения всех воркеров
 
 ## Пример: 4 воркера
 
@@ -97,17 +96,13 @@ REQUIRED SKILLS:
 PROJECT="/mnt/c/Users/user/Documents/Сайты/rag-fresh"
 
 spawn-claude "W1: Task 3 - Test Scenarios.
-REQUIRED SKILLS:
-- superpowers:executing-plans
-- superpowers:verification-before-completion
+REQUIRED SKILL: superpowers:executing-plans
 План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
 Задача: Task 3
 НЕ ДЕЛАЙ git commit" $PROJECT
 
 spawn-claude "W2: Task 4 - Telethon Client.
-REQUIRED SKILLS:
-- superpowers:executing-plans
-- superpowers:verification-before-completion
+REQUIRED SKILL: superpowers:executing-plans
 План: docs/plans/2026-01-27-e2e-bot-testing-impl.md
 Задача: Task 4
 НЕ ДЕЛАЙ git commit" $PROJECT
@@ -128,6 +123,7 @@ W2: 3,4
 - Запустить `spawn-claude` для каждого воркера с правильными скиллами
 - Я (Claude) — оркестратор: не делаю задачи сам, только коммичу после воркеров
 - Воркеры НЕ делают коммиты
+- После завершения воркеров оркестратор вызывает `superpowers:verification-before-completion`
 
 ## Мониторинг прогресса
 
