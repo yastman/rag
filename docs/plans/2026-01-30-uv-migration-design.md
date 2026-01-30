@@ -232,7 +232,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Установка uv (пинить версию!)
-COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /usr/local/bin/uv
 
 # Кэширование: сначала только файлы зависимостей
 COPY pyproject.toml uv.lock ./
@@ -262,7 +262,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Установка uv (пинить версию!)
-COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /usr/local/bin/uv
 
 # Кэширование зависимостей
 COPY pyproject.toml uv.lock ./
@@ -286,7 +286,7 @@ CMD ["uv", "run", "python", "app.py"]
 
 | Принцип | Реализация |
 |---------|------------|
-| Версия uv пинится | `ghcr.io/astral-sh/uv:0.5.14` |
+| Версия uv пинится | `ghcr.io/astral-sh/uv:0.9.26` |
 | Кэширование слоёв | COPY pyproject.toml + uv.lock перед кодом |
 | Воспроизводимость | `--frozen` — падает если lock устарел |
 | Без установки проекта | `--no-install-project` |
@@ -315,7 +315,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: "0.5.14"
+          version: "0.9.26"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -343,7 +343,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: "0.5.14"
+          version: "0.9.26"
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
@@ -362,7 +362,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: "0.5.14"
+          version: "0.9.26"
 
       - name: Check lock is up-to-date
         run: uv lock --check
@@ -370,7 +370,7 @@ jobs:
 
 ### Принципы CI
 
-- Версия uv пинится: `0.5.14`
+- Версия uv пинится: `0.9.26`
 - Lock проверяется: `uv lock --check` падает если устарел
 - Установка строгая: `--frozen`
 - Matrix: Python 3.11 и 3.12
