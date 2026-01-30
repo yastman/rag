@@ -1,4 +1,10 @@
+# Virtual environments
 venv/
+.venv/
+env/
+ENV/
+
+# Python bytecode
 __pycache__/
 *.pyc
 *.pyo
@@ -9,12 +15,51 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Secrets and environment files
+.env
+.env.*
+.env.local
+.env.server
+.env.production
+*.pem
+*.key
+credentials.json
+secrets/
+
+# Git
 .git/
 .gitignore
-.env
-*.log
+.github/
+
+# IDE
+.vscode/
+.idea/
+
+# Tests and coverage
 .pytest_cache/
 .mypy_cache/
 .coverage
 htmlcov/
+.tox/
+tests/
+
+# Logs and temp
+*.log
 .DS_Store
+tmp/
+temp/
+
+# Documentation and reports
+docs/
+reports/
+*.md
+!README.md
+
+# MLflow and experiment tracking
+mlruns/
+.mlflow/
+
+# Data files (usually mounted as volumes)
+data/
+qdrant_storage/
