@@ -83,6 +83,29 @@ class TestBotConfig:
         config = reload_config({})
         assert config.telegram_token == ""
 
+    def test_qdrant_api_key_none_when_missing(self, reload_config):
+        """Test that missing QDRANT_API_KEY results in None, not empty string.
+
+        This prevents 'Api key is used with an insecure connection' warning
+        when connecting to Qdrant over HTTP without authentication.
+        """
+        config = reload_config({})
+        assert config.qdrant_api_key is None
+
+    def test_qdrant_api_key_none_when_empty(self, reload_config):
+        """Test that empty QDRANT_API_KEY results in None.
+
+        Regression test: empty string was being passed to AsyncQdrantClient,
+        triggering insecure connection warning even without real API key.
+        """
+        config = reload_config({"QDRANT_API_KEY": ""})
+        assert config.qdrant_api_key is None
+
+    def test_qdrant_api_key_preserved_when_set(self, reload_config):
+        """Test that valid QDRANT_API_KEY is preserved."""
+        config = reload_config({"QDRANT_API_KEY": "real-api-key"})
+        assert config.qdrant_api_key == "real-api-key"
+
     def test_rag_settings_defaults(self, reload_config):
         """Test RAG settings have correct defaults."""
         config = reload_config({})
