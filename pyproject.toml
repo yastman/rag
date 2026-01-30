@@ -30,6 +30,8 @@ dependencies = [
     ***REMOVED*** AI Integration (2026-01-21)
     "voyageai>=0.3.0",        ***REMOVED*** AI embeddings and reranking
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
+    "redis>=7.0.1",
+    "aiogram>=3.22.0",
 ]
 
 [project.optional-dependencies]
@@ -325,4 +327,10 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
     "@abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.2.0",
+    "pytest-httpx>=0.35.0",
 ]
