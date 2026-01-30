@@ -18,7 +18,7 @@ make test-redis         # Verify Redis Query Engine
 
 **Contextual RAG Pipeline** - Production RAG system with hybrid search (RRF + ColBERT), Voyage AI embeddings, multi-level caching, and Telegram bot.
 
-**Python:** 3.12+ | **LLM:** Cerebras gpt-oss-120b via LiteLLM | **Embeddings:** Voyage AI
+**Python:** 3.9+ (3.12 recommended) | **LLM:** Cerebras GLM-4.7 via LiteLLM | **Embeddings:** Voyage AI
 **Use cases:** Bulgarian property catalogs (192 docs), Ukrainian Criminal Code (1,294 docs)
 
 ## Build & Development Commands
@@ -90,8 +90,11 @@ Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
 | `UserContextService` | Extracts user preferences from queries via LLM                           |
 | `CESCPersonalizer`   | **Lazy** personalization with marker detection (`is_personalized_query`) |
 | `LLMService`         | LLM interaction with streaming and fallbacks via LiteLLM                 |
-| `observability`      | PII masking + Langfuse client initialization (`mask_pii`, `get_langfuse_client`) |
 | `UserBaseVectorizer` | Local Russian embeddings (deepvk/USER-base, ruMTEB #1)                   |
+
+**Observability** (separate module `telegram_bot/observability.py`):
+- `mask_pii()` - PII masking for logs
+- `get_langfuse_client()` - Langfuse client initialization
 
 **Legacy services** (backward compatibility, use VoyageService for new code):
 
@@ -162,12 +165,9 @@ Bot → LiteLLM Proxy (:4000) → Cerebras/Groq/OpenAI → Langfuse tracing
 
 | Model | Provider | Purpose |
 |-------|----------|---------|
-| `gpt-oss-120b` | Cerebras | Production (reasoning model) |
-| `gpt-4o-mini` | Cerebras GLM-4.7 | Dev/Test (fast) |
-| `gpt-4o-mini-fallback` | Groq | Fallback 1 |
-| `gpt-4o-mini-openai` | OpenAI | Fallback 2 |
-
-**Key setting:** `reasoning_format: hidden` — removes model's internal reasoning from responses.
+| `gpt-4o-mini` | Cerebras (zai-glm-4.7) | Primary model |
+| `gpt-4o-mini-fallback` | Groq (llama-3.1-70b) | Fallback 1 |
+| `gpt-4o-mini-openai` | OpenAI (gpt-4o-mini) | Fallback 2 |
 
 ## Code Patterns
 
@@ -410,7 +410,7 @@ Claude понимает: прочитать план, запустить `spawn-
 
 ## Testing
 
-**Coverage:** 91% (1660 unit tests)
+**Coverage:** 91% (~1600 unit tests)
 
 ```bash
 # Unit tests (fast, no Docker needed)
@@ -600,7 +600,7 @@ Bot responses use Markdown formatting (`parse_mode="Markdown"`).
 
 ## Qdrant Collections
 
-- `contextual_bulgaria_voyage4` - Bulgarian property data (192 documents: 92 real + 100 test, Voyage-4 embeddings, Binary Quantization)
+- `contextual_bulgaria_voyage` - Bulgarian property data (192 documents: 92 real + 100 test, Voyage-4 embeddings, Binary Quantization)
   - Test data marked with `is_test_data: true` payload field
   - Test data IDs: 900000-900099
 - `legal_documents` - Ukrainian Criminal Code (1,294 documents, BGE-M3 embeddings)
@@ -623,6 +623,7 @@ make deploy-release VERSION=2.12.0
 | `Qdrant timeout` | Collection too large | Enable `use_quantization=True` |
 | `LiteLLM unhealthy` | Slow startup | Wait 30s, check `docker logs dev-litellm` |
 | `Langfuse invalid credentials` | Wrong keys | Get keys from Langfuse UI → Settings → API Keys |
+| `column does not exist` (Langfuse startup) | Race condition | Safe to ignore, resolves after ~30s when migrations complete |
 | `Voyage API 429` | Rate limit | Use `CacheService`, add delays in batch ops |
 
 ## API Rate Limits
