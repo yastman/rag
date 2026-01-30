@@ -141,6 +141,7 @@ evaluation/evaluation/
 
 ***REMOVED*** Sensitive files
 .env
+.env.*
 .env.local
 .env.server
 .env.production
