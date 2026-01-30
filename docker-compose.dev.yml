@@ -11,8 +11,9 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     container_name: dev-postgres
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -28,15 +29,14 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:8.4.0
+    image: redis/redis-stack-server:7.4.0-v3
     container_name: dev-redis
+    restart: unless-stopped
     ports:
-      - "6379:6379"
-    command: >
-      redis-server
-      --maxmemory 512mb
-      --maxmemory-policy allkeys-lfu
-      --appendonly yes
+      - "127.0.0.1:6379:6379"
+    environment:
+      # Redis Stack includes RediSearch, RedisJSON, RedisTimeSeries
+      REDIS_ARGS: "--maxmemory 512mb --maxmemory-policy allkeys-lfu --appendonly yes"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -48,9 +48,10 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.16
     container_name: dev-qdrant
+    restart: unless-stopped
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
@@ -72,7 +73,7 @@ services:
       dockerfile: Dockerfile
     container_name: dev-bge-m3
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - bge_models:/models
     environment:
@@ -96,7 +97,7 @@ services:
       dockerfile: Dockerfile
     container_name: dev-bm42
     ports:
-      - "8002:8000"
+      - "127.0.0.1:8002:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -114,7 +115,7 @@ services:
       dockerfile: Dockerfile
     container_name: dev-user-base
     ports:
-      - "8003:8000"
+      - "127.0.0.1:8003:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -130,7 +131,7 @@ services:
     image: ghcr.io/docling-project/docling-serve-cpu:main
     container_name: dev-docling
     ports:
-      - "5001:5001"
+      - "127.0.0.1:5001:5001"
     environment:
       UVICORN_HOST: 0.0.0.0
       UVICORN_PORT: 5001
@@ -148,8 +149,9 @@ services:
   lightrag:
     image: ghcr.io/hkuds/lightrag:v1.4.9.11
     container_name: dev-lightrag
+    restart: unless-stopped
     ports:
-      - "9621:9621"
+      - "127.0.0.1:9621:9621"
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
       LLM_BINDING: openai
@@ -174,6 +176,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
     container_name: dev-clickhouse
+    restart: unless-stopped
     user: "101:101"
     environment:
       CLICKHOUSE_DB: default
@@ -183,8 +186,8 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
     ports:
-      - "8123:8123"
-      - "9009:9000"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9009:9000"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1"]
       interval: 5s
@@ -196,29 +199,31 @@ services:
   minio:
     image: minio/minio:latest
     container_name: dev-minio
+    restart: unless-stopped
     entrypoint: sh
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: minio
       MINIO_ROOT_PASSWORD: miniosecret
     ports:
-      - "9090:9000"
-      - "9091:9001"
+      - "127.0.0.1:9090:9000"
+      - "127.0.0.1:9091:9001"
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 10s
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
     image: redis:8.4.0
     container_name: dev-redis-langfuse
+    restart: unless-stopped
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     command: redis-server --requirepass langfuseredis
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "langfuseredis", "ping"]
@@ -310,8 +315,9 @@ services:
       context: ./docker/mlflow
       dockerfile: Dockerfile
     container_name: dev-mlflow
+    restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     environment:
       MLFLOW_BACKEND_STORE_URI: postgresql://postgres:postgres@postgres:5432/mlflow
       MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
