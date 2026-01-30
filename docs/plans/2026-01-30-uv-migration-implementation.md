@@ -6,7 +6,7 @@
 
 **Architecture:** Single source of truth in pyproject.toml with uv.lock. Mode: no-install-project (deps only, run via `uv run`). ML-service bge-m3-api gets separate pyproject.toml + uv.lock. All Dockerfiles and Makefile switch to uv.
 
-**Tech Stack:** uv 0.5.14+, Python 3.11+, PEP 735 dependency-groups, Docker multi-stage with uv
+**Tech Stack:** uv 0.9.x (pinned), Python 3.11+, PEP 735 dependency-groups, Docker with uv
 
 **Design Document:** `docs/plans/2026-01-30-uv-migration-design.md`
 
@@ -56,7 +56,8 @@ dependencies = [
 ]
 
 [tool.uv]
-# No dev dependencies for this service
+# Use CPU-only PyTorch wheels to avoid CUDA dependencies and reduce image size
+index-url = "https://download.pytorch.org/whl/cpu"
 ```
 
 **Step 2: Verify file created**
@@ -129,8 +130,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install build dependencies (in case any package needs compilation)
+# Can be removed if all deps have pre-built wheels for linux/amd64
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv (pinned version for reproducibility)
-COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /usr/local/bin/uv
 
 # Cache: copy only dependency files first
 COPY pyproject.toml uv.lock ./
@@ -155,6 +162,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 # Run with uv
 CMD ["uv", "run", "python", "app.py"]
 ```
+
+**Note:** If all packages have pre-built wheels for python:3.11-slim, the build-essential step can be removed to reduce image size.
 
 **Step 3: Verify Dockerfile syntax**
 
@@ -214,10 +223,11 @@ requires-python = ">=3.11"
 
 **Step 2: Add dependency-groups section after optional-dependencies**
 
-After line 60 (after the `all = [...]` section), add:
+After line 60 (after the `all = [...]` section), add the following.
+
+**IMPORTANT:** Do NOT add any `---` separators — this is TOML, not YAML. Just add a blank line and the new section:
 
 ```toml
-
 [dependency-groups]
 # For uv sync --group dev
 dev = [
@@ -532,8 +542,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install build dependencies (in case any package needs compilation)
+# Can be removed if all deps have pre-built wheels for linux/amd64
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv (pinned version for reproducibility)
-COPY --from=ghcr.io/astral-sh/uv:0.5.14 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /usr/local/bin/uv
 
 # Cache: copy only dependency files first
 COPY pyproject.toml uv.lock ./
@@ -562,6 +578,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 # Run bot with uv
 CMD ["uv", "run", "python", "-m", "telegram_bot.main"]
 ```
+
+**Note:** If all packages have pre-built wheels, the build-essential step can be removed. Current bot deps (aiogram, httpx, redis) typically have wheels available.
 
 **Step 2: Commit**
 
@@ -627,7 +645,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: "0.5.14"
+          version: "0.9.26"
 
       - name: Set up Python
         run: uv python install 3.12
@@ -656,7 +674,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: "0.5.14"
+          version: "0.9.26"
 
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
@@ -676,7 +694,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: "0.5.14"
+          version: "0.9.26"
 
       - name: Check lock is up-to-date
         run: uv lock --check
