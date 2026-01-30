@@ -125,6 +125,33 @@ class TestPreflightRedis:
             else:
                 pytest.skip(f"RediSearch not available: {e}")
 
+    @pytest.mark.asyncio
+    async def test_redis_query_engine_available(self, redis_client):
+        """Query Engine (FT.*) should be available."""
+        try:
+            result = await redis_client.execute_command("FT._LIST")
+            assert isinstance(result, list)
+        except Exception as e:
+            pytest.fail(f"Query Engine not available: {e}")
+
+    @pytest.mark.asyncio
+    async def test_redis_json_available(self, redis_client):
+        """JSON commands should be available.
+
+        Set REQUIRE_REDIS_JSON=1 for strict mode (fail instead of skip).
+        """
+        require_json = os.getenv("REQUIRE_REDIS_JSON", "0") == "1"
+        test_key = "test:preflight:json"
+
+        try:
+            await redis_client.execute_command("JSON.SET", test_key, "$", '{"check": true}')
+            await redis_client.delete(test_key)
+        except Exception as e:
+            if require_json:
+                pytest.fail(f"REQUIRE_REDIS_JSON=1 but JSON not available: {e}")
+            else:
+                pytest.skip(f"JSON not available (set REQUIRE_REDIS_JSON=1 for strict): {e}")
+
 
 class TestPreflightReport:
     """Generate preflight report."""
