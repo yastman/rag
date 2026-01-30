@@ -144,7 +144,7 @@ response = client.query_points(
 | Service     | Port       | Purpose                                         |
 | ----------- | ---------- | ----------------------------------------------- |
 | Qdrant      | 6333       | Vector database                                 |
-| Redis       | 6379       | Semantic cache (Redis 8.4 + Query Engine)       |
+| Redis       | 6379       | Semantic cache (Redis Stack 7.4 + RediSearch)   |
 | LiteLLM     | 4000       | LLM Gateway (Cerebras → Groq → OpenAI fallback) |
 | Langfuse    | 3001       | LLM observability v3 (ClickHouse + MinIO)       |
 | ClickHouse  | 8123       | Langfuse analytics storage                      |
@@ -247,6 +247,15 @@ model = get_bge_m3_model()  # Reuses single instance, saves 4-6GB RAM
 ### Configuration
 
 Central settings in `src/config/settings.py`. Uses environment variables via `.env` file.
+
+```python
+# Lazy settings (recommended - no side effects at import)
+from src.config.settings import get_settings
+settings = get_settings()  # Validates API keys on first call
+
+# Legacy (still works via lazy proxy)
+from src.config.settings import settings
+```
 
 ### Error Handling
 
@@ -401,7 +410,7 @@ Claude понимает: прочитать план, запустить `spawn-
 
 ## Testing
 
-**Coverage:** 91% (1657 unit tests)
+**Coverage:** 91% (1660 unit tests)
 
 ```bash
 # Unit tests (fast, no Docker needed)
