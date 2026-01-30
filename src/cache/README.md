@@ -300,7 +300,7 @@ daily_latency_saved = latency_saved_per_query * daily_queries_cached  # 1,560,00
 # Docker Compose
 services:
   redis:
-    image: redis:8.2-alpine
+    image: redis:8.4.0
     ports:
       - "6379:6379"
     volumes:
@@ -308,8 +308,8 @@ services:
     command: >
       redis-server
       --maxmemory 2gb
-      --maxmemory-policy allkeys-lru  # Evict least recently used
-      --save 60 1000                  # Snapshot every 60s if 1000 keys changed
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
 ```
 
 **Access Redis**:
