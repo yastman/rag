@@ -1,19 +1,18 @@
 """Unit tests for src/retrieval/reranker.py.
 
 Note: sentence_transformers is mocked in conftest.py to avoid slow model loading.
+The reranker module is provided via fixture to ensure fresh import with mock.
 """
 
 from unittest.mock import MagicMock
 
 import numpy as np
 
-from src.retrieval import reranker
-
 
 class TestGetCrossEncoder:
     """Test get_cross_encoder singleton function."""
 
-    def test_get_cross_encoder_creates_new_instance(self, mock_cross_encoder):
+    def test_get_cross_encoder_creates_new_instance(self, reranker, mock_cross_encoder):
         """Test that first call creates a new CrossEncoder instance."""
         result = reranker.get_cross_encoder()
 
@@ -22,7 +21,7 @@ class TestGetCrossEncoder:
         )
         assert result == mock_cross_encoder["encoder"]
 
-    def test_get_cross_encoder_returns_singleton(self, mock_cross_encoder):
+    def test_get_cross_encoder_returns_singleton(self, reranker, mock_cross_encoder):
         """Test that subsequent calls return same instance."""
         result1 = reranker.get_cross_encoder()
         result2 = reranker.get_cross_encoder()
@@ -31,7 +30,7 @@ class TestGetCrossEncoder:
         mock_cross_encoder["class"].assert_called_once()
         assert result1 is result2
 
-    def test_get_cross_encoder_custom_model_name(self, mock_cross_encoder):
+    def test_get_cross_encoder_custom_model_name(self, reranker, mock_cross_encoder):
         """Test creating encoder with custom model name."""
         result = reranker.get_cross_encoder("custom/model")
 
@@ -42,12 +41,12 @@ class TestGetCrossEncoder:
 class TestRerankResults:
     """Test rerank_results function."""
 
-    def test_rerank_empty_results(self, mock_cross_encoder):
+    def test_rerank_empty_results(self, reranker, mock_cross_encoder):
         """Test reranking empty results returns empty list."""
         result = reranker.rerank_results("query", [])
         assert result == []
 
-    def test_rerank_results_success(self, mock_cross_encoder):
+    def test_rerank_results_success(self, reranker, mock_cross_encoder):
         """Test successful reranking of results."""
         # Return scores: first result is worst, third is best
         mock_cross_encoder["encoder"].predict.return_value = np.array([0.3, 0.5, 0.9])
@@ -69,7 +68,7 @@ class TestRerankResults:
         assert reranked[0]["rerank_score"] == 0.9
         assert reranked[0]["original_score"] == 0.6
 
-    def test_rerank_results_preserves_remaining(self, mock_cross_encoder):
+    def test_rerank_results_preserves_remaining(self, reranker, mock_cross_encoder):
         """Test that results beyond top_k are preserved unchanged."""
         mock_cross_encoder["encoder"].predict.return_value = np.array([0.5, 0.8])  # Only for top 2
 
@@ -91,7 +90,7 @@ class TestRerankResults:
         assert "rerank_score" not in reranked[2]
         assert "rerank_score" not in reranked[3]
 
-    def test_rerank_results_creates_query_document_pairs(self, mock_cross_encoder):
+    def test_rerank_results_creates_query_document_pairs(self, reranker, mock_cross_encoder):
         """Test that correct query-document pairs are created."""
         mock_cross_encoder["encoder"].predict.return_value = np.array([0.5, 0.6])
 
@@ -107,7 +106,7 @@ class TestRerankResults:
         pairs = mock_cross_encoder["encoder"].predict.call_args[0][0]
         assert pairs == [("my query", "First document"), ("my query", "Second document")]
 
-    def test_rerank_results_handles_exception(self, mock_cross_encoder):
+    def test_rerank_results_handles_exception(self, reranker, mock_cross_encoder):
         """Test that exceptions return original results."""
         mock_cross_encoder["encoder"].predict.side_effect = RuntimeError("Model error")
 
@@ -122,7 +121,7 @@ class TestRerankResults:
         assert reranked == results
         assert "rerank_score" not in reranked[0]
 
-    def test_rerank_results_default_top_k(self, mock_cross_encoder):
+    def test_rerank_results_default_top_k(self, reranker, mock_cross_encoder):
         """Test default top_k is 5."""
         mock_cross_encoder["encoder"].predict.return_value = np.array([0.5] * 5)
 
@@ -134,7 +133,7 @@ class TestRerankResults:
         pairs = mock_cross_encoder["encoder"].predict.call_args[0][0]
         assert len(pairs) == 5
 
-    def test_rerank_results_fewer_than_top_k(self, mock_cross_encoder):
+    def test_rerank_results_fewer_than_top_k(self, reranker, mock_cross_encoder):
         """Test reranking when results < top_k."""
         mock_cross_encoder["encoder"].predict.return_value = np.array([0.8, 0.6])
 
@@ -150,7 +149,7 @@ class TestRerankResults:
         assert reranked[0]["rerank_score"] == 0.8
         assert reranked[1]["rerank_score"] == 0.6
 
-    def test_rerank_results_score_conversion_to_float(self, mock_cross_encoder):
+    def test_rerank_results_score_conversion_to_float(self, reranker, mock_cross_encoder):
         """Test that scores are converted to float."""
         # Return numpy-like values (simulating numpy array output)
         mock_cross_encoder["encoder"].predict.return_value = np.array([0.75])
@@ -167,7 +166,7 @@ class TestRerankResults:
 class TestClearCrossEncoder:
     """Test clear_cross_encoder function."""
 
-    def test_clear_cross_encoder_when_none(self, mock_cross_encoder):
+    def test_clear_cross_encoder_when_none(self, reranker, mock_cross_encoder):
         """Test clearing when no encoder exists."""
         reranker._cross_encoder = None
 
@@ -176,7 +175,7 @@ class TestClearCrossEncoder:
 
         assert reranker._cross_encoder is None
 
-    def test_clear_cross_encoder_when_exists(self, mock_cross_encoder):
+    def test_clear_cross_encoder_when_exists(self, reranker, mock_cross_encoder):
         """Test clearing existing encoder."""
         reranker._cross_encoder = mock_cross_encoder["encoder"]
 
@@ -184,7 +183,7 @@ class TestClearCrossEncoder:
 
         assert reranker._cross_encoder is None
 
-    def test_clear_cross_encoder_allows_recreation(self, mock_cross_encoder):
+    def test_clear_cross_encoder_allows_recreation(self, reranker, mock_cross_encoder):
         """Test that encoder can be recreated after clearing."""
         mock_encoder1 = MagicMock()
         mock_encoder2 = MagicMock()
