@@ -144,7 +144,7 @@ response = client.query_points(
 | Service     | Port       | Purpose                                         |
 | ----------- | ---------- | ----------------------------------------------- |
 | Qdrant      | 6333       | Vector database                                 |
-| Redis       | 6379       | Semantic cache (Redis Stack 7.4 + RediSearch)   |
+| Redis       | 6379       | Semantic cache (Redis Stack 7.4 with RediSearch/RedisJSON) |
 | LiteLLM     | 4000       | LLM Gateway (Cerebras → Groq → OpenAI fallback) |
 | Langfuse    | 3001       | LLM observability v3 (ClickHouse + MinIO)       |
 | ClickHouse  | 8123       | Langfuse analytics storage                      |
