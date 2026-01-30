@@ -16,6 +16,16 @@ os.environ["RAG_TESTING"] = "true"
 # is not running locally. Opt-in in Makefile targets that require tracing.
 os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")
 
+# Disable all OpenTelemetry exporters to prevent network calls in unit tests
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+os.environ.setdefault("OTEL_TRACES_EXPORTER", "none")
+os.environ.setdefault("OTEL_METRICS_EXPORTER", "none")
+os.environ.setdefault("OTEL_LOGS_EXPORTER", "none")
+
+# Disable Langfuse completely (belt and suspenders)
+os.environ.setdefault("LANGFUSE_ENABLED", "false")
+os.environ.setdefault("LANGFUSE_HOST", "")
+
 # Load environment variables before any imports
 load_dotenv()
 
@@ -49,6 +59,33 @@ def _setup_mock_heavy_imports():
 
 # Run at conftest load time to prevent slow imports during test collection
 _setup_mock_heavy_imports()
+
+
+def _setup_mock_optional_telegram_deps():
+    """Mock optional Telegram deps (aiogram) when not installed.
+
+    Unit tests should not require Telegram runtime dependencies to be present.
+    """
+    try:
+        import aiogram  # noqa: F401
+    except ModuleNotFoundError:
+        mock_aiogram = MagicMock()
+        mock_aiogram.Bot = MagicMock()
+        mock_aiogram.Dispatcher = MagicMock()
+        mock_aiogram.F = MagicMock()
+
+        mock_filters = MagicMock()
+        mock_filters.Command = MagicMock()
+
+        mock_types = MagicMock()
+        mock_types.Message = MagicMock()
+
+        sys.modules["aiogram"] = mock_aiogram
+        sys.modules["aiogram.filters"] = mock_filters
+        sys.modules["aiogram.types"] = mock_types
+
+
+_setup_mock_optional_telegram_deps()
 
 
 # =============================================================================
