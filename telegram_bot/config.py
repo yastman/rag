@@ -2,6 +2,7 @@
 
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -20,7 +21,7 @@ class BotConfig:
     bge_m3_url: str = os.getenv("BGE_M3_URL", "http://localhost:8000")
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
-    qdrant_api_key: str = os.getenv("QDRANT_API_KEY", "")
+    qdrant_api_key: Optional[str] = os.getenv("QDRANT_API_KEY") or None
     qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "contextual_bulgaria_voyage4")
 
     # LLM (OpenAI compatible API - GLM-4)
