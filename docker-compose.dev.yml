@@ -29,14 +29,16 @@ services:
       start_period: 10s
 
   redis:
-    image: redis/redis-stack-server:7.4.0-v3
+    image: redis:8.4.0
     container_name: dev-redis
     restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
-    environment:
-      # Redis Stack includes RediSearch, RedisJSON, RedisTimeSeries
-      REDIS_ARGS: "--maxmemory 512mb --maxmemory-policy allkeys-lfu --appendonly yes"
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lfu
+      --appendonly yes
     volumes:
       - redis_data:/data
     healthcheck:
