@@ -39,28 +39,20 @@ def get_redis_url() -> str:
     return f"redis://{host}:{port}"
 
 
-def check_redisearch_module(client: redis.Redis) -> bool:
-    """Check if RediSearch module is available."""
+def check_query_engine(client: redis.Redis) -> bool:
+    """Check if Redis Query Engine (FT.* commands) is available.
+
+    Works with both Redis 8.4+ (native) and Redis Stack (module).
+    """
     try:
-        modules = client.module_list()
-        for m in modules:
-            # Handle both bytes and str keys (depends on decode_responses)
-            name = m.get("name") or m.get(b"name", b"")
-            if isinstance(name, bytes):
-                name = name.decode()
-            if name.lower() in ("search", "ft"):
-                return True
-        return False
+        client.execute_command("FT._LIST")
+        return True
+    except redis.ResponseError as e:
+        # "unknown command" means Query Engine not available
+        # Other errors mean command exists but something else failed
+        return "unknown command" not in str(e).lower()
     except Exception:
-        # Try FT._LIST as fallback check
-        try:
-            client.execute_command("FT._LIST")
-            return True
-        except redis.ResponseError as e:
-            # If "unknown command" - module not available, otherwise it exists
-            return "unknown command" not in str(e).lower()
-        except Exception:
-            return False
+        return False
 
 
 def index_exists(client: redis.Redis, index_name: str) -> bool:
@@ -234,19 +226,19 @@ Examples:
         print("    - Network connectivity")
         sys.exit(1)
 
-    # Check for RediSearch module
-    print("\nChecking RediSearch module...")
-    if not check_redisearch_module(client):
-        print("\n  ERROR: RediSearch module is not available!")
-        print("\n  RediSearch is required for vector search functionality.")
-        print("  To install RediSearch:")
-        print("\n  Docker (Redis Stack):")
+    # Check for Query Engine
+    print("\nChecking Redis Query Engine...")
+    if not check_query_engine(client):
+        print("\n  ERROR: Redis Query Engine is not available!")
+        print("\n  FT.* commands are required for vector search functionality.")
+        print("  Solutions:")
+        print("\n  Option 1: Use Redis 8.4+ (Query Engine built-in)")
+        print("    docker run -p 6379:6379 redis:8.4.0")
+        print("\n  Option 2: Use Redis Stack (legacy)")
         print("    docker run -p 6379:6379 redis/redis-stack-server:latest")
-        print("\n  Or add to docker-compose.yml:")
-        print("    image: redis/redis-stack-server:latest")
-        print("\n  More info: https://redis.io/docs/stack/search/")
+        print("\n  More info: https://redis.io/docs/latest/develop/whats-new/8-0/")
         sys.exit(1)
-    print("  RediSearch module: OK")
+    print("  Query Engine: OK")
 
     if args.dry_run:
         print("\n[DRY RUN] Configuration verified, no indexes created.")
