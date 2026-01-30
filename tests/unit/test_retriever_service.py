@@ -1,10 +1,27 @@
 """Unit tests for telegram_bot/services/retriever.py."""
 
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from telegram_bot.services.retriever import RetrieverService
+
+
+@pytest.fixture(autouse=True)
+def reset_qdrant_modules():
+    """Clear qdrant module cache to ensure fresh import with mocks."""
+    # Clear before test
+    modules_to_clear = [k for k in sys.modules if "qdrant" in k.lower()]
+    for mod in modules_to_clear:
+        sys.modules.pop(mod, None)
+
+    yield
+
+    # Clear after test
+    modules_to_clear = [k for k in sys.modules if "qdrant" in k.lower()]
+    for mod in modules_to_clear:
+        sys.modules.pop(mod, None)
 
 
 class TestRetrieverServiceInit:
@@ -37,7 +54,7 @@ class TestRetrieverServiceInit:
         mock_client = MagicMock()
         mock_qdrant.return_value = mock_client
 
-        service = RetrieverService(
+        RetrieverService(
             url="http://localhost:6333",
             api_key="",
             collection_name="test_collection",
