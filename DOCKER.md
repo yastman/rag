@@ -32,7 +32,7 @@ docker compose -f docker-compose.dev.yml down -v
 | Service | Container | Port | Purpose |
 |---------|-----------|------|---------|
 | **postgres** | dev-postgres | 5432 | PostgreSQL + pgvector for Langfuse/MLflow |
-| **redis** | dev-redis | 6379, 8001 | Redis Stack (cache, RediSearch). UI: http://localhost:8001 |
+| **redis** | dev-redis | 6379 | Redis 8.4 (cache, Query Engine) |
 | **qdrant** | dev-qdrant | 6333, 6334 | Vector database. UI: http://localhost:6333/dashboard |
 
 ### AI Services
