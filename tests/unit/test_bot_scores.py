@@ -1,9 +1,25 @@
 # tests/unit/test_bot_scores.py
 """Unit tests for bot handler Langfuse scores."""
 
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolate_bot_modules():
+    """Clear telegram_bot modules to ensure fresh imports."""
+    prefixes = ("telegram_bot.", "langfuse", "opentelemetry")
+
+    def _clear():
+        for key in list(sys.modules.keys()):
+            if key.startswith(prefixes):
+                sys.modules.pop(key, None)
+
+    _clear()
+    yield
+    _clear()
 
 
 EXPECTED_SCORE_NAMES = {
@@ -43,12 +59,19 @@ class TestHandleQueryScores:
         from telegram_bot.services import QueryType
 
         handler = PropertyBot.__new__(PropertyBot)
+        # BotConfig with ALL fields that handle_query accesses before classify_query
         handler.config = BotConfig(
             telegram_token="test",
             voyage_api_key="test",
             llm_api_key="test",
             llm_model="test-model",
             cesc_enabled=False,
+            # Fields used for context_fingerprint / cache key before classify_query:
+            voyage_model_queries="voyage-3-lite",
+            voyage_model_rerank="rerank-2",
+            qdrant_collection="test-collection",
+            qdrant_url="http://localhost:6333",
+            redis_url="redis://localhost:6379",
         )
         handler._cache_initialized = True
 
@@ -96,15 +119,23 @@ class TestHandleQueryScores:
 
             await bot_handler.handle_query(mock_message)
 
+            # Verify classify_query was actually called (catches early exception)
+            mock_classify_query.assert_called_once()
+
             # Find the query_type score call
             score_calls = [
                 c
                 for c in mock_langfuse.score_current_trace.call_args_list
                 if c.kwargs.get("name") == "query_type"
             ]
-            assert len(score_calls) == 1
+            assert len(score_calls) == 1, (
+                f"Expected 1 query_type score, got {len(score_calls)}. "
+                f"All scores: {[c.kwargs.get('name') for c in mock_langfuse.score_current_trace.call_args_list]}"
+            )
             # COMPLEX = 2.0
-            assert score_calls[0].kwargs["value"] == 2.0
+            assert score_calls[0].kwargs["value"] == 2.0, (
+                f"Expected query_type=2.0 (COMPLEX), got {score_calls[0].kwargs['value']}"
+            )
 
 
 class TestHandleQueryScoresAllPaths:
