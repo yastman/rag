@@ -101,6 +101,26 @@ test-unit: ## Run only unit tests (fast, no external deps)
 	pytest tests/unit/ -v
 	@echo "$(GREEN)✓ Unit tests complete$(NC)"
 
+test-fast: ## Run unit tests in parallel (xdist)
+	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
+	pytest tests/unit/ -n auto --dist=worksteal -q
+	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
+
+test-lf: ## Run only last failed tests
+	@echo "$(BLUE)Running last failed tests...$(NC)"
+	pytest tests/unit/ --lf -v
+	@echo "$(GREEN)✓ Last failed tests complete$(NC)"
+
+test-ff: ## Run failed first, then rest
+	@echo "$(BLUE)Running failed first...$(NC)"
+	pytest tests/unit/ --ff -v
+	@echo "$(GREEN)✓ Tests complete$(NC)"
+
+test-profile: ## Profile slowest tests
+	@echo "$(BLUE)Profiling slow tests...$(NC)"
+	pytest tests/unit/ --durations=20 --durations-min=0.5 -q
+	@echo "$(GREEN)✓ Profile complete$(NC)"
+
 test-integration: ## Run only integration tests (requires Docker/API keys)
 	@echo "$(BLUE)Running integration tests...$(NC)"
 	pytest tests/integration/ -v
