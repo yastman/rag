@@ -155,12 +155,31 @@ make deploy-release VERSION=2.12.0  # Release deploy
 - **Cerebras**: High throughput, no strict RPM limits
 - **Voyage AI**: 300 RPM (embeddings), 100 RPM (rerank). Use `CacheService`.
 
+## Skills Workflow
+
+Для реализации планов используй superpowers скиллы:
+
+```
+/writing-plans → /executing-plans → /finishing-a-development-branch
+```
+
+| Этап | Скилл |
+|------|-------|
+| Изоляция | `/using-git-worktrees` |
+| План | `/writing-plans` |
+| Выполнение | `/executing-plans` или `/subagent-driven-development` |
+| Качество | `/test-driven-development`, `/systematic-debugging` |
+| Завершение | `/verification-before-completion`, `/finishing-a-development-branch` |
+
+**Подробнее:** `.claude/rules/skills.md`
+
 ## Modular Docs
 
 See `.claude/rules/` for domain-specific documentation:
 
 | File | Scope | Loads when working with |
 |------|-------|------------------------|
+| `skills.md` | Superpowers workflow, план реализации | `docs/plans/**/*.md` |
 | `services.md` | VoyageService, QdrantService, Cache patterns | `telegram_bot/services/**/*.py` |
 | `search.md` | Search engines, Qdrant query_points | `src/retrieval/**/*.py` |
 | `testing.md` | Unit tests, E2E, baseline | `tests/**/*.py` |
