@@ -20,6 +20,7 @@ class QueryType(Enum):
     CHITCHAT = "chitchat"  ***REMOVED*** Simple greetings, thanks - no RAG needed
     SIMPLE = "simple"  ***REMOVED*** Simple factual questions - light RAG
     COMPLEX = "complex"  ***REMOVED*** Complex search queries - full RAG + rerank
+    OFF_TOPIC = "off_topic"  ***REMOVED*** Non-real-estate queries - politely redirect
 
 
 ***REMOVED*** Patterns for chit-chat detection (no RAG needed)
@@ -77,9 +78,44 @@ SIMPLE_PATTERNS = [
     r"^(одно|двух|трёх)комнатн",
 ]
 
+***REMOVED*** Patterns for off-topic detection (non-real-estate queries)
+OFF_TOPIC_PATTERNS = [
+    ***REMOVED*** Programming/Tech
+    r"\b(python|javascript|java|код|программ|api|docker|kubernetes)\b",
+    r"\b(алгоритм|функция|переменная|массив|database)\b",
+    ***REMOVED*** Medical
+    r"\b(лечение|болезн|врач|доктор|симптом[а-я]*|таблетк|медицин)\b",
+    r"\b(диагноз|аптека|рецепт|health|doctor|medicine|грипп)\b",
+    ***REMOVED*** Legal (non-property)
+    r"\b(развод|алимент|уголовн|штраф|суд[^а-я]|адвокат)\b",
+    ***REMOVED*** Cooking/Recipes
+    r"\b(рецепт|готовить|приготовить|ингредиент|блюдо|пицц)",
+    r"\b(recipe|cook[^i]|food|dish)\b",
+    ***REMOVED*** Travel (non-Bulgaria property)
+    r"\b(билет|самолёт|поезд|отел[^ьн]|гостиниц|бронирован)\b",
+    r"\b(flight|ticket|hotel|booking)\b",
+    ***REMOVED*** General knowledge
+    r"\b(кто (такой|такая)|что такое|когда был|история)\b",
+    r"\b(столица|президент|население)\b",
+    ***REMOVED*** Math/Science
+    r"\b(формула|уравнение|теорема|физика|химия|математика)\b",
+    ***REMOVED*** Entertainment
+    r"\b(фильм|сериал|музыка|песня|игр[аы]|movie|game[s]?|music)\b",
+    r"\b(video game)\b",
+    ***REMOVED*** Finance (non-property)
+    r"\b(акции|биржа|криптовалюта|биткоин|инвестиц|трейдинг)\b",
+    r"\b(торговать на бирже)\b",
+    r"\b(crypto|bitcoin|stock|trading)\b",
+    ***REMOVED*** Jobs (non-property)
+    r"\b(вакансия|работа[^ть]|резюме|зарплата|job|career|salary)\b",
+    ***REMOVED*** Education
+    r"\b(экзамен|школа|универси|курс|диплом|exam|university)\b",
+]
+
 ***REMOVED*** Compile patterns for efficiency
 _CHITCHAT_COMPILED = [re.compile(p, re.IGNORECASE) for p in CHITCHAT_PATTERNS]
 _SIMPLE_COMPILED = [re.compile(p, re.IGNORECASE) for p in SIMPLE_PATTERNS]
+_OFF_TOPIC_COMPILED = [re.compile(p, re.IGNORECASE) for p in OFF_TOPIC_PATTERNS]
 
 
 ***REMOVED*** Chit-chat responses (no RAG needed)
@@ -102,6 +138,25 @@ CHITCHAT_RESPONSES = {
     ],
 }
 
+***REMOVED*** Off-topic responses (redirect to real estate)
+OFF_TOPIC_RESPONSES = [
+    (
+        "Я специализируюсь только на недвижимости в Болгарии. 🏠\n\n"
+        "Могу помочь найти:\n"
+        "• Квартиры и апартаменты\n"
+        "• Дома и виллы\n"
+        "• Коммерческую недвижимость\n\n"
+        "Что из этого вас интересует?"
+    ),
+    (
+        "Извините, но я могу помочь только с вопросами о недвижимости в Болгарии.\n\n"
+        "Напишите, например:\n"
+        "• «Квартира в Несебре до 50000€»\n"
+        "• «Дом у моря с 3 спальнями»\n"
+        "• «Что есть в Солнечном берегу?»"
+    ),
+]
+
 
 @observe(name="query-router")
 def classify_query(query: str) -> QueryType:
@@ -116,22 +171,29 @@ def classify_query(query: str) -> QueryType:
     query_stripped = query.strip()
     result = QueryType.COMPLEX  ***REMOVED*** Default
 
-    ***REMOVED*** Check for chit-chat patterns
+    ***REMOVED*** Check for chit-chat patterns first (highest priority)
     for pattern in _CHITCHAT_COMPILED:
         if pattern.search(query_stripped):
             logger.debug(f"Query classified as CHITCHAT: {pattern.pattern}")
             result = QueryType.CHITCHAT
             break
     else:
-        ***REMOVED*** Check for simple patterns (only if not chitchat)
-        for pattern in _SIMPLE_COMPILED:
+        ***REMOVED*** Check for off-topic patterns (before simple/complex)
+        for pattern in _OFF_TOPIC_COMPILED:
             if pattern.search(query_stripped):
-                logger.debug(f"Query classified as SIMPLE: {pattern.pattern}")
-                result = QueryType.SIMPLE
+                logger.debug(f"Query classified as OFF_TOPIC: {pattern.pattern}")
+                result = QueryType.OFF_TOPIC
                 break
         else:
-            ***REMOVED*** Default to complex (full RAG pipeline)
-            logger.debug("Query classified as COMPLEX (full RAG)")
+            ***REMOVED*** Check for simple patterns
+            for pattern in _SIMPLE_COMPILED:
+                if pattern.search(query_stripped):
+                    logger.debug(f"Query classified as SIMPLE: {pattern.pattern}")
+                    result = QueryType.SIMPLE
+                    break
+            else:
+                ***REMOVED*** Default to complex (full RAG pipeline)
+                logger.debug("Query classified as COMPLEX (full RAG)")
 
     ***REMOVED*** Track classification in Langfuse
     langfuse = get_client()
@@ -219,6 +281,29 @@ def get_chitchat_response(query: str) -> str | None:
         return random.choice(CHITCHAT_RESPONSES["farewell"])
 
     return None
+
+
+def get_off_topic_response() -> str:
+    """Get response for off-topic queries.
+
+    Returns:
+        Response redirecting user to real estate topics
+    """
+    import random
+
+    return random.choice(OFF_TOPIC_RESPONSES)
+
+
+def is_off_topic(query: str) -> bool:
+    """Quick check if query is off-topic.
+
+    Args:
+        query: User query text
+
+    Returns:
+        True if query matches off-topic patterns
+    """
+    return any(pattern.search(query) for pattern in _OFF_TOPIC_COMPILED)
 
 
 def needs_rerank(query_type: QueryType, result_count: int) -> bool:
