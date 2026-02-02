@@ -1,8 +1,10 @@
 """Main Telegram bot logic."""
 
 import contextlib
+import hashlib
 import logging
 import time
+from datetime import datetime, timezone
 
 import httpx
 from aiogram import Bot, Dispatcher, F
@@ -30,6 +32,21 @@ from .services.cache import CACHE_SCHEMA_VERSION
 
 
 logger = logging.getLogger(__name__)
+
+
+def make_session_id(session_type: str, identifier: int | str) -> str:
+    """Create unified session_id format: {type}-{hash}-{YYYYMMDD}.
+
+    Args:
+        session_type: Type prefix (e.g., 'chat', 'smoke', 'load')
+        identifier: Unique identifier (chat_id, user_id, etc.)
+
+    Returns:
+        Formatted session_id: "chat-a1b2c3d4-20260202"
+    """
+    id_hash = hashlib.sha256(str(identifier).encode()).hexdigest()[:8]
+    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return f"{session_type}-{id_hash}-{date_str}"
 
 
 class PropertyBot:
@@ -207,7 +224,7 @@ class PropertyBot:
             langfuse.update_current_trace(
                 name="telegram-rag-query",
                 user_id=str(user_id),
-                session_id=f"chat:{message.chat.id}",
+                session_id=make_session_id("chat", message.chat.id),
                 input={"query": query[:200]},
                 metadata=context_fingerprint,
                 tags=["telegram", "rag", context_fingerprint["retrieval_version"]],
