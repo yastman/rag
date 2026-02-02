@@ -15,11 +15,55 @@ make baseline-compare BASELINE_TAG=smoke-abc-20260128 CURRENT_TAG=smoke-def-2026
 make baseline-set TAG=smoke-abc-20260128     # Set current as new baseline
 ```
 
-## Langfuse UI
+## Langfuse UI Workflow
 
-- **Local:** http://localhost:3001
-- **Traces:** See all LLM calls, latency, cost
-- **Sessions:** Group traces by test run (smoke-*, load-*)
+**Local URL:** http://localhost:3001
+
+### Debugging a Slow Query
+
+1. **Find the trace:** Filter by `user_id` or `session_id` (format: `chat-{hash}-{YYYYMMDD}`)
+2. **Check the timeline:** Expand trace to see nested spans with durations
+3. **Identify bottleneck:** Look for spans with >500ms (red highlighted)
+4. **Check cache metrics:** Look at `cache-semantic-check`, `cache-search-check` spans for hit/miss
+
+### Comparing Baseline Runs
+
+1. **Run smoke tests:** `make baseline-smoke` (generates session like `smoke-abc123-20260202`)
+2. **View in UI:** Sessions → filter by `smoke-*` → compare latency/cost columns
+3. **Automated compare:** `make baseline-compare BASELINE_TAG=smoke-old CURRENT_TAG=smoke-new`
+
+### Finding Cache Problems
+
+1. **Filter:** Traces → Name = `cache-semantic-check`
+2. **Group by output:** Check `hit: true/false` distribution
+3. **Low hit rate?** Check distance thresholds in `CacheService`
+
+### Tracking Costs
+
+1. **Dashboard:** Overview → Cost by model/day
+2. **Per-user:** Traces → filter by `user_id` → sum costs
+3. **Regression check:** Costs tab shows trend line
+
+### Session ID Format
+
+All traces use unified format: `{type}-{hash}-{YYYYMMDD}`
+
+| Type | Example | Use Case |
+|------|---------|----------|
+| `chat` | `chat-a1b2c3d4-20260202` | Telegram conversations |
+| `smoke` | `smoke-abc123-20260202` | Smoke test runs |
+| `load` | `load-def456-20260202` | Load test runs |
+| `ci` | `ci-sha-20260202` | CI pipeline runs |
+
+### Key Filters
+
+| Filter | Example | Purpose |
+|--------|---------|---------|
+| Session | `chat-*` | All chat sessions |
+| User | `123456789` | Specific user traces |
+| Tags | `telegram,rag` | Production queries |
+| Name | `llm-generate-answer` | LLM generation only |
+| Score | `semantic_cache_hit=1` | Cache hits only |
 
 ## Thresholds (regression detection)
 
