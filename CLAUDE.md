@@ -69,6 +69,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `docs/PIPELINE_OVERVIEW.md` | Architecture |
 | `docs/QDRANT_STACK.md` | Vector DB |
 | `docs/INGESTION.md` | Document ingestion pipeline |
+| `docs/CONTEXTUALIZED_EMBEDDINGS.md` | voyage-context-3 embeddings |
 | `CACHING.md` | 6-tier cache |
 
 ## Qdrant Collections
@@ -79,7 +80,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `contextual_bulgaria_voyage_scalar` | Same, INT8 | Scalar |
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `acorn_mode=off|on|auto`, `use_hyde=true|false`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `acorn_mode=off|on|auto`, `use_hyde=true|false`, `use_contextualized_embeddings=true|false`
 
 ## Deployment
 
