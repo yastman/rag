@@ -27,6 +27,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Cache versioning - bump when changing cache structure or models
+# NOTE: SemanticMessageHistory index is versioned as:
+#   rag_conversations:{CACHE_SCHEMA_VERSION}:{vectorizer_id}
+#   e.g. rag_conversations:v2:userbase768 or rag_conversations:v2:voyage1024
+# Old indices are NOT deleted automatically; clean up manually if needed.
 CACHE_SCHEMA_VERSION = "v2"
 
 
@@ -208,13 +212,16 @@ class CacheService:
 
                     user_base_url = os.getenv("USER_BASE_URL", "http://localhost:8003")
                     history_vectorizer = UserBaseVectorizer(base_url=user_base_url)
+                    history_index_name = (
+                        f"rag_conversations:{CACHE_SCHEMA_VERSION}:{self._get_vectorizer_id()}"
+                    )
                     self.message_history = SemanticMessageHistory(
-                        name="rag_conversations",
+                        name=history_index_name,
                         redis_url=self.redis_url,
                         vectorizer=history_vectorizer,
                         distance_threshold=0.3,
                     )
-                    logger.info("✓ SemanticMessageHistory initialized (USER-base)")
+                    logger.info(f"✓ SemanticMessageHistory initialized ({history_index_name})")
                 else:
                     voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
                     if voyage_api_key:
@@ -222,13 +229,16 @@ class CacheService:
                             model="voyage-multilingual-2",  # Better RU support
                             api_config={"api_key": voyage_api_key},
                         )
+                        history_index_name = (
+                            f"rag_conversations:{CACHE_SCHEMA_VERSION}:{self._get_vectorizer_id()}"
+                        )
                         self.message_history = SemanticMessageHistory(
-                            name="rag_conversations",
+                            name=history_index_name,
                             redis_url=self.redis_url,
                             vectorizer=history_vectorizer,
                             distance_threshold=0.3,
                         )
-                        logger.info("✓ SemanticMessageHistory initialized (voyage-multilingual-2)")
+                        logger.info(f"✓ SemanticMessageHistory initialized ({history_index_name})")
                     else:
                         logger.warning("VOYAGE_API_KEY not set, SemanticMessageHistory disabled")
                         self.message_history = None
