@@ -428,6 +428,7 @@ class CacheService:
             self.metrics["embeddings"]["misses"] += 1
             return None
 
+    @observe(name="cache-embedding-store")
     async def store_embedding(
         self,
         text: str,
@@ -498,6 +499,7 @@ class CacheService:
             self.metrics["embeddings"]["misses"] += 1
             return None
 
+    @observe(name="cache-sparse-embedding-store")
     async def store_sparse_embedding(
         self,
         text: str,
@@ -561,6 +563,7 @@ class CacheService:
             self.metrics["analyzer"]["misses"] += 1
             return None
 
+    @observe(name="cache-analysis-store")
     async def store_analysis(self, query: str, analysis: dict[str, Any]):
         """Store QueryAnalyzer result in cache.
 
@@ -631,6 +634,7 @@ class CacheService:
             )
             return None
 
+    @observe(name="cache-search-store")
     async def store_search_results(
         self,
         embedding: list[float],
@@ -709,6 +713,7 @@ class CacheService:
             langfuse.update_current_span(output={"hit": False, "layer": "rerank", "error": str(e)})
             return None
 
+    @observe(name="cache-rerank-store")
     async def store_rerank_results(
         self,
         query_hash: str,
@@ -787,6 +792,7 @@ class CacheService:
 
     # ============= Conversation Memory (Task 2.2) =============
 
+    @observe(name="cache-conversation-store")
     async def store_conversation_message(
         self,
         user_id: int,
