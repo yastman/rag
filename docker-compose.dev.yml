@@ -137,6 +137,12 @@ services:
     environment:
       UVICORN_HOST: 0.0.0.0
       UVICORN_PORT: 5001
+      # Docling configuration for optimal RAG chunking
+      DOCLING_BACKEND: docling
+      DOCLING_PDF_BACKEND: dlparse_v2
+      DOCLING_TABLE_MODE: accurate
+    volumes:
+      - ./data/docling:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
       interval: 30s
