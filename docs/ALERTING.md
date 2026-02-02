@@ -103,6 +103,30 @@ Monitors infrastructure services:
 - Embedding services (BGE-M3, BM42)
 - Databases (PostgreSQL, ClickHouse)
 
+### Extended Services (extended-services.yaml)
+Monitors additional development services:
+
+| Service | Alert | Severity | Trigger |
+|---------|-------|----------|---------|
+| dev-docling | DoclingDown | critical | No logs 10min |
+| dev-docling | DoclingOOM | critical | OOM/crash detected |
+| dev-docling | DoclingConversionFailed | warning | Conversion errors (>2 in 5min) |
+| dev-docling | DoclingError | warning | Errors (>3 in 5min) |
+| dev-minio | MinioDown | critical | No logs 5min |
+| dev-minio | MinioDiskFull | critical | Disk full or offline |
+| dev-minio | MinioCorruption | critical | Data corruption/auth error |
+| dev-minio | MinioHealingFailed | warning | Drive init/healing failed |
+| dev-minio | MinioError | warning | Errors (>5 in 5min) |
+| dev-mlflow | MLflowDown | critical | No logs 5min |
+| dev-mlflow | MLflowDBError | critical | Database connection error |
+| dev-mlflow | MLflowError | warning | Errors (>3 in 5min) |
+| dev-redis-langfuse | RedisLangfuseDown | critical | No logs 5min |
+| dev-redis-langfuse | RedisLangfuseConnectionError | critical | Connection refused/readonly |
+| dev-redis-langfuse | RedisLangfuseMemory | warning | Memory pressure/eviction |
+| dev-lightrag | LightRAGDown | critical | No logs 10min |
+| dev-lightrag | LightRAGError | warning | Errors (>3 in 5min) |
+| dev-lightrag | LightRAGAPIError | warning | API errors (rate limits) |
+
 ## Alert Severity Levels
 
 | Severity | Timing | Description |
