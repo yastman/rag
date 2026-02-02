@@ -4,7 +4,7 @@ paths: "**/llm*.py, docker/litellm/**, src/contextualization/**"
 
 ***REMOVED*** LLM Integration
 
-LiteLLM proxy, model routing, fallbacks, and answer generation.
+LiteLLM proxy, model routing, fallbacks, guardrails, and answer generation.
 
 ***REMOVED******REMOVED*** Purpose
 
@@ -106,6 +106,46 @@ answer = await llm.generate_answer(
 Всегда указывай цены в евро и расстояния в метрах.
 Будь вежливым и полезным.
 Форматируй ответ с Markdown: используй **жирный** для важного, • для списков.
+```
+
+***REMOVED******REMOVED*** Guardrails
+
+***REMOVED******REMOVED******REMOVED*** Confidence Scoring
+
+LLMService returns confidence scores with responses:
+
+```python
+from telegram_bot.services.llm import LLMService, LOW_CONFIDENCE_THRESHOLD
+
+result = await llm.generate_with_confidence(question, context)
+***REMOVED*** result.answer, result.confidence, result.sources
+
+if result.confidence < LOW_CONFIDENCE_THRESHOLD:  ***REMOVED*** 0.3
+    return create_low_confidence_response(result)
+```
+
+***REMOVED******REMOVED******REMOVED*** Off-Topic Detection
+
+QueryRouter detects off-topic queries (non-real-estate):
+
+```python
+from telegram_bot.services.query_router import classify_query, QueryType, get_off_topic_response
+
+if classify_query(query) == QueryType.OFF_TOPIC:
+    return get_off_topic_response()  ***REMOVED*** "Я специализируюсь на недвижимости..."
+```
+
+**Off-topic examples:** recipes, crypto, movies, sports
+
+***REMOVED******REMOVED******REMOVED*** Chaos Testing
+
+Tests for graceful degradation when services fail:
+
+```bash
+pytest tests/chaos/ -v
+***REMOVED*** test_qdrant_failures.py - Timeout, connection refused
+***REMOVED*** test_redis_failures.py - Disconnect, pool exhaustion
+***REMOVED*** test_llm_fallback.py - Rate limits, parsing errors
 ```
 
 ***REMOVED******REMOVED*** Langfuse Integration
