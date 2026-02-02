@@ -1,5 +1,5 @@
 ---
-paths: "docker/**/*.*, docker-compose*.yml"
+paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 ---
 
 # Docker & Infrastructure
@@ -59,6 +59,28 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep bot
 Bot connects to: `@test_nika_homes_bot` (configured via `TELEGRAM_BOT_TOKEN`)
 
 Bot responses use Markdown formatting (`parse_mode="Markdown"`).
+
+## Monitoring & Alerting
+
+```bash
+make monitoring-up          # Start Loki, Promtail, Alertmanager
+make monitoring-down        # Stop monitoring stack
+make monitoring-status      # Check health
+make monitoring-test-alert  # Send test alert to Telegram
+make monitoring-logs        # View logs
+```
+
+| Container | Port | Purpose |
+|-----------|------|---------|
+| dev-loki | 3100 | Log aggregation |
+| dev-promtail | - | Log collection from Docker |
+| dev-alertmanager | 9093 | Alert routing to Telegram |
+
+**Config:** `docker/monitoring/` (loki.yaml, promtail.yaml, alertmanager.yaml, rules/)
+
+**Env vars:** `TELEGRAM_ALERTING_BOT_TOKEN`, `TELEGRAM_ALERTING_CHAT_ID`
+
+**Docs:** `docs/ALERTING.md`
 
 ## Parallel Claude Workers
 
