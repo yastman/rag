@@ -4,7 +4,7 @@ paths: "**/llm*.py, docker/litellm/**, src/contextualization/**"
 
 # LLM Integration
 
-LiteLLM proxy, model routing, fallbacks, and answer generation.
+LiteLLM proxy, model routing, fallbacks, guardrails, and answer generation.
 
 ## Purpose
 
@@ -106,6 +106,46 @@ answer = await llm.generate_answer(
 Всегда указывай цены в евро и расстояния в метрах.
 Будь вежливым и полезным.
 Форматируй ответ с Markdown: используй **жирный** для важного, • для списков.
+```
+
+## Guardrails
+
+### Confidence Scoring
+
+LLMService returns confidence scores with responses:
+
+```python
+from telegram_bot.services.llm import LLMService, LOW_CONFIDENCE_THRESHOLD
+
+result = await llm.generate_with_confidence(question, context)
+# result.answer, result.confidence, result.sources
+
+if result.confidence < LOW_CONFIDENCE_THRESHOLD:  # 0.3
+    return create_low_confidence_response(result)
+```
+
+### Off-Topic Detection
+
+QueryRouter detects off-topic queries (non-real-estate):
+
+```python
+from telegram_bot.services.query_router import classify_query, QueryType, get_off_topic_response
+
+if classify_query(query) == QueryType.OFF_TOPIC:
+    return get_off_topic_response()  # "Я специализируюсь на недвижимости..."
+```
+
+**Off-topic examples:** recipes, crypto, movies, sports
+
+### Chaos Testing
+
+Tests for graceful degradation when services fail:
+
+```bash
+pytest tests/chaos/ -v
+# test_qdrant_failures.py - Timeout, connection refused
+# test_redis_failures.py - Disconnect, pool exhaustion
+# test_llm_fallback.py - Rate limits, parsing errors
 ```
 
 ## Langfuse Integration
