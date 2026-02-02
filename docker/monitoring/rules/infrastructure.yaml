@@ -1,0 +1,239 @@
+# Alert Rules for Infrastructure Services
+# Monitors Qdrant, Redis, LiteLLM, Langfuse, and other services
+
+groups:
+  - name: infrastructure
+    interval: 1m
+    rules:
+      # =============================================================================
+      # QDRANT
+      # =============================================================================
+
+      - alert: QdrantDown
+        expr: |
+          absent(count_over_time({container="dev-qdrant"} [5m]))
+        for: 2m
+        labels:
+          severity: critical
+          service: qdrant
+        annotations:
+          summary: "Qdrant vector database is down"
+          description: "No logs from dev-qdrant container for 5 minutes"
+
+      - alert: QdrantError
+        expr: |
+          count_over_time({container="dev-qdrant"} |~ "(?i)error|failed" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: qdrant
+        annotations:
+          summary: "Qdrant errors detected"
+          description: "Multiple errors in Qdrant logs"
+
+      - alert: QdrantSlowQuery
+        expr: |
+          count_over_time({container="dev-qdrant"} |~ "(?i)slow.*query|timeout" [5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: qdrant
+        annotations:
+          summary: "Slow Qdrant queries detected"
+          description: "Multiple slow queries or timeouts in Qdrant"
+
+      # =============================================================================
+      # REDIS
+      # =============================================================================
+
+      - alert: RedisDown
+        expr: |
+          absent(count_over_time({container="dev-redis"} [5m]))
+        for: 2m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis cache is down"
+          description: "No logs from dev-redis container for 5 minutes"
+
+      - alert: RedisMemoryWarning
+        expr: |
+          count_over_time({container="dev-redis"} |~ "(?i)maxmemory|evict|oom" [5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis memory warning"
+          description: "Redis memory pressure or eviction detected"
+
+      - alert: RedisConnectionError
+        expr: |
+          count_over_time({container="dev-redis"} |~ "(?i)connection.*refused|connection.*error" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis connection errors"
+          description: "Multiple Redis connection errors detected"
+
+      # =============================================================================
+      # LITELLM
+      # =============================================================================
+
+      - alert: LiteLLMDown
+        expr: |
+          absent(count_over_time({container="dev-litellm"} [5m]))
+        for: 2m
+        labels:
+          severity: critical
+          service: litellm
+        annotations:
+          summary: "LiteLLM proxy is down"
+          description: "No logs from dev-litellm container for 5 minutes"
+
+      - alert: LiteLLMRateLimited
+        expr: |
+          count_over_time({container="dev-litellm"} |~ "(?i)rate.*limit|429|too.*many.*requests" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: litellm
+        annotations:
+          summary: "LiteLLM rate limited"
+          description: "LLM API rate limiting detected"
+
+      - alert: LiteLLMProviderError
+        expr: |
+          count_over_time({container="dev-litellm"} |~ "(?i)provider.*error|api.*error|500" [5m]) > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: litellm
+        annotations:
+          summary: "LiteLLM provider errors"
+          description: "Multiple LLM provider errors detected"
+
+      - alert: LiteLLMFallbackTriggered
+        expr: |
+          count_over_time({container="dev-litellm"} |~ "(?i)fallback|switching.*model" [5m]) > 3
+        for: 5m
+        labels:
+          severity: info
+          service: litellm
+        annotations:
+          summary: "LiteLLM fallback triggered"
+          description: "LiteLLM is using fallback models"
+
+      # =============================================================================
+      # LANGFUSE
+      # =============================================================================
+
+      - alert: LangfuseDown
+        expr: |
+          absent(count_over_time({container="dev-langfuse"} [5m]))
+        for: 3m
+        labels:
+          severity: warning
+          service: langfuse
+        annotations:
+          summary: "Langfuse observability is down"
+          description: "No logs from dev-langfuse container for 5 minutes"
+
+      - alert: LangfuseWorkerDown
+        expr: |
+          absent(count_over_time({container="dev-langfuse-worker"} [5m]))
+        for: 3m
+        labels:
+          severity: warning
+          service: langfuse
+        annotations:
+          summary: "Langfuse worker is down"
+          description: "No logs from dev-langfuse-worker container"
+
+      - alert: LangfuseError
+        expr: |
+          count_over_time({container=~"dev-langfuse.*"} |~ "(?i)error|failed" [5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: langfuse
+        annotations:
+          summary: "Langfuse errors detected"
+          description: "Multiple errors in Langfuse logs"
+
+      # =============================================================================
+      # EMBEDDING SERVICES
+      # =============================================================================
+
+      - alert: BGEServiceDown
+        expr: |
+          absent(count_over_time({container="dev-bge-m3"} [10m]))
+        for: 5m
+        labels:
+          severity: warning
+          service: bge-m3
+        annotations:
+          summary: "BGE-M3 embedding service is down"
+          description: "No logs from dev-bge-m3 container"
+
+      - alert: BM42ServiceDown
+        expr: |
+          absent(count_over_time({container="dev-bm42"} [10m]))
+        for: 5m
+        labels:
+          severity: warning
+          service: bm42
+        annotations:
+          summary: "BM42 sparse embedding service is down"
+          description: "No logs from dev-bm42 container"
+
+      - alert: EmbeddingServiceError
+        expr: |
+          count_over_time({container=~"dev-bge-m3|dev-bm42|dev-user-base"} |~ "(?i)error|failed|exception" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: embeddings
+        annotations:
+          summary: "Embedding service errors"
+          description: "Errors detected in embedding services"
+
+      # =============================================================================
+      # DATABASE
+      # =============================================================================
+
+      - alert: PostgresDown
+        expr: |
+          absent(count_over_time({container="dev-postgres"} [5m]))
+        for: 2m
+        labels:
+          severity: critical
+          service: postgres
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "No logs from dev-postgres container"
+
+      - alert: PostgresError
+        expr: |
+          count_over_time({container="dev-postgres"} |~ "(?i)error|fatal|panic" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "PostgreSQL errors detected"
+          description: "Multiple errors in PostgreSQL logs"
+
+      - alert: ClickHouseDown
+        expr: |
+          absent(count_over_time({container="dev-clickhouse"} [5m]))
+        for: 3m
+        labels:
+          severity: warning
+          service: clickhouse
+        annotations:
+          summary: "ClickHouse database is down"
+          description: "No logs from dev-clickhouse container"

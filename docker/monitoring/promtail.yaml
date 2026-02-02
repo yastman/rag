@@ -1,0 +1,92 @@
+# Promtail Configuration for RAG Bot Dev Stack
+# Scrapes Docker container logs and sends to Loki
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Docker container logs via Docker socket
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: name
+            values:
+              - dev-.*
+    relabel_configs:
+      # Extract container name
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+      # Extract container ID
+      - source_labels: ['__meta_docker_container_id']
+        target_label: container_id
+      # Extract image name
+      - source_labels: ['__meta_docker_container_image']
+        target_label: image
+      # Set job name based on container
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/dev-(.*)'
+        target_label: job
+      # Add service label for easier filtering
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/dev-(.*)'
+        target_label: service
+    pipeline_stages:
+      # Parse JSON logs (common for Python apps)
+      - match:
+          selector: '{container=~"dev-bot|dev-litellm|dev-langfuse.*"}'
+          stages:
+            - json:
+                expressions:
+                  level: level
+                  message: message
+                  timestamp: timestamp
+                  logger: name
+            - labels:
+                level:
+                logger:
+            - timestamp:
+                source: timestamp
+                format: RFC3339Nano
+                fallback_formats:
+                  - "2006-01-02T15:04:05.000000"
+                  - "2006-01-02 15:04:05,000"
+
+      # Parse Python logging format
+      - match:
+          selector: '{service=~"bot|bge-m3|bm42|user-base"}'
+          stages:
+            - regex:
+                expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (?P<logger>\S+) - (?P<level>\w+) - (?P<message>.*)$'
+            - labels:
+                level:
+                logger:
+
+      # Detect errors in any log line
+      - match:
+          selector: '{container=~"dev-.*"}'
+          stages:
+            - regex:
+                expression: '(?i)(error|exception|failed|fatal|panic|critical)'
+            - labels:
+                error_detected:
+
+      # Add static labels
+      - static_labels:
+          environment: development
+          stack: rag-dev
+
+      # Rate limiting to prevent log floods
+      - limit:
+          rate: 1000
+          burst: 2000
+          drop: true
