@@ -38,9 +38,9 @@ class TestLoadRedisEviction:
 
     @pytest.mark.asyncio
     async def test_redis_lfu_policy_configured(self, redis_client):
-        """Verify allkeys-lfu eviction policy."""
+        """Verify volatile-lfu eviction policy."""
         policy = await redis_client.config_get("maxmemory-policy")
-        assert policy.get("maxmemory-policy") == "allkeys-lfu"
+        assert policy.get("maxmemory-policy") == "volatile-lfu"
 
     @pytest.mark.asyncio
     async def test_redis_maxmemory_set(self, redis_client):
