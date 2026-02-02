@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from .constants import (
     DEFAULT_COLLECTION,
     DEFAULTS,
+    AcornMode,
     APIProvider,
     BatchSizes,
     ModelName,
@@ -162,6 +163,19 @@ class Settings:
         self.max_expanded_chunks = int(os.getenv("MAX_EXPANDED_CHUNKS", "10"))
         self.max_context_tokens = int(os.getenv("MAX_CONTEXT_TOKENS", "8000"))
 
+        # === ACORN (Filtered Vector Search Optimization) ===
+        # ACORN improves search quality when strict filters cause graph disconnection
+        # Best for: low selectivity filters (< 40% of vectors match)
+        # Requires: qdrant-client >= 1.15.0
+        self.acorn_mode = AcornMode(os.getenv("ACORN_MODE", "off").lower())
+        # max_selectivity: ACORN won't be used if selectivity > this value (0.0-1.0)
+        # Higher values = more aggressive ACORN usage
+        self.acorn_max_selectivity = float(os.getenv("ACORN_MAX_SELECTIVITY", "0.4"))
+        # In 'auto' mode: enable ACORN only if estimated selectivity < this threshold
+        self.acorn_enabled_selectivity_threshold = float(
+            os.getenv("ACORN_ENABLED_SELECTIVITY_THRESHOLD", "0.4")
+        )
+
         # === ENVIRONMENT ===
         self.env = os.getenv("ENV", "development").lower()
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
@@ -242,6 +256,9 @@ class Settings:
             "small_to_big_window_after": self.small_to_big_window_after,
             "max_expanded_chunks": self.max_expanded_chunks,
             "max_context_tokens": self.max_context_tokens,
+            "acorn_mode": self.acorn_mode.value,
+            "acorn_max_selectivity": self.acorn_max_selectivity,
+            "acorn_enabled_selectivity_threshold": self.acorn_enabled_selectivity_threshold,
             "env": self.env,
             "debug": self.debug,
         }
