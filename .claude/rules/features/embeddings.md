@@ -34,6 +34,7 @@ Semantic Cache:    USER-base (768-dim, Russian optimized)
 |-------|-----|----------|-----------|
 | voyage-4-large | 1024 | Document indexing | API |
 | voyage-4-lite | 1024 | Query embedding | API |
+| voyage-context-3 | 1024 | Contextualized chunks | API |
 | deepvk/USER-base | 768 | Russian semantic cache | dev-user-base:8003 |
 | BGE-M3 | 1024 | Dense + sparse + ColBERT | dev-bge-m3:8000 |
 | BM42 | sparse | Keyword matching | dev-bm42:8002 |
@@ -112,6 +113,33 @@ resp = await client.post("http://localhost:8002/embed",
     json={"text": "search query"})
 sparse = resp.json()  # {"indices": [...], "values": [...]}
 ```
+
+## Contextualized Embeddings (voyage-context-3)
+
+Process document chunks together to capture cross-chunk context:
+
+```python
+from src.models.contextualized_embedding import ContextualizedEmbeddingService
+
+service = ContextualizedEmbeddingService(
+    api_key=api_key,
+    output_dimension=1024,  # 2048, 1024, 512, or 256
+)
+
+# Embed document chunks together (context-aware)
+doc_chunks = [["intro", "body", "conclusion"]]  # Chunks from one doc
+result = await service.embed_documents(doc_chunks)
+# result.embeddings: one vector per chunk, context-aware
+
+# Embed query (single text)
+query_vec = await service.embed_query("search query")
+```
+
+**Feature flag:** `use_contextualized_embeddings=true`
+**API limits:** 1000 docs, 16K chunks, 32K tokens/doc, 120K total tokens
+**Best for:** Legal docs, technical docs (structure matters)
+
+See `docs/CONTEXTUALIZED_EMBEDDINGS.md` for full documentation.
 
 ## Asymmetric Retrieval
 
