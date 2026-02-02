@@ -8,7 +8,7 @@ groups:
       # Bot container down
       - alert: BotContainerDown
         expr: |
-          absent(count_over_time({container="dev-bot"} [5m]))
+          count_over_time({container="dev-bot"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -104,7 +104,7 @@ groups:
       # Slow response warning
       - alert: SlowBotResponse
         expr: |
-          count_over_time({container="dev-bot"} |~ "response_time.*[5-9]\d{3,}|response_time.*[1-9]\d{4,}" [5m]) > 5
+          count_over_time({container="dev-bot"} |~ "response_time.*[5-9][0-9]{3,}|response_time.*[1-9][0-9]{4,}" [5m]) > 5
         for: 5m
         labels:
           severity: warning
