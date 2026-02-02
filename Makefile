@@ -1,6 +1,7 @@
 .PHONY: help install install-dev lint format type-check security test test-cov clean all-checks \
 	test-preflight test-smoke test-smoke-routing test-load test-load-ci test-load-eviction \
-	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo
+	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
+	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert
 
 # Default target
 .DEFAULT_GOAL := help
@@ -439,3 +440,47 @@ eval-rag-full: ## Full RAG evaluation with all metrics
 	EVAL_INCLUDE_DEEPEVAL=true \
 	python3 -m src.evaluation.ragas_evaluation
 	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
+
+# =============================================================================
+# MONITORING & ALERTING
+# =============================================================================
+
+.PHONY: monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert
+
+monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
+	@echo "$(BLUE)Starting monitoring stack...$(NC)"
+	docker compose -f docker-compose.dev.yml up -d loki promtail alertmanager
+	@echo "$(GREEN)✓ Monitoring stack started$(NC)"
+	@echo "$(YELLOW)Services:$(NC)"
+	@echo "  Loki:         http://localhost:3100"
+	@echo "  Alertmanager: http://localhost:9093"
+
+monitoring-down: ## Stop monitoring stack
+	@echo "$(BLUE)Stopping monitoring stack...$(NC)"
+	docker compose -f docker-compose.dev.yml stop loki promtail alertmanager
+	@echo "$(GREEN)✓ Monitoring stack stopped$(NC)"
+
+monitoring-logs: ## View monitoring stack logs
+	@echo "$(BLUE)Monitoring stack logs (Ctrl+C to exit):$(NC)"
+	docker compose -f docker-compose.dev.yml logs -f loki promtail alertmanager
+
+monitoring-status: ## Show monitoring stack status
+	@echo "$(BLUE)Monitoring stack status:$(NC)"
+	@docker compose -f docker-compose.dev.yml ps loki promtail alertmanager
+	@echo ""
+	@echo "$(YELLOW)Checking health...$(NC)"
+	@curl -s http://localhost:3100/ready > /dev/null 2>&1 && echo "  Loki: $(GREEN)OK$(NC)" || echo "  Loki: $(RED)DOWN$(NC)"
+	@curl -s http://localhost:9093/-/healthy > /dev/null 2>&1 && echo "  Alertmanager: $(GREEN)OK$(NC)" || echo "  Alertmanager: $(RED)DOWN$(NC)"
+	@docker logs dev-promtail 2>&1 | tail -1 | grep -q "level=info" && echo "  Promtail: $(GREEN)OK$(NC)" || echo "  Promtail: $(YELLOW)CHECK LOGS$(NC)"
+
+monitoring-test-alert: ## Send a test alert to verify Telegram integration
+	@echo "$(BLUE)Sending test alert...$(NC)"
+	@if [ -z "$$TELEGRAM_ALERTING_BOT_TOKEN" ] || [ -z "$$TELEGRAM_ALERTING_CHAT_ID" ]; then \
+		echo "$(RED)Error: TELEGRAM_ALERTING_BOT_TOKEN and TELEGRAM_ALERTING_CHAT_ID must be set$(NC)"; \
+		echo "$(YELLOW)Export them or add to .env file$(NC)"; \
+		exit 1; \
+	fi
+	@curl -s -X POST http://localhost:9093/api/v1/alerts \
+		-H "Content-Type: application/json" \
+		-d '[{"labels":{"alertname":"TestAlert","severity":"info","service":"test"},"annotations":{"summary":"Test alert from make monitoring-test-alert","description":"This is a test alert to verify Telegram integration is working correctly."}}]' \
+		> /dev/null && echo "$(GREEN)✓ Test alert sent! Check your Telegram.$(NC)" || echo "$(RED)Failed to send alert. Is Alertmanager running?$(NC)"

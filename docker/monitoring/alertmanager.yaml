@@ -1,0 +1,87 @@
+# Alertmanager Configuration for RAG Bot Dev Stack
+# Routes alerts to Telegram bot
+
+global:
+  resolve_timeout: 5m
+  # Telegram settings (via environment variables)
+  telegram_api_url: "https://api.telegram.org"
+
+route:
+  # Default receiver
+  receiver: telegram-alerts
+  # Group alerts by these labels
+  group_by: ['alertname', 'service', 'severity']
+  # Wait before sending first alert
+  group_wait: 30s
+  # Wait before sending subsequent alerts for same group
+  group_interval: 5m
+  # Wait before resending resolved alert
+  repeat_interval: 4h
+  # Child routes for different severity levels
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: telegram-alerts
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 1h
+    # Warning alerts - standard timing
+    - match:
+        severity: warning
+      receiver: telegram-alerts
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 4h
+    # Info alerts - less frequent
+    - match:
+        severity: info
+      receiver: telegram-alerts
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 12h
+
+receivers:
+  - name: telegram-alerts
+    telegram_configs:
+      # Note: Set TELEGRAM_ALERTING_BOT_TOKEN and TELEGRAM_ALERTING_CHAT_ID in .env
+      # Alertmanager does not support env vars in config, so we use envsubst in entrypoint
+      - bot_token: "${TELEGRAM_ALERTING_BOT_TOKEN}"
+        chat_id: ${TELEGRAM_ALERTING_CHAT_ID}
+        api_url: "https://api.telegram.org"
+        parse_mode: HTML
+        disable_notifications: false
+        message: |
+          {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} <b>{{ .Status | toUpper }}</b>
+
+          {{ range .Alerts }}
+          <b>{{ .Labels.alertname }}</b>
+          {{ if .Labels.severity }}Severity: {{ .Labels.severity }}{{ end }}
+          {{ if .Labels.service }}Service: {{ .Labels.service }}{{ end }}
+
+          {{ if .Annotations.summary }}<i>{{ .Annotations.summary }}</i>{{ end }}
+          {{ if .Annotations.description }}
+          {{ .Annotations.description }}{{ end }}
+
+          {{ end }}
+
+  # Null receiver for silencing
+  - name: 'null'
+
+# Inhibition rules - prevent alert storms
+inhibit_rules:
+  # If critical is firing, suppress warning for same alertname/service
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname', 'service']
+  # If service is down, suppress all other alerts for that service
+  - source_match:
+      alertname: ServiceDown
+    target_match_re:
+      alertname: .+
+    equal: ['service']
+
+# Templates for custom message formatting
+templates: []
