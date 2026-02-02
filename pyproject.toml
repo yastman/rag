@@ -285,6 +285,7 @@ addopts = """
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+norecursedirs = ["tests/legacy"]
 markers = [
     "unit: Unit tests with mocks (fast, no external deps)",
     "integration: Integration tests (requires Docker/API keys)",
