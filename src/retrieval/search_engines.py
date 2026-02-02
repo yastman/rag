@@ -7,7 +7,7 @@ from typing import Any, Optional, Union
 import numpy as np
 from qdrant_client import QdrantClient, models
 
-from src.config import SearchEngine, Settings
+from src.config import QuantizationMode, SearchEngine, Settings
 from src.models import get_bge_m3_model
 
 
@@ -60,6 +60,13 @@ class BaseSearchEngine(ABC):
         """Initialize search engine."""
         self.settings = settings or Settings()
         self.client = QdrantClient(self.settings.qdrant_url)
+        # Use quantization-aware collection name
+        self._collection_name = self.settings.get_collection_name()
+
+    @property
+    def collection_name(self) -> str:
+        """Get collection name (respects quantization_mode setting)."""
+        return self._collection_name
 
     @abstractmethod
     def search(
@@ -95,18 +102,21 @@ class BaselineSearchEngine(BaseSearchEngine):
         if score_threshold is None:
             score_threshold = 0.5
 
+        # Build quantization search params from settings
+        search_params = models.SearchParams(
+            quantization=models.QuantizationSearchParams(
+                ignore=(self.settings.quantization_mode == QuantizationMode.OFF),
+                rescore=self.settings.quantization_rescore,
+                oversampling=self.settings.quantization_oversampling,
+            )
+        )
+
         results = self.client.search(
-            collection_name=self.settings.collection_name,
+            collection_name=self.collection_name,
             query_vector=query_embedding,
             limit=top_k,
             score_threshold=score_threshold,
-            # Oversampling + rescoring for quantization accuracy
-            search_params={
-                "quantization": {
-                    "rescore": True,  # Rescore with original vectors
-                    "oversampling": 3.0,  # Retrieve 3x more for rescoring
-                }
-            },
+            search_params=search_params,
         )
 
         return [
@@ -178,7 +188,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
         # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
-            collection_name=self.settings.collection_name,
+            collection_name=self.collection_name,
             query_vector=query_embedding,
             limit=top_k,
             score_threshold=score_threshold,
@@ -222,7 +232,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         try:
             # SDK query_points with nested prefetch
             response = self.client.query_points(
-                collection_name=self.settings.collection_name,
+                collection_name=self.collection_name,
                 prefetch=[
                     # Dense vector prefetch
                     models.Prefetch(
@@ -326,7 +336,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
         # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
-            collection_name=self.settings.collection_name,
+            collection_name=self.collection_name,
             query_vector=query_embedding,
             limit=top_k,
             score_threshold=score_threshold,
@@ -371,7 +381,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         try:
             # SDK query_points with nested prefetch for 3-stage pipeline
             response = self.client.query_points(
-                collection_name=self.settings.collection_name,
+                collection_name=self.collection_name,
                 prefetch=[
                     # Outer prefetch: RRF fusion of dense + sparse
                     models.Prefetch(
@@ -487,7 +497,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
         # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
-            collection_name=self.settings.collection_name,
+            collection_name=self.collection_name,
             query_vector=query_embedding,
             limit=top_k,
             score_threshold=score_threshold,
@@ -530,7 +540,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
         try:
             response = self.client.query_points(
-                collection_name=self.settings.collection_name,
+                collection_name=self.collection_name,
                 prefetch=[
                     models.Prefetch(
                         prefetch=[
