@@ -83,7 +83,7 @@ class BotConfig:
     #   - off: Use base collection without quantization
     #   - scalar: Use *_scalar collection (INT8 quantization)
     #   - binary: Use *_binary collection (binary quantization, fastest)
-    qdrant_quantization_mode: str = os.getenv("QDRANT_QUANTIZATION_MODE", "binary")
+    qdrant_quantization_mode: str = os.getenv("QDRANT_QUANTIZATION_MODE", "off")
     qdrant_use_quantization: bool = os.getenv("QDRANT_USE_QUANTIZATION", "true").lower() == "true"
     qdrant_quantization_rescore: bool = (
         os.getenv("QDRANT_QUANTIZATION_RESCORE", "true").lower() == "true"
@@ -94,6 +94,13 @@ class BotConfig:
     qdrant_quantization_always_ram: bool = (
         os.getenv("QDRANT_QUANTIZATION_ALWAYS_RAM", "true").lower() == "true"
     )
+
+    # Small-to-big context expansion
+    small_to_big_mode: str = os.getenv("SMALL_TO_BIG_MODE", "off").lower()  # off|on|auto
+    small_to_big_window_before: int = int(os.getenv("SMALL_TO_BIG_WINDOW_BEFORE", "1"))
+    small_to_big_window_after: int = int(os.getenv("SMALL_TO_BIG_WINDOW_AFTER", "1"))
+    max_expanded_chunks: int = int(os.getenv("MAX_EXPANDED_CHUNKS", "10"))
+    max_context_tokens: int = int(os.getenv("MAX_CONTEXT_TOKENS", "8000"))
 
     def get_collection_name(self) -> str:
         """Get collection name based on quantization mode.
