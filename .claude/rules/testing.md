@@ -36,6 +36,17 @@ make test-smoke            ***REMOVED*** 20 queries smoke suite
 make test-load             ***REMOVED*** Parallel chat simulation
 ```
 
+***REMOVED******REMOVED*** Chaos Tests
+
+Tests for graceful degradation when services fail:
+
+```bash
+pytest tests/chaos/ -v                        ***REMOVED*** All chaos tests
+pytest tests/chaos/test_qdrant_failures.py    ***REMOVED*** Qdrant timeout/disconnect
+pytest tests/chaos/test_redis_failures.py     ***REMOVED*** Redis disconnect/pool exhaustion
+pytest tests/chaos/test_llm_fallback.py       ***REMOVED*** LLM rate limits, parsing errors
+```
+
 ***REMOVED******REMOVED*** Notes
 
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
