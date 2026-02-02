@@ -653,6 +653,7 @@ all = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "mypy" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc" },
     { name = "pre-commit" },
     { name = "pylint" },
     { name = "pytest" },
@@ -665,6 +666,7 @@ all = [
 dev = [
     { name = "bandit" },
     { name = "mypy" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc" },
     { name = "pre-commit" },
     { name = "pylint" },
     { name = "pytest" },
@@ -709,6 +711,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11.0" },
     { name = "numpy" },
     { name = "openai" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'dev'", specifier = ">=1.39.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.2.0" },
