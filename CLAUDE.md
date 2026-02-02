@@ -179,6 +179,15 @@ See `.claude/rules/` for domain-specific documentation:
 
 | File | Scope | Loads when working with |
 |------|-------|------------------------|
+| `features/caching.md` | 6-tier cache, TTL, thresholds | `**/cache*.py` |
+| `features/search-retrieval.md` | Hybrid RRF, Qdrant, reranking | `src/retrieval/**` |
+| `features/query-processing.md` | Routing, analysis, preprocessing | `**/query*.py` |
+| `features/embeddings.md` | Voyage, BGE-M3, BM42, USER-base | `**/embed*.py, services/**` |
+| `features/llm-integration.md` | LiteLLM, fallbacks, streaming | `**/llm*.py, docker/litellm/**` |
+| `features/telegram-bot.md` | Handlers, middlewares | `telegram_bot/*.py` |
+| `features/user-personalization.md` | CESC, user context | `**/cesc*.py` |
+| `features/ingestion.md` | Parsing, chunking, indexing | `src/ingestion/**` |
+| `features/evaluation.md` | Metrics, MLflow, A/B tests | `src/evaluation/**` |
 | `skills.md` | Superpowers workflow, план реализации | `docs/plans/**/*.md` |
 | `services.md` | VoyageService, QdrantService, Cache patterns | `telegram_bot/services/**/*.py` |
 | `search.md` | Search engines, Qdrant query_points | `src/retrieval/**/*.py` |
