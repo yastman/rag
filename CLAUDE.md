@@ -7,190 +7,110 @@ This file provides guidance to Claude Code when working with this repository.
 ```bash
 make check              # Lint + types
 make test               # All tests
-make test-unit          # Unit tests only (fast, no deps)
-make docker-up          # Start Qdrant, Redis, MLflow
-. .venv/bin/activate    # Activate venv (created by uv)
+make test-unit          # Unit tests only (fast)
+make docker-up          # Start services
+. .venv/bin/activate    # Activate venv
 ```
 
-**Project Location:** `/home/user/projects/rag-fresh` (native WSL2 filesystem)
+**Location:** `/home/user/projects/rag-fresh` (WSL2)
 
 ## Project Overview
 
-**Contextual RAG Pipeline** - Production RAG system with hybrid search (RRF + ColBERT), Voyage AI embeddings, multi-level caching, and Telegram bot.
+**Contextual RAG Pipeline** — Production RAG with hybrid search (RRF + ColBERT), Voyage AI embeddings, multi-level caching, Telegram bot.
 
-**Python:** 3.11+ (3.12 recommended) | **LLM:** Cerebras GLM-4.7 via LiteLLM | **Embeddings:** Voyage AI
+**Stack:** Python 3.12 | Cerebras via LiteLLM | Voyage AI | Qdrant | Redis
 
-**Use cases:** Bulgarian property catalogs (192 docs), Ukrainian Criminal Code (1,294 docs)
-
-## Build & Development Commands
-
-```bash
-# Install
-make install-dev      # Dev tools (ruff, mypy, pytest)
-
-# Quality
-make check            # Quick check (lint + types)
-make fix              # Auto-fix all issues
-
-# Testing
-make test             # Run pytest
-make test-cov         # Tests with coverage
-
-# Docker
-make docker-up        # Start Qdrant, Redis, MLflow
-make docker-down      # Stop services
-
-# CI
-make pre-commit       # Run all checks before commit
-```
+**Use cases:** Bulgarian property (192 docs), Ukrainian Criminal Code (1,294 docs)
 
 ## Architecture
 
-### Core Pipeline Flow
-
 ```
-Input (PDF/CSV/DOCX) → Docling Parser → Chunker (1024 chars)
-    → VoyageService Embeddings + FastEmbed BM42 (sparse) → Qdrant Storage
-    → QueryPreprocessor (translit, RRF weights) → QdrantService (RRF fusion)
-    → VoyageService Rerank → LLM Contextualization → Response
+Input → Docling Parser → Chunker → Voyage Embeddings + BM42 → Qdrant
+     → QueryPreprocessor → RRF Fusion → Rerank → LLM → Response
 ```
-
-### Key Components
 
 | Module | Purpose |
 |--------|---------|
-| `src/core/pipeline.py` | RAG pipeline orchestrator |
-| `src/retrieval/search_engines.py` | 4 search variants (HybridRRFColBERT default) |
-| `src/ingestion/` | Document parsing, chunking, indexing |
-| `telegram_bot/services/` | Voyage AI unified services |
-| `telegram_bot/` | Telegram interface with streaming LLM |
+| `src/core/pipeline.py` | RAG orchestrator |
+| `src/retrieval/search_engines.py` | 4 search variants |
+| `src/ingestion/` | Parsing, chunking, indexing |
+| `telegram_bot/` | Bot + services |
 
-### External Services (16 containers)
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| Qdrant | 6333 | Vector database |
-| Redis | 6379 | App cache (semantic, rerank, sparse) |
-| LiteLLM | 4000 | LLM Gateway (Cerebras → Groq → OpenAI) |
-| Langfuse | 3001 | LLM observability v3 |
-| user-base | 8003 | Russian embeddings (deepvk/USER-base) |
-| bge-m3 | 8000 | BGE-M3 dense+sparse embeddings |
-| bm42 | 8002 | BM42 sparse embeddings |
-| docling | 5001 | Document parsing (PDF/DOCX) |
-| lightrag | 9621 | LightRAG graph service |
-
-Full stack details: `.claude/rules/docker.md`
-
-### Configuration
-
-```python
-from src.config.settings import get_settings
-settings = get_settings()  # Lazy, validates API keys on first call
-```
+**Services:** Qdrant:6333, Redis:6379, LiteLLM:4000, Langfuse:3001 → see `.claude/rules/docker.md`
 
 ## Code Style
 
-- **Line length:** 100 characters
-- **Formatter/Linter:** Ruff (configured in pyproject.toml)
-- **Type hints:** Encouraged, MyPy configured
-- **Docstrings:** Google style
-
-### Commit Messages (Conventional Commits)
-
-```
-feat(search): add new search variant
-fix(cache): resolve race condition
-docs(readme): update architecture section
-```
+- **Line length:** 100 | **Linter:** Ruff | **Types:** MyPy | **Docstrings:** Google style
+- **Commits:** `feat(scope): message` | `fix(scope): message` | `docs(scope): message`
 
 ## Task Management
 
-**Active tasks:** `TODO.md` | **Backlog:** GitHub Issues (`next`, `backlog`, `idea` labels)
+**Active:** `TODO.md` | **Backlog:** `gh issue list --label "next"`
 
+**Claude Code Tasks:** Для shared task list между терминалами:
 ```bash
-gh issue list --label "next"    # Next to work on
+CLAUDE_CODE_TASK_LIST_ID=my-project claude
 ```
+См. `.claude/rules/shared-tasks.md`
 
-**Auto-close:** Use `Closes #N` in commit message.
+## Environment
 
-## Key Documentation
+1. Copy `.env.example` → `.env`
+2. Required: `TELEGRAM_BOT_TOKEN`, `VOYAGE_API_KEY`, `CEREBRAS_API_KEY`, `LANGFUSE_*`
+3. `make install-dev && make docker-up`
+
+## Key Docs
 
 | Document | Content |
 |----------|---------|
-| `docs/PIPELINE_OVERVIEW.md` | Complete architecture |
-| `docs/QDRANT_STACK.md` | Qdrant configuration |
-| `CACHING.md` | 6-tier cache architecture |
-
-## Environment Setup
-
-1. Copy `.env.example` to `.env`
-2. Required keys: `TELEGRAM_BOT_TOKEN`, `VOYAGE_API_KEY`, `CEREBRAS_API_KEY`, `LANGFUSE_*`
-3. Optional: `GROQ_API_KEY`, `OPENAI_API_KEY` (fallbacks)
-4. Run `make install-dev`
-5. Start services: `docker compose -f docker-compose.dev.yml up -d`
+| `docs/PIPELINE_OVERVIEW.md` | Architecture |
+| `docs/QDRANT_STACK.md` | Vector DB |
+| `CACHING.md` | 6-tier cache |
 
 ## Qdrant Collections
 
-- `contextual_bulgaria_voyage` - Bulgarian property (192 docs, Voyage-4, Binary Quantization)
-- `legal_documents` - Ukrainian Criminal Code (1,294 docs, BGE-M3)
+- `contextual_bulgaria_voyage` — Bulgarian property (Voyage-4, BQ)
+- `legal_documents` — Ukrainian Criminal Code (BGE-M3)
 
 ## Deployment
 
 ```bash
-make deploy-code                  # Quick deploy (git pull)
-make deploy-release VERSION=2.12.0  # Release deploy
+make deploy-code                    # Quick (git pull)
+make deploy-release VERSION=2.12.0  # Release
 ```
 
 ## Troubleshooting
 
 | Error | Fix |
 |-------|-----|
-| `Redis connection refused` | `docker compose up -d redis` |
-| `Qdrant timeout` | Enable `use_quantization=True` |
-| `LiteLLM unhealthy` | Wait 30s, check `docker logs dev-litellm` |
-| `Voyage API 429` | Use `CacheService`, add delays |
-
-## API Rate Limits
-
-- **Cerebras**: High throughput, no strict RPM limits
-- **Voyage AI**: 300 RPM (embeddings), 100 RPM (rerank). Use `CacheService`.
+| Redis connection refused | `docker compose up -d redis` |
+| Qdrant timeout | `use_quantization=True` |
+| Voyage 429 | Use CacheService |
 
 ## Skills Workflow
-
-Для реализации планов используй superpowers скиллы:
 
 ```
 /writing-plans → /executing-plans → /finishing-a-development-branch
 ```
 
-| Этап | Скилл |
-|------|-------|
-| Изоляция | `/using-git-worktrees` |
-| План | `/writing-plans` |
-| Выполнение | `/executing-plans` или `/subagent-driven-development` |
-| Качество | `/test-driven-development`, `/systematic-debugging` |
-| Завершение | `/verification-before-completion`, `/finishing-a-development-branch` |
-
-**Подробнее:** `.claude/rules/skills.md`
+**Details:** `.claude/rules/skills.md`
 
 ## Modular Docs
 
 See `.claude/rules/` for domain-specific documentation:
 
-| File | Scope | Loads when working with |
-|------|-------|------------------------|
-| `features/caching.md` | 6-tier cache, TTL, thresholds | `**/cache*.py` |
-| `features/search-retrieval.md` | Hybrid RRF, Qdrant, reranking | `src/retrieval/**` |
-| `features/query-processing.md` | Routing, analysis, preprocessing | `**/query*.py` |
-| `features/embeddings.md` | Voyage, BGE-M3, BM42, USER-base | `**/embed*.py, services/**` |
-| `features/llm-integration.md` | LiteLLM, fallbacks, streaming | `**/llm*.py, docker/litellm/**` |
-| `features/telegram-bot.md` | Handlers, middlewares | `telegram_bot/*.py` |
-| `features/user-personalization.md` | CESC, user context | `**/cesc*.py` |
-| `features/ingestion.md` | Parsing, chunking, indexing | `src/ingestion/**` |
-| `features/evaluation.md` | Metrics, MLflow, A/B tests | `src/evaluation/**` |
-| `skills.md` | Superpowers workflow, план реализации | `docs/plans/**/*.md` |
-| `services.md` | VoyageService, QdrantService, Cache patterns | `telegram_bot/services/**/*.py` |
-| `search.md` | Search engines, Qdrant query_points | `src/retrieval/**/*.py` |
-| `testing.md` | Unit tests, E2E, baseline | `tests/**/*.py` |
-| `observability.md` | Langfuse, instrumentation | `telegram_bot/observability.py` |
-| `docker.md` | LiteLLM, docker-compose, bot | `docker/**/*` |
+| File | Scope |
+|------|-------|
+| `features/caching.md` | 6-tier cache, TTL |
+| `features/search-retrieval.md` | Hybrid RRF, Qdrant |
+| `features/embeddings.md` | Voyage, BGE-M3, BM42 |
+| `features/llm-integration.md` | LiteLLM, fallbacks |
+| `features/telegram-bot.md` | Handlers, middlewares |
+| `features/ingestion.md` | Parsing, chunking |
+| `services.md` | VoyageService, QdrantService |
+| `search.md` | Search engines |
+| `testing.md` | Unit tests, E2E |
+| `docker.md` | Containers, compose |
+| `skills.md` | Superpowers workflow |
+| `shared-tasks.md` | Multi-terminal tasks |
+| `observability.md` | Langfuse |
