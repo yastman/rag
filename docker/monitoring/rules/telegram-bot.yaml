@@ -1,0 +1,126 @@
+# Alert Rules for Telegram Bot
+# Monitors bot health, errors, and performance
+
+groups:
+  - name: telegram-bot
+    interval: 1m
+    rules:
+      # Bot container down
+      - alert: BotContainerDown
+        expr: |
+          absent(count_over_time({container="dev-bot"} [5m]))
+        for: 2m
+        labels:
+          severity: critical
+          service: bot
+        annotations:
+          summary: "Telegram bot container is down"
+          description: "No logs received from dev-bot container for 5 minutes"
+
+      # High error rate in bot
+      - alert: BotHighErrorRate
+        expr: |
+          sum(rate({container="dev-bot"} |~ "(?i)(error|exception|failed)" [5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: bot
+        annotations:
+          summary: "High error rate in Telegram bot"
+          description: "Bot is producing errors at rate > 0.1/s for 5 minutes"
+
+      # Bot critical errors
+      - alert: BotCriticalError
+        expr: |
+          count_over_time({container="dev-bot"} |~ "(?i)(critical|fatal|panic)" [5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: bot
+        annotations:
+          summary: "Critical error in Telegram bot"
+          description: "Bot encountered a critical/fatal error"
+
+      # Telegram API errors
+      - alert: TelegramAPIError
+        expr: |
+          count_over_time({container="dev-bot"} |~ "(?i)telegram.*error|aiogram.*error" [5m]) > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: bot
+        annotations:
+          summary: "Telegram API errors detected"
+          description: "Multiple Telegram API errors in bot logs"
+
+      # Bot restart detected
+      - alert: BotRestarted
+        expr: |
+          count_over_time({container="dev-bot"} |= "Starting bot" [5m]) > 1
+        for: 0m
+        labels:
+          severity: info
+          service: bot
+        annotations:
+          summary: "Telegram bot restarted"
+          description: "Bot has restarted in the last 5 minutes"
+
+      # Query processing errors
+      - alert: QueryProcessingError
+        expr: |
+          count_over_time({container="dev-bot"} |~ "(?i)query.*error|search.*failed|retrieval.*error" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: bot
+        annotations:
+          summary: "Query processing errors in bot"
+          description: "Multiple query processing errors detected"
+
+      # LLM errors in bot
+      - alert: LLMGenerationError
+        expr: |
+          count_over_time({container="dev-bot"} |~ "(?i)llm.*error|generation.*failed|litellm.*error" [5m]) > 2
+        for: 3m
+        labels:
+          severity: warning
+          service: bot
+        annotations:
+          summary: "LLM generation errors in bot"
+          description: "LLM/generation errors detected in bot"
+
+      # Cache errors
+      - alert: CacheError
+        expr: |
+          count_over_time({container="dev-bot"} |~ "(?i)cache.*error|redis.*error|cache.*failed" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: bot
+        annotations:
+          summary: "Cache errors in bot"
+          description: "Redis/cache errors detected in bot"
+
+      # Slow response warning
+      - alert: SlowBotResponse
+        expr: |
+          count_over_time({container="dev-bot"} |~ "response_time.*[5-9]\d{3,}|response_time.*[1-9]\d{4,}" [5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: bot
+        annotations:
+          summary: "Slow bot responses detected"
+          description: "Multiple slow responses (>5s) in bot"
+
+      # Memory warning (if logged)
+      - alert: BotMemoryWarning
+        expr: |
+          count_over_time({container="dev-bot"} |~ "(?i)memory.*warning|memory.*high|oom" [5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: bot
+        annotations:
+          summary: "Memory warning in bot"
+          description: "Memory-related warning detected in bot logs"
