@@ -49,6 +49,7 @@ dev = [
     "pytest-cov>=5.0.0",     ***REMOVED*** Coverage plugin
     "pytest-asyncio>=0.24.0",***REMOVED*** Async testing
     "pytest-httpx>=0.35.0",  ***REMOVED*** HTTPX mocking (2026 best practice)
+    "opentelemetry-exporter-otlp-proto-grpc>=1.39.0",  ***REMOVED*** OTLP exporter for OTEL tests
     "pre-commit>=3.8.0",     ***REMOVED*** Git hooks
 ]
 
