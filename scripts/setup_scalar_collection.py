@@ -144,6 +144,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
     # Keyword indexes for text filtering
     keyword_fields = [
         "metadata.document_name",
+        "metadata.doc_id",
         "metadata.article_number",
         "metadata.city",
         "metadata.source_type",
