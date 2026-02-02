@@ -163,18 +163,22 @@ class QdrantService:
                 )
             )
 
-        # Execute RRF fusion search
-        result = await self._client.query_points(
-            collection_name=self._collection_name,
-            prefetch=prefetch,
-            query=models.FusionQuery(fusion=models.Fusion.RRF),
-            query_filter=self._build_filter(filters),
-            limit=top_k,
-            with_payload=True,
-            search_params=search_params,
-        )
-
-        return self._format_results(result.points)
+        # Execute RRF fusion search with graceful degradation
+        try:
+            result = await self._client.query_points(
+                collection_name=self._collection_name,
+                prefetch=prefetch,
+                query=models.FusionQuery(fusion=models.Fusion.RRF),
+                query_filter=self._build_filter(filters),
+                limit=top_k,
+                with_payload=True,
+                search_params=search_params,
+            )
+            return self._format_results(result.points)
+        except Exception as e:
+            # Graceful degradation: return empty list on any Qdrant error
+            logger.error(f"Qdrant search failed (graceful degradation): {e}")
+            return []
 
     @observe(name="qdrant-search-score-boosting")
     async def search_with_score_boosting(
