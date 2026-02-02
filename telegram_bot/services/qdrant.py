@@ -52,6 +52,7 @@ class QdrantService:
         self._collection_name = self._get_collection_name(collection_name, quantization_mode)
         self._dense_vector_name = dense_vector_name
         self._sparse_vector_name = sparse_vector_name
+        self._collection_validated = False
 
         logger.info(f"QdrantService initialized: {self._collection_name} (mode={quantization_mode})")
 
@@ -83,6 +84,11 @@ class QdrantService:
         """Get the current collection name (with quantization suffix)."""
         return self._collection_name
 
+    @property
+    def client(self) -> AsyncQdrantClient:
+        """Expose underlying client for helper services (e.g., small-to-big)."""
+        return self._client
+
     def set_quantization_mode(self, mode: str) -> None:
         """Change quantization mode and update collection name.
 
@@ -91,7 +97,46 @@ class QdrantService:
         """
         self._quantization_mode = mode.lower()
         self._collection_name = self._get_collection_name(self._base_collection_name, mode)
+        self._collection_validated = False
         logger.info(f"QdrantService: switched to {self._collection_name} (mode={mode})")
+
+    async def ensure_collection(self) -> None:
+        """Ensure the configured collection exists; fallback to base collection if needed.
+
+        This prevents hard failures when quantization_mode points to a suffix collection
+        that hasn't been created/reindexed yet.
+        """
+        if self._collection_validated:
+            return
+
+        try:
+            resp = await self._client.get_collections()
+            names = {c.name for c in resp.collections}
+        except Exception as e:
+            # If we can't list collections, let the actual query raise a meaningful error.
+            logger.warning(f"QdrantService: unable to list collections: {e}")
+            return
+
+        if self._collection_name in names:
+            self._collection_validated = True
+            return
+
+        # Fallback: use base collection if it exists.
+        if self._base_collection_name in names:
+            logger.warning(
+                "QdrantService: collection '%s' not found, falling back to base '%s'",
+                self._collection_name,
+                self._base_collection_name,
+            )
+            self._collection_name = self._base_collection_name
+            self._quantization_mode = "off"
+            self._collection_validated = True
+            return
+
+        raise RuntimeError(
+            f"Qdrant collection '{self._collection_name}' not found "
+            f"(base '{self._base_collection_name}' also missing)"
+        )
 
     @observe(name="qdrant-hybrid-search-rrf")
     async def hybrid_search_rrf(
@@ -125,6 +170,7 @@ class QdrantService:
         Returns:
             List of results with id, score, text, metadata
         """
+        await self.ensure_collection()
         # Build prefetch queries
         prefetch = []
 
