@@ -1,6 +1,7 @@
 """Configuration module for Contextual RAG Pipeline."""
 
 from .constants import (
+    AcornMode,
     APIProvider,
     HSNWParameters,
     QuantizationMode,
@@ -14,6 +15,7 @@ from .settings import Settings
 
 
 __all__ = [
+    "AcornMode",
     "APIProvider",
     "HSNWParameters",
     "QuantizationMode",
