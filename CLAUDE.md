@@ -87,20 +87,7 @@ make deploy-release VERSION=2.12.0  # Release
 
 ## Monitoring & Alerting
 
-```bash
-make monitoring-up          # Start Loki, Promtail, Alertmanager
-make monitoring-status      # Check health
-make monitoring-test-alert  # Test Telegram notification
-make monitoring-logs        # View logs
-```
-
-**Setup:** See `docs/ALERTING.md`
-
-**Services:** Loki:3100, Alertmanager:9093
-
-**Config:** `docker/monitoring/` (loki.yaml, promtail.yaml, alertmanager.yaml, rules/)
-
-**Env vars:** `TELEGRAM_ALERTING_BOT_TOKEN`, `TELEGRAM_ALERTING_CHAT_ID`
+`make monitoring-up` | `make monitoring-test-alert` → See `.claude/rules/docker.md` and `docs/ALERTING.md`
 
 ## Troubleshooting
 
