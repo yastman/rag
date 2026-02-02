@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from .query_preprocessor import QueryPreprocessor
     from .query_router import QueryType, classify_query, get_chitchat_response, needs_rerank
     from .retriever import RetrieverService
+    from .small_to_big import ExpandedChunk, SmallToBigService
     from .user_context import UserContextService
     from .vectorizers import UserBaseVectorizer
     from .voyage import VoyageService
@@ -27,12 +28,14 @@ __all__ = [
     "CESCPersonalizer",
     "CacheService",
     "EmbeddingService",
+    "ExpandedChunk",
     "LLMService",
     "QdrantService",
     "QueryAnalyzer",
     "QueryPreprocessor",
     "QueryType",
     "RetrieverService",
+    "SmallToBigService",
     "UserBaseVectorizer",
     "UserContextService",
     "VoyageService",
@@ -48,6 +51,7 @@ _IMPORT_MAP = {
     "CESCPersonalizer": ".cesc",
     "is_personalized_query": ".cesc",
     "EmbeddingService": ".embeddings",
+    "ExpandedChunk": ".small_to_big",
     "LLMService": ".llm",
     "QdrantService": ".qdrant",
     "QueryAnalyzer": ".query_analyzer",
@@ -57,6 +61,7 @@ _IMPORT_MAP = {
     "get_chitchat_response": ".query_router",
     "needs_rerank": ".query_router",
     "RetrieverService": ".retriever",
+    "SmallToBigService": ".small_to_big",
     "UserContextService": ".user_context",
     "UserBaseVectorizer": ".vectorizers",
     "VoyageService": ".voyage",
