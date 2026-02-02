@@ -186,6 +186,13 @@ class DocumentIndexer:
                 field_schema="keyword",
             )
 
+            # Small-to-big: index order field for neighbor chunk queries
+            self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name="metadata.order",
+                field_schema="integer",
+            )
+
             # Numeric fields - enable range filtering (price < 100000, rooms >= 2, etc.)
             for field in [
                 "price",
@@ -275,13 +282,16 @@ class DocumentIndexer:
                 sparse_values = list(emb["lexical_weights"].values())
 
                 # Build metadata dict
+                # doc_id and chunk_order are explicit aliases for small-to-big retrieval
                 metadata_dict = {
                     "document_name": chunk.document_name,
+                    "doc_id": chunk.document_name,  # Explicit alias for small-to-big
                     "article_number": chunk.article_number,
                     "chapter": chunk.chapter,
                     "section": chunk.section,
                     "chunk_id": chunk.chunk_id,
                     "order": chunk.order,
+                    "chunk_order": chunk.order,  # Explicit alias for small-to-big
                 }
 
                 # Add extra_metadata for structured data (CSV, etc.)

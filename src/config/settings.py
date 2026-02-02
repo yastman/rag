@@ -138,6 +138,16 @@ class Settings:
         self.enable_mlflow = os.getenv("ENABLE_MLFLOW", "true").lower() == "true"
         self.enable_langfuse = os.getenv("ENABLE_LANGFUSE", "true").lower() == "true"
 
+        # === SMALL-TO-BIG CONTEXT EXPANSION ===
+        # Mode: off (disabled), on (always expand), auto (expand for complex queries)
+        self.small_to_big_mode = os.getenv("SMALL_TO_BIG_MODE", "off").lower()
+        # Window size: number of chunks to fetch before/after each result
+        self.small_to_big_window_before = int(os.getenv("SMALL_TO_BIG_WINDOW_BEFORE", "1"))
+        self.small_to_big_window_after = int(os.getenv("SMALL_TO_BIG_WINDOW_AFTER", "1"))
+        # Limits to prevent context explosion
+        self.max_expanded_chunks = int(os.getenv("MAX_EXPANDED_CHUNKS", "10"))
+        self.max_context_tokens = int(os.getenv("MAX_CONTEXT_TOKENS", "8000"))
+
         # === ENVIRONMENT ===
         self.env = os.getenv("ENV", "development").lower()
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
@@ -189,6 +199,11 @@ class Settings:
             "enable_query_expansion": self.enable_query_expansion,
             "enable_mlflow": self.enable_mlflow,
             "enable_langfuse": self.enable_langfuse,
+            "small_to_big_mode": self.small_to_big_mode,
+            "small_to_big_window_before": self.small_to_big_window_before,
+            "small_to_big_window_after": self.small_to_big_window_after,
+            "max_expanded_chunks": self.max_expanded_chunks,
+            "max_context_tokens": self.max_context_tokens,
             "env": self.env,
             "debug": self.debug,
         }
