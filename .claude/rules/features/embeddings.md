@@ -1,0 +1,162 @@
+---
+paths: "**/embed*.py, **/vector*.py, **/voyage*.py, services/bge-m3-api/**, services/bm42/**, services/user-base/**"
+---
+
+***REMOVED*** Embeddings
+
+Voyage AI, USER-base, BGE-M3, and BM42 embedding services.
+
+***REMOVED******REMOVED*** Purpose
+
+Generate dense and sparse embeddings for semantic search and caching.
+
+***REMOVED******REMOVED*** Architecture
+
+```
+Document Indexing: Voyage voyage-4-large (1024-dim) + BM42 sparse
+Query Embedding:   Voyage voyage-4-lite (1024-dim) + BM42 sparse
+Semantic Cache:    USER-base (768-dim, Russian optimized)
+```
+
+***REMOVED******REMOVED*** Key Files
+
+| File | Line | Description |
+|------|------|-------------|
+| `telegram_bot/services/voyage.py` | 26 | VoyageService class |
+| `telegram_bot/services/vectorizers.py` | 18 | UserBaseVectorizer |
+| `services/bge-m3-api/app.py` | 41 | BGE-M3 FastAPI endpoints |
+| `services/bm42/main.py` | 22 | BM42 FastAPI service |
+| `services/user-base/main.py` | 20 | USER-base FastAPI service |
+
+***REMOVED******REMOVED*** Embedding Models
+
+| Model | Dim | Use Case | Container |
+|-------|-----|----------|-----------|
+| voyage-4-large | 1024 | Document indexing | API |
+| voyage-4-lite | 1024 | Query embedding | API |
+| deepvk/USER-base | 768 | Russian semantic cache | dev-user-base:8003 |
+| BGE-M3 | 1024 | Dense + sparse + ColBERT | dev-bge-m3:8000 |
+| BM42 | sparse | Keyword matching | dev-bm42:8002 |
+
+***REMOVED******REMOVED*** Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `VOYAGE_BATCH_SIZE` | 128 | Texts per API request |
+| `MATRYOSHKA_DIMS` | (2048,1024,512,256) | Available dimensions |
+| Retry attempts | 6 | With exponential backoff |
+
+***REMOVED******REMOVED*** Common Patterns
+
+***REMOVED******REMOVED******REMOVED*** VoyageService (recommended)
+
+```python
+from telegram_bot.services.voyage import VoyageService
+
+service = VoyageService(
+    api_key=api_key,
+    model_docs="voyage-4-large",    ***REMOVED*** For indexing
+    model_queries="voyage-4-lite",  ***REMOVED*** For queries (asymmetric)
+    model_rerank="rerank-2.5",
+)
+
+***REMOVED*** Async (recommended)
+query_vec = await service.embed_query("search text")
+doc_vecs = await service.embed_documents(["doc1", "doc2"])
+results = await service.rerank("query", documents, top_k=5)
+
+***REMOVED*** Sync wrappers
+query_vec = service.embed_query_sync("search text")
+```
+
+***REMOVED******REMOVED******REMOVED*** UserBaseVectorizer (Russian cache)
+
+```python
+from telegram_bot.services.vectorizers import UserBaseVectorizer
+
+vectorizer = UserBaseVectorizer(base_url="http://localhost:8003")
+
+***REMOVED*** Async
+embedding = await vectorizer.aembed("двухкомнатная квартира")
+
+***REMOVED*** Sync
+embedding = vectorizer.embed("двухкомнатная квартира")
+```
+
+***REMOVED******REMOVED******REMOVED*** BGE-M3 API (hybrid)
+
+```python
+import httpx
+
+async with httpx.AsyncClient() as client:
+    ***REMOVED*** Dense only
+    resp = await client.post("http://localhost:8000/encode/dense",
+        json={"texts": ["text"]})
+    dense = resp.json()["dense_vecs"]
+
+    ***REMOVED*** Sparse only
+    resp = await client.post("http://localhost:8000/encode/sparse",
+        json={"texts": ["text"]})
+    sparse = resp.json()["lexical_weights"]
+
+    ***REMOVED*** All three (most efficient)
+    resp = await client.post("http://localhost:8000/encode/hybrid",
+        json={"texts": ["text"]})
+    result = resp.json()  ***REMOVED*** dense_vecs, lexical_weights, colbert_vecs
+```
+
+***REMOVED******REMOVED******REMOVED*** BM42 sparse
+
+```python
+resp = await client.post("http://localhost:8002/embed",
+    json={"text": "search query"})
+sparse = resp.json()  ***REMOVED*** {"indices": [...], "values": [...]}
+```
+
+***REMOVED******REMOVED*** Asymmetric Retrieval
+
+Documents indexed with `voyage-4-large` (high quality, one-time cost).
+Queries embedded with `voyage-4-lite` (fast, cheap, continuous).
+Both share embedding space → compatible for search.
+
+***REMOVED******REMOVED*** Matryoshka Embeddings
+
+Voyage-4 supports variable dimensions:
+
+```python
+***REMOVED*** Lower dimensions for faster search
+embedding = await service.embed_query(text, output_dimension=512)
+```
+
+***REMOVED******REMOVED*** Dependencies
+
+| Container | Port | RAM | Purpose |
+|-----------|------|-----|---------|
+| dev-bge-m3 | 8000 | 4GB | Dense + sparse + ColBERT |
+| dev-bm42 | 8002 | 1GB | BM42 sparse |
+| dev-user-base | 8003 | 2GB | Russian semantic |
+
+***REMOVED******REMOVED*** Testing
+
+```bash
+pytest tests/unit/test_voyage_service.py -v
+pytest tests/unit/test_vectorizers.py -v
+```
+
+***REMOVED******REMOVED*** Troubleshooting
+
+| Error | Fix |
+|-------|-----|
+| `Voyage API 429` | Use CacheService, add delays |
+| `Connection refused :8003` | `docker compose up -d user-base` |
+| Slow BGE-M3 | Check OMP_NUM_THREADS=4 |
+
+***REMOVED******REMOVED*** Development Guide
+
+***REMOVED******REMOVED******REMOVED*** Adding new embedding model
+
+1. Create FastAPI service in `services/new-model/`
+2. Add Dockerfile with model pre-download
+3. Add to `docker-compose.dev.yml`
+4. Create client class in `telegram_bot/services/`
+5. Add tests
