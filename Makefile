@@ -1,7 +1,8 @@
 .PHONY: help install install-dev lint format type-check security test test-cov clean all-checks \
 	test-preflight test-smoke test-smoke-routing test-load test-load-ci test-load-eviction \
 	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
-	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert
+	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
+	ingest-dir ingest-gdrive ingest-status
 
 # Default target
 .DEFAULT_GOAL := help
@@ -484,3 +485,39 @@ monitoring-test-alert: ## Send a test alert to verify Telegram integration
 		-H "Content-Type: application/json" \
 		-d '[{"labels":{"alertname":"TestAlert","severity":"info","service":"test"},"annotations":{"summary":"Test alert from make monitoring-test-alert","description":"This is a test alert to verify Telegram integration is working correctly."}}]' \
 		> /dev/null && echo "$(GREEN)✓ Test alert sent! Check your Telegram.$(NC)" || echo "$(RED)Failed to send alert. Is Alertmanager running?$(NC)"
+
+# =============================================================================
+# DOCUMENT INGESTION (CocoIndex Pipeline)
+# =============================================================================
+
+.PHONY: ingest-setup ingest-dir ingest-gdrive ingest-status ingest-test
+
+ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
+	@echo "$(BLUE)Setting up ingestion infrastructure...$(NC)"
+	uv run python scripts/setup_ingestion_collection.py
+	@echo "$(GREEN)✓ Ingestion setup complete$(NC)"
+
+ingest-test: ## Run ingestion unit tests
+	@echo "$(BLUE)Running ingestion tests...$(NC)"
+	uv run pytest tests/unit/test_ingestion*.py tests/unit/test_docling*.py tests/unit/test_chunker.py tests/unit/test_cocoindex*.py -v
+	@echo "$(GREEN)✓ Ingestion tests complete$(NC)"
+
+ingest-dir: ## Ingest documents from directory (usage: make ingest-dir DIR=path/to/docs)
+ifndef DIR
+	$(error DIR is required. Usage: make ingest-dir DIR=path/to/docs)
+endif
+	@echo "$(BLUE)Ingesting documents from $(DIR)...$(NC)"
+	python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
+	@echo "$(GREEN)✓ Directory ingestion complete$(NC)"
+
+ingest-gdrive: ## Ingest documents from Google Drive (usage: make ingest-gdrive FOLDER_ID=xxx)
+ifndef FOLDER_ID
+	$(error FOLDER_ID is required. Usage: make ingest-gdrive FOLDER_ID=xxx)
+endif
+	@echo "$(BLUE)Ingesting documents from Google Drive folder $(FOLDER_ID)...$(NC)"
+	python -m telegram_bot.services.ingestion_cocoindex ingest-gdrive "$(FOLDER_ID)"
+	@echo "$(GREEN)✓ Google Drive ingestion complete$(NC)"
+
+ingest-status: ## Show collection statistics
+	@echo "$(BLUE)Collection status:$(NC)"
+	python -m telegram_bot.services.ingestion_cocoindex status
