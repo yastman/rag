@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent / "legacy"))
 from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
-from pymupdf_chunker import PyMuPDFChunker
+from legacy.pymupdf_chunker import PyMuPDFChunker
 from transformers import AutoTokenizer
 
 
