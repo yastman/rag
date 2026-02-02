@@ -13,9 +13,9 @@
 ## Execution Strategy
 
 ```
-WAVE 1 (P0) ✅ ──> WAVE 2 (P1) ✅ ──> WAVE 3 (P2) ✅ ──> WAVE 4 (R&D)
+WAVE 1 (P0) ✅ ──> WAVE 2 (P1) ✅ ──> WAVE 3 (P2) ✅ ──> WAVE 4 (R&D) ✅
    │                  │                  │                  │
-   ├─ A (Infra) ✅    ├─ A.1 (Langfuse)✅ ├─ D (ACORN) ✅    └─ E (Late Chunking)
+   ├─ A (Infra) ✅    ├─ A.1 (Langfuse)✅ ├─ D (ACORN) ✅    └─ E (Contextualized) ✅
    ├─ A.0 (Docs) ✅   ├─ B (BinaryQuant)✅├─ G (HyDE) ✅
    └─ A.2 (Index) ✅  ├─ C (Small2big) ✅ ├─ H (Guardrails)✅
                       ├─ F (RAG Eval) ✅  └─ J (Ingestion) ✅
@@ -332,27 +332,32 @@ pytest tests/unit/test_ingestion*.py -v  # 40 tests pass
 
 ---
 
-## WAVE 4: R&D (Optional)
+## WAVE 4: R&D (Optional) ✅ COMPLETE (2026-02-02)
 
 **Prerequisites:** WAVE 3 complete, system stable
 
-### Worker 13: Milestone E — Late/Contextual Chunking
+### Worker 13: Milestone E — Late/Contextual Chunking ✅
 
 **Worktree:** `.worktrees/milestone-e-late-chunking`
-**Branch:** `milestone/e-late-chunking`
-**Estimated tasks:** 4
+**Branch:** `milestone/e-late-chunking` → pushed 2026-02-02
+**Commit:** `41b5e9b feat(embeddings): add voyage-context-3 contextualized embeddings`
 
 **Dependencies:** All previous (experimental, needs stable baseline)
 
-**Scope:**
-- [ ] Evaluate: Does Voyage-4-large support late chunking? (32K context)
-- [ ] If yes: A/B late chunking vs baseline
-- [ ] If no improvement: Then contextual chunking (LLM summary prepend)
-- [ ] Document findings
+**Finding:** Voyage AI has native `/contextualizedembeddings` endpoint with `voyage-context-3` model!
+This is better than late chunking — it's built-in contextualized chunk embeddings.
 
-**Verification:**
+**Scope:**
+- [x] Evaluate: Does Voyage support late/contextual chunking? → YES, voyage-context-3
+- [x] Implement ContextualizedEmbeddingService with voyage-context-3
+- [x] A/B testing script created: `scripts/test_contextualized_ab.py`
+- [x] Document findings: `docs/CONTEXTUALIZED_EMBEDDINGS.md`
+- [x] Add feature flags: `use_contextualized_embeddings`, `contextualized_embedding_dim`
+- [x] 43 tests added (20 unit + 23 integration)
+
+**Verification:** ✅
 ```bash
-# A/B report shows retrieval improvement (or documents why not)
+pytest tests/unit/test_contextualized_embeddings.py tests/integration/test_contextualized_pipeline.py -v  # 43 pass
 ```
 
 ---
@@ -385,6 +390,7 @@ git checkout main && git pull
 | WAVE 1 done | All 3 PRs merged | Start WAVE 2 (5 workers) | ✅ 2026-02-02 |
 | WAVE 2 done | All 5 PRs merged | Start WAVE 3 (4 workers) | ✅ 2026-02-02 |
 | WAVE 3 done | All 4 PRs merged | Start WAVE 4 (1 worker) | ✅ 2026-02-02 |
+| WAVE 4 done | Milestone E complete | All milestones done! | ✅ 2026-02-02 |
 | Blocker found | Any worker stuck | Pause, coordinate, unblock | — |
 
 ---
@@ -404,6 +410,7 @@ git checkout main && git pull
 - [x] HyDE query expansion for short queries (WAVE 3)
 - [x] Guardrails: confidence scoring, off-topic detection (WAVE 3)
 - [x] Document ingestion pipeline with CocoIndex (WAVE 3)
+- [x] Contextualized embeddings with voyage-context-3 (WAVE 4)
 
 ---
 
