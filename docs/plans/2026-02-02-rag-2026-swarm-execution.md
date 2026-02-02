@@ -308,15 +308,19 @@ pytest tests/chaos/ -v          # Chaos tests pass
 **Dependencies:** A.2 (indexing service patterns), I (observability)
 
 **Scope:**
+- [ ] Confirm ingestion orchestrator choice: **CocoIndex (preferred)** vs custom `scripts/gdrive_sync.py`
+- [ ] If CocoIndex: use existing `postgres` service for CocoIndex state (new DB/schema) + configure low-latency polling (e.g. 30–60s) + slower refresh for correctness
 - [ ] Verify `dev-docling` works: `curl http://localhost:5001/health`
-- [ ] Configure docling environment (DOCLING_BACKEND, PDF_BACKEND, TABLE_MODE)
-- [ ] Setup HybridChunker with Voyage-compatible tokenizer
+- [ ] Confirm docling-serve endpoints: `POST /v1/convert/file` and (if supported) `POST /v1/chunk/hybrid/file`; define fallback if chunk endpoint missing
+- [ ] Configure docling parameters (pdf_backend=dlparse_v2, table_mode=accurate, OCR flags)
+- [ ] Define chunking contract: prefer token-based chunking for Voyage; keep `DocumentChunker` as fallback only
 - [ ] Create `telegram_bot/services/indexing_service.py`
 - [ ] Create `scripts/gdrive_sync.py` (Google Drive API client)
 - [ ] Create `services/document_sync/` Docker service
 - [ ] Add Make targets: `make ingest-file/dir/gdrive/status/reindex`
 - [ ] Support formats: PDF, DOCX, XLSX/CSV, HTML, Markdown
 - [ ] Unified metadata schema for payload
+- [ ] Idempotency rules: store `file_id` + `content_hash` + `parser_version` + `chunking_version` + `embedding_model`; on content change do delete-by-`file_id` then upsert (avoid stale chunks)
 - [ ] Add Langfuse traces for indexing, add alert rules
 
 **Verification:**
