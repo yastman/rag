@@ -11,7 +11,7 @@ groups:
 
       - alert: QdrantDown
         expr: |
-          absent(count_over_time({container="dev-qdrant"} [5m]))
+          count_over_time({container="dev-qdrant"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -48,7 +48,7 @@ groups:
 
       - alert: RedisDown
         expr: |
-          absent(count_over_time({container="dev-redis"} [5m]))
+          count_over_time({container="dev-redis"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -85,7 +85,7 @@ groups:
 
       - alert: LiteLLMDown
         expr: |
-          absent(count_over_time({container="dev-litellm"} [5m]))
+          count_over_time({container="dev-litellm"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -133,7 +133,7 @@ groups:
 
       - alert: LangfuseDown
         expr: |
-          absent(count_over_time({container="dev-langfuse"} [5m]))
+          count_over_time({container="dev-langfuse"} [5m]) == 0
         for: 3m
         labels:
           severity: warning
@@ -144,7 +144,7 @@ groups:
 
       - alert: LangfuseWorkerDown
         expr: |
-          absent(count_over_time({container="dev-langfuse-worker"} [5m]))
+          count_over_time({container="dev-langfuse-worker"} [5m]) == 0
         for: 3m
         labels:
           severity: warning
@@ -170,7 +170,7 @@ groups:
 
       - alert: BGEServiceDown
         expr: |
-          absent(count_over_time({container="dev-bge-m3"} [10m]))
+          count_over_time({container="dev-bge-m3"} [10m]) == 0
         for: 5m
         labels:
           severity: warning
@@ -181,7 +181,7 @@ groups:
 
       - alert: BM42ServiceDown
         expr: |
-          absent(count_over_time({container="dev-bm42"} [10m]))
+          count_over_time({container="dev-bm42"} [10m]) == 0
         for: 5m
         labels:
           severity: warning
@@ -207,7 +207,7 @@ groups:
 
       - alert: PostgresDown
         expr: |
-          absent(count_over_time({container="dev-postgres"} [5m]))
+          count_over_time({container="dev-postgres"} [5m]) == 0
         for: 2m
         labels:
           severity: critical
@@ -229,7 +229,7 @@ groups:
 
       - alert: ClickHouseDown
         expr: |
-          absent(count_over_time({container="dev-clickhouse"} [5m]))
+          count_over_time({container="dev-clickhouse"} [5m]) == 0
         for: 3m
         labels:
           severity: warning
