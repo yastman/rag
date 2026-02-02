@@ -5,6 +5,7 @@ from .constants import (
     HSNWParameters,
     RetrievalStages,
     SearchEngine,
+    SmallToBigMode,
     ThresholdValues,
     VectorDimensions,
 )
@@ -17,6 +18,7 @@ __all__ = [
     "RetrievalStages",
     "SearchEngine",
     "Settings",
+    "SmallToBigMode",
     "ThresholdValues",
     "VectorDimensions",
 ]
