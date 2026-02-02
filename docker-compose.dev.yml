@@ -37,7 +37,8 @@ services:
     command: >
       redis-server
       --maxmemory 512mb
-      --maxmemory-policy allkeys-lfu
+      --maxmemory-policy volatile-lfu
+      --maxmemory-samples 10
       --appendonly yes
     volumes:
       - redis_data:/data

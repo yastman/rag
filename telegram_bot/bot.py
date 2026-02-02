@@ -21,6 +21,7 @@ from .services import (
     QdrantService,
     QueryAnalyzer,
     QueryType,
+    SmallToBigService,
     UserContextService,
     VoyageService,
     classify_query,
@@ -78,6 +79,13 @@ class PropertyBot:
             url=config.qdrant_url,
             api_key=config.qdrant_api_key,
             collection_name=config.qdrant_collection,
+            quantization_mode=config.qdrant_quantization_mode,
+        )
+        self.small_to_big_service = SmallToBigService(
+            client=self.qdrant_service.client,
+            collection_name=self.qdrant_service.collection_name,
+            max_expanded_chunks=config.max_expanded_chunks,
+            max_context_tokens=config.max_context_tokens,
         )
 
         # BM42 sparse embedding service (HTTP client)
@@ -317,6 +325,9 @@ class PropertyBot:
                     top_k=self.config.search_top_k,
                     dense_weight=self.config.hybrid_dense_weight,
                     sparse_weight=self.config.hybrid_sparse_weight,
+                    quantization_ignore=not self.config.qdrant_use_quantization,
+                    quantization_rescore=self.config.qdrant_quantization_rescore,
+                    quantization_oversampling=self.config.qdrant_quantization_oversampling,
                 )
 
                 # MMR diversity reranking (if enabled and enough results)
@@ -392,7 +403,29 @@ class PropertyBot:
                 )
                 return  # finally block writes scores
 
-            # 5. Get conversation history for context-aware responses
+            # 5. Small-to-big context expansion (optional)
+            results_for_llm = results
+            if self.config.small_to_big_mode in ("on", "auto"):
+                should_expand = self.config.small_to_big_mode == "on" or (
+                    self.config.small_to_big_mode == "auto" and query_type == QueryType.COMPLEX
+                )
+                if should_expand:
+                    expanded = await self.small_to_big_service.expand_context(
+                        chunks=results,
+                        window_before=self.config.small_to_big_window_before,
+                        window_after=self.config.small_to_big_window_after,
+                    )
+                    results_for_llm = [
+                        {
+                            "text": ec.expanded_text,
+                            "metadata": ec.original_chunk.get("metadata", {}),
+                            "score": ec.original_chunk.get("score", 0.0),
+                        }
+                        for ec in expanded
+                    ]
+                    logger.info(f"Small-to-big expanded to {len(results_for_llm)} chunks")
+
+            # 6. Get conversation history for context-aware responses
             _conversation_history = await self.cache_service.get_conversation_history(
                 user_id, last_n=3
             )
@@ -402,7 +435,7 @@ class PropertyBot:
 
             scores["llm_used"] = 1.0
 
-            # 6. Generate answer with LLM STREAMING
+            # 7. Generate answer with LLM STREAMING
             temp_message = await message.answer("🔍 Генерирую ответ...")
             accumulated_text = ""
             last_sent_text = ""  # Track what we last sent
@@ -411,7 +444,7 @@ class PropertyBot:
             try:
                 async for chunk in self.llm_service.stream_answer(
                     question=query,
-                    context_chunks=results,
+                    context_chunks=results_for_llm,
                 ):
                     accumulated_text += chunk
                     chunk_count += 1
@@ -433,13 +466,13 @@ class PropertyBot:
             except Exception as e:
                 logger.error(f"Streaming error: {e}", exc_info=True)
                 # Fallback to non-streaming
-                answer = await self.llm_service.generate_answer(query, results)
+                answer = await self.llm_service.generate_answer(query, results_for_llm)
                 await temp_message.edit_text(answer, parse_mode="Markdown")
 
-            # 7. Store assistant answer in conversation
+            # 8. Store assistant answer in conversation
             await self.cache_service.store_conversation_message(user_id, "assistant", answer)
 
-            # 8. Store in semantic cache for future queries
+            # 9. Store in semantic cache for future queries
             # Uses langcache-embed-v1 (256-dim) for cache indexing
             await self.cache_service.store_semantic_cache(query, answer)
 
