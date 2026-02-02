@@ -51,6 +51,8 @@ Query → Dense Embedding (Voyage) + Sparse Embedding (BM42)
 | `small_to_big_mode` | off | off/on/auto (context expansion) |
 | `small_to_big_window_before` | 1 | Chunks before hit |
 | `small_to_big_window_after` | 1 | Chunks after hit |
+| `acorn_mode` | off | off/on/auto (filtered search optimization) |
+| `acorn_max_selectivity` | 0.4 | Max filter selectivity for ACORN |
 
 ## RRF Weights by Query Type
 
@@ -166,6 +168,21 @@ expanded = await s2b.expand_results(
 ```
 
 **Modes:** `off` (disabled), `on` (always expand), `auto` (expand for COMPLEX queries only)
+
+## ACORN (Filtered Search Optimization)
+
+ACORN improves search quality when strict filters cause HNSW graph disconnection. Best for low selectivity filters (< 40% of vectors match).
+
+```python
+# Auto mode: ACORN enabled only with filters + low selectivity
+results = await qdrant.hybrid_search_rrf(
+    dense_vector=query_embedding,
+    filters={"city": "Несебр"},  # Triggers ACORN in auto mode
+    acorn_mode="auto",
+)
+```
+
+**Modes:** `off` (disabled), `on` (always use), `auto` (use when beneficial)
 
 ## Dependencies
 
