@@ -4,6 +4,20 @@ from dataclasses import dataclass
 from enum import Enum
 
 
+class QuantizationMode(str, Enum):
+    """Qdrant vector quantization modes.
+
+    Controls which collection suffix to use:
+    - OFF: base collection (no quantization or quantization_ignore=True)
+    - SCALAR: *_scalar collection (INT8, 4x compression, better accuracy)
+    - BINARY: *_binary collection (binary, 32x compression, fastest)
+    """
+
+    OFF = "off"
+    SCALAR = "scalar"
+    BINARY = "binary"
+
+
 class SearchEngine(str, Enum):
     """Available search engine implementations."""
 
