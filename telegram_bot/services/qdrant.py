@@ -24,6 +24,7 @@ class QdrantService:
     - Score boosting with exp_decay (freshness)
     - MMR diversity reranking
     - Async operations with AsyncQdrantClient
+    - Quantization mode-based collection selection
     """
 
     def __init__(
@@ -33,22 +34,64 @@ class QdrantService:
         collection_name: str = "documents",
         dense_vector_name: str = "dense",
         sparse_vector_name: str = "bm42",
+        quantization_mode: str = "off",
     ):
         """Initialize Qdrant service.
 
         Args:
             url: Qdrant server URL
             api_key: Optional API key
-            collection_name: Default collection name
+            collection_name: Default collection name (base, without suffix)
             dense_vector_name: Name of dense vector field
             sparse_vector_name: Name of sparse vector field
+            quantization_mode: One of 'off', 'scalar', 'binary' - controls collection suffix
         """
         self._client = AsyncQdrantClient(url=url, api_key=api_key)
-        self._collection_name = collection_name
+        self._base_collection_name = collection_name
+        self._quantization_mode = quantization_mode.lower()
+        self._collection_name = self._get_collection_name(collection_name, quantization_mode)
         self._dense_vector_name = dense_vector_name
         self._sparse_vector_name = sparse_vector_name
 
-        logger.info(f"QdrantService initialized: {collection_name}")
+        logger.info(f"QdrantService initialized: {self._collection_name} (mode={quantization_mode})")
+
+    @staticmethod
+    def _get_collection_name(base_name: str, mode: str) -> str:
+        """Get collection name with appropriate suffix based on quantization mode.
+
+        Args:
+            base_name: Base collection name
+            mode: Quantization mode ('off', 'scalar', 'binary')
+
+        Returns:
+            Collection name with suffix
+        """
+        # Strip existing suffixes
+        for suffix in ["_binary", "_scalar"]:
+            base_name = base_name.removesuffix(suffix)
+
+        mode = mode.lower()
+        if mode == "scalar":
+            return f"{base_name}_scalar"
+        if mode == "binary":
+            return f"{base_name}_binary"
+        # off or any other value
+        return base_name
+
+    @property
+    def collection_name(self) -> str:
+        """Get the current collection name (with quantization suffix)."""
+        return self._collection_name
+
+    def set_quantization_mode(self, mode: str) -> None:
+        """Change quantization mode and update collection name.
+
+        Args:
+            mode: New quantization mode ('off', 'scalar', 'binary')
+        """
+        self._quantization_mode = mode.lower()
+        self._collection_name = self._get_collection_name(self._base_collection_name, mode)
+        logger.info(f"QdrantService: switched to {self._collection_name} (mode={mode})")
 
     @observe(name="qdrant-hybrid-search-rrf")
     async def hybrid_search_rrf(
