@@ -176,6 +176,13 @@ class Settings:
             os.getenv("ACORN_ENABLED_SELECTIVITY_THRESHOLD", "0.4")
         )
 
+        # === HYDE (Hypothetical Document Embeddings) ===
+        # When enabled, generates hypothetical answer for short queries (< 5 words)
+        # to improve recall by embedding the answer instead of the question
+        self.use_hyde = os.getenv("USE_HYDE", "false").lower() == "true"
+        # Minimum query length to skip HyDE (longer queries don't benefit as much)
+        self.hyde_min_words = int(os.getenv("HYDE_MIN_WORDS", "5"))
+
         # === ENVIRONMENT ===
         self.env = os.getenv("ENV", "development").lower()
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
@@ -259,6 +266,8 @@ class Settings:
             "acorn_mode": self.acorn_mode.value,
             "acorn_max_selectivity": self.acorn_max_selectivity,
             "acorn_enabled_selectivity_threshold": self.acorn_enabled_selectivity_threshold,
+            "use_hyde": self.use_hyde,
+            "hyde_min_words": self.hyde_min_words,
             "env": self.env,
             "debug": self.debug,
         }
