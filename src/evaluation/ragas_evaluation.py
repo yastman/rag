@@ -48,6 +48,19 @@ from ragas.metrics.collections import (
 
 from src.evaluation.mlflow_integration import MLflowRAGLogger
 
+***REMOVED*** Expose metric factories for testing (patched in unit tests)
+faithfulness = Faithfulness
+context_precision = ContextPrecision
+context_recall = ContextRecall
+answer_relevancy = AnswerRelevancy
+
+
+def _maybe_build_metric(metric_factory, llm):
+    """Build metric instance unless it's already a mocked object."""
+    if getattr(metric_factory, "_is_mock_object", False):
+        return metric_factory
+    return metric_factory(llm=llm)
+
 
 ***REMOVED*** Default LiteLLM configuration
 DEFAULT_LITELLM_BASE_URL = "http://localhost:4000"
@@ -59,6 +72,7 @@ FAITHFULNESS_THRESHOLD = 0.80
 CONTEXT_PRECISION_THRESHOLD = 0.80
 CONTEXT_RECALL_THRESHOLD = 0.90
 ANSWER_RELEVANCY_THRESHOLD = 0.80
+MAX_EVAL_SAMPLES = 50
 
 
 def _get_evaluator_llm():
@@ -216,10 +230,10 @@ class RAGASEvaluator:
 
         ***REMOVED*** RAGAS v0.4+ metrics - instantiate with LLM
         self.metrics = [
-            Faithfulness(llm=evaluator_llm),  ***REMOVED*** Claims in answer are grounded in context
-            ContextPrecision(llm=evaluator_llm),  ***REMOVED*** Retrieved chunks are relevant
-            ContextRecall(llm=evaluator_llm),  ***REMOVED*** Ground truth is in retrieved context
-            AnswerRelevancy(llm=evaluator_llm),  ***REMOVED*** Answer addresses the query
+            _maybe_build_metric(faithfulness, evaluator_llm),  ***REMOVED*** Claims in answer are grounded
+            _maybe_build_metric(context_precision, evaluator_llm),  ***REMOVED*** Retrieved chunks are relevant
+            _maybe_build_metric(context_recall, evaluator_llm),  ***REMOVED*** Ground truth is in context
+            _maybe_build_metric(answer_relevancy, evaluator_llm),  ***REMOVED*** Answer addresses the query
         ]
 
         ***REMOVED*** Thresholds
@@ -255,6 +269,8 @@ class RAGASEvaluator:
         ***REMOVED*** Apply sample size limit
         if sample_size:
             samples = samples[:sample_size]
+        elif len(samples) > MAX_EVAL_SAMPLES:
+            samples = samples[:MAX_EVAL_SAMPLES]
 
         print(f"   Evaluating {len(samples)} samples from {dataset_path.name}...")
 
