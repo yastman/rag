@@ -1,0 +1,224 @@
+# Alert Rules for Extended Services
+# Monitors: docling, minio, mlflow, redis-langfuse, lightrag
+
+groups:
+  - name: extended-services
+    interval: 1m
+    rules:
+      # =========================================================================
+      # DEV-DOCLING (Critical - Ingestion Pipeline)
+      # =========================================================================
+
+      - alert: DoclingDown
+        expr: |
+          count_over_time({container="dev-docling"} [10m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: docling
+        annotations:
+          summary: "Docling document parser is down"
+          description: "No logs from dev-docling for 10 minutes - ingestion blocked"
+
+      - alert: DoclingOOM
+        expr: |
+          count_over_time({container="dev-docling"} |~ "(?i)killed|out of memory|oom|segmentation fault" [5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: docling
+        annotations:
+          summary: "Docling OOM/crash detected"
+          description: "Docling killed by OOM or segfault"
+
+      - alert: DoclingConversionFailed
+        expr: |
+          count_over_time({container="dev-docling"} |~ "(?i)failed to convert|conversion failed|pdf.*error|ocr.*error|timeout" [5m]) > 2
+        for: 3m
+        labels:
+          severity: warning
+          service: docling
+        annotations:
+          summary: "Docling conversion errors"
+          description: "Multiple document conversion failures"
+
+      - alert: DoclingError
+        expr: |
+          count_over_time({container="dev-docling"} |~ "(?i)error|exception|traceback" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: docling
+        annotations:
+          summary: "Docling errors detected"
+          description: "Multiple errors in Docling logs"
+
+      # =========================================================================
+      # DEV-MINIO (Critical - Langfuse Storage)
+      # =========================================================================
+
+      - alert: MinioDown
+        expr: |
+          count_over_time({container="dev-minio"} [5m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: minio
+        annotations:
+          summary: "MinIO S3 storage is down"
+          description: "No logs from dev-minio - Langfuse storage broken"
+
+      - alert: MinioDiskFull
+        expr: |
+          count_over_time({container="dev-minio"} |~ "(?i)disk full|no space left|drive offline" [5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: minio
+        annotations:
+          summary: "MinIO disk full or offline"
+          description: "MinIO storage critically low or unavailable"
+
+      - alert: MinioCorruption
+        expr: |
+          count_over_time({container="dev-minio"} |~ "(?i)corrupt|AccessDenied|signature mismatch" [5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: minio
+        annotations:
+          summary: "MinIO data corruption or auth error"
+          description: "MinIO reporting corruption or access issues"
+
+      - alert: MinioHealingFailed
+        expr: |
+          count_over_time({container="dev-minio"} |~ "(?i)failed to initialize|unable to use drive|healing.*failed" [5m]) > 0
+        for: 3m
+        labels:
+          severity: warning
+          service: minio
+        annotations:
+          summary: "MinIO healing/init failed"
+          description: "MinIO drive initialization or healing problems"
+
+      - alert: MinioError
+        expr: |
+          count_over_time({container="dev-minio"} |~ "(?i)error|exception" [5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: minio
+        annotations:
+          summary: "MinIO errors detected"
+          description: "Multiple errors in MinIO logs"
+
+      # =========================================================================
+      # DEV-MLFLOW (Critical - Experiment Tracking)
+      # =========================================================================
+
+      - alert: MLflowDown
+        expr: |
+          count_over_time({container="dev-mlflow"} [5m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: mlflow
+        annotations:
+          summary: "MLflow is down"
+          description: "No logs from dev-mlflow - experiment tracking unavailable"
+
+      - alert: MLflowDBError
+        expr: |
+          count_over_time({container="dev-mlflow"} |~ "(?i)OperationalError|migration|failed to connect|psycopg" [5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mlflow
+        annotations:
+          summary: "MLflow database error"
+          description: "MLflow cannot connect to PostgreSQL"
+
+      - alert: MLflowError
+        expr: |
+          count_over_time({container="dev-mlflow"} |~ "(?i)error|exception|traceback" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: mlflow
+        annotations:
+          summary: "MLflow errors detected"
+          description: "Multiple errors in MLflow logs"
+
+      # =========================================================================
+      # DEV-REDIS-LANGFUSE (Critical - Langfuse Queue)
+      # =========================================================================
+
+      - alert: RedisLangfuseDown
+        expr: |
+          count_over_time({container="dev-redis-langfuse"} [5m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: redis-langfuse
+        annotations:
+          summary: "Redis Langfuse is down"
+          description: "No logs from dev-redis-langfuse - Langfuse queue broken"
+
+      - alert: RedisLangfuseConnectionError
+        expr: |
+          count_over_time({container="dev-redis-langfuse"} |~ "(?i)connection.*refused|connection.*error|READONLY" [5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis-langfuse
+        annotations:
+          summary: "Redis Langfuse connection error"
+          description: "Redis Langfuse refusing connections or readonly"
+
+      - alert: RedisLangfuseMemory
+        expr: |
+          count_over_time({container="dev-redis-langfuse"} |~ "(?i)maxmemory|evict|oom" [5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          service: redis-langfuse
+        annotations:
+          summary: "Redis Langfuse memory pressure"
+          description: "Redis Langfuse memory eviction detected"
+
+      # =========================================================================
+      # DEV-LIGHTRAG (Critical - Graph RAG)
+      # =========================================================================
+
+      - alert: LightRAGDown
+        expr: |
+          count_over_time({container="dev-lightrag"} [10m]) == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: lightrag
+        annotations:
+          summary: "LightRAG is down"
+          description: "No logs from dev-lightrag - graph retrieval unavailable"
+
+      - alert: LightRAGError
+        expr: |
+          count_over_time({container="dev-lightrag"} |~ "(?i)error|exception|failed|traceback" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: lightrag
+        annotations:
+          summary: "LightRAG errors detected"
+          description: "Multiple errors in LightRAG logs"
+
+      - alert: LightRAGAPIError
+        expr: |
+          count_over_time({container="dev-lightrag"} |~ "(?i)openai.*error|api.*error|rate.*limit" [5m]) > 2
+        for: 3m
+        labels:
+          severity: warning
+          service: lightrag
+        annotations:
+          summary: "LightRAG API errors"
+          description: "LightRAG having issues with OpenAI API"
