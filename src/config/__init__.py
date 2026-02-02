@@ -3,6 +3,7 @@
 from .constants import (
     APIProvider,
     HSNWParameters,
+    QuantizationMode,
     RetrievalStages,
     SearchEngine,
     ThresholdValues,
@@ -14,6 +15,7 @@ from .settings import Settings
 __all__ = [
     "APIProvider",
     "HSNWParameters",
+    "QuantizationMode",
     "RetrievalStages",
     "SearchEngine",
     "Settings",
