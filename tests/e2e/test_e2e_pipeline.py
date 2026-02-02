@@ -11,11 +11,10 @@ import pytest
 
 from telegram_bot.services import (
     CacheService,
-    HybridRetrieverService,
     LLMService,
     QueryPreprocessor,
-    VoyageEmbeddingService,
-    VoyageRerankerService,
+    RetrieverService,
+    VoyageService,
 )
 
 
@@ -34,23 +33,28 @@ def preprocessor():
 
 
 @pytest.fixture(scope="module")
-def embedder():
-    """Create embedding service (requires VOYAGE_API_KEY)."""
+def voyage_service():
+    """Create Voyage service for embeddings and reranking (requires VOYAGE_API_KEY)."""
     skip_if_missing_keys()
-    return VoyageEmbeddingService()
+    return VoyageService(api_key=os.getenv("VOYAGE_API_KEY", ""))
 
 
 @pytest.fixture(scope="module")
-def reranker():
+def embedder(voyage_service):
+    """Create embedding service (requires VOYAGE_API_KEY)."""
+    return voyage_service
+
+
+@pytest.fixture(scope="module")
+def reranker(voyage_service):
     """Create reranker service (requires VOYAGE_API_KEY)."""
-    skip_if_missing_keys()
-    return VoyageRerankerService()
+    return voyage_service
 
 
 @pytest.fixture(scope="module")
 def retriever():
     """Create hybrid retriever (requires Qdrant)."""
-    return HybridRetrieverService(
+    return RetrieverService(
         url=os.getenv("QDRANT_URL", "http://localhost:6333"),
         api_key=os.getenv("QDRANT_API_KEY", ""),
         collection_name="contextual_bulgaria_voyage",

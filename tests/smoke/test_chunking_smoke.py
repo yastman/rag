@@ -14,7 +14,7 @@ sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "legacy"))
 
 import pytest
-from pymupdf_chunker import PyMuPDFChunker
+from legacy.pymupdf_chunker import PyMuPDFChunker
 
 
 # Test file path
