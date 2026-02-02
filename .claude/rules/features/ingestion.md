@@ -8,9 +8,48 @@ Parsing, chunking, and indexing documents into Qdrant.
 
 ## Purpose
 
-Convert PDF/DOCX/CSV documents into searchable vector embeddings in Qdrant.
+Convert PDF/DOCX/CSV/Google Drive documents into searchable vector embeddings in Qdrant.
 
-## Architecture
+## Architecture (CocoIndex Pipeline)
+
+```
+Google Drive / Local Files
+        │
+        ▼ (CocoIndex: 60s polling)
+┌───────────────────────────────────────────┐
+│ IngestionService (src/ingestion/service.py) │
+│ State: Postgres (cocoindex database)        │
+└───────────────────────────────────────────┘
+        │
+        ▼
+docling-serve (PDF, DOCX, etc.) → TokenChunker (512 tokens)
+        │
+        ▼
+Voyage API (batched, 100 chunks/request)
+        │
+        ▼ Replace semantics
+Qdrant (DELETE by file_id → UPSERT new chunks)
+```
+
+## Quick Commands
+
+```bash
+make ingest-setup         # Create Postgres schema + Qdrant indexes
+make ingest-run           # Run ingestion once
+make ingest-continuous    # Run with polling
+make ingest-status        # Show indexed files
+```
+
+## Key Files (2026)
+
+| File | Description |
+|------|-------------|
+| `src/ingestion/service.py` | IngestionService class |
+| `src/ingestion/cocoindex_flow.py` | CocoIndex flow definition |
+| `src/ingestion/docling_client.py` | Docling API client |
+| `telegram_bot/services/ingestion_cocoindex.py` | CLI wrapper |
+
+## Legacy Architecture
 
 ```
 Document → Parser (PyMuPDF/Docling) → Chunker (semantic/fixed)
