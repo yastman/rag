@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .llm import LLMService
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
-    from .query_preprocessor import QueryPreprocessor
+    from .query_preprocessor import HyDEGenerator, QueryPreprocessor
     from .query_router import QueryType, classify_query, get_chitchat_response, needs_rerank
     from .retriever import RetrieverService
     from .small_to_big import ExpandedChunk, SmallToBigService
@@ -29,6 +29,7 @@ __all__ = [
     "CacheService",
     "EmbeddingService",
     "ExpandedChunk",
+    "HyDEGenerator",
     "LLMService",
     "QdrantService",
     "QueryAnalyzer",
@@ -52,6 +53,7 @@ _IMPORT_MAP = {
     "is_personalized_query": ".cesc",
     "EmbeddingService": ".embeddings",
     "ExpandedChunk": ".small_to_big",
+    "HyDEGenerator": ".query_preprocessor",
     "LLMService": ".llm",
     "QdrantService": ".qdrant",
     "QueryAnalyzer": ".query_analyzer",

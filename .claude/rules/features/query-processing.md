@@ -29,7 +29,8 @@ Query → QueryRouter (CHITCHAT/SIMPLE/COMPLEX)
 | `telegram_bot/services/query_router.py` | 17 | QueryType enum |
 | `telegram_bot/services/query_router.py` | 107 | classify_query() |
 | `telegram_bot/services/query_analyzer.py` | 14 | QueryAnalyzer (LLM) |
-| `telegram_bot/services/query_preprocessor.py` | 11 | QueryPreprocessor |
+| `telegram_bot/services/query_preprocessor.py` | 14 | HyDEGenerator |
+| `telegram_bot/services/query_preprocessor.py` | 126 | QueryPreprocessor |
 | `telegram_bot/services/filter_extractor.py` | 7 | FilterExtractor (regex) |
 
 ## Query Types
@@ -72,15 +73,59 @@ if query_type == QueryType.SIMPLE:
 from telegram_bot.services.query_preprocessor import QueryPreprocessor
 
 pp = QueryPreprocessor()
-result = pp.analyze("apartments in Sunny Beach корпус 5")
+result = pp.analyze("apartments in Sunny Beach корпус 5", use_hyde=True)
 # {
 #   "original_query": "apartments in Sunny Beach корпус 5",
 #   "normalized_query": "apartments in Солнечный берег корпус 5",
 #   "rrf_weights": {"dense": 0.2, "sparse": 0.8},
 #   "cache_threshold": 0.05,
-#   "is_exact": True
+#   "is_exact": True,
+#   "use_hyde": False,  # Disabled for exact queries
+#   "word_count": 5
 # }
 ```
+
+### HyDE (Hypothetical Document Embeddings)
+
+HyDE improves recall for short/vague queries by generating a hypothetical answer and embedding that instead of the original query.
+
+**How it works:**
+1. User query: "квартира у моря" (3 words)
+2. LLM generates hypothetical doc: "Уютная двухкомнатная квартира в Несебре, 50м², в 200 метрах от пляжа..."
+3. Embed the hypothetical doc (better semantic match with actual documents)
+4. Search with hypothetical embedding
+
+**When HyDE is useful:**
+- Short queries (< 5 words)
+- Queries without domain-specific keywords
+- Semantic/conceptual queries
+
+**When NOT to use HyDE:**
+- Exact queries (IDs, corpus numbers, floor numbers)
+- Long detailed queries (already have context)
+- Queries matching document vocabulary
+
+```python
+from telegram_bot.services.query_preprocessor import HyDEGenerator, QueryPreprocessor
+
+# Check if HyDE should be applied
+pp = QueryPreprocessor()
+result = pp.analyze("студия", use_hyde=True, hyde_min_words=5)
+
+if result["use_hyde"]:
+    # Generate hypothetical document
+    hyde = HyDEGenerator(base_url="http://localhost:4000")
+    hypothetical_doc = await hyde.generate_hypothetical_document("студия")
+    # Use hypothetical_doc for embedding instead of original query
+    embedding = await voyage.embed_query(hypothetical_doc)
+```
+
+**Configuration:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `USE_HYDE` | `false` | Enable HyDE globally |
+| `HYDE_MIN_WORDS` | `5` | Queries shorter than this use HyDE |
 
 ### LLM filter extraction
 
@@ -153,6 +198,7 @@ Skip rerank when:
 pytest tests/unit/test_query_router.py -v
 pytest tests/unit/test_query_analyzer.py -v
 pytest tests/unit/test_query_preprocessor.py -v
+pytest tests/unit/test_hyde.py -v              # HyDE tests (29 tests)
 pytest tests/unit/test_filter_extractor.py -v
 ```
 
@@ -163,6 +209,8 @@ pytest tests/unit/test_filter_extractor.py -v
 | Chitchat not detected | Add pattern to CHITCHAT_PATTERNS |
 | Wrong translit | Add to TRANSLIT_MAP |
 | LLM filter extraction failed | Falls back to regex extractor |
+| HyDE not applied | Check `USE_HYDE=true` and query is < `HYDE_MIN_WORDS` |
+| HyDE generation fails | Falls back to original query (graceful degradation) |
 
 ## Development Guide
 
