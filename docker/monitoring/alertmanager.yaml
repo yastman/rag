@@ -1,0 +1,87 @@
+***REMOVED*** Alertmanager Configuration for RAG Bot Dev Stack
+***REMOVED*** Routes alerts to Telegram bot
+
+global:
+  resolve_timeout: 5m
+  ***REMOVED*** Telegram settings (via environment variables)
+  telegram_api_url: "https://api.telegram.org"
+
+route:
+  ***REMOVED*** Default receiver
+  receiver: telegram-alerts
+  ***REMOVED*** Group alerts by these labels
+  group_by: ['alertname', 'service', 'severity']
+  ***REMOVED*** Wait before sending first alert
+  group_wait: 30s
+  ***REMOVED*** Wait before sending subsequent alerts for same group
+  group_interval: 5m
+  ***REMOVED*** Wait before resending resolved alert
+  repeat_interval: 4h
+  ***REMOVED*** Child routes for different severity levels
+  routes:
+    ***REMOVED*** Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: telegram-alerts
+      group_wait: 10s
+      group_interval: 1m
+      repeat_interval: 1h
+    ***REMOVED*** Warning alerts - standard timing
+    - match:
+        severity: warning
+      receiver: telegram-alerts
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 4h
+    ***REMOVED*** Info alerts - less frequent
+    - match:
+        severity: info
+      receiver: telegram-alerts
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 12h
+
+receivers:
+  - name: telegram-alerts
+    telegram_configs:
+      ***REMOVED*** Note: Set TELEGRAM_ALERTING_BOT_TOKEN and TELEGRAM_ALERTING_CHAT_ID in .env
+      ***REMOVED*** Alertmanager does not support env vars in config, so we use envsubst in entrypoint
+      - bot_token: "${TELEGRAM_ALERTING_BOT_TOKEN}"
+        chat_id: ${TELEGRAM_ALERTING_CHAT_ID}
+        api_url: "https://api.telegram.org"
+        parse_mode: HTML
+        disable_notifications: false
+        message: |
+          {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} <b>{{ .Status | toUpper }}</b>
+
+          {{ range .Alerts }}
+          <b>{{ .Labels.alertname }}</b>
+          {{ if .Labels.severity }}Severity: {{ .Labels.severity }}{{ end }}
+          {{ if .Labels.service }}Service: {{ .Labels.service }}{{ end }}
+
+          {{ if .Annotations.summary }}<i>{{ .Annotations.summary }}</i>{{ end }}
+          {{ if .Annotations.description }}
+          {{ .Annotations.description }}{{ end }}
+
+          {{ end }}
+
+  ***REMOVED*** Null receiver for silencing
+  - name: 'null'
+
+***REMOVED*** Inhibition rules - prevent alert storms
+inhibit_rules:
+  ***REMOVED*** If critical is firing, suppress warning for same alertname/service
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ['alertname', 'service']
+  ***REMOVED*** If service is down, suppress all other alerts for that service
+  - source_match:
+      alertname: ServiceDown
+    target_match_re:
+      alertname: .+
+    equal: ['service']
+
+***REMOVED*** Templates for custom message formatting
+templates: []
