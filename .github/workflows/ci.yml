@@ -35,3 +35,50 @@ jobs:
   ***REMOVED*** Tests require external services (Qdrant, Redis, BGE-M3)
   ***REMOVED*** Run locally with: make local-up && pytest tests/
   ***REMOVED*** TODO: Add service containers for CI testing
+
+  ***REMOVED*** Baseline comparison - runs when Langfuse secrets are configured
+  ***REMOVED*** Compares current smoke tests against main-latest baseline
+  ***REMOVED*** Fails if regression > thresholds defined in tests/baseline/thresholds.yaml
+  baseline-compare:
+    name: Baseline Regression Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: lint
+    ***REMOVED*** Only run if Langfuse secrets are configured
+    env:
+      LANGFUSE_AVAILABLE: ${{ secrets.LANGFUSE_SECRET_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.LANGFUSE_AVAILABLE == 'true'
+
+      - name: Set up Python
+        if: env.LANGFUSE_AVAILABLE == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        if: env.LANGFUSE_AVAILABLE == 'true'
+        run: pip install -e ".[dev]"
+
+      - name: Run baseline comparison
+        if: env.LANGFUSE_AVAILABLE == 'true'
+        env:
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
+        run: |
+          ***REMOVED*** Get current session tag from commit
+          CURRENT_TAG="ci-${{ github.sha }}-$(date +%Y%m%d)"
+
+          ***REMOVED*** Compare against main-latest baseline
+          python3 -m tests.baseline.cli compare \
+            --baseline="main-latest" \
+            --current="${CURRENT_TAG}" \
+            --thresholds=tests/baseline/thresholds.yaml \
+            --hours=168
+
+      - name: Skip - Langfuse not configured
+        if: env.LANGFUSE_AVAILABLE != 'true'
+        run: echo "Skipping baseline comparison - LANGFUSE_SECRET_KEY not configured"
