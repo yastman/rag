@@ -7,7 +7,7 @@ import pytest
 
 
 # Direct import to avoid __init__.py dependency chain
-_module_path = Path(__file__).parent.parent / "telegram_bot" / "services" / "user_context.py"
+_module_path = Path(__file__).parent.parent.parent / "telegram_bot" / "services" / "user_context.py"
 _spec = importlib.util.spec_from_file_location("user_context", _module_path)
 _module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_module)
