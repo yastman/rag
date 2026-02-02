@@ -77,6 +77,13 @@ class BotConfig:
 
     # Qdrant Quantization Configuration (2026 best practice)
     # Binary quantization: 40x faster, -75% RAM for dim >= 1024
+    # Scalar (INT8): 4x faster, better accuracy than binary
+    #
+    # quantization_mode: off | scalar | binary (controls collection suffix)
+    #   - off: Use base collection without quantization
+    #   - scalar: Use *_scalar collection (INT8 quantization)
+    #   - binary: Use *_binary collection (binary quantization, fastest)
+    qdrant_quantization_mode: str = os.getenv("QDRANT_QUANTIZATION_MODE", "binary")
     qdrant_use_quantization: bool = os.getenv("QDRANT_USE_QUANTIZATION", "true").lower() == "true"
     qdrant_quantization_rescore: bool = (
         os.getenv("QDRANT_QUANTIZATION_RESCORE", "true").lower() == "true"
@@ -87,3 +94,25 @@ class BotConfig:
     qdrant_quantization_always_ram: bool = (
         os.getenv("QDRANT_QUANTIZATION_ALWAYS_RAM", "true").lower() == "true"
     )
+
+    def get_collection_name(self) -> str:
+        """Get collection name based on quantization mode.
+
+        Returns:
+            Collection name with appropriate suffix:
+            - 'off': base collection name
+            - 'scalar': base_scalar
+            - 'binary': base_binary
+        """
+        base = self.qdrant_collection
+        # Strip existing suffixes
+        for suffix in ["_binary", "_scalar"]:
+            base = base.removesuffix(suffix)
+
+        mode = self.qdrant_quantization_mode.lower()
+        if mode == "scalar":
+            return f"{base}_scalar"
+        if mode == "binary":
+            return f"{base}_binary"
+        # off or any other value
+        return base
