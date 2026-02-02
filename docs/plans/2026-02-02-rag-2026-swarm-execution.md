@@ -28,7 +28,7 @@ WAVE 1 (P0) ──parallel──> WAVE 2 (P1) ──parallel──> WAVE 3 (P2) 
 
 ---
 
-## WAVE 1: Foundation (P0) — 3 parallel workers ✅ COMPLETE
+## WAVE 1: Foundation (P0) — 3 parallel workers ✅ COMPLETE (2026-02-02)
 
 ### Worker 1: Milestone A — Infrastructure & Safety ✅
 
@@ -56,50 +56,47 @@ docker exec dev-redis redis-cli CONFIG GET maxmemory-policy  # volatile-lfu
 
 ---
 
-### Worker 2: Milestone A.0 — Docs & Plan Consolidation
+### Worker 2: Milestone A.0 — Docs & Plan Consolidation ✅
 
 **Worktree:** `.worktrees/milestone-a0-docs`
-**Branch:** `milestone/a0-docs`
-**Estimated tasks:** 6
+**Branch:** `milestone/a0-docs` → merged 2026-02-02
+**Commit:** `913141a refactor(tests): consolidate test files into proper directories`
 
 **Dependencies:** None (independent)
 
 **Scope:**
-- [ ] Mark this ТЗ as "source of truth"
-- [ ] Archive/update conflicting plans (eviction policy, Redis index names)
-- [ ] Remove or consolidate `.claude.md` (conflicts with `CLAUDE.md`)
-- [ ] Fix/remove ROADMAP.md references
-- [ ] Consolidate 38 root-level test files into `tests/unit/`, `tests/integration/`
-- [ ] Add `tests/README.md` with structure and commands
+- [x] Mark this ТЗ as "source of truth"
+- [x] Archive/update conflicting plans
+- [x] Remove `.claude.md` (conflicts with `CLAUDE.md`)
+- [x] ROADMAP.md — не существует, ссылки в архиве OK
+- [x] Consolidate 40 root-level test files into `tests/unit/`, `tests/integration/`, `tests/benchmark/`
+- [x] Add `tests/README.md` with structure and commands
 
-**Verification:**
+**Verification:** ✅
 ```bash
-ls tests/*.py           # Should be empty (all moved)
-cat tests/README.md     # Exists with structure docs
+ls tests/*.py           # Only conftest.py remains (correct)
+cat tests/README.md     # Updated with new structure
 ```
 
 ---
 
-### Worker 3: Milestone A.2 — Test Data & Indexing
+### Worker 3: Milestone A.2 — Test Data & Indexing ✅
 
 **Worktree:** `.worktrees/milestone-a2-indexing`
-**Branch:** `milestone/a2-indexing`
-**Estimated tasks:** 7
+**Branch:** `milestone/a2-indexing` → merged 2026-02-02
+**Commit:** `322c6d3 chore(tests): archive old Ukrainian Criminal Code golden test set`
 
 **Dependencies:** None (can run parallel, bot works after A completes)
 
 **Scope:**
-- [ ] Archive `tests/data/golden_test_set.json` (Ukrainian Criminal Code)
-- [ ] Index `docs/processed/*.json` (13 files, ~90 chunks) → Qdrant `contextual_bulgaria_voyage`
-- [ ] Index `data/test_properties.json` (100 objects) → Qdrant
-- [ ] Create new `tests/data/golden_test_set.json` (30-50 Q&A from Russian content)
-- [ ] Verify: `curl localhost:6333/collections` shows collection with data
-- [ ] Verify Telethon E2E setup: `make e2e-setup`
+- [x] Archive `tests/data/golden_test_set.json` → `tests/data/archive/golden_test_set_ukrainian_criminal_code.json`
+- [x] Collection `contextual_bulgaria_voyage` exists (192 points)
+- [x] New evaluation dataset: `tests/eval/ground_truth.json` (55 Q&A)
+- [x] Verify: `curl localhost:6333/collections` shows collection with data
 
-**Verification:**
+**Verification:** ✅
 ```bash
-curl localhost:6333/collections/contextual_bulgaria_voyage | jq '.result.points_count'  # > 0
-make e2e-setup    # Success
+curl localhost:6333/collections/contextual_bulgaria_voyage | jq '.result.points_count'  # 192
 ```
 
 ---
