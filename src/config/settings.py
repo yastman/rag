@@ -162,6 +162,13 @@ class Settings:
         self.max_expanded_chunks = int(os.getenv("MAX_EXPANDED_CHUNKS", "10"))
         self.max_context_tokens = int(os.getenv("MAX_CONTEXT_TOKENS", "8000"))
 
+        ***REMOVED*** === HYDE (Hypothetical Document Embeddings) ===
+        ***REMOVED*** When enabled, generates hypothetical answer for short queries (< 5 words)
+        ***REMOVED*** to improve recall by embedding the answer instead of the question
+        self.use_hyde = os.getenv("USE_HYDE", "false").lower() == "true"
+        ***REMOVED*** Minimum query length to skip HyDE (longer queries don't benefit as much)
+        self.hyde_min_words = int(os.getenv("HYDE_MIN_WORDS", "5"))
+
         ***REMOVED*** === ENVIRONMENT ===
         self.env = os.getenv("ENV", "development").lower()
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
@@ -242,6 +249,8 @@ class Settings:
             "small_to_big_window_after": self.small_to_big_window_after,
             "max_expanded_chunks": self.max_expanded_chunks,
             "max_context_tokens": self.max_context_tokens,
+            "use_hyde": self.use_hyde,
+            "hyde_min_words": self.hyde_min_words,
             "env": self.env,
             "debug": self.debug,
         }
