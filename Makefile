@@ -412,3 +412,30 @@ baseline-report: ***REMOVED******REMOVED*** Generate HTML baseline report
 baseline-check: baseline-smoke ***REMOVED******REMOVED*** Quick baseline check (smoke + compare with main)
 	@echo "$(BLUE)Comparing with main baseline...$(NC)"
 	make baseline-compare BASELINE_TAG=main-latest CURRENT_TAG=$(BASELINE_SESSION)
+
+***REMOVED*** =============================================================================
+***REMOVED*** RAG EVALUATION (RAGAS + DeepEval)
+***REMOVED*** =============================================================================
+
+.PHONY: eval-rag eval-rag-quick eval-rag-full
+
+eval-rag: ***REMOVED******REMOVED*** Run RAG evaluation with RAGAS metrics (faithfulness >= 0.8)
+	@echo "$(BLUE)Running RAG evaluation with RAGAS...$(NC)"
+	@echo "$(YELLOW)Dataset: tests/eval/ground_truth.json (55 samples)$(NC)"
+	@echo "$(YELLOW)LLM: $(EVAL_MODEL) via $(LITELLM_BASE_URL)$(NC)"
+	LANGFUSE_TRACING_ENABLED=true \
+	python3 -m src.evaluation.ragas_evaluation
+	@echo "$(GREEN)✓ RAG evaluation complete$(NC)"
+
+eval-rag-quick: ***REMOVED******REMOVED*** Quick RAG evaluation (10 samples)
+	@echo "$(BLUE)Running quick RAG evaluation...$(NC)"
+	EVAL_SAMPLE_SIZE=10 \
+	python3 -m src.evaluation.ragas_evaluation
+	@echo "$(GREEN)✓ Quick evaluation complete$(NC)"
+
+eval-rag-full: ***REMOVED******REMOVED*** Full RAG evaluation with all metrics
+	@echo "$(BLUE)Running full RAG evaluation...$(NC)"
+	LANGFUSE_TRACING_ENABLED=true \
+	EVAL_INCLUDE_DEEPEVAL=true \
+	python3 -m src.evaluation.ragas_evaluation
+	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
