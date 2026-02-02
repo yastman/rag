@@ -7,7 +7,7 @@ from typing import Any, Optional, Union
 import numpy as np
 from qdrant_client import QdrantClient, models
 
-from src.config import QuantizationMode, SearchEngine, Settings
+from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
 from src.models import get_bge_m3_model
 
 
@@ -68,6 +68,71 @@ class BaseSearchEngine(ABC):
         """Get collection name (respects quantization_mode setting)."""
         return self._collection_name
 
+    def _should_use_acorn(self, has_filters: bool, estimated_selectivity: Optional[float]) -> bool:
+        """Determine if ACORN should be enabled based on settings and query context.
+
+        Args:
+            has_filters: Whether the query has any filters applied.
+            estimated_selectivity: Estimated fraction of vectors matching filters (0.0-1.0).
+                None if unknown.
+
+        Returns:
+            True if ACORN should be enabled for this query.
+        """
+        if self.settings.acorn_mode == AcornMode.OFF:
+            return False
+
+        if self.settings.acorn_mode == AcornMode.ON:
+            # Always use ACORN when filters are present
+            return has_filters
+
+        # AUTO mode: use ACORN only with filters AND low selectivity
+        if not has_filters:
+            return False
+
+        # If selectivity is unknown, default to enabled (conservative)
+        if estimated_selectivity is None:
+            return True
+
+        # Enable ACORN only if selectivity is below threshold
+        return estimated_selectivity < self.settings.acorn_enabled_selectivity_threshold
+
+    def _build_search_params(
+        self,
+        has_filters: bool = False,
+        estimated_selectivity: Optional[float] = None,
+    ) -> models.SearchParams:
+        """Build SearchParams with quantization and optional ACORN settings.
+
+        Args:
+            has_filters: Whether the query has filters applied.
+            estimated_selectivity: Estimated fraction of vectors matching filters.
+
+        Returns:
+            SearchParams configured for quantization and ACORN.
+        """
+        # Build quantization params
+        quantization_params = models.QuantizationSearchParams(
+            ignore=(self.settings.quantization_mode == QuantizationMode.OFF),
+            rescore=self.settings.quantization_rescore,
+            oversampling=self.settings.quantization_oversampling,
+        )
+
+        # Determine if ACORN should be enabled
+        use_acorn = self._should_use_acorn(has_filters, estimated_selectivity)
+
+        if use_acorn:
+            acorn_params = models.AcornSearchParams(
+                enable=True,
+                max_selectivity=self.settings.acorn_max_selectivity,
+            )
+            return models.SearchParams(
+                quantization=quantization_params,
+                acorn=acorn_params,
+            )
+
+        return models.SearchParams(quantization=quantization_params)
+
     @abstractmethod
     def search(
         self,
@@ -90,6 +155,8 @@ class BaselineSearchEngine(BaseSearchEngine):
     - Recall@1: 91.3%
     - NDCG@10: 0.9619
     - Latency: ~0.65s
+
+    Supports ACORN for filtered queries (see acorn_mode setting).
     """
 
     def search(
@@ -97,23 +164,36 @@ class BaselineSearchEngine(BaseSearchEngine):
         query_embedding: list[float],
         top_k: int = 10,
         score_threshold: Optional[float] = None,
+        query_filter: Optional[models.Filter] = None,
+        estimated_selectivity: Optional[float] = None,
     ) -> list[SearchResult]:
-        """Search using dense vectors only with rescoring for quantization accuracy."""
+        """Search using dense vectors only with rescoring for quantization accuracy.
+
+        Args:
+            query_embedding: Dense vector embedding of the query.
+            top_k: Number of results to return.
+            score_threshold: Minimum similarity score threshold.
+            query_filter: Optional Qdrant filter for filtered search.
+            estimated_selectivity: Estimated fraction of vectors matching filter (0.0-1.0).
+                Used to determine if ACORN should be enabled in 'auto' mode.
+
+        Returns:
+            List of SearchResult objects.
+        """
         if score_threshold is None:
             score_threshold = 0.5
 
-        # Build quantization search params from settings
-        search_params = models.SearchParams(
-            quantization=models.QuantizationSearchParams(
-                ignore=(self.settings.quantization_mode == QuantizationMode.OFF),
-                rescore=self.settings.quantization_rescore,
-                oversampling=self.settings.quantization_oversampling,
-            )
+        # Build search params with quantization and conditional ACORN
+        has_filters = query_filter is not None
+        search_params = self._build_search_params(
+            has_filters=has_filters,
+            estimated_selectivity=estimated_selectivity,
         )
 
         results = self.client.search(
             collection_name=self.collection_name,
             query_vector=query_embedding,
+            query_filter=query_filter,
             limit=top_k,
             score_threshold=score_threshold,
             search_params=search_params,
