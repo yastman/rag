@@ -341,6 +341,98 @@ services:
       retries: 3
       start_period: 60s
 
+  # =============================================================================
+  # MONITORING & ALERTING
+  # =============================================================================
+
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: dev-loki
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./docker/monitoring/loki.yaml:/etc/loki/local-config.yaml:ro
+      - ./docker/monitoring/rules:/etc/loki/rules:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  promtail:
+    image: grafana/promtail:3.4.2
+    container_name: dev-promtail
+    restart: unless-stopped
+    volumes:
+      - ./docker/monitoring/promtail.yaml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9080/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: dev-alertmanager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./docker/monitoring/alertmanager.yaml:/etc/alertmanager/alertmanager.tmpl:ro
+      - alertmanager_data:/alertmanager
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        # Check if Telegram bot token is configured
+        if [ -z "$${TELEGRAM_ALERTING_BOT_TOKEN}" ]; then
+          echo "WARNING: TELEGRAM_ALERTING_BOT_TOKEN not set, using null receiver"
+          # Create minimal config with null receiver
+          cat > /etc/alertmanager/alertmanager.yml << 'NULLCONFIG'
+        global:
+          resolve_timeout: 5m
+        route:
+          receiver: 'null'
+          group_by: ['alertname']
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+        receivers:
+          - name: 'null'
+        NULLCONFIG
+        else
+          # Substitute environment variables in config template
+          cat /etc/alertmanager/alertmanager.tmpl | \
+            sed "s|\$${TELEGRAM_ALERTING_BOT_TOKEN}|$${TELEGRAM_ALERTING_BOT_TOKEN}|g" | \
+            sed "s|\$${TELEGRAM_ALERTING_CHAT_ID}|$${TELEGRAM_ALERTING_CHAT_ID}|g" \
+            > /etc/alertmanager/alertmanager.yml
+        fi
+        # Start alertmanager
+        exec /bin/alertmanager \
+          --config.file=/etc/alertmanager/alertmanager.yml \
+          --storage.path=/alertmanager \
+          --web.external-url=http://localhost:9093
+    environment:
+      TELEGRAM_ALERTING_BOT_TOKEN: ${TELEGRAM_ALERTING_BOT_TOKEN:-}
+      TELEGRAM_ALERTING_CHAT_ID: ${TELEGRAM_ALERTING_CHAT_ID:-0}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9093/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   litellm:
     image: ghcr.io/berriai/litellm:v1.81.3.rc.3
     container_name: dev-litellm
@@ -439,3 +531,5 @@ volumes:
   clickhouse_data:
   clickhouse_logs:
   minio_data:
+  loki_data:
+  alertmanager_data:
