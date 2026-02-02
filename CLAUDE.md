@@ -9,7 +9,8 @@ make check              # Lint + types
 make test               # All tests
 make test-unit          # Unit tests only (fast)
 make docker-up          # Start services
-. .venv/bin/activate    # Activate venv
+make eval-rag           # RAG evaluation (RAGAS faithfulness >= 0.8)
+make monitoring-up      # Start alerting stack
 ```
 
 **Location:** `/home/user/projects/rag-fresh` (WSL2)
@@ -69,8 +70,13 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 
 #***REMOVED*** Collections
 
-- `contextual_bulgaria_voyage` — Bulgarian property (Voyage-4, BQ)
-- `legal_documents` — Ukrainian Criminal Code (BGE-M3)
+| Collection | Content | Quantization |
+|------------|---------|--------------|
+| `contextual_bulgaria_voyage` | Bulgarian property (192 docs) | Binary |
+| `contextual_bulgaria_voyage_scalar` | Same, INT8 | Scalar |
+| `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 |
+
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`
 
 ## Deployment
 
@@ -117,18 +123,14 @@ make monitoring-logs        # View logs
 
 See `.claude/rules/` for domain-specific documentation:
 
-| File | Scope |
-|------|-------|
-| `features/caching.md` | 6-tier cache, TTL |
-| `features/search-retrieval.md` | Hybrid RRF, Qdrant |
-| `features/embeddings.md` | Voyage, BGE-M3, BM42 |
-| `features/llm-integration.md` | LiteLLM, fallbacks |
-| `features/telegram-bot.md` | Handlers, middlewares |
-| `features/ingestion.md` | Parsing, chunking |
-| `services.md` | VoyageService, QdrantService |
-| `search.md` | Search engines |
-| `testing.md` | Unit tests, E2E |
-| `docker.md` | Containers, compose |
-| `skills.md` | Superpowers workflow |
-| `shared-tasks.md` | Multi-terminal tasks |
-| `observability.md` | Langfuse |
+| File | Scope | Loads when |
+|------|-------|-----------|
+| `features/search-retrieval.md` | RRF, quantization, small-to-big | `src/retrieval/**` |
+| `features/evaluation.md` | RAGAS, metrics, A/B tests | `src/evaluation/**` |
+| `features/caching.md` | 6-tier cache, TTL | `**/cache*.py` |
+| `features/embeddings.md` | Voyage, BGE-M3, BM42 | `**/embed*.py` |
+| `features/llm-integration.md` | LiteLLM, fallbacks | `**/llm*.py` |
+| `features/telegram-bot.md` | Handlers, middlewares | `telegram_bot/*.py` |
+| `docker.md` | Containers, monitoring | `docker/**` |
+| `testing.md` | Unit tests, E2E | `tests/**` |
+| `skills.md` | Superpowers workflow | `docs/plans/**` |

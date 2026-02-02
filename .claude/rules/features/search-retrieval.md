@@ -45,7 +45,12 @@ Query → Dense Embedding (Voyage) + Sparse Embedding (BM42)
 | `dense_weight` | 0.6 | RRF weight for dense vectors |
 | `sparse_weight` | 0.4 | RRF weight for sparse vectors |
 | `prefetch_multiplier` | 3 | Overfetch ratio for RRF |
-| `use_quantization` | true | Enable Binary Quantization |
+| `quantization_mode` | binary | off/scalar/binary (32x compression) |
+| `quantization_rescore` | true | Rescore with full vectors |
+| `quantization_oversampling` | 2.0 | Fetch 2x more candidates |
+| `small_to_big_mode` | off | off/on/auto (context expansion) |
+| `small_to_big_window_before` | 1 | Chunks before hit |
+| `small_to_big_window_after` | 1 | Chunks after hit |
 
 ## RRF Weights by Query Type
 
@@ -142,6 +147,25 @@ results = await qdrant.hybrid_search_rrf(
     quantization_ignore=True,  # Use full vectors
 )
 ```
+
+**Collection selection:** `settings.get_collection_name()` appends `_binary` or `_scalar` suffix based on mode.
+
+## Small-to-Big Expansion
+
+Fetches neighboring chunks after retrieval for more context:
+
+```python
+from telegram_bot.services.small_to_big import SmallToBigService
+
+s2b = SmallToBigService(qdrant_service, settings)
+expanded = await s2b.expand_results(
+    results=search_results,
+    window_before=1,  # 1 chunk before each hit
+    window_after=1,   # 1 chunk after each hit
+)
+```
+
+**Modes:** `off` (disabled), `on` (always expand), `auto` (expand for COMPLEX queries only)
 
 ## Dependencies
 
