@@ -183,6 +183,19 @@ class Settings:
         ***REMOVED*** Minimum query length to skip HyDE (longer queries don't benefit as much)
         self.hyde_min_words = int(os.getenv("HYDE_MIN_WORDS", "5"))
 
+        ***REMOVED*** === CONTEXTUALIZED EMBEDDINGS (voyage-context-3) ===
+        ***REMOVED*** When enabled, uses Voyage AI contextualized embeddings that capture
+        ***REMOVED*** document structure by processing all chunks together. Each chunk's
+        ***REMOVED*** embedding incorporates context from surrounding chunks.
+        ***REMOVED*** Requires chunks WITHOUT overlap (different from standard RAG chunking).
+        self.use_contextualized_embeddings = (
+            os.getenv("USE_CONTEXTUALIZED_EMBEDDINGS", "false").lower() == "true"
+        )
+        ***REMOVED*** Output dimension for contextualized embeddings (2048, 1024, 512, 256)
+        self.contextualized_embedding_dim = int(
+            os.getenv("CONTEXTUALIZED_EMBEDDING_DIM", "1024")
+        )
+
         ***REMOVED*** === ENVIRONMENT ===
         self.env = os.getenv("ENV", "development").lower()
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
@@ -268,6 +281,8 @@ class Settings:
             "acorn_enabled_selectivity_threshold": self.acorn_enabled_selectivity_threshold,
             "use_hyde": self.use_hyde,
             "hyde_min_words": self.hyde_min_words,
+            "use_contextualized_embeddings": self.use_contextualized_embeddings,
+            "contextualized_embedding_dim": self.contextualized_embedding_dim,
             "env": self.env,
             "debug": self.debug,
         }
