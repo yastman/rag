@@ -12,11 +12,18 @@ if TYPE_CHECKING:
     from .cache import CacheService
     from .cesc import CESCPersonalizer, is_personalized_query
     from .embeddings import EmbeddingService
-    from .llm import LLMService
+    from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
     from .query_preprocessor import QueryPreprocessor
-    from .query_router import QueryType, classify_query, get_chitchat_response, needs_rerank
+    from .query_router import (
+        QueryType,
+        classify_query,
+        get_chitchat_response,
+        get_off_topic_response,
+        is_off_topic,
+        needs_rerank,
+    )
     from .retriever import RetrieverService
     from .small_to_big import ExpandedChunk, SmallToBigService
     from .user_context import UserContextService
@@ -25,8 +32,10 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "LOW_CONFIDENCE_THRESHOLD",
     "CESCPersonalizer",
     "CacheService",
+    "ConfidenceResult",
     "EmbeddingService",
     "ExpandedChunk",
     "LLMService",
@@ -41,6 +50,8 @@ __all__ = [
     "VoyageService",
     "classify_query",
     "get_chitchat_response",
+    "get_off_topic_response",
+    "is_off_topic",
     "is_personalized_query",
     "needs_rerank",
 ]
@@ -50,15 +61,19 @@ _IMPORT_MAP = {
     "CacheService": ".cache",
     "CESCPersonalizer": ".cesc",
     "is_personalized_query": ".cesc",
+    "ConfidenceResult": ".llm",
     "EmbeddingService": ".embeddings",
     "ExpandedChunk": ".small_to_big",
     "LLMService": ".llm",
+    "LOW_CONFIDENCE_THRESHOLD": ".llm",
     "QdrantService": ".qdrant",
     "QueryAnalyzer": ".query_analyzer",
     "QueryPreprocessor": ".query_preprocessor",
     "QueryType": ".query_router",
     "classify_query": ".query_router",
     "get_chitchat_response": ".query_router",
+    "get_off_topic_response": ".query_router",
+    "is_off_topic": ".query_router",
     "needs_rerank": ".query_router",
     "RetrieverService": ".retriever",
     "SmallToBigService": ".small_to_big",
