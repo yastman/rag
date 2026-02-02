@@ -27,6 +27,14 @@ class SearchEngine(str, Enum):
     DBSF_COLBERT = "dbsf_colbert"  # Density-Based Semantic Fusion + ColBERT
 
 
+class SmallToBigMode(str, Enum):
+    """Small-to-big context expansion mode."""
+
+    OFF = "off"  # No expansion
+    ON = "on"  # Always expand
+    AUTO = "auto"  # Expand only for complex queries
+
+
 class APIProvider(str, Enum):
     """Available LLM API providers."""
 
