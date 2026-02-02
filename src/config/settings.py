@@ -12,6 +12,7 @@ from .constants import (
     APIProvider,
     BatchSizes,
     ModelName,
+    QuantizationMode,
     RetrievalStages,
     SearchEngine,
 )
@@ -138,6 +139,19 @@ class Settings:
         self.enable_mlflow = os.getenv("ENABLE_MLFLOW", "true").lower() == "true"
         self.enable_langfuse = os.getenv("ENABLE_LANGFUSE", "true").lower() == "true"
 
+        # === QUANTIZATION ===
+        # Binary: 32x compression, 40x faster (best for dim >= 1024)
+        # Scalar (INT8): 4x compression, better accuracy
+        self.quantization_mode = QuantizationMode(
+            os.getenv("QUANTIZATION_MODE", "binary").lower()
+        )
+        self.quantization_rescore = (
+            os.getenv("QUANTIZATION_RESCORE", "true").lower() == "true"
+        )
+        self.quantization_oversampling = float(
+            os.getenv("QUANTIZATION_OVERSAMPLING", "2.0")
+        )
+
         # === ENVIRONMENT ===
         self.env = os.getenv("ENV", "development").lower()
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
@@ -171,6 +185,27 @@ class Settings:
         }
         return defaults.get(provider, ModelName.CLAUDE_SONNET.value)
 
+    def get_collection_name(self) -> str:
+        """Get collection name based on quantization mode.
+
+        Returns:
+            Collection name with appropriate suffix:
+            - QuantizationMode.OFF: base collection
+            - QuantizationMode.SCALAR: base_scalar
+            - QuantizationMode.BINARY: base_binary
+        """
+        base = self.collection_name
+        # Strip existing suffixes
+        for suffix in ["_binary", "_scalar"]:
+            base = base.removesuffix(suffix)
+
+        if self.quantization_mode == QuantizationMode.SCALAR:
+            return f"{base}_scalar"
+        if self.quantization_mode == QuantizationMode.BINARY:
+            return f"{base}_binary"
+        # OFF
+        return base
+
     def to_dict(self) -> dict[str, Any]:
         """Export settings as dictionary (excluding sensitive data)."""
         return {
@@ -189,6 +224,9 @@ class Settings:
             "enable_query_expansion": self.enable_query_expansion,
             "enable_mlflow": self.enable_mlflow,
             "enable_langfuse": self.enable_langfuse,
+            "quantization_mode": self.quantization_mode.value,
+            "quantization_rescore": self.quantization_rescore,
+            "quantization_oversampling": self.quantization_oversampling,
             "env": self.env,
             "debug": self.debug,
         }
