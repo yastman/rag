@@ -35,6 +35,26 @@ class SmallToBigMode(str, Enum):
     AUTO = "auto"  # Expand only for complex queries
 
 
+class AcornMode(str, Enum):
+    """ACORN search mode for filtered queries.
+
+    ACORN (Agnostic Contiguous Optimized Retrieval Network) improves
+    filtered vector search by using second-hop exploration to avoid
+    graph disconnection problems in HNSW.
+
+    Best for: filters with low selectivity (< 40% of vectors match).
+
+    Modes:
+    - OFF: Never use ACORN (default)
+    - ON: Always use ACORN when filters present
+    - AUTO: Use ACORN only when selectivity < threshold
+    """
+
+    OFF = "off"  # Never use ACORN
+    ON = "on"  # Always use ACORN with filters
+    AUTO = "auto"  # Use ACORN only with low selectivity filters
+
+
 class APIProvider(str, Enum):
     """Available LLM API providers."""
 
