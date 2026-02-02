@@ -68,7 +68,8 @@ class TestHandleQueryObservability:
             mock_langfuse.update_current_trace.assert_called_once()
             call_kwargs = mock_langfuse.update_current_trace.call_args.kwargs
             assert call_kwargs["user_id"] == "123456789"
-            assert call_kwargs["session_id"] == "chat:987654321"
+            # Session ID format: chat-{hash}-{YYYYMMDD}
+            assert call_kwargs["session_id"].startswith("chat-")
             assert "telegram" in call_kwargs["tags"]
 
     @pytest.mark.asyncio
