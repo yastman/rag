@@ -37,6 +37,7 @@ Query → SemanticCache check → [HIT: return cached]
 |------|------------|-----|-------------|
 | 1 | Semantic (LLM responses) | 48h | `sem:v2:{vectorizer_id}` |
 | 1 | Embeddings (query vectors) | 7d | `emb:v2:{hash}` |
+| 1 | Conversation history | ∞ | `rag_conversations:v2:{vectorizer_id}` |
 | 2 | QueryAnalyzer results | 24h | `analysis:v2:{hash}` |
 | 2 | Search results | 2h | `search:v2:{index_ver}:{hash}` |
 | 2 | Rerank results | 2h | `rerank:v2:{hash}` |
@@ -102,6 +103,25 @@ CACHE_SCHEMA_VERSION = "v3"  # Was "v2"
 
 Old keys expire naturally via TTL.
 
+### Conversation history (SemanticMessageHistory)
+
+Index name includes version AND vectorizer to prevent schema mismatch:
+
+```python
+# Index format: rag_conversations:{version}:{vectorizer_id}
+# Examples:
+#   rag_conversations:v2:userbase768  (USE_LOCAL_EMBEDDINGS=true)
+#   rag_conversations:v2:voyage1024   (Voyage API)
+```
+
+**Why vectorizer_id?** Different vectorizers have different dimensions (768 vs 1024). Mixing them causes schema mismatch.
+
+**Cleanup old indices:**
+```bash
+docker exec dev-redis redis-cli FT.DROPINDEX rag_conversations DD
+docker exec dev-redis redis-cli FT.DROPINDEX "rag_conversations:v2" DD
+```
+
 ## Dependencies
 
 - Container: `dev-redis` (6379)
@@ -122,6 +142,7 @@ pytest tests/unit/test_semantic_cache.py -v
 | Cache pollution after model change | Bump `CACHE_SCHEMA_VERSION` |
 | False positive hits | Lower `distance_threshold` |
 | High miss rate | Raise `distance_threshold` or increase TTL |
+| `schema does not match` for conversation history | Old index exists; drop with `FT.DROPINDEX ... DD` |
 
 ## Development Guide
 
