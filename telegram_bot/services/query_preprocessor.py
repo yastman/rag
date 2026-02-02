@@ -4,6 +4,8 @@ import logging
 import re
 from typing import Any
 
+from langfuse import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +145,7 @@ class QueryPreprocessor:
         """
         return any(re.search(pattern, query, re.IGNORECASE) for pattern in self.EXACT_PATTERNS)
 
+    @observe(name="query-preprocessor-analyze")
     def analyze(self, query: str) -> dict[str, Any]:
         """Perform full query preprocessing analysis.
 
