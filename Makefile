@@ -193,6 +193,18 @@ smoke-zoo: ## Run zoo smoke tests (pytest)
 
 test-redis: ## Verify Redis Query Engine is available
 	@echo "$(BLUE)Testing Redis Query Engine...$(NC)"
+	@redis_policy=$$(docker exec dev-redis redis-cli CONFIG GET maxmemory-policy | tail -n 1); \
+		if [ "$$redis_policy" != "volatile-lfu" ]; then \
+			echo "$(RED)FAIL: maxmemory-policy is $$redis_policy (expected volatile-lfu)$(NC)"; \
+			exit 1; \
+		fi; \
+		echo "  maxmemory-policy: $$redis_policy"
+	@redis_samples=$$(docker exec dev-redis redis-cli CONFIG GET maxmemory-samples | tail -n 1); \
+		if [ "$$redis_samples" != "10" ]; then \
+			echo "$(RED)FAIL: maxmemory-samples is $$redis_samples (expected 10)$(NC)"; \
+			exit 1; \
+		fi; \
+		echo "  maxmemory-samples: $$redis_samples"
 	@docker exec dev-redis redis-cli FT._LIST > /dev/null 2>&1 || \
 		(echo "$(RED)FAIL: FT._LIST not available - Query Engine missing$(NC)" && exit 1)
 	@echo "  FT._LIST: OK"
@@ -210,6 +222,13 @@ test-redis: ## Verify Redis Query Engine is available
 		echo "  JSON: OK"; \
 	fi
 	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"
+
+.PHONY: test-bot-health
+
+test-bot-health: ## Preflight: verify Qdrant collection + LLM connectivity
+	@echo "$(BLUE)Running bot health preflight...$(NC)"
+	@./scripts/test_bot_health.sh
+	@echo "$(GREEN)✓ Bot health preflight passed$(NC)"
 
 # =============================================================================
 # PROJECT MANAGEMENT
@@ -406,8 +425,17 @@ endif
 	python3 -m tests.baseline.cli set-baseline --tag="$(TAG)"
 
 baseline-report: ## Generate HTML baseline report
+ifndef BASELINE_TAG
+	$(error BASELINE_TAG is required. Usage: make baseline-report BASELINE_TAG=... CURRENT_TAG=...)
+endif
+ifndef CURRENT_TAG
+	$(error CURRENT_TAG is required. Usage: make baseline-report BASELINE_TAG=... CURRENT_TAG=...)
+endif
 	@echo "$(BLUE)Generating baseline report...$(NC)"
 	python3 -m tests.baseline.cli report \
+		--baseline="$(BASELINE_TAG)" \
+		--current="$(CURRENT_TAG)" \
+		--thresholds=tests/baseline/thresholds.yaml \
 		--output=reports/baseline-$(shell date +%Y%m%d-%H%M%S).html
 	@echo "$(GREEN)Report saved to reports/$(NC)"
 
