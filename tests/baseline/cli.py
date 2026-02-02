@@ -188,10 +188,10 @@ def report(baseline: str | None, current: str | None, thresholds: str, hours: in
         sign = "+" if pct >= 0 else ""
         return f"{sign}{pct:.1f}%"
 
-    html = f\"\"\"<!DOCTYPE html>
-<html lang=\\"en\\">
+    html = f"""<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset=\\"UTF-8\\">
+  <meta charset="UTF-8">
   <title>Baseline Report</title>
   <style>
     body {{ font-family: Arial, sans-serif; margin: 24px; color: #222; }}
@@ -209,7 +209,7 @@ def report(baseline: str | None, current: str | None, thresholds: str, hours: in
   <div>Baseline: <code>{baseline_snapshot.tag}</code></div>
   <div>Current: <code>{current_snapshot.tag}</code></div>
   <div>Window: last {hours}h</div>
-  <div>Status: <span class=\\"{'pass' if passed else 'fail'}\\">{'PASSED' if passed else 'FAILED'}</span></div>
+  <div>Status: <span class="{'pass' if passed else 'fail'}">{'PASSED' if passed else 'FAILED'}</span></div>
 
   <table>
     <thead>
@@ -254,7 +254,7 @@ def report(baseline: str | None, current: str | None, thresholds: str, hours: in
   </ul>
 </body>
 </html>
-\"\"\"
+"""
 
     report_path.write_text(html, encoding="utf-8")
     click.echo(f"Report saved to {report_path}")
