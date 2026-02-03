@@ -7,10 +7,13 @@
 
 set -euo pipefail
 
-SYNC_DIR="/data/drive-sync"
-LOG_FILE="/var/log/rclone-sync.log"
+SYNC_DIR="${GDRIVE_SYNC_DIR:-$HOME/drive-sync}"
+LOG_FILE="${HOME}/.local/log/rclone-sync.log"
 LOCK_FILE="/tmp/rclone-sync.lock"
-RCLONE_CONFIG="/repo/docker/rclone/rclone.conf"
+RCLONE_REMOTE="gdrive:RAG"
+
+# Ensure log directory exists
+mkdir -p "$(dirname "$LOG_FILE")"
 
 # Prevent concurrent runs
 exec 200>"$LOCK_FILE"
@@ -18,8 +21,7 @@ flock -n 200 || { echo "$(date): Sync already running" >> "$LOG_FILE"; exit 0; }
 
 echo "$(date): Starting Drive sync" >> "$LOG_FILE"
 
-rclone sync gdrive: "$SYNC_DIR" \
-  --config "$RCLONE_CONFIG" \
+rclone sync "$RCLONE_REMOTE" "$SYNC_DIR" \
   --drive-export-formats docx,xlsx,pptx \
   --fast-list \
   --delete-after \
