@@ -6,7 +6,6 @@ Complete implementation with testing support
 
 import sys
 import time
-from typing import Optional
 
 import requests
 from contextualize_zai import ContextualRetrievalZAI
@@ -104,7 +103,7 @@ def qdrant_upsert(collection: str, point_id: int, vectors: dict, payload: dict):
 def process_document_contextual_kg(
     pdf_path: str,
     collection_name: str,
-    max_chunks: Optional[int] = None,
+    max_chunks: int | None = None,
     document_name: str = DOCUMENT_NAME,
 ):
     """
