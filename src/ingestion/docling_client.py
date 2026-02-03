@@ -27,8 +27,14 @@ class DoclingConfig:
     timeout: float = 300.0  # Long timeout for large documents
     max_tokens: int = 512  # Optimal for Voyage-4-large
     merge_peers: bool = True  # Merge undersized peer chunks
-    tokenizer: str = "word"  # word | huggingface
-    pdf_backend: str = "dlparse_v2"  # Best table parsing
+    # docling-serve expects a HuggingFace model name (string) for `chunking_tokenizer`.
+    # If omitted, docling-serve uses its server-side default tokenizer.
+    #
+    # NOTE: Earlier versions of this client used values like "word" / "huggingface",
+    # but the HTTP API does not support those and may return 0 chunks while still
+    # responding with HTTP 200.
+    tokenizer: str | None = None
+    pdf_backend: str = "dlparse_v4"  # Best table parsing (2026)
     table_mode: str = "accurate"  # accurate | fast
     do_ocr: bool = False  # Enable for scanned documents
 
@@ -140,18 +146,19 @@ class DoclingClient:
         if suffix not in self.SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported format: {suffix}")
 
-        # Prepare multipart form data
-        with open(file_path, "rb") as f:
-            files = {"files": (file_path.name, f, self._get_mime_type(suffix))}
+        # Prepare multipart form data - read file into memory to avoid
+        # async context issues with file handles
+        file_content = file_path.read_bytes()
+        files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
 
-            response = await self.client.post(
-                "/v1/convert/file",
-                files=files,
-                data={
-                    "convert_do_ocr": str(self.config.do_ocr).lower(),
-                    "convert_pdf_backend": self.config.pdf_backend,
-                },
-            )
+        response = await self.client.post(
+            "/v1/convert/file",
+            files=files,
+            data={
+                "convert_do_ocr": str(self.config.do_ocr).lower(),
+                "convert_pdf_backend": self.config.pdf_backend,
+            },
+        )
 
         response.raise_for_status()
         result = response.json()
@@ -191,22 +198,17 @@ class DoclingClient:
         if suffix not in self.SUPPORTED_FORMATS:
             raise ValueError(f"Unsupported format: {suffix}")
 
-        # Prepare multipart form data
-        with open(file_path, "rb") as f:
-            files = {"files": (file_path.name, f, self._get_mime_type(suffix))}
+        # Prepare multipart form data - read file into memory to avoid
+        # async context issues with file handles
+        file_content = file_path.read_bytes()
+        files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
 
-            response = await self.client.post(
-                "/v1/chunk/hybrid/file",
-                files=files,
-                data={
-                    "convert_do_ocr": str(self.config.do_ocr).lower(),
-                    "convert_pdf_backend": self.config.pdf_backend,
-                    "chunking_max_tokens": str(self.config.max_tokens),
-                    "chunking_tokenizer": self.config.tokenizer,
-                    "chunking_merge_peers": str(self.config.merge_peers).lower(),
-                    "include_converted_doc": "false",
-                },
-            )
+        data = self._build_chunking_form_data()
+        response = await self.client.post(
+            "/v1/chunk/hybrid/file",
+            files=files,
+            data=data,
+        )
 
         response.raise_for_status()
         result = response.json()
@@ -214,6 +216,16 @@ class DoclingClient:
         # Parse chunks
         chunks = []
         raw_chunks = result.get("chunks", [])
+
+        if raw_chunks == []:
+            logger.warning(
+                "Docling returned 0 chunks for %s (status=%s). "
+                "This often happens when sending an invalid `chunking_tokenizer` value. "
+                "Sent form fields: %s",
+                file_path.name,
+                response.status_code,
+                sorted(data.keys()),
+            )
 
         for raw_chunk in raw_chunks:
             # Extract text - contextualized if available
@@ -223,10 +235,10 @@ class DoclingClient:
 
             chunk = DoclingChunk(
                 text=text,
-                seq_no=raw_chunk.get("seq_no", len(chunks)),
+                seq_no=raw_chunk.get("seq_no", raw_chunk.get("chunk_index", len(chunks))),
                 headings=raw_chunk.get("headings", []),
-                page_range=self._parse_page_range(raw_chunk.get("meta", {})),
-                metadata=raw_chunk.get("meta", {}),
+                page_range=self._parse_page_range_from_chunk(raw_chunk),
+                metadata=raw_chunk.get("meta") or raw_chunk.get("metadata", {}),
             )
             chunks.append(chunk)
 
@@ -319,6 +331,42 @@ class DoclingClient:
 
         if page_start is not None:
             return (int(page_start), int(page_end or page_start))
+        return None
+
+    def _build_chunking_form_data(self) -> dict[str, str]:
+        """Build multipart form fields for /v1/chunk/hybrid/file."""
+        data: dict[str, str] = {
+            "convert_do_ocr": str(self.config.do_ocr).lower(),
+            "convert_pdf_backend": self.config.pdf_backend,
+            "chunking_max_tokens": str(self.config.max_tokens),
+            "chunking_merge_peers": str(self.config.merge_peers).lower(),
+            "include_converted_doc": "false",
+        }
+
+        # docling-serve expects a HF model id, not "word"/"huggingface".
+        tokenizer = (self.config.tokenizer or "").strip()
+        if tokenizer and tokenizer not in {"word", "huggingface"}:
+            data["chunking_tokenizer"] = tokenizer
+
+        return data
+
+    def _parse_page_range_from_chunk(self, raw_chunk: dict[str, Any]) -> tuple[int, int] | None:
+        """Parse page range from a docling-serve chunk payload."""
+        # Current docling-serve returns `page_numbers: []` on each chunk.
+        page_numbers = raw_chunk.get("page_numbers")
+        if isinstance(page_numbers, list) and page_numbers:
+            try:
+                nums = [int(p) for p in page_numbers if p is not None]
+            except (TypeError, ValueError):
+                nums = []
+            if nums:
+                return (min(nums), max(nums))
+
+        # Backward/alternate formats
+        meta = raw_chunk.get("meta") or raw_chunk.get("metadata") or {}
+        if isinstance(meta, dict):
+            return self._parse_page_range(meta)
+
         return None
 
 
