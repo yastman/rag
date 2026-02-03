@@ -1,0 +1,81 @@
+# docker/monitoring/rules/ingestion.yaml
+# Alert rules for unified ingestion pipeline (LogQL)
+
+groups:
+  - name: ingestion
+    interval: 1m
+    rules:
+      # Pipeline stalled
+      - alert: IngestionPipelineStalled
+        expr: |
+          count_over_time({container="dev-ingestion"} |~ "Cycle complete" [1h]) == 0
+          and
+          count_over_time({container="dev-ingestion"} |~ "Starting watch" [24h]) > 0
+        for: 30m
+        labels:
+          severity: warning
+          service: ingestion
+        annotations:
+          summary: "Ingestion pipeline stalled"
+          description: "No ingestion cycles completed in 1 hour"
+
+      # High failure rate
+      - alert: IngestionHighFailureRate
+        expr: |
+          sum(count_over_time({container="dev-ingestion"} |~ "failed=" [15m]))
+          / sum(count_over_time({container="dev-ingestion"} |~ "Cycle complete" [15m])) > 0.3
+        for: 15m
+        labels:
+          severity: warning
+          service: ingestion
+        annotations:
+          summary: "Ingestion failure rate >30%"
+          description: "Check docling, voyage, or qdrant connectivity"
+
+      # DLQ growing
+      - alert: IngestionDLQGrowing
+        expr: |
+          count_over_time({container="dev-ingestion"} |~ "Moved to DLQ" [1h]) > 3
+        for: 15m
+        labels:
+          severity: warning
+          service: ingestion
+        annotations:
+          summary: "Files moving to dead letter queue"
+          description: "Multiple files failed after retries"
+
+      # Docling errors
+      - alert: DoclingErrors
+        expr: |
+          count_over_time({container="dev-ingestion"} |~ "(?i)docling.*error|docling.*timeout" [10m]) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: docling
+        annotations:
+          summary: "Docling processing errors"
+          description: "Check dev-docling container health"
+
+      ***REMOVED*** rate limiting
+      - alert: VoyageRateLimited
+        expr: |
+          count_over_time({container="dev-ingestion"} |~ "(?i)voyage.*429|rate.*limit" [5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: voyage
+        annotations:
+          summary: "Voyage API rate limited"
+          description: "Consider reducing batch concurrency"
+
+      # Container down
+      - alert: IngestionContainerDown
+        expr: |
+          count_over_time({container="dev-ingestion"} [10m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: ingestion
+        annotations:
+          summary: "Ingestion container is down"
+          description: "No logs from dev-ingestion container"
