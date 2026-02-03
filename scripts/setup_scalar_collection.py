@@ -224,6 +224,77 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
             print(f"  Warning: Could not create index {field}: {e}")
 
 
+def verify_collection_indexes(client: QdrantClient, collection_name: str) -> list[str]:
+    """Verify required payload indexes exist.
+
+    Returns:
+        List of missing index names (empty if all present)
+    """
+    required_indexes = {
+        # Keyword indexes (required for unified ingestion)
+        "file_id": "keyword",
+        "metadata.file_id": "keyword",
+        "metadata.doc_id": "keyword",
+        "metadata.source": "keyword",
+        # Integer indexes (required for small-to-big)
+        "metadata.order": "integer",
+        "metadata.chunk_order": "integer",
+    }
+
+    try:
+        info = client.get_collection(collection_name)
+        existing = info.payload_schema or {}
+
+        missing = []
+        for field, expected_type in required_indexes.items():
+            if field not in existing:
+                missing.append(field)
+            else:
+                # Check type matches
+                actual_type = getattr(existing[field], "data_type", "unknown")
+                if actual_type != expected_type:
+                    missing.append(
+                        f"{field} (wrong type: {actual_type}, expected: {expected_type})"
+                    )
+
+        return missing
+
+    except Exception as e:
+        return [f"Error checking collection: {e}"]
+
+
+def verify_only(source_collection: str) -> bool:
+    """Verify collection has required indexes without modifying.
+
+    Returns:
+        True if all required indexes present, False otherwise
+    """
+    try:
+        client = get_qdrant_client()
+        scalar_collection = get_scalar_collection_name(source_collection)
+
+        if not collection_exists(client, scalar_collection):
+            print(f"Collection '{scalar_collection}' does not exist.")
+            return False
+
+        missing = verify_collection_indexes(client, scalar_collection)
+
+        if missing:
+            print(f"Collection '{scalar_collection}' is MISSING required indexes:")
+            for field in missing:
+                print(f"  - {field}")
+            print("\nRun without --verify-only to add missing indexes.")
+            return False
+
+        print(f"Collection '{scalar_collection}' has all required indexes.")
+        print_collection_info(client, scalar_collection)
+        return True
+
+    except Exception as e:
+        print(f"Error during verification: {e}")
+        return False
+
+
 def print_collection_info(client: QdrantClient, collection_name: str) -> None:
     """Print collection information."""
     try:
@@ -360,7 +431,22 @@ Examples:
         help="Skip creating payload indexes",
     )
 
+    parser.add_argument(
+        "--verify-only",
+        "-v",
+        action="store_true",
+        help="Only verify required indexes exist, don't modify collection",
+    )
+
     args = parser.parse_args()
+
+    # Handle verify-only mode
+    if args.verify_only:
+        print("\n" + "=" * 60)
+        print("Qdrant Collection Verification")
+        print("=" * 60 + "\n")
+        success = verify_only(args.source)
+        return 0 if success else 1
 
     print("\n" + "=" * 60)
     print("Qdrant Scalar (INT8) Quantization Collection Setup")
