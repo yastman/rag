@@ -15,7 +15,6 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import fitz  # PyMuPDF
 import numpy as np
@@ -615,7 +614,7 @@ async def process_chunk_async(
 async def process_document_contextual_kg_async(
     pdf_path: str,
     collection_name: str,
-    max_chunks: Optional[int] = None,
+    max_chunks: int | None = None,
     document_name: str = DOCUMENT_NAME,
     max_concurrent: int = 10,
     enable_mlflow: bool = True,

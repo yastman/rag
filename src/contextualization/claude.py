@@ -1,6 +1,6 @@
 """Claude-based contextualization provider."""
 
-from typing import Any, Optional
+from typing import Any
 
 from anthropic import Anthropic, AsyncAnthropic
 
@@ -25,7 +25,7 @@ class ClaudeContextualizer(ContextualizeProvider):
     - Quality: Highest among available providers
     """
 
-    def __init__(self, settings: Optional[Settings] = None, use_cache: bool = True):
+    def __init__(self, settings: Settings | None = None, use_cache: bool = True):
         """Initialize Claude contextualizer.
 
         Args:
@@ -42,7 +42,7 @@ class ClaudeContextualizer(ContextualizeProvider):
     async def contextualize(
         self,
         chunks: list[str],
-        query: Optional[str] = None,
+        query: str | None = None,
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
         """
@@ -72,7 +72,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         self,
         text: str,
         article_number: str,
-        query: Optional[str] = None,
+        query: str | None = None,
     ) -> ContextualizedChunk:
         """
         Contextualize a single chunk using Claude.
@@ -127,7 +127,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         self,
         text: str,
         article_number: str,
-        query: Optional[str] = None,
+        query: str | None = None,
     ) -> ContextualizedChunk:
         """Synchronous contextualization (blocking)."""
         system_prompt = self.get_system_prompt()

@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 class ChunkingStrategy(str, Enum):
@@ -24,11 +24,11 @@ class Chunk:
     chunk_id: int
     document_name: str
     article_number: str  # For legal documents
-    chapter: Optional[str] = None
-    section: Optional[str] = None
-    page_range: Optional[tuple[int, int]] = None  # (start, end) pages
+    chapter: str | None = None
+    section: str | None = None
+    page_range: tuple[int, int] | None = None  # (start, end) pages
     order: int = 0
-    extra_metadata: Optional[dict[str, Any]] = None  # For structured data (CSV, etc.)
+    extra_metadata: dict[str, Any] | None = None  # For structured data (CSV, etc.)
 
 
 class DocumentChunker:
@@ -290,7 +290,7 @@ def _parse_csv_row_metadata(row: dict[str, str]) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
 
     # Helper to parse number from string (handles "120 000" format)
-    def parse_number(value: str) -> Optional[int | float]:
+    def parse_number(value: str) -> int | float | None:
         if not value or not value.strip():
             return None
         try:
