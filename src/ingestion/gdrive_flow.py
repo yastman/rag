@@ -31,7 +31,9 @@ class GDriveFlowConfig:
     """Configuration for Google Drive ingestion flow."""
 
     # Sync directory (where rclone puts files)
-    sync_dir: str = field(default_factory=lambda: os.getenv("GDRIVE_SYNC_DIR", "/data/drive-sync"))
+    sync_dir: str = field(
+        default_factory=lambda: os.getenv("GDRIVE_SYNC_DIR", os.path.expanduser("~/drive-sync"))
+    )
 
     ***REMOVED*** settings
     qdrant_url: str = field(
