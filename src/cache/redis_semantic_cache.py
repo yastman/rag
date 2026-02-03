@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 from datetime import timedelta
-from typing import Optional
 
 import redis.asyncio as redis
 from opentelemetry import trace
@@ -66,7 +65,7 @@ class RedisSemanticCache:
         """Generate deterministic hash for query."""
         return hashlib.sha256(query.encode()).hexdigest()[:16]
 
-    async def get_embedding(self, query: str) -> Optional[list[float]]:
+    async def get_embedding(self, query: str) -> list[float] | None:
         """
         Get cached embedding.
 
@@ -102,7 +101,7 @@ class RedisSemanticCache:
 
         await self.redis.setex(cache_key, self.embedding_ttl, json.dumps(embedding))
 
-    async def get_response(self, query: str, top_k: int) -> Optional[dict]:
+    async def get_response(self, query: str, top_k: int) -> dict | None:
         """
         Get cached full response (embedding + search results).
 
