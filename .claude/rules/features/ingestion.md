@@ -38,6 +38,7 @@ make ingest-setup         # Create Postgres schema + Qdrant indexes
 make ingest-run           # Run ingestion once
 make ingest-continuous    # Run with polling
 make ingest-status        # Show indexed files
+make ingest-gdrive-run    # Run GDrive ingestion (~/drive-sync)
 ```
 
 ## Key Files (2026)
@@ -46,7 +47,9 @@ make ingest-status        # Show indexed files
 |------|-------------|
 | `src/ingestion/service.py` | IngestionService class |
 | `src/ingestion/cocoindex_flow.py` | CocoIndex flow definition |
-| `src/ingestion/docling_client.py` | Docling API client |
+| `src/ingestion/docling_client.py` | Docling API client (httpx async) |
+| `src/ingestion/gdrive_flow.py` | Google Drive ingestion flow |
+| `src/ingestion/gdrive_indexer.py` | GDrive → Qdrant indexer |
 | `telegram_bot/services/ingestion_cocoindex.py` | CLI wrapper |
 
 ## Legacy Architecture
@@ -187,12 +190,43 @@ VoyageIndexer creates collection with:
 - Voyage API for embeddings
 - Qdrant for storage
 
+## Google Drive Ingestion
+
+```bash
+# Setup rclone (one time)
+rclone config  # Create "gdrive" remote with OAuth
+
+# Sync files
+rclone sync gdrive:RAG ~/drive-sync
+
+# Run ingestion
+make ingest-gdrive-run
+# or: uv run python -m src.ingestion.gdrive_flow --once --sync-dir ~/drive-sync
+```
+
+### GDrive Flow Architecture
+
+```
+~/drive-sync (rclone) → GDriveFlow → DoclingClient → Voyage → Qdrant
+                              ↓
+                     .manifest.json (tracks processed files)
+```
+
+### GDrive Collections
+
+| Collection | Quantization |
+|------------|--------------|
+| `gdrive_documents_scalar` | INT8 (default) |
+| `gdrive_documents_binary` | Binary (fast) |
+
 ## Testing
 
 ```bash
 pytest tests/unit/test_chunker.py -v
 pytest tests/unit/test_document_parser.py -v
 pytest tests/unit/test_voyage_indexer.py -v
+pytest tests/unit/ingestion/test_docling_client.py -v
+pytest tests/unit/ingestion/test_gdrive_flow.py -v
 ```
 
 ## Troubleshooting
@@ -202,6 +236,8 @@ pytest tests/unit/test_voyage_indexer.py -v
 | PyMuPDF import error | `pip install pymupdf` (not `fitz`) |
 | Docling slow | Use PyMuPDF for PDFs |
 | Voyage 429 | Add delays, reduce batch size |
+| Docling returns 0 chunks | Don't set `tokenizer="word"`, use `None` (server default) |
+| rclone empty token | Run `rclone config reconnect gdrive:` |
 
 ## Development Guide
 
