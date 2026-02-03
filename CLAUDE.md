@@ -126,6 +126,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
 | `features/telegram-bot.md` | Handlers, middlewares | `telegram_bot/*.py` |
+| `build.md` | uv, Makefile, pre-commit hooks | `Makefile, pyproject.toml` |
 | `docker.md` | Containers, monitoring | `docker/**` |
 | `testing.md` | Unit tests, chaos tests, E2E | `tests/**` |
 | `skills.md` | Superpowers workflow | `docs/plans/**` |
