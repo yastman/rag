@@ -14,6 +14,7 @@ make eval-rag           # RAG evaluation (RAGAS faithfulness >= 0.8)
 make monitoring-up      # Start alerting stack
 make ingest-setup       # Setup ingestion (Postgres + Qdrant indexes)
 make ingest-run         # Run document ingestion
+make ingest-gdrive-run  # Run GDrive ingestion (~/drive-sync)
 ```
 
 **Location:** `/home/user/projects/rag-fresh` (WSL2)
@@ -81,6 +82,8 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `contextual_bulgaria_voyage` | Bulgarian property (192 docs) | Binary |
 | `contextual_bulgaria_voyage_scalar` | Same, INT8 | Scalar |
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 |
+| `gdrive_documents_scalar` | Google Drive docs | Scalar |
+| `gdrive_documents_binary` | Google Drive docs | Binary |
 
 **Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `acorn_mode=off|on|auto`, `use_hyde=true|false`, `use_contextualized_embeddings=true|false`
 
@@ -102,6 +105,7 @@ make deploy-release VERSION=2.12.0  # Release
 | Redis connection refused | `docker compose up -d redis` |
 | Qdrant timeout | `use_quantization=True` |
 | Voyage 429 | Use CacheService |
+| Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
 | Alerts not sending | Check `TELEGRAM_ALERTING_*` env vars |
 
 ## Skills Workflow
