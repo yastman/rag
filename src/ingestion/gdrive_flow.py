@@ -338,6 +338,10 @@ async def run_watch(config: GDriveFlowConfig | None = None) -> None:
 
 def main():
     """CLI entry point."""
+    from dotenv import load_dotenv
+
+    load_dotenv()  # Load .env before config initialization
+
     import argparse
 
     logging.basicConfig(
