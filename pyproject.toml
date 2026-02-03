@@ -35,6 +35,7 @@ dependencies = [
     "aiogram>=3.22.0",
     # CocoIndex Document Ingestion (2026-02-02)
     "cocoindex>=0.1.60",                  # Data transformation framework for AI
+    "asyncpg>=0.31.0",
 ]
 
 [project.optional-dependencies]
