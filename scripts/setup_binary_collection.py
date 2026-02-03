@@ -137,6 +137,42 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
     """Create indexes on payload fields for fast filtering."""
     print("Creating payload indexes...")
 
+    ***REMOVED*** Required indexes for unified ingestion (flat for fast delete)
+    required_keyword_fields = [
+        "file_id",  ***REMOVED*** Flat, for fast delete
+        "metadata.file_id",  ***REMOVED*** In metadata
+        "metadata.doc_id",  ***REMOVED*** For small-to-big
+        "metadata.source",  ***REMOVED*** For citations
+    ]
+
+    for field in required_keyword_fields:
+        try:
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field,
+                field_schema="keyword",
+            )
+            print(f"  Created keyword index (required): {field}")
+        except Exception as e:
+            print(f"  Warning: Could not create index {field}: {e}")
+
+    ***REMOVED*** Required integer indexes for unified ingestion (small-to-big sorting)
+    required_integer_fields = [
+        "metadata.order",  ***REMOVED*** For small-to-big sorting
+        "metadata.chunk_order",  ***REMOVED*** Alias
+    ]
+
+    for field in required_integer_fields:
+        try:
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field,
+                field_schema="integer",
+            )
+            print(f"  Created integer index (required): {field}")
+        except Exception as e:
+            print(f"  Warning: Could not create index {field}: {e}")
+
     ***REMOVED*** Keyword indexes for text filtering
     keyword_fields = [
         "metadata.document_name",
