@@ -7,7 +7,6 @@ Best-in-class for RU semantic matching (STS 74.35 on ruMTEB).
 
 import asyncio
 import logging
-from typing import Optional
 
 import httpx
 
@@ -42,7 +41,7 @@ class UserBaseVectorizer:
         self.base_url = base_url
         self.timeout = timeout
         self.dims = 768  # USER-base output dimension
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""

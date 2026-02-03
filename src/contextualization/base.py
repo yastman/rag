@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -13,8 +13,8 @@ class ContextualizedChunk:
     original_text: str
     contextual_summary: str  # LLM-generated context
     article_number: str
-    chapter: Optional[str] = None
-    section: Optional[str] = None
+    chapter: str | None = None
+    section: str | None = None
     context_method: str = "none"  # 'claude', 'openai', 'groq'
     timestamp: datetime = field(default_factory=datetime.now)
 
@@ -54,7 +54,7 @@ class ContextualizeProvider(ABC):
     async def contextualize(
         self,
         chunks: list[str],
-        query: Optional[str] = None,
+        query: str | None = None,
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
         """
@@ -74,7 +74,7 @@ class ContextualizeProvider(ABC):
         self,
         text: str,
         article_number: str,
-        query: Optional[str] = None,
+        query: str | None = None,
     ) -> ContextualizedChunk:
         """
         Contextualize a single chunk.
@@ -104,7 +104,7 @@ Guidelines:
 Respond ONLY with the summary, no additional explanation."""
 
     @staticmethod
-    def get_user_prompt(text: str, query: Optional[str] = None) -> str:
+    def get_user_prompt(text: str, query: str | None = None) -> str:
         """Get the user prompt for contextualization."""
         base = f"Summarize this legal text in context:\n\n{text}"
         if query:

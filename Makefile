@@ -1,8 +1,9 @@
-.PHONY: help install install-dev lint format type-check security test test-cov clean all-checks \
+.PHONY: help install install-dev install-all lint format type-check security test test-cov clean all-checks \
 	test-preflight test-smoke test-smoke-routing test-load test-load-ci test-load-eviction \
 	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
-	ingest-dir ingest-gdrive ingest-status
+	ingest-dir ingest-gdrive ingest-status \
+	lock update update-pkg reinstall setup-hooks
 
 # Default target
 .DEFAULT_GOAL := help
@@ -23,18 +24,52 @@ help: ## Show this help message
 
 install: ## Install production dependencies
 	@echo "$(BLUE)Installing production dependencies...$(NC)"
-	pip install -e .
+	uv sync --no-dev
 	@echo "$(GREEN)✓ Production dependencies installed$(NC)"
 
 install-dev: ## Install development dependencies (linters, formatters, etc.)
 	@echo "$(BLUE)Installing development dependencies...$(NC)"
-	pip install -e ".[dev]"
+	uv sync
 	@echo "$(GREEN)✓ Development dependencies installed$(NC)"
 
 install-all: ## Install all dependencies (prod + dev + docs)
 	@echo "$(BLUE)Installing all dependencies...$(NC)"
-	pip install -e ".[all]"
+	uv sync --all-extras
 	@echo "$(GREEN)✓ All dependencies installed$(NC)"
+
+# =============================================================================
+# UV DEPENDENCY MANAGEMENT
+# =============================================================================
+
+lock: ## Generate/update uv.lock from pyproject.toml
+	@echo "$(BLUE)Updating lock file...$(NC)"
+	uv lock
+	@echo "$(GREEN)✓ Lock file updated$(NC)"
+
+update: ## Update all dependencies to latest versions
+	@echo "$(BLUE)Upgrading all dependencies...$(NC)"
+	uv lock --upgrade
+	@echo "$(GREEN)✓ Dependencies upgraded$(NC)"
+
+update-pkg: ## Update specific package (usage: make update-pkg PKG=requests)
+ifndef PKG
+	$(error PKG is required. Usage: make update-pkg PKG=requests)
+endif
+	@echo "$(BLUE)Upgrading $(PKG)...$(NC)"
+	uv lock --upgrade-package $(PKG)
+	@echo "$(GREEN)✓ $(PKG) upgraded$(NC)"
+
+reinstall: ## Clean venv and reinstall all dependencies
+	@echo "$(BLUE)Reinstalling dependencies...$(NC)"
+	rm -rf .venv
+	uv sync
+	@echo "$(GREEN)✓ Dependencies reinstalled$(NC)"
+
+setup-hooks: ## Install pre-commit hooks
+	@echo "$(BLUE)Installing pre-commit hooks...$(NC)"
+	uv run pre-commit install
+	uv run pre-commit install --hook-type pre-push
+	@echo "$(GREEN)✓ Pre-commit hooks installed$(NC)"
 
 # =============================================================================
 # CODE QUALITY CHECKS
@@ -42,42 +77,42 @@ install-all: ## Install all dependencies (prod + dev + docs)
 
 lint: ## Run Ruff linter (fast)
 	@echo "$(BLUE)Running Ruff linter...$(NC)"
-	ruff check src/
+	uv run ruff check src/
 	@echo "$(GREEN)✓ Ruff check complete$(NC)"
 
 lint-fix: ## Run Ruff linter with auto-fix
 	@echo "$(BLUE)Running Ruff with auto-fix...$(NC)"
-	ruff check src/ --fix
+	uv run ruff check src/ --fix
 	@echo "$(GREEN)✓ Ruff auto-fix complete$(NC)"
 
 format: ## Format code with Ruff
 	@echo "$(BLUE)Formatting code with Ruff...$(NC)"
-	ruff format src/
+	uv run ruff format src/
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 format-check: ## Check if code is formatted
 	@echo "$(BLUE)Checking code format...$(NC)"
-	ruff format src/ --check
+	uv run ruff format src/ --check
 	@echo "$(GREEN)✓ Format check complete$(NC)"
 
 type-check: ## Run MyPy type checking
 	@echo "$(BLUE)Running MyPy type checking...$(NC)"
-	mypy src/ --ignore-missing-imports
+	uv run mypy src/ --ignore-missing-imports
 	@echo "$(GREEN)✓ Type check complete$(NC)"
 
 pylint: ## Run Pylint (comprehensive linting)
 	@echo "$(BLUE)Running Pylint...$(NC)"
-	pylint src/ --rcfile=pyproject.toml || true
+	uv run pylint src/ --rcfile=pyproject.toml || true
 	@echo "$(GREEN)✓ Pylint check complete$(NC)"
 
 security: ## Run Bandit security checks
 	@echo "$(BLUE)Running Bandit security checks...$(NC)"
-	bandit -r src/ -c pyproject.toml
+	uv run bandit -r src/ -c pyproject.toml
 	@echo "$(GREEN)✓ Security check complete$(NC)"
 
 dead-code: ## Find dead code with Vulture
 	@echo "$(BLUE)Checking for dead code...$(NC)"
-	vulture src/ --min-confidence 80
+	uv run vulture src/ --min-confidence 80
 	@echo "$(GREEN)✓ Dead code check complete$(NC)"
 
 all-checks: lint type-check security ## Run all code quality checks
@@ -89,48 +124,48 @@ all-checks: lint type-check security ## Run all code quality checks
 
 test: ## Run tests with pytest
 	@echo "$(BLUE)Running tests...$(NC)"
-	pytest tests/
+	uv run pytest tests/
 	@echo "$(GREEN)✓ Tests complete$(NC)"
 
 test-cov: ## Run tests with coverage
 	@echo "$(BLUE)Running tests with coverage...$(NC)"
-	pytest tests/ --cov=src --cov=telegram_bot --cov-report=html --cov-report=term
+	uv run pytest tests/ --cov=src --cov=telegram_bot --cov-report=html --cov-report=term
 	@echo "$(GREEN)✓ Tests with coverage complete$(NC)"
 	@echo "$(YELLOW)Open htmlcov/index.html to view coverage report$(NC)"
 
 test-unit: ## Run only unit tests (fast, no external deps)
 	@echo "$(BLUE)Running unit tests...$(NC)"
-	pytest tests/unit/ -v
+	uv run pytest tests/unit/ -v
 	@echo "$(GREEN)✓ Unit tests complete$(NC)"
 
 test-fast: ## Run unit tests in parallel (xdist)
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	pytest tests/unit/ -n auto --dist=worksteal -q
+	uv run pytest tests/unit/ -n auto --dist=worksteal -q
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
 test-lf: ## Run only last failed tests
 	@echo "$(BLUE)Running last failed tests...$(NC)"
-	pytest tests/unit/ --lf -v
+	uv run pytest tests/unit/ --lf -v
 	@echo "$(GREEN)✓ Last failed tests complete$(NC)"
 
 test-ff: ## Run failed first, then rest
 	@echo "$(BLUE)Running failed first...$(NC)"
-	pytest tests/unit/ --ff -v
+	uv run pytest tests/unit/ --ff -v
 	@echo "$(GREEN)✓ Tests complete$(NC)"
 
 test-profile: ## Profile slowest tests
 	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	pytest tests/unit/ --durations=20 --durations-min=0.5 -q
+	uv run pytest tests/unit/ --durations=20 --durations-min=0.5 -q
 	@echo "$(GREEN)✓ Profile complete$(NC)"
 
 test-integration: ## Run only integration tests (requires Docker/API keys)
 	@echo "$(BLUE)Running integration tests...$(NC)"
-	pytest tests/integration/ -v
+	uv run pytest tests/integration/ -v
 	@echo "$(GREEN)✓ Integration tests complete$(NC)"
 
 test-all: ## Run all tests with coverage threshold (CI mode)
 	@echo "$(BLUE)Running all tests with coverage...$(NC)"
-	pytest tests/ -v --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
+	uv run pytest tests/ -v --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
 	@echo "$(GREEN)✓ All tests passed with 80%+ coverage$(NC)"
 
 # =============================================================================
@@ -139,37 +174,37 @@ test-all: ## Run all tests with coverage threshold (CI mode)
 
 test-preflight: ## Run preflight checks (Qdrant/Redis config)
 	@echo "$(BLUE)Running preflight checks...$(NC)"
-	pytest tests/smoke/test_preflight.py -v -s
+	uv run pytest tests/smoke/test_preflight.py -v -s
 	@echo "$(GREEN)✓ Preflight complete$(NC)"
 
 test-smoke: ## Run smoke tests (requires live services)
 	@echo "$(BLUE)Running smoke tests...$(NC)"
-	pytest tests/smoke/ -v --tb=short
+	uv run pytest tests/smoke/ -v --tb=short
 	@echo "$(GREEN)✓ Smoke tests complete$(NC)"
 
 test-smoke-routing: ## Run smoke routing tests only (no deps)
 	@echo "$(BLUE)Running smoke routing tests...$(NC)"
-	pytest tests/smoke/test_smoke_routing.py -v
+	uv run pytest tests/smoke/test_smoke_routing.py -v
 	@echo "$(GREEN)✓ Routing tests complete$(NC)"
 
 test-load: ## Run load tests (live services)
 	@echo "$(BLUE)Running load tests...$(NC)"
-	pytest tests/load/test_load_conversations.py -v -s
+	uv run pytest tests/load/test_load_conversations.py -v -s
 	@echo "$(GREEN)✓ Load tests complete$(NC)"
 
 test-load-ci: ## Run load tests in CI (mocked, fast)
 	@echo "$(BLUE)Running load tests (CI mode)...$(NC)"
-	LOAD_USE_MOCKS=1 LOAD_CHAT_COUNT=5 pytest tests/load/test_load_conversations.py -v
+	LOAD_USE_MOCKS=1 LOAD_CHAT_COUNT=5 uv run pytest tests/load/test_load_conversations.py -v
 	@echo "$(GREEN)✓ Load tests (CI) complete$(NC)"
 
 test-load-eviction: ## Run Redis eviction tests
 	@echo "$(BLUE)Running Redis eviction tests...$(NC)"
-	pytest tests/load/test_load_redis_eviction.py -v -s
+	uv run pytest tests/load/test_load_redis_eviction.py -v -s
 	@echo "$(GREEN)✓ Redis eviction tests complete$(NC)"
 
 test-load-update-baseline: ## Update load test baseline
 	@echo "$(BLUE)Updating baseline...$(NC)"
-	pytest tests/load/test_load_conversations.py -v --update-baseline
+	uv run pytest tests/load/test_load_conversations.py -v --update-baseline
 	@echo "$(GREEN)✓ Baseline updated$(NC)"
 
 test-all-smoke-load: test-preflight test-smoke test-load ## Full smoke+load suite
@@ -182,7 +217,7 @@ smoke-fast: ## Quick zoo smoke (~30 sec, bash only)
 
 smoke-zoo: ## Run zoo smoke tests (pytest)
 	@echo "$(BLUE)Running zoo smoke tests...$(NC)"
-	pytest tests/smoke/test_zoo_smoke.py -v
+	uv run pytest tests/smoke/test_zoo_smoke.py -v
 	@echo "$(GREEN)✓ Zoo smoke tests complete$(NC)"
 
 # =============================================================================
@@ -276,12 +311,12 @@ ci: format-check lint type-check security test ## CI/CD pipeline checks
 
 docs-serve: ## Serve documentation locally
 	@echo "$(BLUE)Starting documentation server...$(NC)"
-	mkdocs serve
+	uv run mkdocs serve
 	@echo "$(GREEN)✓ Documentation server running at http://localhost:8000$(NC)"
 
 docs-build: ## Build documentation
 	@echo "$(BLUE)Building documentation...$(NC)"
-	mkdocs build
+	uv run mkdocs build
 	@echo "$(GREEN)✓ Documentation built in site/$(NC)"
 
 # =============================================================================
@@ -344,31 +379,31 @@ endif
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
-	pip install -r requirements-e2e.txt
+	uv sync --group e2e
 	@echo "$(GREEN)✓ E2E dependencies installed$(NC)"
 
 e2e-generate-data: ## Generate test property data
 	@echo "$(BLUE)Generating test properties...$(NC)"
-	python scripts/generate_test_properties.py
+	uv run python scripts/generate_test_properties.py
 	@echo "$(GREEN)✓ Test data generated$(NC)"
 
 e2e-index-data: ## Index test data into Qdrant
 	@echo "$(BLUE)Indexing test properties...$(NC)"
-	python scripts/index_test_properties.py
+	uv run python scripts/index_test_properties.py
 	@echo "$(GREEN)✓ Test data indexed$(NC)"
 
 e2e-test: ## Run E2E tests against Telegram bot
 	@echo "$(BLUE)Running E2E tests...$(NC)"
-	python scripts/e2e/runner.py
+	uv run python scripts/e2e/runner.py
 	@echo "$(GREEN)✓ E2E tests complete$(NC)"
 
 e2e-test-traces: ## Run E2E tests + validate Langfuse traces
 	@echo "$(BLUE)Running E2E tests with Langfuse trace validation...$(NC)"
-	E2E_VALIDATE_LANGFUSE=1 python scripts/e2e/runner.py
+	E2E_VALIDATE_LANGFUSE=1 uv run python scripts/e2e/runner.py
 	@echo "$(GREEN)✓ E2E tests with trace validation complete$(NC)"
 
 e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=filters)
-	python scripts/e2e/runner.py --group $(GROUP)
+	uv run python scripts/e2e/runner.py --group $(GROUP)
 
 e2e-setup: e2e-install e2e-generate-data e2e-index-data ## Full E2E setup
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
@@ -389,7 +424,7 @@ baseline-smoke: ## Run smoke tests with Langfuse tracing
 	LANGFUSE_SESSION_ID="$(BASELINE_SESSION)" \
 	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
 	LANGFUSE_TRACING_ENABLED=true \
-	pytest tests/smoke/ -v --tb=short -x
+	uv run pytest tests/smoke/ -v --tb=short -x
 	@echo ""
 	@echo "$(GREEN)Results tagged as: $(BASELINE_SESSION)$(NC)"
 	@echo "$(YELLOW)View in Langfuse: http://localhost:3001$(NC)"
@@ -400,7 +435,7 @@ baseline-load: ## Run load tests with Langfuse tracing
 	LANGFUSE_SESSION_ID="$(LOAD_SESSION)" \
 	LANGFUSE_RELEASE="$(shell git rev-parse --short HEAD)" \
 	LANGFUSE_TRACING_ENABLED=true \
-	pytest tests/load/ -v --tb=short
+	uv run pytest tests/load/ -v --tb=short
 	@echo ""
 	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
 
@@ -412,7 +447,7 @@ ifndef CURRENT_TAG
 	$(error CURRENT_TAG is required. Usage: make baseline-compare BASELINE_TAG=... CURRENT_TAG=...)
 endif
 	@echo "$(BLUE)Comparing $(CURRENT_TAG) against baseline $(BASELINE_TAG)...$(NC)"
-	python3 -m tests.baseline.cli compare \
+	uv run python -m tests.baseline.cli compare \
 		--baseline="$(BASELINE_TAG)" \
 		--current="$(CURRENT_TAG)" \
 		--thresholds=tests/baseline/thresholds.yaml
@@ -422,7 +457,7 @@ ifndef TAG
 	$(error TAG is required. Usage: make baseline-set TAG=smoke-abc1234-20260128)
 endif
 	@echo "$(BLUE)Setting $(TAG) as baseline...$(NC)"
-	python3 -m tests.baseline.cli set-baseline --tag="$(TAG)"
+	uv run python -m tests.baseline.cli set-baseline --tag="$(TAG)"
 
 baseline-report: ## Generate HTML baseline report
 ifndef BASELINE_TAG
@@ -432,7 +467,7 @@ ifndef CURRENT_TAG
 	$(error CURRENT_TAG is required. Usage: make baseline-report BASELINE_TAG=... CURRENT_TAG=...)
 endif
 	@echo "$(BLUE)Generating baseline report...$(NC)"
-	python3 -m tests.baseline.cli report \
+	uv run python -m tests.baseline.cli report \
 		--baseline="$(BASELINE_TAG)" \
 		--current="$(CURRENT_TAG)" \
 		--thresholds=tests/baseline/thresholds.yaml \
@@ -454,20 +489,20 @@ eval-rag: ## Run RAG evaluation with RAGAS metrics (faithfulness >= 0.8)
 	@echo "$(YELLOW)Dataset: tests/eval/ground_truth.json (55 samples)$(NC)"
 	@echo "$(YELLOW)LLM: $(EVAL_MODEL) via $(LITELLM_BASE_URL)$(NC)"
 	LANGFUSE_TRACING_ENABLED=true \
-	python3 -m src.evaluation.ragas_evaluation
+	uv run python -m src.evaluation.ragas_evaluation
 	@echo "$(GREEN)✓ RAG evaluation complete$(NC)"
 
 eval-rag-quick: ## Quick RAG evaluation (10 samples)
 	@echo "$(BLUE)Running quick RAG evaluation...$(NC)"
 	EVAL_SAMPLE_SIZE=10 \
-	python3 -m src.evaluation.ragas_evaluation
+	uv run python -m src.evaluation.ragas_evaluation
 	@echo "$(GREEN)✓ Quick evaluation complete$(NC)"
 
 eval-rag-full: ## Full RAG evaluation with all metrics
 	@echo "$(BLUE)Running full RAG evaluation...$(NC)"
 	LANGFUSE_TRACING_ENABLED=true \
 	EVAL_INCLUDE_DEEPEVAL=true \
-	python3 -m src.evaluation.ragas_evaluation
+	uv run python -m src.evaluation.ragas_evaluation
 	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
 
 # =============================================================================
@@ -504,14 +539,18 @@ monitoring-status: ## Show monitoring stack status
 
 monitoring-test-alert: ## Send a test alert to verify Telegram integration
 	@echo "$(BLUE)Sending test alert...$(NC)"
-	@if [ -z "$$TELEGRAM_ALERTING_BOT_TOKEN" ] || [ -z "$$TELEGRAM_ALERTING_CHAT_ID" ]; then \
+	@# Load local env (repo uses .env -> .env.local symlink) so `make` works without manual `source`.
+	@set -a; [ -f ./.env ] && . ./.env; set +a; \
+	if [ -z "$$TELEGRAM_ALERTING_BOT_TOKEN" ] || [ -z "$$TELEGRAM_ALERTING_CHAT_ID" ]; then \
 		echo "$(RED)Error: TELEGRAM_ALERTING_BOT_TOKEN and TELEGRAM_ALERTING_CHAT_ID must be set$(NC)"; \
 		echo "$(YELLOW)Export them or add to .env file$(NC)"; \
 		exit 1; \
 	fi
-	@curl -s -X POST http://localhost:9093/api/v1/alerts \
+	@START_AT=$$(date -u -Iseconds); \
+	END_AT=$$(date -u -Iseconds -d '+2 minutes'); \
+	curl -fsS -X POST http://localhost:9093/api/v2/alerts \
 		-H "Content-Type: application/json" \
-		-d '[{"labels":{"alertname":"TestAlert","severity":"info","service":"test"},"annotations":{"summary":"Test alert from make monitoring-test-alert","description":"This is a test alert to verify Telegram integration is working correctly."}}]' \
+		-d "[{\"labels\":{\"alertname\":\"TestAlert\",\"severity\":\"critical\",\"service\":\"test\"},\"annotations\":{\"summary\":\"Test alert from make monitoring-test-alert\",\"description\":\"This is a test alert to verify Telegram integration is working correctly.\"},\"startsAt\":\"$$START_AT\",\"endsAt\":\"$$END_AT\"}]" \
 		> /dev/null && echo "$(GREEN)✓ Test alert sent! Check your Telegram.$(NC)" || echo "$(RED)Failed to send alert. Is Alertmanager running?$(NC)"
 
 # =============================================================================
@@ -535,7 +574,7 @@ ifndef DIR
 	$(error DIR is required. Usage: make ingest-dir DIR=path/to/docs)
 endif
 	@echo "$(BLUE)Ingesting documents from $(DIR)...$(NC)"
-	python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
+	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
 	@echo "$(GREEN)✓ Directory ingestion complete$(NC)"
 
 ingest-gdrive: ## Ingest documents from Google Drive (usage: make ingest-gdrive FOLDER_ID=xxx)
@@ -543,9 +582,9 @@ ifndef FOLDER_ID
 	$(error FOLDER_ID is required. Usage: make ingest-gdrive FOLDER_ID=xxx)
 endif
 	@echo "$(BLUE)Ingesting documents from Google Drive folder $(FOLDER_ID)...$(NC)"
-	python -m telegram_bot.services.ingestion_cocoindex ingest-gdrive "$(FOLDER_ID)"
+	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-gdrive "$(FOLDER_ID)"
 	@echo "$(GREEN)✓ Google Drive ingestion complete$(NC)"
 
 ingest-status: ## Show collection statistics
 	@echo "$(BLUE)Collection status:$(NC)"
-	python -m telegram_bot.services.ingestion_cocoindex status
+	uv run python -m telegram_bot.services.ingestion_cocoindex status

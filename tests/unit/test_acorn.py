@@ -15,7 +15,14 @@ from qdrant_client import models
 
 from src.config.constants import AcornMode, QuantizationMode
 from src.config.settings import Settings
-from src.retrieval.search_engines import BaselineSearchEngine
+from src.retrieval.search_engines import ACORN_AVAILABLE, BaselineSearchEngine
+
+
+# Skip marker for tests requiring AcornSearchParams
+requires_acorn = pytest.mark.skipif(
+    not ACORN_AVAILABLE,
+    reason="AcornSearchParams not available in current qdrant-client version",
+)
 
 
 class TestAcornModeEnum:
@@ -200,6 +207,7 @@ class TestBuildSearchParams:
             settings.acorn_max_selectivity = 0.4
             return settings
 
+    @requires_acorn
     def test_build_search_params_with_acorn(self, mock_settings):
         """Test that search params include ACORN when enabled."""
         with patch.object(BaselineSearchEngine, "__init__", lambda _self, _settings: None):
@@ -212,6 +220,7 @@ class TestBuildSearchParams:
             assert params.acorn.enable is True
             assert params.acorn.max_selectivity == 0.4
 
+    @requires_acorn
     def test_build_search_params_without_acorn(self, mock_settings):
         """Test that search params exclude ACORN when disabled."""
         mock_settings.acorn_mode = AcornMode.OFF
@@ -261,6 +270,7 @@ class TestBaselineSearchEngineAcorn:
             settings.quantization_mode = QuantizationMode.OFF
             return settings
 
+    @requires_acorn
     def test_search_with_filter_enables_acorn(self, mock_qdrant_client, mock_settings_acorn_on):
         """Test that search with filter enables ACORN in search params."""
         with patch("src.retrieval.search_engines.QdrantClient", return_value=mock_qdrant_client):
@@ -290,6 +300,7 @@ class TestBaselineSearchEngineAcorn:
             assert search_params.acorn is not None
             assert search_params.acorn.enable is True
 
+    @requires_acorn
     def test_search_without_filter_no_acorn(self, mock_qdrant_client, mock_settings_acorn_on):
         """Test that search without filter does not enable ACORN."""
         with patch("src.retrieval.search_engines.QdrantClient", return_value=mock_qdrant_client):
@@ -310,6 +321,7 @@ class TestBaselineSearchEngineAcorn:
             assert search_params.acorn is None
 
 
+@requires_acorn
 class TestAcornSearchParamsModel:
     """Test that qdrant-client supports AcornSearchParams model."""
 

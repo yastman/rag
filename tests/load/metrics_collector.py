@@ -5,7 +5,6 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -96,7 +95,7 @@ class MetricsResult:
 
 def analyze_metrics(
     metrics: LoadMetrics,
-    baseline: Optional[dict] = None,
+    baseline: dict | None = None,
     require_ttft: bool = False,  # If True, fail when TTFT not measured
 ) -> MetricsResult:
     """Analyze collected metrics against thresholds."""
@@ -177,7 +176,7 @@ def analyze_metrics(
     )
 
 
-def load_baseline(path: Path) -> Optional[dict]:
+def load_baseline(path: Path) -> dict | None:
     """Load baseline from JSON file."""
     if not path.exists():
         return None

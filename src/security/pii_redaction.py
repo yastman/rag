@@ -1,7 +1,6 @@
 """PII redaction and security guardrails for production RAG."""
 
 import re
-from typing import Optional
 
 from langfuse import get_client
 
@@ -84,7 +83,7 @@ class BudgetGuard:
 
         self.alert_threshold = 0.80  # Alert at 80%
 
-    def check_budget(self, estimated_cost: float) -> tuple[bool, Optional[str]]:
+    def check_budget(self, estimated_cost: float) -> tuple[bool, str | None]:
         """
         Check if request would exceed budget.
 
