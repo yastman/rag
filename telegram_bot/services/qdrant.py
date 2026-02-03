@@ -5,8 +5,8 @@ Features: RRF fusion, freshness boosting, MMR diversity.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 from langfuse import observe
@@ -30,7 +30,7 @@ class QdrantService:
     def __init__(
         self,
         url: str,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         collection_name: str = "documents",
         dense_vector_name: str = "dense",
         sparse_vector_name: str = "bm42",
@@ -54,7 +54,9 @@ class QdrantService:
         self._sparse_vector_name = sparse_vector_name
         self._collection_validated = False
 
-        logger.info(f"QdrantService initialized: {self._collection_name} (mode={quantization_mode})")
+        logger.info(
+            f"QdrantService initialized: {self._collection_name} (mode={quantization_mode})"
+        )
 
     @staticmethod
     def _get_collection_name(base_name: str, mode: str) -> str:
@@ -142,14 +144,14 @@ class QdrantService:
     async def hybrid_search_rrf(
         self,
         dense_vector: list[float],
-        sparse_vector: Optional[dict] = None,
-        filters: Optional[dict] = None,
+        sparse_vector: dict | None = None,
+        filters: dict | None = None,
         top_k: int = 10,
         dense_weight: float = 0.6,
         sparse_weight: float = 0.4,
         prefetch_multiplier: int = 3,
         # Quantization A/B testing params
-        quantization_ignore: Optional[bool] = None,
+        quantization_ignore: bool | None = None,
         quantization_rescore: bool = True,
         quantization_oversampling: float = 2.0,
     ) -> list[dict]:
@@ -230,7 +232,7 @@ class QdrantService:
     async def search_with_score_boosting(
         self,
         dense_vector: list[float],
-        filters: Optional[dict] = None,
+        filters: dict | None = None,
         top_k: int = 10,
         freshness_boost: bool = True,
         freshness_field: str = "created_at",
@@ -278,7 +280,7 @@ class QdrantService:
 
             # Post-process with freshness boosting
             points = result.points
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             scale_seconds = freshness_scale_days * 86400
 
             boosted_results = []
@@ -399,7 +401,7 @@ class QdrantService:
 
         return [points[i] for i in selected_indices]
 
-    def _build_filter(self, filters: Optional[dict]) -> Optional[models.Filter]:
+    def _build_filter(self, filters: dict | None) -> models.Filter | None:
         """Build Qdrant filter from dict.
 
         Args:

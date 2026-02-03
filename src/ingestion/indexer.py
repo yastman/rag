@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -58,7 +58,7 @@ class DocumentIndexer:
     - Async processing
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         """
         Initialize indexer.
 
@@ -225,7 +225,7 @@ class DocumentIndexer:
         self,
         chunks: list[Chunk],
         collection_name: str,
-        batch_size: Optional[int] = None,
+        batch_size: int | None = None,
     ) -> IndexStats:
         """
         Index chunks to vector database.
@@ -276,7 +276,7 @@ class DocumentIndexer:
             # Prepare points for Qdrant with named vectors
             prep_start = time.time()
             points = []
-            for chunk, emb in zip(chunks, embeddings):
+            for chunk, emb in zip(chunks, embeddings, strict=True):
                 # Convert sparse dict to lists for Qdrant
                 sparse_indices = list(emb["lexical_weights"].keys())
                 sparse_values = list(emb["lexical_weights"].values())

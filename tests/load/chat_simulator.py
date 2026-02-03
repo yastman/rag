@@ -3,9 +3,8 @@
 
 import asyncio
 import random
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from tests.smoke.queries import ExpectedQueryType
 
