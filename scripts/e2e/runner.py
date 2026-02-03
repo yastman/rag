@@ -104,7 +104,7 @@ async def run_single_test(
 
         return result
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return TestResult(
             scenario=scenario,
             bot_response="",

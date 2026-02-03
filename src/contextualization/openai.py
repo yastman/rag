@@ -1,7 +1,5 @@
 """OpenAI-based contextualization provider."""
 
-from typing import Optional
-
 from openai import AsyncOpenAI, OpenAI
 
 from src.config import Settings
@@ -19,7 +17,7 @@ class OpenAIContextualizer(ContextualizeProvider):
     - Quality: Very good
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         """Initialize OpenAI contextualizer."""
         self.settings = settings or Settings()
         self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
@@ -30,7 +28,7 @@ class OpenAIContextualizer(ContextualizeProvider):
     async def contextualize(
         self,
         chunks: list[str],
-        query: Optional[str] = None,
+        query: str | None = None,
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using OpenAI."""
@@ -55,7 +53,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         self,
         text: str,
         article_number: str,
-        query: Optional[str] = None,
+        query: str | None = None,
     ) -> ContextualizedChunk:
         """Contextualize a single chunk using OpenAI."""
         system_prompt = self.get_system_prompt()
@@ -88,7 +86,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         self,
         text: str,
         article_number: str,
-        query: Optional[str] = None,
+        query: str | None = None,
     ) -> ContextualizedChunk:
         """Synchronous contextualization using OpenAI."""
         system_prompt = self.get_system_prompt()

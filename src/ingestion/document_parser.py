@@ -17,7 +17,6 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import pymupdf  # PyMuPDF 1.26+ (NOT fitz!)
 from docling.document_converter import DocumentConverter
@@ -33,7 +32,7 @@ class ParsedDocument:
     filename: str
     title: str
     content: str
-    num_pages: Optional[int] = None
+    num_pages: int | None = None
     metadata: dict = None
 
     def __post_init__(self):
@@ -58,7 +57,7 @@ class ParserCache:
                 md5.update(chunk)
         return md5.hexdigest()
 
-    def get(self, filepath: Path) -> Optional[str]:
+    def get(self, filepath: Path) -> str | None:
         """Get cached content by file hash."""
         file_hash = self._get_file_hash(filepath)
         cache_file = self.cache_dir / f"{file_hash}.txt"

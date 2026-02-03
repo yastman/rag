@@ -35,7 +35,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import mlflow
 from mlflow.tracking import MlflowClient
@@ -84,7 +84,7 @@ class MLflowRAGLogger:
 
         self.current_run = None
 
-    def start_run(self, run_name: Optional[str] = None, tags: Optional[dict[str, Any]] = None):
+    def start_run(self, run_name: str | None = None, tags: dict[str, Any] | None = None):
         """
         Start a new MLflow run (context manager).
 
@@ -167,8 +167,8 @@ class MLflowRAGLogger:
 
     def log_metrics(
         self,
-        metrics: Optional[dict[str, float]] = None,
-        step: Optional[int] = None,
+        metrics: dict[str, float] | None = None,
+        step: int | None = None,
         **kwargs,
     ) -> None:
         """
@@ -202,8 +202,8 @@ class MLflowRAGLogger:
 
     def log_artifact(
         self,
-        local_path: Union[str, Path],
-        artifact_path: Optional[str] = None,
+        local_path: str | Path,
+        artifact_path: str | None = None,
     ) -> None:
         """
         Log file artifact (report, config file, etc.).
@@ -222,7 +222,7 @@ class MLflowRAGLogger:
         self,
         data: dict[str, Any],
         filename: str,
-        artifact_path: Optional[str] = None,
+        artifact_path: str | None = None,
     ) -> None:
         """
         Log dictionary as JSON artifact.
@@ -262,10 +262,10 @@ class MLflowRAGLogger:
         self,
         query: str,
         results: list[dict[str, Any]],
-        expected_article: Optional[int] = None,
-        precision_at_1: Optional[float] = None,
-        recall_at_10: Optional[float] = None,
-        latency_ms: Optional[float] = None,
+        expected_article: int | None = None,
+        precision_at_1: float | None = None,
+        recall_at_10: float | None = None,
+        latency_ms: float | None = None,
     ) -> None:
         """
         Log individual query evaluation results.
@@ -335,7 +335,7 @@ def log_ab_test_results(
     engine_name: str,
     config: dict[str, Any],
     metrics: dict[str, float],
-    report_path: Union[str, Path],
+    report_path: str | Path,
     experiment_name: str = "contextual_rag_ab_tests",
 ) -> str:
     """
