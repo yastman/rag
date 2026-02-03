@@ -1,16 +1,14 @@
 """Unit tests for src/config/constants.py."""
 
-import pytest
-
 from src.config.constants import (
+    DEFAULTS,
+    RATE_LIMITS,
     APIProvider,
     BatchSizes,
-    DEFAULTS,
     HSNWParameters,
     MetricValues,
     MMRParameters,
     ModelName,
-    RATE_LIMITS,
     RetrievalStages,
     SearchEngine,
     ThresholdValues,
@@ -72,8 +70,8 @@ class TestModelName:
     def test_openai_models(self):
         """Test OpenAI model names."""
         assert "gpt-4-turbo" in ModelName.GPT_4_TURBO.value
-        assert "gpt-4" == ModelName.GPT_4.value
-        assert "gpt-3.5-turbo" == ModelName.GPT_35_TURBO.value
+        assert ModelName.GPT_4.value == "gpt-4"
+        assert ModelName.GPT_35_TURBO.value == "gpt-3.5-turbo"
 
     def test_groq_models(self):
         """Test Groq model names."""
@@ -119,7 +117,11 @@ class TestHSNWParameters:
 
     def test_ef_ordering(self):
         """Test that EF values are properly ordered."""
-        assert HSNWParameters.EF_LOW_LATENCY < HSNWParameters.EF_DEFAULT < HSNWParameters.EF_HIGH_PRECISION
+        assert (
+            HSNWParameters.EF_LOW_LATENCY
+            < HSNWParameters.EF_DEFAULT
+            < HSNWParameters.EF_HIGH_PRECISION
+        )
 
 
 class TestBatchSizes:

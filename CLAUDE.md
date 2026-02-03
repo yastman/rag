@@ -5,6 +5,7 @@ This file provides guidance to Claude Code when working with this repository.
 ## Quick Reference
 
 ```bash
+uv sync                 # Install all dependencies
 make check              # Lint + types
 make test               # All tests
 make test-unit          # Unit tests only (fast)
@@ -58,9 +59,10 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 
 ## Environment
 
-1. Copy `.env.example` → `.env`
-2. Required: `TELEGRAM_BOT_TOKEN`, `VOYAGE_API_KEY`, `CEREBRAS_API_KEY`, `LANGFUSE_*`
-3. `make install-dev && make docker-up`
+1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+2. Copy `.env.example` → `.env`
+3. Required: `TELEGRAM_BOT_TOKEN`, `VOYAGE_API_KEY`, `CEREBRAS_API_KEY`, `LANGFUSE_*`
+4. `uv sync && make docker-up`
 
 ## Key Docs
 

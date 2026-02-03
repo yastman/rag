@@ -1,7 +1,6 @@
 """Unit tests for contextualization base classes."""
 
 from datetime import datetime
-from typing import Optional
 
 import pytest
 
@@ -519,7 +518,7 @@ class TestContextualizeProviderImplementation:
                 self.contextualize_single_called = False
 
             async def contextualize(
-                self, chunks: list[str], query: Optional[str] = None, context_window: int = 3
+                self, chunks: list[str], query: str | None = None, context_window: int = 3
             ) -> list[ContextualizedChunk]:
                 self.contextualize_called = True
                 self.last_chunks = chunks
@@ -535,7 +534,7 @@ class TestContextualizeProviderImplementation:
                 ]
 
             async def contextualize_single(
-                self, text: str, article_number: str, query: Optional[str] = None
+                self, text: str, article_number: str, query: str | None = None
             ) -> ContextualizedChunk:
                 self.contextualize_single_called = True
                 self.last_text = text

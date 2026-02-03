@@ -11,7 +11,6 @@ Metrics:
 """
 
 import json
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -31,7 +30,7 @@ class SearchEvaluator:
             self.ground_truth = json.load(f)
 
     def evaluate_query(
-        self, query: dict, search_results: list[dict], k_values: Optional[list[int]] = None
+        self, query: dict, search_results: list[dict], k_values: list[int] | None = None
     ) -> dict:
         """
         Evaluate a single query's results.
@@ -103,7 +102,7 @@ class SearchEvaluator:
         self,
         queries: list[dict],
         search_results_map: dict[str, list[dict]],
-        k_values: Optional[list[int]] = None,
+        k_values: list[int] | None = None,
     ) -> dict:
         """
         Evaluate multiple queries.

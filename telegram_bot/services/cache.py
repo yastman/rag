@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as redis
 from langfuse import get_client, observe
@@ -83,19 +83,19 @@ class CacheService:
         }
 
         # Initialize Redis client for key-value operations (Tier 2)
-        self.redis_client: Optional[redis.Redis] = None
+        self.redis_client: redis.Redis | None = None
 
         # Native RedisVL SemanticCache (Tier 1)
-        self.semantic_cache: Optional[SemanticCache] = None
+        self.semantic_cache: SemanticCache | None = None
 
         # Native RedisVL EmbeddingsCache (Tier 1)
-        self.embeddings_cache: Optional[EmbeddingsCache] = None
+        self.embeddings_cache: EmbeddingsCache | None = None
 
         # Cosine distance threshold for semantic cache
         self.distance_threshold = distance_threshold
 
         # Native RedisVL SemanticMessageHistory (for conversation context)
-        self.message_history: Optional[SemanticMessageHistory] = None
+        self.message_history: SemanticMessageHistory | None = None
 
         logger.info("CacheService initialized with 4-tier architecture (RedisVL native)")
 
@@ -270,10 +270,10 @@ class CacheService:
     async def check_semantic_cache(
         self,
         query: str,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
         language: str = "ru",
-        threshold_override: Optional[float] = None,
-    ) -> Optional[str]:
+        threshold_override: float | None = None,
+    ) -> str | None:
         """Check semantic cache using RedisVL with VoyageAI voyage-3-lite.
 
         Uses VoyageAI voyage-3-lite for fast, cost-effective cache matching.
@@ -363,7 +363,7 @@ class CacheService:
         self,
         query: str,
         answer: str,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
         language: str = "ru",
         query_type: str = "general",
     ):
@@ -405,7 +405,7 @@ class CacheService:
 
     async def get_cached_embedding(
         self, text: str, model_name: str = "bge-m3"
-    ) -> Optional[list[float]]:
+    ) -> list[float] | None:
         """Get cached embedding using native EmbeddingsCache.
 
         Args:
@@ -444,7 +444,7 @@ class CacheService:
         text: str,
         embedding: list[float],
         model_name: str = "bge-m3",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ):
         """Store embedding in native EmbeddingsCache.
 
@@ -472,7 +472,7 @@ class CacheService:
 
     async def get_cached_sparse_embedding(
         self, text: str, model_name: str = "bm42"
-    ) -> Optional[dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Get cached sparse embedding.
 
         Sparse embeddings are stored as JSON in Redis hash.
@@ -544,7 +544,7 @@ class CacheService:
 
     # ========== TIER 2: QueryAnalyzer Cache ==========
 
-    async def get_cached_analysis(self, query: str) -> Optional[dict[str, Any]]:
+    async def get_cached_analysis(self, query: str) -> dict[str, Any] | None:
         """Get cached QueryAnalyzer result.
 
         Args:
@@ -599,8 +599,8 @@ class CacheService:
 
     @observe(name="cache-search-check")
     async def get_cached_search(
-        self, embedding: list[float], filters: Optional[dict[str, Any]], index_version: str = "v1"
-    ) -> Optional[list[dict[str, Any]]]:
+        self, embedding: list[float], filters: dict[str, Any] | None, index_version: str = "v1"
+    ) -> list[dict[str, Any]] | None:
         """Get cached Qdrant search results.
 
         Args:
@@ -648,7 +648,7 @@ class CacheService:
     async def store_search_results(
         self,
         embedding: list[float],
-        filters: Optional[dict[str, Any]],
+        filters: dict[str, Any] | None,
         results: list[dict[str, Any]],
         index_version: str = "v1",
     ):
@@ -684,7 +684,7 @@ class CacheService:
         self,
         query_hash: str,
         chunk_ids: list[str],
-    ) -> Optional[list[dict[str, Any]]]:
+    ) -> list[dict[str, Any]] | None:
         """Get cached Voyage rerank results.
 
         Args:

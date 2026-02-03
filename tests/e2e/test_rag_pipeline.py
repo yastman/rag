@@ -4,7 +4,7 @@ These tests verify the complete RAG pipeline from document ingestion to search r
 They use mocks to avoid requiring external services but test the full flow.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -30,7 +30,7 @@ class TestRAGPipelineInit:
         mock_embedding,
     ):
         """Test that pipeline initializes all components."""
-        pipeline = RAGPipeline()
+        _pipeline = RAGPipeline()
 
         mock_embedding.assert_called_once_with("BAAI/bge-m3")
         mock_search_engine.assert_called_once()
@@ -90,7 +90,7 @@ class TestRAGPipelineContextualizer:
         mock_settings = MagicMock()
         mock_settings.api_provider = APIProvider.CLAUDE
 
-        pipeline = RAGPipeline(settings=mock_settings)
+        _pipeline = RAGPipeline(settings=mock_settings)
 
         mock_claude.assert_called_once()
 
@@ -115,7 +115,7 @@ class TestRAGPipelineContextualizer:
         mock_settings = MagicMock()
         mock_settings.api_provider = APIProvider.OPENAI
 
-        pipeline = RAGPipeline(settings=mock_settings)
+        _pipeline = RAGPipeline(settings=mock_settings)
 
         mock_openai.assert_called_once()
 
@@ -140,7 +140,7 @@ class TestRAGPipelineContextualizer:
         mock_settings = MagicMock()
         mock_settings.api_provider = APIProvider.GROQ
 
-        pipeline = RAGPipeline(settings=mock_settings)
+        _pipeline = RAGPipeline(settings=mock_settings)
 
         mock_groq.assert_called_once()
 
