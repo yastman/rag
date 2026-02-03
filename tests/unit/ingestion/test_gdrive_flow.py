@@ -1,5 +1,6 @@
 """Tests for Google Drive local watcher flow."""
 
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,7 +14,8 @@ class TestGDriveFlowConfig:
 
         config = GDriveFlowConfig()
 
-        assert config.sync_dir == "/data/drive-sync"
+        # Default is ~/drive-sync expanded to user's home
+        assert config.sync_dir == os.path.expanduser("~/drive-sync")
         assert config.collection_name == "gdrive_documents_binary"
         assert config.watch_interval_seconds == 60
         assert config.docling_url == "http://localhost:5001"
