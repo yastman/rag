@@ -8,7 +8,6 @@ import asyncio
 import json
 import os
 import re
-from typing import Optional
 
 import aiohttp
 from prompts import format_enhanced_chunk_context
@@ -26,7 +25,7 @@ class ContextualRetrievalGroqAsync:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "llama-3.1-8b-instant",  # Default: fast and cheap
         max_tokens: int = 1500,
         temperature: float = 0.0,

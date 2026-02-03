@@ -3,6 +3,7 @@ import pytest
 import redis.asyncio as redis
 from qdrant_client import QdrantClient
 
+
 asyncpg = pytest.importorskip("asyncpg", reason="asyncpg not installed")
 
 

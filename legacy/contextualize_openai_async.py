@@ -8,7 +8,6 @@ import asyncio
 import json
 import os
 import re
-from typing import Optional
 
 import aiohttp
 from prompts import format_enhanced_chunk_context
@@ -25,7 +24,7 @@ class ContextualRetrievalOpenAIAsync:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "gpt-4o-mini",  # Default: cheapest option
         max_tokens: int = 1500,
         temperature: float = 0.0,

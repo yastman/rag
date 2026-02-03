@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -40,33 +40,33 @@ class Settings:
 
     def __init__(
         self,
-        env_file: Optional[str] = None,
+        env_file: str | None = None,
         # API Configuration
-        api_provider: Optional[str] = None,
-        anthropic_api_key: Optional[str] = None,
-        openai_api_key: Optional[str] = None,
-        groq_api_key: Optional[str] = None,
+        api_provider: str | None = None,
+        anthropic_api_key: str | None = None,
+        openai_api_key: str | None = None,
+        groq_api_key: str | None = None,
         # Model Configuration
-        model_name: Optional[str] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
+        model_name: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
         # Vector Database
-        qdrant_url: Optional[str] = None,
-        qdrant_api_key: Optional[str] = None,
+        qdrant_url: str | None = None,
+        qdrant_api_key: str | None = None,
         # Paths
-        data_dir: Optional[str] = None,
-        docs_dir: Optional[str] = None,
-        logs_dir: Optional[str] = None,
+        data_dir: str | None = None,
+        docs_dir: str | None = None,
+        logs_dir: str | None = None,
         # Search Configuration
-        search_engine: Optional[str] = None,
-        score_threshold: Optional[float] = None,
-        top_k: Optional[int] = None,
+        search_engine: str | None = None,
+        score_threshold: float | None = None,
+        top_k: int | None = None,
         # Processing
-        batch_size_embeddings: Optional[int] = None,
-        batch_size_documents: Optional[int] = None,
+        batch_size_embeddings: int | None = None,
+        batch_size_documents: int | None = None,
         # Retry
-        max_retries: Optional[int] = None,
-        retry_backoff: Optional[float] = None,
+        max_retries: int | None = None,
+        retry_backoff: float | None = None,
     ):
         """Initialize settings from environment and arguments."""
         # Load .env file first
@@ -143,15 +143,9 @@ class Settings:
         # === QUANTIZATION ===
         # Binary: 32x compression, 40x faster (best for dim >= 1024)
         # Scalar (INT8): 4x compression, better accuracy
-        self.quantization_mode = QuantizationMode(
-            os.getenv("QUANTIZATION_MODE", "binary").lower()
-        )
-        self.quantization_rescore = (
-            os.getenv("QUANTIZATION_RESCORE", "true").lower() == "true"
-        )
-        self.quantization_oversampling = float(
-            os.getenv("QUANTIZATION_OVERSAMPLING", "2.0")
-        )
+        self.quantization_mode = QuantizationMode(os.getenv("QUANTIZATION_MODE", "binary").lower())
+        self.quantization_rescore = os.getenv("QUANTIZATION_RESCORE", "true").lower() == "true"
+        self.quantization_oversampling = float(os.getenv("QUANTIZATION_OVERSAMPLING", "2.0"))
 
         # === SMALL-TO-BIG CONTEXT EXPANSION ===
         # Mode: off (disabled), on (always expand), auto (expand for complex queries)
@@ -192,9 +186,7 @@ class Settings:
             os.getenv("USE_CONTEXTUALIZED_EMBEDDINGS", "false").lower() == "true"
         )
         # Output dimension for contextualized embeddings (2048, 1024, 512, 256)
-        self.contextualized_embedding_dim = int(
-            os.getenv("CONTEXTUALIZED_EMBEDDING_DIM", "1024")
-        )
+        self.contextualized_embedding_dim = int(os.getenv("CONTEXTUALIZED_EMBEDDING_DIM", "1024"))
 
         # === ENVIRONMENT ===
         self.env = os.getenv("ENV", "development").lower()

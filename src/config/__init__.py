@@ -15,8 +15,8 @@ from .settings import Settings
 
 
 __all__ = [
-    "AcornMode",
     "APIProvider",
+    "AcornMode",
     "HSNWParameters",
     "QuantizationMode",
     "RetrievalStages",
