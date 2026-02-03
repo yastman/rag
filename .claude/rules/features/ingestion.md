@@ -34,22 +34,68 @@ Qdrant (DELETE by file_id → UPSERT new chunks)
 ## Quick Commands
 
 ```bash
-make ingest-setup         # Create Postgres schema + Qdrant indexes
-make ingest-run           # Run ingestion once
-make ingest-continuous    # Run with polling
-make ingest-status        # Show indexed files
-make ingest-gdrive-run    # Run GDrive ingestion (~/drive-sync)
+# Unified Pipeline v3.2.1 (recommended)
+make ingest-unified           # Run once
+make ingest-unified-watch     # Continuous (FlowLiveUpdater)
+make ingest-unified-status    # Show stats from Postgres
+make ingest-unified-reprocess # Retry failed files
+
+# Legacy commands
+make ingest-gdrive-run        # Old GDrive flow
 ```
 
-## Key Files (2026)
+## Unified Pipeline v3.2.1 (Feb 2026)
+
+**Architecture:**
+```
+rclone sync → GDRIVE_SYNC_DIR
+     ↓ (CocoIndex poll)
+sources.LocalFile → QdrantHybridTarget (custom)
+     ├─ DoclingClient (chunking)
+     ├─ VoyageService (dense 1024)
+     ├─ FastEmbed BM42 (sparse)
+     ├─ Qdrant (delete + upsert)
+     └─ Postgres (state + DLQ)
+```
+
+**Key Files:**
 
 | File | Description |
 |------|-------------|
-| `src/ingestion/service.py` | IngestionService class |
-| `src/ingestion/cocoindex_flow.py` | CocoIndex flow definition |
+| `src/ingestion/unified/config.py` | UnifiedConfig dataclass |
+| `src/ingestion/unified/state_manager.py` | Postgres state + DLQ |
+| `src/ingestion/unified/qdrant_writer.py` | Payload contract writer |
+| `src/ingestion/unified/targets/qdrant_hybrid_target.py` | CocoIndex custom target |
+| `src/ingestion/unified/flow.py` | CocoIndex flow definition |
+| `src/ingestion/unified/cli.py` | CLI: run, status, reprocess |
+
+**Payload Contract (required):**
+```python
+{
+    "page_content": str,       # Chunk text
+    "metadata": {
+        "file_id": str,        # sha256(rel_path)[:16]
+        "doc_id": str,         # = file_id (for small-to-big)
+        "order": int,          # Chunk order
+        "source": str,         # Relative path
+    },
+    "file_id": str,            # Flat for fast delete
+}
+```
+
+**Docker Service:**
+```bash
+docker compose -f docker-compose.dev.yml up -d ingestion
+docker logs dev-ingestion -f
+```
+
+## Legacy Files
+
+| File | Description |
+|------|-------------|
 | `src/ingestion/docling_client.py` | Docling API client (httpx async) |
 | `src/ingestion/gdrive_flow.py` | Google Drive ingestion flow |
-| `src/ingestion/gdrive_indexer.py` | GDrive → Qdrant indexer |
+| `src/ingestion/voyage_indexer.py` | Legacy VoyageIndexer |
 | `telegram_bot/services/ingestion_cocoindex.py` | CLI wrapper |
 
 ## Legacy Architecture
@@ -222,22 +268,26 @@ make ingest-gdrive-run
 ## Testing
 
 ```bash
+# Unified pipeline tests
+pytest tests/unit/ingestion/test_payload_contract.py -v
+RUN_INTEGRATION_TESTS=1 pytest tests/integration/test_unified_ingestion_e2e.py -v
+
+# Legacy tests
 pytest tests/unit/test_chunker.py -v
 pytest tests/unit/test_document_parser.py -v
-pytest tests/unit/test_voyage_indexer.py -v
 pytest tests/unit/ingestion/test_docling_client.py -v
-pytest tests/unit/ingestion/test_gdrive_flow.py -v
 ```
 
 ## Troubleshooting
 
 | Error | Fix |
 |-------|-----|
-| PyMuPDF import error | `pip install pymupdf` (not `fitz`) |
-| Docling slow | Use PyMuPDF for PDFs |
-| Voyage 429 | Add delays, reduce batch size |
-| Docling returns 0 chunks | Don't set `tokenizer="word"`, use `None` (server default) |
-| rclone empty token | Run `rclone config reconnect gdrive:` |
+| Docling returns 0 chunks | Don't set `tokenizer="word"`, use `None` |
+| Voyage 429 | Use CacheService or reduce batch size |
+| rclone empty token | `rclone config reconnect gdrive:` |
+| Ingestion stalled | Check `make ingest-unified-status` |
+| Files in DLQ | `make ingest-unified-reprocess` |
+| Missing payload fields | Check `test_payload_contract.py` |
 
 ## Development Guide
 
