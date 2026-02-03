@@ -7,9 +7,9 @@ and HybridChunker for RAG-optimized chunking.
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -51,7 +51,7 @@ class DoclingChunk:
     text: str
     seq_no: int
     headings: list[str] = field(default_factory=list)
-    page_range: Optional[tuple[int, int]] = None
+    page_range: tuple[int, int] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -66,14 +66,14 @@ class DoclingClient:
 
     SUPPORTED_FORMATS = {".pdf", ".docx", ".doc", ".html", ".htm", ".md", ".txt", ".xlsx", ".csv"}
 
-    def __init__(self, config: Optional[DoclingConfig] = None):
+    def __init__(self, config: DoclingConfig | None = None):
         """Initialize client.
 
         Args:
             config: Client configuration (defaults to DoclingConfig())
         """
         self.config = config or DoclingConfig()
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def __aenter__(self) -> "DoclingClient":
         """Async context manager entry."""
@@ -93,7 +93,9 @@ class DoclingClient:
     def client(self) -> httpx.AsyncClient:
         """Get HTTP client."""
         if self._client is None:
-            raise RuntimeError("Client not initialized. Use 'async with DoclingClient()' or call connect()")
+            raise RuntimeError(
+                "Client not initialized. Use 'async with DoclingClient()' or call connect()"
+            )
         return self._client
 
     async def connect(self) -> None:
@@ -249,7 +251,7 @@ class DoclingClient:
         """
         # Generate document hash for doc_id
         doc_id = self._generate_doc_id(source)
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
 
         chunks = []
         for i, dc in enumerate(docling_chunks):
@@ -310,7 +312,7 @@ class DoclingClient:
         return mime_types.get(suffix, "application/octet-stream")
 
     @staticmethod
-    def _parse_page_range(meta: dict[str, Any]) -> Optional[tuple[int, int]]:
+    def _parse_page_range(meta: dict[str, Any]) -> tuple[int, int] | None:
         """Parse page range from chunk metadata."""
         page_start = meta.get("page_start") or meta.get("page")
         page_end = meta.get("page_end") or page_start

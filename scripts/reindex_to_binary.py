@@ -16,7 +16,6 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
@@ -110,10 +109,10 @@ def reindex_to_binary(
 
     if collection_exists(client, target_collection):
         if force:
-            print(f"  Deleting existing collection...")
+            print("  Deleting existing collection...")
             client.delete_collection(target_collection)
         else:
-            print(f"  Collection already exists. Use --force to recreate.")
+            print("  Collection already exists. Use --force to recreate.")
             return stats
 
     # Create binary collection
@@ -124,7 +123,7 @@ def reindex_to_binary(
     # Scroll through source and copy to target
     print(f"\nReindexing {stats.total_points} points in batches of {batch_size}...")
 
-    offset: Optional[str] = None
+    offset: str | None = None
     batch_num = 0
 
     while True:
@@ -179,7 +178,9 @@ def reindex_to_binary(
                 stats.indexed_points += len(upsert_points)
 
             # Progress
-            progress_pct = (stats.indexed_points / stats.total_points * 100) if stats.total_points > 0 else 0
+            progress_pct = (
+                (stats.indexed_points / stats.total_points * 100) if stats.total_points > 0 else 0
+            )
             print(
                 f"  Batch {batch_num}: {stats.indexed_points}/{stats.total_points} "
                 f"({progress_pct:.1f}%)"

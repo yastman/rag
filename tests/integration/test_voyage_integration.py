@@ -10,12 +10,13 @@ class TestVoyagePipelineIntegration:
 
     def test_full_search_pipeline_sync(self):
         """Test complete search pipeline: preprocess -> embed -> retrieve -> rerank."""
+        from telegram_bot.services.voyage_client import VoyageClient
+
         from telegram_bot.services import (
             QueryPreprocessor,
             VoyageEmbeddingService,
             VoyageRerankerService,
         )
-        from telegram_bot.services.voyage_client import VoyageClient
 
         # Reset singleton before test
         VoyageClient._instance = None
@@ -143,8 +144,9 @@ class TestVoyagePipelineIntegration:
     @pytest.mark.asyncio
     async def test_async_pipeline(self):
         """Test async methods work correctly."""
-        from telegram_bot.services import VoyageEmbeddingService, VoyageRerankerService
         from telegram_bot.services.voyage_client import VoyageClient
+
+        from telegram_bot.services import VoyageEmbeddingService, VoyageRerankerService
 
         # Reset singleton
         VoyageClient._instance = None
@@ -309,8 +311,9 @@ class TestVoyageEmbeddingServiceBatching:
 
     def test_document_batching(self):
         """Test documents are batched correctly for embedding."""
-        from telegram_bot.services import VoyageEmbeddingService
         from telegram_bot.services.voyage_client import VoyageClient
+
+        from telegram_bot.services import VoyageEmbeddingService
 
         # Reset singleton
         VoyageClient._instance = None
@@ -346,8 +349,9 @@ class TestVoyageEmbeddingServiceBatching:
 
     def test_empty_documents_list(self):
         """Test handling of empty documents list."""
-        from telegram_bot.services import VoyageEmbeddingService
         from telegram_bot.services.voyage_client import VoyageClient
+
+        from telegram_bot.services import VoyageEmbeddingService
 
         # Reset singleton
         VoyageClient._instance = None
@@ -376,8 +380,9 @@ class TestVoyageRerankerEdgeCases:
 
     def test_empty_documents_rerank(self):
         """Test reranking with empty documents list."""
-        from telegram_bot.services import VoyageRerankerService
         from telegram_bot.services.voyage_client import VoyageClient
+
+        from telegram_bot.services import VoyageRerankerService
 
         # Reset singleton
         VoyageClient._instance = None
@@ -402,8 +407,9 @@ class TestVoyageRerankerEdgeCases:
 
     def test_page_content_fallback(self):
         """Test reranker uses page_content if text is missing."""
-        from telegram_bot.services import VoyageRerankerService
         from telegram_bot.services.voyage_client import VoyageClient
+
+        from telegram_bot.services import VoyageRerankerService
 
         # Reset singleton
         VoyageClient._instance = None

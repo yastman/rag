@@ -1,6 +1,7 @@
 """Tests for QdrantService quantization parameters."""
 
 import sys
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -462,10 +463,10 @@ class TestQdrantServiceScoreBoosting:
     @pytest.mark.asyncio
     async def test_score_boosting_with_fresh_document(self, service):
         """Test freshness boost increases score for new documents."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Create document with recent timestamp
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_point = MagicMock()
         mock_point.id = "1"
         mock_point.score = 0.7
@@ -490,10 +491,10 @@ class TestQdrantServiceScoreBoosting:
     @pytest.mark.asyncio
     async def test_score_boosting_with_old_document(self, service):
         """Test freshness boost is minimal for old documents."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         # Create document with old timestamp
-        old_date = datetime.now(timezone.utc) - timedelta(days=30)
+        old_date = datetime.now(UTC) - timedelta(days=30)
         mock_point = MagicMock()
         mock_point.id = "1"
         mock_point.score = 0.7
@@ -516,9 +517,9 @@ class TestQdrantServiceScoreBoosting:
     @pytest.mark.asyncio
     async def test_score_boosting_reorders_by_freshness(self, service):
         """Test fresher documents can overtake older ones."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         old_date = now - timedelta(days=30)
 
         # Old doc with higher base score

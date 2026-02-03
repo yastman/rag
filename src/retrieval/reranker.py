@@ -8,7 +8,7 @@ for bot runtime. Install with: uv sync --group indexing
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, cast
 
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Global singleton (type: CrossEncoder when loaded)
-_cross_encoder: Optional[Any] = None
+_cross_encoder: Any | None = None
 
 
 def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> "CrossEncoder":
@@ -56,7 +56,8 @@ def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") 
     else:
         logger.debug("Using existing cross-encoder instance")
 
-    return _cross_encoder
+    # cast is safe: _cross_encoder is always set to CrossEncoder when not None
+    return cast("CrossEncoder", _cross_encoder)
 
 
 def rerank_results(

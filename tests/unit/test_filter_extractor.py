@@ -1,7 +1,5 @@
 """Unit tests for telegram_bot/services/filter_extractor.py."""
 
-import pytest
-
 from telegram_bot.services.filter_extractor import FilterExtractor
 
 

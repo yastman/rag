@@ -31,7 +31,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from datasets import Dataset
 from openai import OpenAI
@@ -47,6 +47,7 @@ from ragas.metrics.collections import (
 )
 
 from src.evaluation.mlflow_integration import MLflowRAGLogger
+
 
 # Expose metric factories for testing (patched in unit tests)
 faithfulness = Faithfulness
@@ -122,7 +123,7 @@ def _log_ragas_scores_to_langfuse(
     metrics: dict[str, float],
     session_id: str,
     trace_name: str = "ragas-evaluation",
-) -> Optional[str]:
+) -> str | None:
     """
     Log RAGAS evaluation scores to Langfuse.
 
@@ -243,7 +244,7 @@ class RAGASEvaluator:
         self,
         rag_pipeline,
         test_set_path: str = "tests/eval/ground_truth.json",
-        sample_size: Optional[int] = None,
+        sample_size: int | None = None,
     ) -> dict[str, float]:
         """
         Evaluate RAG pipeline with RAGAS metrics.
@@ -324,9 +325,7 @@ class RAGASEvaluator:
 
         # Log to Langfuse
         session_id = f"ragas-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-        trace_id = _log_ragas_scores_to_langfuse(
-            self.langfuse_client, metrics, session_id
-        )
+        trace_id = _log_ragas_scores_to_langfuse(self.langfuse_client, metrics, session_id)
         if trace_id:
             print(f"   Langfuse trace: {trace_id}")
 
@@ -352,10 +351,18 @@ class RAGASEvaluator:
     def _print_results(self, metrics: dict[str, float]) -> None:
         """Print RAGAS results to console."""
         print("\n   RAGAS Results:")
-        print(f"   Faithfulness:       {metrics['faithfulness']:.3f} (threshold: >= {FAITHFULNESS_THRESHOLD})")
-        print(f"   Context Precision:  {metrics['context_precision']:.3f} (threshold: >= {CONTEXT_PRECISION_THRESHOLD})")
-        print(f"   Context Recall:     {metrics['context_recall']:.3f} (threshold: >= {CONTEXT_RECALL_THRESHOLD})")
-        print(f"   Answer Relevancy:   {metrics['answer_relevancy']:.3f} (threshold: >= {ANSWER_RELEVANCY_THRESHOLD})")
+        print(
+            f"   Faithfulness:       {metrics['faithfulness']:.3f} (threshold: >= {FAITHFULNESS_THRESHOLD})"
+        )
+        print(
+            f"   Context Precision:  {metrics['context_precision']:.3f} (threshold: >= {CONTEXT_PRECISION_THRESHOLD})"
+        )
+        print(
+            f"   Context Recall:     {metrics['context_recall']:.3f} (threshold: >= {CONTEXT_RECALL_THRESHOLD})"
+        )
+        print(
+            f"   Answer Relevancy:   {metrics['answer_relevancy']:.3f} (threshold: >= {ANSWER_RELEVANCY_THRESHOLD})"
+        )
         print(f"   Duration:           {metrics['eval_duration_seconds']:.1f}s")
         print(f"   Samples:            {int(metrics['queries_evaluated'])}")
 
@@ -374,7 +381,7 @@ class RAGASEvaluator:
 
 def evaluate_with_mock_pipeline(
     test_set_path: str = "tests/eval/ground_truth.json",
-    sample_size: Optional[int] = None,
+    sample_size: int | None = None,
 ) -> dict[str, float]:
     """
     Run evaluation with a mock pipeline for testing.

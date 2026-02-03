@@ -37,7 +37,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -49,8 +49,8 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Import search engines and MLflow integration (after load_dotenv)
-from mlflow_integration import MLflowRAGLogger  # noqa: E402
-from search_engines import (  # noqa: E402
+from mlflow_integration import MLflowRAGLogger
+from search_engines import (
     BaselineSearchEngine,
     HybridDBSFColBERTSearchEngine,
     HybridSearchEngine,
@@ -61,9 +61,9 @@ def evaluate_with_ragas(
     engine_name: str = "dbsf_colbert",
     collection: str = "uk_civil_code_v2",
     queries_file: str = "data/queries_testset.json",
-    sample: Optional[int] = None,
+    sample: int | None = None,
     use_mlflow: bool = False,
-    output_file: Optional[str] = None,
+    output_file: str | None = None,
 ) -> dict[str, Any]:
     """
     Run RAGAS evaluation on search engine.

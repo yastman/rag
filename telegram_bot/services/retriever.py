@@ -1,7 +1,7 @@
 """Qdrant retrieval service."""
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from qdrant_client import QdrantClient, models
 
@@ -28,7 +28,7 @@ class RetrieverService:
         self.url = url
         self.api_key = api_key
         self.collection_name = collection_name
-        self.client: Optional[QdrantClient] = None
+        self.client: QdrantClient | None = None
         self._is_healthy = False
 
         # Initialize client with error handling
@@ -50,7 +50,7 @@ class RetrieverService:
     def search(
         self,
         query_vector: list[float],
-        filters: Optional[dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
         top_k: int = 5,
         min_score: float = 0.5,
     ) -> list[dict[str, Any]]:
@@ -105,7 +105,7 @@ class RetrieverService:
             self._is_healthy = False
             return []
 
-    def _build_base_filter(self) -> Optional[models.Filter]:
+    def _build_base_filter(self) -> models.Filter | None:
         """
         Build base Qdrant Filter.
 
@@ -118,7 +118,7 @@ class RetrieverService:
         # No base filter - search all documents in collection
         return None
 
-    def _build_filter(self, filters: dict[str, Any]) -> Optional[models.Filter]:
+    def _build_filter(self, filters: dict[str, Any]) -> models.Filter | None:
         """
         Build Qdrant Filter from extracted filters dict.
 

@@ -90,7 +90,7 @@ class E2ETelegramClient:
             try:
                 final_response = await conv.get_edit(timeout=3)
                 response = final_response
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # No edits, use original response
                 pass
 

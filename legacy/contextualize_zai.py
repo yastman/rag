@@ -8,7 +8,6 @@ import json
 import os
 import re
 import time
-from typing import Optional
 
 import requests
 from prompts import (
@@ -30,7 +29,7 @@ class ContextualRetrievalZAI:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "glm-4.6",
         max_tokens: int = 1500,
         temperature: float = 0.0,
