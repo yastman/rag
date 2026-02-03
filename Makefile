@@ -5,6 +5,7 @@
 	rclone-install sync-drive-install sync-drive-run sync-drive-status \
 	ingest-dir ingest-gdrive ingest-status \
 	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
+	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks
 
 # Default target
@@ -650,3 +651,30 @@ ingest-gdrive-status: ## Show GDrive collection stats
 	@uv run python -c "from qdrant_client import QdrantClient; c=QdrantClient('http://localhost:6333'); \
 		[print(f'  {n}: {c.get_collection(n).points_count} points') if c.collection_exists(n) else print(f'  {n}: not found') \
 		for n in ['gdrive_documents_scalar', 'gdrive_documents_binary']]"
+
+# =============================================================================
+# UNIFIED INGESTION PIPELINE (v3.2.1)
+# =============================================================================
+
+.PHONY: ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+
+ingest-unified: ## Run unified ingestion once
+	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
+	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli run
+	@echo "$(GREEN)✓ Ingestion complete$(NC)"
+
+ingest-unified-watch: ## Run unified ingestion continuously (watch mode)
+	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
+	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli run --watch
+
+ingest-unified-status: ## Show unified ingestion status
+	@echo "$(BLUE)Unified ingestion status:$(NC)"
+	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli status
+
+ingest-unified-reprocess: ## Reprocess all error files
+	@echo "$(BLUE)Reprocessing error files...$(NC)"
+	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli reprocess --errors
+	@echo "$(GREEN)✓ Reprocess queued$(NC)"
+
+ingest-unified-logs: ## Show ingestion service logs
+	docker logs dev-ingestion -f --tail 100

@@ -526,6 +526,48 @@ services:
           memory: 512M
 
 # =============================================================================
+  # UNIFIED INGESTION PIPELINE (v3.2.1)
+  # =============================================================================
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: telegram_bot/Dockerfile
+    container_name: dev-ingestion
+    restart: unless-stopped
+    command: ["uv", "run", "python", "-m", "src.ingestion.unified.cli", "run", "--watch"]
+    environment:
+      - GDRIVE_SYNC_DIR=/data/drive-sync
+      - INGESTION_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cocoindex
+      - QDRANT_URL=http://qdrant:6333
+      - DOCLING_URL=http://docling:5001
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      - GDRIVE_COLLECTION_NAME=gdrive_documents_scalar
+    volumes:
+      - ${GDRIVE_SYNC_DIR:-~/drive-sync}:/data/drive-sync:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      docling:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "src.ingestion.unified.cli"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+# =============================================================================
 # VOLUMES
 # =============================================================================
 
