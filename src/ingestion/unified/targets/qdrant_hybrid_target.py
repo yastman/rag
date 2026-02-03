@@ -1,0 +1,295 @@
+# src/ingestion/unified/targets/qdrant_hybrid_target.py
+"""CocoIndex custom target connector for Qdrant hybrid search.
+
+This target connector receives mutations from CocoIndex and:
+1. Parses documents via DoclingClient
+2. Generates embeddings (Voyage + BM42)
+3. Writes to Qdrant with payload contract
+4. Updates state in Postgres
+"""
+
+import asyncio
+import dataclasses
+import hashlib
+import logging
+import os
+from datetime import UTC, datetime
+from pathlib import Path
+
+from cocoindex.op import TargetSpec, target_connector
+
+from src.ingestion.docling_client import DoclingClient, DoclingConfig
+from src.ingestion.unified.config import UnifiedConfig
+from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
+from src.ingestion.unified.state_manager import UnifiedStateManager
+
+
+logger = logging.getLogger(__name__)
+
+
+def compute_content_hash(file_path: Path) -> str:
+    """Compute SHA256 hash of file content."""
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()[:16]
+
+
+class QdrantHybridTargetSpec(TargetSpec):
+    """Configuration for Qdrant hybrid target."""
+
+    ***REMOVED***
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None
+    collection_name: str = "gdrive_documents_scalar"
+
+    # Docling
+    docling_url: str = "http://localhost:5001"
+    docling_timeout: float = 300.0
+    max_tokens_per_chunk: int = 512
+
+    ***REMOVED***
+    voyage_api_key: str | None = None
+    voyage_model: str = "voyage-4-large"
+
+    # BM42
+    bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+
+    # Postgres
+    database_url: str = "postgresql://postgres:postgres@localhost:5432/cocoindex"
+
+    # Pipeline
+    max_retries: int = 3
+    pipeline_version: str = "v3.2.1"
+
+    @classmethod
+    def from_config(cls, config: UnifiedConfig) -> "QdrantHybridTargetSpec":
+        """Create spec from UnifiedConfig."""
+        return cls(
+            qdrant_url=config.qdrant_url,
+            qdrant_api_key=config.qdrant_api_key,
+            collection_name=config.collection_name,
+            docling_url=config.docling_url,
+            docling_timeout=config.docling_timeout,
+            max_tokens_per_chunk=config.max_tokens_per_chunk,
+            voyage_api_key=config.voyage_api_key,
+            voyage_model=config.voyage_model,
+            bm42_model=config.bm42_model,
+            database_url=config.database_url,
+            max_retries=config.max_retries,
+            pipeline_version=config.pipeline_version,
+        )
+
+
+@dataclasses.dataclass
+class QdrantHybridTargetValues:
+    """Value type for mutations from CocoIndex flow."""
+
+    abs_path: str
+    source_path: str
+    file_name: str
+    mime_type: str
+    file_size: int
+
+
+@target_connector(
+    spec_cls=QdrantHybridTargetSpec,
+    persistent_key_type=str,
+)
+class QdrantHybridTargetConnector:
+    """CocoIndex target connector for Qdrant hybrid search.
+
+    Handles:
+    - Document parsing via Docling
+    - Embedding generation (Voyage dense + BM42 sparse)
+    - Qdrant upsert with payload contract
+    - Postgres state tracking
+    """
+
+    # Shared resources (initialized lazily)
+    _writer: QdrantHybridWriter | None = None
+    _docling: DoclingClient | None = None
+    _state_manager: UnifiedStateManager | None = None
+
+    @staticmethod
+    def get_persistent_key(spec: QdrantHybridTargetSpec, _target_name: str) -> str:
+        """Return unique identifier for this target instance."""
+        return f"{spec.collection_name}@{spec.qdrant_url}"
+
+    @staticmethod
+    def describe(key: str) -> str:
+        """Human-readable description."""
+        return f"Qdrant Hybrid Target: {key}"
+
+    @staticmethod
+    def apply_setup_change(
+        key: str,
+        previous: QdrantHybridTargetSpec | None,
+        current: QdrantHybridTargetSpec | None,
+    ) -> None:
+        """Apply setup changes (create/delete target infrastructure)."""
+        if previous is None and current is not None:
+            logger.info(f"Target created: {key}")
+        elif previous is not None and current is None:
+            logger.info(f"Target removed: {key}")
+        else:
+            logger.info(f"Target updated: {key}")
+
+    @staticmethod
+    def prepare(spec: QdrantHybridTargetSpec) -> QdrantHybridTargetSpec:
+        """Prepare for execution (called once before mutations)."""
+        return spec
+
+    @classmethod
+    def _get_writer(cls, spec: QdrantHybridTargetSpec) -> QdrantHybridWriter:
+        """Get or create QdrantHybridWriter."""
+        if cls._writer is None:
+            cls._writer = QdrantHybridWriter(
+                qdrant_url=spec.qdrant_url,
+                qdrant_api_key=spec.qdrant_api_key,
+                voyage_api_key=spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", ""),
+                voyage_model=spec.voyage_model,
+                bm42_model=spec.bm42_model,
+            )
+        return cls._writer
+
+    @classmethod
+    def _get_docling(cls, spec: QdrantHybridTargetSpec) -> DoclingClient:
+        """Get or create DoclingClient."""
+        if cls._docling is None:
+            config = DoclingConfig(
+                base_url=spec.docling_url,
+                timeout=spec.docling_timeout,
+                max_tokens=spec.max_tokens_per_chunk,
+            )
+            cls._docling = DoclingClient(config)
+        return cls._docling
+
+    @classmethod
+    def _get_state_manager(cls, spec: QdrantHybridTargetSpec) -> UnifiedStateManager:
+        """Get or create UnifiedStateManager."""
+        if cls._state_manager is None:
+            cls._state_manager = UnifiedStateManager(database_url=spec.database_url)
+        return cls._state_manager
+
+    @staticmethod
+    def mutate(
+        *all_mutations: tuple[QdrantHybridTargetSpec, dict[str, QdrantHybridTargetValues | None]],
+    ) -> None:
+        """Apply data mutations to Qdrant.
+
+        For each file_id:
+        - None value: delete all points for file_id
+        - Non-None value: parse, embed, upsert (replace semantics)
+        """
+        for spec, mutations in all_mutations:
+            for file_id, mutation in mutations.items():
+                try:
+                    if mutation is None:
+                        # Delete
+                        asyncio.run(QdrantHybridTargetConnector._handle_delete(spec, file_id))
+                    else:
+                        # Upsert
+                        asyncio.run(
+                            QdrantHybridTargetConnector._handle_upsert(spec, file_id, mutation)
+                        )
+                except Exception as e:
+                    logger.error(f"Mutation failed for {file_id}: {e}", exc_info=True)
+
+    @classmethod
+    async def _handle_delete(cls, spec: QdrantHybridTargetSpec, file_id: str) -> None:
+        """Handle file deletion."""
+        writer = cls._get_writer(spec)
+        state_manager = cls._get_state_manager(spec)
+
+        await writer.delete_file(file_id, spec.collection_name)
+        await state_manager.mark_deleted(file_id)
+        logger.info(f"Deleted: file_id={file_id}")
+
+    @classmethod
+    async def _handle_upsert(
+        cls,
+        spec: QdrantHybridTargetSpec,
+        file_id: str,
+        mutation: QdrantHybridTargetValues,
+    ) -> None:
+        """Handle file insert/update."""
+        writer = cls._get_writer(spec)
+        docling = cls._get_docling(spec)
+        state_manager = cls._get_state_manager(spec)
+
+        abs_path = Path(mutation.abs_path)
+        source_path = mutation.source_path
+
+        # Compute content hash
+        content_hash = compute_content_hash(abs_path)
+
+        # Check if processing needed (skip unchanged)
+        if not await state_manager.should_process(file_id, content_hash):
+            logger.debug(f"Skipping unchanged: {source_path}")
+            return
+
+        # Mark processing
+        await state_manager.mark_processing(file_id)
+
+        try:
+            # Connect docling if needed
+            if not docling._client:
+                await docling.connect()
+
+            # Parse and chunk
+            docling_chunks = await docling.chunk_file(abs_path)
+            if not docling_chunks:
+                await state_manager.mark_indexed(file_id, 0, content_hash)
+                logger.warning(f"No chunks from: {source_path}")
+                return
+
+            # Convert to ingestion chunks
+            chunks = docling.to_ingestion_chunks(
+                docling_chunks,
+                source=source_path,
+                source_type=abs_path.suffix.lstrip("."),
+            )
+
+            # File metadata
+            file_metadata = {
+                "file_name": mutation.file_name,
+                "mime_type": mutation.mime_type,
+                "file_size": mutation.file_size,
+                "content_hash": content_hash,
+                "modified_time": datetime.now(UTC).isoformat(),
+            }
+
+            # Write to Qdrant
+            stats = await writer.upsert_chunks(
+                chunks=chunks,
+                file_id=file_id,
+                source_path=source_path,
+                file_metadata=file_metadata,
+                collection_name=spec.collection_name,
+            )
+
+            if stats.errors:
+                raise Exception("; ".join(stats.errors))
+
+            # Update state
+            await state_manager.mark_indexed(file_id, stats.points_upserted, content_hash)
+            logger.info(f"Indexed: {source_path} ({stats.points_upserted} chunks)")
+
+        except Exception as e:
+            logger.error(f"Upsert failed for {source_path}: {e}")
+            await state_manager.mark_error(file_id, str(e))
+
+            # Check DLQ
+            state = await state_manager.get_state(file_id)
+            if state and state.retry_count >= spec.max_retries:
+                await state_manager.add_to_dlq(
+                    file_id=file_id,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    payload={"source_path": source_path},
+                )
+                logger.warning(f"Moved to DLQ: {source_path}")
+
+            raise
