@@ -6,10 +6,21 @@
 
 Production RAG system with hybrid search (RRF + ColBERT), Voyage AI embeddings, and Telegram bot.
 
+***REMOVED******REMOVED*** Prerequisites
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) package manager
+
 ***REMOVED******REMOVED*** Quick Start
 
 ```bash
-make install-dev        ***REMOVED*** Install dependencies
+***REMOVED*** Install uv (if not installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+***REMOVED*** Install dependencies
+uv sync
+
+***REMOVED*** Start services and run
 make docker-up          ***REMOVED*** Start Qdrant, Redis, MLflow
 make check              ***REMOVED*** Lint + type check
 make test               ***REMOVED*** Run tests

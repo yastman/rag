@@ -8,7 +8,6 @@ import json
 import os
 import re
 import time
-from typing import Optional
 
 from anthropic import Anthropic
 from prompts import (
@@ -31,7 +30,7 @@ class ContextualRetrieval:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         model: str = "claude-3-haiku-20240307",
         max_tokens: int = 2048,
         temperature: float = 0.0,

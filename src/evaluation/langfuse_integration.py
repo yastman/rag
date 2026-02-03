@@ -78,7 +78,8 @@ Reference:
 
 import os
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from langfuse import Langfuse, get_client, observe
 
@@ -90,10 +91,10 @@ from langfuse import Langfuse, get_client, observe
 
 def initialize_langfuse(
     host: str = "http://localhost:3001",
-    public_key: Optional[str] = None,
-    secret_key: Optional[str] = None,
+    public_key: str | None = None,
+    secret_key: str | None = None,
     enabled: bool = True,
-) -> tuple[Optional[Langfuse], bool]:
+) -> tuple[Langfuse | None, bool]:
     """
     Initialize Langfuse client with graceful error handling.
 
@@ -137,8 +138,8 @@ def trace_search_with_decorator(
     search_fn: Callable,
     engine_name: str = "unknown",
     user_id: str = "anonymous",
-    session_id: Optional[str] = None,
-    expected_article: Optional[int] = None,
+    session_id: str | None = None,
+    expected_article: int | None = None,
 ) -> tuple[list[Any], dict[str, float]]:
     """
     Trace a RAG search query using native @observe() decorator.
@@ -218,8 +219,8 @@ def trace_search_with_spans(
     search_fn: Callable,
     engine_name: str = "unknown",
     user_id: str = "anonymous",
-    session_id: Optional[str] = None,
-    expected_article: Optional[int] = None,
+    session_id: str | None = None,
+    expected_article: int | None = None,
 ) -> tuple[list[Any], dict[str, float]]:
     """
     Trace a RAG search query using manual span creation.
