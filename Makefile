@@ -5,6 +5,7 @@
 	rclone-install sync-drive-install sync-drive-run sync-drive-status \
 	ingest-dir ingest-gdrive ingest-status \
 	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
+	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks
 
 ***REMOVED*** Default target
@@ -650,3 +651,30 @@ ingest-gdrive-status: ***REMOVED******REMOVED*** Show GDrive collection stats
 	@uv run python -c "from qdrant_client import QdrantClient; c=QdrantClient('http://localhost:6333'); \
 		[print(f'  {n}: {c.get_collection(n).points_count} points') if c.collection_exists(n) else print(f'  {n}: not found') \
 		for n in ['gdrive_documents_scalar', 'gdrive_documents_binary']]"
+
+***REMOVED*** =============================================================================
+***REMOVED*** UNIFIED INGESTION PIPELINE (v3.2.1)
+***REMOVED*** =============================================================================
+
+.PHONY: ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+
+ingest-unified: ***REMOVED******REMOVED*** Run unified ingestion once
+	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
+	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli run
+	@echo "$(GREEN)✓ Ingestion complete$(NC)"
+
+ingest-unified-watch: ***REMOVED******REMOVED*** Run unified ingestion continuously (watch mode)
+	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
+	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli run --watch
+
+ingest-unified-status: ***REMOVED******REMOVED*** Show unified ingestion status
+	@echo "$(BLUE)Unified ingestion status:$(NC)"
+	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli status
+
+ingest-unified-reprocess: ***REMOVED******REMOVED*** Reprocess all error files
+	@echo "$(BLUE)Reprocessing error files...$(NC)"
+	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli reprocess --errors
+	@echo "$(GREEN)✓ Reprocess queued$(NC)"
+
+ingest-unified-logs: ***REMOVED******REMOVED*** Show ingestion service logs
+	docker logs dev-ingestion -f --tail 100
