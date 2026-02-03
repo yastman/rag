@@ -1,7 +1,5 @@
 """Groq-based contextualization provider (high-speed alternative)."""
 
-from typing import Optional
-
 from groq import AsyncGroq, Groq
 
 from src.config import Settings
@@ -21,7 +19,7 @@ class GroqContextualizer(ContextualizeProvider):
     Note: Fast inference on LLaMA, trade-off with quality.
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         """Initialize Groq contextualizer."""
         self.settings = settings or Settings()
         self.client = AsyncGroq(api_key=self.settings.groq_api_key)
@@ -31,7 +29,7 @@ class GroqContextualizer(ContextualizeProvider):
     async def contextualize(
         self,
         chunks: list[str],
-        query: Optional[str] = None,
+        query: str | None = None,
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using Groq."""
@@ -56,7 +54,7 @@ class GroqContextualizer(ContextualizeProvider):
         self,
         text: str,
         article_number: str,
-        query: Optional[str] = None,
+        query: str | None = None,
     ) -> ContextualizedChunk:
         """Contextualize a single chunk using Groq."""
         system_prompt = self.get_system_prompt()
@@ -87,7 +85,7 @@ class GroqContextualizer(ContextualizeProvider):
         self,
         text: str,
         article_number: str,
-        query: Optional[str] = None,
+        query: str | None = None,
     ) -> ContextualizedChunk:
         """Synchronous contextualization using Groq."""
         system_prompt = self.get_system_prompt()

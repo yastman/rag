@@ -26,7 +26,6 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from qdrant_client import AsyncQdrantClient, models
 
@@ -140,8 +139,8 @@ async def run_ab_test(
     k: int = 5,
     num_runs: int = 1,
     oversampling_factors: list[float] | None = None,
-    ground_truth_path: Optional[Path] = None,
-    output_path: Optional[Path] = None,
+    ground_truth_path: Path | None = None,
+    output_path: Path | None = None,
 ) -> dict:
     """Run A/B test comparing INT8 vs Binary quantization.
 
@@ -243,7 +242,10 @@ async def run_ab_test(
             relevant_ids = ground_truth.get(query, [])
 
             # Test each quantization type and oversampling factor
-            for quant_type, coll_name in [("scalar", collections["scalar"]), ("binary", collections["binary"])]:
+            for quant_type, coll_name in [
+                ("scalar", collections["scalar"]),
+                ("binary", collections["binary"]),
+            ]:
                 if not coll_name:
                     continue
 
@@ -348,7 +350,9 @@ async def run_ab_test(
     print(f"\n{'=' * 70}")
     print("  RECOMMENDATION:")
     if best_config["type"]:
-        print(f"  Best configuration: {best_config['type'].upper()} with oversampling={best_config['osf']}")
+        print(
+            f"  Best configuration: {best_config['type'].upper()} with oversampling={best_config['osf']}"
+        )
         print(f"  Composite score: {best_config['score']:.3f}")
     else:
         print("  No configuration tested successfully")

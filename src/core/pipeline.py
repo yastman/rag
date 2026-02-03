@@ -2,7 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from src.config import APIProvider, Settings
 from src.contextualization import (
@@ -43,7 +43,7 @@ class RAGPipeline:
         ...     print(result["text"])
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         """
         Initialize RAG pipeline.
 
@@ -78,7 +78,7 @@ class RAGPipeline:
     async def search(
         self,
         query: str,
-        top_k: Optional[int] = None,
+        top_k: int | None = None,
         use_context: bool = True,
     ) -> RAGResult:
         """
@@ -156,7 +156,7 @@ class RAGPipeline:
     async def index_documents(
         self,
         pdf_paths: list[str],
-        collection_name: Optional[str] = None,
+        collection_name: str | None = None,
         recreate_collection: bool = False,
     ) -> dict[str, Any]:
         """
@@ -212,7 +212,7 @@ class RAGPipeline:
     async def evaluate(
         self,
         queries: list[str],
-        ground_truth: Optional[list[list[str]]] = None,
+        ground_truth: list[list[str]] | None = None,
     ) -> dict[str, Any]:
         """
         Evaluate pipeline on test queries.

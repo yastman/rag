@@ -5,7 +5,6 @@ This module ensures only ONE model instance exists in memory.
 """
 
 import logging
-from typing import Optional
 
 from FlagEmbedding import BGEM3FlagModel
 from sentence_transformers import SentenceTransformer
@@ -14,11 +13,11 @@ from sentence_transformers import SentenceTransformer
 logger = logging.getLogger(__name__)
 
 # Global singleton instances
-_bge_m3_model: Optional[BGEM3FlagModel] = None
-_sentence_transformer: Optional[SentenceTransformer] = None
+_bge_m3_model: BGEM3FlagModel | None = None
+_sentence_transformer: SentenceTransformer | None = None
 
 
-def get_bge_m3_model(use_fp16: bool = True, device: Optional[str] = None) -> BGEM3FlagModel:
+def get_bge_m3_model(use_fp16: bool = True, device: str | None = None) -> BGEM3FlagModel:
     """
     Get singleton BGE-M3 model instance (FlagEmbedding version).
 

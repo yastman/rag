@@ -4,7 +4,7 @@ import contextlib
 import hashlib
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from aiogram import Bot, Dispatcher, F
@@ -46,7 +46,7 @@ def make_session_id(session_type: str, identifier: int | str) -> str:
         Formatted session_id: "chat-a1b2c3d4-20260202"
     """
     id_hash = hashlib.sha256(str(identifier).encode()).hexdigest()[:8]
-    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    date_str = datetime.now(UTC).strftime("%Y%m%d")
     return f"{session_type}-{id_hash}-{date_str}"
 
 

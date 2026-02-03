@@ -16,7 +16,6 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Optional
 
 from telegram_bot.config import BotConfig
 from telegram_bot.services.qdrant import QdrantService
@@ -44,7 +43,7 @@ def recall_at_k(retrieved_ids: list[str], relevant_ids: list[str], k: int) -> fl
 async def run_ab_test(
     k: int = 5,
     num_runs: int = 1,
-    ground_truth_path: Optional[Path] = None,
+    ground_truth_path: Path | None = None,
 ):
     """Run A/B test comparing quantization on/off."""
     config = BotConfig()
