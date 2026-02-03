@@ -1,27 +1,31 @@
 # src/ingestion/unified/flow.py
 """CocoIndex flow for unified ingestion pipeline.
 
-Uses sources.LocalFile for change detection and exports to QdrantHybridTarget.
+This module is intentionally minimal:
+- CocoIndex handles incremental change detection via `sources.LocalFile`.
+- A custom target connector performs docling → embeddings → Qdrant upsert/delete.
 """
 
 import hashlib
 import logging
+from datetime import timedelta
 from pathlib import Path
 
 import cocoindex
+from cocoindex import setting
+from cocoindex.flow import flow_by_name, flow_names
+from cocoindex.op import function as cocoindex_function
 
 from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.targets.qdrant_hybrid_target import (
     QdrantHybridTargetConnector,  # noqa: F401 - registers the connector
     QdrantHybridTargetSpec,
-    QdrantHybridTargetValues,
 )
 
 
 logger = logging.getLogger(__name__)
 
 
-# MIME types for supported extensions
 MIME_TYPES = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -41,160 +45,147 @@ def compute_file_id(relative_path: str) -> str:
     return hashlib.sha256(relative_path.encode()).hexdigest()[:16]
 
 
-def get_mime_type(file_path: str) -> str:
+def get_mime_type(relative_path: str) -> str:
     """Get MIME type from file extension."""
-    ext = Path(file_path).suffix.lower()
+    ext = Path(relative_path).suffix.lower()
     return MIME_TYPES.get(ext, "application/octet-stream")
 
 
-@cocoindex.flow_def(name="unified_ingestion")
-def unified_ingestion_flow(flow_builder: cocoindex.FlowBuilder, config: UnifiedConfig) -> None:
-    """Define the unified ingestion flow.
+@cocoindex_function()
+def file_id_from_filename(filename: str) -> str:
+    return compute_file_id(filename)
 
-    Flow:
-    1. sources.LocalFile watches sync_dir for changes
-    2. Collector extracts file metadata
-    3. Export to QdrantHybridTarget for processing
-    """
-    sync_dir = str(config.sync_dir)
 
-    # Supported file patterns
-    included_patterns = [
-        "**/*.pdf",
-        "**/*.docx",
-        "**/*.doc",
-        "**/*.xlsx",
-        "**/*.pptx",
-        "**/*.md",
-        "**/*.txt",
-        "**/*.html",
-        "**/*.htm",
-        "**/*.csv",
-    ]
+@cocoindex_function()
+def mime_type_from_filename(filename: str) -> str:
+    return get_mime_type(filename)
 
-    # Exclude hidden files and temp files
-    excluded_patterns = [
-        "**/.*",
-        "**/*~",
-        "**/*.tmp",
-        "**/~$*",
-    ]
 
-    # Source: LocalFile with change detection
-    files = flow_builder.source(
-        cocoindex.sources.LocalFile(
-            path=sync_dir,
-            included_patterns=included_patterns,
-            excluded_patterns=excluded_patterns,
-            binary=True,  # Get file content as bytes
-        )
-    )
+@cocoindex_function()
+def file_size_from_bytes(content: bytes | None) -> int:
+    return len(content) if content is not None else 0
 
-    # Collector: extract metadata and compute file_id
-    @cocoindex.op.collector()
-    class FileCollector:
-        """Collect file metadata for export."""
 
-        file_id: cocoindex.String
-        abs_path: cocoindex.String
-        source_path: cocoindex.String
-        file_name: cocoindex.String
-        mime_type: cocoindex.String
-        file_size: cocoindex.Int64
+@cocoindex_function()
+def basename_from_filename(filename: str) -> str:
+    return Path(filename).name
 
-    collected = files.transform(
-        FileCollector,
-        lambda row: FileCollector(
-            file_id=compute_file_id(row["filename"]),
-            abs_path=str(Path(sync_dir) / row["filename"]),
-            source_path=row["filename"],
-            file_name=Path(row["filename"]).name,
-            mime_type=get_mime_type(row["filename"]),
-            file_size=len(row["content"]) if row["content"] else 0,
-        ),
-    )
 
-    # Export to Qdrant via custom target
-    target_spec = QdrantHybridTargetSpec.from_config(config)
+def _flow_name_for(config: UnifiedConfig) -> str:
+    # Keep short to stay under 64 char limit for full flow name.
+    # Use hash suffix for uniqueness across collections.
+    suffix = hashlib.sha256(config.collection_name.encode()).hexdigest()[:6]
+    return f"ingest_{suffix}"
 
-    collected.export(
-        target_spec,
-        primary_key=["file_id"],
-        value_fields={
-            "abs_path": QdrantHybridTargetValues.abs_path,
-            "source_path": QdrantHybridTargetValues.source_path,
-            "file_name": QdrantHybridTargetValues.file_name,
-            "mime_type": QdrantHybridTargetValues.mime_type,
-            "file_size": QdrantHybridTargetValues.file_size,
-        },
-    )
+
+def _app_namespace_for(config: UnifiedConfig) -> str:
+    # CocoIndex full name = "{app_namespace}.{flow_name}" must be <= 64 chars.
+    # Keep namespace short.
+    return "unified"
 
 
 def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
-    """Build and return the unified ingestion flow.
-
-    Args:
-        config: Pipeline configuration. Uses defaults if not provided.
-
-    Returns:
-        CocoIndex Flow instance.
-    """
+    """Build and register the unified CocoIndex flow."""
     if config is None:
         config = UnifiedConfig()
 
-    # Initialize CocoIndex with Postgres backend
+    # Init CocoIndex with explicit database settings (do not rely on env vars).
     cocoindex.init(
-        database_url=config.database_url,
+        setting.Settings(
+            database=setting.DatabaseConnectionSpec(url=config.database_url),
+            app_namespace=_app_namespace_for(config),
+        )
     )
 
-    # Build flow
-    return cocoindex.open_flow(
-        unified_ingestion_flow,
-        config=config,
-    )
+    flow_name = _flow_name_for(config)
+    if flow_name in flow_names():
+        flow_by_name(flow_name).close()
+
+    def flow_def(flow_builder: cocoindex.FlowBuilder, data_scope: cocoindex.DataScope) -> None:
+        sync_dir = str(config.sync_dir)
+
+        included_patterns = [
+            "**/*.pdf",
+            "**/*.docx",
+            "**/*.doc",
+            "**/*.xlsx",
+            "**/*.pptx",
+            # For dev/e2e
+            "**/*.md",
+            "**/*.txt",
+            "**/*.html",
+            "**/*.htm",
+            "**/*.csv",
+        ]
+
+        excluded_patterns = [
+            "**/.*",
+            "**/*~",
+            "**/*.tmp",
+            "**/~$*",
+        ]
+
+        # Source: LocalFile with refresh safety net
+        data_scope["files"] = flow_builder.add_source(
+            cocoindex.sources.LocalFile(
+                path=sync_dir,
+                binary=True,
+                included_patterns=included_patterns,
+                excluded_patterns=excluded_patterns,
+            ),
+            refresh_interval=timedelta(hours=6),
+        )
+
+        collector = data_scope.add_collector()
+
+        with data_scope["files"].row() as f:
+            f["file_id"] = f["filename"].transform(file_id_from_filename)
+            f["mime_type"] = f["filename"].transform(mime_type_from_filename)
+            f["file_size"] = f["content"].transform(file_size_from_bytes)
+
+            collector.collect(
+                file_id=f["file_id"],
+                source_path=f["filename"],
+                file_name=f["filename"].transform(basename_from_filename),
+                mime_type=f["mime_type"],
+                file_size=f["file_size"],
+            )
+
+        collector.export(
+            "unified_gdrive_export",
+            QdrantHybridTargetSpec.from_config(config),
+            primary_key_fields=["file_id"],
+        )
+
+    return cocoindex.open_flow(flow_name, flow_def)
 
 
 def run_once(config: UnifiedConfig | None = None) -> None:
-    """Run ingestion once (single pass).
-
-    Args:
-        config: Pipeline configuration.
-    """
-    _flow = build_flow(config)
-
-    # Setup and update
-    cocoindex.setup_all_flows()
-    cocoindex.update_all_flows()
-
-    logger.info("Single pass completed")
+    """Run ingestion once (single pass)."""
+    flow = build_flow(config)
+    flow.setup()
+    flow.update(print_stats=True)
+    flow.close()
 
 
 def run_watch(config: UnifiedConfig | None = None) -> None:
-    """Run continuous ingestion with live updates.
+    """Run ingestion continuously using FlowLiveUpdater."""
+    if config is None:
+        config = UnifiedConfig()
 
-    Args:
-        config: Pipeline configuration.
-    """
     flow = build_flow(config)
+    flow.setup()
 
-    # Setup
-    cocoindex.setup_all_flows()
-
-    # Live updater for continuous watching
-    logger.info(f"Starting watch mode: {config.sync_dir if config else 'default'}")
-
+    logger.info("Starting watch mode via CocoIndex FlowLiveUpdater")
     updater = cocoindex.FlowLiveUpdater(
         flow,
-        cocoindex.FlowLiveUpdaterOptions(
-            live_mode=True,
-            print_stats=True,
-        ),
+        cocoindex.FlowLiveUpdaterOptions(live_mode=True, print_stats=True),
     )
-
     try:
         updater.start()
         updater.wait()
     except KeyboardInterrupt:
         logger.info("Watch mode interrupted")
     finally:
-        updater.stop()
+        updater.abort()
+        flow.close()
