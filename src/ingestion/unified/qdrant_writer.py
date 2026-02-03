@@ -304,3 +304,105 @@ class QdrantHybridWriter:
             logger.error(f"Error upserting chunks: {e}", exc_info=True)
 
         return stats
+
+    def delete_file_sync(self, file_id: str, collection_name: str) -> int:
+        """Sync version of delete_file.
+
+        Uses sync Qdrant client directly.
+        """
+        # Qdrant client is already sync
+        count_result = self.client.count(
+            collection_name=collection_name,
+            count_filter=Filter(
+                must=[FieldCondition(key="metadata.file_id", match=MatchValue(value=file_id))]
+            ),
+        )
+        count = count_result.count
+
+        if count > 0:
+            self.client.delete(
+                collection_name=collection_name,
+                points_selector=Filter(
+                    must=[FieldCondition(key="metadata.file_id", match=MatchValue(value=file_id))]
+                ),
+            )
+            logger.info(f"Deleted {count} points for file_id={file_id}")
+
+        return count
+
+    def upsert_chunks_sync(
+        self,
+        chunks: list[Any],
+        file_id: str,
+        source_path: str,
+        file_metadata: dict[str, Any],
+        collection_name: str,
+    ) -> WriteStats:
+        """Sync version of upsert_chunks.
+
+        Uses sync Voyage client and sync Qdrant operations.
+        """
+        stats = WriteStats()
+
+        if not chunks:
+            return stats
+
+        try:
+            # Step 1: Delete existing (replace semantics)
+            stats.points_deleted = self.delete_file_sync(file_id, collection_name)
+
+            # Step 2: Extract texts
+            texts = [chunk.text for chunk in chunks]
+
+            # Step 3: Generate embeddings (sync)
+            # Use Voyage client directly (it's sync, async methods wrap with asyncio.to_thread)
+            all_dense_embeddings: list[list[float]] = []
+            for i in range(0, len(texts), self.VOYAGE_BATCH_SIZE):
+                batch = texts[i : i + self.VOYAGE_BATCH_SIZE]
+                response = self.voyage._client.embed(
+                    texts=batch,
+                    model=self.voyage._model_docs,
+                    input_type="document",
+                )
+                all_dense_embeddings.extend(response.embeddings)
+
+            sparse_embeddings = list(self.sparse_model.embed(texts))
+
+            # Step 4: Build points
+            points = []
+            for i, (chunk, dense_vec, sparse_emb) in enumerate(
+                zip(chunks, all_dense_embeddings, sparse_embeddings, strict=True)
+            ):
+                chunk_location = self.get_chunk_location(chunk, i)
+                point_id = self.generate_point_id(file_id, chunk_location)
+                payload = self.build_payload(
+                    chunk, file_id, source_path, chunk_location, file_metadata
+                )
+
+                point = PointStruct(
+                    id=point_id,
+                    vector={
+                        "dense": dense_vec,
+                        "bm42": SparseVector(
+                            indices=sparse_emb.indices.tolist(),
+                            values=sparse_emb.values.tolist(),
+                        ),
+                    },
+                    payload=payload,
+                )
+                points.append(point)
+
+            # Step 5: Upsert (sync)
+            self.client.upsert(collection_name=collection_name, points=points)
+            stats.points_upserted = len(points)
+
+            logger.info(
+                f"Upserted {stats.points_upserted} points for {source_path} "
+                f"(replaced {stats.points_deleted})"
+            )
+
+        except Exception as e:
+            stats.errors = [str(e)]
+            logger.error(f"Error upserting chunks: {e}", exc_info=True)
+
+        return stats
