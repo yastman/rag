@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -67,7 +67,7 @@ class UserContextService:
         Returns:
             Default context dictionary with empty preferences.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         return {
             "user_id": user_id,
             "language": "ru",
@@ -187,7 +187,7 @@ class UserContextService:
         # Update interaction stats
         context["interaction_count"] += 1
         context["last_queries"] = [query, *context["last_queries"][:4]]
-        context["updated_at"] = datetime.now(timezone.utc).isoformat()
+        context["updated_at"] = datetime.now(UTC).isoformat()
 
         # Extract preferences every 3rd query or if empty
         if self._should_extract(context["interaction_count"], context["preferences"]):

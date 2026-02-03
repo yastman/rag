@@ -10,8 +10,7 @@ Claude CLI creates JSON in this format, Python code loads and indexes it.
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 
 def create_text_for_embedding(topic: str, context: str, text: str) -> str:
@@ -55,7 +54,7 @@ class ContextualChunk:
     keywords: list[str]
     context: str
     text: str
-    _text_for_embedding: Optional[str] = field(default=None, repr=False)
+    _text_for_embedding: str | None = field(default=None, repr=False)
 
     @property
     def text_for_embedding(self) -> str:
@@ -101,11 +100,11 @@ class ContextualDocument:
 
     source: str
     chunks: list[ContextualChunk]
-    processed_at: Optional[str] = None
+    processed_at: str | None = None
 
     def __post_init__(self):
         if self.processed_at is None:
-            self.processed_at = datetime.now(timezone.utc).isoformat()
+            self.processed_at = datetime.now(UTC).isoformat()
 
     @property
     def total_chunks(self) -> int:

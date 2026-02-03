@@ -9,7 +9,7 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from telegram_bot.services.llm import ConfidenceResult, LLMService, LOW_CONFIDENCE_THRESHOLD
+from telegram_bot.services.llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
 
 
 class TestLLMTimeout:
@@ -114,9 +114,7 @@ class TestLLMResponseParsing:
 
     async def test_malformed_json_response_handled(self, httpx_mock: HTTPXMock):
         """Verify handling of malformed JSON in LLM response."""
-        httpx_mock.add_response(
-            json={"choices": [{"message": {"content": "not json response"}}]}
-        )
+        httpx_mock.add_response(json={"choices": [{"message": {"content": "not json response"}}]})
 
         async with httpx.AsyncClient() as client:
             service = LLMService(api_key="test-key", client=client)
@@ -137,11 +135,7 @@ class TestLLMResponseParsing:
         httpx_mock.add_response(
             json={
                 "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps({"answer": "Response without confidence"})
-                        }
-                    }
+                    {"message": {"content": json.dumps({"answer": "Response without confidence"})}}
                 ]
             }
         )
@@ -163,11 +157,7 @@ class TestLLMResponseParsing:
         httpx_mock.add_response(
             json={
                 "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps({"answer": "Test", "confidence": 1.5})
-                        }
-                    }
+                    {"message": {"content": json.dumps({"answer": "Test", "confidence": 1.5})}}
                 ]
             }
         )
@@ -231,9 +221,7 @@ class TestLLMStreamingFallback:
         async with httpx.AsyncClient() as client:
             service = LLMService(api_key="test-key", client=client)
 
-            chunks = [
-                {"text": "Data", "metadata": {"title": "Test"}, "score": 0.9}
-            ]
+            chunks = [{"text": "Data", "metadata": {"title": "Test"}, "score": 0.9}]
 
             collected = []
             async for chunk in service.stream_answer("Query", chunks):
@@ -265,7 +253,11 @@ class TestLowConfidenceFallback:
         service = LLMService(api_key="test-key")
 
         chunks = [
-            {"text": "Data", "metadata": {"title": "Beach Apt", "price": 50000, "city": "Varna"}, "score": 0.8}
+            {
+                "text": "Data",
+                "metadata": {"title": "Beach Apt", "price": 50000, "city": "Varna"},
+                "score": 0.8,
+            }
         ]
 
         response = service.get_low_confidence_response("Query", chunks, 0.35)

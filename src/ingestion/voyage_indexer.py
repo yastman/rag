@@ -10,7 +10,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from fastembed import SparseTextEmbedding
 from qdrant_client import QdrantClient
@@ -60,9 +60,9 @@ class VoyageIndexer:
 
     def __init__(
         self,
-        qdrant_url: Optional[str] = None,
-        qdrant_api_key: Optional[str] = None,
-        voyage_api_key: Optional[str] = None,
+        qdrant_url: str | None = None,
+        qdrant_api_key: str | None = None,
+        voyage_api_key: str | None = None,
         voyage_model: str = "voyage-4-large",
     ):
         """Initialize indexer.
@@ -240,7 +240,9 @@ class VoyageIndexer:
 
             # Prepare points
             points = []
-            for chunk, dense_vec, sparse_emb in zip(chunks, dense_embeddings, sparse_embeddings):
+            for chunk, dense_vec, sparse_emb in zip(
+                chunks, dense_embeddings, sparse_embeddings, strict=True
+            ):
                 # Convert sparse to Qdrant format
                 sparse_indices = sparse_emb.indices.tolist()
                 sparse_values = sparse_emb.values.tolist()

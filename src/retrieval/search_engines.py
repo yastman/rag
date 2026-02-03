@@ -2,12 +2,23 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import numpy as np
 from qdrant_client import QdrantClient, models
 
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
+
+
+# Check if AcornSearchParams is available in qdrant-client
+# (Feature may not be implemented yet in current version)
+try:
+    from qdrant_client.models import AcornSearchParams
+
+    ACORN_AVAILABLE = True
+except ImportError:
+    ACORN_AVAILABLE = False
+    AcornSearchParams = None  # type: ignore[misc, assignment]
 from src.models import get_bge_m3_model
 
 
@@ -56,7 +67,7 @@ def convert_to_python_types(obj):
 class BaseSearchEngine(ABC):
     """Abstract base class for search engines."""
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         """Initialize search engine."""
         self.settings = settings or Settings()
         self.client = QdrantClient(self.settings.qdrant_url)
@@ -68,7 +79,7 @@ class BaseSearchEngine(ABC):
         """Get collection name (respects quantization_mode setting)."""
         return self._collection_name
 
-    def _should_use_acorn(self, has_filters: bool, estimated_selectivity: Optional[float]) -> bool:
+    def _should_use_acorn(self, has_filters: bool, estimated_selectivity: float | None) -> bool:
         """Determine if ACORN should be enabled based on settings and query context.
 
         Args:
@@ -100,7 +111,7 @@ class BaseSearchEngine(ABC):
     def _build_search_params(
         self,
         has_filters: bool = False,
-        estimated_selectivity: Optional[float] = None,
+        estimated_selectivity: float | None = None,
     ) -> models.SearchParams:
         """Build SearchParams with quantization and optional ACORN settings.
 
@@ -119,10 +130,11 @@ class BaseSearchEngine(ABC):
         )
 
         # Determine if ACORN should be enabled
-        use_acorn = self._should_use_acorn(has_filters, estimated_selectivity)
+        # Only use ACORN if the feature is available in qdrant-client
+        use_acorn = ACORN_AVAILABLE and self._should_use_acorn(has_filters, estimated_selectivity)
 
-        if use_acorn:
-            acorn_params = models.AcornSearchParams(
+        if use_acorn and AcornSearchParams is not None:
+            acorn_params = AcornSearchParams(
                 enable=True,
                 max_selectivity=self.settings.acorn_max_selectivity,
             )
@@ -136,11 +148,21 @@ class BaseSearchEngine(ABC):
     @abstractmethod
     def search(
         self,
-        query_embedding: list[float],
+        query_embedding: str | list[float],
         top_k: int = 10,
-        score_threshold: Optional[float] = None,
+        score_threshold: float | None = None,
     ) -> list[SearchResult]:
-        """Search for similar documents."""
+        """Search for similar documents.
+
+        Args:
+            query_embedding: Either query string (for hybrid engines) or
+                pre-computed dense embedding (for baseline engine).
+            top_k: Number of results to return.
+            score_threshold: Minimum similarity score threshold.
+
+        Returns:
+            List of SearchResult objects.
+        """
 
     @abstractmethod
     def get_name(self) -> str:
@@ -161,16 +183,18 @@ class BaselineSearchEngine(BaseSearchEngine):
 
     def search(
         self,
-        query_embedding: list[float],
+        query_embedding: str | list[float],
         top_k: int = 10,
-        score_threshold: Optional[float] = None,
-        query_filter: Optional[models.Filter] = None,
-        estimated_selectivity: Optional[float] = None,
+        score_threshold: float | None = None,
+        *,
+        query_filter: models.Filter | None = None,
+        estimated_selectivity: float | None = None,
     ) -> list[SearchResult]:
         """Search using dense vectors only with rescoring for quantization accuracy.
 
         Args:
-            query_embedding: Dense vector embedding of the query.
+            query_embedding: Dense vector embedding of the query (str not supported,
+                for API compatibility only - will raise TypeError).
             top_k: Number of results to return.
             score_threshold: Minimum similarity score threshold.
             query_filter: Optional Qdrant filter for filtered search.
@@ -179,7 +203,14 @@ class BaselineSearchEngine(BaseSearchEngine):
 
         Returns:
             List of SearchResult objects.
+
+        Raises:
+            TypeError: If query_embedding is a string (not supported for baseline).
         """
+        if isinstance(query_embedding, str):
+            raise TypeError(
+                "BaselineSearchEngine requires pre-computed embeddings, not query strings"
+            )
         if score_threshold is None:
             score_threshold = 0.5
 
@@ -201,10 +232,10 @@ class BaselineSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=result.payload.get("metadata", {}).get("article_number", ""),
-                text=result.payload.get("page_content", ""),
+                article_number=(result.payload or {}).get("metadata", {}).get("article_number", ""),
+                text=(result.payload or {}).get("page_content", ""),
                 score=result.score,
-                metadata=result.payload.get("metadata", {}),
+                metadata=(result.payload or {}).get("metadata", {}),
             )
             for result in results
         ]
@@ -235,16 +266,16 @@ class HybridRRFSearchEngine(BaseSearchEngine):
     - Latency: ~0.72s (same as BM25)
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         """Initialize hybrid RRF search engine with BGE-M3 model."""
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
     def search(
         self,
-        query_embedding: Union[str, list[float]],
+        query_embedding: str | list[float],
         top_k: int = 10,
-        score_threshold: Optional[float] = None,
+        score_threshold: float | None = None,
     ) -> list[SearchResult]:
         """
         Search using RRF fusion of dense and sparse vectors.
@@ -276,10 +307,10 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=result.payload.get("metadata", {}).get("article_number", ""),
-                text=result.payload.get("page_content", ""),
+                article_number=(result.payload or {}).get("metadata", {}).get("article_number", ""),
+                text=(result.payload or {}).get("page_content", ""),
                 score=result.score,
-                metadata=result.payload.get("metadata", {}),
+                metadata=(result.payload or {}).get("metadata", {}),
             )
             for result in dense_results
         ]
@@ -334,10 +365,12 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
             return [
                 SearchResult(
-                    article_number=point.payload.get("metadata", {}).get("article_number", ""),
-                    text=point.payload.get("page_content", ""),
+                    article_number=(point.payload or {})
+                    .get("metadata", {})
+                    .get("article_number", ""),
+                    text=(point.payload or {}).get("page_content", ""),
                     score=point.score,
-                    metadata=point.payload.get("metadata", {}),
+                    metadata=(point.payload or {}).get("metadata", {}),
                 )
                 for point in response.points
             ]
@@ -383,16 +416,16 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
     - ColBERT: https://qdrant.tech/documentation/concepts/hybrid-queries/
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         """Initialize hybrid RRF + ColBERT search engine with BGE-M3 model."""
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
     def search(
         self,
-        query_embedding: Union[str, list[float]],
+        query_embedding: str | list[float],
         top_k: int = 10,
-        score_threshold: Optional[float] = None,
+        score_threshold: float | None = None,
     ) -> list[SearchResult]:
         """
         Search using RRF fusion + ColBERT reranking.
@@ -424,10 +457,10 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=result.payload.get("metadata", {}).get("article_number", ""),
-                text=result.payload.get("page_content", ""),
+                article_number=(result.payload or {}).get("metadata", {}).get("article_number", ""),
+                text=(result.payload or {}).get("page_content", ""),
                 score=result.score,
-                metadata=result.payload.get("metadata", {}),
+                metadata=(result.payload or {}).get("metadata", {}),
             )
             for result in dense_results
         ]
@@ -492,11 +525,11 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
             return [
                 SearchResult(
-                    article_number=point.payload.get("article_number", ""),
-                    text=point.payload.get("page_content", ""),
+                    article_number=(point.payload or {}).get("article_number", ""),
+                    text=(point.payload or {}).get("page_content", ""),
                     score=point.score,
                     metadata={
-                        **point.payload,
+                        **(point.payload or {}),
                         "search_method": "hybrid_rrf_colbert",
                     },
                 )
@@ -544,16 +577,16 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
     - ColBERT: https://qdrant.tech/documentation/concepts/hybrid-queries/
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         """Initialize hybrid DBSF + ColBERT search engine with BGE-M3 model."""
         super().__init__(settings)
         self.embedding_model = get_bge_m3_model(use_fp16=True)
 
     def search(
         self,
-        query_embedding: Union[str, list[float]],
+        query_embedding: str | list[float],
         top_k: int = 10,
-        score_threshold: Optional[float] = None,
+        score_threshold: float | None = None,
     ) -> list[SearchResult]:
         """
         Search using DBSF fusion + ColBERT reranking.
@@ -585,10 +618,10 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
         return [
             SearchResult(
-                article_number=result.payload.get("metadata", {}).get("article_number", ""),
-                text=result.payload.get("page_content", ""),
+                article_number=(result.payload or {}).get("metadata", {}).get("article_number", ""),
+                text=(result.payload or {}).get("page_content", ""),
                 score=result.score,
-                metadata=result.payload.get("metadata", {}),
+                metadata=(result.payload or {}).get("metadata", {}),
             )
             for result in dense_results
         ]
@@ -647,11 +680,11 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
             return [
                 SearchResult(
-                    article_number=point.payload.get("article_number", ""),
-                    text=point.payload.get("page_content", ""),
+                    article_number=(point.payload or {}).get("article_number", ""),
+                    text=(point.payload or {}).get("page_content", ""),
                     score=point.score,
                     metadata={
-                        **point.payload,
+                        **(point.payload or {}),
                         "search_method": "dbsf_colbert",
                     },
                 )
@@ -669,8 +702,8 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
 
 def create_search_engine(
-    engine_type: Optional[SearchEngine] = None,
-    settings: Optional[Settings] = None,
+    engine_type: SearchEngine | None = None,
+    settings: Settings | None = None,
 ) -> Union[
     "BaselineSearchEngine",
     "HybridRRFSearchEngine",

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable
-from typing import Any, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import BaseMiddleware, Dispatcher
 from aiogram.types import Message, TelegramObject

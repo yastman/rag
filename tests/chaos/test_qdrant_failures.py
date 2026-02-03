@@ -4,10 +4,7 @@ Tests verify graceful degradation when Qdrant is unavailable or times out.
 These tests focus on the QdrantService's error handling behavior.
 """
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 
 class TestQdrantTimeout:
@@ -25,9 +22,7 @@ class TestQdrantTimeout:
 
         # Mock the internal client to raise timeout
         mock_client = MagicMock()
-        mock_client.query_points = AsyncMock(
-            side_effect=asyncio.TimeoutError("Connection timed out")
-        )
+        mock_client.query_points = AsyncMock(side_effect=TimeoutError("Connection timed out"))
         service._client = mock_client
 
         # Should return empty list, not raise exception
@@ -73,9 +68,7 @@ class TestQdrantTimeout:
         )
 
         mock_client = MagicMock()
-        mock_client.query_points = AsyncMock(
-            side_effect=Exception("Unexpected error")
-        )
+        mock_client.query_points = AsyncMock(side_effect=Exception("Unexpected error"))
         service._client = mock_client
 
         results = await service.hybrid_search_rrf(
@@ -122,9 +115,7 @@ class TestQdrantConnectionFailure:
         )
 
         mock_client = MagicMock()
-        mock_client.query_points = AsyncMock(
-            side_effect=OSError("getaddrinfo failed")
-        )
+        mock_client.query_points = AsyncMock(side_effect=OSError("getaddrinfo failed"))
         service._client = mock_client
 
         results = await service.hybrid_search_rrf(
@@ -140,7 +131,6 @@ class TestQdrantRecovery:
 
     async def test_qdrant_recovers_after_transient_failure(self):
         """Verify service recovers after transient failures."""
-        from qdrant_client import models
 
         from telegram_bot.services.qdrant import QdrantService
 
@@ -156,7 +146,7 @@ class TestQdrantRecovery:
             nonlocal call_count
             call_count += 1
             if call_count <= 2:
-                raise asyncio.TimeoutError("Transient timeout")
+                raise TimeoutError("Transient timeout")
             # Third call succeeds
             mock_result = MagicMock()
             mock_point = MagicMock()
