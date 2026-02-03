@@ -39,6 +39,9 @@ def compute_content_hash(file_path: Path) -> str:
 class QdrantHybridTargetSpec(TargetSpec):
     """Configuration for Qdrant hybrid target."""
 
+    # Source
+    sync_dir: str = ""  # Base directory for resolving relative paths
+
     ***REMOVED***
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
@@ -67,6 +70,7 @@ class QdrantHybridTargetSpec(TargetSpec):
     def from_config(cls, config: UnifiedConfig) -> "QdrantHybridTargetSpec":
         """Create spec from UnifiedConfig."""
         return cls(
+            sync_dir=str(config.sync_dir),
             qdrant_url=config.qdrant_url,
             qdrant_api_key=config.qdrant_api_key,
             collection_name=config.collection_name,
@@ -86,8 +90,7 @@ class QdrantHybridTargetSpec(TargetSpec):
 class QdrantHybridTargetValues:
     """Value type for mutations from CocoIndex flow."""
 
-    abs_path: str
-    source_path: str
+    source_path: str  # Relative path (abs_path computed from spec.sync_dir)
     file_name: str
     mime_type: str
     file_size: int
@@ -179,6 +182,7 @@ class QdrantHybridTargetConnector:
     ) -> None:
         """Apply data mutations to Qdrant.
 
+        Uses sync execution to avoid event loop conflicts.
         For each file_id:
         - None value: delete all points for file_id
         - Non-None value: parse, embed, upsert (replace semantics)
@@ -187,61 +191,70 @@ class QdrantHybridTargetConnector:
             for file_id, mutation in mutations.items():
                 try:
                     if mutation is None:
-                        # Delete
-                        asyncio.run(QdrantHybridTargetConnector._handle_delete(spec, file_id))
+                        QdrantHybridTargetConnector._handle_delete(spec, file_id)
                     else:
-                        # Upsert
-                        asyncio.run(
-                            QdrantHybridTargetConnector._handle_upsert(spec, file_id, mutation)
-                        )
+                        QdrantHybridTargetConnector._handle_upsert(spec, file_id, mutation)
                 except Exception as e:
                     logger.error(f"Mutation failed for {file_id}: {e}", exc_info=True)
 
     @classmethod
-    async def _handle_delete(cls, spec: QdrantHybridTargetSpec, file_id: str) -> None:
-        """Handle file deletion."""
+    def _handle_delete(cls, spec: QdrantHybridTargetSpec, file_id: str) -> None:
+        """Handle file deletion (sync)."""
         writer = cls._get_writer(spec)
         state_manager = cls._get_state_manager(spec)
 
-        await writer.delete_file(file_id, spec.collection_name)
-        await state_manager.mark_deleted(file_id)
+        writer.delete_file_sync(file_id, spec.collection_name)
+
+        # State manager needs async - use a dedicated event loop
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(state_manager.mark_deleted(file_id))
+        finally:
+            loop.close()
+
         logger.info(f"Deleted: file_id={file_id}")
 
     @classmethod
-    async def _handle_upsert(
+    def _handle_upsert(
         cls,
         spec: QdrantHybridTargetSpec,
         file_id: str,
         mutation: QdrantHybridTargetValues,
     ) -> None:
-        """Handle file insert/update."""
+        """Handle file insert/update (sync)."""
         writer = cls._get_writer(spec)
         docling = cls._get_docling(spec)
         state_manager = cls._get_state_manager(spec)
 
-        abs_path = Path(mutation.abs_path)
+        abs_path = Path(spec.sync_dir) / mutation.source_path
         source_path = mutation.source_path
 
         # Compute content hash
         content_hash = compute_content_hash(abs_path)
 
-        # Check if processing needed (skip unchanged)
-        if not await state_manager.should_process(file_id, content_hash):
-            logger.debug(f"Skipping unchanged: {source_path}")
-            return
-
-        # Mark processing
-        await state_manager.mark_processing(file_id)
+        # State operations need async handling
+        loop = asyncio.new_event_loop()
 
         try:
-            # Connect docling if needed
-            if not docling._client:
-                await docling.connect()
+            # Check if processing needed (skip unchanged)
+            should_process = loop.run_until_complete(
+                state_manager.should_process(file_id, content_hash)
+            )
+            if not should_process:
+                logger.debug(f"Skipping unchanged: {source_path}")
+                return
 
-            # Parse and chunk
-            docling_chunks = await docling.chunk_file(abs_path)
+            # Mark processing
+            loop.run_until_complete(state_manager.mark_processing(file_id))
+
+            # Connect docling if needed (async)
+            if not docling._client:
+                loop.run_until_complete(docling.connect())
+
+            # Parse and chunk (async)
+            docling_chunks = loop.run_until_complete(docling.chunk_file(abs_path))
             if not docling_chunks:
-                await state_manager.mark_indexed(file_id, 0, content_hash)
+                loop.run_until_complete(state_manager.mark_indexed(file_id, 0, content_hash))
                 logger.warning(f"No chunks from: {source_path}")
                 return
 
@@ -261,8 +274,8 @@ class QdrantHybridTargetConnector:
                 "modified_time": datetime.now(UTC).isoformat(),
             }
 
-            # Write to Qdrant
-            stats = await writer.upsert_chunks(
+            # Write to Qdrant (sync)
+            stats = writer.upsert_chunks_sync(
                 chunks=chunks,
                 file_id=file_id,
                 source_path=source_path,
@@ -274,22 +287,28 @@ class QdrantHybridTargetConnector:
                 raise Exception("; ".join(stats.errors))
 
             # Update state
-            await state_manager.mark_indexed(file_id, stats.points_upserted, content_hash)
+            loop.run_until_complete(
+                state_manager.mark_indexed(file_id, stats.points_upserted, content_hash)
+            )
             logger.info(f"Indexed: {source_path} ({stats.points_upserted} chunks)")
 
         except Exception as e:
             logger.error(f"Upsert failed for {source_path}: {e}")
-            await state_manager.mark_error(file_id, str(e))
+            loop.run_until_complete(state_manager.mark_error(file_id, str(e)))
 
             # Check DLQ
-            state = await state_manager.get_state(file_id)
+            state = loop.run_until_complete(state_manager.get_state(file_id))
             if state and state.retry_count >= spec.max_retries:
-                await state_manager.add_to_dlq(
-                    file_id=file_id,
-                    error_type=type(e).__name__,
-                    error_message=str(e),
-                    payload={"source_path": source_path},
+                loop.run_until_complete(
+                    state_manager.add_to_dlq(
+                        file_id=file_id,
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                        payload={"source_path": source_path},
+                    )
                 )
                 logger.warning(f"Moved to DLQ: {source_path}")
 
             raise
+        finally:
+            loop.close()
