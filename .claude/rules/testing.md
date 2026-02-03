@@ -4,7 +4,7 @@ paths: "tests/**/*.py"
 
 # Testing Guide
 
-Coverage: 91% (~1670 unit tests)
+Coverage: 91% (~1820 tests after RAG 2026 audit)
 
 ## Unit Tests
 
@@ -51,6 +51,34 @@ pytest tests/chaos/test_llm_fallback.py       # LLM rate limits, parsing errors
 
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Integration tests require: `make docker-up`
+
+## Test Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `pytest>=8.3.0` | Test framework |
+| `pytest-asyncio>=0.24.0` | Async test support |
+| `pytest-cov>=5.0.0` | Coverage reporting |
+| `pytest-httpx>=0.35.0` | HTTP request mocking |
+
+### HTTP Mocking with pytest-httpx
+
+```python
+import pytest
+from httpx import AsyncClient
+
+@pytest.fixture
+def httpx_mock():
+    # Auto-provided by pytest-httpx
+    pass
+
+async def test_api_call(httpx_mock):
+    httpx_mock.add_response(
+        url="https://api.example.com/data",
+        json={"result": "ok"}
+    )
+    # Your async HTTP client will use mocked response
+```
 
 ---
 
