@@ -173,6 +173,22 @@ expanded = await s2b.expand_results(
 
 ACORN improves search quality when strict filters cause HNSW graph disconnection. Best for low selectivity filters (< 40% of vectors match).
 
+**Status (Feb 2026):**
+| Component | Version | ACORN Support |
+|-----------|---------|---------------|
+| Qdrant Server | 1.16+ | ✅ Supported |
+| qdrant-client (Python) | 1.16.2 | ⚠️ `AcornSearchParams` not yet exported |
+
+Code is ready — will auto-enable when SDK adds the class:
+```python
+# src/retrieval/search_engines.py
+try:
+    from qdrant_client.models import AcornSearchParams
+    ACORN_AVAILABLE = True
+except ImportError:
+    ACORN_AVAILABLE = False  # Current state
+```
+
 ```python
 # Auto mode: ACORN enabled only with filters + low selectivity
 results = await qdrant.hybrid_search_rrf(
@@ -183,6 +199,12 @@ results = await qdrant.hybrid_search_rrf(
 ```
 
 **Modes:** `off` (disabled), `on` (always use), `auto` (use when beneficial)
+
+**To enable when SDK updates:**
+```bash
+uv lock --upgrade-package qdrant-client
+pytest tests/unit/test_acorn.py -v  # Should show 22 passed (not 8 skipped)
+```
 
 ## Dependencies
 
