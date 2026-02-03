@@ -5,16 +5,16 @@ This file provides guidance to Claude Code when working with this repository.
 ## Quick Reference
 
 ```bash
-uv sync                 # Install all dependencies
-make check              # Lint + types
-make test               # All tests
-make test-unit          # Unit tests only (fast)
-make docker-up          # Start services
-make eval-rag           # RAG evaluation (RAGAS faithfulness >= 0.8)
-make monitoring-up      # Start alerting stack
-make ingest-setup       # Setup ingestion (Postgres + Qdrant indexes)
-make ingest-run         # Run document ingestion
-make ingest-gdrive-run  # Run GDrive ingestion (~/drive-sync)
+uv sync                    # Install all dependencies
+make check                 # Lint + types
+make test                  # All tests
+make test-unit             # Unit tests only (fast)
+make docker-up             # Start services
+make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
+make monitoring-up         # Start alerting stack
+make ingest-unified        # Run unified ingestion (CocoIndex v3.2.1)
+make ingest-unified-watch  # Continuous mode with FlowLiveUpdater
+make ingest-unified-status # Show ingestion stats from Postgres
 ```
 
 **Location:** `/home/user/projects/rag-fresh` (WSL2)
@@ -38,7 +38,7 @@ Input → Docling Parser → Chunker → Voyage Embeddings + BM42 → Qdrant
 |--------|---------|
 | `src/core/pipeline.py` | RAG orchestrator |
 | `src/retrieval/search_engines.py` | 4 search variants |
-| `src/ingestion/` | Parsing, chunking, indexing |
+| `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
 | `telegram_bot/` | Bot + services |
 
 **Services:** Qdrant:6333, Redis:6379, LiteLLM:4000, Langfuse:3001 → see `.claude/rules/docker.md`
