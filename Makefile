@@ -2,7 +2,9 @@
 	test-preflight test-smoke test-smoke-routing test-load test-load-ci test-load-eviction \
 	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
+	rclone-install sync-drive-install sync-drive-run sync-drive-status \
 	ingest-dir ingest-gdrive ingest-status \
+	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
 	lock update update-pkg reinstall setup-hooks
 
 # Default target
@@ -554,6 +556,39 @@ monitoring-test-alert: ## Send a test alert to verify Telegram integration
 		> /dev/null && echo "$(GREEN)✓ Test alert sent! Check your Telegram.$(NC)" || echo "$(RED)Failed to send alert. Is Alertmanager running?$(NC)"
 
 # =============================================================================
+# GOOGLE DRIVE SYNC (rclone)
+# =============================================================================
+
+.PHONY: rclone-install sync-drive-install sync-drive-run sync-drive-status
+
+rclone-install: ## Install rclone
+	@echo "$(BLUE)Installing rclone...$(NC)"
+	curl https://rclone.org/install.sh | sudo bash
+	@echo "$(GREEN)✓ rclone installed$(NC)"
+
+sync-drive-install: ## Install rclone cron job
+	@echo "$(BLUE)Installing rclone cron...$(NC)"
+	sudo mkdir -p /opt/scripts /opt/credentials /data/drive-sync
+	sudo cp docker/rclone/sync-drive.sh /opt/scripts/
+	sudo cp docker/rclone/gdrive-manifest.sh /opt/scripts/
+	sudo chmod +x /opt/scripts/sync-drive.sh /opt/scripts/gdrive-manifest.sh
+	sudo cp docker/rclone/crontab /etc/cron.d/rclone-sync
+	sudo chmod 644 /etc/cron.d/rclone-sync
+	@echo "$(GREEN)✓ Cron installed$(NC)"
+
+sync-drive-run: ## Run Drive sync manually
+	@echo "$(BLUE)Syncing Google Drive...$(NC)"
+	/opt/scripts/sync-drive.sh
+	@echo "$(GREEN)✓ Sync complete$(NC)"
+
+sync-drive-status: ## Show sync status and recent files
+	@echo "$(BLUE)Recent synced files:$(NC)"
+	@ls -lt /data/drive-sync 2>/dev/null | head -20 || echo "No files synced yet"
+	@echo ""
+	@echo "$(BLUE)Last sync log:$(NC)"
+	@tail -10 /var/log/rclone-sync.log 2>/dev/null || echo "No logs yet"
+
+# =============================================================================
 # DOCUMENT INGESTION (CocoIndex Pipeline)
 # =============================================================================
 
@@ -588,3 +623,30 @@ endif
 ingest-status: ## Show collection statistics
 	@echo "$(BLUE)Collection status:$(NC)"
 	uv run python -m telegram_bot.services.ingestion_cocoindex status
+
+# =============================================================================
+# GOOGLE DRIVE INGESTION (rclone + watcher pipeline)
+# =============================================================================
+
+.PHONY: ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status
+
+ingest-gdrive-setup: ## Setup GDrive collection in Qdrant (scalar + binary)
+	@echo "$(BLUE)Creating Qdrant collections...$(NC)"
+	uv run python scripts/setup_scalar_collection.py --source gdrive_documents
+	uv run python scripts/setup_binary_collection.py --source gdrive_documents
+	@echo "$(GREEN)✓ Collections ready$(NC)"
+
+ingest-gdrive-run: ## Run GDrive ingestion once
+	@echo "$(BLUE)Running GDrive ingestion...$(NC)"
+	uv run python -m src.ingestion.gdrive_flow --once
+	@echo "$(GREEN)✓ Ingestion complete$(NC)"
+
+ingest-gdrive-watch: ## Run GDrive ingestion continuously (watch mode)
+	@echo "$(BLUE)Starting GDrive watch mode...$(NC)"
+	uv run python -m src.ingestion.gdrive_flow --watch
+
+ingest-gdrive-status: ## Show GDrive collection stats
+	@echo "$(BLUE)GDrive collection stats:$(NC)"
+	@uv run python -c "from qdrant_client import QdrantClient; c=QdrantClient('http://localhost:6333'); \
+		[print(f'  {n}: {c.get_collection(n).points_count} points') if c.collection_exists(n) else print(f'  {n}: not found') \
+		for n in ['gdrive_documents_scalar', 'gdrive_documents_binary']]"
