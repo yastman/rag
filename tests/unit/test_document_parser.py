@@ -63,7 +63,7 @@ class TestParserCache:
         """Test that cache creates directory on init."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir) / "test_cache"
-            cache = ParserCache(cache_dir=cache_dir)
+            _cache = ParserCache(cache_dir=cache_dir)
 
             assert cache_dir.exists()
 
@@ -204,8 +204,8 @@ class TestParsePDF:
         mock_page.get_text.return_value = "Page content"
 
         mock_doc = MagicMock()
-        mock_doc.__iter__ = lambda self: iter([mock_page])
-        mock_doc.__len__ = lambda self: 1
+        mock_doc.__iter__ = lambda _: iter([mock_page])
+        mock_doc.__len__ = lambda _: 1
         mock_doc.metadata = {"title": "Test PDF", "author": "Author"}
 
         mock_pymupdf.open.return_value = mock_doc
@@ -231,8 +231,8 @@ class TestParsePDF:
         mock_page.get_text.return_value = "Content"
 
         mock_doc = MagicMock()
-        mock_doc.__iter__ = lambda self: iter([mock_page])
-        mock_doc.__len__ = lambda self: 1
+        mock_doc.__iter__ = lambda _: iter([mock_page])
+        mock_doc.__len__ = lambda _: 1
         mock_doc.metadata = None
 
         mock_pymupdf.open.return_value = mock_doc
@@ -285,8 +285,8 @@ class TestParseFile:
         mock_page.get_text.return_value = "Content"
 
         mock_doc = MagicMock()
-        mock_doc.__iter__ = lambda self: iter([mock_page])
-        mock_doc.__len__ = lambda self: 1
+        mock_doc.__iter__ = lambda _: iter([mock_page])
+        mock_doc.__len__ = lambda _: 1
         mock_doc.metadata = {}
 
         mock_pymupdf.open.return_value = mock_doc
@@ -299,7 +299,7 @@ class TestParseFile:
             parser.cache = ParserCache(cache_dir=Path(tmpdir) / "cache")
 
             # First call - should parse
-            result1 = parser.parse_file(pdf_file)
+            _result1 = parser.parse_file(pdf_file)
 
             # Reset mock to verify second call uses cache
             mock_pymupdf.open.reset_mock()
@@ -322,8 +322,8 @@ class TestConvenienceFunction:
         mock_page.get_text.return_value = "Content"
 
         mock_doc = MagicMock()
-        mock_doc.__iter__ = lambda self: iter([mock_page])
-        mock_doc.__len__ = lambda self: 1
+        mock_doc.__iter__ = lambda _: iter([mock_page])
+        mock_doc.__len__ = lambda _: 1
         mock_doc.metadata = {}
 
         mock_pymupdf.open.return_value = mock_doc

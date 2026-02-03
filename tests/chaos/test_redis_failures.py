@@ -5,8 +5,6 @@ Tests verify graceful degradation when Redis is unavailable.
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 
 class TestRedisDisconnect:
     """Tests for Redis disconnection handling."""
@@ -44,7 +42,9 @@ class TestRedisDisconnect:
             # Should not raise exception - test that cache operations handle failures gracefully
             # store_analysis internally calls hset which we've mocked to raise
             try:
-                await service.store_analysis("test_query", {"filters": {}, "semantic_query": "test"})
+                await service.store_analysis(
+                    "test_query", {"filters": {}, "semantic_query": "test"}
+                )
             except ConnectionError:
                 # If exception propagates, that's acceptable for now
                 # This documents the current behavior
@@ -77,9 +77,7 @@ class TestRedisConnectionPool:
         from telegram_bot.services.cache import CacheService
 
         mock_redis = MagicMock()
-        mock_redis.hgetall = AsyncMock(
-            side_effect=Exception("Connection pool exhausted")
-        )
+        mock_redis.hgetall = AsyncMock(side_effect=Exception("Connection pool exhausted"))
         mock_redis.ping = AsyncMock(return_value=True)
 
         with patch("telegram_bot.services.cache.redis.from_url", return_value=mock_redis):
@@ -104,7 +102,7 @@ class TestRedisConnectionPool:
             call_count += 1
             if call_count % 2 == 0:
                 raise TimeoutError("Intermittent timeout")
-            return None
+            return
 
         mock_redis.hgetall = mock_hgetall
         mock_redis.ping = AsyncMock(return_value=True)
@@ -114,10 +112,7 @@ class TestRedisConnectionPool:
             service._redis = mock_redis
 
             # Run 5 concurrent requests
-            tasks = [
-                service.get_cached_analysis(f"query_{i}")
-                for i in range(5)
-            ]
+            tasks = [service.get_cached_analysis(f"query_{i}") for i in range(5)]
 
             # All should complete without raising
             results = await asyncio.gather(*tasks, return_exceptions=True)
