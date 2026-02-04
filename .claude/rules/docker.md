@@ -25,6 +25,36 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 | dev-docling | 5001 | Document parsing (PDF/DOCX/CSV) |
 | dev-lightrag | 9621 | LightRAG graph-based retrieval |
 
+## Docker Profiles (Fast Startup)
+
+| Command | Services | Use Case |
+|---------|----------|----------|
+| `make docker-core-up` | postgres, qdrant, redis, docling, bm42 | Daily ingestion dev |
+| `make docker-bot-up` | core + litellm, bot | Bot development |
+| `make docker-obs-up` | core + loki, promtail, alertmanager | Debug logging |
+| `make docker-ml-up` | core + langfuse stack, mlflow | ML experiments |
+| `make docker-ai-up` | core + bge-m3, user-base, lightrag | Heavy AI models |
+| `make docker-ingest-up` | core + ingestion | Ingestion container |
+| `make docker-full-up` | everything (16+ services) | Full stack |
+
+### Combining Profiles
+
+```bash
+# Bot + observability
+docker compose -f docker-compose.dev.yml --profile bot --profile obs up -d
+
+# Using COMPOSE_PROFILES env var
+COMPOSE_PROFILES=bot,obs docker compose -f docker-compose.dev.yml up -d
+```
+
+### Startup Times (warm images)
+
+| Profile | Services | Target Time |
+|---------|----------|-------------|
+| core | 5 | ≤90s |
+| bot | 7 | ≤2-3 min |
+| full | 16+ | ≤5 min |
+
 ## LLM Gateway (LiteLLM)
 
 ```
