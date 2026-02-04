@@ -18,14 +18,27 @@ make ingest-unified-reprocess ***REMOVED*** Retry failed files
 ***REMOVED******REMOVED*** Architecture (v3.2.1)
 
 ```
-rclone sync → ~/drive-sync/
-     ↓ (CocoIndex poll)
+Google Drive → rclone sync → ~/drive-sync/
+     ↓ (CocoIndex FlowLiveUpdater)
 sources.LocalFile → QdrantHybridTarget (custom connector)
      ├─ DoclingClient.chunk_file_sync()
-     ├─ VoyageService (dense 1024)
+     ├─ VoyageService (dense 1024-dim)
      ├─ FastEmbed BM42 (sparse)
      ├─ QdrantHybridWriter.*_sync()
      └─ StateManager.*_sync() → Postgres
+```
+
+***REMOVED******REMOVED******REMOVED*** rclone Setup
+
+```bash
+***REMOVED*** Configure (one-time)
+rclone config  ***REMOVED*** Create 'gdrive' remote
+
+***REMOVED*** Manual sync
+rclone sync gdrive:RAG-Documents ~/drive-sync/ --progress
+
+***REMOVED*** Cron (every 5 min)
+*/5 * * * * rclone sync gdrive:RAG-Documents ~/drive-sync/ -q
 ```
 
 ***REMOVED******REMOVED*** Key Files
@@ -95,6 +108,22 @@ RUN_INTEGRATION_TESTS=1 pytest tests/integration/test_unified_ingestion_e2e.py -
 | `asyncio.run()` nested | Use `*_sync()` methods in mutate() |
 | Missing payload fields | Check `test_payload_contract.py` |
 | Files in DLQ | `make ingest-unified-reprocess` |
+
+***REMOVED******REMOVED*** E2E Verification
+
+```bash
+***REMOVED*** 1. Sync from Google Drive
+rclone sync gdrive:RAG-Documents ~/drive-sync/ --progress
+
+***REMOVED*** 2. Run ingestion
+make ingest-unified
+
+***REMOVED*** 3. Check status
+make ingest-unified-status  ***REMOVED*** Should show "indexed: N (100%)"
+
+***REMOVED*** 4. Verify Qdrant
+curl -s localhost:6333/collections/gdrive_documents_scalar | jq '.result.points_count'
+```
 
 ***REMOVED******REMOVED*** Legacy (deprecated)
 
