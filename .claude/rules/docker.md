@@ -131,25 +131,38 @@ Claude понимает: прочитать план, запустить `spawn-
 
 ## Docker Hardening (Feb 2026)
 
-**Applied fixes:**
+**Phase 1 — Critical fixes:**
 
-| Issue | Fix | Files |
-|-------|-----|-------|
-| ENTRYPOINT + command duplication | Removed duplicate command from ingestion service | `docker-compose.dev.yml` |
-| Healthchecks using `requests` | Switched to `urllib.request` (stdlib) | `docker-compose.dev.yml` |
-| Ports open to LAN | Bound langfuse/litellm to `127.0.0.1` | `docker-compose.dev.yml` |
-| Floating image tags | Pinned minio, docling by digest/release | `docker-compose.dev.yml`, `docker-compose.local.yml` |
+| Issue | Fix |
+|-------|-----|
+| ENTRYPOINT + command duplication | Removed duplicate command from ingestion |
+| Healthchecks using `requests` | Switched to `urllib.request` (stdlib) |
+| Ports open to LAN | Bound langfuse/litellm to `127.0.0.1` |
+| Floating image tags | Pinned minio, docling by digest/release |
 
-**Pinned images:**
-- `minio/minio:RELEASE.2024-11-07T00-52-20Z`
-- `ghcr.io/docling-project/docling-serve-cpu@sha256:4e93e8e...`
-- `quay.io/docling-project/docling-serve@sha256:0acc75b...`
+**Phase 2 — Operational hygiene:**
+
+| Feature | Implementation |
+|---------|---------------|
+| Memory limits | `--compatibility` flag via `COMPOSE_CMD` in Makefile |
+| Log rotation | `50m/5` for bot, litellm, langfuse, langfuse-worker |
+| Fail-fast secrets | `${VAR:?VAR is required}` syntax for critical env vars |
+| Image policy | Versioned tags OK, digest only for floating (documented in DOCKER.md) |
+
+**Required env vars by profile:**
+
+| Profile | Required |
+|---------|----------|
+| core | None (dev defaults) |
+| bot | `TELEGRAM_BOT_TOKEN`, `VOYAGE_API_KEY`, `LITELLM_MASTER_KEY` + 1 LLM provider |
+| ml | `NEXTAUTH_SECRET`, `SALT`, `ENCRYPTION_KEY` |
 
 **Verification:**
 ```bash
-docker compose -f docker-compose.dev.yml config --quiet  # Must succeed
-grep "import requests" docker-compose.dev.yml            # Must return nothing
-grep -E "127\.0\.0\.1:(3001|4000)" docker-compose.dev.yml  # Must match
+docker compose --compatibility -f docker-compose.dev.yml config --quiet
+docker inspect dev-bm42 --format '{{.HostConfig.Memory}}'  # != 0
+docker inspect dev-litellm --format '{{json .HostConfig.LogConfig}}'  # max-size: 50m
+TELEGRAM_BOT_TOKEN= make docker-bot-up  # Must fail with "is required"
 ```
 
 **Plan:** `docs/plans/2026-02-04-docker-hardening.md`
