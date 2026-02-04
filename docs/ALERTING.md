@@ -172,6 +172,27 @@ Or use Grafana (if installed) connected to Loki at `http://loki:3100`.
 2. Verify Promtail→Loki connection in Promtail logs
 3. Check Loki storage permissions
 
+### Loki rules not loading (400 error)
+
+If `curl http://localhost:3100/loki/api/v1/rules` returns 400 with "unable to read rule dir /etc/loki/rules/fake":
+
+1. Rules must be mounted to tenant subdir `/etc/loki/rules/fake/` (not `/etc/loki/rules/`)
+2. Fix in `docker-compose.dev.yml`:
+   ```yaml
+   - ./docker/monitoring/rules:/etc/loki/rules/fake:ro
+   ```
+3. Restart Loki: `docker compose restart loki`
+
+### No dispatch logs in Alertmanager
+
+This is **normal behavior**. Alertmanager only logs notification failures (ERROR level), not successes.
+
+To verify alerts are sending:
+1. Run `make monitoring-test-alert`
+2. Check Telegram within 30 seconds
+3. Check metrics: `curl localhost:9093/metrics | grep alertmanager_notifications_total`
+4. If no message and metric=0, check for ERROR logs: `docker logs dev-alertmanager | grep ERROR`
+
 ## Configuration Files
 
 | File | Purpose |
