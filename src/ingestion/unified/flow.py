@@ -71,6 +71,16 @@ def basename_from_filename(filename: str) -> str:
     return Path(filename).name
 
 
+# Global to store sync_dir for abs_path computation
+_current_sync_dir: str = ""
+
+
+@cocoindex_function()
+def abs_path_from_filename(filename: str) -> str:
+    """Compute absolute path from relative filename and sync_dir."""
+    return str(Path(_current_sync_dir) / filename)
+
+
 def _flow_name_for(config: UnifiedConfig) -> str:
     # Keep short to stay under 64 char limit for full flow name.
     # Use hash suffix for uniqueness across collections.
@@ -102,7 +112,9 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
         flow_by_name(flow_name).close()
 
     def flow_def(flow_builder: cocoindex.FlowBuilder, data_scope: cocoindex.DataScope) -> None:
+        global _current_sync_dir
         sync_dir = str(config.sync_dir)
+        _current_sync_dir = sync_dir
 
         included_patterns = [
             "**/*.pdf",
@@ -142,9 +154,11 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
             f["file_id"] = f["filename"].transform(file_id_from_filename)
             f["mime_type"] = f["filename"].transform(mime_type_from_filename)
             f["file_size"] = f["content"].transform(file_size_from_bytes)
+            f["abs_path"] = f["filename"].transform(abs_path_from_filename)
 
             collector.collect(
                 file_id=f["file_id"],
+                abs_path=f["abs_path"],
                 source_path=f["filename"],
                 file_name=f["filename"].transform(basename_from_filename),
                 mime_type=f["mime_type"],
