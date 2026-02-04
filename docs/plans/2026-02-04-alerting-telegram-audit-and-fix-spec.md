@@ -105,6 +105,16 @@
 - Изменение касается только dev-монтирования правил в Loki (профиль `obs/full`).
 - Не меняет Alertmanager/TG конфиг и не раскрывает токены.
 
+## 7) Валидация (факт)
+
+Проверено 2026-02-04 локально в dev-окружении Docker Compose.
+
+- Containers healthy: `PASS` (`dev-loki`, `dev-promtail`, `dev-alertmanager` в `healthy`)
+- Loki rules API: `PASS` (`GET /loki/api/v1/rules` → `HTTP 200`)
+- Rules loaded: `PASS` (в `/loki/api/v1/rules` найдено `53` вхождения `- alert:`)
+- Promtail → Loki ingestion: `PASS` (LogQL `{container="dev-loki"}` за 10 мин возвращает `>= 1` stream и события)
+- Telegram notification sent: `PASS` (`alertmanager_notifications_total{integration="telegram"}` увеличился `1 → 2`, `alertmanager_notification_errors_total{integration="telegram"} = 0`)
+
 ## 7) Заметка: Alertmanager не логирует успешные отправки
 
 Alertmanager логирует только ошибки нотификаций (ERROR level). Успешные dispatch'ы не видны в логах - это нормальное поведение.
