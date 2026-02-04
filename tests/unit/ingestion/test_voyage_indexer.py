@@ -280,21 +280,26 @@ class TestMultipleBatchIndexing:
                     mock_client.get_collection.side_effect = Exception("Not found")
 
                     mock_voyage_inst = AsyncMock()
+
+                    # Return embeddings matching input length (for batch_size=2)
+                    async def embed_documents_side_effect(texts):
+                        return [[0.1] * 1024 for _ in texts]
+
                     mock_voyage_inst.embed_documents = AsyncMock(
-                        return_value=[[0.1] * 1024, [0.2] * 1024, [0.3] * 1024]
+                        side_effect=embed_documents_side_effect
                     )
                     mock_voyage.return_value = mock_voyage_inst
 
-                    # Mock sparse embedding
+                    # Mock sparse embedding - return matching length
                     mock_sparse_inst = MagicMock()
-                    mock_sparse_emb = MagicMock()
-                    mock_sparse_emb.indices.tolist.return_value = [1, 2, 3]
-                    mock_sparse_emb.values.tolist.return_value = [0.5, 0.3, 0.2]
-                    mock_sparse_inst.embed.return_value = [
-                        mock_sparse_emb,
-                        mock_sparse_emb,
-                        mock_sparse_emb,
-                    ]
+
+                    def sparse_embed_side_effect(texts):
+                        mock_sparse_emb = MagicMock()
+                        mock_sparse_emb.indices.tolist.return_value = [1, 2, 3]
+                        mock_sparse_emb.values.tolist.return_value = [0.5, 0.3, 0.2]
+                        return [mock_sparse_emb for _ in texts]
+
+                    mock_sparse_inst.embed.side_effect = sparse_embed_side_effect
                     mock_sparse.return_value = mock_sparse_inst
 
                     idx = VoyageIndexer(voyage_api_key="test")
