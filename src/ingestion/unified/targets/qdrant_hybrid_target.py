@@ -107,9 +107,9 @@ class QdrantHybridTargetConnector:
     """
 
     # Shared resources (initialized lazily)
+    # Note: StateManager is created fresh per mutate() call to avoid asyncpg pool issues
     _writer: QdrantHybridWriter | None = None
     _docling: DoclingClient | None = None
-    _state_manager: UnifiedStateManager | None = None
 
     @staticmethod
     def get_persistent_key(spec: QdrantHybridTargetSpec, _target_name: str) -> str:
@@ -165,13 +165,6 @@ class QdrantHybridTargetConnector:
             cls._docling = DoclingClient(config)
         return cls._docling
 
-    @classmethod
-    def _get_state_manager(cls, spec: QdrantHybridTargetSpec) -> UnifiedStateManager:
-        """Get or create UnifiedStateManager."""
-        if cls._state_manager is None:
-            cls._state_manager = UnifiedStateManager(database_url=spec.database_url)
-        return cls._state_manager
-
     @staticmethod
     def mutate(
         *all_mutations: tuple[QdrantHybridTargetSpec, dict[str, QdrantHybridTargetValues | None]],
@@ -182,39 +175,50 @@ class QdrantHybridTargetConnector:
         - None value: delete all points for file_id
         - Non-None value: parse, embed, upsert (replace semantics)
 
-        All operations use sync methods to avoid event loop conflicts.
+        Creates fresh StateManager per mutate() call to avoid asyncpg pool
+        being attached to closed event loops between CocoIndex batches.
         """
         for spec, mutations in all_mutations:
-            for file_id, mutation in mutations.items():
-                try:
-                    if mutation is None:
-                        QdrantHybridTargetConnector._handle_delete(spec, file_id)
-                    else:
-                        QdrantHybridTargetConnector._handle_upsert(spec, file_id, mutation)
-                except Exception as e:
-                    logger.error(f"Mutation failed for {file_id}: {e}", exc_info=True)
+            # Create fresh state manager for this batch (not cached)
+            # This avoids asyncpg pool issues with different event loops
+            state_manager = UnifiedStateManager(database_url=spec.database_url)
+
+            with state_manager.sync_context():
+                for file_id, mutation in mutations.items():
+                    try:
+                        if mutation is None:
+                            QdrantHybridTargetConnector._handle_delete_with_state(
+                                spec, file_id, state_manager
+                            )
+                        else:
+                            QdrantHybridTargetConnector._handle_upsert_with_state(
+                                spec, file_id, mutation, state_manager
+                            )
+                    except Exception as e:
+                        logger.error(f"Mutation failed for {file_id}: {e}", exc_info=True)
 
     @classmethod
-    def _handle_delete(cls, spec: QdrantHybridTargetSpec, file_id: str) -> None:
+    def _handle_delete_with_state(
+        cls, spec: QdrantHybridTargetSpec, file_id: str, state_manager: UnifiedStateManager
+    ) -> None:
         """Handle file deletion (sync)."""
         writer = cls._get_writer(spec)
-        state_manager = cls._get_state_manager(spec)
 
         writer.delete_file_sync(file_id, spec.collection_name)
         state_manager.mark_deleted_sync(file_id)
         logger.info(f"Deleted: file_id={file_id}")
 
     @classmethod
-    def _handle_upsert(
+    def _handle_upsert_with_state(
         cls,
         spec: QdrantHybridTargetSpec,
         file_id: str,
         mutation: QdrantHybridTargetValues,
+        state_manager: UnifiedStateManager,
     ) -> None:
         """Handle file insert/update (sync)."""
         writer = cls._get_writer(spec)
         docling = cls._get_docling(spec)
-        state_manager = cls._get_state_manager(spec)
 
         abs_path = Path(mutation.abs_path)
         source_path = mutation.source_path
