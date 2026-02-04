@@ -75,6 +75,7 @@ services:
       context: ./services/bge-m3-api
       dockerfile: Dockerfile
     container_name: dev-bge-m3
+    profiles: ["ai", "full"]
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -117,6 +118,7 @@ services:
       context: ./services/user-base
       dockerfile: Dockerfile
     container_name: dev-user-base
+    profiles: ["ai", "full"]
     ports:
       - "127.0.0.1:8003:8000"
     healthcheck:
@@ -158,6 +160,7 @@ services:
   lightrag:
     image: ghcr.io/hkuds/lightrag:v1.4.9.11
     container_name: dev-lightrag
+    profiles: ["ai", "full"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:9621:9621"
@@ -185,6 +188,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
     container_name: dev-clickhouse
+    profiles: ["ml", "full"]
     restart: unless-stopped
     user: "101:101"
     environment:
@@ -208,6 +212,7 @@ services:
   minio:
     image: minio/minio:latest
     container_name: dev-minio
+    profiles: ["ml", "full"]
     restart: unless-stopped
     entrypoint: sh
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
@@ -230,6 +235,7 @@ services:
   redis-langfuse:
     image: redis:8.4.0
     container_name: dev-redis-langfuse
+    profiles: ["ml", "full"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:6380:6379"
@@ -244,6 +250,7 @@ services:
   langfuse-worker:
     image: langfuse/langfuse-worker:3.150.0
     container_name: dev-langfuse-worker
+    profiles: ["ml", "full"]
     restart: always
     depends_on:
       postgres:
@@ -295,6 +302,7 @@ services:
   langfuse:
     image: langfuse/langfuse:3.150.0
     container_name: dev-langfuse
+    profiles: ["ml", "full"]
     restart: always
     depends_on:
       postgres:
@@ -324,6 +332,7 @@ services:
       context: ./docker/mlflow
       dockerfile: Dockerfile
     container_name: dev-mlflow
+    profiles: ["ml", "full"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:5000:5000"
@@ -355,6 +364,7 @@ services:
   loki:
     image: grafana/loki:3.4.2
     container_name: dev-loki
+    profiles: ["obs", "full"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:3100:3100"
@@ -373,6 +383,7 @@ services:
   promtail:
     image: grafana/promtail:3.4.2
     container_name: dev-promtail
+    profiles: ["obs", "full"]
     restart: unless-stopped
     volumes:
       - ./docker/monitoring/promtail.yaml:/etc/promtail/config.yml:ro
@@ -393,6 +404,7 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.28.1
     container_name: dev-alertmanager
+    profiles: ["obs", "full"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:9093:9093"
@@ -444,6 +456,7 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:v1.81.3.rc.3
     container_name: dev-litellm
+    profiles: ["bot", "full"]
     ports:
       - "4000:4000"
     volumes:
@@ -466,8 +479,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      langfuse:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=5)"]
       interval: 30s
@@ -488,6 +499,7 @@ services:
       context: .
       dockerfile: telegram_bot/Dockerfile
     container_name: dev-bot
+    profiles: ["bot", "full"]
     environment:
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
@@ -515,8 +527,6 @@ services:
         condition: service_healthy
       bm42:
         condition: service_healthy
-      user-base:
-        condition: service_healthy
       litellm:
         condition: service_healthy
     restart: unless-stopped
@@ -532,9 +542,11 @@ services:
   ingestion:
     build:
       context: .
-      dockerfile: telegram_bot/Dockerfile
+      dockerfile: Dockerfile.ingestion
     container_name: dev-ingestion
+    profiles: ["ingest", "full"]
     restart: unless-stopped
+    stop_grace_period: 30s
     command: ["uv", "run", "python", "-m", "src.ingestion.unified.cli", "run", "--watch"]
     environment:
       - GDRIVE_SYNC_DIR=/data/drive-sync

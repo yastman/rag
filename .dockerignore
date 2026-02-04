@@ -63,3 +63,21 @@ mlruns/
 # Data files (usually mounted as volumes)
 data/
 qdrant_storage/
+
+# Worktrees (Claude Code)
+.worktrees/
+
+# Ruff cache
+.ruff_cache/
+
+# Claude settings
+.claude/
+
+# Scripts (not needed in container)
+scripts/
+
+# Docker configs (not needed in image)
+docker/
+
+# Services (separate builds)
+services/
