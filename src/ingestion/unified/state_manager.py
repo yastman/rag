@@ -216,13 +216,30 @@ class UnifiedStateManager:
     # =========================================================================
     # These wrap async methods using a dedicated event loop.
     # Safe to call from sync context (e.g., CocoIndex mutate()).
+    #
+    # IMPORTANT: Each sync call uses a fresh event loop. To avoid asyncpg pool
+    # being attached to a closed loop, we reset the pool before each sync call.
 
     def _run_sync(self, coro):
-        """Run coroutine synchronously with a fresh event loop."""
+        """Run coroutine synchronously with a fresh event loop.
+
+        Resets the pool before running to avoid 'Event loop is closed' errors
+        when asyncpg pool was created in a previous (now closed) loop.
+        """
+        # Reset pool to avoid loop mismatch
+        if self._pool is not None:
+            # Pool exists from previous loop - it's now invalid
+            # asyncpg pools cannot be reused across different event loops
+            self._pool = None
+
         loop = asyncio.new_event_loop()
         try:
             return loop.run_until_complete(coro)
         finally:
+            # Close pool before closing loop to release connections properly
+            if self._pool is not None:
+                loop.run_until_complete(self._pool.close())
+                self._pool = None
             loop.close()
 
     def get_state_sync(self, file_id: str) -> FileState | None:
