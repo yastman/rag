@@ -245,6 +245,35 @@ class DoclingClient:
         logger.info(f"Chunked {file_path.name}: {len(chunks)} chunks")
         return chunks
 
+    def chunk_file_sync(
+        self,
+        file_path: Path,
+        contextualize: bool = True,
+    ) -> list[DoclingChunk]:
+        """Sync version of chunk_file() for CocoIndex target.
+
+        Creates a fresh event loop to run the async method.
+        Safe to call from sync context.
+
+        Args:
+            file_path: Path to document file
+            contextualize: Whether to add hierarchical context to chunks
+
+        Returns:
+            List of DoclingChunk with rich metadata
+        """
+        import asyncio
+
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            # Connect if needed
+            if self._client is None:
+                loop.run_until_complete(self.connect())
+            return loop.run_until_complete(self.chunk_file(file_path, contextualize))
+        finally:
+            loop.close()
+
     def to_ingestion_chunks(
         self,
         docling_chunks: list[DoclingChunk],
