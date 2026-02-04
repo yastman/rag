@@ -44,3 +44,21 @@ def test_parse_page_range_falls_back_to_meta():
     raw_chunk = {"meta": {"page": 7}}
 
     assert client._parse_page_range_from_chunk(raw_chunk) == (7, 7)
+
+
+class TestDoclingClientSync:
+    """Tests for sync methods."""
+
+    def test_chunk_file_sync_exists(self):
+        """chunk_file_sync() method should exist."""
+        from src.ingestion.docling_client import DoclingClient
+
+        assert hasattr(DoclingClient, "chunk_file_sync")
+
+    def test_chunk_file_sync_is_not_coroutine(self):
+        """chunk_file_sync() should be sync."""
+        import asyncio
+
+        from src.ingestion.docling_client import DoclingClient
+
+        assert not asyncio.iscoroutinefunction(DoclingClient.chunk_file_sync)
