@@ -186,3 +186,4 @@ services/bge-m3-api/models/
 *.safetensors
 reports/
 .worktrees/
+CLAUDE.local.md
