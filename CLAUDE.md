@@ -9,7 +9,9 @@ uv sync                    # Install all dependencies
 make check                 # Lint + types
 make test                  # All tests
 make test-unit             # Unit tests only (fast)
-make docker-up             # Start services
+make docker-up             # Start core services (5 containers, ~17s)
+make docker-bot-up         # Core + bot/litellm
+make docker-full-up        # All services (20 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
 make monitoring-up         # Start alerting stack
 make ingest-unified        # Run unified ingestion (CocoIndex v3.2.1)
@@ -41,7 +43,9 @@ Input → Docling Parser → Chunker → Voyage Embeddings + BM42 → Qdrant
 | `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
 | `telegram_bot/` | Bot + services |
 
-**Services:** Qdrant:6333, Redis:6379, LiteLLM:4000, Langfuse:3001 → see `.claude/rules/docker.md`
+**Services:** Qdrant:6333, Redis:6379, LiteLLM:4000, Langfuse:3001
+
+**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (20 svc) → see `.claude/rules/docker.md`
 
 ## Code Style
 
