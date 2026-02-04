@@ -19,18 +19,18 @@ class TestTargetSyncExecution:
         assert "asyncio.run(" not in source, "mutate() should not use asyncio.run()"
 
     def test_handle_methods_are_sync(self):
-        """_handle_delete and _handle_upsert should be sync methods."""
+        """_handle_delete_with_state and _handle_upsert_with_state should be sync methods."""
         from src.ingestion.unified.targets.qdrant_hybrid_target import (
             QdrantHybridTargetConnector,
         )
 
         # After refactor, these should not be async
-        assert not asyncio.iscoroutinefunction(QdrantHybridTargetConnector._handle_delete), (
-            "_handle_delete should be sync"
-        )
-        assert not asyncio.iscoroutinefunction(QdrantHybridTargetConnector._handle_upsert), (
-            "_handle_upsert should be sync"
-        )
+        assert not asyncio.iscoroutinefunction(
+            QdrantHybridTargetConnector._handle_delete_with_state
+        ), "_handle_delete_with_state should be sync"
+        assert not asyncio.iscoroutinefunction(
+            QdrantHybridTargetConnector._handle_upsert_with_state
+        ), "_handle_upsert_with_state should be sync"
 
     def test_writer_has_sync_methods(self):
         """QdrantHybridWriter should have sync methods."""
