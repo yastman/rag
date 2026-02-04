@@ -1,12 +1,46 @@
 # src/ingestion/unified/state_manager.py
 """State manager using existing Postgres ingestion_state table."""
 
+from __future__ import annotations
+
 import asyncio
+import contextlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import asyncpg
+
+
+if TYPE_CHECKING:
+    from typing import Self
+
+
+class _SyncContext:
+    """Context manager for batch sync operations with shared Runner."""
+
+    def __init__(self, manager: UnifiedStateManager) -> None:
+        self._manager = manager
+        self._runner: asyncio.Runner | None = None
+
+    def __enter__(self) -> Self:
+        # Reset pool from any previous loop before creating new runner
+        # This ensures pool will be created fresh in the new runner's loop
+        self._manager._pool = None
+
+        self._runner = asyncio.Runner()
+        self._manager._runner = self._runner
+        return self
+
+    def __exit__(self, *args) -> None:
+        # Close pool before closing runner
+        if self._manager._pool is not None:
+            with contextlib.suppress(Exception):
+                self._runner.run(self._manager._pool.close())
+            self._manager._pool = None
+        self._manager._runner = None
+        self._runner.close()
 
 
 @dataclass
@@ -33,7 +67,7 @@ class FileState:
     retry_after: datetime | None = None
 
     @classmethod
-    def from_row(cls, row: asyncpg.Record) -> "FileState":
+    def from_row(cls, row: asyncpg.Record) -> FileState:
         """Create from database row."""
         return cls(**{k: v for k, v in dict(row).items() if k in cls.__dataclass_fields__})
 
@@ -119,7 +153,11 @@ class UnifiedStateManager:
     async def mark_processing(self, file_id: str) -> None:
         pool = await self._get_pool()
         await pool.execute(
-            f"UPDATE {self._table} SET status = 'processing', updated_at = NOW() WHERE file_id = $1",
+            f"""
+            INSERT INTO {self._table} (file_id, status, updated_at)
+            VALUES ($1, 'processing', NOW())
+            ON CONFLICT (file_id) DO UPDATE SET status = 'processing', updated_at = NOW()
+            """,
             file_id,
         )
 
@@ -127,11 +165,12 @@ class UnifiedStateManager:
         pool = await self._get_pool()
         await pool.execute(
             f"""
-            UPDATE {self._table}
-            SET status = 'indexed', chunk_count = $2, content_hash = $3,
+            INSERT INTO {self._table} (file_id, status, chunk_count, content_hash, indexed_at, updated_at)
+            VALUES ($1, 'indexed', $2, $3, NOW(), NOW())
+            ON CONFLICT (file_id) DO UPDATE SET
+                status = 'indexed', chunk_count = $2, content_hash = $3,
                 indexed_at = NOW(), error_message = NULL, retry_count = 0, retry_after = NULL,
                 updated_at = NOW()
-            WHERE file_id = $1
             """,
             file_id,
             chunk_count,
@@ -214,29 +253,48 @@ class UnifiedStateManager:
     # =========================================================================
     # SYNC METHODS (for CocoIndex target connector)
     # =========================================================================
-    # These wrap async methods using a dedicated event loop.
-    # Safe to call from sync context (e.g., CocoIndex mutate()).
+    # These wrap async methods using asyncio.Runner (Python 3.11+).
+    # Runner maintains a single event loop across calls, allowing asyncpg pool reuse.
     #
-    # IMPORTANT: Each sync call uses a fresh event loop. To avoid asyncpg pool
-    # being attached to a closed loop, we reset the pool before each sync call.
+    # Usage pattern:
+    #   with state_manager.sync_context():
+    #       state_manager.should_process_sync(...)
+    #       state_manager.mark_indexed_sync(...)
+    #   # Pool is closed when context exits
+
+    _runner: asyncio.Runner | None = None
+
+    def sync_context(self):
+        """Context manager for batch sync operations.
+
+        Creates a single asyncio.Runner for multiple sync calls,
+        allowing asyncpg pool reuse within the batch.
+
+        Usage:
+            with state_manager.sync_context():
+                state_manager.should_process_sync(file_id, hash)
+                state_manager.mark_indexed_sync(file_id, count, hash)
+        """
+        return _SyncContext(self)
 
     def _run_sync(self, coro):
-        """Run coroutine synchronously with a fresh event loop.
+        """Run coroutine synchronously.
 
-        Resets the pool before running to avoid 'Event loop is closed' errors
-        when asyncpg pool was created in a previous (now closed) loop.
+        If called within sync_context(), reuses the shared Runner/loop.
+        Otherwise creates a fresh loop per call (less efficient).
         """
-        # Reset pool to avoid loop mismatch
+        if self._runner is not None:
+            # Inside sync_context - reuse runner
+            return self._runner.run(coro)
+
+        # Standalone call - create fresh loop (backwards compatible)
         if self._pool is not None:
-            # Pool exists from previous loop - it's now invalid
-            # asyncpg pools cannot be reused across different event loops
-            self._pool = None
+            self._pool = None  # Reset to avoid loop mismatch
 
         loop = asyncio.new_event_loop()
         try:
             return loop.run_until_complete(coro)
         finally:
-            # Close pool before closing loop to release connections properly
             if self._pool is not None:
                 loop.run_until_complete(self._pool.close())
                 self._pool = None
