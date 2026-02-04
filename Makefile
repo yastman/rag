@@ -281,15 +281,57 @@ clean: ## Clean up cache files and build artifacts
 	find . -type f -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	@echo "$(GREEN)✓ Cleaned up$(NC)"
 
-docker-up: ## Start Qdrant and ML services
-	@echo "$(BLUE)Starting Docker services...$(NC)"
-	docker compose up -d
-	@echo "$(GREEN)✓ Services started$(NC)"
+# =============================================================================
+# DOCKER PROFILES
+# =============================================================================
 
-docker-down: ## Stop Docker services
+.PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
+
+docker-core-up: ## Start core services (postgres, qdrant, redis, docling, bm42)
+	@echo "$(BLUE)Starting core services...$(NC)"
+	docker compose -f docker-compose.dev.yml up -d
+	@echo "$(GREEN)✓ Core services started$(NC)"
+
+docker-bot-up: ## Start core + bot services (litellm, bot)
+	@echo "$(BLUE)Starting bot services...$(NC)"
+	docker compose -f docker-compose.dev.yml --profile bot up -d
+	@echo "$(GREEN)✓ Bot services started$(NC)"
+
+docker-obs-up: ## Start core + observability (loki, promtail, alertmanager)
+	@echo "$(BLUE)Starting observability services...$(NC)"
+	docker compose -f docker-compose.dev.yml --profile obs up -d
+	@echo "$(GREEN)✓ Observability services started$(NC)"
+
+docker-ml-up: ## Start core + ML platform (langfuse, mlflow, clickhouse, minio)
+	@echo "$(BLUE)Starting ML platform services...$(NC)"
+	docker compose -f docker-compose.dev.yml --profile ml up -d
+	@echo "$(GREEN)✓ ML platform started$(NC)"
+
+docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base, lightrag)
+	@echo "$(BLUE)Starting AI services...$(NC)"
+	docker compose -f docker-compose.dev.yml --profile ai up -d
+	@echo "$(GREEN)✓ AI services started$(NC)"
+
+docker-ingest-up: ## Start core + ingestion service
+	@echo "$(BLUE)Starting ingestion service...$(NC)"
+	docker compose -f docker-compose.dev.yml --profile ingest up -d
+	@echo "$(GREEN)✓ Ingestion service started$(NC)"
+
+docker-full-up: ## Start all services (full stack)
+	@echo "$(BLUE)Starting full stack...$(NC)"
+	docker compose -f docker-compose.dev.yml --profile full up -d
+	@echo "$(GREEN)✓ Full stack started$(NC)"
+
+docker-up: docker-core-up ## Alias for docker-core-up (backward compat)
+
+docker-down: ## Stop all Docker services
 	@echo "$(BLUE)Stopping Docker services...$(NC)"
-	docker compose down
+	docker compose -f docker-compose.dev.yml --profile full down
 	@echo "$(GREEN)✓ Services stopped$(NC)"
+
+docker-ps: ## Show Docker service status
+	@echo "$(BLUE)Docker service status:$(NC)"
+	@docker compose -f docker-compose.dev.yml --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
 # =============================================================================
 # DEVELOPMENT WORKFLOW
@@ -516,7 +558,7 @@ eval-rag-full: ## Full RAG evaluation with all metrics
 
 monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
 	@echo "$(BLUE)Starting monitoring stack...$(NC)"
-	docker compose -f docker-compose.dev.yml up -d loki promtail alertmanager
+	docker compose -f docker-compose.dev.yml --profile obs up -d
 	@echo "$(GREEN)✓ Monitoring stack started$(NC)"
 	@echo "$(YELLOW)Services:$(NC)"
 	@echo "  Loki:         http://localhost:3100"
@@ -524,7 +566,7 @@ monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
 
 monitoring-down: ## Stop monitoring stack
 	@echo "$(BLUE)Stopping monitoring stack...$(NC)"
-	docker compose -f docker-compose.dev.yml stop loki promtail alertmanager
+	docker compose -f docker-compose.dev.yml --profile obs stop
 	@echo "$(GREEN)✓ Monitoring stack stopped$(NC)"
 
 monitoring-logs: ## View monitoring stack logs
