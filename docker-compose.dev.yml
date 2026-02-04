@@ -370,7 +370,7 @@ services:
       - "127.0.0.1:3100:3100"
     volumes:
       - ./docker/monitoring/loki.yaml:/etc/loki/local-config.yaml:ro
-      - ./docker/monitoring/rules:/etc/loki/rules:ro
+      - ./docker/monitoring/rules:/etc/loki/rules/fake:ro
       - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     healthcheck:
