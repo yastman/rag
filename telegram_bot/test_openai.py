@@ -2,13 +2,16 @@
 """Test OpenAI API connection."""
 
 import asyncio
+import os
 
 import httpx
 
 
 async def test_openai():
     """Test OpenAI API."""
-    api_key = "REDACTED_OPENAI_KEY_3"
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set")
 
     print("Testing OpenAI API connection...")
     print()
