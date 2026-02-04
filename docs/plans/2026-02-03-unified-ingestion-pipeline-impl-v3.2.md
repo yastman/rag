@@ -1,4 +1,4 @@
-# Unified Ingestion Pipeline v3.2 (CocoIndex Orchestrator + Custom Target)
+# Unified Ingestion Pipeline v3.2.1 (CocoIndex Orchestrator + Custom Target)
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -30,6 +30,16 @@ Docker container → Loki → Alertmanager → Telegram
 - ✅ **Extend existing Postgres schema** (ALTER TABLE, not new tables)
 - ✅ **Docker service for ingestion** (unified Loki monitoring)
 - ✅ **Payload contract enforced** (page_content + metadata.doc_id/order/source/file_id)
+
+## What Changed in v3.2.1 (Make the plan executable)
+
+v3.2 had the right intent (“CocoIndex orchestrator + custom target”), but Phase 4 implemented a hand-rolled watcher instead of CocoIndex, and the custom target interface didn’t match CocoIndex 0.3.28.
+
+This revision:
+- Replaces manual polling (`rglob` + `run_watch`) with a real CocoIndex flow + `FlowLiveUpdater`
+- Fixes the custom target to the correct CocoIndex API (`@cocoindex.op.target_connector`, `mutate(self, *args)`)
+- Corrects `sources.LocalFile` parameter names to `included_patterns` / `excluded_patterns`
+- Keeps Postgres `content_hash` gating as the guardrail against unnecessary docling/voyage calls
 
 ---
 
@@ -172,15 +182,13 @@ BEGIN
         ALTER TABLE ingestion_state ADD COLUMN file_size BIGINT;
     END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns
-                   WHERE table_name = 'ingestion_state' AND column_name = 'file_modified_at') THEN
-        ALTER TABLE ingestion_state ADD COLUMN file_modified_at TIMESTAMPTZ;
-    END IF;
+    -- NOTE: ingestion_state already has `modified_time` (TIMESTAMPTZ) from 02-cocoindex.sql.
+    -- Use that column for filesystem mtime too (no need to introduce a second timestamp field).
 
     -- Pipeline versioning
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                    WHERE table_name = 'ingestion_state' AND column_name = 'pipeline_version') THEN
-        ALTER TABLE ingestion_state ADD COLUMN pipeline_version VARCHAR(20) DEFAULT 'v3.2';
+        ALTER TABLE ingestion_state ADD COLUMN pipeline_version VARCHAR(20) DEFAULT 'v3.2.1';
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns
@@ -209,7 +217,7 @@ BEGIN
     END IF;
 END $$;
 
-COMMENT ON TABLE ingestion_state IS 'Unified ingestion state tracking (v3.2)';
+COMMENT ON TABLE ingestion_state IS 'Unified ingestion state tracking (v3.2.1)';
 ```
 
 **Step 2: Apply migration**
@@ -224,7 +232,7 @@ docker exec -i dev-postgres psql -U postgres < docker/postgres/init/03-unified-i
 docker exec dev-postgres psql -U postgres -d cocoindex -c "\d ingestion_state"
 ```
 
-Expected: Shows new columns `source_path`, `file_size`, `file_modified_at`, `pipeline_version`, etc.
+Expected: Shows new columns `source_path`, `file_size`, `pipeline_version`, etc.
 
 **Step 4: Commit**
 
@@ -232,7 +240,7 @@ Expected: Shows new columns `source_path`, `file_size`, `file_modified_at`, `pip
 git add docker/postgres/init/03-unified-ingestion-alter.sql
 git commit -m "feat(db): add unified ingestion schema extensions
 
-- source_path, file_size, file_modified_at for file tracking
+- source_path, file_size for file tracking
 - pipeline_version, chunk_location_version for versioning
 - collection_name for multi-collection support
 - retry_after for exponential backoff"
@@ -296,9 +304,10 @@ class UnifiedConfig:
     bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
 
     # Pipeline
+    # NOTE: Watch mode is handled by CocoIndex FlowLiveUpdater (no manual poll loop).
     poll_interval_seconds: int = 60
     max_retries: int = 3
-    pipeline_version: str = "v3.2"
+    pipeline_version: str = "v3.2.1"
 
     # Supported extensions
     supported_extensions: frozenset[str] = frozenset({
@@ -339,7 +348,7 @@ git commit -m "feat(ingestion): add unified pipeline config module"
 """State manager using existing Postgres ingestion_state table."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import asyncpg
@@ -354,14 +363,14 @@ class FileState:
     file_name: str | None = None
     mime_type: str | None = None
     file_size: int | None = None
-    file_modified_at: datetime | None = None
+    modified_time: datetime | None = None
     content_hash: str | None = None
     parser_version: str | None = None
     chunker_version: str | None = None
     embedding_model: str = "voyage-4-large"
     chunk_count: int = 0
     collection_name: str | None = None
-    pipeline_version: str = "v3.2"
+    pipeline_version: str = "v3.2.1"
     indexed_at: datetime | None = None
     status: str = "pending"
     error_message: str | None = None
@@ -414,7 +423,7 @@ class UnifiedStateManager:
             f"""
             INSERT INTO {self._table} (
                 file_id, source_path, file_name, mime_type, file_size,
-                file_modified_at, content_hash, parser_version, chunker_version,
+                modified_time, content_hash, parser_version, chunker_version,
                 embedding_model, chunk_count, collection_name, pipeline_version,
                 status, error_message, retry_count, retry_after, updated_at
             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
@@ -423,7 +432,7 @@ class UnifiedStateManager:
                 file_name = EXCLUDED.file_name,
                 mime_type = EXCLUDED.mime_type,
                 file_size = EXCLUDED.file_size,
-                file_modified_at = EXCLUDED.file_modified_at,
+                modified_time = EXCLUDED.modified_time,
                 content_hash = EXCLUDED.content_hash,
                 parser_version = EXCLUDED.parser_version,
                 chunker_version = EXCLUDED.chunker_version,
@@ -436,7 +445,7 @@ class UnifiedStateManager:
                 updated_at = NOW()
             """,
             state.file_id, state.source_path, state.file_name, state.mime_type,
-            state.file_size, state.file_modified_at, state.content_hash,
+            state.file_size, state.modified_time, state.content_hash,
             state.parser_version, state.chunker_version, state.embedding_model,
             state.chunk_count, state.collection_name, state.pipeline_version,
             state.status, state.error_message, state.retry_count, state.retry_after,
@@ -492,7 +501,7 @@ class UnifiedStateManager:
             return True  # New file
         if state.status == "indexed" and state.content_hash == content_hash:
             return False  # Unchanged
-        if state.status == "error" and state.retry_after and state.retry_after > datetime.utcnow():
+        if state.status == "error" and state.retry_after and state.retry_after > datetime.now(UTC):
             return False  # Still in backoff
         if state.retry_count >= 3:
             return False  # Exceeded retries (in DLQ)
@@ -996,6 +1005,12 @@ git commit -m "test(ingestion): add payload contract tests
 
 ### Task 3.5: Create QdrantHybridTarget (CocoIndex Custom Target)
 
+> ⚠️ **DEPRECATED in v3.2.1:** The implementation below uses a “CocoIndex-style” `mutate(mutation, file_id)` API.
+> CocoIndex 0.3.28 custom targets require `@cocoindex.op.target_connector(...)` and `mutate(self, *args)` with the
+> `(prepared_spec, {primary_key: value_or_None})` shape. Keep this section for historical context only.
+>
+> ✅ Implement **Phase 3.5R + Phase 4R** below instead.
+
 **Files:**
 - Create: `src/ingestion/unified/targets/__init__.py`
 - Create: `src/ingestion/unified/targets/qdrant_hybrid.py`
@@ -1228,6 +1243,9 @@ git commit -m "feat(ingestion): add QdrantHybridTarget for CocoIndex
 ---
 
 ## Phase 4: CocoIndex Flow
+
+> ⚠️ **DEPRECATED in v3.2.1:** This phase implements a manual filesystem scan + diff loop, which bypasses CocoIndex.
+> Keep for historical context only. Implement **Phase 4R** instead (real CocoIndex flow + FlowLiveUpdater).
 
 ### Task 4.1: Create CocoIndex Orchestrator Flow
 
@@ -1472,6 +1490,78 @@ git commit -m "feat(ingestion): add UnifiedIngestionFlow orchestrator
 
 ---
 
+---
+
+## Phase 3.5R: CocoIndex Custom Target (Correct API for 0.3.28)
+
+### Task 3.5R.1: Implement `QdrantHybridTarget` via `@cocoindex.op.target_connector`
+
+**Goal:** Make CocoIndex the real orchestrator, while keeping full control over:
+- Docling chunking (`src/ingestion/docling_client.py`)
+- Dense embeddings (reuse `telegram_bot/services/voyage.py`)
+- Sparse BM42 (FastEmbed)
+- Qdrant write semantics (delete-by-filter + upsert)
+- Postgres state/DLQ (reuse `docker/postgres/init/02-cocoindex.sql`, extended by Phase 2)
+
+**Why this matters:** CocoIndex will only call custom targets if they’re registered via `cocoindex.op.target_connector`, and the engine will pass mutations in the `mutate(self, *args)` shape.
+
+**Files:**
+- Create: `src/ingestion/unified/targets/qdrant_hybrid_target.py`
+
+**Implementation contract (must match CocoIndex engine):**
+- `@cocoindex.op.target_connector(spec_cls=..., persistent_key_type=...)`
+- `get_persistent_key(spec, target_name) -> persistent_key`
+- optional `prepare(spec, setup_state, key_fields_schema, value_fields_schema) -> prepared_spec`
+- `apply_setup_change(persistent_key, previous_state, current_state)`
+- `mutate(self, *args)` where each arg is `(prepared_spec, {primary_key_dict: value_dict_or_None})`
+
+**Required export key/value shape (we control this in the flow):**
+- Primary key: `{"file_id": "<sha256(rel_path)[:16]>"}`
+- Value dict fields: `abs_path`, `source_path`, `file_name`, `mime_type`, `file_size`
+- Delete event: value is `None`
+
+### Task 3.5R.2: Payload contract enforcement happens in writer (not CocoIndex)
+
+The custom target must call `QdrantHybridWriter.build_payload(...)` so every point has:
+- `page_content`
+- `metadata.file_id/doc_id/order/chunk_order/source`
+- top-level `file_id` (flat)
+
+---
+
+## Phase 4R: CocoIndex Flow + Live Updater (No manual polling loop)
+
+### Task 4R.1: Create flow definition (`sources.LocalFile` → export to custom target)
+
+**Files:**
+- Create: `src/ingestion/unified/flow.py`
+
+**Important correctness fixes vs v3.2:**
+- `sources.LocalFile` uses `included_patterns` / `excluded_patterns` (not `include_patterns`)
+- watch mode is handled by `FlowLiveUpdater`, not by a custom `while True` loop
+
+**Minimal flow responsibilities:**
+- compute stable `file_id = sha256(relative_path)[:16]`
+- pass absolute file path + relative source_path to target
+- set `included_patterns` to match what rclone sync produces (at minimum `**/*.pdf`, `**/*.docx`, `**/*.xlsx`, `**/*.pptx`; for dev/e2e also include `**/*.md`, `**/*.txt`)
+- keep refresh_interval as safety net (6h)
+
+### Task 4R.2: Watch mode uses `FlowLiveUpdater`
+
+**Run once:**
+- `cocoindex.init()`
+- `open_flow(...)`
+- `cocoindex.setup_all_flows()`
+- `cocoindex.update_all_flows()`
+
+**Watch mode:**
+- `updater = cocoindex.FlowLiveUpdater(flow, cocoindex.FlowLiveUpdaterOptions(live_mode=True, print_stats=True))`
+- `updater.start()` then `updater.wait()`
+
+This is the supported “live” mechanism in CocoIndex 0.3.28 and replaces Phase 4 (manual scan + diff) completely.
+
+---
+
 ## Phase 5: CLI and Docker Integration
 
 ### Task 5.1: Create CLI
@@ -1505,24 +1595,23 @@ def setup_logging(verbose: bool = False) -> None:
 
 async def cmd_run(args: argparse.Namespace) -> int:
     """Run ingestion."""
-    from src.ingestion.unified.config import UnifiedConfig
-    from src.ingestion.unified.coco_flow import UnifiedIngestionFlow
+    import cocoindex
 
-    config = UnifiedConfig()
-    flow = UnifiedIngestionFlow(config)
+    from src.ingestion.unified.flow import build_flow
 
-    try:
-        if args.watch:
-            logging.info(f"Starting watch mode: {config.sync_dir}")
-            await flow.run_watch(interval=args.interval)
-        else:
-            stats = await flow.run_once()
-            logging.info(
-                f"Done: processed={stats['processed']}, "
-                f"deleted={stats['deleted']}, failed={stats['failed']}"
-            )
-    finally:
-        await flow.close()
+    flow = build_flow()
+    cocoindex.setup_all_flows()
+
+    if args.watch:
+        logging.info("Starting CocoIndex watch mode (FlowLiveUpdater)")
+        updater = cocoindex.FlowLiveUpdater(
+            flow,
+            cocoindex.FlowLiveUpdaterOptions(live_mode=True, print_stats=True),
+        )
+        updater.start()
+        updater.wait()
+    else:
+        cocoindex.update_all_flows()
 
     return 0
 
@@ -1588,7 +1677,7 @@ def main() -> int:
     load_dotenv()
 
     parser = argparse.ArgumentParser(
-        description="Unified Ingestion Pipeline (v3.2)",
+        description="Unified Ingestion Pipeline (v3.2.1)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
@@ -1597,7 +1686,7 @@ def main() -> int:
     # run
     run_p = subparsers.add_parser("run", help="Run ingestion")
     run_p.add_argument("--watch", "-w", action="store_true", help="Continuous mode")
-    run_p.add_argument("--interval", "-i", type=int, default=60, help="Poll interval (s)")
+    # NOTE: No manual poll interval. CocoIndex live updater handles scheduling internally.
 
     # status
     subparsers.add_parser("status", help="Show status")
@@ -1647,7 +1736,7 @@ git commit -m "feat(ingestion): add unified pipeline CLI
 Add after the bot service:
 
 ```yaml
-  # Unified Ingestion Pipeline (v3.2)
+  # Unified Ingestion Pipeline (v3.2.1)
   ingestion:
     build:
       context: .
@@ -1706,7 +1795,7 @@ git commit -m "feat(docker): add unified ingestion service
 
 ```makefile
 # =============================================================================
-# UNIFIED INGESTION PIPELINE (v3.2)
+# UNIFIED INGESTION PIPELINE (v3.2.1)
 # =============================================================================
 
 .PHONY: ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess
@@ -1890,29 +1979,36 @@ def temp_sync_dir(tmp_path):
 async def test_unified_pipeline_e2e(temp_sync_dir):
     """File goes through pipeline with correct payload format."""
     from qdrant_client import QdrantClient
+    from qdrant_client.models import Distance, Modifier, SparseVectorParams, VectorParams
 
-    from src.ingestion.unified.config import UnifiedConfig
-    from src.ingestion.unified.coco_flow import UnifiedIngestionFlow, compute_file_id
+    import cocoindex
 
-    # Configure
-    config = UnifiedConfig()
-    config.sync_dir = temp_sync_dir
-    config.collection_name = "test_unified_e2e"
-
-    flow = UnifiedIngestionFlow(config)
+    from src.ingestion.unified.flow import build_flow
 
     try:
-        # Run ingestion
-        stats = await flow.run_once()
-        assert stats["processed"] >= 1, f"Expected at least 1 processed, got {stats}"
+        # Configure env for the flow
+        os.environ["GDRIVE_SYNC_DIR"] = str(temp_sync_dir)
+        os.environ["GDRIVE_COLLECTION_NAME"] = "test_unified_e2e"
+
+        # Ensure test collection exists with correct vector config
+        qdrant = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"))
+        qdrant.recreate_collection(
+            collection_name=os.environ["GDRIVE_COLLECTION_NAME"],
+            vectors_config={"dense": VectorParams(size=1024, distance=Distance.COSINE)},
+            sparse_vectors_config={"bm42": SparseVectorParams(modifier=Modifier.IDF)},
+        )
+
+        # Run ingestion once (CocoIndex orchestrator)
+        flow = build_flow()
+        cocoindex.setup_all_flows()
+        cocoindex.update_all_flows()
 
         # Verify in Qdrant
-        qdrant = QdrantClient(url=config.qdrant_url)
         test_file = temp_sync_dir / "test.md"
-        file_id = compute_file_id(temp_sync_dir, test_file)
+        file_id = __import__("hashlib").sha256(str(test_file.relative_to(temp_sync_dir)).encode()).hexdigest()[:16]
 
         results, _ = qdrant.scroll(
-            collection_name=config.collection_name,
+            collection_name=os.environ["GDRIVE_COLLECTION_NAME"],
             scroll_filter={
                 "must": [{"key": "metadata.file_id", "match": {"value": file_id}}]
             },
@@ -1938,44 +2034,51 @@ async def test_unified_pipeline_e2e(temp_sync_dir):
         assert payload["file_id"] == file_id
 
         # Cleanup
-        qdrant.delete_collection(config.collection_name)
+        qdrant.delete_collection(os.environ["GDRIVE_COLLECTION_NAME"])
+        cocoindex.drop_all_flows()
 
     finally:
-        await flow.close()
+        pass
 
 
 @pytest.mark.asyncio
 async def test_delete_removes_points(temp_sync_dir):
     """Deleting file removes points from Qdrant."""
     from qdrant_client import QdrantClient
-
-    from src.ingestion.unified.config import UnifiedConfig
-    from src.ingestion.unified.coco_flow import UnifiedIngestionFlow, compute_file_id
-
-    config = UnifiedConfig()
-    config.sync_dir = temp_sync_dir
-    config.collection_name = "test_unified_delete"
-
-    flow = UnifiedIngestionFlow(config)
+    from qdrant_client.models import Distance, Modifier, SparseVectorParams, VectorParams
 
     try:
-        # First run - index file
-        stats = await flow.run_once()
-        assert stats["processed"] >= 1
+        import cocoindex
+
+        from src.ingestion.unified.flow import build_flow
+
+        os.environ["GDRIVE_SYNC_DIR"] = str(temp_sync_dir)
+        os.environ["GDRIVE_COLLECTION_NAME"] = "test_unified_delete"
+
+        qdrant = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"))
+        qdrant.recreate_collection(
+            collection_name=os.environ["GDRIVE_COLLECTION_NAME"],
+            vectors_config={"dense": VectorParams(size=1024, distance=Distance.COSINE)},
+            sparse_vectors_config={"bm42": SparseVectorParams(modifier=Modifier.IDF)},
+        )
+
+        flow = build_flow()
+        cocoindex.setup_all_flows()
+
+        # First update - index file
+        cocoindex.update_all_flows()
 
         # Delete file
         test_file = temp_sync_dir / "test.md"
-        file_id = compute_file_id(temp_sync_dir, test_file)
+        file_id = __import__("hashlib").sha256(str(test_file.relative_to(temp_sync_dir)).encode()).hexdigest()[:16]
         test_file.unlink()
 
-        # Second run - should detect deletion
-        stats = await flow.run_once()
-        assert stats["deleted"] >= 1
+        # Second update - should detect deletion
+        cocoindex.update_all_flows()
 
         # Verify points removed
-        qdrant = QdrantClient(url=config.qdrant_url)
         count = qdrant.count(
-            collection_name=config.collection_name,
+            collection_name=os.environ["GDRIVE_COLLECTION_NAME"],
             count_filter={
                 "must": [{"key": "metadata.file_id", "match": {"value": file_id}}]
             },
@@ -1983,10 +2086,11 @@ async def test_delete_removes_points(temp_sync_dir):
         assert count.count == 0, "Points should be deleted"
 
         # Cleanup
-        qdrant.delete_collection(config.collection_name)
+        qdrant.delete_collection(os.environ["GDRIVE_COLLECTION_NAME"])
+        cocoindex.drop_all_flows()
 
     finally:
-        await flow.close()
+        pass
 ```
 
 **Step 2: Run test**
@@ -2018,8 +2122,8 @@ git commit -m "test(ingestion): add E2E tests for unified pipeline
 | `src/ingestion/unified/state_manager.py` | Postgres state tracking |
 | `src/ingestion/unified/qdrant_writer.py` | Qdrant write with payload contract |
 | `src/ingestion/unified/targets/__init__.py` | Target exports |
-| `src/ingestion/unified/targets/qdrant_hybrid.py` | CocoIndex custom target |
-| `src/ingestion/unified/coco_flow.py` | Orchestrator flow |
+| `src/ingestion/unified/targets/qdrant_hybrid_target.py` | CocoIndex custom target connector (0.3.28 API) |
+| `src/ingestion/unified/flow.py` | CocoIndex flow definition (LocalFile → export) |
 | `src/ingestion/unified/cli.py` | CLI entry point |
 | `docker/postgres/init/03-unified-ingestion-alter.sql` | Schema migration |
 | `docker/monitoring/rules/ingestion.yaml` | Alert rules (LogQL) |
