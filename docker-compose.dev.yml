@@ -266,9 +266,9 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/langfuse
       # Auth
       NEXTAUTH_URL: http://localhost:3001
-      NEXTAUTH_SECRET: dev-secret-change-in-production
-      SALT: dev-salt-change-in-production
-      ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      SALT: ${SALT:?SALT is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       # ClickHouse
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
@@ -297,6 +297,11 @@ services:
       # Telemetry
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "true"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   # Langfuse v3 Web
   langfuse:
@@ -326,6 +331,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   mlflow:
     build:
@@ -463,7 +473,7 @@ services:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
     environment:
       # Auth
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master-dev}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       # LLM Providers
       CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-${LLM_API_KEY}}
       GROQ_API_KEY: ${GROQ_API_KEY}
@@ -485,6 +495,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     deploy:
       resources:
         limits:
@@ -502,14 +517,14 @@ services:
     profiles: ["bot", "full"]
     environment:
       # Telegram
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       ***REMOVED*** AI
-      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:?VOYAGE_API_KEY is required}
       VOYAGE_EMBED_MODEL: ${VOYAGE_EMBED_MODEL:-voyage-3-large}
       VOYAGE_CACHE_MODEL: ${VOYAGE_CACHE_MODEL:-voyage-3-lite}
       VOYAGE_RERANK_MODEL: ${VOYAGE_RERANK_MODEL:-rerank-2}
       # LLM (via LiteLLM Proxy)
-      LLM_API_KEY: ${LITELLM_MASTER_KEY:-sk-litellm-master-dev}
+      LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
       # Services (Docker internal network)
@@ -530,6 +545,11 @@ services:
       litellm:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     deploy:
       resources:
         limits:
