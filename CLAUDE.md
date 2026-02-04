@@ -120,6 +120,18 @@ make deploy-release VERSION=2.12.0  # Release
 
 **Details:** `.claude/rules/skills.md`
 
+## Long-Running Commands
+
+For docker build, large tests (> 30 sec) — use tmux + logs:
+
+```bash
+mkdir -p logs
+tmux new-window -n "W-BUILD" -c /home/user/projects/rag-fresh
+tmux send-keys -t "W-BUILD" "docker compose build ingestion 2>&1 | tee logs/build.log; echo '[COMPLETE]'" Enter
+```
+
+Check: `tail -f logs/build.log` | Done: `grep '\[COMPLETE\]' logs/build.log`
+
 ## Modular Docs
 
 See `.claude/rules/` for domain-specific documentation:
