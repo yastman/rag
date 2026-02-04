@@ -61,7 +61,7 @@ services:
           memory: 6G
 
   docling:
-    image: quay.io/docling-project/docling-serve:latest
+    image: quay.io/docling-project/docling-serve@sha256:0acc75bd86219a8c8cdf38970cb651b0567844d6c97ec9d9023624c8209c6efc
     container_name: rag-docling-local
     ports:
       - "5001:5001"
