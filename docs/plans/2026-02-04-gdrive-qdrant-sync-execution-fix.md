@@ -10,6 +10,94 @@
 
 ---
 
+## Промт для новой сессии
+
+```
+Выполни план: docs/plans/2026-02-04-gdrive-qdrant-sync-execution-fix.md
+
+КОНТЕКСТ:
+- Unified ingestion pipeline v3.2.1 почти готов, но target connector использует asyncio.run() с async handlers
+- CocoIndex вызывает mutate() синхронно — нужно сделать всё sync
+- rclone работает, 15 файлов в ~/drive-sync/, Docker сервисы запущены
+- 2 теста падают: test_target_sync_execution.py
+
+ЗАДАЧИ (последовательно):
+1. StateManager: добавить *_sync() методы + тест
+2. DoclingClient: добавить chunk_file_sync() + тест
+3. Target connector: рефакторинг на pure sync (убрать asyncio.run)
+4. E2E валидация: запустить ingestion, проверить Qdrant
+
+ОГРАНИЧЕНИЯ:
+- НЕ использовать asyncio.run() в mutate()
+- НЕ создавать новый event loop на каждый sync-метод если есть кэшированные ресурсы
+- Использовать asyncio.Runner (Python 3.11+) или один loop на весь mutate()
+- Закрывать async-ресурсы после обработки
+
+КРИТЕРИИ ПРИЁМКИ:
+- pytest tests/unit/ingestion/test_target_sync_execution.py -v → 3 passed
+- pytest tests/unit/ingestion/ -v → all pass
+- uv run python -m src.ingestion.unified.cli run → индексирует файлы
+- curl localhost:6333/collections/gdrive_documents_scalar → points_count > 0
+
+SKILLS: superpowers:executing-plans, superpowers:verification-before-completion
+
+НЕ делай git push. Коммить после каждой задачи.
+```
+
+---
+
+## ТЗ (обязательные требования)
+
+### Цель
+
+Починить async/sync mismatch в target connector так, чтобы unified ingestion pipeline выполнялся end-to-end
+(файлы из `~/drive-sync/` индексируются в Qdrant) и unit-тесты по sync execution проходили.
+
+### Проблема
+
+`cocoindex` вызывает `TargetConnector.mutate()` **синхронно**. Текущая реализация опирается на `asyncio.run()` и
+async handlers, из-за чего получаем конфликты event loop и блокировку пайплайна.
+
+### Ключевые ограничения (важно)
+
+- `mutate()` и все методы, вызываемые CocoIndex внутри `mutate()`, должны быть **синхронными** (не coroutine).
+- Запрещено использовать `asyncio.run(` (это проверяется тестом).
+- Нельзя создавать/переиспользовать `asyncpg.Pool` и/или `httpx.AsyncClient` между **разными** event loop'ами.
+  Это приводит к ошибкам вида `Future attached to a different loop` и к утечкам незакрытых соединений.
+- Если добавляются `*_sync()` методы к async-компонентам (StateManager/DoclingClient), то они должны:
+  - выполняться в **одном** runner/loop в рамках вызова `mutate()` (или на экземпляр адаптера),
+  - создавать async-ресурсы (pool/client) **в этом же loop** и корректно закрывать их в конце.
+
+Практически допустимые варианты реализации sync-моста:
+
+1) **Рекомендуется:** один `asyncio.Runner` (Python 3.11+) на весь вызов `mutate()`; все async-вызовы гоняются через
+   `runner.run(...)`, а ресурсы создаются/закрываются внутри того же runner.
+2) Background thread с event loop + `asyncio.run_coroutine_threadsafe` (если нужен reuse между вызовами).
+
+> Важно: не копировать подход “`asyncio.new_event_loop()` на каждый sync-метод” при наличии кэшируемых async-ресурсов
+> (`self._pool`, `self._client`). Это почти гарантированно ломает asyncpg/httpx из-за привязки к loop.
+
+### Объём работ (Definition of Done)
+
+- `QdrantHybridTargetConnector.mutate()` — полностью sync, без `asyncio.run(`.
+- `_handle_delete()` и `_handle_upsert()` — обычные sync-методы (не coroutine), без скрытых async-await.
+- Сохранить payload contract и replace semantics (delete → upsert) из текущего writer.
+- Закрывать async-ресурсы (docling client, asyncpg pool) после обработки пачки мутаций.
+
+### Критерии приёмки
+
+- `uv run pytest tests/unit/ingestion/test_target_sync_execution.py -v` проходит.
+- `uv run pytest tests/unit/ingestion/ -v` проходит.
+- `uv run python -m src.ingestion.unified.cli run` индексирует хотя бы 1 файл (коллекция `gdrive_documents_scalar`
+  имеет `points_count > 0`).
+- В логах нет `Future attached to a different loop` и нет предупреждений про незакрытые http/db соединения.
+
+### Техстек
+
+Python `>=3.11` (repo targets `py311`), CocoIndex `0.3.28`, asyncpg, httpx, Qdrant, Voyage AI.
+
+---
+
 ## Current State
 
 - **rclone:** ✅ Working, 15 files in `~/drive-sync/`
