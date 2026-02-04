@@ -8,7 +8,6 @@ This target connector receives mutations from CocoIndex and:
 4. Updates state in Postgres
 """
 
-import asyncio
 import dataclasses
 import hashlib
 import logging
@@ -39,9 +38,6 @@ def compute_content_hash(file_path: Path) -> str:
 class QdrantHybridTargetSpec(TargetSpec):
     """Configuration for Qdrant hybrid target."""
 
-    # Source
-    sync_dir: str = ""  # Base directory for resolving relative paths
-
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
@@ -70,7 +66,6 @@ class QdrantHybridTargetSpec(TargetSpec):
     def from_config(cls, config: UnifiedConfig) -> "QdrantHybridTargetSpec":
         """Create spec from UnifiedConfig."""
         return cls(
-            sync_dir=str(config.sync_dir),
             qdrant_url=config.qdrant_url,
             qdrant_api_key=config.qdrant_api_key,
             collection_name=config.collection_name,
@@ -90,7 +85,8 @@ class QdrantHybridTargetSpec(TargetSpec):
 class QdrantHybridTargetValues:
     """Value type for mutations from CocoIndex flow."""
 
-    source_path: str  # Relative path (abs_path computed from spec.sync_dir)
+    abs_path: str
+    source_path: str
     file_name: str
     mime_type: str
     file_size: int
@@ -180,12 +176,13 @@ class QdrantHybridTargetConnector:
     def mutate(
         *all_mutations: tuple[QdrantHybridTargetSpec, dict[str, QdrantHybridTargetValues | None]],
     ) -> None:
-        """Apply data mutations to Qdrant.
+        """Apply data mutations to Qdrant (fully synchronous).
 
-        Uses sync execution to avoid event loop conflicts.
         For each file_id:
         - None value: delete all points for file_id
         - Non-None value: parse, embed, upsert (replace semantics)
+
+        All operations use sync methods to avoid event loop conflicts.
         """
         for spec, mutations in all_mutations:
             for file_id, mutation in mutations.items():
@@ -204,14 +201,7 @@ class QdrantHybridTargetConnector:
         state_manager = cls._get_state_manager(spec)
 
         writer.delete_file_sync(file_id, spec.collection_name)
-
-        # State manager needs async - use a dedicated event loop
-        loop = asyncio.new_event_loop()
-        try:
-            loop.run_until_complete(state_manager.mark_deleted(file_id))
-        finally:
-            loop.close()
-
+        state_manager.mark_deleted_sync(file_id)
         logger.info(f"Deleted: file_id={file_id}")
 
     @classmethod
@@ -226,35 +216,25 @@ class QdrantHybridTargetConnector:
         docling = cls._get_docling(spec)
         state_manager = cls._get_state_manager(spec)
 
-        abs_path = Path(spec.sync_dir) / mutation.source_path
+        abs_path = Path(mutation.abs_path)
         source_path = mutation.source_path
 
         # Compute content hash
         content_hash = compute_content_hash(abs_path)
 
-        # State operations need async handling
-        loop = asyncio.new_event_loop()
+        # Check if processing needed (skip unchanged)
+        if not state_manager.should_process_sync(file_id, content_hash):
+            logger.debug(f"Skipping unchanged: {source_path}")
+            return
+
+        # Mark processing
+        state_manager.mark_processing_sync(file_id)
 
         try:
-            # Check if processing needed (skip unchanged)
-            should_process = loop.run_until_complete(
-                state_manager.should_process(file_id, content_hash)
-            )
-            if not should_process:
-                logger.debug(f"Skipping unchanged: {source_path}")
-                return
-
-            # Mark processing
-            loop.run_until_complete(state_manager.mark_processing(file_id))
-
-            # Connect docling if needed (async)
-            if not docling._client:
-                loop.run_until_complete(docling.connect())
-
-            # Parse and chunk (async)
-            docling_chunks = loop.run_until_complete(docling.chunk_file(abs_path))
+            # Parse and chunk (sync)
+            docling_chunks = docling.chunk_file_sync(abs_path)
             if not docling_chunks:
-                loop.run_until_complete(state_manager.mark_indexed(file_id, 0, content_hash))
+                state_manager.mark_indexed_sync(file_id, 0, content_hash)
                 logger.warning(f"No chunks from: {source_path}")
                 return
 
@@ -287,28 +267,22 @@ class QdrantHybridTargetConnector:
                 raise Exception("; ".join(stats.errors))
 
             # Update state
-            loop.run_until_complete(
-                state_manager.mark_indexed(file_id, stats.points_upserted, content_hash)
-            )
+            state_manager.mark_indexed_sync(file_id, stats.points_upserted, content_hash)
             logger.info(f"Indexed: {source_path} ({stats.points_upserted} chunks)")
 
         except Exception as e:
             logger.error(f"Upsert failed for {source_path}: {e}")
-            loop.run_until_complete(state_manager.mark_error(file_id, str(e)))
+            state_manager.mark_error_sync(file_id, str(e))
 
             # Check DLQ
-            state = loop.run_until_complete(state_manager.get_state(file_id))
+            state = state_manager.get_state_sync(file_id)
             if state and state.retry_count >= spec.max_retries:
-                loop.run_until_complete(
-                    state_manager.add_to_dlq(
-                        file_id=file_id,
-                        error_type=type(e).__name__,
-                        error_message=str(e),
-                        payload={"source_path": source_path},
-                    )
+                state_manager.add_to_dlq_sync(
+                    file_id=file_id,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    payload={"source_path": source_path},
                 )
                 logger.warning(f"Moved to DLQ: {source_path}")
 
             raise
-        finally:
-            loop.close()
