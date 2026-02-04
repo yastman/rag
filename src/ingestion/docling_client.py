@@ -252,8 +252,8 @@ class DoclingClient:
     ) -> list[DoclingChunk]:
         """Sync version of chunk_file() for CocoIndex target.
 
-        Creates a fresh event loop to run the async method.
-        Safe to call from sync context.
+        Uses a fresh httpx client per call to avoid loop mismatch issues.
+        Does NOT reuse self._client (which is async and bound to another loop).
 
         Args:
             file_path: Path to document file
@@ -262,17 +262,53 @@ class DoclingClient:
         Returns:
             List of DoclingChunk with rich metadata
         """
-        import asyncio
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
 
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            # Connect if needed
-            if self._client is None:
-                loop.run_until_complete(self.connect())
-            return loop.run_until_complete(self.chunk_file(file_path, contextualize))
-        finally:
-            loop.close()
+        suffix = file_path.suffix.lower()
+        if suffix not in self.SUPPORTED_FORMATS:
+            raise ValueError(f"Unsupported format: {suffix}")
+
+        # Use sync httpx client (NOT self._client which is async)
+        with httpx.Client(
+            base_url=self.config.base_url,
+            timeout=self.config.timeout,
+        ) as client:
+            file_content = file_path.read_bytes()
+            files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
+            data = self._build_chunking_form_data()
+
+            response = client.post("/v1/chunk/hybrid/file", files=files, data=data)
+            response.raise_for_status()
+            result = response.json()
+
+        # Parse chunks
+        chunks = []
+        raw_chunks = result.get("chunks", [])
+
+        if raw_chunks == []:
+            logger.warning(
+                "Docling returned 0 chunks for %s (status=%s).",
+                file_path.name,
+                response.status_code,
+            )
+
+        for raw_chunk in raw_chunks:
+            text = raw_chunk.get("contextualized_text") or raw_chunk.get("text", "")
+            if not text:
+                continue
+
+            chunk = DoclingChunk(
+                text=text,
+                seq_no=raw_chunk.get("seq_no", raw_chunk.get("chunk_index", len(chunks))),
+                headings=raw_chunk.get("headings", []),
+                page_range=self._parse_page_range_from_chunk(raw_chunk),
+                metadata=raw_chunk.get("meta") or raw_chunk.get("metadata", {}),
+            )
+            chunks.append(chunk)
+
+        logger.info(f"Chunked (sync) {file_path.name}: {len(chunks)} chunks")
+        return chunks
 
     def to_ingestion_chunks(
         self,
