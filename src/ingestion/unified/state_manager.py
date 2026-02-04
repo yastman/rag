@@ -1,6 +1,7 @@
 # src/ingestion/unified/state_manager.py
 """State manager using existing Postgres ingestion_state table."""
 
+import asyncio
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -209,3 +210,51 @@ class UnifiedStateManager:
         pool = await self._get_pool()
         row = await pool.fetchrow(f"SELECT COUNT(*) as count FROM {self._dlq_table}")
         return row["count"]
+
+    # =========================================================================
+    # SYNC METHODS (for CocoIndex target connector)
+    # =========================================================================
+    # These wrap async methods using a dedicated event loop.
+    # Safe to call from sync context (e.g., CocoIndex mutate()).
+
+    def _run_sync(self, coro):
+        """Run coroutine synchronously with a fresh event loop."""
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
+
+    def get_state_sync(self, file_id: str) -> FileState | None:
+        """Sync version of get_state()."""
+        return self._run_sync(self.get_state(file_id))
+
+    def should_process_sync(self, file_id: str, content_hash: str) -> bool:
+        """Sync version of should_process()."""
+        return self._run_sync(self.should_process(file_id, content_hash))
+
+    def mark_processing_sync(self, file_id: str) -> None:
+        """Sync version of mark_processing()."""
+        self._run_sync(self.mark_processing(file_id))
+
+    def mark_indexed_sync(self, file_id: str, chunk_count: int, content_hash: str) -> None:
+        """Sync version of mark_indexed()."""
+        self._run_sync(self.mark_indexed(file_id, chunk_count, content_hash))
+
+    def mark_error_sync(self, file_id: str, error: str) -> None:
+        """Sync version of mark_error()."""
+        self._run_sync(self.mark_error(file_id, error))
+
+    def mark_deleted_sync(self, file_id: str) -> None:
+        """Sync version of mark_deleted()."""
+        self._run_sync(self.mark_deleted(file_id))
+
+    def add_to_dlq_sync(
+        self,
+        file_id: str,
+        error_type: str,
+        error_message: str,
+        payload: dict | None = None,
+    ) -> int:
+        """Sync version of add_to_dlq()."""
+        return self._run_sync(self.add_to_dlq(file_id, error_type, error_message, payload))
