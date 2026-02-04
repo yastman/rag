@@ -128,3 +128,28 @@ W2: 3,4
 Claude понимает: прочитать план, запустить `spawn-claude` для каждого воркера с правильными скиллами. Оркестратор (основной Claude) не делает задачи сам — только коммитит после воркеров.
 
 **Правило:** 1 воркер = 1 набор независимых файлов. Никогда не делить один файл между воркерами.
+
+## Docker Hardening (Feb 2026)
+
+**Applied fixes:**
+
+| Issue | Fix | Files |
+|-------|-----|-------|
+| ENTRYPOINT + command duplication | Removed duplicate command from ingestion service | `docker-compose.dev.yml` |
+| Healthchecks using `requests` | Switched to `urllib.request` (stdlib) | `docker-compose.dev.yml` |
+| Ports open to LAN | Bound langfuse/litellm to `127.0.0.1` | `docker-compose.dev.yml` |
+| Floating image tags | Pinned minio, docling by digest/release | `docker-compose.dev.yml`, `docker-compose.local.yml` |
+
+**Pinned images:**
+- `minio/minio:RELEASE.2024-11-07T00-52-20Z`
+- `ghcr.io/docling-project/docling-serve-cpu@sha256:4e93e8e...`
+- `quay.io/docling-project/docling-serve@sha256:0acc75b...`
+
+**Verification:**
+```bash
+docker compose -f docker-compose.dev.yml config --quiet  # Must succeed
+grep "import requests" docker-compose.dev.yml            # Must return nothing
+grep -E "127\.0\.0\.1:(3001|4000)" docker-compose.dev.yml  # Must match
+```
+
+**Plan:** `docs/plans/2026-02-04-docker-hardening.md`
