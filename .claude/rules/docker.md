@@ -153,3 +153,22 @@ grep -E "127\.0\.0\.1:(3001|4000)" docker-compose.dev.yml  # Must match
 ```
 
 **Plan:** `docs/plans/2026-02-04-docker-hardening.md`
+
+## Loki Rules Mount (Feb 2026)
+
+**Issue:** Loki Ruler expects rules in `/etc/loki/rules/<tenant>/` (tenant=`fake` in dev), but rules were mounted to `/etc/loki/rules/`.
+
+**Fix:** Changed mount in `docker-compose.dev.yml`:
+```yaml
+# Before (broken)
+- ./docker/monitoring/rules:/etc/loki/rules:ro
+# After (working)
+- ./docker/monitoring/rules:/etc/loki/rules/fake:ro
+```
+
+**Verification:**
+```bash
+curl -sS http://localhost:3100/loki/api/v1/rules | head -5  # Should return YAML, not 400
+```
+
+**Plan:** `docs/plans/2026-02-04-alerting-telegram-audit-and-fix-spec.md`
