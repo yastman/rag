@@ -2,13 +2,16 @@
 
 **Date:** 2026-02-04
 
-**Goal:** Fix critical Docker issues that can break container startup and improve security/reproducibility.
+**Goal:** Fix critical Docker issues + improve operational hygiene (memory limits, log rotation, secrets management).
 
-**Scope:** Direct edits to Compose files only (no application code changes).
+**Scope:**
+- Direct edits to Compose files
+- Makefile updates for --compatibility
+- DOCKER.md policy documentation
 
 **Non-goals:**
 - Redesigning service architecture, networks, or volumes
-- Refactoring Dockerfiles (beyond Compose hardening)
+- Refactoring Dockerfiles (see phase2 plan)
 
 **Tech stack:** Docker Compose, Python `urllib.request` (stdlib)
 
@@ -16,14 +19,19 @@
 - `docker compose -f docker-compose.dev.yml config --quiet` succeeds
 - `docker compose -f docker-compose.local.yml config --quiet` succeeds
 - Core dev services can reach `healthy` without relying on optional Python deps in healthchecks
-- No `latest`/`main` tags remain in Compose files for 3rd-party services where pinning is feasible
+- No `latest`/`main` tags remain in Compose files for 3rd-party services
+- Memory limits enforced via `--compatibility` flag
+- Log rotation configured for noisy services
+- Missing secrets cause immediate fail with clear error message
 
 ---
 
-## Task 1: Fix Ingestion Command Duplication
+## Task 1: Fix Ingestion Command Duplication ✅
+
+**Status:** Done
 
 **Files:**
-- Modify: `docker-compose.dev.yml` (service: `ingestion`)
+- Modified: `docker-compose.dev.yml` (service: `ingestion`)
 
 **Context:**
 `Dockerfile.ingestion` has:
@@ -33,265 +41,490 @@ CMD ["run", "--watch"]
 ```
 If the compose file also sets the full `command: ["uv", "run", ...]`, Docker concatenates `ENTRYPOINT + command`, producing an invalid invocation.
 
-**Step 1: Remove the full command override**
+**Change:** Removed the full command override from compose file.
 
-In `docker-compose.dev.yml`, remove this line from the `ingestion` service:
-```yaml
-    command: ["uv", "run", "python", "-m", "src.ingestion.unified.cli", "run", "--watch"]
+---
+
+## Task 2: Fix Healthchecks to Use stdlib ✅
+
+**Status:** Done
+
+**Files:**
+- Modified: `docker-compose.dev.yml` (services: `bge-m3`, `bm42`, `user-base`, `lightrag`)
+
+**Context:**
+Healthchecks used `import requests`, but not all service images explicitly install `requests`. Switched to `urllib.request` (stdlib) to make healthchecks deterministic.
+
+**Change:** Replaced `requests.get()` with `urllib.request.urlopen()` in all healthchecks.
+
+---
+
+## Task 3: Bind Exposed Ports to Localhost ✅
+
+**Status:** Done
+
+**Files:**
+- Modified: `docker-compose.dev.yml` (services: `langfuse`, `litellm`)
+
+**Context:**
+langfuse and litellm exposed ports to all interfaces (0.0.0.0). On a dev machine in a network, this exposes services to other hosts.
+
+**Change:** Bound ports to `127.0.0.1:3001:3000` and `127.0.0.1:4000:4000`.
+
+---
+
+## Task 4: Pin Floating Image Tags ✅
+
+**Status:** Done
+
+**Files:**
+- Modified: `docker-compose.dev.yml` (services: `minio`, `docling`)
+- Modified: `docker-compose.local.yml` (service: `docling`)
+
+**Context:**
+`latest` and `main` tags change without notice, breaking builds.
+
+**Change:**
+- `minio/minio:latest` → `minio/minio:RELEASE.2024-11-07T00-52-20Z`
+- `docling-serve-cpu:main` → `@sha256:4e93e8ec95accd74474a60d0cbbd1292b333bba2c53bb43074ae966d3f1becc8`
+- `docling-serve:latest` → `@sha256:0acc75bd86219a8c8cdf38970cb651b0567844d6c97ec9d9023624c8209c6efc`
+
+---
+
+## Task 5: Memory Limits via --compatibility
+
+**Status:** New
+
+**Files:**
+- Modify: `Makefile`
+
+**Context:**
+`deploy.resources.limits.memory` in compose only works with `docker compose --compatibility` or Swarm mode. Currently limits are defined but not enforced.
+
+**Step 1: Add COMPOSE_CMD variable**
+
+In `Makefile`, define a common compose command:
+
+```makefile
+COMPOSE_CMD := docker compose --compatibility -f docker-compose.dev.yml
 ```
 
-Alternative (if you want Compose to override behavior): keep `ENTRYPOINT` from image and set only args:
-```yaml
-    command: ["run", "--watch"]
+**Step 2: Update all docker targets**
+
+All docker compose commands must use `$(COMPOSE_CMD)`:
+
+```makefile
+# Up commands
+docker-up:
+	$(COMPOSE_CMD) up -d postgres redis qdrant docling bm42
+
+docker-bot-up:
+	$(COMPOSE_CMD) --profile bot up -d
+
+docker-full-up:
+	$(COMPOSE_CMD) --profile full up -d
+
+docker-ml-up:
+	$(COMPOSE_CMD) --profile ml up -d
+
+docker-obs-up:
+	$(COMPOSE_CMD) --profile obs up -d
+
+docker-ai-up:
+	$(COMPOSE_CMD) --profile ai up -d
+
+docker-ingest-up:
+	$(COMPOSE_CMD) --profile ingest up -d
+
+# Down/logs/ps/build
+docker-down:
+	$(COMPOSE_CMD) down
+
+docker-logs:
+	$(COMPOSE_CMD) logs -f
+
+docker-ps:
+	$(COMPOSE_CMD) ps
+
+docker-build:
+	$(COMPOSE_CMD) build
 ```
-
-**Step 2: Verify syntax**
-
-Run: `docker compose -f docker-compose.dev.yml config --quiet`
-Expected: No output (valid YAML)
 
 **Step 3: Acceptance**
-- `docker compose -f docker-compose.dev.yml --profile ingest up -d ingestion` starts the container without argument-concatenation errors.
 
-**Step 4: Commit (optional)**
+```bash
+make docker-bot-up
+docker inspect dev-litellm --format '{{.HostConfig.Memory}}'
+# Expected: 536870912 (512M in bytes), NOT 0
+
+docker inspect dev-bm42 --format '{{.HostConfig.Memory}}'
+# Expected: 1073741824 (1G in bytes), NOT 0
+```
+
+Value must be > 0 and match the service's configured limit.
+
+**Step 4: Commit**
+
+```bash
+git add Makefile
+git commit -m "fix(docker): enable memory limits via --compatibility flag
+
+deploy.resources.limits now enforced in non-Swarm mode.
+All Makefile compose commands use \$(COMPOSE_CMD) with --compatibility."
+```
+
+---
+
+## Task 6: Log Rotation for Noisy Services
+
+**Status:** New
+
+**Files:**
+- Modify: `docker-compose.dev.yml`
+
+**Context:**
+Only `ingestion` has logging config (10m/3). Noisy services (bot, litellm, langfuse*) can grow logs unboundedly.
+
+**Step 1: Add logging config to noisy services**
+
+Add to `bot`, `litellm`, `langfuse`, `langfuse-worker`:
+
+```yaml
+  bot:
+    # ... existing config ...
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  litellm:
+    # ... existing config ...
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  langfuse:
+    # ... existing config ...
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  langfuse-worker:
+    # ... existing config ...
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+```
+
+**Not modified:**
+- `ingestion` — already has `10m/3`
+- `postgres`, `qdrant`, `redis` — databases typically don't log heavily
+
+**Step 2: Acceptance**
+
+Container must be recreated to pick up new LogConfig:
+
+```bash
+docker compose --compatibility -f docker-compose.dev.yml --profile bot up -d --force-recreate litellm
+docker inspect dev-litellm --format '{{json .HostConfig.LogConfig}}'
+# Expected: {"Type":"json-file","Config":{"max-file":"5","max-size":"50m"}}
+```
+
+**Step 3: Commit**
 
 ```bash
 git add docker-compose.dev.yml
-git commit -m "fix(docker): remove duplicate ingestion command
+git commit -m "fix(docker): add log rotation for noisy services
 
-Dockerfile.ingestion already has ENTRYPOINT + CMD. The compose command
-was causing Docker to concatenate them into invalid invocation."
+bot, litellm, langfuse, langfuse-worker: max-size 50m, max-file 5.
+Prevents unbounded log growth on dev machines."
 ```
 
 ---
 
-## Task 2: Fix Healthchecks to Use stdlib
+## Task 7: Image Versioning Policy
+
+**Status:** New
 
 **Files:**
-- Modify: `docker-compose.dev.yml` (services: `bge-m3`, `bm42`, `user-base`, `lightrag`)
+- Modify: `DOCKER.md`
 
 **Context:**
-Healthchecks use `import requests`, but not all service images explicitly install `requests`. Switch to `urllib.request` (stdlib) to make healthchecks deterministic.
+Need to document the image versioning policy: when to use tags vs digests.
 
-**Step 1: Replace healthcheck snippets**
+**Step 1: Add policy section to DOCKER.md**
 
-Change each of these patterns:
-```yaml
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:PORT/health', timeout=5)"]
+```markdown
+## Image Versioning Policy
+
+| Type | Strategy | Example |
+|------|----------|---------|
+| Stable 3rd-party | Versioned tag | `redis:8.4.0`, `qdrant/qdrant:v1.16`, `clickhouse:24.8` |
+| Floating tag only | Digest pin | `docling-serve-cpu@sha256:4e93e8e...` |
+| Self-built | Local build | `services/bm42/Dockerfile` |
+
+**Rules:**
+- Never use `latest` or `main` tags in compose files
+- Versioned tags (semver, release tags, version numbers) are sufficient for reproducibility
+- Digest pinning required only when no stable tag exists (e.g., Docling)
+- Update tags explicitly via Renovate PR or manual bump
+
+**Current pinned digests:**
+- `ghcr.io/docling-project/docling-serve-cpu@sha256:4e93e8ec95accd74474a60d0cbbd1292b333bba2c53bb43074ae966d3f1becc8`
+- `quay.io/docling-project/docling-serve@sha256:0acc75bd86219a8c8cdf38970cb651b0567844d6c97ec9d9023624c8209c6efc`
 ```
 
-To:
-```yaml
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:PORT/health', timeout=5)"]
-```
-
-**Step 2: Verify syntax**
-
-Run: `docker compose -f docker-compose.dev.yml config --quiet`
-Expected: No output (valid YAML)
-
-**Step 3: Acceptance**
-- `bm42` and `user-base` can become `healthy` without adding new Python deps to their images.
-
-**Step 4: Commit (optional)**
+**Step 2: Acceptance**
 
 ```bash
-git add docker-compose.dev.yml
-git commit -m "fix(docker): use urllib.request in healthchecks
+rg -n '\b(latest|main)\b' docker-compose.dev.yml docker-compose.local.yml
+# Expected: empty output (no floating tags)
+```
 
-Replace requests.get with urllib.request.urlopen (stdlib).
-bm42 and user-base don't explicitly install requests, making
-healthchecks fragile. urllib.request is always available."
+**Step 3: Commit**
+
+```bash
+git add DOCKER.md
+git commit -m "docs(docker): document image versioning policy
+
+Versioned tags for stable images, digest pins for floating-only.
+No latest/main tags allowed in compose files."
 ```
 
 ---
 
-## Task 3: Bind Exposed Ports to Localhost
+## Task 8: Dev-Secrets Fail-Fast
+
+**Status:** New
 
 **Files:**
-- Modify: `docker-compose.dev.yml` (services: `langfuse`, `litellm`)
+- Modify: `docker-compose.dev.yml`
+- Modify: `.env.example`
+- Modify: `DOCKER.md`
 
 **Context:**
-langfuse and litellm expose ports to all interfaces (0.0.0.0). On a dev machine in a network, this exposes services to other hosts. Bind to 127.0.0.1 like other services.
+Dev compose has default values for secrets that could accidentally leak to production or cause silent misconfiguration. Critical secrets should fail immediately if missing.
 
-**Step 1: Bind ports to 127.0.0.1**
+**Step 1: Add fail-fast for bot profile secrets**
 
-Change from:
+In `docker-compose.dev.yml`, update `litellm` service:
+
 ```yaml
-    ports:
-      - "3001:3000"
+  litellm:
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      # LLM providers — optional, at least one needed
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 ```
 
-To:
+Update `bot` service:
+
 ```yaml
-    ports:
-      - "127.0.0.1:3001:3000"
+  bot:
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:?VOYAGE_API_KEY is required}
+      LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
 ```
 
-And:
+**Step 2: Add fail-fast for ml profile secrets**
+
+Update `langfuse` environment anchor (`&langfuse-env`):
+
 ```yaml
-    ports:
-      - "4000:4000"
+  langfuse-worker:
+    environment: &langfuse-env
+      # ... existing config ...
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      SALT: ${SALT:?SALT is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
 ```
 
-To:
-```yaml
-    ports:
-      - "127.0.0.1:4000:4000"
-```
+**Step 3: Keep dev defaults for core**
 
-**Step 2: Verify syntax**
+These remain unchanged (OK for local dev):
+- `POSTGRES_PASSWORD: postgres`
+- `redis-langfuse --requirepass langfuseredis`
+- `MINIO_ROOT_PASSWORD: miniosecret`
+- `CLICKHOUSE_PASSWORD: clickhouse`
 
-Run: `docker compose -f docker-compose.dev.yml config --quiet`
-Expected: No output (valid YAML)
-
-**Step 3: Acceptance**
-- `ss -tlnp | grep 3001` shows `127.0.0.1:3001` (not `0.0.0.0:3001`)
-- `ss -tlnp | grep 4000` shows `127.0.0.1:4000` (not `0.0.0.0:4000`)
-
-**Step 4: Commit (optional)**
+**Step 4: Update .env.example**
 
 ```bash
-git add docker-compose.dev.yml
-git commit -m "fix(docker): bind langfuse/litellm ports to localhost
+# =============================================================================
+# Required for bot profile
+# =============================================================================
+TELEGRAM_BOT_TOKEN=
+VOYAGE_API_KEY=
+LITELLM_MASTER_KEY=
 
-Prevent exposure to LAN. Matches pattern used by other services
-(postgres, redis, qdrant all bind to 127.0.0.1)."
+# =============================================================================
+# Required for ml profile
+# =============================================================================
+NEXTAUTH_SECRET=   # generate: openssl rand -base64 32
+SALT=              # generate: openssl rand -base64 32
+ENCRYPTION_KEY=    # generate: openssl rand -hex 32
+
+# =============================================================================
+# LLM Providers (at least one required for bot profile)
+# =============================================================================
+CEREBRAS_API_KEY=
+GROQ_API_KEY=
+OPENAI_API_KEY=
+```
+
+**Step 5: Update DOCKER.md**
+
+Add section:
+
+```markdown
+## Required Environment Variables
+
+| Profile | Required Variables | Notes |
+|---------|-------------------|-------|
+| core | None | Dev defaults for postgres/redis/qdrant |
+| bot | TELEGRAM_BOT_TOKEN, VOYAGE_API_KEY, LITELLM_MASTER_KEY | + at least one LLM provider |
+| ml | NEXTAUTH_SECRET, SALT, ENCRYPTION_KEY | Crypto keys for Langfuse |
+| full | All of the above | |
+
+**LLM Providers:** At least one of CEREBRAS_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY must be set for the bot profile. LiteLLM uses fallback chain: Cerebras → Groq → OpenAI.
+
+**Behavior:** Missing required variables cause compose to abort immediately with a clear error message (e.g., "TELEGRAM_BOT_TOKEN is required").
+```
+
+**Step 6: Acceptance**
+
+```bash
+# Test fail-fast (without editing .env)
+TELEGRAM_BOT_TOKEN= make docker-bot-up
+# Expected: compose aborts with "TELEGRAM_BOT_TOKEN is required"
+
+# Core profile still works without secrets
+make docker-up
+# Expected: postgres, redis, qdrant, docling, bm42 start successfully
+```
+
+**Step 7: Commit**
+
+```bash
+git add docker-compose.dev.yml .env.example DOCKER.md
+git commit -m "fix(docker): fail-fast for missing secrets in bot/ml profiles
+
+Required: TELEGRAM_BOT_TOKEN, VOYAGE_API_KEY, LITELLM_MASTER_KEY (bot)
+Required: NEXTAUTH_SECRET, SALT, ENCRYPTION_KEY (ml)
+LLM providers optional but at least one needed (documented).
+Core profile keeps dev defaults for local development."
 ```
 
 ---
 
-## Task 4: Pin Floating Image Tags
+## Task 9: Integration Test
 
-**Files:**
-- Modify: `docker-compose.dev.yml` (services: `minio`, `docling`)
-- Modify: `docker-compose.local.yml` (service: `docling`)
+**Status:** Updated (covers all changes)
 
-**Context:**
-`latest` and `main` tags change without notice, breaking builds. Pin to specific versions.
+**Files:** None (verification only)
 
-**Step 1: Pin MinIO to a release tag (or digest)**
-
-Preferred (human-readable, stable): pin to a specific `RELEASE.*` tag.
-
-Change:
-```yaml
-  minio:
-    image: minio/minio:latest
-```
-
-To:
-```yaml
-  minio:
-    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
-```
-
-Optional (most reproducible): additionally resolve and pin digest:
-```bash
-docker manifest inspect --verbose minio/minio:RELEASE.2024-11-07T00-52-20Z | head
-```
-
-**Step 2: Pin Docling images by digest**
-
-Docling tags may be `main`/`latest` without a stable semver tag available in registry. Use digest pinning to freeze the exact image.
-
-Resolve digests:
-```bash
-docker manifest inspect --verbose ghcr.io/docling-project/docling-serve-cpu:main | head -20
-docker manifest inspect --verbose quay.io/docling-project/docling-serve:latest | head -20
-```
-
-As of **2026-02-04**, the digests observed:
-- `ghcr.io/docling-project/docling-serve-cpu:main@sha256:4e93e8ec95accd74474a60d0cbbd1292b333bba2c53bb43074ae966d3f1becc8`
-- `quay.io/docling-project/docling-serve:latest@sha256:0acc75bd86219a8c8cdf38970cb651b0567844d6c97ec9d9023624c8209c6efc`
-
-Pin in `docker-compose.dev.yml`:
-```yaml
-  docling:
-    image: ghcr.io/docling-project/docling-serve-cpu@sha256:4e93e8ec95accd74474a60d0cbbd1292b333bba2c53bb43074ae966d3f1becc8
-```
-
-Pin in `docker-compose.local.yml`:
-```yaml
-  docling:
-    image: quay.io/docling-project/docling-serve@sha256:0acc75bd86219a8c8cdf38970cb651b0567844d6c97ec9d9023624c8209c6efc
-```
-
-**Step 3: Verify syntax for both files**
-
-Run: `docker compose -f docker-compose.dev.yml config --quiet && docker compose -f docker-compose.local.yml config --quiet`
-Expected: No output (valid YAML)
-
-**Step 4: Acceptance**
-- `docker pull` succeeds for the pinned `minio` tag and both Docling digests.
-
-**Step 5: Commit (optional)**
+**Step 1: Verify compose syntax**
 
 ```bash
-git add docker-compose.dev.yml docker-compose.local.yml
-git commit -m "fix(docker): pin minio and docling image tags
-
-Replace floating tags (latest, main) with stable refs.
-Prevents 'works today, breaks tomorrow' scenarios.
-
-- minio: latest → RELEASE.2024-11-07T00-52-20Z
-- docling-serve-cpu: main → @sha256:4e93e8e...
-- docling-serve: latest → @sha256:0acc75b..."
+docker compose --compatibility -f docker-compose.dev.yml config --quiet
+docker compose --compatibility -f docker-compose.local.yml config --quiet
+# Expected: no output (valid YAML)
 ```
 
----
+**Step 2: Dev base stack without secrets**
 
-## Task 5: Integration Test
+```bash
+make docker-down
+make docker-up
+sleep 30
+docker compose --compatibility -f docker-compose.dev.yml ps
+# Expected: postgres, redis, qdrant, docling, bm42 — healthy/running
+```
 
-**Files:**
-- None (verification only)
+**Step 3: Memory limits work (base stack)**
 
-**Step 1: Start core services**
+```bash
+docker inspect dev-bm42 --format '{{.HostConfig.Memory}}'
+# Expected: 1073741824 (1G), NOT 0
+```
 
-Run (warning: `down -v` deletes volumes): `docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d postgres redis qdrant bm42`
+**Step 4: Bot profile + memory limits via Makefile**
 
-Expected: All 4 services start
+```bash
+make docker-bot-up
+docker inspect dev-litellm --format '{{.HostConfig.Memory}}'
+# Expected: 536870912 (512M), NOT 0
+# This confirms Makefile uses --compatibility
+```
 
-**Step 2: Wait for healthy status**
+**Step 5: Log rotation after recreate**
 
-Run: `sleep 30 && docker compose -f docker-compose.dev.yml ps`
+```bash
+docker compose --compatibility -f docker-compose.dev.yml --profile bot up -d --force-recreate litellm
+docker inspect dev-litellm --format '{{json .HostConfig.LogConfig}}'
+# Expected: {"Type":"json-file","Config":{"max-file":"5","max-size":"50m"}}
+```
 
-Expected: All services show "healthy" or "running"
+**Step 6: Fail-fast works**
 
-**Step 3: Verify bm42 healthcheck works**
+```bash
+TELEGRAM_BOT_TOKEN= make docker-bot-up
+# Expected: compose aborts with "TELEGRAM_BOT_TOKEN is required"
+```
 
-Run: `docker inspect dev-bm42 --format='{{.State.Health.Status}}'`
+**Step 7: Port bindings (from original plan)**
 
-Expected: `healthy`
+```bash
+ss -tlnp | grep -E '(3001|4000)'
+# Expected: 127.0.0.1:3001, 127.0.0.1:4000 (NOT 0.0.0.0)
+```
 
-**Step 4: Verify port bindings**
+**Step 8: No floating tags**
 
-Run: `docker compose -f docker-compose.dev.yml --profile bot up -d litellm && sleep 5 && ss -tlnp | grep 4000`
+```bash
+rg -n '\b(latest|main)\b' docker-compose.dev.yml docker-compose.local.yml
+# Expected: empty output
+```
 
-Expected: Shows `127.0.0.1:4000` (not `0.0.0.0:4000`)
+**Step 9: Cleanup**
 
-**Step 5: Test ingestion starts correctly (if profile available)**
-
-Run: `docker compose -f docker-compose.dev.yml --profile ingest up -d ingestion && sleep 10 && docker logs dev-ingestion 2>&1 | head -20`
-
-Expected: Normal startup logs, NOT "uv: error: unrecognized arguments"
-
-**Step 6: Cleanup**
-
-Run: `docker compose -f docker-compose.dev.yml down`
+```bash
+make docker-down
+```
 
 ---
 
 ## Summary
 
-| Task | Files | Commits |
-|------|-------|---------|
-| 1. Fix ingestion command | docker-compose.dev.yml | 1 |
-| 2. Fix healthchecks | docker-compose.dev.yml | 1 |
-| 3. Bind ports to localhost | docker-compose.dev.yml | 1 |
-| 4. Pin image tags | docker-compose.dev.yml, docker-compose.local.yml | 1 |
-| 5. Integration test | — | 0 |
+| Task | Files | Status |
+|------|-------|--------|
+| 1. Fix ingestion command | docker-compose.dev.yml | ✅ Done |
+| 2. Fix healthchecks | docker-compose.dev.yml | ✅ Done |
+| 3. Bind ports to localhost | docker-compose.dev.yml | ✅ Done |
+| 4. Pin floating tags | docker-compose.dev.yml, docker-compose.local.yml | ✅ Done |
+| 5. Memory limits | Makefile | New |
+| 6. Log rotation | docker-compose.dev.yml | New |
+| 7. Image pin policy | DOCKER.md | New |
+| 8. Dev-secrets fail-fast | docker-compose.dev.yml, .env.example, DOCKER.md | New |
+| 9. Integration test | — | Verification |
 
-**Total:** 4 commits, 2 files modified
+**Total:** 4 commits (Tasks 5–8), 4 files modified (Makefile, docker-compose.dev.yml, .env.example, DOCKER.md)
+
+---
+
+## Phase 2 (Separate Plan)
+
+Dockerfile hardening tasks deferred to `docs/plans/2026-02-04-docker-hardening-phase2.md`:
+- Non-root users for custom services (bm42, user-base, bge-m3-api)
+- Pin dependency versions in Dockerfiles
+- Multi-stage builds optimization
