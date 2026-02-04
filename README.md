@@ -21,7 +21,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 
 # Start services and run
-make docker-up          # Start Qdrant, Redis, MLflow
+make docker-up          # Start core (5 services, ~17s)
+make docker-full-up     # Start all (20 services)
 make check              # Lint + type check
 make test               # Run tests
 ```
