@@ -285,53 +285,56 @@ clean: ## Clean up cache files and build artifacts
 # DOCKER PROFILES
 # =============================================================================
 
+# Common compose command with --compatibility to enforce deploy.resources.limits
+COMPOSE_CMD := docker compose --compatibility -f docker-compose.dev.yml
+
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
 
 docker-core-up: ## Start core services (postgres, qdrant, redis, docling, bm42)
 	@echo "$(BLUE)Starting core services...$(NC)"
-	docker compose -f docker-compose.dev.yml up -d
+	$(COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
 
 docker-bot-up: ## Start core + bot services (litellm, bot)
 	@echo "$(BLUE)Starting bot services...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile bot up -d
+	$(COMPOSE_CMD) --profile bot up -d
 	@echo "$(GREEN)✓ Bot services started$(NC)"
 
 docker-obs-up: ## Start core + observability (loki, promtail, alertmanager)
 	@echo "$(BLUE)Starting observability services...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile obs up -d
+	$(COMPOSE_CMD) --profile obs up -d
 	@echo "$(GREEN)✓ Observability services started$(NC)"
 
 docker-ml-up: ## Start core + ML platform (langfuse, mlflow, clickhouse, minio)
 	@echo "$(BLUE)Starting ML platform services...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile ml up -d
+	$(COMPOSE_CMD) --profile ml up -d
 	@echo "$(GREEN)✓ ML platform started$(NC)"
 
 docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base, lightrag)
 	@echo "$(BLUE)Starting AI services...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile ai up -d
+	$(COMPOSE_CMD) --profile ai up -d
 	@echo "$(GREEN)✓ AI services started$(NC)"
 
 docker-ingest-up: ## Start core + ingestion service
 	@echo "$(BLUE)Starting ingestion service...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile ingest up -d
+	$(COMPOSE_CMD) --profile ingest up -d
 	@echo "$(GREEN)✓ Ingestion service started$(NC)"
 
 docker-full-up: ## Start all services (full stack)
 	@echo "$(BLUE)Starting full stack...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile full up -d
+	$(COMPOSE_CMD) --profile full up -d
 	@echo "$(GREEN)✓ Full stack started$(NC)"
 
 docker-up: docker-core-up ## Alias for docker-core-up (backward compat)
 
 docker-down: ## Stop all Docker services
 	@echo "$(BLUE)Stopping Docker services...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile full down
+	$(COMPOSE_CMD) --profile full down
 	@echo "$(GREEN)✓ Services stopped$(NC)"
 
 docker-ps: ## Show Docker service status
 	@echo "$(BLUE)Docker service status:$(NC)"
-	@docker compose -f docker-compose.dev.yml --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+	@$(COMPOSE_CMD) --profile full ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
 # =============================================================================
 # DEVELOPMENT WORKFLOW
@@ -558,7 +561,7 @@ eval-rag-full: ## Full RAG evaluation with all metrics
 
 monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
 	@echo "$(BLUE)Starting monitoring stack...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile obs up -d
+	$(COMPOSE_CMD) --profile obs up -d
 	@echo "$(GREEN)✓ Monitoring stack started$(NC)"
 	@echo "$(YELLOW)Services:$(NC)"
 	@echo "  Loki:         http://localhost:3100"
@@ -566,16 +569,16 @@ monitoring-up: ## Start monitoring stack (Loki, Promtail, Alertmanager)
 
 monitoring-down: ## Stop monitoring stack
 	@echo "$(BLUE)Stopping monitoring stack...$(NC)"
-	docker compose -f docker-compose.dev.yml --profile obs stop
+	$(COMPOSE_CMD) --profile obs stop
 	@echo "$(GREEN)✓ Monitoring stack stopped$(NC)"
 
 monitoring-logs: ## View monitoring stack logs
 	@echo "$(BLUE)Monitoring stack logs (Ctrl+C to exit):$(NC)"
-	docker compose -f docker-compose.dev.yml logs -f loki promtail alertmanager
+	$(COMPOSE_CMD) logs -f loki promtail alertmanager
 
 monitoring-status: ## Show monitoring stack status
 	@echo "$(BLUE)Monitoring stack status:$(NC)"
-	@docker compose -f docker-compose.dev.yml ps loki promtail alertmanager
+	@$(COMPOSE_CMD) ps loki promtail alertmanager
 	@echo ""
 	@echo "$(YELLOW)Checking health...$(NC)"
 	@curl -s http://localhost:3100/ready > /dev/null 2>&1 && echo "  Loki: $(GREEN)OK$(NC)" || echo "  Loki: $(RED)DOWN$(NC)"

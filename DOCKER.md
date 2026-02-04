@@ -148,6 +148,37 @@ docker exec -it dev-redis redis-cli
 docker stats
 ```
 
+## Image Versioning Policy
+
+| Type | Strategy | Example |
+|------|----------|---------|
+| Stable 3rd-party | Versioned tag | `redis:8.4.0`, `qdrant/qdrant:v1.16`, `clickhouse:24.8` |
+| Floating tag only | Digest pin | `docling-serve-cpu@sha256:4e93e8e...` |
+| Self-built | Local build | `services/bm42/Dockerfile` |
+
+**Rules:**
+- Never use `latest` or `main` tags in compose files
+- Versioned tags (semver, release tags, version numbers) are sufficient for reproducibility
+- Digest pinning required only when no stable tag exists (e.g., Docling)
+- Update tags explicitly via Renovate PR or manual bump
+
+**Current pinned digests:**
+- `ghcr.io/docling-project/docling-serve-cpu@sha256:4e93e8ec95accd74474a60d0cbbd1292b333bba2c53bb43074ae966d3f1becc8`
+- `quay.io/docling-project/docling-serve@sha256:0acc75bd86219a8c8cdf38970cb651b0567844d6c97ec9d9023624c8209c6efc`
+
+## Required Environment Variables
+
+| Profile | Required Variables | Notes |
+|---------|-------------------|-------|
+| core | None | Dev defaults for postgres/redis/qdrant |
+| bot | TELEGRAM_BOT_TOKEN, VOYAGE_API_KEY, LITELLM_MASTER_KEY | + at least one LLM provider |
+| ml | NEXTAUTH_SECRET, SALT, ENCRYPTION_KEY | Crypto keys for Langfuse |
+| full | All of the above | |
+
+**LLM Providers:** At least one of CEREBRAS_API_KEY, GROQ_API_KEY, or OPENAI_API_KEY must be set for the bot profile. LiteLLM uses fallback chain: Cerebras → Groq → OpenAI.
+
+**Behavior:** Missing required variables cause compose to abort immediately with a clear error message (e.g., "TELEGRAM_BOT_TOKEN is required").
+
 ## Related
 
 - [CLAUDE.md](./CLAUDE.md) — Full architecture documentation
