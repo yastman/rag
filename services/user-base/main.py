@@ -1,7 +1,7 @@
-"""USER-base Dense Embedding Service.
+"""USER2-base Dense Embedding Service.
 
-FastAPI service for generating dense vectors using deepvk/USER-base.
-Best-in-class Russian semantic matching (STS 74.35 on ruMTEB).
+FastAPI service for generating dense vectors using deepvk/USER2-base.
+Best-in-class Russian semantic matching.
 Model is loaded once at startup and reused for all requests.
 """
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Global model instance
 model: SentenceTransformer | None = None
-MODEL_NAME = "deepvk/USER-base"
+MODEL_NAME = "deepvk/USER2-base"
 
 
 class EmbedRequest(BaseModel):
@@ -63,13 +63,13 @@ async def lifespan(app: FastAPI):
         f"{MODEL_NAME} model loaded successfully (dim={model.get_sentence_embedding_dimension()})"
     )
     yield
-    logger.info("Shutting down USER-base service")
+    logger.info("Shutting down USER2-base service")
 
 
 app = FastAPI(
-    title="USER-base Dense Embedding Service",
+    title="USER2-base Dense Embedding Service",
     version="1.0.0",
-    description="Russian semantic embeddings with deepvk/USER-base (STS 74.35 ruMTEB)",
+    description="Russian semantic embeddings with deepvk/USER2-base",
     lifespan=lifespan,
 )
 
