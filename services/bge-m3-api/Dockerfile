@@ -1,35 +1,32 @@
-FROM python:3.11-slim
-
-***REMOVED*** Set working directory
+FROM python:3.12-slim
 WORKDIR /app
 
 ***REMOVED*** Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    wget \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-***REMOVED*** Copy requirements and install Python dependencies
+***REMOVED*** Install CPU-only torch first (separate index)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+***REMOVED*** Copy and install remaining requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-***REMOVED*** Copy application files
-COPY app.py config.py ./
+***REMOVED*** Copy application code
+COPY config.py .
+COPY app.py .
 
-***REMOVED*** Create model cache directory
-RUN mkdir -p /models
+***REMOVED*** Environment for HF cache (will be mounted as volume)
+ENV HF_HOME=/models/hf
+ENV TRANSFORMERS_CACHE=/models/hf
+ENV SENTENCE_TRANSFORMERS_HOME=/models/sentence-transformers
 
-***REMOVED*** Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV OMP_NUM_THREADS=4
-ENV MKL_NUM_THREADS=4
+***REMOVED*** Concurrency settings
+ENV OMP_NUM_THREADS=2
+ENV MKL_NUM_THREADS=2
 
-***REMOVED*** Expose port
 EXPOSE 8000
 
-***REMOVED*** Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5)"
-
-***REMOVED*** Run application
-CMD ["python", "app.py"]
+***REMOVED*** Run with limited concurrency for VPS
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "4"]

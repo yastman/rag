@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     PORT: int = 8000  ***REMOVED*** Внутренний порт контейнера (8001 на хосте)
     WORKERS: int = 1  ***REMOVED*** Один worker для экономии памяти
 
+    ***REMOVED*** Rerank limits
+    RERANK_MAX_DOCS: int = 30
+    RERANK_MAX_LENGTH: int = 512
+    RERANK_DEFAULT_TOP_K: int = 5
+
     ***REMOVED*** Logging
     LOG_LEVEL: str = "INFO"
 
