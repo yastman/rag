@@ -47,6 +47,14 @@ class UnifiedConfig:
     ***REMOVED*** BM42
     bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
 
+    ***REMOVED*** BGE-M3 API (alternative to Voyage)
+    bge_m3_url: str = field(
+        default_factory=lambda: os.getenv("BGE_M3_URL", "http://localhost:8000")
+    )
+    use_local_embeddings: bool = field(
+        default_factory=lambda: os.getenv("USE_LOCAL_DENSE_EMBEDDINGS", "false").lower() == "true"
+    )
+
     ***REMOVED*** Pipeline
     ***REMOVED*** NOTE: Watch mode is handled by CocoIndex FlowLiveUpdater (no manual poll loop).
     poll_interval_seconds: int = 60
