@@ -10,7 +10,37 @@
 
 ---
 
-## Task 1: Create user-bge-m3 Service (Dense Retrieval)
+## Parallel Execution Strategy (tmux-swarm)
+
+План разбит на 2 независимых воркера + финальная верификация оркестратором.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  W1: Docker Services           │  W2: Bot Integration           │
+│  (services/*, compose)         │  (telegram_bot/*, pyproject)   │
+├─────────────────────────────────────────────────────────────────┤
+│  Task 1: user-bge-m3 service   │  Task 5: LocalEmbeddingService │
+│  Task 2: reranker service      │  Task 6: LocalRerankerService  │
+│  Task 3: user-base → USER2     │  Task 7: pyproject.toml deps   │
+│  Task 4: docker-compose.dev.yml│                                │
+│          (все изменения)       │                                │
+├─────────────────────────────────────────────────────────────────┤
+│                    MERGE POINT (оркестратор)                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Task 8: Build and test (оркестратор)                           │
+│  Task 9: Full test suite (оркестратор)                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Файлы без конфликтов:**
+- W1: `services/*`, `docker-compose.dev.yml`
+- W2: `telegram_bot/services/*`, `tests/unit/*`, `pyproject.toml`, `uv.lock`
+
+---
+
+## Worker 1: Docker Services
+
+### Task 1: Create user-bge-m3 Service (Dense Retrieval)
 
 **Files:**
 - Create: `services/user-bge-m3/Dockerfile`
@@ -182,7 +212,7 @@ git commit -m "feat(docker): add user-bge-m3 service for Russian dense retrieval
 
 ---
 
-## Task 2: Create reranker Service
+### Task 2: Create reranker Service
 
 **Files:**
 - Create: `services/reranker/Dockerfile`
@@ -362,7 +392,7 @@ git commit -m "feat(docker): add reranker service with bge-reranker-v2-m3
 
 ---
 
-## Task 3: Update user-base to USER2-base
+### Task 3: Update user-base to USER2-base
 
 **Files:**
 - Modify: `services/user-base/main.py:21`
@@ -418,10 +448,10 @@ git commit -m "feat(docker): upgrade user-base to USER2-base
 
 ---
 
-## Task 4: Add New Services to docker-compose.dev.yml
+### Task 4: Update docker-compose.dev.yml (All Changes)
 
 **Files:**
-- Modify: `docker-compose.dev.yml:116-134` (after user-base)
+- Modify: `docker-compose.dev.yml`
 
 **Step 1: Add user-bge-m3 service**
 
@@ -473,24 +503,49 @@ Add after `user-bge-m3`:
           memory: 3G
 ```
 
-**Step 3: Commit**
+**Step 3: Update bot service environment**
+
+Add to bot service `environment` section (around line 530):
+
+```yaml
+      # Local embedding/reranking services (replaces Voyage)
+      USER_BGE_M3_URL: http://user-bge-m3:8000
+      RERANKER_URL: http://reranker:8000
+```
+
+**Step 4: Update bot service depends_on**
+
+Add to bot service `depends_on` section:
+
+```yaml
+      user-bge-m3:
+        condition: service_healthy
+      reranker:
+        condition: service_healthy
+```
+
+**Step 5: Commit**
 
 ```bash
 git add docker-compose.dev.yml
-git commit -m "feat(docker): add user-bge-m3 and reranker services to compose
+git commit -m "feat(docker): add user-bge-m3, reranker services and bot deps
 
 - user-bge-m3 on port 8004 (2GB limit)
 - reranker on port 8005 (3GB limit)
-- Both in 'ai' and 'full' profiles"
+- Both in 'ai' and 'full' profiles
+- Bot env vars: USER_BGE_M3_URL, RERANKER_URL
+- Bot depends on user-bge-m3, reranker health"
 ```
 
 ---
 
-## Task 5: Create LocalEmbeddingService Client
+## Worker 2: Bot Integration
+
+### Task 5: Create LocalEmbeddingService Client
 
 **Files:**
 - Create: `telegram_bot/services/local_embeddings.py`
-- Test: `tests/unit/test_local_embeddings.py`
+- Create: `tests/unit/test_local_embeddings.py`
 
 **Step 1: Write the failing test**
 
@@ -656,11 +711,11 @@ git commit -m "feat(bot): add LocalEmbeddingService client
 
 ---
 
-## Task 6: Create LocalRerankerService Client
+### Task 6: Create LocalRerankerService Client
 
 **Files:**
 - Create: `telegram_bot/services/local_reranker.py`
-- Test: `tests/unit/test_local_reranker.py`
+- Create: `tests/unit/test_local_reranker.py`
 
 **Step 1: Write the failing test**
 
@@ -825,10 +880,11 @@ git commit -m "feat(bot): add LocalRerankerService client
 
 ---
 
-## Task 7: Optimize pyproject.toml Dependencies
+### Task 7: Optimize pyproject.toml Dependencies
 
 **Files:**
 - Modify: `pyproject.toml:6-39`
+- Regenerate: `uv.lock`
 
 **Step 1: Remove dead dependencies**
 
@@ -895,64 +951,38 @@ git commit -m "fix(deps): remove dead deps, move eval to optional
 
 ---
 
-## Task 8: Update Bot Environment Variables
+## Orchestrator: Merge and Verify
 
-**Files:**
-- Modify: `docker-compose.dev.yml:518-536` (bot service environment)
+### Task 8: Build and Test Services Locally
 
-**Step 1: Add new service URLs**
+**Prerequisites:** W1 and W2 completed and merged.
 
-Add to bot service `environment` section:
-
-```yaml
-      # Local embedding/reranking services (replaces Voyage)
-      USER_BGE_M3_URL: http://user-bge-m3:8000
-      RERANKER_URL: http://reranker:8000
-```
-
-**Step 2: Add new dependencies**
-
-Add to bot service `depends_on`:
-
-```yaml
-      user-bge-m3:
-        condition: service_healthy
-      reranker:
-        condition: service_healthy
-```
-
-**Step 3: Commit**
+**Step 1: Pull changes from both workers**
 
 ```bash
-git add docker-compose.dev.yml
-git commit -m "feat(docker): add local embedding/reranker deps to bot
-
-- USER_BGE_M3_URL and RERANKER_URL env vars
-- Add service dependencies for health checks"
+git checkout main
+git merge feature/docker-services --no-edit
+git merge feature/bot-integration --no-edit
 ```
 
----
-
-## Task 9: Build and Test Services Locally
-
-**Files:**
-- None (verification task)
-
-**Step 1: Build new images**
+**Step 2: Build new images (use tmux for long build)**
 
 ```bash
-docker compose -f docker-compose.dev.yml build user-bge-m3 reranker user-base
+mkdir -p logs
+tmux new-window -n "W-BUILD" -c /home/user/projects/rag-fresh
+tmux send-keys -t "W-BUILD" "docker compose -f docker-compose.dev.yml build user-bge-m3 reranker user-base 2>&1 | tee logs/docker-build.log; echo '[COMPLETE]'" Enter
 ```
 
-Expected: Build completes successfully
+Check: `tail -f logs/docker-build.log`
+Done: `grep '\[COMPLETE\]' logs/docker-build.log`
 
-**Step 2: Start services**
+**Step 3: Start services**
 
 ```bash
 docker compose -f docker-compose.dev.yml --profile ai up -d user-bge-m3 reranker user-base
 ```
 
-**Step 3: Wait for healthy status**
+**Step 4: Wait for healthy status**
 
 ```bash
 docker compose -f docker-compose.dev.yml ps
@@ -960,7 +990,7 @@ docker compose -f docker-compose.dev.yml ps
 
 Expected: All three services show "healthy"
 
-**Step 4: Test user-bge-m3 endpoint**
+**Step 5: Test user-bge-m3 endpoint**
 
 ```bash
 curl -X POST http://localhost:8004/embed \
@@ -970,7 +1000,7 @@ curl -X POST http://localhost:8004/embed \
 
 Expected: JSON with `embedding` array of 1024 floats
 
-**Step 5: Test reranker endpoint**
+**Step 6: Test reranker endpoint**
 
 ```bash
 curl -X POST http://localhost:8005/rerank \
@@ -980,7 +1010,7 @@ curl -X POST http://localhost:8005/rerank \
 
 Expected: JSON with sorted `results` array
 
-**Step 6: Test user-base (USER2)**
+**Step 7: Test user-base (USER2)**
 
 ```bash
 curl -X POST http://localhost:8003/embed \
@@ -990,22 +1020,9 @@ curl -X POST http://localhost:8003/embed \
 
 Expected: JSON with `embedding` array of 768 floats
 
-**Step 7: Commit verification notes (optional)**
-
-```bash
-git commit --allow-empty -m "chore: verify local embedding services work
-
-- user-bge-m3: 1024-dim embeddings OK
-- reranker: sorted results OK
-- user-base: 768-dim embeddings OK"
-```
-
 ---
 
-## Task 10: Run Full Test Suite
-
-**Files:**
-- None (verification task)
+### Task 9: Run Full Test Suite
 
 **Step 1: Run unit tests**
 
@@ -1034,20 +1051,33 @@ git commit -m "fix: address test/lint issues from migration"
 
 ---
 
+## tmux-swarm Execution Commands
+
+```bash
+# Worker 1: Docker Services
+spawn-claude --worktree feature/docker-services \
+  --plan docs/plans/2026-02-05-docker-vps-optimization.md \
+  --tasks "1,2,3,4" \
+  --skill executing-plans
+
+# Worker 2: Bot Integration
+spawn-claude --worktree feature/bot-integration \
+  --plan docs/plans/2026-02-05-docker-vps-optimization.md \
+  --tasks "5,6,7" \
+  --skill executing-plans
+```
+
+---
+
 ## Summary
 
-| Task | Description | Files |
-|------|-------------|-------|
-| 1 | Create user-bge-m3 service | `services/user-bge-m3/*` |
-| 2 | Create reranker service | `services/reranker/*` |
-| 3 | Update user-base to USER2 | `services/user-base/*` |
-| 4 | Add to docker-compose | `docker-compose.dev.yml` |
-| 5 | LocalEmbeddingService client | `telegram_bot/services/local_embeddings.py` |
-| 6 | LocalRerankerService client | `telegram_bot/services/local_reranker.py` |
-| 7 | Optimize pyproject.toml | `pyproject.toml` |
-| 8 | Update bot env vars | `docker-compose.dev.yml` |
-| 9 | Build and test locally | — |
-| 10 | Run full test suite | — |
+| Worker | Tasks | Files | Est. Time |
+|--------|-------|-------|-----------|
+| W1 | 1,2,3,4 | `services/*`, `docker-compose.dev.yml` | 15 min |
+| W2 | 5,6,7 | `telegram_bot/services/*`, `tests/*`, `pyproject.toml` | 10 min |
+| Orchestrator | 8,9 | — (verification) | 5 min |
+
+**Общее время:** ~20-25 мин (параллельно) вместо ~40 мин (последовательно)
 
 **Next steps after this plan:**
 1. Deploy to VPS (`git pull`, `docker compose build`, etc.)
