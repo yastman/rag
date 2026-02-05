@@ -48,6 +48,7 @@ class QdrantHybridWriter:
     """
 
     VOYAGE_BATCH_SIZE = 128
+    BGE_M3_BATCH_SIZE = 32
 
     def __init__(
         self,
@@ -56,6 +57,8 @@ class QdrantHybridWriter:
         voyage_api_key: str | None = None,
         voyage_model: str = "voyage-4-large",
         bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions",
+        bge_m3_url: str | None = None,
+        use_local_embeddings: bool = False,
     ):
         # Qdrant client
         self.client = QdrantClient(
@@ -64,16 +67,28 @@ class QdrantHybridWriter:
             timeout=120,
         )
 
-        # Voyage for dense embeddings
-        self.voyage = VoyageService(
-            api_key=voyage_api_key,
-            model_docs=voyage_model,
-        )
+        # Dense embeddings: local BGE-M3 or Voyage API
+        self.use_local_embeddings = use_local_embeddings
+        self._http_client = None
+        self.voyage = None
+
+        if use_local_embeddings:
+            import httpx
+
+            self.bge_m3_url = bge_m3_url or "http://localhost:8000"
+            self._http_client = httpx.Client(timeout=60.0)
+            logger.info(f"QdrantHybridWriter using local BGE-M3: {self.bge_m3_url}")
+        else:
+            self.voyage = VoyageService(
+                api_key=voyage_api_key,
+                model_docs=voyage_model,
+            )
+            logger.info(f"QdrantHybridWriter using Voyage: {voyage_model}")
 
         # FastEmbed BM42 for sparse
         self.sparse_model = SparseTextEmbedding(model_name=bm42_model)
 
-        logger.info(f"QdrantHybridWriter initialized: {voyage_model} + {bm42_model}")
+        logger.info(f"QdrantHybridWriter initialized with BM42: {bm42_model}")
 
     @staticmethod
     def generate_point_id(file_id: str, chunk_location: str) -> str:
@@ -110,6 +125,33 @@ class QdrantHybridWriter:
 
         # Fallback
         return f"chunk_{index}"
+
+    def _embed_documents_local(self, texts: list[str]) -> list[list[float]]:
+        """Embed documents using local BGE-M3 API.
+
+        Args:
+            texts: List of document texts
+
+        Returns:
+            List of 1024-dim dense embedding vectors
+        """
+        if not texts:
+            return []
+
+        if self._http_client is None:
+            raise RuntimeError("HTTP client not initialized for local embeddings")
+
+        all_embeddings: list[list[float]] = []
+        for i in range(0, len(texts), self.BGE_M3_BATCH_SIZE):
+            batch = texts[i : i + self.BGE_M3_BATCH_SIZE]
+            response = self._http_client.post(
+                f"{self.bge_m3_url}/encode/dense",
+                json={"texts": batch, "batch_size": len(batch), "max_length": 512},
+            )
+            response.raise_for_status()
+            all_embeddings.extend(response.json()["dense_vecs"])
+
+        return all_embeddings
 
     def build_payload(
         self,
@@ -215,8 +257,13 @@ class QdrantHybridWriter:
             # Step 2: Extract texts
             texts = [chunk.text for chunk in chunks]
 
-            # Step 3: Generate embeddings
-            dense_embeddings = await self.voyage.embed_documents(texts)
+            # Step 3: Generate embeddings (local BGE-M3 or Voyage API)
+            if self.use_local_embeddings:
+                dense_embeddings = self._embed_documents_local(texts)
+            else:
+                if self.voyage is None:
+                    raise RuntimeError("VoyageService not initialized")
+                dense_embeddings = await self.voyage.embed_documents(texts)
             sparse_embeddings = list(self.sparse_model.embed(texts))
 
             # Step 4: Build points
