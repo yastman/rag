@@ -60,6 +60,12 @@ class BotConfig:
     ***REMOVED*** BM42 Sparse Embedding Service
     bm42_url: str = os.getenv("BM42_URL", "http://localhost:8002")
 
+    ***REMOVED*** Retrieval provider (bge_m3_api | voyage)
+    retrieval_dense_provider: str = os.getenv("RETRIEVAL_DENSE_PROVIDER", "voyage")
+
+    ***REMOVED*** Rerank provider (colbert | none | voyage)
+    rerank_provider: str = os.getenv("RERANK_PROVIDER", "voyage")
+
     ***REMOVED*** Hybrid Search Configuration
     hybrid_dense_weight: float = float(os.getenv("HYBRID_DENSE_WEIGHT", "0.6"))
     hybrid_sparse_weight: float = float(os.getenv("HYBRID_SPARSE_WEIGHT", "0.4"))
