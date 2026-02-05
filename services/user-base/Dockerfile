@@ -1,23 +1,22 @@
 FROM python:3.12-slim
-
 WORKDIR /app
 
-# Install PyTorch CPU-only first (saves ~2GB vs CUDA)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# CPU-only torch
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
-# Install other dependencies
-RUN pip install --no-cache-dir \
-    fastapi>=0.115.0 \
-    uvicorn>=0.32.0 \
-    sentence-transformers>=2.2.0 \
-    pydantic>=2.0.0
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy service code
 COPY main.py .
 
-# Pre-download model during build (cached in image)
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('deepvk/USER-base')"
+# HF cache environment
+ENV HF_HOME=/models/hf
+ENV TRANSFORMERS_CACHE=/models/hf
+ENV SENTENCE_TRANSFORMERS_HOME=/models/sentence-transformers
 
 EXPOSE 8000
-
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
