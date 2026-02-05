@@ -185,3 +185,4 @@ services/bge-m3-api/models/
 *.bin
 *.safetensors
 reports/
+.worktrees/
