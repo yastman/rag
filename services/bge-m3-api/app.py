@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any
 
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from FlagEmbedding import BGEM3FlagModel
 from prometheus_client import Counter, Gauge, Histogram, make_asgi_app
@@ -84,6 +85,54 @@ class HybridResponse(BaseModel):
     lexical_weights: list[dict[str, Any]]
     colbert_vecs: list[list[list[float]]]
     processing_time: float
+
+
+class RerankResult(BaseModel):
+    """Single rerank result."""
+
+    index: int = Field(..., description="Original document index")
+    score: float = Field(..., description="MaxSim relevance score")
+
+
+class RerankRequest(BaseModel):
+    """Request for ColBERT reranking."""
+
+    query: str = Field(..., description="Query text")
+    documents: list[str] = Field(..., description="Documents to rerank")
+    top_k: int = Field(settings.RERANK_DEFAULT_TOP_K, description="Number of top results")
+    max_length: int = Field(settings.RERANK_MAX_LENGTH, description="Max token length")
+
+
+class RerankResponse(BaseModel):
+    """Rerank response with scored results."""
+
+    results: list[RerankResult] = Field(..., description="Ranked results")
+    processing_time: float
+
+
+def compute_maxsim_scores(query_vecs: np.ndarray, doc_vecs_list: list[np.ndarray]) -> list[float]:
+    """Compute MaxSim scores between query and documents.
+
+    MaxSim: for each query token, find max similarity with any doc token,
+    then sum across all query tokens.
+
+    Args:
+        query_vecs: Query ColBERT vectors (num_query_tokens, dim)
+        doc_vecs_list: List of document ColBERT vectors
+
+    Returns:
+        List of MaxSim scores for each document
+    """
+    scores = []
+    for doc_vecs in doc_vecs_list:
+        # Cosine similarity matrix: (num_query_tokens, num_doc_tokens)
+        # Vectors are already normalized by BGE-M3
+        sim_matrix = query_vecs @ doc_vecs.T
+        # MaxSim: max over doc tokens for each query token, then sum
+        max_sims = sim_matrix.max(axis=1)
+        score = float(max_sims.sum())
+        scores.append(score)
+    return scores
 
 
 # Endpoints
@@ -257,6 +306,64 @@ async def encode_hybrid(request: EncodeRequest):
     except Exception as e:
         logger.error(f"Hybrid encoding error: {e!s}")
         raise HTTPException(500, f"Encoding failed: {e!s}")
+
+
+@app.post("/rerank", response_model=RerankResponse)
+async def rerank(request: RerankRequest):
+    """
+    Rerank documents using ColBERT MaxSim.
+
+    Returns documents sorted by relevance score (highest first).
+    """
+    encode_requests_total.labels(encode_type="rerank").inc()
+
+    # Validate limits
+    if len(request.documents) > settings.RERANK_MAX_DOCS:
+        raise HTTPException(
+            400,
+            f"Too many documents: {len(request.documents)} > {settings.RERANK_MAX_DOCS}",
+        )
+
+    if not request.documents:
+        return RerankResponse(results=[], processing_time=0.0)
+
+    try:
+        model = get_model()
+        start_time = time.time()
+
+        # Encode query and documents with ColBERT
+        all_texts = [request.query, *request.documents]
+        embeddings = model.encode(
+            all_texts,
+            batch_size=min(len(all_texts), 12),
+            max_length=request.max_length,
+            return_dense=False,
+            return_sparse=False,
+            return_colbert_vecs=True,
+        )
+
+        colbert_vecs = embeddings["colbert_vecs"]
+        query_vecs = colbert_vecs[0]  # First is query
+        doc_vecs_list = colbert_vecs[1:]  # Rest are documents
+
+        # Compute MaxSim scores
+        scores = compute_maxsim_scores(query_vecs, doc_vecs_list)
+
+        # Sort by score descending and take top_k
+        indexed_scores = [(i, s) for i, s in enumerate(scores)]
+        indexed_scores.sort(key=lambda x: x[1], reverse=True)
+        top_results = indexed_scores[: request.top_k]
+
+        processing_time = time.time() - start_time
+        encode_duration.labels(encode_type="rerank").observe(processing_time)
+
+        results = [RerankResult(index=idx, score=score) for idx, score in top_results]
+
+        return RerankResponse(results=results, processing_time=processing_time)
+
+    except Exception as e:
+        logger.error(f"Rerank error: {e!s}")
+        raise HTTPException(500, f"Rerank failed: {e!s}")
 
 
 # Mount Prometheus metrics
