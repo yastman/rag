@@ -66,14 +66,46 @@ class PropertyBot:
             base_url=config.llm_base_url,
             model=config.llm_model,
         )
-        # Voyage AI unified service (embeddings + reranker)
-        # Asymmetric retrieval: voyage-4-large for docs, voyage-4-lite for queries
-        self.voyage_service = VoyageService(
-            api_key=config.voyage_api_key,
-            model_docs=config.voyage_model_docs,
-            model_queries=config.voyage_model_queries,
-            model_rerank=config.voyage_model_rerank,
-        )
+        # Dense embedding provider (feature flag)
+        # RETRIEVAL_DENSE_PROVIDER: bge_m3_api | voyage
+        if config.retrieval_dense_provider == "bge_m3_api":
+            from .services.bge_m3_dense import BgeM3DenseService
+
+            self.dense_service = BgeM3DenseService(base_url=config.bge_m3_url)
+            self.voyage_service = None  # Not needed for dense
+            logger.info("Using BgeM3DenseService for dense embeddings")
+        else:
+            # Voyage (default)
+            self.voyage_service = VoyageService(
+                api_key=config.voyage_api_key,
+                model_docs=config.voyage_model_docs,
+                model_queries=config.voyage_model_queries,
+                model_rerank=config.voyage_model_rerank,
+            )
+            self.dense_service = self.voyage_service
+            logger.info("Using VoyageService for dense embeddings")
+
+        # Rerank provider (feature flag)
+        # RERANK_PROVIDER: colbert | none | voyage
+        if config.rerank_provider == "colbert":
+            from .services.colbert_reranker import ColbertRerankerService
+
+            self.rerank_service = ColbertRerankerService(base_url=config.bge_m3_url)
+            logger.info("Using ColbertRerankerService for reranking")
+        elif config.rerank_provider == "none":
+            self.rerank_service = None
+            logger.info("Reranking disabled")
+        else:
+            # Voyage (default) - need VoyageService for rerank
+            if self.voyage_service is None:
+                self.voyage_service = VoyageService(
+                    api_key=config.voyage_api_key,
+                    model_docs=config.voyage_model_docs,
+                    model_queries=config.voyage_model_queries,
+                    model_rerank=config.voyage_model_rerank,
+                )
+            self.rerank_service = self.voyage_service
+            logger.info("Using VoyageService for reranking")
         # Qdrant service with hybrid search, score boosting, MMR
         self.qdrant_service = QdrantService(
             url=config.qdrant_url,
@@ -270,7 +302,7 @@ class PropertyBot:
             # 1. Generate embedding (with embeddings cache - Tier 1)
             query_vector = await self.cache_service.get_cached_embedding(query)
             if query_vector is None:
-                query_vector = await self.voyage_service.embed_query(query)
+                query_vector = await self.dense_service.embed_query(query)
                 await self.cache_service.store_embedding(query, query_vector)
                 logger.info(f"Generated embedding: {len(query_vector)}-dim")
             else:
@@ -334,7 +366,7 @@ class PropertyBot:
                 if self.config.mmr_enabled and len(results) > self.config.rerank_top_k:
                     # Get embeddings for MMR calculation
                     result_embeddings = [
-                        await self.voyage_service.embed_query(r["text"])
+                        await self.dense_service.embed_query(r["text"])
                         for r in results[:20]  # Limit for performance
                     ]
                     results = self.qdrant_service.mmr_rerank(
@@ -345,8 +377,12 @@ class PropertyBot:
                     )
 
                 # Voyage rerank with cache (2026 best practice)
-                # Skip rerank for simple queries or few results
-                if results and needs_rerank(query_type, len(results)):
+                # Skip rerank for simple queries, few results, or if rerank disabled
+                if (
+                    results
+                    and self.rerank_service is not None
+                    and needs_rerank(query_type, len(results))
+                ):
                     scores["rerank_applied"] = 1.0
                     doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
 
@@ -369,7 +405,7 @@ class PropertyBot:
                         logger.info(f"✓ Using cached rerank ({len(results)} results)")
                     else:
                         doc_texts = [r["text"] for r in results]
-                        rerank_results = await self.voyage_service.rerank(
+                        rerank_results = await self.rerank_service.rerank(
                             query=query,
                             documents=doc_texts,
                             top_k=self.config.rerank_top_k,
@@ -570,4 +606,13 @@ class PropertyBot:
         await self.qdrant_service.close()
         if self._http_client:
             await self._http_client.aclose()
+        # Close provider services (if they have close method and aren't VoyageService)
+        if hasattr(self.dense_service, "close") and self.dense_service is not self.voyage_service:
+            await self.dense_service.close()
+        if (
+            self.rerank_service is not None
+            and hasattr(self.rerank_service, "close")
+            and self.rerank_service is not self.voyage_service
+        ):
+            await self.rerank_service.close()
         await self.bot.session.close()

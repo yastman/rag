@@ -1,47 +1,37 @@
 #!/bin/bash
-# Auto-monitor workers: read logs, close completed, notify when all done
-
-LOGS_DIR="/repo/logs"
-POLL_INTERVAL=30
+# Monitor tmux workers and auto-close completed ones
 
 declare -A WINDOW_MAP=(
-    ["worker-j"]="W-J"
+    ["worker-bge"]="W-BGE"
+    ["worker-user"]="W-USER"
+    ["worker-bot"]="W-BOT"
+    ["worker-ing"]="W-ING"
+    ["worker-dock"]="W-DOCK"
 )
 
-echo "=== Worker Monitor Started $(date) ==="
-echo "Polling every ${POLL_INTERVAL}s"
-echo
+LOGS_DIR="/repo/logs"
+
+echo "[$(date)] Monitor started"
 
 while true; do
-    completed=0
-    total=${#WINDOW_MAP[@]}
+    all_complete=true
+    for k in "${!WINDOW_MAP[@]}"; do
+        log_file="${LOGS_DIR}/${k}.log"
+        window_name="${WINDOW_MAP[$k]}"
 
-    for log_name in "${!WINDOW_MAP[@]}"; do
-        log_file="$LOGS_DIR/${log_name}.log"
-        window="${WINDOW_MAP[$log_name]}"
-
-        if [[ -f "$log_file" ]]; then
-            if grep -q '\[COMPLETE\]' "$log_file" 2>/dev/null; then
-                # Check if window still exists
-                if tmux list-windows -F '#{window_name}' | grep -q "^${window}$"; then
-                    echo "[$(date +%H:%M:%S)] ✅ $window COMPLETE - closing window"
-                    tmux kill-window -t "$window" 2>/dev/null
-                fi
-                ((completed++))
-            elif grep -q '\[FAIL\]' "$log_file" 2>/dev/null; then
-                echo "[$(date +%H:%M:%S)] ❌ $window has FAILURES - check logs"
-            fi
+        if grep -q '\[COMPLETE\]' "$log_file" 2>/dev/null; then
+            echo "[$(date)] $k completed, killing window $window_name"
+            tmux kill-window -t "$window_name" 2>/dev/null
+            unset "WINDOW_MAP[$k]"
+        else
+            all_complete=false
         fi
     done
 
-    echo "[$(date +%H:%M:%S)] Progress: $completed/$total complete"
-
-    if [[ "$completed" -eq "$total" ]]; then
-        echo
-        echo "🎉 ALL WORKERS COMPLETE! $(date)"
-        echo "Run: /verification-before-completion"
+    if [ ${#WINDOW_MAP[@]} -eq 0 ]; then
+        echo "[$(date)] All workers complete!"
         break
     fi
 
-    sleep $POLL_INTERVAL
+    sleep 30
 done
