@@ -4,7 +4,7 @@ httpx==0.28.1
 qdrant-client==1.16.2
 redisvl==0.13.2
 python-dotenv==1.2.1
-numpy==1.26.4
+numpy==2.4.2
 
 # Document Processing
 pymupdf>=1.26.0

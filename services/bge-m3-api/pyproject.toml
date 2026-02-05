@@ -18,7 +18,7 @@ dependencies = [
     # Monitoring & Metrics
     "prometheus-client==0.24.1",
     # Utilities
-    "numpy==1.26.4",
+    "numpy==2.4.2",
     "scipy==1.17.0",
 ]
 
