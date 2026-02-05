@@ -98,9 +98,19 @@ class RerankRequest(BaseModel):
     """Request for ColBERT reranking."""
 
     query: str = Field(..., description="Query text")
-    documents: list[str] = Field(..., description="Documents to rerank")
-    top_k: int = Field(settings.RERANK_DEFAULT_TOP_K, description="Number of top results")
-    max_length: int = Field(settings.RERANK_MAX_LENGTH, description="Max token length")
+    documents: list[str] = Field(..., description="Documents to rerank", min_length=1)
+    top_k: int = Field(
+        settings.RERANK_DEFAULT_TOP_K,
+        description="Number of top results",
+        ge=1,
+        le=settings.RERANK_MAX_DOCS,
+    )
+    max_length: int = Field(
+        settings.RERANK_MAX_LENGTH,
+        description="Max token length",
+        ge=1,
+        le=settings.RERANK_MAX_LENGTH,
+    )
 
 
 class RerankResponse(BaseModel):
@@ -324,7 +334,12 @@ async def rerank(request: RerankRequest):
             f"Too many documents: {len(request.documents)} > {settings.RERANK_MAX_DOCS}",
         )
 
-    if not request.documents:
+    query = request.query.strip()
+    if not query:
+        raise HTTPException(400, "Query must be non-empty")
+
+    documents = [d for d in (doc.strip() for doc in request.documents) if d]
+    if not documents:
         return RerankResponse(results=[], processing_time=0.0)
 
     try:
@@ -332,7 +347,7 @@ async def rerank(request: RerankRequest):
         start_time = time.time()
 
         # Encode query and documents with ColBERT
-        all_texts = [request.query, *request.documents]
+        all_texts = [query, *documents]
         embeddings = model.encode(
             all_texts,
             batch_size=min(len(all_texts), 12),
@@ -352,7 +367,8 @@ async def rerank(request: RerankRequest):
         # Sort by score descending and take top_k
         indexed_scores = [(i, s) for i, s in enumerate(scores)]
         indexed_scores.sort(key=lambda x: x[1], reverse=True)
-        top_results = indexed_scores[: request.top_k]
+        top_k = min(request.top_k, len(indexed_scores))
+        top_results = indexed_scores[:top_k]
 
         processing_time = time.time() - start_time
         encode_duration.labels(encode_type="rerank").observe(processing_time)
