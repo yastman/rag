@@ -81,21 +81,25 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 
 ## Qdrant Collections
 
-| Collection | Content | Quantization |
-|------------|---------|--------------|
-| `contextual_bulgaria_voyage` | Bulgarian property (192 docs) | Binary |
-| `contextual_bulgaria_voyage_scalar` | Same, INT8 | Scalar |
+| Collection | Content | Embeddings |
+|------------|---------|------------|
+| `contextual_bulgaria_voyage` | Bulgarian property (192 docs) | Voyage |
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 |
-| `gdrive_documents_scalar` | Google Drive docs | Scalar |
-| `gdrive_documents_binary` | Google Drive docs | Binary |
+| `gdrive_documents_scalar` | Google Drive docs | Voyage |
+| `gdrive_documents_bge` | Google Drive docs (VPS) | BGE-M3 local |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `acorn_mode=off|on|auto`, `use_hyde=true|false`, `use_contextualized_embeddings=true|false`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`
 
 ## Deployment
 
 ```bash
-make deploy-code                    # Quick (git pull)
-make deploy-release VERSION=2.12.0  # Release
+# Dev (with Voyage API)
+make docker-up                      # Core services
+make docker-bot-up                  # + bot
+
+# VPS (local embeddings, no Voyage API)
+docker compose -f docker-compose.vps.yml up -d
+# Env: RETRIEVAL_DENSE_PROVIDER=bge_m3_api RERANK_PROVIDER=colbert
 ```
 
 ## Monitoring & Alerting
