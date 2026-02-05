@@ -1,0 +1,214 @@
+# VPS Stack - Local embeddings, no Voyage API dependency
+# Start: docker compose --compatibility -f docker-compose.vps.yml up -d
+
+services:
+  # =============================================================================
+  # DATABASES
+  # =============================================================================
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: vps-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  redis:
+    image: redis:8.4.0
+    container_name: vps-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy volatile-lfu
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+
+  qdrant:
+    image: qdrant/qdrant:v1.16
+    container_name: vps-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:6333/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # =============================================================================
+  # ML SERVICES (Local embeddings)
+  # =============================================================================
+
+  bge-m3:
+    build:
+      context: ./services/bge-m3-api
+      dockerfile: Dockerfile
+    container_name: vps-bge-m3
+    restart: unless-stopped
+    volumes:
+      - hf_cache:/models
+    environment:
+      OMP_NUM_THREADS: 2
+      MKL_NUM_THREADS: 2
+      HF_HOME: /models/hf
+      TRANSFORMERS_CACHE: /models/hf
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  user-base:
+    build:
+      context: ./services/user-base
+      dockerfile: Dockerfile
+    container_name: vps-user-base
+    restart: unless-stopped
+    volumes:
+      - hf_cache:/models
+    environment:
+      HF_HOME: /models/hf
+      TRANSFORMERS_CACHE: /models/hf
+      SENTENCE_TRANSFORMERS_HOME: /models/sentence-transformers
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  bm42:
+    build:
+      context: ./services/bm42
+      dockerfile: Dockerfile
+    container_name: vps-bm42
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # =============================================================================
+  # LLM GATEWAY
+  # =============================================================================
+
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.81.3.rc.3
+    container_name: vps-litellm
+    restart: unless-stopped
+    volumes:
+      - ./docker/litellm/config.yaml:/app/config.yaml:ro
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    command: ["--config", "/app/config.yaml"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # =============================================================================
+  # TELEGRAM BOT
+  # =============================================================================
+
+  bot:
+    build:
+      context: .
+      dockerfile: telegram_bot/Dockerfile
+    container_name: vps-bot
+    restart: unless-stopped
+    environment:
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
+      # Local embeddings (no Voyage API needed)
+      RETRIEVAL_DENSE_PROVIDER: bge_m3_api
+      RERANK_PROVIDER: colbert
+      BGE_M3_URL: http://bge-m3:8000
+      # Semantic cache
+      USE_LOCAL_EMBEDDINGS: "true"
+      USER_BASE_URL: http://user-base:8000
+      # Services
+      REDIS_URL: redis://redis:6379
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
+      BM42_URL: http://bm42:8000
+      # LLM
+      LLM_API_KEY: ${LITELLM_MASTER_KEY}
+      LLM_BASE_URL: http://litellm:4000
+      LLM_MODEL: gpt-4o-mini
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      bm42:
+        condition: service_healthy
+      bge-m3:
+        condition: service_healthy
+      user-base:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  hf_cache:
