@@ -19,7 +19,7 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 | dev-clickhouse | 8123, 9009 | Langfuse analytics |
 | dev-minio | 9090, 9091 | Langfuse S3 storage |
 | dev-mlflow | 5000 | Experiment tracking |
-| dev-user-base | 8003 | Russian embeddings (deepvk/USER-base) |
+| dev-user-base | 8003 | Russian embeddings (deepvk/USER2-base) |
 | dev-bge-m3 | 8000 | BGE-M3 dense+sparse embeddings |
 | dev-bm42 | 8002 | BM42 sparse embeddings (FastEmbed) |
 | dev-docling | 5001 | Document parsing (PDF/DOCX/CSV) |
@@ -54,6 +54,33 @@ COMPOSE_PROFILES=bot,obs docker compose -f docker-compose.dev.yml up -d
 | core | 5 | ≤90s |
 | bot | 7 | ≤2-3 min |
 | full | 16+ | ≤5 min |
+
+## VPS Stack (Local Embeddings)
+
+For VPS deployment without Voyage API dependency:
+
+```bash
+docker compose -f docker-compose.vps.yml up -d
+```
+
+| Service | Purpose | Memory |
+|---------|---------|--------|
+| bge-m3 | Dense embeddings + ColBERT rerank | 4GB |
+| user-base | Semantic cache (USER2-base) | 2GB |
+| bm42 | Sparse embeddings | 1GB |
+| qdrant | Vector DB | 1GB |
+| redis | Cache | 300MB |
+| litellm | LLM gateway | 512MB |
+| bot | Telegram bot | 512MB |
+
+**Feature flags:**
+```bash
+RETRIEVAL_DENSE_PROVIDER=bge_m3_api  # bge_m3_api | voyage
+RERANK_PROVIDER=colbert              # colbert | none | voyage
+BGE_M3_URL=http://bge-m3:8000
+```
+
+**Collection:** `gdrive_documents_bge` (1024-dim BGE-M3 + BM42 sparse)
 
 ## LLM Gateway (LiteLLM)
 
