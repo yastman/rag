@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from .bge_m3_dense import BgeM3DenseService
     from .cache import CacheService
     from .cesc import CESCPersonalizer, is_personalized_query
+    from .colbert_reranker import ColbertRerankerService
     from .embeddings import EmbeddingService
     from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
     from .qdrant import QdrantService
@@ -33,8 +35,10 @@ if TYPE_CHECKING:
 
 __all__ = [
     "LOW_CONFIDENCE_THRESHOLD",
+    "BgeM3DenseService",
     "CESCPersonalizer",
     "CacheService",
+    "ColbertRerankerService",
     "ConfidenceResult",
     "EmbeddingService",
     "ExpandedChunk",
@@ -59,8 +63,10 @@ __all__ = [
 
 # Lazy import mapping
 _IMPORT_MAP = {
+    "BgeM3DenseService": ".bge_m3_dense",
     "CacheService": ".cache",
     "CESCPersonalizer": ".cesc",
+    "ColbertRerankerService": ".colbert_reranker",
     "is_personalized_query": ".cesc",
     "ConfidenceResult": ".llm",
     "EmbeddingService": ".embeddings",
