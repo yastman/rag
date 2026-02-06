@@ -39,7 +39,7 @@ services:
     container_name: vps-redis
     restart: unless-stopped
     logging: *default-logging
-    command: redis-server --maxmemory 256mb --maxmemory-policy volatile-lfu
+    command: redis-server --maxmemory 256mb --maxmemory-policy volatile-lfu --maxmemory-samples 10
     volumes:
       - redis_data:/data
     healthcheck:

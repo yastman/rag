@@ -280,5 +280,5 @@ class TestLowConfidenceFallback:
 
     def test_confidence_threshold_constant(self):
         """Verify LOW_CONFIDENCE_THRESHOLD is defined correctly."""
-        assert LOW_CONFIDENCE_THRESHOLD == 0.5
+        assert LOW_CONFIDENCE_THRESHOLD == 0.3
         assert 0.0 < LOW_CONFIDENCE_THRESHOLD < 1.0
