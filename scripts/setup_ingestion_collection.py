@@ -107,12 +107,14 @@ def main() -> int:
         description="Setup Qdrant collection for ingestion pipeline",
     )
     parser.add_argument(
-        "--collection", "-c",
+        "--collection",
+        "-c",
         default=COLLECTION_NAME,
         help=f"Collection name (default: {COLLECTION_NAME})",
     )
     parser.add_argument(
-        "--force", "-f",
+        "--force",
+        "-f",
         action="store_true",
         help="Force recreation of collection",
     )

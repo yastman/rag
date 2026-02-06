@@ -3,6 +3,7 @@
 Tests verify graceful degradation when Redis is unavailable.
 """
 
+import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -41,14 +42,10 @@ class TestRedisDisconnect:
 
             ***REMOVED*** Should not raise exception - test that cache operations handle failures gracefully
             ***REMOVED*** store_analysis internally calls hset which we've mocked to raise
-            try:
+            with contextlib.suppress(ConnectionError):
                 await service.store_analysis(
                     "test_query", {"filters": {}, "semantic_query": "test"}
                 )
-            except ConnectionError:
-                ***REMOVED*** If exception propagates, that's acceptable for now
-                ***REMOVED*** This documents the current behavior
-                pass
             ***REMOVED*** No assertion needed - just verify no crash
 
     async def test_semantic_cache_returns_none_without_redis(self):

@@ -144,9 +144,7 @@ class TestQueryAnalyzerAnalyze:
         with patch.object(analyzer.client, "post", new_callable=AsyncMock) as mock_post:
             mock_post.return_value = mock_response
 
-            result = await analyzer.analyze(
-                "2-комнатная в Солнечный берег дешевле 80000"
-            )
+            result = await analyzer.analyze("2-комнатная в Солнечный берег дешевле 80000")
 
             assert result["filters"]["price"] == {"lt": 80000}
             assert result["filters"]["rooms"] == 2
@@ -194,9 +192,7 @@ class TestQueryAnalyzerAnalyze:
         )
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "invalid json {"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "invalid json {"}}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(analyzer.client, "post", new_callable=AsyncMock) as mock_post:
@@ -236,11 +232,7 @@ class TestQueryAnalyzerAnalyze:
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "choices": [
-                {
-                    "message": {
-                        "content": json.dumps({"filters": {}, "semantic_query": "test"})
-                    }
-                }
+                {"message": {"content": json.dumps({"filters": {}, "semantic_query": "test"})}}
             ]
         }
         mock_response.raise_for_status = MagicMock()

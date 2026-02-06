@@ -118,7 +118,12 @@ class TestGetFallbackAnswer:
         chunks = [
             {
                 "text": "Apt 1",
-                "metadata": {"title": "Nice apartment", "price": 45000, "city": "Burgas", "rooms": 2},
+                "metadata": {
+                    "title": "Nice apartment",
+                    "price": 45000,
+                    "city": "Burgas",
+                    "rooms": 2,
+                },
             },
             {
                 "text": "Apt 2",
@@ -138,9 +143,7 @@ class TestGetFallbackAnswer:
         """Test that fallback only shows 3 chunks."""
         service = LLMService(api_key="test-key")
 
-        chunks = [
-            {"text": f"Chunk {i}", "metadata": {"title": f"Title {i}"}} for i in range(5)
-        ]
+        chunks = [{"text": f"Chunk {i}", "metadata": {"title": f"Title {i}"}} for i in range(5)]
 
         result = service._get_fallback_answer("query", chunks)
 
@@ -305,7 +308,7 @@ class TestGenerate:
         with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
             mock_post.side_effect = Exception("API Error")
 
-            with pytest.raises(Exception):
+            with pytest.raises(Exception, match="API Error"):
                 await service.generate("Prompt")
 
 

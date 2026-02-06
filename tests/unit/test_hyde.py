@@ -140,11 +140,7 @@ class TestHyDEGenerator:
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "choices": [
-                {
-                    "message": {
-                        "content": "Уютная квартира в Несебре, 45м², рядом с пляжем."
-                    }
-                }
+                {"message": {"content": "Уютная квартира в Несебре, 45м², рядом с пляжем."}}
             ],
             "usage": {"prompt_tokens": 100, "completion_tokens": 30},
         }
