@@ -5,6 +5,7 @@ Replaces VoyageService for dense retrieval when RETRIEVAL_DENSE_PROVIDER=bge_m3_
 """
 
 import logging
+import os
 
 import httpx
 
@@ -25,14 +26,16 @@ class BgeM3DenseService:
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
-        timeout: float = 30.0,
+        timeout: float | None = None,
     ):
         """Initialize service.
 
         Args:
             base_url: BGE-M3 API base URL
-            timeout: Request timeout in seconds
+            timeout: Request timeout in seconds (default from BGE_M3_TIMEOUT env, or 120.0)
         """
+        if timeout is None:
+            timeout = float(os.getenv("BGE_M3_TIMEOUT", "120.0"))
         self.base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(timeout=timeout)
         logger.info(f"BgeM3DenseService initialized: {base_url}")
