@@ -295,7 +295,7 @@ class TestFilterExtractorDistanceToSea:
     def test_distance_u_morya(self, extractor: FilterExtractor) -> None:
         """Test 'у моря' pattern correctly maps to distance <= 200m."""
         result = extractor.extract_filters("квартира у моря")
-        # "у моря" correctly maps to distance_to_sea <= 200m
+        # "u morya" correctly maps to distance_to_sea <= 200m
         assert result["distance_to_sea"] == {"lte": 200}
 
     # No distance filter
