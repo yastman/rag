@@ -162,7 +162,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/query-processing.md` | HyDE, preprocessing, routing | `**/query*.py` |
 | `features/evaluation.md` | RAGAS, metrics, A/B tests | `src/evaluation/**` |
 | `features/caching.md` | 6-tier cache, TTL | `**/cache*.py` |
-| `features/embeddings.md` | Voyage, BGE-M3, BM42 | `**/embed*.py` |
+| `features/embeddings.md` | BGE-M3, Voyage, BM42 (deprecated on VPS) | `**/embed*.py` |
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
 | `features/telegram-bot.md` | Handlers, middlewares | `telegram_bot/*.py` |

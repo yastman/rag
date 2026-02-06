@@ -75,7 +75,7 @@ ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.v
 | docling | Document parsing | 2GB |
 | bge-m3 | Dense embeddings + ColBERT rerank | 4GB |
 | user-base | Semantic cache (USER2-base) | 2GB |
-| bm42 | Sparse embeddings | 1GB |
+| bm42 | Sparse embeddings (deprecated, orphan container) | 1GB |
 | litellm | LLM gateway | 512MB |
 | bot | Telegram bot | 512MB |
 | ingestion | CocoIndex pipeline (profile: ingest) | 512MB |
@@ -87,7 +87,7 @@ RERANK_PROVIDER=colbert              # colbert | none | voyage
 BGE_M3_URL=http://bge-m3:8000
 ```
 
-**Collection:** `gdrive_documents_bge` (1024-dim BGE-M3 + BM42 sparse)
+**Collection:** `gdrive_documents_bge` (1024-dim BGE-M3 dense + BGE-M3 sparse, field name "bm42" kept)
 
 ### VPS Code Deployment (Hot Reload)
 
@@ -267,7 +267,7 @@ Claude понимает: прочитать план, запустить `spawn-
 | Profile | Required |
 |---------|----------|
 | core | None (dev defaults) |
-| bot | `TELEGRAM_BOT_TOKEN`, `VOYAGE_API_KEY`, `LITELLM_MASTER_KEY` + 1 LLM provider |
+| bot | `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY` + 1 LLM provider (dev also needs `VOYAGE_API_KEY`) |
 | ml | `NEXTAUTH_SECRET`, `SALT`, `ENCRYPTION_KEY` |
 
 **Verification:**
