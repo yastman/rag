@@ -52,13 +52,13 @@ class E2ETelegramClient:
     async def send_and_wait(
         self,
         query: str,
-        timeout: int | None = None,
+        response_timeout: int | None = None,
     ) -> BotResponse:
         """Send message to bot and wait for response.
 
         Args:
             query: Message to send
-            timeout: Response timeout in seconds (default from config)
+            response_timeout: Response timeout in seconds (default from config)
 
         Returns:
             BotResponse with text and timing
@@ -69,13 +69,13 @@ class E2ETelegramClient:
         if not self._client:
             raise RuntimeError("Client not connected")
 
-        timeout = timeout or self.config.response_timeout
+        effective_timeout = response_timeout or self.config.response_timeout
 
         start_time = time.time()
 
         async with self._client.conversation(
             self.config.bot_username,
-            timeout=timeout,
+            timeout=effective_timeout,
         ) as conv:
             await conv.send_message(query)
             logger.debug(f"Sent: {query[:50]}...")

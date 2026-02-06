@@ -67,7 +67,10 @@ def _setup_mock_optional_telegram_deps():
     Unit tests should not require Telegram runtime dependencies to be present.
     """
     try:
-        import aiogram
+        import importlib.util
+
+        if importlib.util.find_spec("aiogram") is None:
+            raise ModuleNotFoundError("aiogram not installed")
     except ModuleNotFoundError:
         mock_aiogram = MagicMock()
         mock_aiogram.Bot = MagicMock()

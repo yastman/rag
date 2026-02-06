@@ -292,7 +292,7 @@ class QdrantService:
                 if created_at:
                     try:
                         if isinstance(created_at, str):
-                            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                            dt = datetime.fromisoformat(created_at)
                         else:
                             dt = created_at
 
