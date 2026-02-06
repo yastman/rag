@@ -6,7 +6,7 @@ import pytest
 # Skip entire module if aiogram not installed
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from aiogram import Dispatcher
 from aiogram.types import Message, User
@@ -62,7 +62,7 @@ class TestErrorHandlerMiddleware:
         assert "ошибка" in call_args.lower()
 
     @pytest.mark.asyncio
-    async def test_middleware_logs_error(self):
+    async def test_middleware_logs_error(self, caplog):
         """Test that middleware logs errors."""
         middleware = ErrorHandlerMiddleware()
 
@@ -71,11 +71,11 @@ class TestErrorHandlerMiddleware:
         event.answer = AsyncMock()
         data = {}
 
-        with patch("telegram_bot.middlewares.error_handler.logger") as mock_logger:
+        with caplog.at_level("ERROR", logger="telegram_bot.middlewares.error_handler"):
             with pytest.raises(ValueError):
                 await middleware(handler, event, data)
 
-            mock_logger.error.assert_called_once()
+        assert any("Error in handler" in record.message for record in caplog.records)
 
 
 class TestSetupErrorMiddleware:

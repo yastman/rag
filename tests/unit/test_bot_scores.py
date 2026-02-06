@@ -33,6 +33,8 @@ EXPECTED_SCORE_NAMES = {
     "results_count",
     "no_results",
     "llm_used",
+    "hyde_used",
+    "confidence_score",
 }
 
 
@@ -80,6 +82,19 @@ class TestHandleQueryScores:
         handler.cache_service.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
         handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
         handler.cache_service.log_metrics = MagicMock()
+
+        # Services required by handle_query pipeline
+        handler.query_preprocessor = MagicMock()
+        handler.query_preprocessor.analyze = MagicMock(
+            return_value={
+                "use_hyde": False,
+                "normalized_query": "test",
+                "rrf_weights": {"dense": 0.6, "sparse": 0.4},
+            }
+        )
+        handler.hyde_generator = None
+        handler.dense_service = MagicMock()
+        handler.dense_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
 
         handler._test_query_type = QueryType.COMPLEX
         return handler
@@ -176,6 +191,19 @@ class TestHandleQueryScoresAllPaths:
         handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
         handler.cache_service.log_metrics = MagicMock()
 
+        # Services required by handle_query pipeline
+        handler.query_preprocessor = MagicMock()
+        handler.query_preprocessor.analyze = MagicMock(
+            return_value={
+                "use_hyde": False,
+                "normalized_query": "test",
+                "rrf_weights": {"dense": 0.6, "sparse": 0.4},
+            }
+        )
+        handler.hyde_generator = None
+        handler.dense_service = MagicMock()
+        handler.dense_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
+
         return handler
 
     @pytest.mark.asyncio
@@ -231,12 +259,12 @@ class TestHandleQueryScoresAllPaths:
             return_value=[{"text": "Result 1", "id": "1"}, {"text": "Result 2", "id": "2"}]
         )
 
-        # Mock Voyage service
-        bot_handler_full.voyage_service = MagicMock()
-        bot_handler_full.voyage_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
-        bot_handler_full.voyage_service.rerank = AsyncMock(
+        # Mock rerank service (ColBERT or Voyage - bot uses self.rerank_service)
+        bot_handler_full.rerank_service = MagicMock()
+        bot_handler_full.rerank_service.rerank = AsyncMock(
             return_value=[{"index": 0, "score": 0.9}, {"index": 1, "score": 0.8}]
         )
+        bot_handler_full.voyage_service = None
 
         # Mock LLM service - stream_answer must return async iterator directly
         bot_handler_full.llm_service = MagicMock()
@@ -305,8 +333,8 @@ class TestHandleQueryScoresAllPaths:
         bot_handler_full.qdrant_service = MagicMock()
         bot_handler_full.qdrant_service.hybrid_search_rrf = AsyncMock(return_value=[])
 
-        bot_handler_full.voyage_service = MagicMock()
-        bot_handler_full.voyage_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
+        bot_handler_full.rerank_service = None
+        bot_handler_full.voyage_service = None
 
         bot_handler_full._get_sparse_vector = AsyncMock(return_value={"indices": [], "values": []})
 

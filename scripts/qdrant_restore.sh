@@ -3,7 +3,8 @@
 
 set -e
 
-COLLECTION_NAME="contextual_rag_criminal_code_v1"
+COLLECTION_NAME="${QDRANT_COLLECTION:-gdrive_documents_bge}"
+QDRANT_URL="${QDRANT_URL:-http://localhost:6333}"
 BACKUP_FILE="$1"
 
 if [ -z "$BACKUP_FILE" ]; then
@@ -39,7 +40,7 @@ echo "📤 Uploading snapshot to Qdrant..."
 SNAPSHOT_NAME=$(basename "$BACKUP_FILE")
 
 curl -X POST \
-  "http://localhost:6333/collections/$COLLECTION_NAME/snapshots/upload" \
+  "$QDRANT_URL/collections/$COLLECTION_NAME/snapshots/upload" \
   -F "snapshot=@$BACKUP_FILE" \
   --fail
 
@@ -54,7 +55,7 @@ fi
 echo "📥 Restoring collection from snapshot..."
 
 curl -X PUT \
-  "http://localhost:6333/collections/$COLLECTION_NAME/snapshots/$SNAPSHOT_NAME/recover" \
+  "$QDRANT_URL/collections/$COLLECTION_NAME/snapshots/$SNAPSHOT_NAME/recover" \
   -H "Content-Type: application/json" \
   --fail
 
@@ -62,7 +63,7 @@ if [ $? -eq 0 ]; then
   echo "✅ Restore complete!"
 
   # Verify collection
-  POINTS=$(curl -s "http://localhost:6333/collections/$COLLECTION_NAME" | jq '.result.points_count')
+  POINTS=$(curl -s "$QDRANT_URL/collections/$COLLECTION_NAME" | jq '.result.points_count')
   echo "   Points restored: $POINTS"
 else
   echo "❌ Restore failed"
