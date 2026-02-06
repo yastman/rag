@@ -81,9 +81,7 @@ class TestContextualizedEmbeddingServiceInit:
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
         for dim in (2048, 1024, 512, 256):
-            service = ContextualizedEmbeddingService(
-                api_key="test-key", output_dimension=dim
-            )
+            service = ContextualizedEmbeddingService(api_key="test-key", output_dimension=dim)
             assert service.output_dimension == dim
 
 
@@ -144,9 +142,7 @@ class TestEmbedDocuments:
         assert result.chunks_per_document == []
 
     @pytest.mark.asyncio
-    async def test_embed_documents_too_many_documents(
-        self, mock_voyage_client, mock_langfuse
-    ):
+    async def test_embed_documents_too_many_documents(self, mock_voyage_client, mock_langfuse):
         """Test validation for too many documents."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -159,9 +155,7 @@ class TestEmbedDocuments:
             await service.embed_documents(document_chunks)
 
     @pytest.mark.asyncio
-    async def test_embed_documents_too_many_chunks(
-        self, mock_voyage_client, mock_langfuse
-    ):
+    async def test_embed_documents_too_many_chunks(self, mock_voyage_client, mock_langfuse):
         """Test validation for too many total chunks."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
 
@@ -397,9 +391,7 @@ class TestFeatureFlag:
         with patch.dict("os.environ", {}, clear=True):
             settings = settings_module.Settings.__new__(settings_module.Settings)
             # Manually call init parts we need
-            settings.use_contextualized_embeddings = (
-                False  # Default when env var not set
-            )
+            settings.use_contextualized_embeddings = False  # Default when env var not set
 
             assert settings.use_contextualized_embeddings is False
 
