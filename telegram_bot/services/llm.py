@@ -151,7 +151,14 @@ class LLMService:
             response.raise_for_status()
 
             data = response.json()
-            raw_answer = data["choices"][0]["message"]["content"]
+            message = data["choices"][0]["message"]
+            # Support reasoning models: content may be in "reasoning_content"
+            raw_answer = (
+                message.get("content")
+                or message.get("reasoning_content")
+                or message.get("reasoning")
+                or ""
+            )
 
             # Parse confidence if requested
             if with_confidence:
@@ -360,7 +367,15 @@ class LLMService:
                         try:
                             data = json.loads(data_str)
                             delta = data.get("choices", [{}])[0].get("delta", {})
-                            content = delta.get("content", "")
+                            # Support both regular and reasoning models:
+                            # reasoning models (e.g. zai-glm-4.7) send tokens
+                            # as "reasoning_content" or "reasoning" instead of "content"
+                            content = (
+                                delta.get("content")
+                                or delta.get("reasoning_content")
+                                or delta.get("reasoning")
+                                or ""
+                            )
 
                             if content:
                                 yield content
@@ -530,7 +545,13 @@ class LLMService:
             )
             response.raise_for_status()
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            message = data["choices"][0]["message"]
+            return (
+                message.get("content")
+                or message.get("reasoning_content")
+                or message.get("reasoning")
+                or ""
+            )
         except Exception as e:
             logger.error(f"LLM generate failed: {e}")
             raise
