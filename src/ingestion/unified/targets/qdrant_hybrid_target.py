@@ -212,20 +212,18 @@ class QdrantHybridTargetConnector:
         """
         # Acquire semaphore to ensure sequential processing (one file at a time)
         with cls._process_semaphore:
-            logger.info(f"=== mutate() called with {len(all_mutations)} batch(es) ===")
+            logger.info(f"mutate(): {len(all_mutations)} batch(es)")
             for spec, mutations in all_mutations:
-                logger.info(
-                    f"Processing batch: {len(mutations)} mutations, collection={spec.collection_name}"
-                )
+                logger.info(f"Batch: {len(mutations)} mutations, collection={spec.collection_name}")
                 # Create fresh state manager for this batch (not cached)
                 # This avoids asyncpg pool issues with different event loops
                 state_manager = UnifiedStateManager(database_url=spec.database_url)
-                logger.info("Created state_manager, entering sync_context...")
+                logger.debug("Created state_manager, entering sync_context...")
 
                 with state_manager.sync_context():
-                    logger.info(f"Inside sync_context, iterating {len(mutations)} mutations...")
+                    logger.debug(f"Inside sync_context, iterating {len(mutations)} mutations...")
                     for file_id, mutation in mutations.items():
-                        logger.info(
+                        logger.debug(
                             f"Processing mutation: file_id={file_id}, has_value={mutation is not None}"
                         )
                         try:
@@ -250,7 +248,7 @@ class QdrantHybridTargetConnector:
 
         writer.delete_file_sync(file_id, spec.collection_name)
         state_manager.mark_deleted_sync(file_id)
-        logger.info(f"Deleted: file_id={file_id}")
+        logger.debug(f"Deleted: file_id={file_id}")
 
     @classmethod
     def _handle_upsert_with_state(
@@ -261,25 +259,19 @@ class QdrantHybridTargetConnector:
         state_manager: UnifiedStateManager,
     ) -> None:
         """Handle file insert/update (sync)."""
-        logger.info(f"_handle_upsert_with_state: file_id={file_id}, path={mutation.abs_path}")
+        logger.debug(f"Upsert: file_id={file_id}, path={mutation.abs_path}")
 
-        logger.info("Getting writer...")
         writer = cls._get_writer(spec)
-        logger.info(f"Got writer: {writer}")
-        logger.info("Getting docling...")
         docling = cls._get_docling(spec)
-        logger.info("Got writer and docling")
 
         abs_path = Path(mutation.abs_path)
         source_path = mutation.source_path
 
         # Compute content hash
-        logger.info(f"Computing content hash for {abs_path}...")
         content_hash = compute_content_hash(abs_path)
-        logger.info(f"Hash computed: {content_hash}")
+        logger.debug(f"Hash: {content_hash}")
 
         # Check if processing needed (skip unchanged)
-        logger.info("Checking should_process_sync...")
         if not state_manager.should_process_sync(file_id, content_hash):
             logger.debug(f"Skipping unchanged: {source_path}")
             return

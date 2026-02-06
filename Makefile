@@ -265,12 +265,26 @@ test-redis: ## Verify Redis Query Engine is available
 	fi
 	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"
 
-.PHONY: test-bot-health
+.PHONY: test-bot-health test-bot-health-vps
 
-test-bot-health: ## Preflight: verify Qdrant collection + LLM connectivity
+test-bot-health: ## Preflight: verify Qdrant collection + LLM (local dev, ports published)
 	@echo "$(BLUE)Running bot health preflight...$(NC)"
 	@./scripts/test_bot_health.sh
 	@echo "$(GREEN)✓ Bot health preflight passed$(NC)"
+
+test-bot-health-vps: ## Preflight: verify Qdrant + LLM from inside Docker network (VPS)
+	@echo "$(BLUE)Running VPS bot health preflight...$(NC)"
+	@docker exec vps-bot python -c "\
+	import urllib.request, json, sys; \
+	r = json.loads(urllib.request.urlopen('http://qdrant:6333/collections', timeout=10).read()); \
+	names = [c['name'] for c in r['result']['collections']]; \
+	print(f'  Qdrant collections: {names}'); \
+	assert 'gdrive_documents_bge' in names, 'gdrive_documents_bge not found'; \
+	print('  ✓ Qdrant OK'); \
+	urllib.request.urlopen('http://litellm:4000/health/liveliness', timeout=10); \
+	print('  ✓ LiteLLM OK'); \
+	"
+	@echo "$(GREEN)✓ VPS bot health preflight passed$(NC)"
 
 # =============================================================================
 # PROJECT MANAGEMENT
