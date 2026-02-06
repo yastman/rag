@@ -12,11 +12,15 @@ class TestGDriveFlowConfig:
         """Config should have sensible defaults."""
         from src.ingestion.gdrive_flow import GDriveFlowConfig
 
-        config = GDriveFlowConfig()
+        # Clear GDRIVE_SYNC_DIR so we test the actual default (dotenv may set it)
+        env = os.environ.copy()
+        env.pop("GDRIVE_SYNC_DIR", None)
+        with patch.dict("os.environ", env, clear=True):
+            config = GDriveFlowConfig()
 
-        # Default is ~/drive-sync expanded to user's home
-        assert config.sync_dir == os.path.expanduser("~/drive-sync")
-        assert config.collection_name == "gdrive_documents_binary"
+            # Default is ~/drive-sync expanded to user's home
+            assert config.sync_dir == os.path.expanduser("~/drive-sync")
+        assert config.collection_name == "gdrive_documents_bge"
         assert config.watch_interval_seconds == 60
         assert config.docling_url == "http://localhost:5001"
 
