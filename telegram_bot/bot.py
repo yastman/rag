@@ -17,15 +17,19 @@ from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .services import (
     CacheService,
     CESCPersonalizer,
+    HyDEGenerator,
     LLMService,
     QdrantService,
     QueryAnalyzer,
+    QueryPreprocessor,
     QueryType,
     SmallToBigService,
     UserContextService,
     VoyageService,
     classify_query,
     get_chitchat_response,
+    get_off_topic_response,
+    is_off_topic,
     is_personalized_query,
     needs_rerank,
 )
@@ -128,6 +132,19 @@ class PropertyBot:
             base_url=config.llm_base_url,
             model=config.llm_model,
         )
+
+        # Query preprocessor (rule-based: translit, RRF weights, HyDE gating)
+        self.query_preprocessor = QueryPreprocessor()
+
+        # HyDE generator (optional, feature-flagged)
+        self.hyde_generator: HyDEGenerator | None = None
+        if config.use_hyde:
+            self.hyde_generator = HyDEGenerator(
+                api_key=config.llm_api_key,
+                base_url=config.llm_base_url,
+                model=config.llm_model,
+            )
+            logger.info("HyDE enabled (min_words=%d)", config.hyde_min_words)
 
         # CESC: User context and personalization (configurable)
         self.user_context_service = UserContextService(
@@ -242,6 +259,8 @@ class PropertyBot:
             "llm_used": 0.0,
             "no_results": 0.0,
             "results_count": 0.0,
+            "hyde_used": 0.0,
+            "confidence_score": 0.0,
         }
         query_type = QueryType.SIMPLE  # Default for early exceptions
 
@@ -279,6 +298,12 @@ class PropertyBot:
                     await message.answer(chitchat_response)
                     return
 
+            # Off-topic detection (Guardrails)
+            if self.config.enable_off_topic_detection and is_off_topic(query):
+                logger.info("Query routed to OFF_TOPIC (skipping RAG)")
+                await message.answer(get_off_topic_response())
+                return
+
             # CESC: Lazy routing (2026 best practice) - only update context for personalized queries
             user_context = None
             needs_personalization = False
@@ -299,11 +324,27 @@ class PropertyBot:
             # Show typing indicator
             await message.bot.send_chat_action(message.chat.id, "typing")
 
+            # 0. Query preprocessing (translit + HyDE gating)
+            preprocess_result = self.query_preprocessor.analyze(
+                query,
+                use_hyde=self.config.use_hyde,
+                hyde_min_words=self.config.hyde_min_words,
+            )
+            embed_text = query  # Default: embed the original query
+
+            # HyDE: generate hypothetical document for short/vague queries
+            if preprocess_result["use_hyde"] and self.hyde_generator is not None:
+                hypothetical_doc = await self.hyde_generator.generate_hypothetical_document(query)
+                if hypothetical_doc and hypothetical_doc != query:
+                    embed_text = hypothetical_doc
+                    scores["hyde_used"] = 1.0
+                    logger.info("HyDE: embedding hypothetical doc instead of query")
+
             # 1. Generate embedding (with embeddings cache - Tier 1)
-            query_vector = await self.cache_service.get_cached_embedding(query)
+            query_vector = await self.cache_service.get_cached_embedding(embed_text)
             if query_vector is None:
-                query_vector = await self.dense_service.embed_query(query)
-                await self.cache_service.store_embedding(query, query_vector)
+                query_vector = await self.dense_service.embed_query(embed_text)
+                await self.cache_service.store_embedding(embed_text, query_vector)
                 logger.info(f"Generated embedding: {len(query_vector)}-dim")
             else:
                 scores["embeddings_cache_hit"] = 1.0
@@ -471,39 +512,61 @@ class PropertyBot:
 
             scores["llm_used"] = 1.0
 
-            # 7. Generate answer with LLM STREAMING
+            # 7. Generate answer with LLM
             temp_message = await message.answer("🔍 Генерирую ответ...")
-            accumulated_text = ""
-            last_sent_text = ""  # Track what we last sent
-            chunk_count = 0
 
-            try:
-                async for chunk in self.llm_service.stream_answer(
-                    question=query,
-                    context_chunks=results_for_llm,
-                ):
-                    accumulated_text += chunk
-                    chunk_count += 1
+            # Confidence scoring mode (non-streaming, returns ConfidenceResult)
+            if self.config.enable_confidence_scoring:
+                result = await self.llm_service.generate_answer(
+                    query, results_for_llm, with_confidence=True
+                )
+                scores["confidence_score"] = result.confidence
 
-                    # Update message every 10 chunks or when punctuation appears
-                    # Only if text actually changed
-                    if (
-                        chunk_count % 10 == 0 or chunk in ".!?\n"
-                    ) and accumulated_text != last_sent_text:
-                        with contextlib.suppress(Exception):
-                            await temp_message.edit_text(accumulated_text)
-                            last_sent_text = accumulated_text
+                if result.is_low_confidence:
+                    logger.info(
+                        f"Low confidence ({result.confidence:.2f}), using fallback response"
+                    )
+                    answer = self.llm_service.get_low_confidence_response(
+                        query, results_for_llm, result.confidence
+                    )
+                else:
+                    answer = result.answer
 
-                # Final update with complete answer (only if different)
-                if accumulated_text != last_sent_text:
-                    await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
-                answer = accumulated_text
-
-            except Exception as e:
-                logger.error(f"Streaming error: {e}", exc_info=True)
-                # Fallback to non-streaming
-                answer = await self.llm_service.generate_answer(query, results_for_llm)
                 await temp_message.edit_text(answer, parse_mode="Markdown")
+
+            else:
+                # Standard streaming mode
+                accumulated_text = ""
+                last_sent_text = ""  # Track what we last sent
+                chunk_count = 0
+
+                try:
+                    async for chunk in self.llm_service.stream_answer(
+                        question=query,
+                        context_chunks=results_for_llm,
+                    ):
+                        accumulated_text += chunk
+                        chunk_count += 1
+
+                        # Update message every 10 chunks or when punctuation appears
+                        # Only if text actually changed
+                        if (
+                            chunk_count % 10 == 0 or chunk in ".!?\n"
+                        ) and accumulated_text != last_sent_text:
+                            with contextlib.suppress(Exception):
+                                await temp_message.edit_text(accumulated_text)
+                                last_sent_text = accumulated_text
+
+                    # Final update with complete answer (only if different)
+                    if accumulated_text != last_sent_text:
+                        await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
+                    answer = accumulated_text
+
+                except Exception as e:
+                    logger.error(f"Streaming error: {e}", exc_info=True)
+                    # Fallback to non-streaming
+                    answer = await self.llm_service.generate_answer(query, results_for_llm)
+                    await temp_message.edit_text(answer, parse_mode="Markdown")
 
             # 8. Store assistant answer in conversation
             await self.cache_service.store_conversation_message(user_id, "assistant", answer)
@@ -604,6 +667,8 @@ class PropertyBot:
         await self.query_analyzer.close()
         await self.llm_service.close()
         await self.qdrant_service.close()
+        if self.hyde_generator:
+            await self.hyde_generator.close()
         if self._http_client:
             await self._http_client.aclose()
         # Close provider services (if they have close method and aren't VoyageService)

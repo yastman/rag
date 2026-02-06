@@ -137,7 +137,7 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
             "**/~$*",
         ]
 
-        # Source: LocalFile with refresh safety net
+        # Source: LocalFile with refresh safety net (60s for dev, can increase for prod)
         data_scope["files"] = flow_builder.add_source(
             cocoindex.sources.LocalFile(
                 path=sync_dir,
@@ -145,7 +145,7 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
                 included_patterns=included_patterns,
                 excluded_patterns=excluded_patterns,
             ),
-            refresh_interval=timedelta(hours=6),
+            refresh_interval=timedelta(seconds=60),
         )
 
         collector = data_scope.add_collector()
@@ -191,15 +191,14 @@ def run_watch(config: UnifiedConfig | None = None) -> None:
     flow.setup()
 
     logger.info("Starting watch mode via CocoIndex FlowLiveUpdater")
-    updater = cocoindex.FlowLiveUpdater(
-        flow,
-        cocoindex.FlowLiveUpdaterOptions(live_mode=True, print_stats=True),
-    )
     try:
-        updater.start()
-        updater.wait()
+        with cocoindex.FlowLiveUpdater(
+            flow,
+            cocoindex.FlowLiveUpdaterOptions(print_stats=True),
+        ) as updater:
+            logger.info("Live updater started. Press Ctrl+C to stop.")
+            updater.wait()
     except KeyboardInterrupt:
         logger.info("Watch mode interrupted")
     finally:
-        updater.abort()
         flow.close()

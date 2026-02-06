@@ -33,6 +33,9 @@ dependencies = [
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
     "redis>=7.0.1",
     "aiogram>=3.22.0",
+    # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
     # CocoIndex Document Ingestion (2026-02-02)
     "cocoindex>=0.1.60",                  # Data transformation framework for AI
     "asyncpg>=0.31.0",
@@ -64,6 +67,24 @@ docs = [
 # All optional dependencies
 all = [
     "contextual-rag[dev,docs]",
+]
+
+# =============================================================================
+# UV: CPU-only PyTorch (no CUDA — VPS has no GPU)
+# SDK pattern from Context7: https://github.com/astral-sh/uv/blob/main/docs/guides/integration/pytorch.md
+# =============================================================================
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu" },
+]
+torchvision = [
+    { index = "pytorch-cpu" },
 ]
 
 # =============================================================================
