@@ -17,6 +17,7 @@ make monitoring-up         # Start alerting stack
 make ingest-unified        # Run unified ingestion (CocoIndex v3.2.1)
 make ingest-unified-watch  # Continuous mode with FlowLiveUpdater
 make ingest-unified-status # Show ingestion stats from Postgres
+# VPS CLI: python -m src.ingestion.unified.cli preflight|bootstrap|run|status|reprocess
 ```
 
 **Location:** `/home/user/projects/rag-fresh` (WSL2) | `/opt/rag-fresh` (VPS)
@@ -41,7 +42,9 @@ Input → Docling Parser → Chunker → BGE-M3 Dense + BGE-M3 Sparse → Qdrant
 | `src/core/pipeline.py` | RAG orchestrator |
 | `src/retrieval/search_engines.py` | 4 search variants |
 | `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
+| `src/ingestion/unified/manifest.py` | Content-hash → stable UUID (rename-safe) |
 | `telegram_bot/` | Bot + services |
+| `telegram_bot/preflight.py` | Dependency health checks (Redis, Qdrant, BGE-M3, LiteLLM) |
 
 **Services:** Qdrant:6333, Redis:6379, LiteLLM:4000, Langfuse:3001
 
@@ -111,9 +114,9 @@ ssh vps "docker logs vps-bot --tail 30"                                   # Logs
 rsync -avz src/ vps:/opt/rag-fresh/src/ && ssh vps "docker restart vps-ingestion"  # Deploy code
 ```
 
-**VPS Env:** `RETRIEVAL_DENSE_PROVIDER=bge_m3_api` `RETRIEVAL_SPARSE_PROVIDER=bge_m3_api` `RERANK_PROVIDER=colbert` `BGE_M3_URL=http://bge-m3:8000`
+**VPS Env:** `RETRIEVAL_DENSE_PROVIDER=bge_m3_api` `RETRIEVAL_SPARSE_PROVIDER=bge_m3_api` `RERANK_PROVIDER=colbert` `BGE_M3_URL=http://bge-m3:8000` `COLBERT_TIMEOUT=120` `RERANK_CANDIDATES_MAX=10`
 
-**VPS Embeddings:** Dense: BGE-M3 (local CPU) | Sparse: transitioning BM42 -> BGE-M3 | Rerank: ColBERT (local CPU)
+**VPS Embeddings:** Dense: BGE-M3 (local CPU) | Sparse: BGE-M3 `/encode/sparse` | Rerank: ColBERT (local CPU, graceful degradation on timeout)
 
 ## Monitoring & Alerting
 
