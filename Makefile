@@ -8,6 +8,10 @@
 	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks
 
+# Configurable container names & thresholds
+REDIS_CONTAINER ?= dev-redis
+EXPECTED_MAXMEMORY_SAMPLES ?= 10
+
 # Default target
 .DEFAULT_GOAL := help
 
@@ -231,32 +235,32 @@ smoke-zoo: ## Run zoo smoke tests (pytest)
 
 test-redis: ## Verify Redis Query Engine is available
 	@echo "$(BLUE)Testing Redis Query Engine...$(NC)"
-	@redis_policy=$$(docker exec dev-redis redis-cli CONFIG GET maxmemory-policy | tail -n 1); \
+	@redis_policy=$$(docker exec $(REDIS_CONTAINER) redis-cli CONFIG GET maxmemory-policy | tail -n 1); \
 		if [ "$$redis_policy" != "volatile-lfu" ]; then \
 			echo "$(RED)FAIL: maxmemory-policy is $$redis_policy (expected volatile-lfu)$(NC)"; \
 			exit 1; \
 		fi; \
 		echo "  maxmemory-policy: $$redis_policy"
-	@redis_samples=$$(docker exec dev-redis redis-cli CONFIG GET maxmemory-samples | tail -n 1); \
-		if [ "$$redis_samples" != "10" ]; then \
-			echo "$(RED)FAIL: maxmemory-samples is $$redis_samples (expected 10)$(NC)"; \
+	@redis_samples=$$(docker exec $(REDIS_CONTAINER) redis-cli CONFIG GET maxmemory-samples | tail -n 1); \
+		if [ "$$redis_samples" != "$(EXPECTED_MAXMEMORY_SAMPLES)" ]; then \
+			echo "$(RED)FAIL: maxmemory-samples is $$redis_samples (expected $(EXPECTED_MAXMEMORY_SAMPLES))$(NC)"; \
 			exit 1; \
 		fi; \
 		echo "  maxmemory-samples: $$redis_samples"
-	@docker exec dev-redis redis-cli FT._LIST > /dev/null 2>&1 || \
+	@docker exec $(REDIS_CONTAINER) redis-cli FT._LIST > /dev/null 2>&1 || \
 		(echo "$(RED)FAIL: FT._LIST not available - Query Engine missing$(NC)" && exit 1)
 	@echo "  FT._LIST: OK"
-	@docker exec dev-redis redis-cli FT.CREATE __test_vec_idx ON HASH PREFIX 1 __test_vec: SCHEMA name TEXT vec VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE > /dev/null 2>&1 || \
+	@docker exec $(REDIS_CONTAINER) redis-cli FT.CREATE __test_vec_idx ON HASH PREFIX 1 __test_vec: SCHEMA name TEXT vec VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE > /dev/null 2>&1 || \
 		(echo "$(RED)FAIL: Cannot create VECTOR index$(NC)" && exit 1)
 	@echo "  FT.CREATE VECTOR: OK"
-	@docker exec dev-redis redis-cli FT.DROPINDEX __test_vec_idx > /dev/null 2>&1 || true
+	@docker exec $(REDIS_CONTAINER) redis-cli FT.DROPINDEX __test_vec_idx > /dev/null 2>&1 || true
 	@echo "$(GREEN)Query Engine + Vector Search: OK$(NC)"
 	@if [ "$${REQUIRE_REDIS_JSON:-0}" = "1" ]; then \
-		docker exec dev-redis redis-cli JSON.SET __test_json '$$' '{"test":1}' > /dev/null 2>&1 || \
+		docker exec $(REDIS_CONTAINER) redis-cli JSON.SET __test_json '$$' '{"test":1}' > /dev/null 2>&1 || \
 			(echo "$(RED)FAIL: JSON.SET not available$(NC)" && exit 1); \
-		docker exec dev-redis redis-cli JSON.GET __test_json > /dev/null 2>&1 || \
+		docker exec $(REDIS_CONTAINER) redis-cli JSON.GET __test_json > /dev/null 2>&1 || \
 			(echo "$(RED)FAIL: JSON.GET not available$(NC)" && exit 1); \
-		docker exec dev-redis redis-cli DEL __test_json > /dev/null 2>&1 || true; \
+		docker exec $(REDIS_CONTAINER) redis-cli DEL __test_json > /dev/null 2>&1 || true; \
 		echo "  JSON: OK"; \
 	fi
 	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"

@@ -131,6 +131,7 @@ class PropertyBot:
             api_key=config.llm_api_key,
             base_url=config.llm_base_url,
             model=config.llm_model,
+            low_confidence_threshold=config.low_confidence_threshold,
         )
 
         # Query preprocessor (rule-based: translit, RRF weights, HyDE gating)
