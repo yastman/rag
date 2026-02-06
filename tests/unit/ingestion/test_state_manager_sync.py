@@ -14,6 +14,7 @@ class TestStateManagerSyncMethods:
         required_methods = [
             "get_state_sync",
             "should_process_sync",
+            "upsert_state_sync",
             "mark_processing_sync",
             "mark_indexed_sync",
             "mark_error_sync",
@@ -31,6 +32,7 @@ class TestStateManagerSyncMethods:
         sync_methods = [
             "get_state_sync",
             "should_process_sync",
+            "upsert_state_sync",
             "mark_processing_sync",
             "mark_indexed_sync",
             "mark_error_sync",
