@@ -14,14 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
-          cache: "pip"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
 
       - name: Install linters
-        run: pip install ruff mypy
+        run: uv tool install ruff && uv tool install mypy
 
       - name: Ruff lint
         run: ruff check src/ telegram_bot/ tests/ --output-format=github
@@ -51,16 +53,19 @@ jobs:
       - uses: actions/checkout@v4
         if: env.LANGFUSE_AVAILABLE == 'true'
 
+      - name: Install uv
+        if: env.LANGFUSE_AVAILABLE == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       - name: Set up Python
         if: env.LANGFUSE_AVAILABLE == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
+        run: uv python install 3.12
 
       - name: Install dependencies
         if: env.LANGFUSE_AVAILABLE == 'true'
-        run: pip install -e ".[dev]"
+        run: uv sync --group dev
 
       - name: Run baseline comparison
         if: env.LANGFUSE_AVAILABLE == 'true'
@@ -73,7 +78,7 @@ jobs:
           CURRENT_TAG="ci-${{ github.sha }}-$(date +%Y%m%d)"
 
           # Compare against main-latest baseline
-          python3 -m tests.baseline.cli compare \
+          uv run python3 -m tests.baseline.cli compare \
             --baseline="main-latest" \
             --current="${CURRENT_TAG}" \
             --thresholds=tests/baseline/thresholds.yaml \
