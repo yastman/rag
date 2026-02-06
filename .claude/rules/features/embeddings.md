@@ -13,9 +13,15 @@ Generate dense and sparse embeddings for semantic search and caching.
 ## Architecture
 
 ```
-Document Indexing: Voyage voyage-4-large (1024-dim) + BM42 sparse
-Query Embedding:   Voyage voyage-4-lite (1024-dim) + BM42 sparse
-Semantic Cache:    USER-base (768-dim, Russian optimized)
+VPS Production:
+  Dense + Sparse: BGE-M3 (1024-dim dense + lexical sparse, single CPU service)
+  Rerank:         ColBERT MaxSim (via BGE-M3 /rerank, timeout=120s, graceful degradation)
+  Semantic Cache:  USER-base (768-dim, Russian optimized)
+
+Dev:
+  Dense:  Voyage voyage-4-large (indexing) / voyage-4-lite (queries)
+  Sparse: BM42 (deprecated on VPS, replaced by BGE-M3 /encode/sparse)
+  Cache:  USER-base (768-dim)
 ```
 
 ## Key Files
@@ -37,7 +43,7 @@ Semantic Cache:    USER-base (768-dim, Russian optimized)
 | voyage-context-3 | 1024 | Contextualized chunks | API |
 | deepvk/USER-base | 768 | Russian semantic cache | dev-user-base:8003 |
 | BGE-M3 | 1024 | Dense + sparse + ColBERT | dev-bge-m3:8000 |
-| BM42 | sparse | Keyword matching | dev-bm42:8002 |
+| BM42 | sparse | Keyword matching (DEPRECATED on VPS) | dev-bm42:8002 |
 
 ## Configuration
 
