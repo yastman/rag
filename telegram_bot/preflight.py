@@ -1,7 +1,9 @@
-"""Bot dependency preflight checks."""
+"""Bot dependency preflight checks with CRITICAL/OPTIONAL classification."""
 
+import asyncio
 import contextlib
 import logging
+from enum import StrEnum
 
 import httpx
 import redis.asyncio as aioredis
@@ -10,6 +12,10 @@ from .config import BotConfig
 
 
 logger = logging.getLogger(__name__)
+
+# Retry settings for critical deps
+CRITICAL_RETRIES = 3
+CRITICAL_RETRY_DELAY = 5.0  # seconds
 
 # Cache key prefixes used by CacheService (see telegram_bot/services/cache.py)
 # Used for synthetic write/read/ttl/delete verification at startup.
@@ -20,6 +26,36 @@ CACHE_KEY_PREFIXES = [
     "rerank:",
     "conversation:",
 ]
+
+
+class DepLevel(StrEnum):
+    CRITICAL = "CRITICAL"
+    OPTIONAL = "OPTIONAL"
+
+
+# Dependency classification:
+#   CRITICAL — bot cannot function, fail startup after retries
+#   OPTIONAL — bot can degrade gracefully, warn and continue
+DEP_CLASSIFICATION: dict[str, DepLevel] = {
+    "redis": DepLevel.CRITICAL,
+    "redis_cache": DepLevel.CRITICAL,
+    "qdrant": DepLevel.CRITICAL,
+    "bge_m3": DepLevel.CRITICAL,
+    "litellm": DepLevel.OPTIONAL,
+    "langfuse": DepLevel.OPTIONAL,
+}
+
+
+class PreflightError(SystemExit):
+    """Raised when a CRITICAL dependency is unreachable after retries."""
+
+    def __init__(self, failed_deps: list[str]):
+        self.failed_deps = failed_deps
+        msg = (
+            f"CRITICAL preflight failure — cannot start bot. "
+            f"Unreachable after {CRITICAL_RETRIES} attempts: {', '.join(failed_deps)}"
+        )
+        super().__init__(msg)
 
 
 async def _check_redis_deep(redis_url: str) -> tuple[bool, dict[str, str]]:
@@ -153,69 +189,152 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
         await r.aclose()
 
 
+async def _check_single_dep(
+    name: str,
+    config: BotConfig,
+    client: httpx.AsyncClient,
+) -> bool:
+    """Run a single dependency check. Returns True if healthy."""
+    if name == "redis":
+        passed, details = await _check_redis_deep(config.redis_url)
+        if not passed:
+            logger.error("Preflight FAIL: Redis deep check — %s", details)
+        return passed
+
+    if name == "redis_cache":
+        cache_ok, cache_errors = await _verify_cache_synthetic(config.redis_url)
+        if not cache_ok:
+            logger.error("Preflight FAIL: Redis cache verify — %s", cache_errors)
+        return cache_ok
+
+    if name == "qdrant":
+        collection = config.qdrant_collection
+        resp = await client.get(f"{config.qdrant_url}/collections/{collection}")
+        if resp.status_code != 200:
+            logger.error("Preflight FAIL: Qdrant collection — %s", resp.status_code)
+            return False
+        return True
+
+    if name == "bge_m3":
+        resp = await client.get(f"{config.bge_m3_url}/health")
+        if resp.status_code != 200:
+            logger.error("Preflight FAIL: BGE-M3 — %s", resp.status_code)
+            return False
+        return True
+
+    if name == "litellm":
+        resp = await client.get(f"{config.llm_base_url}/health/liveliness")
+        if resp.status_code != 200:
+            logger.error("Preflight FAIL: LiteLLM — %s", resp.status_code)
+            return False
+        return True
+
+    if name == "langfuse":
+        from .observability import get_langfuse_client
+
+        lf = get_langfuse_client()
+        return lf is not None
+
+    logger.warning("Preflight: unknown dependency %r", name)
+    return False
+
+
 async def check_dependencies(config: BotConfig) -> dict[str, bool]:
-    """Check all bot dependencies are reachable. Returns status dict."""
+    """Check all bot dependencies with retry logic for CRITICAL ones.
+
+    CRITICAL deps (redis, qdrant, bge_m3) are retried up to CRITICAL_RETRIES
+    times with CRITICAL_RETRY_DELAY between attempts.
+
+    OPTIONAL deps (litellm, langfuse) are checked once — failures are logged
+    as warnings but do not block startup.
+
+    Returns:
+        Status dict mapping dep name to pass/fail.
+
+    Raises:
+        PreflightError: If any CRITICAL dep fails after all retries.
+    """
     results: dict[str, bool] = {}
-    timeout = httpx.Timeout(5.0)
+    timeout = httpx.Timeout(10.0)
+
+    # Order matters: redis_cache depends on redis
+    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "litellm", "langfuse"]
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        # ----- Redis deep check (REDIS-01) -----
-        try:
-            passed, details = await _check_redis_deep(config.redis_url)
-            results["redis"] = passed
-            if not passed:
-                logger.error("Preflight FAIL: Redis deep check — %s", details)
-        except Exception as e:
-            logger.error("Preflight FAIL: Redis — %s", e)
-            results["redis"] = False
+        for dep_name in dep_order:
+            level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
 
-        # ----- Redis synthetic cache verification (REDIS-02) -----
-        if results.get("redis"):
-            try:
-                cache_ok, cache_errors = await _verify_cache_synthetic(config.redis_url)
-                results["redis_cache"] = cache_ok
-                if not cache_ok:
-                    logger.error(
-                        "Preflight FAIL: Redis cache verify — %s",
-                        cache_errors,
-                    )
-            except Exception as e:
-                logger.error("Preflight FAIL: Redis cache verify — %s", e)
+            # redis_cache depends on redis — skip if redis failed
+            if dep_name == "redis_cache" and not results.get("redis"):
                 results["redis_cache"] = False
-        else:
-            # Skip cache verification when Redis itself is down
-            results["redis_cache"] = False
-            logger.warning("Preflight SKIP: Redis cache verify (Redis unreachable)")
+                logger.warning("Preflight SKIP: Redis cache verify (Redis unreachable)")
+                continue
 
-        ***REMOVED*** collection
-        try:
-            collection = config.qdrant_collection
-            resp = await client.get(f"{config.qdrant_url}/collections/{collection}")
-            results["qdrant"] = resp.status_code == 200
-            if not results["qdrant"]:
-                logger.error("Preflight FAIL: Qdrant collection — %s", resp.status_code)
-        except Exception as e:
-            logger.error("Preflight FAIL: Qdrant — %s", e)
-            results["qdrant"] = False
+            if level == DepLevel.CRITICAL:
+                # Retry loop for critical deps
+                passed = False
+                for attempt in range(1, CRITICAL_RETRIES + 1):
+                    try:
+                        passed = await _check_single_dep(dep_name, config, client)
+                    except Exception as e:
+                        logger.error(
+                            "Preflight FAIL: %s (attempt %d/%d) — %s",
+                            dep_name,
+                            attempt,
+                            CRITICAL_RETRIES,
+                            e,
+                        )
+                        passed = False
 
-        # BGE-M3 embedding service
-        try:
-            resp = await client.get(f"{config.bge_m3_url}/health")
-            results["bge_m3"] = resp.status_code == 200
-            if not results["bge_m3"]:
-                logger.error("Preflight FAIL: BGE-M3 — %s", resp.status_code)
-        except Exception as e:
-            logger.error("Preflight FAIL: BGE-M3 — %s", e)
-            results["bge_m3"] = False
+                    if passed:
+                        break
 
-        # LiteLLM proxy (/health/liveliness doesn't require auth)
-        try:
-            resp = await client.get(f"{config.llm_base_url}/health/liveliness")
-            results["litellm"] = resp.status_code == 200
-            if not results["litellm"]:
-                logger.error("Preflight FAIL: LiteLLM — %s", resp.status_code)
-        except Exception as e:
-            logger.error("Preflight FAIL: LiteLLM — %s", e)
-            results["litellm"] = False
+                    if attempt < CRITICAL_RETRIES:
+                        logger.warning(
+                            "Preflight: %s [CRITICAL] failed (attempt %d/%d), retrying in %.0fs...",
+                            dep_name,
+                            attempt,
+                            CRITICAL_RETRIES,
+                            CRITICAL_RETRY_DELAY,
+                        )
+                        await asyncio.sleep(CRITICAL_RETRY_DELAY)
+
+                results[dep_name] = passed
+            else:
+                # Single attempt for optional deps
+                try:
+                    results[dep_name] = await _check_single_dep(dep_name, config, client)
+                except Exception as e:
+                    logger.warning("Preflight WARN: %s [OPTIONAL] — %s", dep_name, e)
+                    results[dep_name] = False
+
+    # Log summary
+    for dep_name, passed in results.items():
+        level = DEP_CLASSIFICATION.get(dep_name, DepLevel.OPTIONAL)
+        status = "OK" if passed else "FAIL"
+        logger.info("Preflight %s: %s [%s]", status, dep_name, level.value)
+
+    # Enforce critical deps
+    critical_failures = [
+        name
+        for name, passed in results.items()
+        if not passed and DEP_CLASSIFICATION.get(name) == DepLevel.CRITICAL
+    ]
+    if critical_failures:
+        raise PreflightError(critical_failures)
+
+    # Warn about optional failures
+    optional_failures = [
+        name
+        for name, passed in results.items()
+        if not passed and DEP_CLASSIFICATION.get(name) == DepLevel.OPTIONAL
+    ]
+    if optional_failures:
+        logger.warning(
+            "Preflight: optional deps unavailable (bot will continue): %s",
+            optional_failures,
+        )
+    else:
+        logger.info("Preflight: all dependencies OK")
 
     return results

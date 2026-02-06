@@ -1,7 +1,7 @@
 """Bot configuration."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -101,6 +101,17 @@ class BotConfig:
     # HyDE (Hypothetical Document Embeddings)
     use_hyde: bool = os.getenv("USE_HYDE", "false").lower() == "true"
     hyde_min_words: int = int(os.getenv("HYDE_MIN_WORDS", "5"))
+
+    # Semantic cache tuning
+    semantic_cache_threshold: float = float(os.getenv("SEMANTIC_CACHE_THRESHOLD", "0.10"))
+    semantic_cache_ttl_default: int = int(os.getenv("SEMANTIC_CACHE_TTL_DEFAULT", "3600"))
+
+    # Admin user IDs (comma-separated Telegram user IDs)
+    admin_ids: list[int] = field(
+        default_factory=lambda: [
+            int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()
+        ]
+    )
 
     # Guardrails
     enable_confidence_scoring: bool = (

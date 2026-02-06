@@ -6,15 +6,19 @@ NOTE: redisvl imports are lazy-loaded in initialize() to avoid ~7.5s import over
 from voyageai SDK (pandas, scipy.stats) during test collection.
 """
 
+import asyncio
+import contextlib
 import hashlib
 import json
 import logging
 import os
+import re
 import time
 from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as redis
-from langfuse import get_client, observe
+
+from telegram_bot.observability import get_client, observe
 
 
 # Lazy imports for redisvl (heavy dependency chain via voyageai SDK)
@@ -26,12 +30,52 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def _langfuse_client():
+    """Get Langfuse client, returning None if not configured."""
+    with contextlib.suppress(Exception):
+        return get_client()
+    return None
+
+
 # Cache versioning - bump when changing cache structure or models
 # NOTE: SemanticMessageHistory index is versioned as:
 #   rag_conversations:{CACHE_SCHEMA_VERSION}:{vectorizer_id}
 #   e.g. rag_conversations:v2:userbase768 or rag_conversations:v2:voyage1024
 # Old indices are NOT deleted automatically; clean up manually if needed.
 CACHE_SCHEMA_VERSION = "v2"
+
+# TTL strategy: pattern-based TTL for semantic cache entries
+# Price/availability queries change frequently → short TTL
+PRICE_PATTERNS = re.compile(
+    r"цен[аыу]|стоимост|ціна|вартіст|наличи[еи]|наявніст|скидк|знижк|акци[яию]|тариф",
+    re.IGNORECASE,
+)
+# FAQ/stable content queries → long TTL
+FAQ_PATTERNS = re.compile(
+    r"что\s+такое|как\s+работает|які\s+умови|що\s+таке|как\s+оформить|які\s+документи|порядок|процедура",
+    re.IGNORECASE,
+)
+
+
+def get_ttl_for_query(query: str, answer: str = "") -> int:
+    """Determine TTL for a semantic cache entry based on query content.
+
+    Price/availability queries get short TTL (30min), FAQ queries get long TTL (24h),
+    everything else uses the configurable default.
+
+    Args:
+        query: User query text
+        answer: LLM answer (reserved for future use)
+
+    Returns:
+        TTL in seconds
+    """
+    if PRICE_PATTERNS.search(query):
+        return 1800  # 30 min
+    if FAQ_PATTERNS.search(query):
+        return 86400  # 24h
+    return int(os.getenv("SEMANTIC_CACHE_TTL_DEFAULT", "3600"))
 
 
 class CacheService:
@@ -53,7 +97,7 @@ class CacheService:
         embeddings_cache_ttl: int = 7 * 24 * 3600,  # 7 days
         analyzer_cache_ttl: int = 24 * 3600,  # 24 hours
         search_cache_ttl: int = 2 * 3600,  # 2 hours
-        distance_threshold: float = 0.20,  # cosine distance threshold (0.20 ≈ 80% similarity, better for RU paraphrases)
+        distance_threshold: float | None = None,  # default from SEMANTIC_CACHE_THRESHOLD env
     ):
         """Initialize cache service.
 
@@ -66,6 +110,10 @@ class CacheService:
             distance_threshold: Cosine distance threshold for semantic cache (lower = stricter)
         """
         self.redis_url = redis_url
+
+        # Resolve distance threshold: explicit arg > env var > 0.10
+        if distance_threshold is None:
+            distance_threshold = float(os.getenv("SEMANTIC_CACHE_THRESHOLD", "0.10"))
 
         # TTL configuration
         self.semantic_cache_ttl = semantic_cache_ttl
@@ -97,18 +145,22 @@ class CacheService:
         # Native RedisVL SemanticMessageHistory (for conversation context)
         self.message_history: SemanticMessageHistory | None = None
 
+        # Last semantic cache hit distance (for pipeline metrics observation)
+        self.last_semantic_distance: float | None = None
+
         logger.info("CacheService initialized with 4-tier architecture (RedisVL native)")
 
     def _get_vectorizer_id(self) -> str:
         """Get vectorizer identifier for cache namespacing.
 
         Returns:
-            'userbase768' for local USER-base model (768-dim)
-            'voyage1024' for Voyage API (1024-dim)
+            'bge1024' for BGE-M3 vector reuse (1024-dim, default)
+            'userbase768' for local USER-base model (768-dim, legacy)
+            'voyage1024' for Voyage API (1024-dim, legacy)
         """
         use_local = os.getenv("USE_LOCAL_EMBEDDINGS", "false").lower() == "true"
         if use_local:
-            return "userbase768"
+            return "bge1024"
         return "voyage1024"
 
     async def initialize(self):
@@ -143,12 +195,16 @@ class CacheService:
 
             try:
                 if use_local:
-                    # Use local USER-base for Russian semantic matching (ruMTEB #1)
-                    from telegram_bot.services.vectorizers import UserBaseVectorizer
+                    # Fast-Lane: reuse BGE-M3 dense vector (1024-dim) for semantic cache.
+                    # Vectors are passed via vector= parameter to acheck/astore,
+                    # so the vectorizer is only used for Redis index schema creation.
+                    from telegram_bot.services.vectorizers import BgeM3CacheVectorizer
 
-                    user_base_url = os.getenv("USER_BASE_URL", "http://localhost:8003")
-                    logger.info(f"Initializing SemanticCache with USER-base ({user_base_url})...")
-                    vectorizer = UserBaseVectorizer(base_url=user_base_url)
+                    bge_m3_url = os.getenv("BGE_M3_URL", "http://bge-m3:8000")
+                    logger.info(
+                        f"Initializing SemanticCache with BGE-M3 vector reuse ({bge_m3_url})..."
+                    )
+                    vectorizer = BgeM3CacheVectorizer(base_url=bge_m3_url)
                 else:
                     # Fallback to Voyage API
                     voyage_api_key = os.getenv("VOYAGE_API_KEY", "")
@@ -182,7 +238,9 @@ class CacheService:
                             {"name": "query_type", "type": "tag"},
                         ],
                     )
-                    vectorizer_name = "USER-base" if use_local else "voyage-multilingual-2"
+                    vectorizer_name = (
+                        "BGE-M3 (vector reuse)" if use_local else "voyage-multilingual-2"
+                    )
                     logger.info(
                         f"✓ RedisVL SemanticCache initialized "
                         f"(vectorizer={vectorizer_name}, distance_threshold={self.distance_threshold}, "
@@ -262,6 +320,41 @@ class CacheService:
             await self.redis_client.aclose()
         logger.info("Redis connections closed")
 
+    def set_threshold(self, value: float) -> None:
+        """Dynamically update semantic cache distance threshold.
+
+        Updates both the local default and the RedisVL SemanticCache instance.
+
+        Args:
+            value: New cosine distance threshold (lower = stricter matching)
+        """
+        old = self.distance_threshold
+        self.distance_threshold = value
+        if self.semantic_cache is not None:
+            self.semantic_cache.set_threshold(value)
+        logger.info("Semantic cache threshold changed: %.3f -> %.3f", old, value)
+
+    async def clear_semantic_index(self) -> int:
+        """Clear all entries from the semantic cache index.
+
+        Returns:
+            Number of entries cleared (approximate via SCAN count), or 0 if unavailable.
+        """
+        if self.semantic_cache is None:
+            return 0
+
+        # Count entries before clear (approximate)
+        count = 0
+        if self.redis_client:
+            vid = self._get_vectorizer_id()
+            prefix = f"sem:{CACHE_SCHEMA_VERSION}:{vid}:"
+            async for _key in self.redis_client.scan_iter(match=f"{prefix}*", count=500):
+                count += 1
+
+        await self.semantic_cache.aclear()
+        logger.info("Semantic cache cleared (%d entries removed)", count)
+        return count
+
     def _hash_key(self, data: str) -> str:
         """Generate SHA256 hash for cache key."""
         return hashlib.sha256(data.encode()).hexdigest()[:16]
@@ -272,21 +365,24 @@ class CacheService:
     async def check_semantic_cache(
         self,
         query: str,
+        vector: list[float] | None = None,
         user_id: int | None = None,
         language: str = "ru",
         threshold_override: float | None = None,
+        cache_timeout: float = 0.3,
     ) -> str | None:
-        """Check semantic cache using RedisVL with VoyageAI voyage-3-lite.
+        """Check semantic cache using pre-computed vector (Fast-Lane).
 
-        Uses VoyageAI voyage-3-lite for fast, cost-effective cache matching.
-        This is separate from BGE-M3 (1024-dim) used for Qdrant search.
-        Supports multi-user isolation via filterable_fields.
+        When ``vector`` is provided, skips internal vectorizer entirely —
+        zero embedding latency. Falls back to prompt-based if no vector.
 
         Args:
-            query: User query text
+            query: User query text (used as prompt fallback if no vector)
+            vector: Pre-computed dense vector (BGE-M3, 1024-dim). Skips vectorizer.
             user_id: Optional user ID for cache isolation (Telegram user ID)
             language: Language code for filtering (default: "ru")
-            threshold_override: Optional distance threshold override for adaptive caching
+            threshold_override: Optional distance threshold override
+            cache_timeout: Max seconds to wait for cache check (default: 0.3s)
 
         Returns:
             Cached answer if similar query found, None otherwise
@@ -311,41 +407,65 @@ class CacheService:
             if user_id is not None:
                 filter_expr = filter_expr & (Tag("user_id") == str(user_id))
 
-            # Use native RedisVL acheck - vectorizer computes embedding internally
-            results = await self.semantic_cache.acheck(
-                prompt=query,
-                filter_expression=filter_expr,
-                num_results=1,
-                distance_threshold=effective_threshold,
-            )
+            # Fast-Lane: pass pre-computed vector, skip internal vectorizer
+            check_kwargs: dict = {
+                "filter_expression": filter_expr,
+                "num_results": 1,
+                "distance_threshold": effective_threshold,
+            }
+            if vector is not None:
+                check_kwargs["vector"] = vector
+            else:
+                check_kwargs["prompt"] = query
+
+            # Timeout guard — cache miss is better than slow cache
+            try:
+                results = await asyncio.wait_for(
+                    self.semantic_cache.acheck(**check_kwargs),
+                    timeout=cache_timeout,
+                )
+            except TimeoutError:
+                latency = (time.time() - start) * 1000
+                logger.warning(f"Semantic cache timeout ({latency:.0f}ms > {cache_timeout}s)")
+                self.metrics["semantic"]["misses"] += 1
+                return None
 
             latency = (time.time() - start) * 1000
 
-            langfuse = get_client()
+            langfuse = _langfuse_client()
 
             if results:
                 self.metrics["semantic"]["hits"] += 1
                 answer = results[0].get("response", "")
                 distance = results[0].get("vector_distance", 0)
+                self.last_semantic_distance = float(distance)
                 logger.info(f"✓ Semantic cache HIT ({latency:.0f}ms, distance={distance:.3f})")
 
-                langfuse.update_current_span(
-                    output={
-                        "hit": True,
-                        "layer": "semantic",
-                        "distance": distance,
-                        "threshold": effective_threshold,
-                    }
-                )
+                if langfuse:
+                    langfuse.update_current_span(
+                        output={
+                            "hit": True,
+                            "layer": "semantic",
+                            "distance": distance,
+                            "threshold": effective_threshold,
+                            "latency_ms": latency,
+                        }
+                    )
 
                 return answer
 
             self.metrics["semantic"]["misses"] += 1
-            logger.debug("✗ Semantic cache MISS (no similar results)")
+            logger.debug(f"✗ Semantic cache MISS ({latency:.0f}ms)")
 
-            langfuse.update_current_span(
-                output={"hit": False, "layer": "semantic", "reason": "no_match"}
-            )
+            if langfuse:
+                langfuse.update_current_span(
+                    output={
+                        "hit": False,
+                        "layer": "semantic",
+                        "reason": "no_match",
+                        "latency_ms": latency,
+                    }
+                )
 
             return None
 
@@ -353,10 +473,11 @@ class CacheService:
             logger.error(f"Semantic cache error: {type(e).__name__}: {e}")
             self.metrics["semantic"]["misses"] += 1
 
-            langfuse = get_client()
-            langfuse.update_current_span(
-                output={"hit": False, "layer": "semantic", "error": repr(e)}
-            )
+            langfuse = _langfuse_client()
+            if langfuse:
+                langfuse.update_current_span(
+                    output={"hit": False, "layer": "semantic", "error": repr(e)}
+                )
 
             return None
 
@@ -365,21 +486,24 @@ class CacheService:
         self,
         query: str,
         answer: str,
+        vector: list[float] | None = None,
         user_id: int | None = None,
         language: str = "ru",
         query_type: str = "general",
+        ttl: int | None = None,
     ):
-        """Store question-answer pair in semantic cache using RedisVL.
+        """Store question-answer pair in semantic cache (Fast-Lane).
 
-        Uses VoyageAI voyage-3-lite for cache indexing.
-        Stores with user context filters for multi-user isolation.
+        When ``vector`` is provided, skips internal vectorizer — zero latency.
 
         Args:
             query: User query text
             answer: LLM answer
+            vector: Pre-computed dense vector (BGE-M3, 1024-dim). Skips vectorizer.
             user_id: User ID for cache isolation (Telegram user ID)
             language: Language code (default: "ru")
             query_type: Query type for categorization (default: "general")
+            ttl: Optional per-entry TTL override (seconds)
         """
         if not self.semantic_cache:
             return
@@ -393,12 +517,18 @@ class CacheService:
             if user_id is not None:
                 filters["user_id"] = str(user_id)
 
-            # Use native RedisVL astore - vectorizer computes embedding internally
-            await self.semantic_cache.astore(
-                prompt=query,
-                response=answer,
-                filters=filters,
-            )
+            # Fast-Lane: pass pre-computed vector, skip internal vectorizer
+            store_kwargs: dict = {
+                "prompt": query,
+                "response": answer,
+                "filters": filters,
+            }
+            if vector is not None:
+                store_kwargs["vector"] = vector
+            if ttl is not None:
+                store_kwargs["ttl"] = ttl
+
+            await self.semantic_cache.astore(**store_kwargs)
             logger.debug(f"✓ Stored semantic cache: {query[:50]}... (user_id={user_id})")
         except Exception as e:
             logger.error(f"Semantic cache store error: {type(e).__name__}: {e}")
@@ -473,7 +603,7 @@ class CacheService:
     # ========== TIER 1.5: Sparse Embedding Cache ==========
 
     async def get_cached_sparse_embedding(
-        self, text: str, model_name: str = "bm42"
+        self, text: str, model_name: str = "bge_m3_sparse"
     ) -> dict[str, Any] | None:
         """Get cached sparse embedding.
 
@@ -516,7 +646,7 @@ class CacheService:
         self,
         text: str,
         sparse_vector: dict[str, Any],
-        model_name: str = "bm42",
+        model_name: str = "bge_m3_sparse",
         ttl: int = 86400,  # 24 hours default
     ):
         """Store sparse embedding in Redis hash.
@@ -640,10 +770,11 @@ class CacheService:
         except Exception as e:
             logger.error(f"Search cache error: {type(e).__name__}: {e}")
             self.metrics["search"]["misses"] += 1
-            langfuse = get_client()
-            langfuse.update_current_span(
-                output={"hit": False, "layer": "retrieval", "error": repr(e)}
-            )
+            langfuse = _langfuse_client()
+            if langfuse:
+                langfuse.update_current_span(
+                    output={"hit": False, "layer": "retrieval", "error": repr(e)}
+                )
             return None
 
     @observe(name="cache-search-store")
@@ -721,8 +852,11 @@ class CacheService:
         except Exception as e:
             logger.error(f"Rerank cache error: {type(e).__name__}: {e}")
             self.metrics["rerank"]["misses"] += 1
-            langfuse = get_client()
-            langfuse.update_current_span(output={"hit": False, "layer": "rerank", "error": repr(e)})
+            langfuse = _langfuse_client()
+            if langfuse:
+                langfuse.update_current_span(
+                    output={"hit": False, "layer": "rerank", "error": repr(e)}
+                )
             return None
 
     @observe(name="cache-rerank-store")
@@ -991,6 +1125,8 @@ class CacheService:
                 "total_keys": db_size,
                 "prefix_counts": prefix_counts,
                 "redis_version": server_info.get("redis_version", "N/A"),
+                "semantic_threshold": self.distance_threshold,
+                "semantic_ttl_default": int(os.getenv("SEMANTIC_CACHE_TTL_DEFAULT", "3600")),
             }
         except Exception as e:
             logger.error(f"Redis diagnostics error: {type(e).__name__}: {e}")
