@@ -4,11 +4,18 @@ Tests that deepvk/USER-base model correctly handles:
 - Word order variations (вид рассрочки vs рассрочки вид)
 - Morphological forms (купить vs покупка)
 - Singular/plural (рассрочка vs рассрочки)
+
+NOTE: These are integration tests requiring redisvl + live Redis.
 """
 
+import importlib.util
 import os
 
 import pytest
+
+
+if importlib.util.find_spec("redisvl") is None:
+    pytest.skip("redisvl not installed (integration test)", allow_module_level=True)
 
 from telegram_bot.services.cache import CacheService
 
