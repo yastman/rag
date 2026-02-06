@@ -57,21 +57,28 @@ COMPOSE_PROFILES=bot,obs docker compose -f docker-compose.dev.yml up -d
 
 ## VPS Stack (Local Embeddings)
 
-For VPS deployment without Voyage API dependency:
+**VPS:** `admin@95.111.252.29:1654` | Alias: `ssh vps` | Path: `/opt/rag-fresh`
 
 ```bash
-docker compose -f docker-compose.vps.yml up -d
+# Start all services
+ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml up -d"
+
+# With ingestion profile
+ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml --profile ingest up -d"
 ```
 
 | Service | Purpose | Memory |
 |---------|---------|--------|
+| postgres | CocoIndex state | 512MB |
+| redis | Cache (semantic, rerank, sparse) | 300MB |
+| qdrant | Vector DB | 1GB |
+| docling | Document parsing | 2GB |
 | bge-m3 | Dense embeddings + ColBERT rerank | 4GB |
 | user-base | Semantic cache (USER2-base) | 2GB |
 | bm42 | Sparse embeddings | 1GB |
-| qdrant | Vector DB | 1GB |
-| redis | Cache | 300MB |
 | litellm | LLM gateway | 512MB |
 | bot | Telegram bot | 512MB |
+| ingestion | CocoIndex pipeline (profile: ingest) | 512MB |
 
 **Feature flags:**
 ```bash
@@ -81,6 +88,85 @@ BGE_M3_URL=http://bge-m3:8000
 ```
 
 **Collection:** `gdrive_documents_bge` (1024-dim BGE-M3 + BM42 sparse)
+
+### VPS Code Deployment (Hot Reload)
+
+Volume mounts позволяют обновлять код без rebuild:
+
+```yaml
+# docker-compose.vps.yml (ingestion service)
+volumes:
+  - ./src:/app/src:ro
+  - ./telegram_bot:/app/telegram_bot:ro
+```
+
+**Workflow:**
+```bash
+# 1. Sync code
+rsync -avz src/ vps:/opt/rag-fresh/src/
+
+# 2. Restart (НЕ rebuild)
+ssh vps "docker restart vps-ingestion"
+# Готово за 5 секунд
+```
+
+**ВАЖНО:** Volume mounts применяются только при создании контейнера. После изменения compose:
+```bash
+ssh vps "cd /opt/rag-fresh && docker compose -f docker-compose.vps.yml --profile ingest up -d --force-recreate ingestion"
+```
+
+### VPS Quick Commands
+
+```bash
+# Статус
+ssh vps "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep vps"
+
+# Логи
+ssh vps "docker logs vps-bot --tail 50"
+ssh vps "docker logs vps-ingestion --tail 50"
+
+# Restart сервиса
+ssh vps "docker restart vps-bot"
+
+# Память
+ssh vps "docker stats --no-stream | grep vps"
+
+# Диск
+ssh vps "docker system df"
+ssh vps "df -h /"
+
+# Очистка (осторожно!)
+ssh vps "docker builder prune -f"           # Build cache
+ssh vps "docker image prune -f"             # Dangling images
+# НИКОГДА: docker system prune --volumes    # Удалит данные!
+```
+
+### VPS Troubleshooting
+
+| Проблема | Решение |
+|----------|---------|
+| Volume mounts не работают | `--force-recreate` один раз |
+| `No space left on device` | `docker builder prune -a -f` |
+| Image 28GB (ingestion) | `RUN chown -R` дублирует слой → использовать `COPY --chown` |
+| Код не обновился | Проверить mounts: `docker inspect vps-ingestion --format '{{json .Mounts}}'` |
+| Container unhealthy | `docker logs vps-{service} --tail 50` |
+
+### VPS Heavy Commands (tmux pattern)
+
+Для тяжёлых команд (docker build, etc) — создать tmux window:
+
+```bash
+# 1. Создать окно
+tmux new-window -n "W-VPS"
+
+# 2. SSH
+tmux send-keys -t "W-VPS" 'ssh vps' Enter
+
+# 3. Команда (после паузы)
+sleep 2 && tmux send-keys -t "W-VPS" 'cd /opt/rag-fresh && docker compose -f docker-compose.vps.yml build 2>&1 | tee logs/build.log; echo "[COMPLETE]"' Enter
+```
+
+Пользователь видит вывод в tmux, Claude ждёт feedback.
 
 ## LLM Gateway (LiteLLM)
 

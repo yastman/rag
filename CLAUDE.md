@@ -98,9 +98,19 @@ make docker-up                      # Core services
 make docker-bot-up                  # + bot
 
 # VPS (local embeddings, no Voyage API)
-docker compose -f docker-compose.vps.yml up -d
-# Env: RETRIEVAL_DENSE_PROVIDER=bge_m3_api RERANK_PROVIDER=colbert
+ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml up -d"
 ```
+
+**VPS:** `admin@95.111.252.29:1654` (`ssh vps`) | Path: `/opt/rag-fresh`
+
+**VPS Quick Commands:**
+```bash
+ssh vps "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep vps"  # Status
+ssh vps "docker logs vps-bot --tail 30"                                   # Logs
+rsync -avz src/ vps:/opt/rag-fresh/src/ && ssh vps "docker restart vps-ingestion"  # Deploy code
+```
+
+**VPS Env:** `RETRIEVAL_DENSE_PROVIDER=bge_m3_api` `RERANK_PROVIDER=colbert` `BGE_M3_URL=http://bge-m3:8000`
 
 ## Monitoring & Alerting
 
