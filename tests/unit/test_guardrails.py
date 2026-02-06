@@ -39,7 +39,7 @@ class TestConfidenceResult:
         """Test ConfidenceResult with low confidence flag."""
         result = ConfidenceResult(
             answer="Uncertain answer",
-            confidence=0.3,
+            confidence=0.2,
             is_low_confidence=True,
         )
 
@@ -102,7 +102,7 @@ class TestConfidenceScoring:
 
     async def test_low_confidence_detection(self, httpx_mock: HTTPXMock, sample_chunks):
         """Test is_low_confidence is True when confidence < threshold."""
-        response_json = json.dumps({"answer": "Uncertain answer", "confidence": 0.3})
+        response_json = json.dumps({"answer": "Uncertain answer", "confidence": 0.2})
         httpx_mock.add_response(json={"choices": [{"message": {"content": response_json}}]})
 
         async with httpx.AsyncClient() as client:
@@ -307,7 +307,7 @@ class TestLowConfidenceResponse:
 
     def test_low_confidence_threshold_value(self):
         """Test LOW_CONFIDENCE_THRESHOLD has correct value."""
-        assert LOW_CONFIDENCE_THRESHOLD == 0.5
+        assert LOW_CONFIDENCE_THRESHOLD == 0.3
 
 
 class TestGuardrailsIntegration:
