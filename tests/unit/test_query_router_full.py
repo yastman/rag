@@ -314,4 +314,5 @@ class TestQueryTypeEnum:
         assert "CHITCHAT" in members
         assert "SIMPLE" in members
         assert "COMPLEX" in members
-        assert len(members) == 3
+        assert "OFF_TOPIC" in members
+        assert len(members) == 4
