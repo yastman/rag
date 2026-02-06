@@ -57,7 +57,7 @@ class GDriveIndexer:
     """
 
     VOYAGE_BATCH_SIZE = 128
-    DEFAULT_COLLECTION = "gdrive_documents_binary"
+    DEFAULT_COLLECTION = "gdrive_documents_bge"
 
     def __init__(
         self,

@@ -429,10 +429,13 @@ class PropertyBot:
                     doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
 
                     # Check rerank cache first
+                    # Hash embedding for cache key (same pattern as search cache)
+                    rerank_query_hash = hashlib.sha256(str(query_vector[:10]).encode()).hexdigest()[
+                        :16
+                    ]
                     cached_rerank = await self.cache_service.get_cached_rerank(
-                        query_embedding=query_vector,
-                        doc_ids=doc_ids,
-                        collection=self.config.qdrant_collection,
+                        query_hash=rerank_query_hash,
+                        chunk_ids=doc_ids,
                     )
 
                     if cached_rerank:
@@ -440,9 +443,9 @@ class PropertyBot:
                         # Rebuild results from cached scores
                         id_to_result = {r.get("id", str(i)): r for i, r in enumerate(results)}
                         results = [
-                            id_to_result[doc_id]
-                            for doc_id, _ in cached_rerank
-                            if doc_id in id_to_result
+                            id_to_result[item["id"]]
+                            for item in cached_rerank
+                            if item["id"] in id_to_result
                         ][: self.config.rerank_top_k]
                         logger.info(f"✓ Using cached rerank ({len(results)} results)")
                     else:
@@ -453,15 +456,15 @@ class PropertyBot:
                             top_k=self.config.rerank_top_k,
                         )
 
-                        # Store rerank results in cache
+                        # Store rerank results in cache (dict format for JSON serialization)
                         rerank_cache_data = [
-                            (doc_ids[r["index"]], r.get("score", 0.0)) for r in rerank_results
+                            {"id": doc_ids[r["index"]], "score": r.get("score", 0.0)}
+                            for r in rerank_results
                         ]
                         await self.cache_service.store_rerank_results(
-                            query_embedding=query_vector,
-                            doc_ids=doc_ids,
+                            query_hash=rerank_query_hash,
+                            chunk_ids=doc_ids,
                             results=rerank_cache_data,
-                            collection=self.config.qdrant_collection,
                         )
 
                         results = [results[r["index"]] for r in rerank_results]
