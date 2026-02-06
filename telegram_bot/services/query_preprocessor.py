@@ -306,7 +306,9 @@ class QueryPreprocessor:
         return should_hyde
 
     @observe(name="query-preprocessor-analyze")
-    def analyze(self, query: str, use_hyde: bool = False, hyde_min_words: int = 5) -> dict[str, Any]:
+    def analyze(
+        self, query: str, use_hyde: bool = False, hyde_min_words: int = 5
+    ) -> dict[str, Any]:
         """Perform full query preprocessing analysis.
 
         Args:
