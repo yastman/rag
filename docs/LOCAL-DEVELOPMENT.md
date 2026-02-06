@@ -94,14 +94,11 @@ docker compose -f docker-compose.dev.yml up -d
 ### Option 1: Local Python (recommended for development)
 
 ```bash
-# Activate virtual environment
-source venv/bin/activate
-
-# Install dependencies
-pip install -e .
+# Install dependencies (uv-first standard)
+uv sync
 
 # Run bot
-python -m telegram_bot.main
+uv run python -m telegram_bot.main
 ```
 
 ### Option 2: Docker container
