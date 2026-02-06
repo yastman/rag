@@ -47,6 +47,19 @@ class TestHandleQueryObservability:
         handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
         handler.cache_service.log_metrics = MagicMock()
 
+        # Query preprocessor and HyDE (required by handle_query pipeline)
+        handler.query_preprocessor = MagicMock()
+        handler.query_preprocessor.analyze = MagicMock(
+            return_value={
+                "use_hyde": False,
+                "normalized_query": "test",
+                "rrf_weights": {"dense": 0.6, "sparse": 0.4},
+            }
+        )
+        handler.hyde_generator = None
+        handler.dense_service = MagicMock()
+        handler.dense_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
+
         # Router decision is external; make it deterministic
         handler._test_query_type = QueryType.COMPLEX
 
