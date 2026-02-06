@@ -1,11 +1,11 @@
 """Tests for custom vectorizers."""
 
-import importlib.util
-
 import pytest
 
 
-if importlib.util.find_spec("redisvl") is None:
+try:
+    import redisvl  # noqa: F401
+except (ImportError, ModuleNotFoundError, ValueError):
     pytest.skip("redisvl not installed", allow_module_level=True)
 
 from unittest.mock import AsyncMock, MagicMock, patch
