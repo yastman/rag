@@ -182,8 +182,8 @@ class TestCreatePayloadIndexes:
             for call in mock_client.create_payload_index.call_args_list
             if call[1].get("field_schema") == "integer"
         ]
-        # price, rooms, area, floor, floors, distance_to_sea, bathrooms
-        assert len(integer_calls) == 7
+        # order, price, rooms, area, floor, floors, distance_to_sea, bathrooms
+        assert len(integer_calls) == 8
 
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
