@@ -174,8 +174,7 @@ class SmallToBigService:
             )
 
         logger.info(
-            f"Expanded {len(chunks)} chunks to {len(expanded_results)} "
-            f"with ~{total_tokens} tokens"
+            f"Expanded {len(chunks)} chunks to {len(expanded_results)} with ~{total_tokens} tokens"
         )
         return expanded_results
 

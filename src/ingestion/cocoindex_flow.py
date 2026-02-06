@@ -38,7 +38,9 @@ class FlowConfig:
     """Configuration for CocoIndex flows."""
 
     # Qdrant settings
-    qdrant_url: str = field(default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333"))
+    qdrant_url: str = field(
+        default_factory=lambda: os.getenv("QDRANT_URL", "http://localhost:6333")
+    )
     qdrant_api_key: str | None = field(default_factory=lambda: os.getenv("QDRANT_API_KEY"))
     collection_name: str = "documents"
 
