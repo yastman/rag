@@ -21,7 +21,7 @@ from cocoindex.op import TargetSpec, target_connector
 from src.ingestion.docling_client import DoclingClient, DoclingConfig
 from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
-from src.ingestion.unified.state_manager import UnifiedStateManager
+from src.ingestion.unified.state_manager import FileState, UnifiedStateManager
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class QdrantHybridTargetSpec(TargetSpec):
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
-    collection_name: str = "gdrive_documents_scalar"
+    collection_name: str = "gdrive_documents_bge"
 
     # Docling
     docling_url: str = "http://localhost:5001"
@@ -276,8 +276,21 @@ class QdrantHybridTargetConnector:
             logger.debug(f"Skipping unchanged: {source_path}")
             return
 
-        # Mark processing
-        state_manager.mark_processing_sync(file_id)
+        # Persist metadata before processing so state table keeps source/file context.
+        state_manager.upsert_state_sync(
+            FileState(
+                file_id=file_id,
+                source_path=source_path,
+                file_name=mutation.file_name,
+                mime_type=mutation.mime_type,
+                file_size=mutation.file_size,
+                content_hash=content_hash,
+                embedding_model="bge-m3-api" if spec.use_local_embeddings else spec.voyage_model,
+                collection_name=spec.collection_name,
+                pipeline_version=spec.pipeline_version,
+                status="processing",
+            )
+        )
 
         try:
             # Parse and chunk (sync)

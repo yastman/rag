@@ -5,10 +5,24 @@ import asyncio
 import logging
 import os
 
+from aiogram.exceptions import (
+    TelegramConflictError,
+    TelegramNetworkError,
+    TelegramRetryAfter,
+    TelegramServerError,
+    TelegramUnauthorizedError,
+)
+
 from .bot import PropertyBot
 from .config import BotConfig
 from .logging_config import setup_logging
 from .observability import get_langfuse_client
+
+
+def _retry_delays() -> tuple[float, float]:
+    initial = float(os.getenv("BOT_START_RETRY_DELAY_SEC", "2"))
+    max_delay = float(os.getenv("BOT_START_RETRY_MAX_SEC", "60"))
+    return max(0.5, initial), max(max_delay, 1.0)
 
 
 async def main():
@@ -40,8 +54,30 @@ async def main():
 
     # Create and start bot
     bot = PropertyBot(config)
+    delay, max_delay = _retry_delays()
+
     try:
-        await bot.start()
+        while True:
+            try:
+                await bot.start()
+                break
+            except TelegramRetryAfter as e:
+                retry_after = max(float(e.retry_after), delay)
+                logger.warning(
+                    f"Telegram rate limit during startup. Retrying in {retry_after:.1f}s"
+                )
+                await asyncio.sleep(retry_after)
+                delay = min(max_delay, delay * 2)
+            except (TelegramNetworkError, TelegramServerError, OSError) as e:
+                logger.warning(
+                    f"Temporary Telegram/network error during startup: {e}. "
+                    f"Retrying in {delay:.1f}s"
+                )
+                await asyncio.sleep(delay)
+                delay = min(max_delay, delay * 2)
+            except (TelegramUnauthorizedError, TelegramConflictError):
+                # Fatal configuration/runtime errors; let container restart policy handle it.
+                raise
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     finally:
