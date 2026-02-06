@@ -25,6 +25,12 @@ class EmbedRequest(BaseModel):
     text: str
 
 
+class EmbedBatchRequest(BaseModel):
+    """Request for batch sparse embedding."""
+
+    texts: list[str]
+
+
 class EmbedResponse(BaseModel):
     """Sparse vector response."""
 
@@ -37,6 +43,12 @@ class HealthResponse(BaseModel):
 
     status: str
     model: str
+
+
+class EmbedBatchResponse(BaseModel):
+    """Batch sparse vector response."""
+
+    vectors: list[EmbedResponse]
 
 
 @asynccontextmanager
@@ -77,3 +89,17 @@ async def embed(request: EmbedRequest):
         indices=result.indices.tolist(),
         values=result.values.tolist(),
     )
+
+
+@app.post("/embed_batch", response_model=EmbedBatchResponse)
+async def embed_batch(request: EmbedBatchRequest):
+    """Generate sparse vectors for a batch of texts."""
+    if not sparse_model:
+        raise RuntimeError("Model not loaded")
+
+    results = list(sparse_model.embed(request.texts))
+    vectors = [
+        EmbedResponse(indices=result.indices.tolist(), values=result.values.tolist())
+        for result in results
+    ]
+    return EmbedBatchResponse(vectors=vectors)

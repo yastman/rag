@@ -1,0 +1,96 @@
+***REMOVED*** syntax=docker/dockerfile:1
+***REMOVED*** Docling Serve — CPU-only optimized build for VPS
+***REMOVED*** Multi-stage build with uv (Context7 best practices 2026)
+***REMOVED***
+***REMOVED*** Key optimizations:
+***REMOVED*** 1. CPU-only PyTorch (no CUDA) via --index-url
+***REMOVED*** 2. uv instead of pip (10x faster installs)
+***REMOVED*** 3. Multi-stage build (builder + runtime)
+***REMOVED*** 4. Cache mounts for apt and uv
+***REMOVED*** 5. Non-root user
+
+ARG PYTHON_VERSION=3.12
+
+***REMOVED*** =============================================================================
+***REMOVED*** BUILD STAGE
+***REMOVED*** =============================================================================
+FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+
+***REMOVED*** Install build dependencies with apt cache mount
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++
+
+***REMOVED*** Create venv and install CPU-only PyTorch FIRST (critical for size)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv venv /opt/venv && \
+    VIRTUAL_ENV=/opt/venv uv pip install \
+    torch \
+    torchvision \
+    --index-url https://download.pytorch.org/whl/cpu
+
+***REMOVED*** Install docling-serve with UI support
+RUN --mount=type=cache,target=/root/.cache/uv \
+    VIRTUAL_ENV=/opt/venv uv pip install \
+    "docling-serve[ui]>=1.0.0" \
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple/
+
+***REMOVED*** =============================================================================
+***REMOVED*** RUNTIME STAGE
+***REMOVED*** =============================================================================
+FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
+
+WORKDIR /app
+
+***REMOVED*** Install minimal runtime dependencies with apt cache
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    fonts-liberation
+
+***REMOVED*** Create non-root user
+RUN groupadd -g 1001 docling && \
+    useradd -u 1001 -g docling -m -d /app -s /bin/false docling
+
+***REMOVED*** Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UVICORN_HOST=0.0.0.0 \
+    UVICORN_PORT=5001 \
+    DOCLING_BACKEND=docling \
+    DOCLING_PDF_BACKEND=dlparse_v2 \
+    DOCLING_TABLE_MODE=accurate \
+    HF_HOME=/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/app/.cache/huggingface
+
+***REMOVED*** Create cache directory with proper permissions
+RUN mkdir -p /app/.cache/huggingface && \
+    chown -R docling:docling /app/.cache
+
+***REMOVED*** RapidOCR downloads models at runtime
+RUN chmod -R a+rw /opt/venv/lib/python*/site-packages/rapidocr/ 2>/dev/null || true
+
+USER docling
+
+EXPOSE 5001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=5)" || exit 1
+
+CMD ["docling-serve", "run"]
