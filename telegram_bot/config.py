@@ -100,6 +100,19 @@ class BotConfig:
         os.getenv("QDRANT_QUANTIZATION_ALWAYS_RAM", "true").lower() == "true"
     )
 
+    # HyDE (Hypothetical Document Embeddings)
+    use_hyde: bool = os.getenv("USE_HYDE", "false").lower() == "true"
+    hyde_min_words: int = int(os.getenv("HYDE_MIN_WORDS", "5"))
+
+    # Guardrails
+    enable_confidence_scoring: bool = (
+        os.getenv("ENABLE_CONFIDENCE_SCORING", "false").lower() == "true"
+    )
+    enable_off_topic_detection: bool = (
+        os.getenv("ENABLE_OFF_TOPIC_DETECTION", "true").lower() == "true"
+    )
+    low_confidence_threshold: float = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.3"))
+
     # Small-to-big context expansion
     small_to_big_mode: str = os.getenv("SMALL_TO_BIG_MODE", "off").lower()  # off|on|auto
     small_to_big_window_before: int = int(os.getenv("SMALL_TO_BIG_WINDOW_BEFORE", "1"))
