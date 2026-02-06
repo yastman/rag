@@ -257,6 +257,7 @@ class TestHybridRRFSearchEngine:
         mock_settings.qdrant_url = "http://localhost:6333"
         mock_settings.qdrant_api_key = "test-key"
         mock_settings.collection_name = "test_collection"
+        mock_settings.get_collection_name.return_value = "test_collection"
         mock_settings_cls.return_value = mock_settings
 
         # Mock embedding model
