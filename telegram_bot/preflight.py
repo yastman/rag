@@ -48,9 +48,9 @@ async def check_dependencies(config: BotConfig) -> dict[str, bool]:
             logger.error("Preflight FAIL: BGE-M3 — %s", e)
             results["bge_m3"] = False
 
-        # LiteLLM proxy
+        # LiteLLM proxy (/health/liveliness doesn't require auth)
         try:
-            resp = await client.get(f"{config.llm_base_url}/health")
+            resp = await client.get(f"{config.llm_base_url}/health/liveliness")
             results["litellm"] = resp.status_code == 200
             if not results["litellm"]:
                 logger.error("Preflight FAIL: LiteLLM — %s", resp.status_code)
