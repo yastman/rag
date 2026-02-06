@@ -96,7 +96,7 @@ self.cesc_personalizer = CESCPersonalizer(llm)
 4. **Preprocess** → Translit, weights
 5. **Analyze** → Extract filters
 6. **Search** → Qdrant hybrid RRF
-7. **Rerank** → Voyage rerank (if COMPLEX)
+7. **Rerank** → ColBERT rerank on VPS / Voyage rerank in dev (if COMPLEX)
 8. **Generate** → LLM answer
 9. **Cache** → Store response
 10. **Reply** → Markdown formatted
@@ -115,8 +115,8 @@ Supported:
 
 ## Dependencies
 
-- Container: `dev-bot`, 512MB RAM
-- Requires: redis, qdrant, litellm, bm42, user-base
+- Container: `dev-bot` / `vps-bot`, 512MB RAM
+- Requires: redis, qdrant, litellm, bge-m3, user-base (VPS) | redis, qdrant, litellm, bm42, user-base (dev)
 
 ## Testing
 
