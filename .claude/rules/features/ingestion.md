@@ -21,12 +21,15 @@ make ingest-unified-reprocess # Retry failed files
 Google Drive → rclone sync → ~/drive-sync/ (or /opt/rag-fresh/drive-sync on VPS)
      ↓ (CocoIndex FlowLiveUpdater)
 sources.LocalFile → QdrantHybridTarget (custom connector)
-     ├─ DoclingClient.chunk_file_sync()
-     ├─ BGE-M3 (dense 1024-dim) or VoyageService
-     ├─ FastEmbed BM42 (sparse)
+     ├─ DoclingClient.chunk_file_sync() (profiles: speed/quality/scan/vlm)
+     ├─ BGE-M3 dense 1024-dim (or VoyageService in dev)
+     ├─ BGE-M3 sparse /encode/sparse (replaced FastEmbed BM42)
+     ├─ Manifest-based file identity (content hash → stable UUID)
      ├─ QdrantHybridWriter.*_sync()
      └─ StateManager.*_sync() → Postgres
 ```
+
+**CLI commands:** `python -m src.ingestion.unified.cli preflight|bootstrap|run|status|reprocess`
 
 **Embedding providers:**
 - **Dev:** VoyageService (API) → `gdrive_documents_scalar`
@@ -53,7 +56,8 @@ rclone sync gdrive:RAG-Documents ~/drive-sync/ --progress
 | `src/ingestion/unified/targets/qdrant_hybrid_target.py` | Custom target (pure sync) |
 | `src/ingestion/unified/qdrant_writer.py` | Qdrant writer with sync methods |
 | `src/ingestion/unified/state_manager.py` | Postgres state + DLQ + sync methods |
-| `src/ingestion/unified/cli.py` | CLI: run, status, reprocess |
+| `src/ingestion/unified/cli.py` | CLI: preflight, bootstrap, run, status, reprocess |
+| `src/ingestion/unified/manifest.py` | Content-hash → stable UUID mapping |
 | `src/ingestion/docling_client.py` | Docling API client + chunk_file_sync() |
 
 ## Sync Execution Pattern
@@ -147,15 +151,17 @@ ssh vps "docker compose -f /opt/rag-fresh/docker-compose.vps.yml exec -T bge-m3 
 ```bash
 USE_LOCAL_DENSE_EMBEDDINGS=true
 BGE_M3_URL=http://bge-m3:8000
-BM42_URL=http://bm42:8000
 GDRIVE_SYNC_DIR=/opt/rag-fresh/drive-sync
 GDRIVE_COLLECTION_NAME=gdrive_documents_bge
+DOCLING_PROFILE=quality  # speed|quality|scan|vlm
 ```
 
-**Hot reload (volume mounts):**
+**Deploy (immutable image, no bind-mounts):**
 ```bash
-rsync -avz src/ vps:/opt/rag-fresh/src/
-ssh vps "docker restart vps-ingestion"
+ssh vps "cd /opt/rag-fresh && \
+  docker compose --compatibility -f docker-compose.vps.yml --profile ingest build ingestion && \
+  docker stop vps-ingestion && docker rm vps-ingestion && \
+  docker compose --compatibility -f docker-compose.vps.yml --profile ingest up -d ingestion"
 ```
 
 ## Legacy (deprecated)
