@@ -1,7 +1,16 @@
+import importlib.util
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+# Skip entire module if opentelemetry.instrumentation is not installed
+if importlib.util.find_spec("opentelemetry.instrumentation") is None:
+    pytest.skip(
+        "opentelemetry-instrumentation not installed",
+        allow_module_level=True,
+    )
 
 
 @pytest.fixture(autouse=True)

@@ -30,7 +30,20 @@ class TestCacheServiceSpanMetadata:
         """check_semantic_cache should include layer=semantic in span."""
         cache_service.semantic_cache.acheck = AsyncMock(return_value=None)
 
-        with patch("telegram_bot.services.cache.get_client") as mock_get_client:
+        # Mock redisvl.query.filter.Tag used inside check_semantic_cache
+        mock_tag = MagicMock()
+        mock_tag_mod = MagicMock()
+        mock_tag_mod.Tag = mock_tag
+        redisvl_mocks = {
+            "redisvl": MagicMock(),
+            "redisvl.query": MagicMock(),
+            "redisvl.query.filter": mock_tag_mod,
+        }
+
+        with (
+            patch("telegram_bot.services.cache.get_client") as mock_get_client,
+            patch.dict("sys.modules", redisvl_mocks),
+        ):
             mock_langfuse = MagicMock()
             mock_get_client.return_value = mock_langfuse
 
@@ -48,7 +61,20 @@ class TestCacheServiceSpanMetadata:
             return_value=[{"response": "cached", "vector_distance": 0.05}]
         )
 
-        with patch("telegram_bot.services.cache.get_client") as mock_get_client:
+        # Mock redisvl.query.filter.Tag used inside check_semantic_cache
+        mock_tag = MagicMock()
+        mock_tag_mod = MagicMock()
+        mock_tag_mod.Tag = mock_tag
+        redisvl_mocks = {
+            "redisvl": MagicMock(),
+            "redisvl.query": MagicMock(),
+            "redisvl.query.filter": mock_tag_mod,
+        }
+
+        with (
+            patch("telegram_bot.services.cache.get_client") as mock_get_client,
+            patch.dict("sys.modules", redisvl_mocks),
+        ):
             mock_langfuse = MagicMock()
             mock_get_client.return_value = mock_langfuse
 
