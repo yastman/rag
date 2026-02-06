@@ -319,9 +319,7 @@ async def run_ab_test(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="A/B test for Voyage contextualized embeddings"
-    )
+    parser = argparse.ArgumentParser(description="A/B test for Voyage contextualized embeddings")
     parser.add_argument("--k", type=int, default=5, help="Top-k results to compare")
     parser.add_argument("--runs", type=int, default=1, help="Number of test runs")
     parser.add_argument(

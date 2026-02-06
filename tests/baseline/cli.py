@@ -209,7 +209,7 @@ def report(baseline: str | None, current: str | None, thresholds: str, hours: in
   <div>Baseline: <code>{baseline_snapshot.tag}</code></div>
   <div>Current: <code>{current_snapshot.tag}</code></div>
   <div>Window: last {hours}h</div>
-  <div>Status: <span class="{'pass' if passed else 'fail'}">{'PASSED' if passed else 'FAILED'}</span></div>
+  <div>Status: <span class="{"pass" if passed else "fail"}">{"PASSED" if passed else "FAILED"}</span></div>
 
   <table>
     <thead>
@@ -250,7 +250,7 @@ def report(baseline: str | None, current: str | None, thresholds: str, hours: in
 
   <h2>Regressions</h2>
   <ul>
-    {''.join(f'<li>{r}</li>' for r in regressions) if regressions else '<li>None</li>'}
+    {"".join(f"<li>{r}</li>" for r in regressions) if regressions else "<li>None</li>"}
   </ul>
 </body>
 </html>

@@ -149,8 +149,7 @@ class TestSmallToBigService:
 
         # Create 5 chunks
         chunks = [
-            {"text": f"chunk {i}", "metadata": {"doc_id": "doc1", "order": i}}
-            for i in range(5)
+            {"text": f"chunk {i}", "metadata": {"doc_id": "doc1", "order": i}} for i in range(5)
         ]
 
         # Mock empty neighbors (simplifies test)
@@ -167,10 +166,7 @@ class TestSmallToBigService:
         service._max_context_tokens = 50  # ~200 characters
 
         # Create chunks with ~100 chars each
-        chunks = [
-            {"text": "A" * 100, "metadata": {"doc_id": "doc1", "order": i}}
-            for i in range(5)
-        ]
+        chunks = [{"text": "A" * 100, "metadata": {"doc_id": "doc1", "order": i}} for i in range(5)]
 
         mock_client.scroll.return_value = ([], None)
 
