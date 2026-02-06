@@ -112,8 +112,8 @@ class UnifiedStateManager:
                 file_id, source_path, file_name, mime_type, file_size,
                 modified_time, content_hash, parser_version, chunker_version,
                 embedding_model, chunk_count, collection_name, pipeline_version,
-                status, error_message, retry_count, retry_after, updated_at
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW())
+                status, error_message, retry_count, retry_after, indexed_at, updated_at
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
             ON CONFLICT (file_id) DO UPDATE SET
                 source_path = EXCLUDED.source_path,
                 file_name = EXCLUDED.file_name,
@@ -123,8 +123,11 @@ class UnifiedStateManager:
                 content_hash = EXCLUDED.content_hash,
                 parser_version = EXCLUDED.parser_version,
                 chunker_version = EXCLUDED.chunker_version,
+                embedding_model = EXCLUDED.embedding_model,
+                chunk_count = EXCLUDED.chunk_count,
                 collection_name = EXCLUDED.collection_name,
                 pipeline_version = EXCLUDED.pipeline_version,
+                indexed_at = EXCLUDED.indexed_at,
                 status = EXCLUDED.status,
                 error_message = EXCLUDED.error_message,
                 retry_count = EXCLUDED.retry_count,
@@ -148,6 +151,7 @@ class UnifiedStateManager:
             state.error_message,
             state.retry_count,
             state.retry_after,
+            state.indexed_at,
         )
 
     async def mark_processing(self, file_id: str) -> None:
@@ -307,6 +311,10 @@ class UnifiedStateManager:
     def should_process_sync(self, file_id: str, content_hash: str) -> bool:
         """Sync version of should_process()."""
         return self._run_sync(self.should_process(file_id, content_hash))
+
+    def upsert_state_sync(self, state: FileState) -> None:
+        """Sync version of upsert_state()."""
+        self._run_sync(self.upsert_state(state))
 
     def mark_processing_sync(self, file_id: str) -> None:
         """Sync version of mark_processing()."""
