@@ -1,8 +1,8 @@
 ***REMOVED*** Pre-commit hooks configuration for rag-fresh project
-***REMOVED*** Install: pip install pre-commit
-***REMOVED*** Setup: pre-commit install --install-hooks
-***REMOVED*** Setup pre-push: pre-commit install --hook-type pre-push
-***REMOVED*** Run manually: pre-commit run --all-files
+***REMOVED*** Install: uv add pre-commit --dev && uv run pre-commit install
+***REMOVED*** Setup pre-push: uv run pre-commit install --hook-type pre-push
+***REMOVED*** Run manually: uv run pre-commit run --all-files
+***REMOVED*** VPS: /srv/.local/pre-commit-venv/bin/pre-commit run --all-files
 ***REMOVED***
 ***REMOVED*** Documentation: https://pre-commit.com/
 
