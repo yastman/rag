@@ -3,7 +3,7 @@
 
 This target connector receives mutations from CocoIndex and:
 1. Parses documents via DoclingClient
-2. Generates embeddings (Voyage + BM42)
+2. Generates embeddings (BGE-M3 dense + sparse, or Voyage dense + BGE-M3 sparse)
 3. Writes to Qdrant with payload contract
 4. Updates state in Postgres
 """
@@ -53,11 +53,7 @@ class QdrantHybridTargetSpec(TargetSpec):
     voyage_api_key: str | None = None
     voyage_model: str = "voyage-4-large"
 
-    # BM42
-    bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
-    bm42_url: str | None = None
-
-    # Local embeddings (BGE-M3)
+    # Local embeddings (BGE-M3 dense + sparse)
     use_local_embeddings: bool = False
     bge_m3_url: str = "http://localhost:8000"
     bge_m3_timeout: float = 300.0
@@ -82,8 +78,6 @@ class QdrantHybridTargetSpec(TargetSpec):
             max_tokens_per_chunk=config.max_tokens_per_chunk,
             voyage_api_key=config.voyage_api_key,
             voyage_model=config.voyage_model,
-            bm42_model=config.bm42_model,
-            bm42_url=config.bm42_url,
             use_local_embeddings=config.use_local_embeddings,
             bge_m3_url=config.bge_m3_url,
             bge_m3_timeout=config.bge_m3_timeout,
@@ -114,7 +108,7 @@ class QdrantHybridTargetConnector:
 
     Handles:
     - Document parsing via Docling
-    - Embedding generation (Voyage dense + BM42 sparse)
+    - Embedding generation (BGE-M3 dense + sparse, or Voyage dense + BGE-M3 sparse)
     - Qdrant upsert with payload contract
     - Postgres state tracking
     """
@@ -171,8 +165,6 @@ class QdrantHybridTargetConnector:
                         qdrant_api_key=spec.qdrant_api_key,
                         voyage_api_key=spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", ""),
                         voyage_model=spec.voyage_model,
-                        bm42_model=spec.bm42_model,
-                        bm42_url=spec.bm42_url or os.getenv("BM42_URL"),
                         use_local_embeddings=spec.use_local_embeddings,
                         bge_m3_url=spec.bge_m3_url,
                         bge_m3_timeout=spec.bge_m3_timeout,
