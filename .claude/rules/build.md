@@ -4,7 +4,7 @@ paths: "Makefile, pyproject.toml, uv.lock, .pre-commit-config.yaml"
 
 # Build & Tooling
 
-Project uses **uv** package manager (2026 best practice) with pre-commit hooks.
+Project uses **uv** package manager with **Ruff v0.14.14** linter/formatter and **pre-commit v4.5.1** hooks.
 
 ## Package Management
 
@@ -93,11 +93,11 @@ Key packages:
 ### Development (`[project.optional-dependencies.dev]`)
 
 Key packages:
-- `ruff>=0.6.0` — Linter + formatter
+- `ruff>=0.6.0` — Linter + formatter (v0.14.14 in pre-commit)
 - `mypy>=1.11.0` — Type checking
 - `pytest>=8.3.0` — Testing
 - `pytest-httpx>=0.35.0` — HTTP mocking
-- `pre-commit>=3.0.0` — Git hooks
+- `pre-commit>=3.8.0` — Git hooks (v4.5.1 on VPS)
 
 ## Troubleshooting
 
