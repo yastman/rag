@@ -226,7 +226,7 @@ class FilterExtractor:
         """Extract distance to sea filter from query."""
         query_lower = query.lower()
 
-        # Check "первая линия" and "у моря" first (fixed pattern matching)
+        # Check "pervaya liniya" and "u morya" first (fixed pattern matching)
         if re.search(r"первая\s+линия", query_lower):
             return {"lte": 200}
         if re.search(r"у\s+моря", query_lower):
@@ -304,7 +304,7 @@ class FilterExtractor:
         """Extract furniture requirement from query."""
         query_lower = query.lower()
 
-        # "с мебелью", "меблированная"
+        # "s mebelyu", "meblirovannaya"
         patterns = [
             r"с\s+мебелью",
             r"меблирован",

@@ -74,7 +74,7 @@ async def main():
 
     # Index points
     points = []
-    for i, (prop, embedding) in enumerate(zip(properties, embeddings)):
+    for i, (prop, embedding) in enumerate(zip(properties, embeddings, strict=True)):
         point = PointStruct(
             id=i,
             vector={"dense": embedding},

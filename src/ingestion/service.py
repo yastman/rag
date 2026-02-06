@@ -84,8 +84,7 @@ class IngestionService:
         self._qdrant_client: QdrantClient | None = None
 
         logger.info(
-            f"IngestionService initialized: collection={collection_name}, "
-            f"qdrant={self.qdrant_url}"
+            f"IngestionService initialized: collection={collection_name}, qdrant={self.qdrant_url}"
         )
 
     @property
@@ -139,7 +138,8 @@ class IngestionService:
         # Count documents
         supported_extensions = {".pdf", ".docx", ".doc", ".md", ".txt", ".html", ".htm"}
         documents = [
-            f for f in directory.iterdir()
+            f
+            for f in directory.iterdir()
             if f.is_file() and f.suffix.lower() in supported_extensions
         ]
         stats.total_documents = len(documents)
@@ -171,8 +171,7 @@ class IngestionService:
 
         stats.duration_seconds = time.time() - start_time
         logger.info(
-            f"Ingestion complete: {stats.indexed_nodes} nodes "
-            f"in {stats.duration_seconds:.2f}s"
+            f"Ingestion complete: {stats.indexed_nodes} nodes in {stats.duration_seconds:.2f}s"
         )
 
         return stats

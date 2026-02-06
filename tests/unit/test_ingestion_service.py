@@ -227,9 +227,7 @@ class TestConvenienceFunctions:
         """Test convenience function for GDrive ingestion."""
         with patch.object(IngestionService, "ingest_gdrive") as mock_ingest:
             with patch.object(IngestionService, "close") as mock_close:
-                mock_ingest.return_value = IngestionStats(
-                    errors=["Test error"]
-                )
+                mock_ingest.return_value = IngestionStats(errors=["Test error"])
 
                 stats = await ingest_from_gdrive("folder_id")
 

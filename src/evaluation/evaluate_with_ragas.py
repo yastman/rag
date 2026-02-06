@@ -42,15 +42,12 @@ from typing import Any
 from dotenv import load_dotenv
 
 
-# Load environment variables first
+# Load environment variables and add parent to path before local imports
 load_dotenv()
-
-# Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Import search engines and MLflow integration (after load_dotenv)
-from mlflow_integration import MLflowRAGLogger
-from search_engines import (
+from mlflow_integration import MLflowRAGLogger  # noqa: E402
+from search_engines import (  # noqa: E402
     BaselineSearchEngine,
     HybridDBSFColBERTSearchEngine,
     HybridSearchEngine,
