@@ -22,11 +22,7 @@ class TestMainFunction:
         fresh imports and prevent state pollution between tests.
         """
         prefixes = (
-            "telegram_bot.main",
-            "telegram_bot.bot",
-            "telegram_bot.config",
-            "telegram_bot.logging_config",
-            "telegram_bot.services",
+            "telegram_bot",
             "src.observability",
         )
 
@@ -113,3 +109,82 @@ class TestMainFunction:
 
             # Bot should not be created when token is missing
             mock_property_bot.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_main_retries_on_temporary_startup_error(self):
+        """Temporary network errors should trigger retry with sleep."""
+        mock_property_bot_instance = AsyncMock()
+        mock_property_bot_instance.start = AsyncMock(side_effect=[OSError("dns failure"), None])
+        mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
+        mock_bot_config = MagicMock()
+        mock_setup_logging = MagicMock()
+
+        mock_bot_mod = MagicMock()
+        mock_bot_mod.PropertyBot = mock_property_bot
+
+        mock_config_mod = MagicMock()
+        mock_config_mod.BotConfig = mock_bot_config
+
+        mock_logging_config_mod = MagicMock()
+        mock_logging_config_mod.setup_logging = mock_setup_logging
+
+        mock_config_instance = MagicMock()
+        mock_config_instance.telegram_token = "test-token"
+        mock_config_instance.llm_api_key = "test-api-key"
+        mock_bot_config.return_value = mock_config_instance
+
+        with patch.dict(
+            sys.modules,
+            {
+                "telegram_bot.bot": mock_bot_mod,
+                "telegram_bot.config": mock_config_mod,
+                "telegram_bot.logging_config": mock_logging_config_mod,
+            },
+        ):
+            from telegram_bot import main as main_module
+
+            with patch.object(main_module.asyncio, "sleep", new=AsyncMock()) as mock_sleep:
+                await main_module.main()
+
+            assert mock_property_bot_instance.start.await_count == 2
+            mock_sleep.assert_awaited_once()
+            mock_property_bot_instance.stop.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_main_propagates_non_retryable_startup_error(self):
+        """Unexpected startup errors should not be retried indefinitely."""
+        mock_property_bot_instance = AsyncMock()
+        mock_property_bot_instance.start = AsyncMock(side_effect=RuntimeError("boom"))
+        mock_property_bot = MagicMock(return_value=mock_property_bot_instance)
+        mock_bot_config = MagicMock()
+        mock_setup_logging = MagicMock()
+
+        mock_bot_mod = MagicMock()
+        mock_bot_mod.PropertyBot = mock_property_bot
+
+        mock_config_mod = MagicMock()
+        mock_config_mod.BotConfig = mock_bot_config
+
+        mock_logging_config_mod = MagicMock()
+        mock_logging_config_mod.setup_logging = mock_setup_logging
+
+        mock_config_instance = MagicMock()
+        mock_config_instance.telegram_token = "test-token"
+        mock_config_instance.llm_api_key = "test-api-key"
+        mock_bot_config.return_value = mock_config_instance
+
+        with patch.dict(
+            sys.modules,
+            {
+                "telegram_bot.bot": mock_bot_mod,
+                "telegram_bot.config": mock_config_mod,
+                "telegram_bot.logging_config": mock_logging_config_mod,
+            },
+        ):
+            from telegram_bot import main as main_module
+
+            with pytest.raises(RuntimeError, match="boom"):
+                await main_module.main()
+
+            mock_property_bot_instance.start.assert_awaited_once()
+            mock_property_bot_instance.stop.assert_awaited_once()

@@ -19,7 +19,7 @@ make ingest-unified-watch  # Continuous mode with FlowLiveUpdater
 make ingest-unified-status # Show ingestion stats from Postgres
 ```
 
-**Location:** `/home/user/projects/rag-fresh` (WSL2)
+**Location:** `/home/user/projects/rag-fresh` (WSL2) | `/opt/rag-fresh` (VPS)
 
 ## Project Overview
 
