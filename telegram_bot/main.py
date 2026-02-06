@@ -36,10 +36,13 @@ async def main():
     setup_logging(level=log_level, json_format=json_format, log_file=log_file)
     logger = logging.getLogger(__name__)
 
-    # Initialize Langfuse client with PII masking FIRST
+    # Initialize Langfuse client with PII masking FIRST (no-op when keys not set)
     # This registers the SDK singleton with mask=... before any other code uses it
     _langfuse = get_langfuse_client()
-    logger.debug("Langfuse client initialized with PII masking")
+    if _langfuse:
+        logger.info("Langfuse client initialized with PII masking")
+    else:
+        logger.info("Langfuse disabled (LANGFUSE_SECRET_KEY not set)")
 
     # Load config
     config = BotConfig()
@@ -85,4 +88,10 @@ async def main():
 
 
 if __name__ == "__main__":
+    try:
+        import uvloop
+
+        uvloop.install()
+    except ImportError:
+        pass
     asyncio.run(main())
