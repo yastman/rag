@@ -8,7 +8,7 @@ import logging
 import re
 from enum import Enum
 
-from langfuse import get_client, observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)

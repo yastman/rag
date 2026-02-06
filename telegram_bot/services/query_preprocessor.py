@@ -5,7 +5,8 @@ import re
 from typing import Any
 
 import httpx
-from langfuse import get_client, observe
+
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)

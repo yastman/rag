@@ -163,7 +163,7 @@ services:
   ***REMOVED*** =============================================================================
 
   litellm:
-    image: ghcr.io/berriai/litellm:v1.81.3.rc.3  ***REMOVED*** TODO: upgrade to stable when ghcr.io is reachable
+    image: ghcr.io/berriai/litellm:v1.81.3.rc.3
     container_name: vps-litellm
     restart: unless-stopped
     logging: *default-logging
