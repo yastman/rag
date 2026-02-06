@@ -1,5 +1,13 @@
 """Tests for custom vectorizers."""
 
+import importlib.util
+
+import pytest
+
+
+if importlib.util.find_spec("redisvl") is None:
+    pytest.skip("redisvl not installed", allow_module_level=True)
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
