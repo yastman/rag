@@ -72,7 +72,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     from src.ingestion.unified.config import UnifiedConfig
 
     config = UnifiedConfig()
-    timeout = httpx.Timeout(10.0)
+    timeout = httpx.Timeout(float(os.getenv("BGE_M3_TIMEOUT", "60")))
     results: dict[str, bool] = {}
 
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -154,21 +154,34 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
 
 async def cmd_bootstrap(args: argparse.Namespace) -> int:
     """Create Qdrant collection if it doesn't exist."""
-    from scripts.setup_qdrant_collection import (
-        collection_exists,
-        create_collection,
-        create_payload_indexes,
-        get_qdrant_client,
-        print_collection_info,
+    from qdrant_client import QdrantClient
+    from qdrant_client.http.exceptions import UnexpectedResponse
+    from qdrant_client.models import (
+        BinaryQuantization,
+        BinaryQuantizationConfig,
+        Distance,
+        HnswConfigDiff,
+        Modifier,
+        MultiVectorComparator,
+        MultiVectorConfig,
+        OptimizersConfigDiff,
+        SparseVectorParams,
+        VectorParams,
     )
+
     from src.ingestion.unified.config import UnifiedConfig
 
     config = UnifiedConfig()
     collection_name = config.collection_name
+    dense_dimension = 1024
 
     print(f"\n=== Bootstrap: {collection_name} ===")
 
-    client = get_qdrant_client()
+    client = QdrantClient(
+        url=os.getenv("QDRANT_URL", "http://localhost:6333"),
+        api_key=os.getenv("QDRANT_API_KEY"),
+        timeout=60,
+    )
 
     # Check connection
     try:
@@ -177,16 +190,79 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
         print(f"  [FAIL] Cannot connect to Qdrant: {e}")
         return 1
 
-    if collection_exists(client, collection_name):
+    # Check if collection already exists
+    exists = False
+    try:
+        client.get_collection(collection_name)
+        exists = True
+    except (UnexpectedResponse, Exception):
+        pass
+
+    if exists:
         print(f"  Collection '{collection_name}' already exists — nothing to do.")
-        print_collection_info(client, collection_name)
         return 0
 
-    # Create collection + indexes
-    create_collection(client, collection_name)
-    create_payload_indexes(client, collection_name)
-    print_collection_info(client, collection_name)
-    print("Bootstrap completed.")
+    # Create collection
+    print(f"  Creating collection: {collection_name}")
+    client.create_collection(
+        collection_name=collection_name,
+        vectors_config={
+            "dense": VectorParams(
+                size=dense_dimension,
+                distance=Distance.COSINE,
+                hnsw_config=HnswConfigDiff(m=16, ef_construct=200, on_disk=False),
+                quantization_config=BinaryQuantization(
+                    binary=BinaryQuantizationConfig(always_ram=True)
+                ),
+                on_disk=True,
+            ),
+            "colbert": VectorParams(
+                size=dense_dimension,
+                distance=Distance.COSINE,
+                multivector_config=MultiVectorConfig(comparator=MultiVectorComparator.MAX_SIM),
+                hnsw_config=HnswConfigDiff(m=0),
+                on_disk=True,
+            ),
+        },
+        sparse_vectors_config={
+            "bm42": SparseVectorParams(modifier=Modifier.IDF),
+        },
+        optimizers_config=OptimizersConfigDiff(
+            indexing_threshold=20000,
+            memmap_threshold=50000,
+        ),
+    )
+
+    # Create payload indexes
+    print("  Creating payload indexes...")
+    for field in [
+        "file_id",
+        "metadata.file_id",
+        "metadata.doc_id",
+        "metadata.source",
+        "metadata.file_name",
+        "metadata.mime_type",
+    ]:
+        try:
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field,
+                field_schema="keyword",
+            )
+        except Exception as e:
+            print(f"  Warning: Could not create index {field}: {e}")
+
+    for field in ["metadata.order", "metadata.chunk_id"]:
+        try:
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field,
+                field_schema="integer",
+            )
+        except Exception as e:
+            print(f"  Warning: Could not create index {field}: {e}")
+
+    print(f"  Bootstrap completed: {collection_name}")
     return 0
 
 

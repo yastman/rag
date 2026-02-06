@@ -130,16 +130,16 @@ class DoclingConfig:
             self.ocr_engine = settings["ocr_engine"]
         if self.pipeline is None:
             self.pipeline = settings["pipeline"]
-        # do_ocr / table_mode / pdf_backend already have explicit defaults,
-        # so only override them when the user picked a non-default profile
-        # and did NOT pass custom values via the constructor.
-        if self.profile != "speed":
-            if not self.do_ocr and settings["do_ocr"]:
-                self.do_ocr = settings["do_ocr"]
-            if self.table_mode == "accurate" and settings["table_mode"] != "accurate":
-                self.table_mode = settings["table_mode"]
-            if self.pdf_backend == "dlparse_v4" and settings["pdf_backend"] != "dlparse_v4":
-                self.pdf_backend = settings["pdf_backend"]
+        # do_ocr / table_mode / pdf_backend have dataclass defaults that may
+        # differ from the chosen profile.  Override them when the current value
+        # still matches the dataclass default (i.e. the caller didn't pass a
+        # custom value via the constructor).
+        if not self.do_ocr and settings["do_ocr"]:
+            self.do_ocr = settings["do_ocr"]
+        if self.table_mode == "accurate" and settings["table_mode"] != "accurate":
+            self.table_mode = settings["table_mode"]
+        if self.pdf_backend == "dlparse_v4" and settings["pdf_backend"] != "dlparse_v4":
+            self.pdf_backend = settings["pdf_backend"]
 
         logger.debug(
             "DoclingConfig profile=%s do_ocr=%s force_ocr=%s ocr_engine=%s "

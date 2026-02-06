@@ -58,9 +58,6 @@ class BotConfig:
     cesc_extraction_frequency: int = int(os.getenv("CESC_EXTRACTION_FREQUENCY", "3"))
     user_context_ttl: int = int(os.getenv("USER_CONTEXT_TTL", str(30 * 24 * 3600)))
 
-    # BM42 Sparse Embedding Service
-    bm42_url: str = os.getenv("BM42_URL", "http://localhost:8002")
-
     # Retrieval provider (bge_m3_api | voyage)
     retrieval_dense_provider: str = os.getenv("RETRIEVAL_DENSE_PROVIDER", "voyage")
 
