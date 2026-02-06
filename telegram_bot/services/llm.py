@@ -13,8 +13,8 @@ from langfuse import get_client, observe
 
 logger = logging.getLogger(__name__)
 
-# Confidence threshold for triggering fallback response
-LOW_CONFIDENCE_THRESHOLD = 0.5
+# Default confidence threshold for triggering fallback response
+LOW_CONFIDENCE_THRESHOLD = 0.3
 
 
 @dataclass
@@ -24,7 +24,7 @@ class ConfidenceResult:
     Attributes:
         answer: Generated answer text
         confidence: Confidence score (0.0-1.0)
-        is_low_confidence: True if confidence < LOW_CONFIDENCE_THRESHOLD
+        is_low_confidence: True if confidence < low_confidence_threshold
         raw_response: Original LLM response before parsing
     """
 
@@ -43,6 +43,7 @@ class LLMService:
         base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o-mini",
         client: httpx.AsyncClient | None = None,
+        low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
     ):
         """Initialize LLM service.
 
@@ -51,12 +52,14 @@ class LLMService:
             base_url: API base URL (for OpenAI-compatible APIs)
             model: Model name
             client: Optional httpx.AsyncClient for dependency injection (testing)
+            low_confidence_threshold: Confidence below this triggers fallback
         """
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
         self._owns_client = client is None
         self.client = client or httpx.AsyncClient(timeout=60.0)
+        self.low_confidence_threshold = low_confidence_threshold
 
     @observe(name="llm-generate-answer", as_type="generation")
     async def generate_answer(
@@ -259,7 +262,7 @@ class LLMService:
             return ConfidenceResult(
                 answer=answer,
                 confidence=confidence,
-                is_low_confidence=confidence < LOW_CONFIDENCE_THRESHOLD,
+                is_low_confidence=confidence < self.low_confidence_threshold,
                 raw_response=raw_response,
             )
 
