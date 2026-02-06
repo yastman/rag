@@ -181,7 +181,7 @@ services:
   # =============================================================================
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.81.0-stable
+    image: ghcr.io/berriai/litellm:v1.81.3.rc.3  # TODO: upgrade to stable when ghcr.io is reachable
     container_name: vps-litellm
     restart: unless-stopped
     logging: *default-logging
