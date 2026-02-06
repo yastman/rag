@@ -1,6 +1,12 @@
 # VPS Stack - Local embeddings, no Voyage API dependency
 # Start: docker compose --compatibility -f docker-compose.vps.yml up -d
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # =============================================================================
   # DATABASES
@@ -10,6 +16,7 @@ services:
     image: pgvector/pgvector:pg17
     container_name: vps-postgres
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -31,6 +38,7 @@ services:
     image: redis:8.4.0
     container_name: vps-redis
     restart: unless-stopped
+    logging: *default-logging
     command: redis-server --maxmemory 256mb --maxmemory-policy volatile-lfu
     volumes:
       - redis_data:/data
@@ -48,13 +56,15 @@ services:
     image: qdrant/qdrant:v1.16
     container_name: vps-qdrant
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
       QDRANT__SERVICE__GRPC_PORT: 6334
     healthcheck:
       # qdrant/qdrant image doesn't include curl/wget; use bash + /dev/tcp to hit /readyz.
-      test: ["CMD-SHELL", "bash -c 'set -euo pipefail; exec 3<>/dev/tcp/localhost/6333; echo -e \"GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3; read -r line <&3; [[ \"$line\" == *\"200\"* ]]'"]
+      # NOTE: docker-compose interpolates `$VAR`; use `$$` to pass literal `$` into the container.
+      test: ["CMD-SHELL", "bash -c 'set -euo pipefail; exec 3<>/dev/tcp/localhost/6333; echo -e \"GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3; read -r line <&3; [[ \"$$line\" == *\"200\"* ]]'"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -63,6 +73,37 @@ services:
       resources:
         limits:
           memory: 1G
+
+  # =============================================================================
+  # DOCUMENT PROCESSING
+  # =============================================================================
+
+  docling:
+    build:
+      context: ./services/docling
+      dockerfile: Dockerfile
+    container_name: vps-docling
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      UVICORN_HOST: 0.0.0.0
+      UVICORN_PORT: 5001
+      DOCLING_BACKEND: docling
+      DOCLING_PDF_BACKEND: dlparse_v2
+      DOCLING_TABLE_MODE: accurate
+    volumes:
+      - ./data/docling:/data
+      - docling_cache:/app/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 
   # =============================================================================
   # ML SERVICES (Local embeddings)
@@ -74,6 +115,7 @@ services:
       dockerfile: Dockerfile
     container_name: vps-bge-m3
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - hf_cache:/models
     environment:
@@ -98,6 +140,7 @@ services:
       dockerfile: Dockerfile
     container_name: vps-user-base
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - hf_cache:/models
     environment:
@@ -121,6 +164,7 @@ services:
       dockerfile: Dockerfile
     container_name: vps-bm42
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -140,6 +184,7 @@ services:
     image: ghcr.io/berriai/litellm:v1.81.3.rc.3
     container_name: vps-litellm
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
     environment:
@@ -171,6 +216,7 @@ services:
       dockerfile: telegram_bot/Dockerfile
     container_name: vps-bot
     restart: unless-stopped
+    logging: *default-logging
     environment:
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
@@ -208,8 +254,55 @@ services:
         limits:
           memory: 512M
 
+  # =============================================================================
+  # INGESTION PIPELINE
+  # =============================================================================
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    container_name: vps-ingestion
+    profiles: ["ingest"]
+    restart: unless-stopped
+    logging: *default-logging
+    stop_grace_period: 30s
+    environment:
+      - GDRIVE_SYNC_DIR=/data/drive-sync
+      - INGESTION_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cocoindex
+      - QDRANT_URL=http://qdrant:6333
+      - DOCLING_URL=http://docling:5001
+      - GDRIVE_COLLECTION_NAME=gdrive_documents_bge
+      # Local embeddings (no Voyage API)
+      - USE_LOCAL_DENSE_EMBEDDINGS=true
+      - BGE_M3_URL=http://bge-m3:8000
+      - BGE_M3_TIMEOUT=600
+      - BGE_M3_CONCURRENCY=1
+      - BM42_URL=http://bm42:8000
+    volumes:
+      - ${GDRIVE_SYNC_DIR:-~/drive-sync}:/data/drive-sync:ro
+      # Dev: mount source for hot-reload without rebuild
+      - ./src:/app/src:ro
+      - ./telegram_bot:/app/telegram_bot:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      docling:
+        condition: service_healthy
+      bge-m3:
+        condition: service_healthy
+      bm42:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
 volumes:
   postgres_data:
   redis_data:
   qdrant_data:
   hf_cache:
+  docling_cache:

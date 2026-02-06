@@ -12,6 +12,7 @@ import dataclasses
 import hashlib
 import logging
 import os
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -54,6 +55,13 @@ class QdrantHybridTargetSpec(TargetSpec):
 
     # BM42
     bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+    bm42_url: str | None = None
+
+    # Local embeddings (BGE-M3)
+    use_local_embeddings: bool = False
+    bge_m3_url: str = "http://localhost:8000"
+    bge_m3_timeout: float = 300.0
+    bge_m3_concurrency: int = 1
 
     # Postgres
     database_url: str = "postgresql://postgres:postgres@localhost:5432/cocoindex"
@@ -75,6 +83,11 @@ class QdrantHybridTargetSpec(TargetSpec):
             voyage_api_key=config.voyage_api_key,
             voyage_model=config.voyage_model,
             bm42_model=config.bm42_model,
+            bm42_url=config.bm42_url,
+            use_local_embeddings=config.use_local_embeddings,
+            bge_m3_url=config.bge_m3_url,
+            bge_m3_timeout=config.bge_m3_timeout,
+            bge_m3_concurrency=config.bge_m3_concurrency,
             database_url=config.database_url,
             max_retries=config.max_retries,
             pipeline_version=config.pipeline_version,
@@ -110,6 +123,13 @@ class QdrantHybridTargetConnector:
     # Note: StateManager is created fresh per mutate() call to avoid asyncpg pool issues
     _writer: QdrantHybridWriter | None = None
     _docling: DoclingClient | None = None
+    _writer_lock = threading.Lock()
+    _docling_lock = threading.Lock()
+
+    # Sequential processing: Semaphore(1) ensures only one file is processed at a time.
+    # Critical for CPU-only VPS where BGE-M3 is slow (~10-50s per batch).
+    # Without this, CocoIndex sends parallel requests → queue grows → timeouts.
+    _process_semaphore = threading.Semaphore(1)
 
     @staticmethod
     def get_persistent_key(spec: QdrantHybridTargetSpec, _target_name: str) -> str:
@@ -144,32 +164,42 @@ class QdrantHybridTargetConnector:
     def _get_writer(cls, spec: QdrantHybridTargetSpec) -> QdrantHybridWriter:
         """Get or create QdrantHybridWriter."""
         if cls._writer is None:
-            cls._writer = QdrantHybridWriter(
-                qdrant_url=spec.qdrant_url,
-                qdrant_api_key=spec.qdrant_api_key,
-                voyage_api_key=spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", ""),
-                voyage_model=spec.voyage_model,
-                bm42_model=spec.bm42_model,
-            )
+            with cls._writer_lock:
+                if cls._writer is None:
+                    cls._writer = QdrantHybridWriter(
+                        qdrant_url=spec.qdrant_url,
+                        qdrant_api_key=spec.qdrant_api_key,
+                        voyage_api_key=spec.voyage_api_key or os.getenv("VOYAGE_API_KEY", ""),
+                        voyage_model=spec.voyage_model,
+                        bm42_model=spec.bm42_model,
+                        bm42_url=spec.bm42_url or os.getenv("BM42_URL"),
+                        use_local_embeddings=spec.use_local_embeddings,
+                        bge_m3_url=spec.bge_m3_url,
+                        bge_m3_timeout=spec.bge_m3_timeout,
+                        bge_m3_concurrency=spec.bge_m3_concurrency,
+                    )
         return cls._writer
 
     @classmethod
     def _get_docling(cls, spec: QdrantHybridTargetSpec) -> DoclingClient:
         """Get or create DoclingClient."""
         if cls._docling is None:
-            config = DoclingConfig(
-                base_url=spec.docling_url,
-                timeout=spec.docling_timeout,
-                max_tokens=spec.max_tokens_per_chunk,
-            )
-            cls._docling = DoclingClient(config)
+            with cls._docling_lock:
+                if cls._docling is None:
+                    config = DoclingConfig(
+                        base_url=spec.docling_url,
+                        timeout=spec.docling_timeout,
+                        max_tokens=spec.max_tokens_per_chunk,
+                    )
+                    cls._docling = DoclingClient(config)
         return cls._docling
 
-    @staticmethod
+    @classmethod
     def mutate(
+        cls,
         *all_mutations: tuple[QdrantHybridTargetSpec, dict[str, QdrantHybridTargetValues | None]],
     ) -> None:
-        """Apply data mutations to Qdrant (fully synchronous).
+        """Apply data mutations to Qdrant (fully synchronous, sequential).
 
         For each file_id:
         - None value: delete all points for file_id
@@ -177,25 +207,35 @@ class QdrantHybridTargetConnector:
 
         Creates fresh StateManager per mutate() call to avoid asyncpg pool
         being attached to closed event loops between CocoIndex batches.
-        """
-        for spec, mutations in all_mutations:
-            # Create fresh state manager for this batch (not cached)
-            # This avoids asyncpg pool issues with different event loops
-            state_manager = UnifiedStateManager(database_url=spec.database_url)
 
-            with state_manager.sync_context():
-                for file_id, mutation in mutations.items():
-                    try:
-                        if mutation is None:
-                            QdrantHybridTargetConnector._handle_delete_with_state(
-                                spec, file_id, state_manager
-                            )
-                        else:
-                            QdrantHybridTargetConnector._handle_upsert_with_state(
-                                spec, file_id, mutation, state_manager
-                            )
-                    except Exception as e:
-                        logger.error(f"Mutation failed for {file_id}: {e}", exc_info=True)
+        NOTE: Uses Semaphore(1) for sequential processing on CPU-only VPS.
+        """
+        # Acquire semaphore to ensure sequential processing (one file at a time)
+        with cls._process_semaphore:
+            logger.info(f"=== mutate() called with {len(all_mutations)} batch(es) ===")
+            for spec, mutations in all_mutations:
+                logger.info(f"Processing batch: {len(mutations)} mutations, collection={spec.collection_name}")
+                # Create fresh state manager for this batch (not cached)
+                # This avoids asyncpg pool issues with different event loops
+                state_manager = UnifiedStateManager(database_url=spec.database_url)
+                logger.info(f"Created state_manager, entering sync_context...")
+
+                with state_manager.sync_context():
+                    logger.info(f"Inside sync_context, iterating {len(mutations)} mutations...")
+                    for file_id, mutation in mutations.items():
+                        logger.info(f"Processing mutation: file_id={file_id}, has_value={mutation is not None}")
+                        try:
+                            if mutation is None:
+                                QdrantHybridTargetConnector._handle_delete_with_state(
+                                    spec, file_id, state_manager
+                                )
+                            else:
+                                QdrantHybridTargetConnector._handle_upsert_with_state(
+                                    spec, file_id, mutation, state_manager
+                                )
+                        except Exception as e:
+                            logger.error(f"Mutation failed for {file_id}: {e}", exc_info=True)
+                            raise  # Propagate to CocoIndex
 
     @classmethod
     def _handle_delete_with_state(
@@ -217,16 +257,25 @@ class QdrantHybridTargetConnector:
         state_manager: UnifiedStateManager,
     ) -> None:
         """Handle file insert/update (sync)."""
+        logger.info(f"_handle_upsert_with_state: file_id={file_id}, path={mutation.abs_path}")
+
+        logger.info(f"Getting writer...")
         writer = cls._get_writer(spec)
+        logger.info(f"Got writer: {writer}")
+        logger.info(f"Getting docling...")
         docling = cls._get_docling(spec)
+        logger.info(f"Got writer and docling")
 
         abs_path = Path(mutation.abs_path)
         source_path = mutation.source_path
 
         # Compute content hash
+        logger.info(f"Computing content hash for {abs_path}...")
         content_hash = compute_content_hash(abs_path)
+        logger.info(f"Hash computed: {content_hash}")
 
         # Check if processing needed (skip unchanged)
+        logger.info(f"Checking should_process_sync...")
         if not state_manager.should_process_sync(file_id, content_hash):
             logger.debug(f"Skipping unchanged: {source_path}")
             return
