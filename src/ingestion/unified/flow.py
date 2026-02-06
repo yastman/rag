@@ -4,7 +4,7 @@
 This module is intentionally minimal:
 - CocoIndex handles incremental change detection via `sources.LocalFile`.
 - A custom target connector performs docling → embeddings → Qdrant upsert/delete.
-- File identity is manifest-based (content hash → stable UUID) to survive renames.
+- File identity is manifest-based (content hash → stable UUID, rename/move stable).
 """
 
 import hashlib

@@ -1,5 +1,6 @@
 """Main Telegram bot logic."""
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -10,15 +11,16 @@ import httpx
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message
-from langfuse import get_client, observe
 
 from .config import BotConfig
 from .middlewares import setup_error_middleware, setup_throttling_middleware
+from .observability import get_client, observe
 from .services import (
     CacheService,
     CESCPersonalizer,
     HyDEGenerator,
     LLMService,
+    PipelineMetrics,
     QdrantService,
     QueryAnalyzer,
     QueryPreprocessor,
@@ -33,11 +35,20 @@ from .services import (
     is_personalized_query,
     needs_rerank,
 )
-from .services.cache import CACHE_SCHEMA_VERSION
+from .services.cache import CACHE_SCHEMA_VERSION, get_ttl_for_query
+from .services.normalizer import normalize_ru_uk
 from .services.redis_monitor import RedisHealthMonitor
 
 
 logger = logging.getLogger(__name__)
+
+
+def _langfuse_client():
+    """Get Langfuse client, returning None if not configured."""
+    try:
+        return get_client()
+    except Exception:
+        return None
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -173,7 +184,7 @@ class PropertyBot:
     def _setup_middlewares(self):
         """Setup bot middlewares."""
         # Rate limiting: 1.5 seconds between requests
-        setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=[])
+        setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=self.config.admin_ids)
 
         # Error handling middleware
         setup_error_middleware(self.dp)
@@ -187,6 +198,9 @@ class PropertyBot:
         self.dp.message(Command("clear"))(self.cmd_clear)
         self.dp.message(Command("stats"))(self.cmd_stats)
         self.dp.message(Command("cache_stats"))(self.cmd_cache_stats)
+        self.dp.message(Command("cache_threshold"))(self.cmd_cache_threshold)
+        self.dp.message(Command("cache_clear"))(self.cmd_cache_clear)
+        self.dp.message(Command("metrics"))(self.cmd_metrics)
         self.dp.message(F.text)(self.handle_query)
 
     async def cmd_start(self, message: Message):
@@ -260,6 +274,9 @@ class PropertyBot:
         for prefix, count in diag.get("prefix_counts", {}).items():
             prefix_lines += f"  {prefix:<30s} {count}\n"
 
+        threshold = diag.get("semantic_threshold", "N/A")
+        default_ttl = diag.get("semantic_ttl_default", "N/A")
+
         text = (
             f"```\n"
             f"=== Redis Diagnostics ===\n"
@@ -275,6 +292,11 @@ class PropertyBot:
             f"  ({diag['keyspace_hits']}"
             f" hits / {diag['keyspace_misses']} misses)\n"
             f"\n"
+            f"=== Semantic Cache ===\n"
+            f"\n"
+            f"Threshold:    {threshold}\n"
+            f"Default TTL:  {default_ttl}s\n"
+            f"\n"
             f"=== Keys by prefix ({diag['total_keys']} total) ===\n"
             f"\n"
             f"{prefix_lines}"
@@ -283,10 +305,57 @@ class PropertyBot:
 
         await message.answer(text, parse_mode="Markdown")
 
+    def _is_admin(self, user_id: int) -> bool:
+        """Check if user is an admin."""
+        return user_id in self.config.admin_ids
+
+    async def cmd_cache_threshold(self, message: Message):
+        """Handle /cache_threshold command - dynamically set semantic cache threshold (admin only)."""
+        user_id = message.from_user.id
+        if not self._is_admin(user_id):
+            await message.answer("Access denied. Admin only.")
+            return
+
+        parts = (message.text or "").split()
+        if len(parts) < 2:
+            current = self.cache_service.distance_threshold
+            await message.answer(f"Current threshold: {current:.3f}\nUsage: /cache_threshold 0.12")
+            return
+
+        try:
+            value = float(parts[1])
+            if not 0.0 < value < 1.0:
+                await message.answer("Threshold must be between 0.0 and 1.0 (exclusive).")
+                return
+        except ValueError:
+            await message.answer("Invalid number. Usage: /cache_threshold 0.12")
+            return
+
+        old = self.cache_service.distance_threshold
+        self.cache_service.set_threshold(value)
+        await message.answer(f"Semantic cache threshold updated: {old:.3f} -> {value:.3f}")
+
+    async def cmd_cache_clear(self, message: Message):
+        """Handle /cache_clear command - clear semantic cache index (admin only)."""
+        user_id = message.from_user.id
+        if not self._is_admin(user_id):
+            await message.answer("Access denied. Admin only.")
+            return
+
+        count = await self.cache_service.clear_semantic_index()
+        await message.answer(f"Semantic cache cleared ({count} entries removed).")
+
+    async def cmd_metrics(self, message: Message):
+        """Handle /metrics command - show pipeline p50/p95 timing stats."""
+        metrics = PipelineMetrics.get()
+        text = f"```\n{metrics.format_text()}\n```"
+        await message.answer(text, parse_mode="Markdown")
+
     @observe(name="telegram-message")
     async def handle_query(self, message: Message):
         """Handle user query with multi-level caching RAG pipeline."""
-        start_time = time.time()
+        start_time = time.perf_counter()
+        metrics = PipelineMetrics.get()
         query = message.text or ""
         user_id = message.from_user.id
         logger.info(f"Query from {user_id}: {query}")
@@ -313,7 +382,7 @@ class PropertyBot:
                 "tenant": "default",
                 "lang": "ru",
                 "prompt_version": "v2.1",
-                "retrieval_version": f"{self.config.voyage_model_queries}-bm42-rrf",
+                "retrieval_version": f"{self.config.voyage_model_queries}-bge_m3-rrf",
                 "rerank_version": self.config.voyage_model_rerank,
                 "model_id": self.config.llm_model,
                 "cache_schema": CACHE_SCHEMA_VERSION,
@@ -321,15 +390,16 @@ class PropertyBot:
             }
 
             # Update trace with user context
-            langfuse = get_client()
-            langfuse.update_current_trace(
-                name="telegram-rag-query",
-                user_id=str(user_id),
-                session_id=make_session_id("chat", message.chat.id),
-                input={"query": query[:200]},
-                metadata=context_fingerprint,
-                tags=["telegram", "rag", context_fingerprint["retrieval_version"]],
-            )
+            langfuse = _langfuse_client()
+            if langfuse:
+                langfuse.update_current_trace(
+                    name="telegram-rag-query",
+                    user_id=str(user_id),
+                    session_id=make_session_id("chat", message.chat.id),
+                    input={"query": query[:200]},
+                    metadata=context_fingerprint,
+                    tags=["telegram", "rag", context_fingerprint["retrieval_version"]],
+                )
 
             # Query routing (2026 best practice) - skip RAG for chit-chat
             query_type = classify_query(query)
@@ -372,7 +442,16 @@ class PropertyBot:
                 use_hyde=self.config.use_hyde,
                 hyde_min_words=self.config.hyde_min_words,
             )
-            embed_text = query  # Default: embed the original query
+
+            # 0.1 RU/UK normalizer: strip greetings/politeness for better cache hits
+            clean_query = normalize_ru_uk(query)
+            if clean_query != query:
+                logger.info(
+                    "Query normalized",
+                    extra={"original": query[:100], "normalized": clean_query[:100]},
+                )
+
+            embed_text = clean_query  # Use normalized query for embedding
 
             # HyDE: generate hypothetical document for short/vague queries
             if preprocess_result["use_hyde"] and self.hyde_generator is not None:
@@ -382,7 +461,8 @@ class PropertyBot:
                     scores["hyde_used"] = 1.0
                     logger.info("HyDE: embedding hypothetical doc instead of query")
 
-            # 1. Generate embedding (with embeddings cache - Tier 1)
+            # === FAST-LANE: Dense embed → cache check (vector reuse) ===
+            t_embed = time.perf_counter()
             query_vector = await self.cache_service.get_cached_embedding(embed_text)
             if query_vector is None:
                 query_vector = await self.dense_service.embed_query(embed_text)
@@ -391,12 +471,25 @@ class PropertyBot:
             else:
                 scores["embeddings_cache_hit"] = 1.0
                 logger.info(f"✓ Using cached embedding: {len(query_vector)}-dim")
+            embed_ms = (time.perf_counter() - t_embed) * 1000
+            metrics.record("embed_dense", embed_ms)
+            logger.info("embed_dense: %.0fms", embed_ms)
 
-            # 2. Check semantic cache (Tier 1 - highest priority)
-            # Uses langcache-embed-v1 (256-dim) for fast cache matching
-            cached_answer = await self.cache_service.check_semantic_cache(query)
+            # Fast-Lane: check semantic cache with pre-computed vector (no vectorizer call)
+            t_cache = time.perf_counter()
+            cached_answer = await self.cache_service.check_semantic_cache(
+                clean_query, vector=query_vector, user_id=user_id
+            )
+            cache_ms = (time.perf_counter() - t_cache) * 1000
+            metrics.record("cache_acheck", cache_ms)
+            logger.info("cache_acheck: %.0fms", cache_ms)
+
             if cached_answer:
                 scores["semantic_cache_hit"] = 1.0
+                metrics.inc("cache_hit")
+                # Observe vector distance from last cache hit
+                if self.cache_service.last_semantic_distance is not None:
+                    metrics.observe("cache_distance", self.cache_service.last_semantic_distance)
                 # CESC: Personalize only if lazy routing determined it's needed
                 if needs_personalization and self.cesc_personalizer.should_personalize(
                     user_context
@@ -409,34 +502,46 @@ class PropertyBot:
                 await message.answer(cached_answer, parse_mode="Markdown")
                 return  # finally block writes scores
 
-            # 3. Analyze query with cache (Tier 2)
-            analysis = await self.cache_service.get_cached_analysis(query)
-            if analysis is None:
-                analysis = await self.query_analyzer.analyze(query)
-                await self.cache_service.store_analysis(query, analysis)
+            # === MISS-LANE: parallel sparse + QueryAnalyzer, then search ===
+            metrics.inc("cache_miss")
+            t_miss = time.perf_counter()
+
+            # Parallel: QueryAnalyzer + Sparse embedding (independent, both cached)
+            async def _get_analysis():
+                cached = await self.cache_service.get_cached_analysis(clean_query)
+                if cached is not None:
+                    return cached
+                result = await self.query_analyzer.analyze(clean_query)
+                await self.cache_service.store_analysis(clean_query, result)
+                return result
+
+            async def _get_sparse():
+                cached = await self.cache_service.get_cached_sparse_embedding(clean_query)
+                if cached is not None:
+                    return cached
+                vec = await self._get_sparse_vector(clean_query)
+                if vec.get("indices"):
+                    await self.cache_service.store_sparse_embedding(clean_query, vec)
+                return vec
+
+            analysis, sparse_vector = await asyncio.gather(_get_analysis(), _get_sparse())
+            miss_parallel_ms = (time.perf_counter() - t_miss) * 1000
+            metrics.record("miss_parallel", miss_parallel_ms)
+            logger.info("miss_parallel (analyzer+sparse): %.0fms", miss_parallel_ms)
 
             filters = analysis.get("filters", {})
             semantic_query = analysis.get("semantic_query", query)
             logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
 
             # 4. Search in Qdrant with hybrid search
+            t_search = time.perf_counter()
             results = await self.cache_service.get_cached_search(query_vector, filters)
             if results is None:
-                # Generate sparse vector with cache (2026 best practice)
-                sparse_vector = await self.cache_service.get_cached_sparse_embedding(query)
-                if sparse_vector is None:
-                    sparse_vector = await self._get_sparse_vector(query)
-                    if sparse_vector.get("indices"):  # Only cache non-empty vectors
-                        await self.cache_service.store_sparse_embedding(query, sparse_vector)
-                        logger.debug("Generated and cached sparse embedding")
-                else:
-                    logger.debug("✓ Using cached sparse embedding")
-
                 # Hybrid RRF search (dense + sparse)
                 results = await self.qdrant_service.hybrid_search_rrf(
                     dense_vector=query_vector,
                     sparse_vector=sparse_vector,
-                    filters=filters if filters else None,
+                    filters=filters or None,
                     top_k=self.config.search_top_k,
                     dense_weight=self.config.hybrid_dense_weight,
                     sparse_weight=self.config.hybrid_sparse_weight,
@@ -522,6 +627,9 @@ class PropertyBot:
                 await self.cache_service.store_search_results(query_vector, filters, results)
             else:
                 scores["search_cache_hit"] = 1.0
+            search_ms = (time.perf_counter() - t_search) * 1000
+            metrics.record("qdrant_search", search_ms)
+            logger.info("qdrant_search+rerank: %.0fms", search_ms)
 
             scores["results_count"] = float(len(results)) if results else 0.0
             logger.info(f"Found {len(results)} results")
@@ -564,6 +672,7 @@ class PropertyBot:
             await self.cache_service.store_conversation_message(user_id, "user", query)
 
             scores["llm_used"] = 1.0
+            t_llm = time.perf_counter()
 
             # 7. Generate answer with LLM
             temp_message = await message.answer("🔍 Генерирую ответ...")
@@ -633,27 +742,56 @@ class PropertyBot:
                     except Exception:
                         await temp_message.edit_text(answer)
 
+            llm_ms = (time.perf_counter() - t_llm) * 1000
+            metrics.record("llm_generate", llm_ms)
+            logger.info("llm_generate: %.0fms", llm_ms)
+
             # 8. Store assistant answer in conversation
             await self.cache_service.store_conversation_message(user_id, "assistant", answer)
 
-            # 9. Store in semantic cache for future queries
-            # Uses langcache-embed-v1 (256-dim) for cache indexing
-            await self.cache_service.store_semantic_cache(query, answer)
+            # 9. Fire-and-forget: store in semantic cache with pre-computed vector
+            def _log_store_error(task: asyncio.Task):
+                if task.cancelled():
+                    return
+                exc = task.exception()
+                if exc:
+                    logger.warning("Semantic cache store failed: %s: %s", type(exc).__name__, exc)
+
+            store_task = asyncio.create_task(
+                self.cache_service.store_semantic_cache(
+                    clean_query,
+                    answer,
+                    vector=query_vector,
+                    user_id=user_id,
+                    ttl=get_ttl_for_query(query, answer),
+                )
+            )
+            store_task.add_done_callback(_log_store_error)
 
         finally:
+            # Record total pipeline time
+            total_ms = (time.perf_counter() - start_time) * 1000
+            metrics.record("total", total_ms)
+
+            # Log summary every 50 queries
+            qcount = metrics.inc_queries()
+            if qcount % 50 == 0:
+                metrics.log_summary()
+
             # Write all scores - guaranteed on ALL exit paths
-            langfuse = get_client()
-            query_type_map = {"chitchat": 0, "simple": 1, "complex": 2}
-            langfuse.score_current_trace(
-                name="query_type",
-                value=float(query_type_map.get(query_type.value, 1)),
-            )
-            langfuse.score_current_trace(
-                name="latency_total_ms",
-                value=(time.time() - start_time) * 1000,
-            )
-            for name, value in scores.items():
-                langfuse.score_current_trace(name=name, value=value)
+            langfuse = _langfuse_client()
+            if langfuse:
+                query_type_map = {"chitchat": 0, "simple": 1, "complex": 2}
+                langfuse.score_current_trace(
+                    name="query_type",
+                    value=float(query_type_map.get(query_type.value, 1)),
+                )
+                langfuse.score_current_trace(
+                    name="latency_total_ms",
+                    value=total_ms,
+                )
+                for name, value in scores.items():
+                    langfuse.score_current_trace(name=name, value=value)
 
             self.cache_service.log_metrics()
 
@@ -732,15 +870,10 @@ class PropertyBot:
             self._cache_initialized = True
             logger.info("Cache service ready")
 
-        # Preflight dependency checks
+        # Preflight dependency checks (raises PreflightError for CRITICAL failures)
         from .preflight import check_dependencies
 
-        dep_status = await check_dependencies(self.config)
-        failed = [k for k, v in dep_status.items() if not v]
-        if failed:
-            logger.warning("Preflight: dependencies unavailable: %s", failed)
-        else:
-            logger.info("Preflight: all dependencies OK")
+        await check_dependencies(self.config)
 
         # Start Redis health monitor (background task, every 5 min)
         await self._redis_monitor.start()
