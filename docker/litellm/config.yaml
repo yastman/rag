@@ -5,11 +5,14 @@
 model_list:
   # Primary: Cerebras (zai-glm-4.7 via OpenAI-compat API)
   # Bot requests "gpt-4o-mini" — this alias routes to Cerebras primary
+  # merge_reasoning_content: zai-glm-4.7 is a reasoning model that sends
+  # tokens as delta.reasoning instead of delta.content — this flag merges them
   - model_name: gpt-4o-mini
     litellm_params:
       model: openai/zai-glm-4.7
       api_base: https://api.cerebras.ai/v1
       api_key: os.environ/CEREBRAS_API_KEY
+      merge_reasoning_content_in_choices: true
 
   # Fallback 1: Groq (fast, free tier)
   - model_name: gpt-4o-mini-fallback
