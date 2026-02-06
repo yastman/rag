@@ -39,6 +39,8 @@ dependencies = [
     # CocoIndex Document Ingestion (2026-02-02)
     "cocoindex>=0.1.60",                  # Data transformation framework for AI
     "asyncpg>=0.31.0",
+    # Performance (2026-02-06)
+    "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
 ]
 
 [project.optional-dependencies]
