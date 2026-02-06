@@ -23,17 +23,17 @@ make ingest-unified-status # Show ingestion stats from Postgres
 
 ## Project Overview
 
-**Contextual RAG Pipeline** — Production RAG with hybrid search (RRF + ColBERT), Voyage AI embeddings, multi-level caching, Telegram bot.
+**Contextual RAG Pipeline** — Production RAG with hybrid search (RRF + ColBERT rerank), BGE-M3 embeddings (local CPU), multi-level caching, Telegram bot.
 
-**Stack:** Python 3.12 | Cerebras via LiteLLM | Voyage AI | Qdrant | Redis | CocoIndex
+**Stack:** Python 3.12 | Cerebras via LiteLLM | BGE-M3 (local) | Qdrant | Redis | CocoIndex
 
 **Use cases:** Bulgarian property (192 docs), Ukrainian Criminal Code (1,294 docs)
 
 ## Architecture
 
 ```
-Input → Docling Parser → Chunker → Voyage Embeddings + BM42 → Qdrant
-     → QueryPreprocessor → RRF Fusion → Rerank → LLM → Response
+Input → Docling Parser → Chunker → BGE-M3 Dense + BGE-M3 Sparse → Qdrant
+     → QueryPreprocessor → RRF Fusion → ColBERT Rerank → LLM → Response
 ```
 
 | Module | Purpose |
@@ -67,7 +67,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 
 1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 2. Copy `.env.example` → `.env`
-3. Required: `TELEGRAM_BOT_TOKEN`, `VOYAGE_API_KEY`, `CEREBRAS_API_KEY`, `LANGFUSE_*`
+3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `LANGFUSE_*` (VPS: `VOYAGE_API_KEY` not needed, uses local BGE-M3)
 4. `uv sync && make docker-up`
 
 ## Key Docs
@@ -82,12 +82,12 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 
 ## Qdrant Collections
 
-| Collection | Content | Embeddings |
-|------------|---------|------------|
-| `contextual_bulgaria_voyage` | Bulgarian property (192 docs) | Voyage |
-| `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 |
-| `gdrive_documents_scalar` | Google Drive docs | Voyage |
-| `gdrive_documents_bge` | Google Drive docs (VPS) | BGE-M3 local |
+| Collection | Content | Embeddings | Environment |
+|------------|---------|------------|-------------|
+| `gdrive_documents_bge` | Google Drive docs | BGE-M3 (dense + sparse) | VPS (production) |
+| `contextual_bulgaria_voyage` | Bulgarian property (192 docs) | Voyage | Dev |
+| `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
+| `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
 
 **Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`
 
@@ -111,7 +111,9 @@ ssh vps "docker logs vps-bot --tail 30"                                   # Logs
 rsync -avz src/ vps:/opt/rag-fresh/src/ && ssh vps "docker restart vps-ingestion"  # Deploy code
 ```
 
-**VPS Env:** `RETRIEVAL_DENSE_PROVIDER=bge_m3_api` `RERANK_PROVIDER=colbert` `BGE_M3_URL=http://bge-m3:8000`
+**VPS Env:** `RETRIEVAL_DENSE_PROVIDER=bge_m3_api` `RETRIEVAL_SPARSE_PROVIDER=bge_m3_api` `RERANK_PROVIDER=colbert` `BGE_M3_URL=http://bge-m3:8000`
+
+**VPS Embeddings:** Dense: BGE-M3 (local CPU) | Sparse: transitioning BM42 -> BGE-M3 | Rerank: ColBERT (local CPU)
 
 ## Monitoring & Alerting
 

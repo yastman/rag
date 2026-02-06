@@ -7,7 +7,6 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from fastembed import SparseTextEmbedding
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
     FieldCondition,
@@ -44,13 +43,12 @@ class QdrantHybridWriter:
     - file_id: str (flat, for fast delete)
 
     Vector Names:
-    - dense: Voyage 1024-dim
-    - bm42: FastEmbed sparse
+    - dense: BGE-M3 1024-dim (or Voyage)
+    - bm42: BGE-M3 sparse (named 'bm42' for backward compat with existing collection)
     """
 
     VOYAGE_BATCH_SIZE = 128
     BGE_M3_BATCH_SIZE = 32
-    BM42_BATCH_SIZE = 64
 
     def __init__(
         self,
@@ -58,9 +56,6 @@ class QdrantHybridWriter:
         qdrant_api_key: str | None = None,
         voyage_api_key: str | None = None,
         voyage_model: str = "voyage-4-large",
-        bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions",
-        bm42_url: str | None = None,
-        bm42_timeout: float = 30.0,
         bge_m3_url: str | None = None,
         bge_m3_timeout: float = 300.0,
         bge_m3_concurrency: int = 1,
@@ -73,115 +68,54 @@ class QdrantHybridWriter:
             timeout=120,
         )
 
+        # BGE-M3 HTTP client (always needed for sparse embeddings)
+        import httpx
+
+        self.bge_m3_url = bge_m3_url or "http://localhost:8000"
+        self._http_client = httpx.Client(timeout=bge_m3_timeout)
+        logger.info(f"QdrantHybridWriter BGE-M3 URL: {self.bge_m3_url}")
+        logger.info(f"QdrantHybridWriter BGE-M3 timeout: {bge_m3_timeout}s")
+
         # Dense embeddings: local BGE-M3 or Voyage API
         self.use_local_embeddings = use_local_embeddings
-        self._http_client = None
         self.voyage = None
 
         if use_local_embeddings:
-            import httpx
-
-            self.bge_m3_url = bge_m3_url or "http://localhost:8000"
-            self._http_client = httpx.Client(timeout=bge_m3_timeout)
-            logger.info(f"QdrantHybridWriter using local BGE-M3: {self.bge_m3_url}")
-            logger.info(f"QdrantHybridWriter BGE-M3 timeout: {bge_m3_timeout}s")
             self._dense_semaphore = threading.Semaphore(max(1, bge_m3_concurrency))
-            logger.info(f"QdrantHybridWriter BGE-M3 concurrency: {bge_m3_concurrency}")
+            logger.info(
+                f"QdrantHybridWriter dense: local BGE-M3 (concurrency={bge_m3_concurrency})"
+            )
         else:
             self.voyage = VoyageService(
                 api_key=voyage_api_key,
                 model_docs=voyage_model,
             )
-            logger.info(f"QdrantHybridWriter using Voyage: {voyage_model}")
+            logger.info(f"QdrantHybridWriter dense: Voyage ({voyage_model})")
 
-        # Sparse embeddings: BM42 via service or local FastEmbed
-        self.bm42_model = bm42_model
-        self.bm42_url = bm42_url
-        self._bm42_http_client = None
-        self._sparse_model: SparseTextEmbedding | None = None
-        self._sparse_lock = threading.Lock()
+        logger.info("QdrantHybridWriter sparse: BGE-M3 /encode/sparse")
 
-        if self.bm42_url:
-            import httpx
+    def _embed_sparse(self, texts: list[str]) -> list[dict[str, list]]:
+        """Generate sparse embeddings via BGE-M3 /encode/sparse endpoint.
 
-            self._bm42_http_client = httpx.Client(timeout=bm42_timeout)
-            logger.info(f"QdrantHybridWriter using BM42 service: {self.bm42_url}")
-        else:
-            logger.info("QdrantHybridWriter using local BM42 (fastembed)")
-
-        logger.info(f"QdrantHybridWriter initialized with BM42 model: {bm42_model}")
-
-    def _ensure_sparse_model(self) -> None:
-        """Initialize local sparse model if not already loaded."""
-        if self._sparse_model is not None:
-            return
-        with self._sparse_lock:
-            if self._sparse_model is not None:
-                return
-            logger.info("Initializing BM42 SparseTextEmbedding (fastembed)...")
-            self._sparse_model = SparseTextEmbedding(model_name=self.bm42_model)
-            logger.info("BM42 SparseTextEmbedding ready")
-
-    def _embed_sparse_http_single(self, text: str) -> dict[str, list]:
-        if self._bm42_http_client is None or not self.bm42_url:
-            raise RuntimeError("BM42 HTTP client not initialized")
-
-        response = self._bm42_http_client.post(
-            f"{self.bm42_url}/embed",
-            json={"text": text},
-        )
-        response.raise_for_status()
-        return response.json()
-
-    def _embed_sparse_http(self, texts: list[str]) -> list[dict[str, list]]:
+        Returns list of dicts with 'indices' and 'values' keys.
+        """
         if not texts:
             return []
-        if self._bm42_http_client is None or not self.bm42_url:
-            raise RuntimeError("BM42 HTTP client not initialized")
 
-        # Try batch endpoint first
-        try:
-            response = self._bm42_http_client.post(
-                f"{self.bm42_url}/embed_batch",
-                json={"texts": texts},
+        if self._http_client is None:
+            raise RuntimeError("HTTP client not initialized for sparse embeddings")
+
+        all_sparse: list[dict[str, list]] = []
+        for i in range(0, len(texts), self.BGE_M3_BATCH_SIZE):
+            batch = texts[i : i + self.BGE_M3_BATCH_SIZE]
+            response = self._http_client.post(
+                f"{self.bge_m3_url}/encode/sparse",
+                json={"texts": batch, "batch_size": len(batch), "max_length": 512},
             )
-            if response.status_code == 404:
-                raise RuntimeError("BM42 batch endpoint not found")
             response.raise_for_status()
-            data = response.json()
-            vectors = data.get("vectors") if isinstance(data, dict) else None
-            if not isinstance(vectors, list):
-                raise RuntimeError("BM42 batch response missing vectors")
-            if len(vectors) != len(texts):
-                raise RuntimeError(
-                    f"BM42 batch size mismatch: got {len(vectors)}, expected {len(texts)}"
-                )
-            return vectors
-        except Exception as e:
-            logger.warning(f"BM42 batch request failed: {e}. Falling back to per-text calls.")
+            all_sparse.extend(response.json()["lexical_weights"])
 
-        # Fallback: per-text calls
-        vectors: list[dict[str, list]] = []
-        for text in texts:
-            try:
-                vectors.append(self._embed_sparse_http_single(text))
-            except Exception as e:
-                logger.warning(f"BM42 service error: {e}. Using empty sparse vector.")
-                vectors.append({"indices": [], "values": []})
-        return vectors
-
-    def _embed_sparse_local(self, texts: list[str]) -> list[Any]:
-        if not texts:
-            return []
-        self._ensure_sparse_model()
-        if self._sparse_model is None:
-            raise RuntimeError("SparseTextEmbedding not initialized")
-        return list(self._sparse_model.embed(texts))
-
-    def _embed_sparse(self, texts: list[str]) -> list[Any]:
-        if self.bm42_url:
-            return self._embed_sparse_http(texts)
-        return self._embed_sparse_local(texts)
+        return all_sparse
 
     @staticmethod
     def _to_sparse_vector(sparse_emb: Any) -> SparseVector:
