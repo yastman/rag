@@ -222,8 +222,12 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
       # Local embeddings (no Voyage API needed)
       RETRIEVAL_DENSE_PROVIDER: bge_m3_api
+      RETRIEVAL_SPARSE_PROVIDER: bge_m3_api
       RERANK_PROVIDER: colbert
       BGE_M3_URL: http://bge-m3:8000
+      BGE_M3_TIMEOUT: "120"
+      COLBERT_TIMEOUT: "120"
+      RERANK_CANDIDATES_MAX: "10"
       # Semantic cache
       USE_LOCAL_EMBEDDINGS: "true"
       USER_BASE_URL: http://user-base:8000
@@ -231,7 +235,6 @@ services:
       REDIS_URL: redis://redis:6379
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
-      BM42_URL: http://bm42:8000
       # LLM
       LLM_API_KEY: ${LITELLM_MASTER_KEY}
       LLM_BASE_URL: http://litellm:4000
