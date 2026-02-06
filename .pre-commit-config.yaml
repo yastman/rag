@@ -1,8 +1,8 @@
 # Pre-commit hooks configuration for contextual_rag project
-# Install: pip install pre-commit
-# Setup: pre-commit install --install-hooks
-# Setup pre-push: pre-commit install --hook-type pre-push
-# Run manually: pre-commit run --all-files
+# Install: uv add pre-commit --dev && uv run pre-commit install
+# Setup pre-push: uv run pre-commit install --hook-type pre-push
+# Run manually: uv run pre-commit run --all-files
+# VPS: /home/admin/.local/pre-commit-venv/bin/pre-commit run --all-files
 #
 # Documentation: https://pre-commit.com/
 
