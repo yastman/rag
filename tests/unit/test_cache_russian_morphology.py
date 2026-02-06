@@ -8,13 +8,14 @@ Tests that deepvk/USER-base model correctly handles:
 NOTE: These are integration tests requiring redisvl + live Redis.
 """
 
-import importlib.util
 import os
 
 import pytest
 
 
-if importlib.util.find_spec("redisvl") is None:
+try:
+    import redisvl  # noqa: F401
+except (ImportError, ModuleNotFoundError, ValueError):
     pytest.skip("redisvl not installed (integration test)", allow_module_level=True)
 
 from telegram_bot.services.cache import CacheService
