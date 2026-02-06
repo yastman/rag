@@ -13,11 +13,14 @@ Retrieve relevant documents using combination of dense (semantic) and sparse (ke
 ## Architecture
 
 ```
-Query → Dense Embedding (Voyage) + Sparse Embedding (BM42)
+Query → Dense Embedding (BGE-M3) + Sparse Embedding (BGE-M3)
      → Qdrant Prefetch (dense + sparse)
      → RRF Fusion
-     → [Optional] Voyage Rerank
+     → [Optional] ColBERT Rerank
      → Results
+
+VPS:  BGE-M3 for dense + sparse + ColBERT rerank (local CPU)
+Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
 ```
 
 ## Key Files
@@ -74,8 +77,8 @@ qdrant = QdrantService(
 )
 
 results = await qdrant.hybrid_search_rrf(
-    dense_vector=query_embedding,      # From VoyageService
-    sparse_vector=sparse_embedding,    # From BM42
+    dense_vector=query_embedding,      # From BGE-M3 (VPS) or VoyageService (dev)
+    sparse_vector=sparse_embedding,    # From BGE-M3 sparse (VPS) or BM42 (dev)
     filters={"city": "Несебр"},
     top_k=10,
     dense_weight=0.6,
@@ -92,7 +95,7 @@ response = client.query_points(
     collection_name="documents",
     prefetch=[
         models.Prefetch(query=dense_vector, using="dense", limit=100),
-        models.Prefetch(query=sparse_vector, using="bm42", limit=100),
+        models.Prefetch(query=sparse_vector, using="bm42", limit=100),  # field name "bm42" kept, data from BGE-M3 sparse on VPS
     ],
     query=models.FusionQuery(fusion=models.Fusion.RRF),
     limit=top_k,
@@ -208,8 +211,8 @@ pytest tests/unit/test_acorn.py -v  # Should show 22 passed (not 8 skipped)
 
 ## Dependencies
 
-- Container: `dev-qdrant` (6333, 6334 gRPC)
-- Collections: `contextual_bulgaria_voyage`, `legal_documents`
+- Container: `dev-qdrant` / `vps-qdrant` (6333, 6334 gRPC)
+- Collections: `gdrive_documents_bge` (VPS), `contextual_bulgaria_voyage` (dev), `legal_documents` (dev)
 
 ## Testing
 
