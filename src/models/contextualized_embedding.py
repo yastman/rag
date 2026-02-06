@@ -100,8 +100,7 @@ class ContextualizedEmbeddingService:
         """
         if output_dimension not in self.SUPPORTED_DIMS:
             raise ValueError(
-                f"Invalid output_dimension {output_dimension}. "
-                f"Supported: {self.SUPPORTED_DIMS}"
+                f"Invalid output_dimension {output_dimension}. Supported: {self.SUPPORTED_DIMS}"
             )
 
         self._client = voyageai.Client(api_key=api_key)
@@ -312,7 +311,8 @@ class ContextualizedEmbeddingService:
         )
 
         embeddings: list[list[float]] = [
-            result.embeddings[0] for result in response.results  # type: ignore[misc]
+            result.embeddings[0]
+            for result in response.results  # type: ignore[misc]
         ]
         total_tokens = getattr(response, "total_tokens", 0)
 
@@ -350,9 +350,7 @@ class ContextualizedEmbeddingService:
 
         total_chunks = sum(len(doc) for doc in document_chunks)
         if total_chunks > self.MAX_CHUNKS_PER_REQUEST:
-            raise ValueError(
-                f"Too many chunks: {total_chunks} > {self.MAX_CHUNKS_PER_REQUEST}"
-            )
+            raise ValueError(f"Too many chunks: {total_chunks} > {self.MAX_CHUNKS_PER_REQUEST}")
 
     # Sync wrappers for compatibility
 

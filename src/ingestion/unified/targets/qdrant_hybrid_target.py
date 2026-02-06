@@ -214,16 +214,20 @@ class QdrantHybridTargetConnector:
         with cls._process_semaphore:
             logger.info(f"=== mutate() called with {len(all_mutations)} batch(es) ===")
             for spec, mutations in all_mutations:
-                logger.info(f"Processing batch: {len(mutations)} mutations, collection={spec.collection_name}")
+                logger.info(
+                    f"Processing batch: {len(mutations)} mutations, collection={spec.collection_name}"
+                )
                 # Create fresh state manager for this batch (not cached)
                 # This avoids asyncpg pool issues with different event loops
                 state_manager = UnifiedStateManager(database_url=spec.database_url)
-                logger.info(f"Created state_manager, entering sync_context...")
+                logger.info("Created state_manager, entering sync_context...")
 
                 with state_manager.sync_context():
                     logger.info(f"Inside sync_context, iterating {len(mutations)} mutations...")
                     for file_id, mutation in mutations.items():
-                        logger.info(f"Processing mutation: file_id={file_id}, has_value={mutation is not None}")
+                        logger.info(
+                            f"Processing mutation: file_id={file_id}, has_value={mutation is not None}"
+                        )
                         try:
                             if mutation is None:
                                 QdrantHybridTargetConnector._handle_delete_with_state(
@@ -259,12 +263,12 @@ class QdrantHybridTargetConnector:
         """Handle file insert/update (sync)."""
         logger.info(f"_handle_upsert_with_state: file_id={file_id}, path={mutation.abs_path}")
 
-        logger.info(f"Getting writer...")
+        logger.info("Getting writer...")
         writer = cls._get_writer(spec)
         logger.info(f"Got writer: {writer}")
-        logger.info(f"Getting docling...")
+        logger.info("Getting docling...")
         docling = cls._get_docling(spec)
-        logger.info(f"Got writer and docling")
+        logger.info("Got writer and docling")
 
         abs_path = Path(mutation.abs_path)
         source_path = mutation.source_path
@@ -275,7 +279,7 @@ class QdrantHybridTargetConnector:
         logger.info(f"Hash computed: {content_hash}")
 
         # Check if processing needed (skip unchanged)
-        logger.info(f"Checking should_process_sync...")
+        logger.info("Checking should_process_sync...")
         if not state_manager.should_process_sync(file_id, content_hash):
             logger.debug(f"Skipping unchanged: {source_path}")
             return

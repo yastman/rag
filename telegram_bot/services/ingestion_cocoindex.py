@@ -35,13 +35,11 @@ class CocoIndexIngestionStats(IngestionStats):
     """Alias for IngestionStats."""
 
 
-
 class CocoIndexIngestionService(IngestionService):
     """CocoIndex-based ingestion service.
 
     Uses CocoIndex flows for document processing and Voyage AI for embeddings.
     """
-
 
 
 # Convenience functions

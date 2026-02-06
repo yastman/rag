@@ -248,14 +248,24 @@ def main():
     acorn = result_acorn.to_dict()
 
     latency_diff = acorn["mean_latency_ms"] - no_acorn["mean_latency_ms"]
-    latency_pct = (latency_diff / no_acorn["mean_latency_ms"] * 100) if no_acorn["mean_latency_ms"] > 0 else 0
+    latency_pct = (
+        (latency_diff / no_acorn["mean_latency_ms"] * 100) if no_acorn["mean_latency_ms"] > 0 else 0
+    )
 
-    print(f"{'Mean Latency (ms)':<25} {no_acorn['mean_latency_ms']:<15.2f} {acorn['mean_latency_ms']:<15.2f} {latency_diff:+.2f} ({latency_pct:+.1f}%)")
-    print(f"{'P50 Latency (ms)':<25} {no_acorn['p50_latency_ms']:<15.2f} {acorn['p50_latency_ms']:<15.2f}")
-    print(f"{'P95 Latency (ms)':<25} {no_acorn['p95_latency_ms']:<15.2f} {acorn['p95_latency_ms']:<15.2f}")
+    print(
+        f"{'Mean Latency (ms)':<25} {no_acorn['mean_latency_ms']:<15.2f} {acorn['mean_latency_ms']:<15.2f} {latency_diff:+.2f} ({latency_pct:+.1f}%)"
+    )
+    print(
+        f"{'P50 Latency (ms)':<25} {no_acorn['p50_latency_ms']:<15.2f} {acorn['p50_latency_ms']:<15.2f}"
+    )
+    print(
+        f"{'P95 Latency (ms)':<25} {no_acorn['p95_latency_ms']:<15.2f} {acorn['p95_latency_ms']:<15.2f}"
+    )
 
     results_diff = acorn["mean_result_count"] - no_acorn["mean_result_count"]
-    print(f"{'Mean Result Count':<25} {no_acorn['mean_result_count']:<15.2f} {acorn['mean_result_count']:<15.2f} {results_diff:+.2f}")
+    print(
+        f"{'Mean Result Count':<25} {no_acorn['mean_result_count']:<15.2f} {acorn['mean_result_count']:<15.2f} {results_diff:+.2f}"
+    )
 
     print()
 
