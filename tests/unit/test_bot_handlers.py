@@ -338,7 +338,9 @@ class TestGetSparseVector:
         bot = PropertyBot(mock_config)
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {"indices": [1, 2, 3], "values": [0.5, 0.3, 0.2]}
+        mock_response.json.return_value = {
+            "lexical_weights": [{"indices": [1, 2, 3], "values": [0.5, 0.3, 0.2]}]
+        }
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.AsyncClient") as mock_client:
