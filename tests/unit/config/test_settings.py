@@ -392,6 +392,13 @@ class TestSettingsToDict:
             "small_to_big_window_after",
             "max_expanded_chunks",
             "max_context_tokens",
+            "acorn_mode",
+            "acorn_max_selectivity",
+            "acorn_enabled_selectivity_threshold",
+            "use_hyde",
+            "hyde_min_words",
+            "use_contextualized_embeddings",
+            "contextualized_embedding_dim",
             "env",
             "debug",
         }
