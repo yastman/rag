@@ -4,6 +4,7 @@
 This module is intentionally minimal:
 - CocoIndex handles incremental change detection via `sources.LocalFile`.
 - A custom target connector performs docling → embeddings → Qdrant upsert/delete.
+- File identity is manifest-based (content hash → stable UUID) to survive renames.
 """
 
 import hashlib
@@ -17,6 +18,7 @@ from cocoindex.flow import flow_by_name, flow_names
 from cocoindex.op import function as cocoindex_function
 
 from src.ingestion.unified.config import UnifiedConfig
+from src.ingestion.unified.manifest import GDriveManifest, compute_content_hash_from_bytes
 from src.ingestion.unified.targets.qdrant_hybrid_target import (
     QdrantHybridTargetConnector,  # noqa: F401 - registers the connector
     QdrantHybridTargetSpec,
@@ -41,7 +43,7 @@ MIME_TYPES = {
 
 
 def compute_file_id(relative_path: str) -> str:
-    """Compute stable file_id from relative path."""
+    """Compute file_id from relative path (legacy fallback)."""
     return hashlib.sha256(relative_path.encode()).hexdigest()[:16]
 
 
@@ -53,7 +55,25 @@ def get_mime_type(relative_path: str) -> str:
 
 @cocoindex_function()
 def file_id_from_filename(filename: str) -> str:
+    """Legacy path-based file_id (kept for reference, unused in flow)."""
     return compute_file_id(filename)
+
+
+# Global manifest instance, initialised in build_flow().
+_manifest: GDriveManifest | None = None
+
+
+@cocoindex_function()
+def file_id_from_content(filename: str, content: bytes | None) -> str:
+    """Manifest-based file_id: content hash → stable UUID.
+
+    If a file is renamed/moved but content is unchanged, the same
+    file_id is returned, preventing duplicates in Qdrant.
+    """
+    if _manifest is None or content is None:
+        return compute_file_id(filename)
+    content_hash = compute_content_hash_from_bytes(content)
+    return _manifest.get_or_create_id(filename, content_hash)
 
 
 @cocoindex_function()
@@ -96,8 +116,13 @@ def _app_namespace_for(config: UnifiedConfig) -> str:
 
 def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
     """Build and register the unified CocoIndex flow."""
+    global _manifest
+
     if config is None:
         config = UnifiedConfig()
+
+    # Initialise the manifest in the sync directory.
+    _manifest = GDriveManifest(config.sync_dir)
 
     # Init CocoIndex with explicit database settings (do not rely on env vars).
     cocoindex.init(
@@ -151,7 +176,8 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
         collector = data_scope.add_collector()
 
         with data_scope["files"].row() as f:
-            f["file_id"] = f["filename"].transform(file_id_from_filename)
+            # Manifest-based file_id: uses content hash for stable identity
+            f["file_id"] = f["filename"].transform(file_id_from_content, f["content"])
             f["mime_type"] = f["filename"].transform(mime_type_from_filename)
             f["file_size"] = f["content"].transform(file_size_from_bytes)
             f["abs_path"] = f["filename"].transform(abs_path_from_filename)

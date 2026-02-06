@@ -127,15 +127,25 @@ def create_collection(client: QdrantClient, collection_name: str) -> None:
 
 
 def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
-    """Create indexes on payload fields for fast filtering."""
+    """Create indexes on payload fields for fast filtering and deletion.
+
+    Indexes match the payload contract in qdrant_writer.py:
+    - file_id (flat): fast delete by file
+    - metadata.file_id: filter by file in queries
+    - metadata.source: filter by source path
+    - metadata.file_name: filter by filename
+    - metadata.mime_type: filter by document type
+    """
     print("Creating payload indexes...")
 
-    # Keyword indexes for text filtering
+    # Keyword indexes (exact match filtering + deletion)
     keyword_fields = [
-        "metadata.document_name",
-        "metadata.article_number",
-        "metadata.city",
-        "metadata.source_type",
+        "file_id",  # Flat field for fast delete
+        "metadata.file_id",  # Nested field for query filtering
+        "metadata.doc_id",  # Small-to-big doc grouping
+        "metadata.source",  # Source path filtering
+        "metadata.file_name",  # Filename filtering
+        "metadata.mime_type",  # Document type filtering
     ]
 
     for field in keyword_fields:
@@ -149,15 +159,10 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
-    # Integer indexes for numeric filtering (range queries)
+    # Integer indexes for ordering/pagination
     integer_fields = [
-        "metadata.price",
-        "metadata.rooms",
-        "metadata.area",
-        "metadata.floor",
-        "metadata.floors",
-        "metadata.distance_to_sea",
-        "metadata.bathrooms",
+        "metadata.order",  # Chunk ordering for small-to-big
+        "metadata.chunk_id",  # Chunk position
     ]
 
     for field in integer_fields:
@@ -168,23 +173,6 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
                 field_schema="integer",
             )
             print(f"  Created integer index: {field}")
-        except Exception as e:
-            print(f"  Warning: Could not create index {field}: {e}")
-
-    # Boolean indexes
-    boolean_fields = [
-        "metadata.furnished",
-        "metadata.year_round",
-    ]
-
-    for field in boolean_fields:
-        try:
-            client.create_payload_index(
-                collection_name=collection_name,
-                field_name=field,
-                field_schema="bool",
-            )
-            print(f"  Created boolean index: {field}")
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
@@ -293,7 +281,7 @@ def main() -> int:
 Environment variables:
   QDRANT_URL      Qdrant server URL (default: http://localhost:6333)
   QDRANT_API_KEY  Optional API key for authentication
-  COLLECTION_NAME Default collection name (default: legal_documents)
+  COLLECTION_NAME Default collection name (default: gdrive_documents_bge)
 
 Examples:
   python scripts/setup_qdrant_collection.py
@@ -306,8 +294,8 @@ Examples:
     parser.add_argument(
         "--collection",
         "-c",
-        default=os.getenv("COLLECTION_NAME", "legal_documents"),
-        help="Collection name (default: legal_documents or COLLECTION_NAME env)",
+        default=os.getenv("COLLECTION_NAME", "gdrive_documents_bge"),
+        help="Collection name (default: gdrive_documents_bge or COLLECTION_NAME env)",
     )
 
     parser.add_argument(

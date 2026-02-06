@@ -3,6 +3,7 @@
 import contextlib
 import hashlib
 import logging
+import os
 import time
 from datetime import UTC, datetime
 
@@ -124,8 +125,7 @@ class PropertyBot:
             max_context_tokens=config.max_context_tokens,
         )
 
-        # BM42 sparse embedding service (HTTP client)
-        self.bm42_url = config.bm42_url
+        # BGE-M3 sparse embedding service (HTTP client, lazy init)
         self._http_client: httpx.AsyncClient | None = None
         self.llm_service = LLMService(
             api_key=config.llm_api_key,
@@ -426,6 +426,7 @@ class PropertyBot:
                     and needs_rerank(query_type, len(results))
                 ):
                     scores["rerank_applied"] = 1.0
+                    results = results[: self.config.rerank_candidates_max]
                     doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
 
                     # Check rerank cache first
@@ -449,26 +450,33 @@ class PropertyBot:
                         ][: self.config.rerank_top_k]
                         logger.info(f"✓ Using cached rerank ({len(results)} results)")
                     else:
-                        doc_texts = [r["text"] for r in results]
-                        rerank_results = await self.rerank_service.rerank(
-                            query=query,
-                            documents=doc_texts,
-                            top_k=self.config.rerank_top_k,
-                        )
+                        try:
+                            doc_texts = [r["text"] for r in results]
+                            rerank_results = await self.rerank_service.rerank(
+                                query=query,
+                                documents=doc_texts,
+                                top_k=self.config.rerank_top_k,
+                            )
 
-                        # Store rerank results in cache (dict format for JSON serialization)
-                        rerank_cache_data = [
-                            {"id": doc_ids[r["index"]], "score": r.get("score", 0.0)}
-                            for r in rerank_results
-                        ]
-                        await self.cache_service.store_rerank_results(
-                            query_hash=rerank_query_hash,
-                            chunk_ids=doc_ids,
-                            results=rerank_cache_data,
-                        )
+                            # Store rerank results in cache (dict format for JSON serialization)
+                            rerank_cache_data = [
+                                {"id": doc_ids[r["index"]], "score": r.get("score", 0.0)}
+                                for r in rerank_results
+                            ]
+                            await self.cache_service.store_rerank_results(
+                                query_hash=rerank_query_hash,
+                                chunk_ids=doc_ids,
+                                results=rerank_cache_data,
+                            )
 
-                        results = [results[r["index"]] for r in rerank_results]
-                        logger.info(f"Reranked to top {len(results)} results")
+                            results = [results[r["index"]] for r in rerank_results]
+                            logger.info(f"Reranked to top {len(results)} results")
+                        except Exception as e:
+                            logger.warning(
+                                f"Rerank failed ({type(e).__name__}: {e}), "
+                                f"using base retrieval results ({len(results)} docs)"
+                            )
+                            scores["rerank_fallback"] = 1.0
 
                 await self.cache_service.store_search_results(query_vector, filters, results)
             else:
@@ -597,7 +605,7 @@ class PropertyBot:
             self.cache_service.log_metrics()
 
     async def _get_sparse_vector(self, text: str) -> dict:
-        """Generate BM42 sparse vector via HTTP service.
+        """Generate sparse vector via BGE-M3 API.
 
         Args:
             text: Query text
@@ -606,17 +614,26 @@ class PropertyBot:
             Dict with 'indices' and 'values' for Qdrant sparse vector
         """
         if self._http_client is None:
-            self._http_client = httpx.AsyncClient(timeout=10.0)
+            timeout = float(os.getenv("BGE_M3_TIMEOUT", "120.0"))
+            self._http_client = httpx.AsyncClient(timeout=timeout)
 
         try:
             response = await self._http_client.post(
-                f"{self.bm42_url}/embed",
-                json={"text": text},
+                f"{self.config.bge_m3_url}/encode/sparse",
+                json={"texts": [text]},
             )
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            # BGE-M3 returns {"lexical_weights": [{"indices": [...], "values": [...]}]}
+            weights = data.get("lexical_weights", [{}])
+            if weights:
+                return {
+                    "indices": weights[0].get("indices", []),
+                    "values": weights[0].get("values", []),
+                }
+            return {"indices": [], "values": []}
         except Exception as e:
-            logger.warning(f"BM42 service error: {e}, returning empty sparse vector")
+            logger.warning(f"BGE-M3 sparse error: {e}, returning empty sparse vector")
             return {"indices": [], "values": []}
 
     def _format_results(self, results: list[dict]) -> str:
@@ -661,6 +678,16 @@ class PropertyBot:
             await self.cache_service.initialize()
             self._cache_initialized = True
             logger.info("Cache service ready")
+
+        # Preflight dependency checks
+        from .preflight import check_dependencies
+
+        dep_status = await check_dependencies(self.config)
+        failed = [k for k, v in dep_status.items() if not v]
+        if failed:
+            logger.warning("Preflight: dependencies unavailable: %s", failed)
+        else:
+            logger.info("Preflight: all dependencies OK")
 
         await self.dp.start_polling(self.bot)
 
