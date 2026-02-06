@@ -46,10 +46,17 @@ class UnifiedConfig:
 
     # BM42
     bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+    bm42_url: str | None = field(default_factory=lambda: os.getenv("BM42_URL"))
 
     # BGE-M3 API (alternative to Voyage)
     bge_m3_url: str = field(
         default_factory=lambda: os.getenv("BGE_M3_URL", "http://localhost:8000")
+    )
+    bge_m3_timeout: float = field(
+        default_factory=lambda: float(os.getenv("BGE_M3_TIMEOUT", "300"))
+    )
+    bge_m3_concurrency: int = field(
+        default_factory=lambda: int(os.getenv("BGE_M3_CONCURRENCY", "1"))
     )
     use_local_embeddings: bool = field(
         default_factory=lambda: os.getenv("USE_LOCAL_DENSE_EMBEDDINGS", "false").lower() == "true"
