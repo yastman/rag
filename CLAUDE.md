@@ -25,7 +25,7 @@ make ingest-unified-status # Show ingestion stats from Postgres
 
 **Contextual RAG Pipeline** — Production RAG with hybrid search (RRF + ColBERT), Voyage AI embeddings, multi-level caching, Telegram bot.
 
-**Stack:** Python 3.11+ | Cerebras via LiteLLM | Voyage AI | Qdrant | Redis | CocoIndex
+**Stack:** Python 3.12 | Cerebras via LiteLLM | Voyage AI | Qdrant | Redis | CocoIndex
 
 **Use cases:** Bulgarian property (192 docs), Ukrainian Criminal Code (1,294 docs)
 
