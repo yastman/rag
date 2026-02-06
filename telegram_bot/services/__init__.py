@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .colbert_reranker import ColbertRerankerService
     from .embeddings import EmbeddingService
     from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
+    from .metrics import PipelineMetrics
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
     from .query_preprocessor import HyDEGenerator, QueryPreprocessor
@@ -44,6 +45,7 @@ __all__ = [
     "ExpandedChunk",
     "HyDEGenerator",
     "LLMService",
+    "PipelineMetrics",
     "QdrantService",
     "QueryAnalyzer",
     "QueryPreprocessor",
@@ -74,6 +76,7 @@ _IMPORT_MAP = {
     "HyDEGenerator": ".query_preprocessor",
     "LLMService": ".llm",
     "LOW_CONFIDENCE_THRESHOLD": ".llm",
+    "PipelineMetrics": ".metrics",
     "QdrantService": ".qdrant",
     "QueryAnalyzer": ".query_analyzer",
     "QueryPreprocessor": ".query_preprocessor",
