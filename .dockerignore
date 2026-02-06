@@ -81,3 +81,14 @@ docker/
 
 # Services (separate builds)
 services/
+
+# Benchmarks and eval data
+benchmarks/
+evaluation/
+
+# Docker compose files (not needed in image)
+docker-compose*.yml
+
+# Node / frontend
+node_modules/
+package-lock.json
