@@ -9,8 +9,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
-from langfuse import observe
 from qdrant_client import AsyncQdrantClient, models
+
+from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
