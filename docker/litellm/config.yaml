@@ -1,39 +1,49 @@
 # LiteLLM Proxy Configuration
 # Docs: https://docs.litellm.ai/docs/proxy/configs
-# Version: v1.81.3.rc.3
+# Image: ghcr.io/berriai/litellm:main-v1.81.0-stable
 
 model_list:
-  # Primary: Cerebras (текущий провайдер)
+  # Primary: Cerebras (zai-glm-4.7 via OpenAI-compat API)
+  # Bot requests "gpt-4o-mini" — this alias routes to Cerebras primary
   - model_name: gpt-4o-mini
     litellm_params:
       model: openai/zai-glm-4.7
       api_base: https://api.cerebras.ai/v1
       api_key: os.environ/CEREBRAS_API_KEY
 
-  # Fallback 1: Groq (быстрый, бесплатный tier)
+  # Fallback 1: Groq (fast, free tier)
   - model_name: gpt-4o-mini-fallback
     litellm_params:
       model: groq/llama-3.1-70b-versatile
       api_key: os.environ/GROQ_API_KEY
 
-  # Fallback 2: OpenAI (надёжный)
+  # Fallback 2: OpenAI (reliable)
   - model_name: gpt-4o-mini-openai
     litellm_params:
       model: openai/gpt-4o-mini
       api_key: os.environ/OPENAI_API_KEY
 
-# Автоматический fallback при ошибках
+# Production general settings
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  proxy_batch_write_at: 60
+  disable_error_logs: true
+  allow_requests_on_db_unavailable: true
+
+# Automatic fallback on errors
 router_settings:
   fallbacks:
     - gpt-4o-mini: [gpt-4o-mini-fallback, gpt-4o-mini-openai]
   retry_policy:
     retry_count: 2
 
-# Langfuse v3 OTEL интеграция
+# LiteLLM settings
 litellm_settings:
-  callbacks: ["langfuse_otel"]
+  request_timeout: 600
+  set_verbose: false
+  json_logs: true
 
-# Environment variables для Langfuse v3
+# Environment variables for Langfuse v3
 environment_variables:
   LANGFUSE_PUBLIC_KEY: os.environ/LANGFUSE_PUBLIC_KEY
   LANGFUSE_SECRET_KEY: os.environ/LANGFUSE_SECRET_KEY

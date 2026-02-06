@@ -6,6 +6,7 @@ and HybridChunker for RAG-optimized chunking.
 
 import hashlib
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,70 @@ from src.ingestion.chunker import Chunk
 
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Profile presets for docling-serve conversion
+# ---------------------------------------------------------------------------
+
+_PROFILE_SETTINGS: dict[str, dict[str, Any]] = {
+    "speed": {
+        "do_ocr": False,
+        "force_ocr": False,
+        "ocr_engine": None,
+        "table_mode": "fast",
+        "pdf_backend": "dlparse_v4",
+        "pipeline": None,
+    },
+    "quality": {
+        "do_ocr": True,
+        "force_ocr": False,
+        "ocr_engine": "easyocr",
+        "table_mode": "accurate",
+        "pdf_backend": "dlparse_v4",
+        "pipeline": None,
+    },
+    "scan": {
+        "do_ocr": True,
+        "force_ocr": True,
+        "ocr_engine": "easyocr",
+        "table_mode": "accurate",
+        "pdf_backend": "dlparse_v4",
+        "pipeline": None,
+    },
+    "vlm": {
+        "do_ocr": False,
+        "force_ocr": False,
+        "ocr_engine": None,
+        "table_mode": "accurate",
+        "pdf_backend": "dlparse_v4",
+        "pipeline": "vlm",
+    },
+}
+
+VALID_PROFILES = frozenset(_PROFILE_SETTINGS)
+
+
+def get_profile_settings(profile: str) -> dict[str, Any]:
+    """Return docling-serve conversion settings for *profile*.
+
+    Args:
+        profile: One of "speed", "quality", "scan", "vlm".
+
+    Returns:
+        Dict with keys: do_ocr, force_ocr, ocr_engine, table_mode,
+        pdf_backend, pipeline.
+
+    Raises:
+        ValueError: If *profile* is not recognised.
+    """
+    if profile not in _PROFILE_SETTINGS:
+        raise ValueError(
+            f"Unknown docling profile {profile!r}. "
+            f"Valid profiles: {', '.join(sorted(VALID_PROFILES))}"
+        )
+    # Return a copy so callers cannot mutate the module-level dict.
+    return dict(_PROFILE_SETTINGS[profile])
 
 
 @dataclass
@@ -37,6 +102,56 @@ class DoclingConfig:
     pdf_backend: str = "dlparse_v4"  # Best table parsing (2026)
     table_mode: str = "accurate"  # accurate | fast
     do_ocr: bool = False  # Enable for scanned documents
+
+    # Profile-based settings (from DOCLING_PROFILE env, default "speed")
+    profile: str = field(default_factory=lambda: os.getenv("DOCLING_PROFILE", "speed"))
+    ocr_engine: str | None = None  # auto, easyocr, rapidocr, tesserocr, tesseract
+    force_ocr: bool = False  # Replace existing text with OCR output
+    pipeline: str | None = None  # Processing pipeline (None = standard, "vlm" = VLM)
+
+    def __post_init__(self) -> None:
+        """Apply profile defaults for fields left at their init defaults."""
+        if self.profile not in _PROFILE_SETTINGS:
+            logger.warning(
+                "Unknown DOCLING_PROFILE %r, falling back to 'speed'",
+                self.profile,
+            )
+            self.profile = "speed"
+
+        settings = get_profile_settings(self.profile)
+        # Profile sets defaults — explicit constructor args take priority.
+        # We detect "not explicitly set" by checking against the dataclass
+        # field defaults.  For mutable/factory defaults this is tricky, so
+        # we simply always apply the profile for the new fields that had no
+        # previous presence in the config.
+        if not self.force_ocr and settings["force_ocr"]:
+            self.force_ocr = settings["force_ocr"]
+        if self.ocr_engine is None:
+            self.ocr_engine = settings["ocr_engine"]
+        if self.pipeline is None:
+            self.pipeline = settings["pipeline"]
+        # do_ocr / table_mode / pdf_backend already have explicit defaults,
+        # so only override them when the user picked a non-default profile
+        # and did NOT pass custom values via the constructor.
+        if self.profile != "speed":
+            if not self.do_ocr and settings["do_ocr"]:
+                self.do_ocr = settings["do_ocr"]
+            if self.table_mode == "accurate" and settings["table_mode"] != "accurate":
+                self.table_mode = settings["table_mode"]
+            if self.pdf_backend == "dlparse_v4" and settings["pdf_backend"] != "dlparse_v4":
+                self.pdf_backend = settings["pdf_backend"]
+
+        logger.debug(
+            "DoclingConfig profile=%s do_ocr=%s force_ocr=%s ocr_engine=%s "
+            "pipeline=%s table_mode=%s pdf_backend=%s",
+            self.profile,
+            self.do_ocr,
+            self.force_ocr,
+            self.ocr_engine,
+            self.pipeline,
+            self.table_mode,
+            self.pdf_backend,
+        )
 
 
 @dataclass
@@ -154,10 +269,7 @@ class DoclingClient:
         response = await self.client.post(
             "/v1/convert/file",
             files=files,
-            data={
-                "convert_do_ocr": str(self.config.do_ocr).lower(),
-                "convert_pdf_backend": self.config.pdf_backend,
-            },
+            data=self._build_convert_form_data(),
         )
 
         response.raise_for_status()
@@ -398,15 +510,31 @@ class DoclingClient:
             return (int(page_start), int(page_end or page_start))
         return None
 
-    def _build_chunking_form_data(self) -> dict[str, str]:
-        """Build multipart form fields for /v1/chunk/hybrid/file."""
+    def _build_convert_form_data(self) -> dict[str, str]:
+        """Build multipart form fields for /v1/convert/file."""
         data: dict[str, str] = {
             "convert_do_ocr": str(self.config.do_ocr).lower(),
             "convert_pdf_backend": self.config.pdf_backend,
-            "chunking_max_tokens": str(self.config.max_tokens),
-            "chunking_merge_peers": str(self.config.merge_peers).lower(),
-            "include_converted_doc": "false",
+            "convert_table_mode": self.config.table_mode,
         }
+        if self.config.force_ocr:
+            data["convert_force_ocr"] = "true"
+        if self.config.ocr_engine:
+            data["convert_ocr_engine"] = self.config.ocr_engine
+        if self.config.pipeline:
+            data["convert_pipeline"] = self.config.pipeline
+        return data
+
+    def _build_chunking_form_data(self) -> dict[str, str]:
+        """Build multipart form fields for /v1/chunk/hybrid/file."""
+        data = self._build_convert_form_data()
+        data.update(
+            {
+                "chunking_max_tokens": str(self.config.max_tokens),
+                "chunking_merge_peers": str(self.config.merge_peers).lower(),
+                "include_converted_doc": "false",
+            }
+        )
 
         # docling-serve expects a HF model id, not "word"/"huggingface".
         tokenizer = (self.config.tokenizer or "").strip()
