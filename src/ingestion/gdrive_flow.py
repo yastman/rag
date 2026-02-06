@@ -41,7 +41,7 @@ class GDriveFlowConfig:
     )
     # Default to binary collection for best latency; override via env if needed.
     collection_name: str = field(
-        default_factory=lambda: os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_binary")
+        default_factory=lambda: os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_bge")
     )
 
     # Docling settings

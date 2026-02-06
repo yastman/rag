@@ -30,7 +30,7 @@ class UnifiedConfig:
     )
     qdrant_api_key: str | None = field(default_factory=lambda: os.getenv("QDRANT_API_KEY"))
     collection_name: str = field(
-        default_factory=lambda: os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_scalar")
+        default_factory=lambda: os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_bge")
     )
 
     # Docling
