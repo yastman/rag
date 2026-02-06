@@ -209,7 +209,7 @@ services:
       BGE_M3_URL: http://bge-m3:8000
       BGE_M3_TIMEOUT: "120"
       COLBERT_TIMEOUT: "120"
-      RERANK_CANDIDATES_MAX: "10"
+      RERANK_CANDIDATES_MAX: "5"  # ColBERT CPU: 5 docs ~15s vs 10 docs ~30s
       # Semantic cache
       USE_LOCAL_EMBEDDINGS: "true"
       USER_BASE_URL: http://user-base:8000
