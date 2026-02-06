@@ -929,6 +929,71 @@ class CacheService:
 
     # =============================================================
 
+    async def get_redis_diagnostics(self) -> dict[str, Any]:
+        """Get extended Redis diagnostics for monitoring.
+
+        Returns:
+            Dict with memory usage, hit rate, key counts by prefix,
+            eviction count, connected clients, and maxmemory policy.
+        """
+        if not self.redis_client:
+            return {"error": "Redis client not initialized"}
+
+        try:
+            # Gather Redis INFO sections in parallel
+            memory_info = await self.redis_client.info("memory")
+            stats_info = await self.redis_client.info("stats")
+            clients_info = await self.redis_client.info("clients")
+            server_info = await self.redis_client.info("server")
+
+            # Calculate hit rate
+            keyspace_hits = stats_info.get("keyspace_hits", 0)
+            keyspace_misses = stats_info.get("keyspace_misses", 0)
+            total_keyspace = keyspace_hits + keyspace_misses
+            hit_rate = (keyspace_hits / total_keyspace * 100) if total_keyspace > 0 else 0.0
+
+            # Count keys per known prefix using SCAN (non-blocking)
+            known_prefixes = [
+                f"sparse:{CACHE_SCHEMA_VERSION}:",
+                f"analysis:{CACHE_SCHEMA_VERSION}:",
+                f"search:{CACHE_SCHEMA_VERSION}:",
+                f"rerank:{CACHE_SCHEMA_VERSION}:",
+                f"sem:{CACHE_SCHEMA_VERSION}:",
+                f"emb:{CACHE_SCHEMA_VERSION}:",
+                f"rag_conversations:{CACHE_SCHEMA_VERSION}:",
+                "conversation:",
+                "user_context:",
+            ]
+
+            prefix_counts: dict[str, int] = {}
+            for prefix in known_prefixes:
+                count = 0
+                async for _key in self.redis_client.scan_iter(match=f"{prefix}*", count=500):
+                    count += 1
+                # Use short display name (strip version suffix)
+                display_name = prefix.rstrip(":")
+                prefix_counts[display_name] = count
+
+            # Total keys in DB
+            db_size = await self.redis_client.dbsize()
+
+            return {
+                "used_memory_human": memory_info.get("used_memory_human", "N/A"),
+                "maxmemory_human": memory_info.get("maxmemory_human", "0B"),
+                "maxmemory_policy": memory_info.get("maxmemory_policy", "N/A"),
+                "hit_rate": round(hit_rate, 1),
+                "keyspace_hits": keyspace_hits,
+                "keyspace_misses": keyspace_misses,
+                "evicted_keys": stats_info.get("evicted_keys", 0),
+                "connected_clients": clients_info.get("connected_clients", 0),
+                "total_keys": db_size,
+                "prefix_counts": prefix_counts,
+                "redis_version": server_info.get("redis_version", "N/A"),
+            }
+        except Exception as e:
+            logger.error(f"Redis diagnostics error: {e}")
+            return {"error": str(e)}
+
     def log_metrics(self):
         """Log current cache metrics."""
         metrics = self.get_metrics()
