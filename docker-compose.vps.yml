@@ -158,24 +158,6 @@ services:
         limits:
           memory: 2G
 
-  bm42:
-    build:
-      context: ./services/bm42
-      dockerfile: Dockerfile
-    container_name: vps-bm42
-    restart: unless-stopped
-    logging: *default-logging
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-
   # =============================================================================
   # LLM GATEWAY
   # =============================================================================
@@ -243,8 +225,6 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
-      bm42:
         condition: service_healthy
       bge-m3:
         condition: service_healthy

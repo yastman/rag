@@ -273,9 +273,8 @@ class TestHandleQueryScoresAllPaths:
         )
         bot_handler_full.llm_service.generate_answer = AsyncMock(return_value="Fallback answer")
 
-        # Mock BM42 sparse vector
+        # Mock sparse vector
         bot_handler_full._http_client = MagicMock()
-        bot_handler_full.bm42_url = "http://test"
         bot_handler_full._get_sparse_vector = AsyncMock(
             return_value={"indices": [1, 2], "values": [0.5, 0.3]}
         )
