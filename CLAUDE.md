@@ -49,7 +49,8 @@ Input → Docling Parser → Chunker → Voyage Embeddings + BM42 → Qdrant
 
 ## Code Style
 
-- **Line length:** 100 | **Linter:** Ruff | **Types:** MyPy | **Docstrings:** Google style
+- **Linter/Formatter:** Ruff v0.14.14 | **Types:** MyPy | **Line length:** 100 | **Docstrings:** Google style
+- **Pre-commit:** ruff-check (--fix) → ruff-format → trailing-whitespace → check-yaml/toml/json
 - **Commits:** `feat(scope): message` | `fix(scope): message` | `docs(scope): message`
 
 ## Task Management
