@@ -4,6 +4,7 @@
 import argparse
 import asyncio
 import logging
+import os
 import sys
 
 from dotenv import load_dotenv
@@ -64,6 +65,131 @@ async def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+async def cmd_preflight(args: argparse.Namespace) -> int:
+    """Check that all ingestion dependencies are reachable."""
+    import httpx
+
+    from src.ingestion.unified.config import UnifiedConfig
+
+    config = UnifiedConfig()
+    timeout = httpx.Timeout(10.0)
+    results: dict[str, bool] = {}
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        # Qdrant reachable + collection exists
+        try:
+            resp = await client.get(f"{config.qdrant_url}/collections/{config.collection_name}")
+            results["qdrant"] = resp.status_code == 200
+            if results["qdrant"]:
+                data = resp.json().get("result", {})
+                points = data.get("points_count", "?")
+                print(f"  [OK] Qdrant collection '{config.collection_name}' ({points} points)")
+            else:
+                print(
+                    f"  [FAIL] Qdrant collection '{config.collection_name}' — HTTP {resp.status_code}"
+                )
+        except Exception as e:
+            results["qdrant"] = False
+            print(f"  [FAIL] Qdrant ({config.qdrant_url}) — {e}")
+
+        # BGE-M3 dense endpoint
+        try:
+            resp = await client.post(
+                f"{config.bge_m3_url}/encode/dense",
+                json={"texts": ["ping"]},
+            )
+            results["bge_m3_dense"] = resp.status_code == 200
+            if results["bge_m3_dense"]:
+                print(f"  [OK] BGE-M3 dense ({config.bge_m3_url}/encode/dense)")
+            else:
+                print(f"  [FAIL] BGE-M3 dense — HTTP {resp.status_code}")
+        except Exception as e:
+            results["bge_m3_dense"] = False
+            print(f"  [FAIL] BGE-M3 dense ({config.bge_m3_url}) — {e}")
+
+        # BGE-M3 sparse endpoint
+        try:
+            resp = await client.post(
+                f"{config.bge_m3_url}/encode/sparse",
+                json={"texts": ["ping"]},
+            )
+            results["bge_m3_sparse"] = resp.status_code == 200
+            if results["bge_m3_sparse"]:
+                print(f"  [OK] BGE-M3 sparse ({config.bge_m3_url}/encode/sparse)")
+            else:
+                print(f"  [FAIL] BGE-M3 sparse — HTTP {resp.status_code}")
+        except Exception as e:
+            results["bge_m3_sparse"] = False
+            print(f"  [FAIL] BGE-M3 sparse ({config.bge_m3_url}) — {e}")
+
+        # Docling service
+        try:
+            resp = await client.get(f"{config.docling_url}/health")
+            results["docling"] = resp.status_code == 200
+            if results["docling"]:
+                print(f"  [OK] Docling ({config.docling_url})")
+            else:
+                print(f"  [FAIL] Docling — HTTP {resp.status_code}")
+        except Exception as e:
+            results["docling"] = False
+            print(f"  [FAIL] Docling ({config.docling_url}) — {e}")
+
+    # Required env vars
+    required_vars = ["QDRANT_URL", "BGE_M3_URL", "DOCLING_URL", "INGESTION_DATABASE_URL"]
+    missing = [v for v in required_vars if not os.getenv(v)]
+    if missing:
+        results["env_vars"] = False
+        print(f"  [WARN] Missing env vars: {', '.join(missing)} (using defaults)")
+    else:
+        results["env_vars"] = True
+        print("  [OK] All required env vars set")
+
+    # Summary
+    ok = sum(1 for v in results.values() if v)
+    total = len(results)
+    all_ok = ok == total
+    print(f"\nPreflight: {ok}/{total} checks passed {'— READY' if all_ok else '— NOT READY'}")
+    return 0 if all_ok else 1
+
+
+async def cmd_bootstrap(args: argparse.Namespace) -> int:
+    """Create Qdrant collection if it doesn't exist."""
+    from scripts.setup_qdrant_collection import (
+        collection_exists,
+        create_collection,
+        create_payload_indexes,
+        get_qdrant_client,
+        print_collection_info,
+    )
+    from src.ingestion.unified.config import UnifiedConfig
+
+    config = UnifiedConfig()
+    collection_name = config.collection_name
+
+    print(f"\n=== Bootstrap: {collection_name} ===")
+
+    client = get_qdrant_client()
+
+    # Check connection
+    try:
+        client.get_collections()
+    except Exception as e:
+        print(f"  [FAIL] Cannot connect to Qdrant: {e}")
+        return 1
+
+    if collection_exists(client, collection_name):
+        print(f"  Collection '{collection_name}' already exists — nothing to do.")
+        print_collection_info(client, collection_name)
+        return 0
+
+    # Create collection + indexes
+    create_collection(client, collection_name)
+    create_payload_indexes(client, collection_name)
+    print_collection_info(client, collection_name)
+    print("Bootstrap completed.")
+    return 0
+
+
 async def cmd_reprocess(args: argparse.Namespace) -> int:
     """Reprocess a specific file or all errors."""
     from src.ingestion.unified.config import UnifiedConfig
@@ -117,6 +243,12 @@ def main() -> int:
     # status
     subparsers.add_parser("status", help="Show status")
 
+    # preflight
+    subparsers.add_parser("preflight", help="Check dependencies are reachable")
+
+    # bootstrap
+    subparsers.add_parser("bootstrap", help="Create Qdrant collection if missing")
+
     # reprocess
     reprocess_p = subparsers.add_parser("reprocess", help="Reprocess files")
     reprocess_p.add_argument("--file-id", help="Specific file ID")
@@ -129,6 +261,10 @@ def main() -> int:
         return cmd_run(args)
     if args.command == "status":
         return asyncio.run(cmd_status(args))
+    if args.command == "preflight":
+        return asyncio.run(cmd_preflight(args))
+    if args.command == "bootstrap":
+        return asyncio.run(cmd_bootstrap(args))
     if args.command == "reprocess":
         return asyncio.run(cmd_reprocess(args))
 
