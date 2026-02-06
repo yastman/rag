@@ -10,7 +10,6 @@ import asyncio
 import logging
 
 import voyageai
-from langfuse import get_client, observe
 from tenacity import (
     before_sleep_log,
     retry,
@@ -18,6 +17,8 @@ from tenacity import (
     stop_after_attempt,
     wait_random_exponential,
 )
+
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
