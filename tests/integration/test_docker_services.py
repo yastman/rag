@@ -42,16 +42,6 @@ async def test_bge_m3_health():
 
 
 @pytest.mark.asyncio
-async def test_bm42_health():
-    async with aiohttp.ClientSession() as session:
-        async with session.get("http://localhost:8002/health") as resp:
-            # Note: BM42 service in docker-compose.dev.yml maps 8002:8000
-            assert resp.status == 200
-            data = await resp.json()
-            assert data["status"] == "ok"
-
-
-@pytest.mark.asyncio
 async def test_lightrag_health():
     async with aiohttp.ClientSession() as session:
         async with session.get("http://localhost:9621/health") as resp:

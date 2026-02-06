@@ -25,7 +25,6 @@ def mock_config():
         qdrant_api_key="qdrant-key",
         qdrant_collection="test_collection",
         redis_url="redis://localhost:6379",
-        bm42_url="http://localhost:8000",
     )
 
 
