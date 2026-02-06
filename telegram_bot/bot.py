@@ -35,6 +35,7 @@ from .services import (
     needs_rerank,
 )
 from .services.cache import CACHE_SCHEMA_VERSION
+from .services.redis_monitor import RedisHealthMonitor
 
 
 logger = logging.getLogger(__name__)
@@ -158,6 +159,9 @@ class PropertyBot:
             llm_service=self.llm_service,
         )
 
+        # Redis health monitor (periodic background task)
+        self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -183,6 +187,7 @@ class PropertyBot:
         self.dp.message(Command("help"))(self.cmd_help)
         self.dp.message(Command("clear"))(self.cmd_clear)
         self.dp.message(Command("stats"))(self.cmd_stats)
+        self.dp.message(Command("cache_stats"))(self.cmd_cache_stats)
         self.dp.message(F.text)(self.handle_query)
 
     async def cmd_start(self, message: Message):
@@ -216,6 +221,7 @@ class PropertyBot:
             "Команды:\n"
             "/clear - Очистить историю диалога\n"
             "/stats - Показать статистику кеша\n"
+            "/cache_stats - Диагностика Redis\n"
         )
 
     async def cmd_clear(self, message: Message):
@@ -241,6 +247,42 @@ class PropertyBot:
             )
 
         await message.answer(stats_text)
+
+    async def cmd_cache_stats(self, message: Message):
+        """Handle /cache_stats command - show extended Redis diagnostics."""
+        diag = await self.cache_service.get_redis_diagnostics()
+
+        if "error" in diag:
+            await message.answer(f"Redis diagnostics error: {diag['error']}")
+            return
+
+        # Format prefix counts
+        prefix_lines = ""
+        for prefix, count in diag.get("prefix_counts", {}).items():
+            prefix_lines += f"  {prefix:<30s} {count}\n"
+
+        text = (
+            f"```\n"
+            f"=== Redis Diagnostics ===\n"
+            f"\n"
+            f"Memory:       {diag['used_memory_human']}"
+            f" / {diag['maxmemory_human']}\n"
+            f"Policy:       {diag['maxmemory_policy']}\n"
+            f"Evicted keys: {diag['evicted_keys']}\n"
+            f"Clients:      {diag['connected_clients']}\n"
+            f"Redis ver:    {diag['redis_version']}\n"
+            f"\n"
+            f"Hit rate:     {diag['hit_rate']}%"
+            f"  ({diag['keyspace_hits']}"
+            f" hits / {diag['keyspace_misses']} misses)\n"
+            f"\n"
+            f"=== Keys by prefix ({diag['total_keys']} total) ===\n"
+            f"\n"
+            f"{prefix_lines}"
+            f"```"
+        )
+
+        await message.answer(text, parse_mode="Markdown")
 
     @observe(name="telegram-message")
     async def handle_query(self, message: Message):
@@ -689,11 +731,15 @@ class PropertyBot:
         else:
             logger.info("Preflight: all dependencies OK")
 
+        # Start Redis health monitor (background task, every 5 min)
+        await self._redis_monitor.start()
+
         await self.dp.start_polling(self.bot)
 
     async def stop(self):
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
+        await self._redis_monitor.stop()
         await self.cache_service.close()
         await self.query_analyzer.close()
         await self.llm_service.close()
