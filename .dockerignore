@@ -81,3 +81,14 @@ docker/
 
 ***REMOVED*** Services (separate builds)
 services/
+
+***REMOVED*** Benchmarks and eval data
+benchmarks/
+evaluation/
+
+***REMOVED*** Docker compose files (not needed in image)
+docker-compose*.yml
+
+***REMOVED*** Node / frontend
+node_modules/
+package-lock.json

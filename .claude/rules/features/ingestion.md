@@ -18,15 +18,19 @@ make ingest-unified-reprocess ***REMOVED*** Retry failed files
 ***REMOVED******REMOVED*** Architecture (v3.2.1)
 
 ```
-Google Drive → rclone sync → ~/drive-sync/
+Google Drive → rclone sync → ~/drive-sync/ (or /opt/rag-fresh/drive-sync on VPS)
      ↓ (CocoIndex FlowLiveUpdater)
 sources.LocalFile → QdrantHybridTarget (custom connector)
      ├─ DoclingClient.chunk_file_sync()
-     ├─ VoyageService (dense 1024-dim)
+     ├─ BGE-M3 (dense 1024-dim) or VoyageService
      ├─ FastEmbed BM42 (sparse)
      ├─ QdrantHybridWriter.*_sync()
      └─ StateManager.*_sync() → Postgres
 ```
+
+**Embedding providers:**
+- **Dev:** VoyageService (API) → `gdrive_documents_scalar`
+- **VPS:** BGE-M3 local (`USE_LOCAL_DENSE_EMBEDDINGS=true`) → `gdrive_documents_bge`
 
 ***REMOVED******REMOVED******REMOVED*** rclone Setup
 
@@ -83,10 +87,11 @@ state_manager.mark_indexed_sync(file_id, chunk_count, content_hash)
 
 ***REMOVED******REMOVED*** Collections
 
-| Collection | Quantization |
-|------------|--------------|
-| `gdrive_documents_scalar` | INT8 (default) |
-| `gdrive_documents_binary` | Binary (fast) |
+| Collection | Embeddings | Environment |
+|------------|------------|-------------|
+| `gdrive_documents_scalar` | Voyage 1024-dim | Dev |
+| `gdrive_documents_bge` | BGE-M3 1024-dim | VPS |
+| `gdrive_documents_binary` | Voyage (binary quantized) | Dev (fast) |
 
 ***REMOVED******REMOVED*** Testing
 
@@ -123,6 +128,34 @@ make ingest-unified-status  ***REMOVED*** Should show "indexed: N (100%)"
 
 ***REMOVED*** 4. Verify Qdrant
 curl -s localhost:6333/collections/gdrive_documents_scalar | jq '.result.points_count'
+```
+
+***REMOVED******REMOVED*** VPS Ingestion
+
+```bash
+***REMOVED*** Start ingestion on VPS
+ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml --profile ingest up -d ingestion"
+
+***REMOVED*** Check logs
+ssh vps "docker logs vps-ingestion --tail 50"
+
+***REMOVED*** Check Qdrant points
+ssh vps "docker compose -f /opt/rag-fresh/docker-compose.vps.yml exec -T bge-m3 python -c \"import urllib.request, json; print(json.load(urllib.request.urlopen('http://qdrant:6333/collections/gdrive_documents_bge'))['result']['points_count'])\""
+```
+
+**VPS Environment:**
+```bash
+USE_LOCAL_DENSE_EMBEDDINGS=true
+BGE_M3_URL=http://bge-m3:8000
+BM42_URL=http://bm42:8000
+GDRIVE_SYNC_DIR=/opt/rag-fresh/drive-sync
+GDRIVE_COLLECTION_NAME=gdrive_documents_bge
+```
+
+**Hot reload (volume mounts):**
+```bash
+rsync -avz src/ vps:/opt/rag-fresh/src/
+ssh vps "docker restart vps-ingestion"
 ```
 
 ***REMOVED******REMOVED*** Legacy (deprecated)
