@@ -74,7 +74,7 @@ async def main():
 
     # Prepare points with offset IDs
     points = []
-    for i, (prop, emb) in enumerate(zip(properties, embeddings)):
+    for i, (prop, emb) in enumerate(zip(properties, embeddings, strict=True)):
         point_id = ID_OFFSET + i
         points.append(
             PointStruct(
