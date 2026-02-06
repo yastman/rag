@@ -189,7 +189,7 @@ class CacheService:
                         f"filterable_fields=[user_id, language, query_type])"
                     )
             except Exception as e:
-                logger.warning(f"SemanticCache initialization failed: {e}")
+                logger.warning(f"SemanticCache initialization failed: {type(e).__name__}: {e}")
                 self.semantic_cache = None
 
             # Initialize native EmbeddingsCache (Tier 1)
@@ -201,7 +201,7 @@ class CacheService:
                 )
                 logger.info("✓ EmbeddingsCache initialized (native RedisVL)")
             except Exception as e:
-                logger.warning(f"EmbeddingsCache initialization failed: {e}")
+                logger.warning(f"EmbeddingsCache initialization failed: {type(e).__name__}: {e}")
                 self.embeddings_cache = None
 
             # Initialize SemanticMessageHistory for conversation context
@@ -243,11 +243,13 @@ class CacheService:
                         logger.warning("VOYAGE_API_KEY not set, SemanticMessageHistory disabled")
                         self.message_history = None
             except Exception as e:
-                logger.warning(f"SemanticMessageHistory initialization failed: {e}")
+                logger.warning(
+                    f"SemanticMessageHistory initialization failed: {type(e).__name__}: {e}"
+                )
                 self.message_history = None
 
         except Exception as e:
-            logger.error(f"Cache initialization error: {e}")
+            logger.error(f"Cache initialization error: {type(e).__name__}: {e}")
             self.redis_client = None
 
     async def close(self):
@@ -348,12 +350,12 @@ class CacheService:
             return None
 
         except Exception as e:
-            logger.error(f"Semantic cache error: {e}")
+            logger.error(f"Semantic cache error: {type(e).__name__}: {e}")
             self.metrics["semantic"]["misses"] += 1
 
             langfuse = get_client()
             langfuse.update_current_span(
-                output={"hit": False, "layer": "semantic", "error": str(e)}
+                output={"hit": False, "layer": "semantic", "error": repr(e)}
             )
 
             return None
@@ -399,7 +401,7 @@ class CacheService:
             )
             logger.debug(f"✓ Stored semantic cache: {query[:50]}... (user_id={user_id})")
         except Exception as e:
-            logger.error(f"Semantic cache store error: {e}")
+            logger.error(f"Semantic cache store error: {type(e).__name__}: {e}")
 
     # ========== TIER 1: Embeddings Cache (Native RedisVL) ==========
 
@@ -434,7 +436,7 @@ class CacheService:
             self.metrics["embeddings"]["misses"] += 1
             return None
         except Exception as e:
-            logger.error(f"EmbeddingsCache error: {e}")
+            logger.error(f"EmbeddingsCache error: {type(e).__name__}: {e}")
             self.metrics["embeddings"]["misses"] += 1
             return None
 
@@ -466,7 +468,7 @@ class CacheService:
             )
             logger.debug(f"✓ Stored embedding: {text[:50]}...")
         except Exception as e:
-            logger.error(f"EmbeddingsCache store error: {e}")
+            logger.error(f"EmbeddingsCache store error: {type(e).__name__}: {e}")
 
     # ========== TIER 1.5: Sparse Embedding Cache ==========
 
@@ -505,7 +507,7 @@ class CacheService:
             self.metrics["embeddings"]["misses"] += 1
             return None
         except Exception as e:
-            logger.error(f"Sparse cache get error: {e}")
+            logger.error(f"Sparse cache get error: {type(e).__name__}: {e}")
             self.metrics["embeddings"]["misses"] += 1
             return None
 
@@ -540,7 +542,7 @@ class CacheService:
             await self.redis_client.expire(key, ttl)
             logger.debug(f"✓ Stored sparse embedding: {text[:50]}...")
         except Exception as e:
-            logger.error(f"Sparse cache store error: {e}")
+            logger.error(f"Sparse cache store error: {type(e).__name__}: {e}")
 
     # ========== TIER 2: QueryAnalyzer Cache ==========
 
@@ -569,7 +571,7 @@ class CacheService:
             self.metrics["analyzer"]["misses"] += 1
             return None
         except Exception as e:
-            logger.error(f"QueryAnalyzer cache error: {e}")
+            logger.error(f"QueryAnalyzer cache error: {type(e).__name__}: {e}")
             self.metrics["analyzer"]["misses"] += 1
             return None
 
@@ -593,7 +595,7 @@ class CacheService:
             )
             logger.debug(f"✓ Stored analysis: {query[:50]}...")
         except Exception as e:
-            logger.error(f"QueryAnalyzer cache store error: {e}")
+            logger.error(f"QueryAnalyzer cache store error: {type(e).__name__}: {e}")
 
     # ========== TIER 2: Qdrant Search Cache ==========
 
@@ -636,11 +638,11 @@ class CacheService:
             langfuse.update_current_span(output={"hit": False, "layer": "retrieval"})
             return None
         except Exception as e:
-            logger.error(f"Search cache error: {e}")
+            logger.error(f"Search cache error: {type(e).__name__}: {e}")
             self.metrics["search"]["misses"] += 1
             langfuse = get_client()
             langfuse.update_current_span(
-                output={"hit": False, "layer": "retrieval", "error": str(e)}
+                output={"hit": False, "layer": "retrieval", "error": repr(e)}
             )
             return None
 
@@ -675,7 +677,7 @@ class CacheService:
             )
             logger.debug(f"✓ Stored search results ({len(results)} items)")
         except Exception as e:
-            logger.error(f"Search cache store error: {e}")
+            logger.error(f"Search cache store error: {type(e).__name__}: {e}")
 
     # ========== TIER 2: Rerank Cache ==========
 
@@ -717,10 +719,10 @@ class CacheService:
             langfuse.update_current_span(output={"hit": False, "layer": "rerank"})
             return None
         except Exception as e:
-            logger.error(f"Rerank cache error: {e}")
+            logger.error(f"Rerank cache error: {type(e).__name__}: {e}")
             self.metrics["rerank"]["misses"] += 1
             langfuse = get_client()
-            langfuse.update_current_span(output={"hit": False, "layer": "rerank", "error": str(e)})
+            langfuse.update_current_span(output={"hit": False, "layer": "rerank", "error": repr(e)})
             return None
 
     @observe(name="cache-rerank-store")
@@ -742,7 +744,7 @@ class CacheService:
             await self.redis_client.setex(key, ttl, json.dumps(results))
             logger.debug(f"✓ Stored rerank ({len(results)} items)")
         except Exception as e:
-            logger.error(f"Rerank cache store error: {e}")
+            logger.error(f"Rerank cache store error: {type(e).__name__}: {e}")
 
     # ========== Metrics ==========
 
@@ -796,7 +798,7 @@ class CacheService:
                 "keyspace_misses": stats_info.get("keyspace_misses", 0),
             }
         except Exception as e:
-            logger.warning(f"Failed to get Redis stats: {e}")
+            logger.warning(f"Failed to get Redis stats: {type(e).__name__}: {e}")
 
         return base_metrics
 
@@ -901,7 +903,7 @@ class CacheService:
             logger.debug(f"Retrieved {len(messages)} relevant messages for user {user_id}")
             return messages
         except Exception as e:
-            logger.error(f"SemanticMessageHistory error: {e}")
+            logger.error(f"SemanticMessageHistory error: {type(e).__name__}: {e}")
             return []
 
     async def add_semantic_message(self, user_id: int, role: str, content: str):
@@ -925,7 +927,7 @@ class CacheService:
             )
             logger.debug(f"Added semantic message for user {user_id}: {role}")
         except Exception as e:
-            logger.error(f"SemanticMessageHistory add error: {e}")
+            logger.error(f"SemanticMessageHistory add error: {type(e).__name__}: {e}")
 
     # =============================================================
 
@@ -991,7 +993,7 @@ class CacheService:
                 "redis_version": server_info.get("redis_version", "N/A"),
             }
         except Exception as e:
-            logger.error(f"Redis diagnostics error: {e}")
+            logger.error(f"Redis diagnostics error: {type(e).__name__}: {e}")
             return {"error": str(e)}
 
     def log_metrics(self):
