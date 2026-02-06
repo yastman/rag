@@ -662,13 +662,14 @@ endif
 	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-dir "$(DIR)"
 	@echo "$(GREEN)✓ Directory ingestion complete$(NC)"
 
-ingest-gdrive: ***REMOVED******REMOVED*** Ingest documents from Google Drive (usage: make ingest-gdrive FOLDER_ID=xxx)
-ifndef FOLDER_ID
-	$(error FOLDER_ID is required. Usage: make ingest-gdrive FOLDER_ID=xxx)
-endif
-	@echo "$(BLUE)Ingesting documents from Google Drive folder $(FOLDER_ID)...$(NC)"
-	uv run python -m telegram_bot.services.ingestion_cocoindex ingest-gdrive "$(FOLDER_ID)"
-	@echo "$(GREEN)✓ Google Drive ingestion complete$(NC)"
+ingest-gdrive: ***REMOVED******REMOVED*** [DEPRECATED] Use ingest-gdrive-run instead (rclone + CocoIndex pipeline)
+	@echo "$(RED)⚠ make ingest-gdrive is deprecated.$(NC)"
+	@echo "  GDrive ingestion now uses rclone sync + CocoIndex pipeline."
+	@echo "  Use one of:"
+	@echo "    make ingest-gdrive-run    ***REMOVED*** Run ingestion once"
+	@echo "    make ingest-gdrive-watch  ***REMOVED*** Continuous watch mode"
+	@echo "    make ingest-gdrive-status ***REMOVED*** Collection stats"
+	@exit 1
 
 ingest-status: ***REMOVED******REMOVED*** Show collection statistics
 	@echo "$(BLUE)Collection status:$(NC)"
