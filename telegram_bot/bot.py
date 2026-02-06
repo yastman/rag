@@ -1,6 +1,5 @@
 """Main Telegram bot logic."""
 
-import contextlib
 import hashlib
 import logging
 import os
@@ -586,7 +585,10 @@ class PropertyBot:
                 else:
                     answer = result.answer
 
-                await temp_message.edit_text(answer, parse_mode="Markdown")
+                try:
+                    await temp_message.edit_text(answer, parse_mode="Markdown")
+                except Exception:
+                    await temp_message.edit_text(answer)
 
             else:
                 # Standard streaming mode
@@ -607,20 +609,29 @@ class PropertyBot:
                         if (
                             chunk_count % 10 == 0 or chunk in ".!?\n"
                         ) and accumulated_text != last_sent_text:
-                            with contextlib.suppress(Exception):
+                            try:
                                 await temp_message.edit_text(accumulated_text)
                                 last_sent_text = accumulated_text
+                            except Exception as edit_err:
+                                logger.debug("Streaming edit skipped: %s", edit_err)
 
                     # Final update with complete answer (only if different)
                     if accumulated_text != last_sent_text:
-                        await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
+                        try:
+                            await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
+                        except Exception:
+                            # Markdown parse failed — send without formatting
+                            await temp_message.edit_text(accumulated_text)
                     answer = accumulated_text
 
                 except Exception as e:
                     logger.error(f"Streaming error: {e}", exc_info=True)
                     # Fallback to non-streaming
                     answer = await self.llm_service.generate_answer(query, results_for_llm)
-                    await temp_message.edit_text(answer, parse_mode="Markdown")
+                    try:
+                        await temp_message.edit_text(answer, parse_mode="Markdown")
+                    except Exception:
+                        await temp_message.edit_text(answer)
 
             # 8. Store assistant answer in conversation
             await self.cache_service.store_conversation_message(user_id, "assistant", answer)
