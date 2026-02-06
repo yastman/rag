@@ -52,37 +52,13 @@ class TestBotHybridSearch:
             mock_qdrant.assert_called_once()
             assert hasattr(bot, "qdrant_service")
 
-    def test_bot_has_bm42_url(self):
-        """Bot should have bm42_url for HTTP sparse embedding service."""
-        with (
-            patch("telegram_bot.bot.setup_throttling_middleware"),
-            patch("telegram_bot.bot.setup_error_middleware"),
-            patch("telegram_bot.bot.QdrantService"),
-            patch("telegram_bot.bot.VoyageService"),
-            patch("telegram_bot.bot.CacheService"),
-            patch("telegram_bot.bot.LLMService"),
-            patch("telegram_bot.bot.QueryAnalyzer"),
-            patch("telegram_bot.bot.UserContextService"),
-            patch("telegram_bot.bot.CESCPersonalizer"),
-        ):
-            from telegram_bot.bot import PropertyBot
-            from telegram_bot.config import BotConfig
-
-            config = BotConfig()
-            config.telegram_token = "test:token"
-            config.bm42_url = "http://bm42:8000"
-            bot = PropertyBot(config)
-
-            assert hasattr(bot, "bm42_url")
-            assert bot.bm42_url == "http://bm42:8000"
-
 
 class TestBotGetSparseVector:
     """Test sparse vector generation via HTTP."""
 
     @pytest.mark.asyncio
     async def test_get_sparse_vector_calls_http_service(self):
-        """_get_sparse_vector should call BM42 HTTP service."""
+        """_get_sparse_vector should call BGE-M3 HTTP service."""
         with (
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_middleware"),
@@ -109,7 +85,6 @@ class TestBotGetSparseVector:
 
             config = BotConfig()
             config.telegram_token = "test:token"
-            config.bm42_url = "http://bm42:8000"
             bot = PropertyBot(config)
 
             result = await bot._get_sparse_vector("test query")
@@ -140,7 +115,6 @@ class TestBotGetSparseVector:
 
             config = BotConfig()
             config.telegram_token = "test:token"
-            config.bm42_url = "http://bm42:8000"
             bot = PropertyBot(config)
 
             result = await bot._get_sparse_vector("test query")
