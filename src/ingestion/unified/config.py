@@ -44,11 +44,7 @@ class UnifiedConfig:
     voyage_api_key: str = field(default_factory=lambda: os.getenv("VOYAGE_API_KEY", ""))
     voyage_model: str = "voyage-4-large"
 
-    # BM42
-    bm42_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
-    bm42_url: str | None = field(default_factory=lambda: os.getenv("BM42_URL"))
-
-    # BGE-M3 API (alternative to Voyage)
+    # BGE-M3 API (dense + sparse embeddings)
     bge_m3_url: str = field(
         default_factory=lambda: os.getenv("BGE_M3_URL", "http://localhost:8000")
     )

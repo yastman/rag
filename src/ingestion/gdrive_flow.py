@@ -1,5 +1,7 @@
 """Google Drive ingestion watcher for rclone-synced folder.
 
+DEPRECATED: Use unified ingestion pipeline instead (src.ingestion.unified).
+
 Watches synced Drive folder (via rclone) and processes new/changed files:
 1. Detect changes via content hash + persistent state (sqlite)
 2. Chunk via docling-serve HybridChunker
@@ -15,6 +17,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import warnings
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +25,12 @@ from pathlib import Path
 from src.ingestion.docling_client import DoclingClient, DoclingConfig
 from src.ingestion.gdrive_indexer import GDriveIndexer
 
+
+warnings.warn(
+    "This module is deprecated. Use src.ingestion.unified instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 logger = logging.getLogger(__name__)
 

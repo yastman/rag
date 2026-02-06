@@ -181,7 +181,7 @@ services:
   # =============================================================================
 
   litellm:
-    image: ghcr.io/berriai/litellm:v1.81.3.rc.3
+    image: ghcr.io/berriai/litellm:main-v1.81.0-stable
     container_name: vps-litellm
     restart: unless-stopped
     logging: *default-logging
@@ -278,12 +278,8 @@ services:
       - BGE_M3_URL=http://bge-m3:8000
       - BGE_M3_TIMEOUT=600
       - BGE_M3_CONCURRENCY=1
-      - BM42_URL=http://bm42:8000
     volumes:
       - ${GDRIVE_SYNC_DIR:-~/drive-sync}:/data/drive-sync:ro
-      # Dev: mount source for hot-reload without rebuild
-      - ./src:/app/src:ro
-      - ./telegram_bot:/app/telegram_bot:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -292,8 +288,6 @@ services:
       docling:
         condition: service_healthy
       bge-m3:
-        condition: service_healthy
-      bm42:
         condition: service_healthy
     deploy:
       resources:

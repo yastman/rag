@@ -1,5 +1,7 @@
 """Google Drive document indexer with hybrid search and replace semantics.
 
+DEPRECATED: Use unified ingestion pipeline instead (src.ingestion.unified).
+
 Indexes documents from synced Google Drive folder into Qdrant with:
 - Voyage AI dense embeddings (1024-dim)
 - FastEmbed BM42 sparse vectors
@@ -11,6 +13,7 @@ import logging
 import os
 import time
 import uuid
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -27,6 +30,12 @@ from qdrant_client.models import (
 from src.ingestion.chunker import Chunk
 from telegram_bot.services import VoyageService
 
+
+warnings.warn(
+    "This module is deprecated. Use src.ingestion.unified instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 logger = logging.getLogger(__name__)
 
