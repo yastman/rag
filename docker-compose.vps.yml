@@ -232,6 +232,12 @@ services:
         condition: service_healthy
       litellm:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, signal; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
