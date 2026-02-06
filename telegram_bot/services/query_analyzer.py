@@ -106,37 +106,65 @@ class QueryAnalyzer:
             result = response.json()
             content = result["choices"][0]["message"]["content"]
 
+            # Guard against None content (some models return null in thinking mode)
+            if content is None:
+                logger.warning(
+                    "QueryAnalyzer: LLM returned None content. finish_reason=%s, model=%s",
+                    result["choices"][0].get("finish_reason", "unknown"),
+                    result.get("model", self.model),
+                )
+                return {"filters": {}, "semantic_query": query}
+
             # Parse JSON with fallback
             try:
                 analysis = json.loads(content)
-                filters = analysis.get("filters", {})
-                semantic_query = analysis.get("semantic_query", query)
-
-                logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
-
-                # Track completion
-                langfuse.update_current_generation(
-                    output={
-                        "filters": filters,
-                        "has_semantic": bool(semantic_query),
-                    },
-                    usage_details={
-                        "input": result.get("usage", {}).get("prompt_tokens", 0),
-                        "output": result.get("usage", {}).get("completion_tokens", 0),
-                    },
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.error(
+                    "QueryAnalyzer: failed to parse LLM response as JSON: %s. "
+                    "Raw content (first 500 chars): %s",
+                    e,
+                    content[:500],
                 )
-
-                return {"filters": filters, "semantic_query": semantic_query}
-
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON from QueryAnalyzer: {e}")
-                logger.error(f"Raw content: {content}")
-                # Fallback: no filters, use original query
                 return {"filters": {}, "semantic_query": query}
 
+            # Guard against non-dict responses (e.g. LLM returns "null" or a list)
+            if not isinstance(analysis, dict):
+                logger.warning(
+                    "QueryAnalyzer: LLM returned non-dict JSON: type=%s, value=%s",
+                    type(analysis).__name__,
+                    str(analysis)[:200],
+                )
+                return {"filters": {}, "semantic_query": query}
+
+            filters = analysis.get("filters", {})
+            semantic_query = analysis.get("semantic_query", query)
+
+            logger.info("QueryAnalyzer: filters=%s, semantic_query=%s", filters, semantic_query)
+
+            # Track completion
+            langfuse.update_current_generation(
+                output={
+                    "filters": filters,
+                    "has_semantic": bool(semantic_query),
+                },
+                usage_details={
+                    "input": result.get("usage", {}).get("prompt_tokens", 0),
+                    "output": result.get("usage", {}).get("completion_tokens", 0),
+                },
+            )
+
+            return {"filters": filters, "semantic_query": semantic_query}
+
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                "QueryAnalyzer HTTP error: %s %s, body=%s",
+                e.response.status_code,
+                e.response.reason_phrase,
+                e.response.text[:300],
+            )
+            return {"filters": {}, "semantic_query": query}
         except Exception as e:
-            logger.error(f"QueryAnalyzer error: {e}", exc_info=True)
-            # Fallback: no filters, use original query
+            logger.error("QueryAnalyzer error: %s", e, exc_info=True)
             return {"filters": {}, "semantic_query": query}
 
     async def close(self):
