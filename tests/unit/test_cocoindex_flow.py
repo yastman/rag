@@ -87,9 +87,7 @@ class TestVoyageEmbedFunction:
 
         # Mock the VoyageService
         mock_service = MagicMock()
-        mock_service.embed_documents = AsyncMock(
-            return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
-        )
+        mock_service.embed_documents = AsyncMock(return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
         func._service = mock_service
 
         with patch("asyncio.run", side_effect=lambda _coro: [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]):
