@@ -3,6 +3,12 @@
 # Stop:  docker compose -f docker-compose.dev.yml down
 # Reset: docker compose -f docker-compose.dev.yml down -v
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   # =============================================================================
   # DATABASES
@@ -12,6 +18,7 @@ services:
     image: pgvector/pgvector:pg17
     container_name: dev-postgres
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:5432:5432"
     environment:
@@ -32,6 +39,7 @@ services:
     image: redis:8.4.0
     container_name: dev-redis
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:6379:6379"
     command: >
@@ -52,6 +60,7 @@ services:
     image: qdrant/qdrant:v1.16
     container_name: dev-qdrant
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:6333:6333"
       - "127.0.0.1:6334:6334"
@@ -75,14 +84,17 @@ services:
       context: ./services/bge-m3-api
       dockerfile: Dockerfile
     container_name: dev-bge-m3
-    profiles: ["ai", "full"]
+    restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - bge_models:/models
+      - hf_cache:/models
     environment:
-      OMP_NUM_THREADS: 4
-      MKL_NUM_THREADS: 4
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-4}
+      MKL_NUM_THREADS: ${MKL_NUM_THREADS:-4}
+      HF_HOME: /models/hf
+      TRANSFORMERS_CACHE: /models/hf
       MODEL_CACHE_DIR: /models
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
@@ -95,32 +107,21 @@ services:
         limits:
           memory: 4G
 
-  bm42:
-    build:
-      context: ./services/bm42
-      dockerfile: Dockerfile
-    container_name: dev-bm42
-    ports:
-      - "127.0.0.1:8002:8000"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-
   user-base:
     build:
       context: ./services/user-base
       dockerfile: Dockerfile
     container_name: dev-user-base
-    profiles: ["ai", "full"]
+    restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:8003:8000"
+    volumes:
+      - hf_cache:/models
+    environment:
+      HF_HOME: /models/hf
+      TRANSFORMERS_CACHE: /models/hf
+      SENTENCE_TRANSFORMERS_HOME: /models/sentence-transformers
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 30s
@@ -133,8 +134,12 @@ services:
           memory: 2G
 
   docling:
-    image: ghcr.io/docling-project/docling-serve-cpu@sha256:4e93e8ec95accd74474a60d0cbbd1292b333bba2c53bb43074ae966d3f1becc8
+    build:
+      context: ./services/docling
+      dockerfile: Dockerfile
     container_name: dev-docling
+    restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:5001:5001"
     environment:
@@ -146,6 +151,7 @@ services:
       DOCLING_TABLE_MODE: accurate
     volumes:
       - ./data/docling:/data
+      - docling_cache:/app/.cache/huggingface
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
       interval: 30s
@@ -606,7 +612,8 @@ volumes:
   postgres_data:
   redis_data:
   qdrant_data:
-  bge_models:
+  hf_cache:
+  docling_cache:
   lightrag_data:
   mlflow_artifacts:
   clickhouse_data:
