@@ -275,6 +275,7 @@ class TestBaselineSearchEngineAcorn:
         """Test that search with filter enables ACORN in search params."""
         with patch("src.retrieval.search_engines.QdrantClient", return_value=mock_qdrant_client):
             engine = BaselineSearchEngine(mock_settings_acorn_on)
+            engine.client = mock_qdrant_client
 
             query_filter = models.Filter(
                 must=[
@@ -305,6 +306,7 @@ class TestBaselineSearchEngineAcorn:
         """Test that search without filter does not enable ACORN."""
         with patch("src.retrieval.search_engines.QdrantClient", return_value=mock_qdrant_client):
             engine = BaselineSearchEngine(mock_settings_acorn_on)
+            engine.client = mock_qdrant_client
 
             engine.search(
                 query_embedding=[0.1] * 1024,
