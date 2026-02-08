@@ -4,11 +4,11 @@
 [![Ruff](https://img.shields.io/badge/linter-ruff-green.svg)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Production RAG system with hybrid search (RRF + ColBERT), Voyage AI embeddings, and Telegram bot.
+Production RAG system with hybrid search (RRF + ColBERT rerank), BGE-M3 embeddings (local CPU), multi-level caching, and Telegram bot.
 
 ## Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - [uv](https://docs.astral.sh/uv/) package manager
 
 ## Quick Start
