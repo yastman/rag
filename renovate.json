@@ -1,6 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "docker:enableMajor", ":gitSignOff"],
+  "extends": [
+    "config:best-practices",
+    "docker:enableMajor"
+  ],
   "mode": "default",
 
   "schedule": ["before 9am on monday"],
@@ -10,6 +13,11 @@
   "platformAutomerge": true,
   "prHourlyLimit": 5,
   "labels": ["dependencies"],
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
 
   "pre-commit": {
     "enabled": true
@@ -44,7 +52,8 @@
       "description": "LiteLLM - allow unstable versions (they use rc tags)",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/berriai/litellm"],
-      "ignoreUnstable": false
+      "ignoreUnstable": false,
+      "versioning": "loose"
     },
     {
       "description": "AI Services - group docling and lightrag",
@@ -67,9 +76,10 @@
       "groupName": "monitoring"
     },
     {
-      "description": "MinIO - track release tags",
+      "description": "MinIO - regex versioning for RELEASE.YYYY-MM-DD tags",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["minio/minio"],
+      "versioning": "regex:^RELEASE\\.(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})T\\d{2}-\\d{2}-\\d{2}Z$",
       "groupName": "storage"
     },
     {
