@@ -182,6 +182,111 @@ class TestCommandHandlers:
     @patch("telegram_bot.bot.LLMService")
     @patch("telegram_bot.bot.UserContextService")
     @patch("telegram_bot.bot.CESCPersonalizer")
+    async def test_cmd_cache_stats(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test /cache_stats command returns Redis diagnostics."""
+        mock_cache_instance = MagicMock()
+        mock_cache_instance.get_redis_diagnostics = AsyncMock(
+            return_value={
+                "used_memory_human": "1.50M",
+                "maxmemory_human": "100.00M",
+                "maxmemory_policy": "allkeys-lru",
+                "evicted_keys": 0,
+                "connected_clients": 3,
+                "redis_version": "7.2.4",
+                "hit_rate": 85.5,
+                "keyspace_hits": 171,
+                "keyspace_misses": 29,
+                "total_keys": 42,
+                "semantic_threshold": 0.12,
+                "semantic_ttl_default": 3600,
+                "prefix_counts": {
+                    "rag:cache:semantic:": 10,
+                    "rag:cache:embedding:": 20,
+                    "rag:cache:search:": 12,
+                },
+            }
+        )
+        mock_cache.return_value = mock_cache_instance
+
+        bot = PropertyBot(mock_config)
+
+        message = MagicMock()
+        message.answer = AsyncMock()
+
+        await bot.cmd_cache_stats(message)
+
+        mock_cache_instance.get_redis_diagnostics.assert_called_once()
+        message.answer.assert_called_once()
+        call_args = message.answer.call_args
+        text = call_args[0][0]
+        assert "Redis Diagnostics" in text
+        assert "1.50M" in text
+        assert "85.5" in text
+        assert "allkeys-lru" in text
+        assert "Semantic Cache" in text
+        assert "0.12" in text
+        assert call_args[1]["parse_mode"] == "Markdown"
+
+    @pytest.mark.asyncio
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
+    async def test_cmd_cache_stats_error(
+        self,
+        mock_cesc,
+        mock_user_ctx,
+        mock_llm,
+        mock_qdrant,
+        mock_voyage,
+        mock_analyzer,
+        mock_cache,
+        mock_bot,
+        mock_config,
+    ):
+        """Test /cache_stats returns error message when Redis is unavailable."""
+        mock_cache_instance = MagicMock()
+        mock_cache_instance.get_redis_diagnostics = AsyncMock(
+            return_value={"error": "Connection refused"}
+        )
+        mock_cache.return_value = mock_cache_instance
+
+        bot = PropertyBot(mock_config)
+
+        message = MagicMock()
+        message.answer = AsyncMock()
+
+        await bot.cmd_cache_stats(message)
+
+        message.answer.assert_called_once()
+        text = message.answer.call_args[0][0]
+        assert "error" in text.lower()
+        assert "Connection refused" in text
+
+    @pytest.mark.asyncio
+    @patch("telegram_bot.bot.Bot")
+    @patch("telegram_bot.bot.CacheService")
+    @patch("telegram_bot.bot.QueryAnalyzer")
+    @patch("telegram_bot.bot.VoyageService")
+    @patch("telegram_bot.bot.QdrantService")
+    @patch("telegram_bot.bot.LLMService")
+    @patch("telegram_bot.bot.UserContextService")
+    @patch("telegram_bot.bot.CESCPersonalizer")
     async def test_cmd_stats(
         self,
         mock_cesc,
