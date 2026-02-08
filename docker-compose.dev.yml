@@ -512,7 +512,7 @@ services:
           memory: 512M
 
   # =============================================================================
-  # TELEGRAM BOT (Voyage AI powered)
+  # TELEGRAM BOT (Local BGE-M3 embeddings — matches VPS production)
   # =============================================================================
 
   bot:
@@ -521,41 +521,47 @@ services:
       dockerfile: telegram_bot/Dockerfile
     container_name: dev-bot
     profiles: ["bot", "full"]
+    restart: unless-stopped
+    logging: *default-logging
     environment:
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
-      ***REMOVED*** AI
-      VOYAGE_API_KEY: ${VOYAGE_API_KEY:?VOYAGE_API_KEY is required}
-      VOYAGE_EMBED_MODEL: ${VOYAGE_EMBED_MODEL:-voyage-3-large}
-      VOYAGE_CACHE_MODEL: ${VOYAGE_CACHE_MODEL:-voyage-3-lite}
-      VOYAGE_RERANK_MODEL: ${VOYAGE_RERANK_MODEL:-rerank-2}
+      # Local embeddings (matches VPS production)
+      RETRIEVAL_DENSE_PROVIDER: bge_m3_api
+      RETRIEVAL_SPARSE_PROVIDER: bge_m3_api
+      RERANK_PROVIDER: colbert
+      BGE_M3_URL: http://bge-m3:8000
+      BGE_M3_TIMEOUT: "${BGE_M3_TIMEOUT:-120}"
+      COLBERT_TIMEOUT: "${COLBERT_TIMEOUT:-120}"
+      RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
+      # Semantic cache
+      USE_LOCAL_EMBEDDINGS: "true"
+      USER_BASE_URL: http://user-base:8000
+      # Services
+      REDIS_URL: redis://redis:6379
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
       # LLM (via LiteLLM Proxy)
       LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
-      # Services (Docker internal network)
-      REDIS_URL: redis://redis:6379
-      QDRANT_URL: http://qdrant:6333
-      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-contextual_bulgaria_voyage}
-      BM42_URL: http://bm42:8000
-      USER_BASE_URL: http://user-base:8000
-      # Cache settings
-      CACHE_SIMILARITY_THRESHOLD: ${CACHE_SIMILARITY_THRESHOLD:-0.95}
     depends_on:
       redis:
         condition: service_healthy
       qdrant:
         condition: service_healthy
-      bm42:
+      bge-m3:
+        condition: service_healthy
+      user-base:
         condition: service_healthy
       litellm:
         condition: service_healthy
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, signal; os.kill(1, 0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
