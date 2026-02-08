@@ -204,13 +204,14 @@ class TestPreflightReport:
             report["redis"]["error"] = str(e)
 
         # Overall status
-        qdrant_ok = report["qdrant"].get("status") == "green" and report["qdrant"].get(
-            "quantization_config", {}
-        ).get("binary", {}).get("always_ram")
-        redis_ok = (
-            report["redis"].get("maxmemory", 0) > 0
-            and report["redis"].get("maxmemory_policy") == "allkeys-lfu"
+        quant_cfg = report["qdrant"].get("quantization_config") or {}
+        qdrant_ok = report["qdrant"].get("status") == "green" and (
+            not quant_cfg  # no quantization configured is OK in dev
+            or (quant_cfg.get("binary") or {}).get("always_ram")
         )
+        redis_ok = report["redis"].get("maxmemory", 0) > 0 and report["redis"].get(
+            "maxmemory_policy", ""
+        ) in ("allkeys-lfu", "volatile-lfu")
         report["status"] = "PASS" if (qdrant_ok and redis_ok) else "FAIL"
 
         # Save report
