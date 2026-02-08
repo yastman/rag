@@ -1,34 +1,34 @@
-# syntax=docker/dockerfile:1.4
-# USER-base Embedding Service - Optimized with uv
+# syntax=docker/dockerfile:1
+# USER-base Embedding Service — uv sync (2026 best practices)
 
 # ====== BUILD STAGE ======
-FROM python:3.12-slim AS builder
-
-COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_SYSTEM_PYTHON=1
+    UV_PYTHON_DOWNLOADS=0
 
-# CPU-only torch
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+WORKDIR /app
 
-COPY requirements.txt .
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && apt-get install -y --no-install-recommends gcc g++ libgomp1
+
+# Deps layer
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install -r requirements.txt
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv sync --frozen --no-dev --no-install-project
+
+# Code layer (single-file app, no package to install)
+COPY pyproject.toml uv.lock ./
+COPY main.py ./
 
 # ====== RUNTIME STAGE ======
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgomp1 \
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 1001 appgroup && \
@@ -36,18 +36,21 @@ RUN groupadd -g 1001 appgroup && \
 
 WORKDIR /app
 
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder --chown=appuser:appgroup /app/.venv /app/.venv
+COPY --from=builder --chown=appuser:appgroup /app/main.py ./
 
-ENV HF_HOME=/models/hf \
+ENV PATH="/app/.venv/bin:$PATH" \
+    HF_HOME=/models/hf \
     TRANSFORMERS_CACHE=/models/hf \
     SENTENCE_TRANSFORMERS_HOME=/models/sentence-transformers \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-COPY --chown=appuser:appgroup main.py .
-
 USER appuser
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)" || exit 1
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
