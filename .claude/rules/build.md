@@ -4,7 +4,7 @@ paths: "Makefile, pyproject.toml, uv.lock, .pre-commit-config.yaml"
 
 # Build & Tooling
 
-Project uses **uv** package manager with **Ruff v0.14.14** linter/formatter and **pre-commit v4.5.1** hooks.
+Project uses **uv 0.10.0** package manager with **Ruff v0.14.14** linter/formatter and **pre-commit v4.5.1** hooks.
 
 ## Package Management
 
@@ -79,6 +79,24 @@ git commit --no-verify -m "feat: ... (skip hooks: pre-existing E402)"
 - Ensures reproducible builds across dev/CI/prod
 - Regenerate after pyproject.toml changes: `uv lock`
 - Verify in CI: `uv lock --check`
+
+## Service-level pyproject.toml
+
+Each Docker service with custom code has its own `pyproject.toml` + `uv.lock`:
+
+| Service | pyproject.toml | uv.lock |
+|---------|---------------|---------|
+| Bot | `telegram_bot/pyproject.toml` | `telegram_bot/uv.lock` |
+| BGE-M3 | `services/bge-m3-api/pyproject.toml` | `services/bge-m3-api/uv.lock` |
+| USER-base | `services/user-base/pyproject.toml` | `services/user-base/uv.lock` |
+| Ingestion | `pyproject.toml` (root) | `uv.lock` (root) |
+
+After changing service dependencies:
+```bash
+cd telegram_bot && uv lock        # Regenerate service lockfile
+cd services/bge-m3-api && uv lock
+cd services/user-base && uv lock
+```
 
 ## Dependencies
 
