@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
-# Root Dockerfile — uv SDK pattern (mirrors telegram_bot/Dockerfile)
+# Root Dockerfile — uv sync pattern (mirrors telegram_bot/Dockerfile)
 
 # ====== BUILD STAGE ======
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -10,37 +10,43 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Install build dependencies with apt cache mount
+# Install build deps
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    gcc
+    apt-get update && apt-get install -y --no-install-recommends gcc g++
 
-# Install Python dependencies (bind mount — no COPY layer)
+# Deps layer (cached separately from code)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=requirements.txt,target=requirements.txt \
-    uv venv /opt/venv && \
-    VIRTUAL_ENV=/opt/venv uv pip install -r requirements.txt
+    --mount=type=bind,source=telegram_bot/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=telegram_bot/uv.lock,target=uv.lock \
+    uv sync --frozen --no-dev --no-install-project
+
+# Code layer
+COPY telegram_bot/pyproject.toml telegram_bot/uv.lock ./
+COPY telegram_bot/ ./telegram_bot/
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 # ====== RUNTIME STAGE ======
 FROM python:3.12-slim-bookworm AS runtime
 
 WORKDIR /app
 
-# Create non-root user before COPY --chown
 RUN groupadd -g 1001 botgroup && \
     useradd -u 1001 -g botgroup -m -s /bin/false botuser
 
-# Copy virtual environment from builder (--chown avoids extra layer)
-COPY --from=builder --chown=botuser:botgroup /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH" \
+COPY --from=builder --chown=botuser:botgroup /app/.venv /app/.venv
+COPY --chown=botuser:botgroup telegram_bot/ ./telegram_bot/
+
+ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# Copy application code (changes most often — last layer)
-COPY --chown=botuser:botgroup . .
-
 USER botuser
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import os, signal; os.kill(1, 0)" || exit 1
 
 CMD ["python", "-m", "telegram_bot.main"]
