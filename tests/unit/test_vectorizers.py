@@ -8,7 +8,7 @@ try:
 except (ImportError, ModuleNotFoundError, ValueError):
     pytest.skip("redisvl not installed", allow_module_level=True)
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 
@@ -37,13 +37,13 @@ class TestUserBaseVectorizer:
     async def test_get_client_creates_httpx_client(self):
         """Should create httpx.AsyncClient on first call."""
         vectorizer = UserBaseVectorizer()
-        assert vectorizer._client is None
+        assert vectorizer._async_client is None
 
-        client = await vectorizer._get_client()
+        client = await vectorizer._get_async_client()
 
         assert client is not None
         assert isinstance(client, httpx.AsyncClient)
-        assert vectorizer._client is client
+        assert vectorizer._async_client is client
 
         # Cleanup
         await vectorizer.aclose()
@@ -52,8 +52,8 @@ class TestUserBaseVectorizer:
         """Should reuse existing client on subsequent calls."""
         vectorizer = UserBaseVectorizer()
 
-        client1 = await vectorizer._get_client()
-        client2 = await vectorizer._get_client()
+        client1 = await vectorizer._get_async_client()
+        client2 = await vectorizer._get_async_client()
 
         assert client1 is client2
 
@@ -70,7 +70,7 @@ class TestUserBaseVectorizer:
 
         mock_client = AsyncMock()
         mock_client.post.return_value = mock_response
-        vectorizer._client = mock_client
+        vectorizer._async_client = mock_client
 
         result = await vectorizer.aembed("тестовый запрос")
 
@@ -88,7 +88,7 @@ class TestUserBaseVectorizer:
 
         mock_client = AsyncMock()
         mock_client.post.return_value = mock_response
-        vectorizer._client = mock_client
+        vectorizer._async_client = mock_client
 
         texts = ["текст один", "текст два"]
         result = await vectorizer.aembed_many(texts)
@@ -99,51 +99,69 @@ class TestUserBaseVectorizer:
         mock_client.post.assert_called_once_with("/embed_batch", json={"texts": texts})
 
     def test_embed_sync_wrapper(self):
-        """Should call aembed via asyncio.run."""
+        """Should use sync httpx client to get embedding."""
         vectorizer = UserBaseVectorizer()
 
-        with patch.object(vectorizer, "aembed", return_value=[0.1] * 768):
-            with patch("telegram_bot.services.vectorizers.asyncio.run") as mock_run:
-                mock_run.return_value = [0.1] * 768
-                result = vectorizer.embed("тест")
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"embedding": [0.1] * 768}
+        mock_response.raise_for_status = MagicMock()
 
-                mock_run.assert_called_once()
-                assert result == [0.1] * 768
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        vectorizer._sync_client = mock_client
+
+        result = vectorizer.embed("тест")
+
+        assert result == [0.1] * 768
+        mock_client.post.assert_called_once_with("/embed", json={"text": "тест"})
 
     def test_embed_many_sync_wrapper(self):
-        """Should call aembed_many via asyncio.run."""
+        """Should use sync httpx client to get embeddings."""
         vectorizer = UserBaseVectorizer()
 
-        with patch.object(vectorizer, "aembed_many", return_value=[[0.1] * 768, [0.2] * 768]):
-            with patch("telegram_bot.services.vectorizers.asyncio.run") as mock_run:
-                mock_run.return_value = [[0.1] * 768, [0.2] * 768]
-                result = vectorizer.embed_many(["тест1", "тест2"])
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"embeddings": [[0.1] * 768, [0.2] * 768]}
+        mock_response.raise_for_status = MagicMock()
 
-                mock_run.assert_called_once()
-                assert len(result) == 2
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_response
+        vectorizer._sync_client = mock_client
+
+        result = vectorizer.embed_many(["тест1", "тест2"])
+
+        assert len(result) == 2
+        mock_client.post.assert_called_once_with("/embed_batch", json={"texts": ["тест1", "тест2"]})
 
     async def test_aclose_closes_client(self):
-        """Should close httpx client and set to None."""
+        """Should close httpx clients and set to None."""
         vectorizer = UserBaseVectorizer()
 
-        # Create a client first
-        mock_client = AsyncMock()
-        vectorizer._client = mock_client
+        # Create async client
+        mock_async_client = AsyncMock()
+        vectorizer._async_client = mock_async_client
+
+        # Create sync client
+        mock_sync_client = MagicMock()
+        vectorizer._sync_client = mock_sync_client
 
         await vectorizer.aclose()
 
-        mock_client.aclose.assert_called_once()
-        assert vectorizer._client is None
+        mock_async_client.aclose.assert_called_once()
+        mock_sync_client.close.assert_called_once()
+        assert vectorizer._async_client is None
+        assert vectorizer._sync_client is None
 
     async def test_aclose_does_nothing_if_no_client(self):
-        """Should not raise if client is None."""
+        """Should not raise if clients are None."""
         vectorizer = UserBaseVectorizer()
-        assert vectorizer._client is None
+        assert vectorizer._async_client is None
+        assert vectorizer._sync_client is None
 
         # Should not raise
         await vectorizer.aclose()
 
-        assert vectorizer._client is None
+        assert vectorizer._async_client is None
+        assert vectorizer._sync_client is None
 
 
 class TestUserBaseVectorizerRedisVL:
