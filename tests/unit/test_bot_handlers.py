@@ -752,6 +752,7 @@ class TestBotStart:
     """Test bot start method."""
 
     @pytest.mark.asyncio
+    @patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock)
     @patch("telegram_bot.bot.Bot")
     @patch("telegram_bot.bot.CacheService")
     @patch("telegram_bot.bot.QueryAnalyzer")
@@ -770,6 +771,7 @@ class TestBotStart:
         mock_analyzer,
         mock_cache,
         mock_bot,
+        mock_check_deps,
         mock_config,
     ):
         """Test that start() initializes cache."""
@@ -780,6 +782,8 @@ class TestBotStart:
         bot = PropertyBot(mock_config)
         bot.dp = MagicMock()
         bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
 
         await bot.start()
 
@@ -787,6 +791,7 @@ class TestBotStart:
         bot.dp.start_polling.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock)
     @patch("telegram_bot.bot.Bot")
     @patch("telegram_bot.bot.CacheService")
     @patch("telegram_bot.bot.QueryAnalyzer")
@@ -805,6 +810,7 @@ class TestBotStart:
         mock_analyzer,
         mock_cache,
         mock_bot,
+        mock_check_deps,
         mock_config,
     ):
         """Test that start() skips cache init if already done."""
@@ -816,6 +822,8 @@ class TestBotStart:
         bot._cache_initialized = True  # Already initialized
         bot.dp = MagicMock()
         bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
 
         await bot.start()
 
