@@ -21,7 +21,6 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 | dev-mlflow | 5000 | Experiment tracking |
 | dev-user-base | 8003 | Russian embeddings (deepvk/USER2-base) |
 | dev-bge-m3 | 8000 | BGE-M3 dense+sparse embeddings |
-| dev-bm42 | 8002 | BM42 sparse embeddings (FastEmbed) |
 | dev-docling | 5001 | Document parsing (PDF/DOCX/CSV) |
 | dev-lightrag | 9621 | LightRAG graph-based retrieval |
 
@@ -75,7 +74,6 @@ ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.v
 | docling | Document parsing | 2GB |
 | bge-m3 | Dense embeddings + ColBERT rerank | 4GB |
 | user-base | Semantic cache (USER2-base) | 2GB |
-| bm42 | Sparse embeddings (deprecated, orphan container) | 1GB |
 | litellm | LLM gateway | 512MB |
 | bot | Telegram bot | 512MB |
 | ingestion | CocoIndex pipeline (profile: ingest) | 512MB |
@@ -273,12 +271,34 @@ Claude понимает: прочитать план, запустить `spawn-
 **Verification:**
 ```bash
 docker compose --compatibility -f docker-compose.dev.yml config --quiet
-docker inspect dev-bm42 --format '{{.HostConfig.Memory}}'  # != 0
+docker inspect dev-bge-m3 --format '{{.HostConfig.Memory}}'  # != 0
 docker inspect dev-litellm --format '{{json .HostConfig.LogConfig}}'  # max-size: 50m
 TELEGRAM_BOT_TOKEN= make docker-bot-up  # Must fail with "is required"
 ```
 
 **Plan:** `docs/plans/2026-02-04-docker-hardening.md`
+
+**Phase 3 — UV Migration (Feb 2026):**
+
+| Service | Change |
+|---------|--------|
+| Bot | `uv pip install -r requirements.txt` → `uv sync --frozen --no-dev` + `pyproject.toml` |
+| BGE-M3 | `uv pip install -r requirements.txt` → `uv sync --frozen --no-dev` + `uv.lock` |
+| USER-base | `uv pip install -r requirements.txt` → `uv sync --frozen --no-dev` + `pyproject.toml` |
+| Ingestion | uv 0.5.18 → uv 0.10 pin |
+| Healthchecks | `curl -f` → `python urllib.request` (compose files) |
+
+**Docker pattern (all custom services):**
+```dockerfile
+FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim AS builder
+RUN uv sync --frozen --no-dev --no-install-project  # deps layer
+COPY . .
+RUN uv sync --frozen --no-dev                        # code layer
+FROM python:3.12-slim-bookworm AS runtime
+COPY --from=builder /app/.venv /app/.venv
+```
+
+**Plan:** `docs/plans/2026-02-08-uv-docker-migration.md`
 
 ## Loki Rules Mount (Feb 2026)
 
