@@ -1,109 +1,110 @@
 ---
 name: dependency-updates
-description: Use when managing Renovate dependency PRs, reviewing updates, or merging safe dependency changes. Invoke with /deps command.
+description: "Use when checking project freshness, reviewing outdated packages, auditing Docker image versions, or managing Renovate PRs. Triggers on /deps, 'обновления', 'проверь версии', 'what is outdated', 'dependency audit', 'check updates'"
 ---
 
 # Dependency Updates
 
-Interactive assistant for Renovate dependency management.
+Full project audit via **Mend Renovate** — tracks Python, Docker, GH Actions automatically.
 
-## Overview
+**Dashboard:** [developer.mend.io/github/yastman/rag](https://developer.mend.io/github/yastman/rag)
 
-Analyzes Renovate PRs, categorizes by risk level, recommends safe updates, executes merges with test verification.
+## How It Works
 
-**Trigger:** `/deps` command
+Mend Renovate is installed as a GitHub App. It scans the repo on schedule (Monday before 9:00 Kyiv) and:
 
-**Workflow:**
-1. Fetch Renovate PRs
-2. Categorize: Safe → Medium → Risky
-3. Show recommendations
-4. Wait for user choice
-5. Merge approved PRs
-6. Run tests
-7. Report results
+1. Detects all dependencies across all tracked files
+2. Creates PRs for available updates
+3. Auto-merges patches and safe minor updates
+4. Groups related updates (databases, ml-platform, ai-services)
+
+**Config:** `renovate.json` in repo root.
+
+## What's Tracked
+
+| Layer | Files | Examples |
+|-------|-------|---------|
+| Docker Compose | `docker-compose.{dev,local,vps}.yml` | redis, qdrant, litellm, langfuse, loki, promtail |
+| Dockerfiles | `Dockerfile*`, `services/*/Dockerfile` | python base, uv, docker/dockerfile syntax |
+| Python (pyproject) | `pyproject.toml` | cocoindex, docling, langfuse, ragas, deepeval |
+| Python (requirements) | `requirements.txt`, `services/*/requirements.txt`, `telegram_bot/requirements.txt` | aiogram, transformers, FlagEmbedding, qdrant-client |
+| GH Actions | `.github/workflows/*.yml` | actions/checkout, astral-sh/setup-uv |
+
+## Check Status
+
+```bash
+# Dependency Dashboard issue (full overview)
+gh issue view 11
+
+# Open Renovate PRs
+gh pr list --author "renovate[bot]" --json number,title,state,mergeable
+
+# Trigger manual re-scan
+# → check the checkbox at bottom of issue #11
+```
+
+## Auto-merge Rules (renovate.json)
+
+| Rule | What | Auto-merge |
+|------|------|-----------|
+| All patches | `1.2.3 → 1.2.4` | Yes |
+| Database minor | pgvector, redis, qdrant | Yes |
+| ML Platform | litellm, langfuse, mlflow | No (grouped PR) |
+| AI Services | docling, lightrag | No (grouped PR) |
+| Python base | `3.12 → 3.14` | No |
+
+## Reviewing Updates
+
+```bash
+# View specific PR diff
+gh pr view {number}
+gh pr diff {number}
+
+# Merge a PR
+gh pr merge {number} --squash
+
+# Request rebase
+gh pr comment {number} --body "@renovate rebase"
+
+# Force all awaiting PRs to create now
+# → check "Create all awaiting schedule PRs" in issue #11
+```
 
 ## Risk Categories
 
-### ✅ SAFE (auto-recommend)
-- Patch versions: `1.2.3 → 1.2.4`
-- GitHub Actions patch/minor
-- Stable libs: pydantic, httpx, uvicorn, python-dotenv, prometheus-client
+| Risk | Criteria | Action |
+|------|----------|--------|
+| SAFE | Auto-merged patches, grouped minor | Already handled |
+| MEDIUM | Minor of ML/AI libs, Docker minor | Review PR diff, merge |
+| RISKY | Major bumps (open PRs) | Test in branch before merge |
+| CRITICAL | EOL, security vulns | Prioritize immediately |
 
-### ⚠️ MEDIUM (ask user)
-- Minor versions: `1.2.0 → 1.3.0`
-- Docker images minor
-- ML libs: torch, transformers, sentence-transformers
+### Known Breaking (project-specific)
 
-### ❌ RISKY (warn)
-- Major versions: `1.x → 2.x`
-- Python base: `3.12 → 3.14`
-- Known breaking: numpy v2, langfuse v3
+numpy v2, transformers v5, huggingface-hub 1.x, pandas 3.0, sentence-transformers v5, Python 3.14
 
-## Commands
+### Known Safe (fast-track)
 
-### Fetch PRs
+pydantic, httpx, uvicorn, aiogram 3.x, qdrant-client 1.x, langfuse 3.x, cocoindex 0.3.x, fastapi 0.128.x, sentry-sdk, tenacity, tqdm, rich
+
+## After Merging
+
 ```bash
-gh pr list --author "renovate[bot]" --json number,title,state --jq '.[] | select(.state == "OPEN")'
-```
+# Pull merged changes
+git pull
 
-### Merge PR
-```bash
-gh pr merge {number} --squash
-```
+# Sync lock file
+uv sync
 
-### Request Rebase
-```bash
-gh pr comment {number} --body "@renovate rebase"
-```
-
-### Run Tests
-```bash
+# Run tests
 pytest tests/unit/ -q
+make check
 ```
 
-## User Input
+## Common Mistakes
 
-| Input | Action |
-|-------|--------|
-| `y` | Merge all SAFE PRs |
-| `n` | Cancel |
-| `18,19,21` | Merge specific PR numbers |
-| `all` | Merge SAFE + MEDIUM |
-| `rebase` | Request rebase for conflicting PRs |
-| `skip` | Show list without merging |
-
-## Output Format
-
-```
-📦 Dependency Updates
-
-✅ SAFE (3 PRs) — recommend merge:
-   #18 httpx 0.28.1
-   #19 prometheus-client 0.24.1
-   #21 pydantic-settings 2.12.0
-
-⚠️ MEDIUM (2 PRs) — check changelog:
-   #13 mlflow v2.22.4
-   #24 qdrant-client 1.16.2
-
-❌ RISKY (2 PRs) — skip unless needed:
-   #22 python 3.14 (major)
-   #35 numpy v2 (breaking)
-
-⚠️ CONFLICTS (1 PR):
-   #20 pydantic 2.12.5
-
-Merge? [y/n/numbers/rebase]
-```
-
-## Post-Merge
-
-1. Run tests: `pytest tests/unit/ -q`
-2. If tests fail:
-   - Show failed test names
-   - Offer: "Revert last merge? [y/n]"
-3. Show summary:
-   ```
-   ✅ Done: 3 merged, 0 failed tests
-   ⏭️ Skipped: 2 risky, 1 conflict
-   ```
+- **Merging ML major bumps without testing** — transformers v5 / sentence-transformers v5 can break HybridChunker and BGE-M3
+- **Forgetting VPS compose** — Renovate tracks `docker-compose.vps.yml` too, but verify images match across envs
+- **Ignoring "Awaiting Schedule"** — these are pending PRs waiting for Monday; check dashboard issue #11 to trigger early
+- **RC images** — litellm uses RC tags (`ignoreUnstable: false` in config); review before merging
+- **Not checking EOL** — Renovate flags updates but doesn't warn about approaching end-of-life

@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "docker:enableMajor"],
+  "extends": ["config:recommended", "docker:enableMajor", ":gitSignOff"],
   "mode": "default",
 
   "schedule": ["before 9am on monday"],
@@ -9,7 +9,11 @@
   "dependencyDashboard": true,
   "platformAutomerge": true,
   "prHourlyLimit": 5,
-  "labels": ["dependencies", "docker"],
+  "labels": ["dependencies"],
+
+  "pre-commit": {
+    "enabled": true
+  },
 
   "packageRules": [
     {
@@ -20,7 +24,7 @@
     {
       "description": "Databases - stable, auto-merge minor",
       "matchDatasources": ["docker"],
-      "matchPackageNames": ["pgvector/pgvector", "redis/redis-stack", "qdrant/qdrant"],
+      "matchPackageNames": ["pgvector/pgvector", "redis", "qdrant/qdrant"],
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "groupName": "databases"
@@ -28,7 +32,12 @@
     {
       "description": "ML Platform - group together",
       "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/berriai/litellm", "langfuse/langfuse", "ghcr.io/mlflow/mlflow"],
+      "matchPackageNames": [
+        "ghcr.io/berriai/litellm",
+        "langfuse/langfuse",
+        "langfuse/langfuse-worker",
+        "ghcr.io/mlflow/mlflow"
+      ],
       "groupName": "ml-platform"
     },
     {
@@ -48,10 +57,131 @@
       "groupName": "ai-services"
     },
     {
+      "description": "Monitoring - group loki, promtail, alertmanager",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "grafana/loki",
+        "grafana/promtail",
+        "prom/alertmanager"
+      ],
+      "groupName": "monitoring"
+    },
+    {
+      "description": "MinIO - track release tags",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["minio/minio"],
+      "groupName": "storage"
+    },
+    {
       "description": "Base images - Python",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["python"],
       "groupName": "python-base"
+    },
+    {
+      "description": "Base images - uv",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/astral-sh/uv"],
+      "groupName": "uv-base"
+    },
+    {
+      "description": "Pre-commit hooks - group together",
+      "matchManagers": ["pre-commit"],
+      "groupName": "pre-commit-hooks",
+      "automerge": true
+    },
+    {
+      "description": "Python core libs - safe, auto-merge patch",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "pydantic",
+        "httpx",
+        "uvicorn",
+        "python-dotenv",
+        "prometheus-client",
+        "sentry-sdk",
+        "tenacity",
+        "tqdm",
+        "rich",
+        "cachetools",
+        "orjson"
+      ],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true,
+      "groupName": "python-core-libs"
+    },
+    {
+      "description": "Python ML libs - group, no auto-merge",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "transformers",
+        "sentence-transformers",
+        "FlagEmbedding",
+        "torch",
+        "numpy"
+      ],
+      "groupName": "python-ml-libs"
+    },
+    {
+      "description": "Python RAG stack - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "qdrant-client",
+        "langfuse",
+        "langchain",
+        "langchain-core",
+        "cocoindex",
+        "ragas",
+        "deepeval"
+      ],
+      "groupName": "python-rag-stack"
+    },
+    {
+      "description": "Python bot - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "aiogram",
+        "redisvl"
+      ],
+      "groupName": "python-bot"
+    },
+    {
+      "description": "Python document processing - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "docling",
+        "docling-core",
+        "docling-parse"
+      ],
+      "groupName": "python-docling"
+    },
+    {
+      "description": "Python API clients - group",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "anthropic",
+        "openai",
+        "groq",
+        "voyageai"
+      ],
+      "groupName": "python-api-clients"
+    },
+    {
+      "description": "Dev tools - ruff, mypy, pytest",
+      "matchDatasources": ["pypi"],
+      "matchPackageNames": [
+        "ruff",
+        "mypy",
+        "pytest",
+        "pytest-httpx",
+        "pre-commit"
+      ],
+      "groupName": "python-dev-tools"
+    },
+    {
+      "description": "GitHub Actions - group",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
     }
   ]
 }
