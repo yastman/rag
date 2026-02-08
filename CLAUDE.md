@@ -52,9 +52,18 @@ Input → Docling Parser → Chunker → BGE-M3 Dense + BGE-M3 Sparse → Qdrant
 
 ## Code Style
 
-- **Linter/Formatter:** Ruff v0.14.14 | **Types:** MyPy | **Line length:** 100 | **Docstrings:** Google style
+- **Linter/Formatter:** Ruff | **Types:** MyPy | **Line length:** 100 | **Docstrings:** Google style
 - **Pre-commit:** ruff-check (--fix) → ruff-format → trailing-whitespace → check-yaml/toml/json
 - **Commits:** `feat(scope): message` | `fix(scope): message` | `docs(scope): message`
+
+## Dependency Management
+
+**Mend Renovate** tracks all deps automatically: Python, Docker, GH Actions, pre-commit hooks.
+
+- **Dashboard:** [developer.mend.io/github/yastman/rag](https://developer.mend.io/github/yastman/rag) | Issue #11
+- **Config:** `renovate.json` | Schedule: Monday before 9:00 Kyiv
+- **Skill:** `/deps` — review and merge updates
+- **Lock maintenance:** `uv.lock` refreshed weekly via Renovate
 
 ## Task Management
 
@@ -136,6 +145,8 @@ rsync -avz src/ vps:/opt/rag-fresh/src/ && ssh vps "docker restart vps-ingestion
 
 ```
 /writing-plans → /executing-plans → /finishing-a-development-branch
+/deps                              — dependency audit (Mend Renovate)
+/agent-teams                       — multi-agent coordination
 ```
 
 **Details:** `.claude/rules/skills.md`
@@ -170,3 +181,4 @@ See `.claude/rules/` for domain-specific documentation:
 | `docker.md` | Containers, monitoring | `docker/**` |
 | `testing.md` | Unit tests, chaos tests, E2E | `tests/**` |
 | `skills.md` | Superpowers workflow | `docs/plans/**` |
+| `shared-tasks.md` | Shared task list between terminals | — |
