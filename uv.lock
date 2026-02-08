@@ -743,6 +743,7 @@ docs = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pre-commit" },
     { name = "pytest-asyncio" },
     { name = "pytest-httpx" },
 ]
@@ -800,6 +801,7 @@ provides-extras = ["dev", "docs", "all"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-httpx", specifier = ">=0.35.0" },
 ]
