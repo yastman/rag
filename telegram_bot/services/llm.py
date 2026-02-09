@@ -104,7 +104,7 @@ class LLMService:
                 if with_confidence:
                     system_prompt = self._get_confidence_system_prompt()
                 else:
-                    system_prompt = """Ты - ассистент по недвижимости в Болгарии.
+                    system_prompt = """Ты - ассистент по недвижимости.
 
 Отвечай на вопросы пользователя на основе предоставленного контекста.
 Если информации недостаточно, честно скажи об этом.
@@ -216,7 +216,7 @@ class LLMService:
 
     def _get_confidence_system_prompt(self) -> str:
         """Get system prompt that requests confidence scoring."""
-        return """Ты - ассистент по недвижимости в Болгарии.
+        return """Ты - ассистент по недвижимости.
 
 Отвечай на вопросы пользователя на основе предоставленного контекста.
 Всегда указывай цены в евро и расстояния в метрах.
@@ -310,7 +310,7 @@ class LLMService:
 
             # Default system prompt
             if not system_prompt:
-                system_prompt = """Ты - ассистент по недвижимости в Болгарии.
+                system_prompt = """Ты - ассистент по недвижимости.
 
 Отвечай на вопросы пользователя на основе предоставленного контекста.
 Если информации недостаточно, честно скажи об этом.

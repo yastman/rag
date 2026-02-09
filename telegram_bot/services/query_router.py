@@ -121,7 +121,7 @@ _OFF_TOPIC_COMPILED = [re.compile(p, re.IGNORECASE) for p in OFF_TOPIC_PATTERNS]
 # Chit-chat responses (no RAG needed)
 CHITCHAT_RESPONSES = {
     "greeting": [
-        "Привет! 👋 Я помогу найти недвижимость в Болгарии. Что вас интересует?",
+        "Привет! 👋 Я помогу найти недвижимость. Что вас интересует?",
         "Здравствуйте! Чем могу помочь? Ищете квартиру или дом в Болгарии?",
     ],
     "thanks": [
