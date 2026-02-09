@@ -145,6 +145,27 @@ class BaseSearchEngine(ABC):
 
         return models.SearchParams(quantization=quantization_params)
 
+    @staticmethod
+    def _parse_group_results(response: Any) -> list[SearchResult]:
+        """Parse grouped query results into flat SearchResult list.
+
+        Extracts the top hit from each group, preserving group ordering.
+        """
+        results: list[SearchResult] = []
+        for group in response.groups:
+            for point in group.hits:
+                results.append(
+                    SearchResult(
+                        article_number=(point.payload or {})
+                        .get("metadata", {})
+                        .get("article_number", ""),
+                        text=(point.payload or {}).get("page_content", ""),
+                        score=point.score,
+                        metadata=(point.payload or {}).get("metadata", {}),
+                    )
+                )
+        return results
+
     @abstractmethod
     def search(
         self,
@@ -276,6 +297,10 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         query_embedding: str | list[float],
         top_k: int = 10,
         score_threshold: float | None = None,
+        *,
+        rrf_k: int = 60,
+        group_by: str | None = None,
+        group_size: int = 2,
     ) -> list[SearchResult]:
         """
         Search using RRF fusion of dense and sparse vectors.
@@ -286,6 +311,9 @@ class HybridRRFSearchEngine(BaseSearchEngine):
                 If list, will use dense-only search (backward compatibility).
             top_k: Number of results to return
             score_threshold: Minimum similarity score threshold
+            rrf_k: RRF constant k (higher = more weight to lower-ranked results).
+            group_by: Optional payload field to group results by (e.g. "metadata.doc_id").
+            group_size: Max points per group when group_by is set.
 
         Returns:
             List of SearchResult objects
@@ -295,7 +323,14 @@ class HybridRRFSearchEngine(BaseSearchEngine):
 
         # If query is a string, generate all embeddings and use hybrid search
         if isinstance(query_embedding, str):
-            return self._search_hybrid(query_embedding, top_k, score_threshold)
+            return self._search_hybrid(
+                query_embedding,
+                top_k,
+                score_threshold,
+                rrf_k=rrf_k,
+                group_by=group_by,
+                group_size=group_size,
+            )
 
         # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
@@ -320,6 +355,10 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         query: str,
         top_k: int,
         score_threshold: float,
+        *,
+        rrf_k: int = 60,
+        group_by: str | None = None,
+        group_size: int = 2,
     ) -> list[SearchResult]:
         """
         Hybrid search using dense + sparse + RRF via SDK query_points.
@@ -328,6 +367,14 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         1. Prefetch dense vector search (100 candidates)
         2. Prefetch sparse BM42 search (100 candidates)
         3. RRF fusion combines both result sets
+
+        Args:
+            query: Search query string.
+            top_k: Number of results to return.
+            score_threshold: Minimum score threshold.
+            rrf_k: RRF constant k (higher = more weight to lower-ranked results).
+            group_by: Optional payload field to group results by (e.g. "metadata.doc_id").
+            group_size: Max points per group when group_by is set.
         """
         import logging
 
@@ -340,25 +387,29 @@ class HybridRRFSearchEngine(BaseSearchEngine):
         dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
         sparse_vector = lexical_weights_to_sparse(query_embeddings["lexical_weights"])
 
+        prefetch = [
+            models.Prefetch(query=dense_vector, using="dense", limit=100),
+            models.Prefetch(query=sparse_vector, using="bm42", limit=100),
+        ]
+        rrf_query = models.RrfQuery(rrf=models.Rrf(k=rrf_k))
+
         try:
-            # SDK query_points with nested prefetch
+            if group_by:
+                response = self.client.query_points_groups(
+                    collection_name=self.collection_name,
+                    prefetch=prefetch,
+                    query=rrf_query,
+                    group_by=group_by,
+                    group_size=group_size,
+                    limit=top_k,
+                    with_payload=True,
+                )
+                return self._parse_group_results(response)
+
             response = self.client.query_points(
                 collection_name=self.collection_name,
-                prefetch=[
-                    # Dense vector prefetch
-                    models.Prefetch(
-                        query=dense_vector,
-                        using="dense",
-                        limit=100,
-                    ),
-                    # Sparse BM42 prefetch
-                    models.Prefetch(
-                        query=sparse_vector,
-                        using="bm42",
-                        limit=100,
-                    ),
-                ],
-                query=models.FusionQuery(fusion=models.Fusion.RRF),
+                prefetch=prefetch,
+                query=rrf_query,
                 limit=top_k,
                 with_payload=True,
             )
@@ -426,6 +477,10 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         query_embedding: str | list[float],
         top_k: int = 10,
         score_threshold: float | None = None,
+        *,
+        rrf_k: int = 60,
+        group_by: str | None = None,
+        group_size: int = 2,
     ) -> list[SearchResult]:
         """
         Search using RRF fusion + ColBERT reranking.
@@ -436,6 +491,9 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
                 If list, will use dense-only search (backward compatibility).
             top_k: Number of results to return
             score_threshold: Minimum similarity score threshold
+            rrf_k: RRF constant k (higher = more weight to lower-ranked results).
+            group_by: Optional payload field to group results by (e.g. "metadata.doc_id").
+            group_size: Max points per group when group_by is set.
 
         Returns:
             List of SearchResult objects
@@ -445,7 +503,14 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
 
         # If query is a string, use full hybrid + ColBERT rerank
         if isinstance(query_embedding, str):
-            return self._search_hybrid_colbert(query_embedding, top_k, score_threshold)
+            return self._search_hybrid_colbert(
+                query_embedding,
+                top_k,
+                score_threshold,
+                rrf_k=rrf_k,
+                group_by=group_by,
+                group_size=group_size,
+            )
 
         # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
@@ -470,6 +535,10 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         query: str,
         top_k: int,
         score_threshold: float,
+        *,
+        rrf_k: int = 60,
+        group_by: str | None = None,
+        group_size: int = 2,
     ) -> list[SearchResult]:
         """
         3-stage hybrid search with ColBERT rerank via SDK query_points.
@@ -491,32 +560,31 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
         sparse_vector = lexical_weights_to_sparse(query_embeddings["lexical_weights"])
         colbert_vectors = convert_to_python_types(query_embeddings["colbert_vecs"])
 
+        rrf_prefetch = models.Prefetch(
+            prefetch=[
+                models.Prefetch(query=dense_vector, using="dense", limit=100),
+                models.Prefetch(query=sparse_vector, using="bm42", limit=100),
+            ],
+            query=models.RrfQuery(rrf=models.Rrf(k=rrf_k)),
+        )
+
         try:
-            # SDK query_points with nested prefetch for 3-stage pipeline
+            if group_by:
+                response = self.client.query_points_groups(
+                    collection_name=self.collection_name,
+                    prefetch=[rrf_prefetch],
+                    query=colbert_vectors,
+                    using="colbert",
+                    group_by=group_by,
+                    group_size=group_size,
+                    limit=top_k,
+                    with_payload=True,
+                )
+                return self._parse_group_results(response)
+
             response = self.client.query_points(
                 collection_name=self.collection_name,
-                prefetch=[
-                    # Outer prefetch: RRF fusion of dense + sparse
-                    models.Prefetch(
-                        prefetch=[
-                            # Stage 1a: Dense vector search
-                            models.Prefetch(
-                                query=dense_vector,
-                                using="dense",
-                                limit=100,
-                            ),
-                            # Stage 1b: BM42 sparse search
-                            models.Prefetch(
-                                query=sparse_vector,
-                                using="bm42",
-                                limit=100,
-                            ),
-                        ],
-                        # Stage 2: RRF fusion
-                        query=models.FusionQuery(fusion=models.Fusion.RRF),
-                    ),
-                ],
-                # Stage 3: ColBERT multivector rerank
+                prefetch=[rrf_prefetch],
                 query=colbert_vectors,
                 using="colbert",
                 limit=top_k,
@@ -587,6 +655,9 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         query_embedding: str | list[float],
         top_k: int = 10,
         score_threshold: float | None = None,
+        *,
+        group_by: str | None = None,
+        group_size: int = 2,
     ) -> list[SearchResult]:
         """
         Search using DBSF fusion + ColBERT reranking.
@@ -597,6 +668,8 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
                 If list, will use dense-only search (backward compatibility).
             top_k: Number of results to return
             score_threshold: Minimum similarity score threshold
+            group_by: Optional payload field to group results by (e.g. "metadata.doc_id").
+            group_size: Max points per group when group_by is set.
 
         Returns:
             List of SearchResult objects
@@ -606,7 +679,13 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
 
         # If query is a string, use full hybrid + ColBERT rerank
         if isinstance(query_embedding, str):
-            return self._search_hybrid_colbert(query_embedding, top_k, score_threshold)
+            return self._search_hybrid_colbert(
+                query_embedding,
+                top_k,
+                score_threshold,
+                group_by=group_by,
+                group_size=group_size,
+            )
 
         # Backward compatibility: if embedding provided, use dense-only search
         dense_results = self.client.search(
@@ -631,6 +710,9 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         query: str,
         top_k: int,
         score_threshold: float,
+        *,
+        group_by: str | None = None,
+        group_size: int = 2,
     ) -> list[SearchResult]:
         """
         3-stage hybrid search with DBSF fusion + ColBERT rerank via SDK.
@@ -651,27 +733,31 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
         sparse_vector = lexical_weights_to_sparse(query_embeddings["lexical_weights"])
         colbert_vectors = convert_to_python_types(query_embeddings["colbert_vecs"])
 
+        dbsf_prefetch = models.Prefetch(
+            prefetch=[
+                models.Prefetch(query=dense_vector, using="dense", limit=100),
+                models.Prefetch(query=sparse_vector, using="sparse", limit=100),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.DBSF),
+        )
+
         try:
+            if group_by:
+                response = self.client.query_points_groups(
+                    collection_name=self.collection_name,
+                    prefetch=[dbsf_prefetch],
+                    query=colbert_vectors,
+                    using="colbert",
+                    group_by=group_by,
+                    group_size=group_size,
+                    limit=top_k,
+                    with_payload=True,
+                )
+                return self._parse_group_results(response)
+
             response = self.client.query_points(
                 collection_name=self.collection_name,
-                prefetch=[
-                    models.Prefetch(
-                        prefetch=[
-                            models.Prefetch(
-                                query=dense_vector,
-                                using="dense",
-                                limit=100,
-                            ),
-                            models.Prefetch(
-                                query=sparse_vector,
-                                using="sparse",  # DBSF uses standard sparse, not bm42
-                                limit=100,
-                            ),
-                        ],
-                        # DBSF fusion (statistical normalization)
-                        query=models.FusionQuery(fusion=models.Fusion.DBSF),
-                    ),
-                ],
+                prefetch=[dbsf_prefetch],
                 query=colbert_vectors,
                 using="colbert",
                 limit=top_k,
