@@ -89,7 +89,7 @@ class BGEM3SparseEmbeddings:
                 json={"texts": [text], "max_length": self.max_length},
             )
             response.raise_for_status()
-            data = response.json()
+            data: dict[str, list[dict[str, Any]]] = response.json()
             return data["sparse_vecs"][0]
 
     async def aembed_documents(self, texts: list[str]) -> list[dict[str, Any]]:
@@ -101,5 +101,5 @@ class BGEM3SparseEmbeddings:
                 json={"texts": texts, "max_length": self.max_length},
             )
             response.raise_for_status()
-            data = response.json()
+            data: dict[str, list[dict[str, Any]]] = response.json()
             return data["sparse_vecs"]
