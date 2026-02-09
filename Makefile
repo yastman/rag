@@ -26,7 +26,7 @@ help: ## Show this help message
 	@echo "$(BLUE)Contextual RAG v2.0.1 - Development Commands$(NC)"
 	@echo ""
 	@echo "$(GREEN)Available commands:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_%-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 
 install: ## Install production dependencies
@@ -742,3 +742,47 @@ ingest-unified-reprocess: ## Reprocess all error files
 
 ingest-unified-logs: ## Show ingestion service logs
 	docker logs dev-ingestion -f --tail 100
+
+# =============================================================================
+# K3S DEPLOYMENT
+# =============================================================================
+
+.PHONY: k3s-core k3s-bot k3s-ingest k3s-full k3s-status k3s-logs k3s-down k3s-secrets k3s-ingest-start k3s-ingest-stop
+
+k3s-core: ## Deploy core services (postgres, redis, qdrant) to k3s
+	kubectl apply -k k8s/overlays/core/ --load-restrictor=LoadRestrictionsNone
+
+k3s-bot: ## Deploy bot stack to k3s (core + ML + litellm + bot)
+	kubectl apply -k k8s/overlays/bot/ --load-restrictor=LoadRestrictionsNone
+
+k3s-ingest: ## Deploy ingestion stack to k3s (core + docling + bge-m3 + ingestion)
+	kubectl apply -k k8s/overlays/ingest/ --load-restrictor=LoadRestrictionsNone
+
+k3s-full: ## Deploy all services to k3s
+	kubectl apply -k k8s/overlays/full/
+
+k3s-status: ## Show k3s pod status
+	kubectl get pods -n rag -o wide
+
+k3s-logs: ## Show logs for a service: make k3s-logs SVC=bot
+	kubectl logs -n rag deployment/$(SVC) -f --tail=50
+
+k3s-down: ## Delete all k3s resources
+	kubectl delete -k k8s/overlays/full/ --ignore-not-found
+
+k3s-secrets: ## Create k8s secrets from k8s/secrets/.env
+	kubectl create secret generic api-keys --from-env-file=k8s/secrets/.env -n rag --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic db-credentials \
+		--from-literal=POSTGRES_USER=postgres \
+		--from-literal=POSTGRES_PASSWORD=postgres \
+		--from-literal=POSTGRES_DB=postgres \
+		-n rag --dry-run=client -o yaml | kubectl apply -f -
+
+k3s-ingest-start: ## Scale ingestion to 1 replica
+	kubectl scale deployment ingestion -n rag --replicas=1
+
+k3s-ingest-stop: ## Scale ingestion to 0 replicas
+	kubectl scale deployment ingestion -n rag --replicas=0
+
+k3s-push-%: ## Build and push image to VPS k3s: make k3s-push-bot
+	docker save rag/$*:latest | ssh vps 'sudo k3s ctr -n k8s.io images import -'
