@@ -10,25 +10,28 @@ Code patterns for `telegram_bot/services/` and `telegram_bot/integrations/`.
 
 ```
 telegram_bot/
+├── bot.py                 # PropertyBot (~244 LOC, LangGraph pipeline orchestrator)
+├── config.py              # BotConfig (pydantic-settings BaseSettings)
+├── observability.py       # Langfuse init, @observe decorator, PII masking
+├── preflight.py           # Health checks (Redis, Qdrant, BGE-M3, LiteLLM)
 ├── services/              # Business logic services (LLM, search, preprocessing)
 │   ├── llm.py             # LLMService (OpenAI SDK, langfuse.openai.AsyncOpenAI)
 │   ├── query_analyzer.py  # QueryAnalyzer (LLM filter extraction, OpenAI SDK)
 │   ├── query_preprocessor.py # HyDEGenerator + QueryPreprocessor
-│   ├── query_router.py    # Legacy QueryType routing (4-type)
 │   ├── filter_extractor.py # Regex filter extraction
-│   ├── qdrant.py          ***REMOVED***Service (async, Qdrant SDK)
+│   ├── qdrant.py          ***REMOVED***Service (async, gRPC, batch_search_rrf, group_by)
 │   ├── colbert_reranker.py # ColbertRerankerService (BGE-M3 /rerank)
 │   ├── voyage.py          ***REMOVED***Service (embeddings + rerank API)
 │   ├── vectorizers.py     # UserBaseVectorizer + BgeM3CacheVectorizer
-│   ├── cache.py           # Legacy CacheService (retained for reference)
 │   ├── metrics.py         # PipelineMetrics (p50/p95 tracking)
-│   ├── redis_monitor.py   # RedisHealthMonitor (background task)
-│   └── retriever.py       # RetrieverService (sync, legacy)
+│   └── redis_monitor.py   # RedisHealthMonitor (background task)
 ├── integrations/          # LangGraph-compatible wrappers
-│   ├── cache.py           # CacheLayerManager (6-tier, ~430 LOC)
+│   ├── cache.py           # CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
 │   ├── embeddings.py      # BGEM3Embeddings + BGEM3SparseEmbeddings (LangChain)
+│   ├── event_stream.py    # EventStream for graph→bot communication
 │   ├── langfuse.py        # create_langfuse_handler() for LangGraph callbacks
-│   └── memory.py          # MemorySaver for conversation persistence
+│   ├── memory.py          # MemorySaver for conversation persistence
+│   └── prompt_manager.py  # Langfuse Prompt Management with fallback templates
 └── graph/                 # LangGraph pipeline
     ├── graph.py           # build_graph() — 9-node StateGraph assembly
     ├── state.py           # RAGState TypedDict + make_initial_state()
@@ -65,7 +68,25 @@ sparse = BGEM3SparseEmbeddings(base_url="http://bge-m3:8000")
 sv = await sparse.aembed_query("text")   # sparse dict
 ```
 
-### CacheLayerManager (integrations)
+##***REMOVED***Service (gRPC + batch)
+
+```python
+from telegram_bot.services.qdrant import QdrantService
+
+# Uses prefer_grpc=True for faster connections
+qdrant = QdrantService(url="http://localhost:6333", collection_name="gdrive_documents_bge")
+
+# Single hybrid search
+results = await qdrant.hybrid_search_rrf(dense_vector=emb, sparse_vector=sparse, top_k=20)
+
+# Batch search (single round-trip via query_batch_points)
+results = await qdrant.batch_search_rrf(queries=[...])
+
+# Group-by for diverse results
+results = await qdrant.hybrid_search_rrf(dense_vector=emb, sparse_vector=sparse, group_by="doc_id")
+```
+
+### CacheLayerManager (Redis pipelines)
 
 ```python
 from telegram_bot.integrations.cache import CacheLayerManager
@@ -73,15 +94,16 @@ from telegram_bot.integrations.cache import CacheLayerManager
 cache = CacheLayerManager(redis_url="redis://redis:6379")
 await cache.initialize()
 # CACHE_VERSION = "v3", keys: {tier}:v3:{hash}
+# Uses async Redis pipelines for batch operations (1 round-trip)
 ```
 
-### BotConfig (pydantic-settings)
+### Prompt Manager (Langfuse)
 
 ```python
-from telegram_bot.config import BotConfig
+from telegram_bot.integrations.prompt_manager import get_prompt
 
-config = BotConfig()  # Reads from .env + env vars via AliasChoices
-# config.telegram_token, config.llm_base_url, config.domain, etc.
+# Fetches prompt from Langfuse with fallback to hardcoded template
+prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain": "real estate"})
 ```
 
 ### GraphConfig (service factories)
@@ -90,7 +112,7 @@ config = BotConfig()  # Reads from .env + env vars via AliasChoices
 from telegram_bot.graph.config import GraphConfig
 
 gc = GraphConfig.from_env()
-llm = gc.create_llm()                    # ChatLiteLLM
+llm = gc.create_llm()                    # langfuse.openai.AsyncOpenAI
 emb = gc.create_embeddings()             # BGEM3Embeddings
 sparse = gc.create_sparse_embeddings()   # BGEM3SparseEmbeddings
 ```
@@ -112,6 +134,7 @@ Bump version when changing models. Old keys expire naturally.
 ## I/O Patterns
 
 - **LangGraph nodes**: Async functions with `state: dict[str, Any]` signature
-- **Services**: Async (`httpx.AsyncClient`, `AsyncQdrantClient`, `AsyncOpenAI`)
+- **Services**: Async (`httpx.AsyncClient`, `AsyncQdrantClient` with gRPC, `AsyncOpenAI`)
 - **Search Engines (src/retrieval)**: Sync Qdrant SDK for evaluation benchmarks
+- **Redis**: Async pipelines for batch operations (`async with redis.pipeline()`)
 - No blocking calls in async context for bot handlers
