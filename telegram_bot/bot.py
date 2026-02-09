@@ -21,6 +21,47 @@ from .services.redis_monitor import RedisHealthMonitor
 
 logger = logging.getLogger(__name__)
 
+# --- Query type mapping for scores ---
+_QUERY_TYPE_SCORE = {
+    "CHITCHAT": 0.0,
+    "OFF_TOPIC": 0.0,
+    "SIMPLE": 1.0,
+    "GENERAL": 1.0,
+    "FAQ": 1.0,
+    "ENTITY": 1.0,
+    "STRUCTURED": 2.0,
+    "COMPLEX": 2.0,
+}
+
+
+def _write_langfuse_scores(lf: object, result: dict) -> None:
+    """Write 12 Langfuse scores from graph result state.
+
+    Args:
+        lf: Langfuse client (from get_client(), may be _NullLangfuseClient).
+        result: State dict returned by graph.ainvoke().
+    """
+    latency_stages = result.get("latency_stages", {})
+    total_ms = sum(latency_stages.values()) * 1000
+
+    scores = {
+        "query_type": _QUERY_TYPE_SCORE.get(result.get("query_type", ""), 1.0),
+        "latency_total_ms": total_ms,
+        "semantic_cache_hit": 1.0 if result.get("cache_hit") else 0.0,
+        "embeddings_cache_hit": 0.0,  # Not tracked in LangGraph state
+        "search_cache_hit": 0.0,  # Not tracked in LangGraph state
+        "rerank_applied": 1.0 if result.get("rerank_applied") else 0.0,
+        "rerank_cache_hit": 0.0,  # Not tracked in LangGraph state
+        "results_count": float(result.get("search_results_count", 0)),
+        "no_results": 1.0 if result.get("search_results_count", 0) == 0 else 0.0,
+        "llm_used": 1.0 if "generate" in latency_stages else 0.0,
+        "confidence_score": 0.0,  # Not tracked in LangGraph state
+        "hyde_used": 0.0,  # Not tracked in LangGraph state
+    }
+
+    for name, value in scores.items():
+        lf.score_current_trace(name=name, value=value)
+
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
     """Create unified session_id format: {type}-{hash}-{YYYYMMDD}.
@@ -222,6 +263,9 @@ class PropertyBot:
                     "rerank_applied": result.get("rerank_applied", False),
                 },
             )
+
+            # Write all 12 Langfuse scores (guaranteed on all exit paths)
+            _write_langfuse_scores(lf, result)
 
     async def start(self):
         """Start bot polling."""
