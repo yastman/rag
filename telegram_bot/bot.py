@@ -13,8 +13,8 @@ from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
 from .graph.state import make_initial_state
-from .integrations.langfuse import create_langfuse_handler
 from .middlewares import setup_error_middleware, setup_throttling_middleware
+from .observability import get_client, observe, propagate_attributes
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 
@@ -180,6 +180,7 @@ class PropertyBot:
         text = f"```\n{metrics.format_text()}\n```"
         await message.answer(text, parse_mode="Markdown")
 
+    @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message):
         """Handle user query via LangGraph RAG pipeline."""
         # Early typing ACK — user sees "typing..." immediately
@@ -191,26 +192,36 @@ class PropertyBot:
             query=message.text or "",
         )
 
-        handler = create_langfuse_handler(
+        with propagate_attributes(
             session_id=state["session_id"],
             user_id=str(state["user_id"]),
-            tags=["telegram", "rag", "langgraph"],
-        )
+            tags=["telegram", "rag"],
+        ):
+            graph = build_graph(
+                cache=self._cache,
+                embeddings=self._embeddings,
+                sparse_embeddings=self._sparse,
+                qdrant=self._qdrant,
+                reranker=self._reranker,
+                llm=self._llm,
+                message=message,
+            )
 
-        graph = build_graph(
-            cache=self._cache,
-            embeddings=self._embeddings,
-            sparse_embeddings=self._sparse,
-            qdrant=self._qdrant,
-            reranker=self._reranker,
-            llm=self._llm,
-            message=message,
-        )
+            async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+                result = await graph.ainvoke(state)
 
-        config = {"callbacks": [handler]} if handler else {}
-
-        async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
-            await graph.ainvoke(state, config=config)
+            # Update trace with input/output and metadata
+            lf = get_client()
+            lf.update_current_trace(
+                input={"query": message.text},
+                output={"response": result.get("response", "")},
+                metadata={
+                    "query_type": result.get("query_type", ""),
+                    "cache_hit": result.get("cache_hit", False),
+                    "search_results_count": result.get("search_results_count", 0),
+                    "rerank_applied": result.get("rerank_applied", False),
+                },
+            )
 
     async def start(self):
         """Start bot polling."""
