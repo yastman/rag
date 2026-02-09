@@ -113,7 +113,7 @@ class TestCacheStoreNode:
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation = AsyncMock()
+        cache.store_conversation_batch = AsyncMock()
 
         result = await cache_store_node(state, cache=cache)
 
@@ -134,12 +134,15 @@ class TestCacheStoreNode:
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation = AsyncMock()
+        cache.store_conversation_batch = AsyncMock()
 
         await cache_store_node(state, cache=cache)
 
-        # Should store both user query and assistant response
-        assert cache.store_conversation.await_count == 2
+        # Should store both user query and assistant response in one batch
+        cache.store_conversation_batch.assert_awaited_once_with(
+            user_id=1,
+            messages=[("user", "test query"), ("assistant", "answer")],
+        )
 
     @pytest.mark.asyncio
     async def test_skips_store_if_no_response(self):
