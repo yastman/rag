@@ -41,7 +41,7 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 
 | Module | Purpose |
 |--------|---------|
-| `telegram_bot/bot.py` | PropertyBot (~244 LOC, LangGraph orchestrator) |
+| `telegram_bot/bot.py` | PropertyBot (~260 LOC, LangGraph orchestrator + score writing) |
 | `telegram_bot/graph/` | LangGraph 9-node RAG pipeline |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
@@ -50,6 +50,8 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 | `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001
+
+**Observability:** Langfuse v3 — 35 observations/trace, 12 scores, `OTEL_SERVICE_NAME=rag-bot` → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (20 svc) → see `.claude/rules/docker.md`
 
@@ -180,6 +182,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
 | `features/telegram-bot.md` | LangGraph pipeline, bot, middlewares | `telegram_bot/*.py` |
 | `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
+| `observability.md` | Langfuse v3, @observe, scores, baseline | `telegram_bot/observability.py, tests/baseline/**` |
 | `build.md` | uv, Makefile, pre-commit hooks | `Makefile, pyproject.toml` |
 | `docker.md` | Containers, monitoring | `docker/**` |
 | `k3s.md` | k3s manifests, deployment, VPS | `k8s/**` |

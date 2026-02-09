@@ -24,7 +24,7 @@ User Message → ThrottlingMiddleware → ErrorMiddleware
 
 | File | Description |
 |------|-------------|
-| `telegram_bot/bot.py` | PropertyBot class (~245 LOC, LangGraph pipeline) |
+| `telegram_bot/bot.py` | PropertyBot class (~290 LOC, LangGraph pipeline + score writing) |
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
 | `telegram_bot/graph/graph.py` | `build_graph()` — assembles 9-node StateGraph |
@@ -32,7 +32,7 @@ User Message → ThrottlingMiddleware → ErrorMiddleware
 | `telegram_bot/graph/edges.py` | 3 routing functions |
 | `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories) |
 | `telegram_bot/graph/nodes/` | 8 node modules (classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
-| `telegram_bot/integrations/langfuse.py` | `create_langfuse_handler()` for LangGraph callbacks |
+| `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, PII masking |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 
@@ -106,10 +106,13 @@ self._llm = self._graph_config.create_llm()   # langfuse.openai.AsyncOpenAI
 
 ```python
 state = make_initial_state(user_id, session_id, query)
-handler = create_langfuse_handler(session_id, user_id, tags)
-graph = build_graph(cache, embeddings, sparse, qdrant, reranker, llm, message)
-async with ChatActionSender.typing(...):
-    await graph.ainvoke(state, config={"callbacks": [handler]})
+with propagate_attributes(session_id=..., user_id=..., tags=["telegram", "rag"]):
+    graph = build_graph(cache, embeddings, sparse, qdrant, reranker, llm, message)
+    async with ChatActionSender.typing(...):
+        result = await graph.ainvoke(state)
+    lf = get_client()
+    lf.update_current_trace(input=..., output=..., metadata=...)
+    _write_langfuse_scores(lf, result)  # 12 scores
 ```
 
 ## Middlewares

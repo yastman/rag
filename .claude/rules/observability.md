@@ -76,54 +76,91 @@ All traces use unified format: `{type}-{hash}-{YYYYMMDD}`
 
 Config: `tests/baseline/thresholds.yaml`
 
-## Instrumented Services
+## Instrumented Services (35 traced operations)
 
-### @observe Tracing (Langfuse decorator)
+### Root Trace
 
-Cache and graph nodes use `@observe` decorator for automatic span creation:
-
-| Component | Decorator | Tracked |
+| Component | Span Name | Details |
 |-----------|-----------|---------|
-| cache_check_node | `@observe(name="cache_check")` | hit/miss, embedding latency |
-| cache_store_node | `@observe(name="cache_store")` | store latency |
-| retrieve_node | `@observe(name="retrieve")` | search latency, results count |
-| CacheLayerManager.check_semantic | `@observe` | hit/miss, latency |
-| CacheLayerManager.store_semantic | `@observe` | latency |
+| `bot.py` handle_query | `telegram-rag-query` | Root span, session_id, user_id, tags |
 
-### Service-level Traces
+### Graph Nodes (9 nodes, all covered)
 
-| Service | Trace Name | Tracked |
-|---------|------------|---------|
-| VoyageService.embed_query | voyage-embed-query | tokens, latency |
-| VoyageService.embed_documents | voyage-embed-documents | tokens, latency |
-| VoyageService.rerank | voyage-rerank | latency, top_k |
-| QdrantService.hybrid_search_rrf | qdrant-hybrid-search-rrf | latency, results |
-| QdrantService.batch_search_rrf | qdrant-batch-search-rrf | latency, batch_size |
-| QdrantService.search_with_score_boosting | qdrant-search-score-boosting | latency, results |
-| CacheLayerManager.get_exact("search") | cache-search-check | hit/miss, latency |
-| CacheLayerManager.get_exact("rerank") | cache-rerank-check | hit/miss, latency, layer |
-| LLMService.generate_answer | llm-generate-answer | model, tokens, latency |
-| classify_node | query-classify | query_type (6-type taxonomy) |
-| QueryAnalyzer.analyze | query-analyzer | filters, tokens |
-| PropertyBot.handle_query | telegram-message | root trace, user_id, session_id |
-| LLMService (via LiteLLM) | Auto (OTEL) | tokens, cost, latency |
+| Node | Span Name |
+|------|-----------|
+| classify_node | `node-classify` |
+| cache_check_node | `node-cache-check` |
+| cache_store_node | `node-cache-store` |
+| retrieve_node | `node-retrieve` |
+| grade_node | `node-grade` |
+| rerank_node | `node-rerank` |
+| generate_node | `node-generate` |
+| rewrite_node | `node-rewrite` |
+| respond_node | `node-respond` |
+
+### Cache (8 methods)
+
+| Method | Span Name |
+|--------|-----------|
+| check_semantic | `cache-semantic-check` |
+| store_semantic | `cache-semantic-store` |
+| get_exact | `cache-exact-get` |
+| store_exact | `cache-exact-store` |
+| get_embedding | `cache-embedding-get` |
+| store_embedding | `cache-embedding-store` |
+| get_conversation | `cache-conversation-get` |
+| store_conversation | `cache-conversation-store` |
+
+### Services
+
+| Service | Span Name | as_type |
+|---------|-----------|---------|
+| BGEM3Embeddings.aembed_documents | `bge-m3-dense-embed` | span |
+| BGEM3SparseEmbeddings.aembed_query | `bge-m3-sparse-embed` | span |
+| BGEM3SparseEmbeddings.aembed_documents | `bge-m3-sparse-embed-batch` | span |
+| ColbertRerankerService.rerank | `colbert-rerank` | span |
+| QdrantService.hybrid_search_rrf | `qdrant-hybrid-search-rrf` | span |
+| QdrantService.batch_search_rrf | `qdrant-batch-search-rrf` | span |
+| QdrantService.search_with_score_boosting | `qdrant-search-score-boosting` | span |
+| VoyageService (5 methods) | `voyage-*` | generation |
+
+### LLM Calls (auto-traced via langfuse.openai.AsyncOpenAI)
+
+| Module | `name=` kwarg |
+|--------|---------------|
+| llm.py generate_answer | `generate-answer` |
+| llm.py stream_answer | `stream-answer` |
+| query_analyzer.py | `query-analysis` |
+| query_preprocessor.py | `hyde-generate` |
+| generate_node LLM call | `generate-answer` |
+| rewrite_node LLM call | `rewrite-query` |
+
+### OTEL Configuration
+
+```yaml
+OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
+```
 
 ## Langfuse Scores (All Exit Paths)
 
-All 10 scores written via try/finally accumulator pattern in `handle_query`:
+12 scores written via `_write_langfuse_scores(lf, result)` in `bot.py` after `graph.ainvoke()`:
 
 | Score | Values | Purpose |
 |-------|--------|---------|
-| `query_type` | 0/1/2 | CHITCHAT/SIMPLE/COMPLEX |
+| `query_type` | 0/1/2 | CHITCHAT/SIMPLE/COMPLEX (via `_QUERY_TYPE_SCORE` mapping) |
 | `latency_total_ms` | float | End-to-end request latency |
 | `semantic_cache_hit` | 0.0/1.0 | Semantic cache effectiveness |
-| `embeddings_cache_hit` | 0.0/1.0 | Embeddings cache effectiveness |
-| `search_cache_hit` | 0.0/1.0 | Search results cache |
+| `embeddings_cache_hit` | 0.0/1.0 | Embeddings cache (not yet tracked in state, default 0.0) |
+| `search_cache_hit` | 0.0/1.0 | Search results cache (not yet tracked in state, default 0.0) |
 | `rerank_applied` | 0.0/1.0 | Whether reranking was performed |
-| `rerank_cache_hit` | 0.0/1.0 | Rerank cache effectiveness |
+| `rerank_cache_hit` | 0.0/1.0 | Rerank cache (not yet tracked in state, default 0.0) |
 | `results_count` | 0-N | Number of retrieved documents |
 | `no_results` | 0.0/1.0 | Query returned empty results |
 | `llm_used` | 0.0/1.0 | LLM generation was invoked |
+| `confidence_score` | 0.0 | Not yet tracked in LangGraph state |
+| `hyde_used` | 0.0 | Not yet tracked in LangGraph state |
+
+**Implementation:** `get_client().score_current_trace(name=..., value=...)` (Langfuse SDK v3)
 
 ## Langfuse Prompt Management
 
