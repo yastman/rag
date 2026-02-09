@@ -18,10 +18,8 @@ LangGraph Pipeline:
        → [CHITCHAT/OFF_TOPIC: canned response → respond_node]
        → [STRUCTURED/FAQ/ENTITY/GENERAL: → cache_check → retrieve → ...]
 
-Legacy (still available):
-  Query → QueryRouter (4-type: CHITCHAT/SIMPLE/COMPLEX/OFF_TOPIC)
-       → QueryPreprocessor (translit, weights)
-       → QueryAnalyzer (LLM filter extraction)
+Supporting services (used by graph nodes):
+  QueryPreprocessor (translit, weights) + QueryAnalyzer (LLM filter extraction)
 ```
 
 ## Key Files
@@ -30,7 +28,6 @@ Legacy (still available):
 |------|-------------|
 | `telegram_bot/graph/nodes/classify.py` | classify_node (LangGraph, 6-type regex) |
 | `telegram_bot/graph/nodes/respond.py` | respond_node (Markdown + plain text fallback) |
-| `telegram_bot/services/query_router.py` | Legacy QueryType enum + classify_query() |
 | `telegram_bot/services/query_analyzer.py` | QueryAnalyzer (OpenAI SDK, LLM filter extraction) |
 | `telegram_bot/services/query_preprocessor.py` | HyDEGenerator + QueryPreprocessor |
 | `telegram_bot/services/filter_extractor.py` | FilterExtractor (regex fallback) |
@@ -126,7 +123,6 @@ pytest tests/unit/graph/test_classify_node.py -v   # 28 tests (6-type taxonomy)
 pytest tests/unit/graph/test_respond_node.py -v    # 5 tests (Markdown fallback)
 
 # Services
-pytest tests/unit/test_query_router.py -v
 pytest tests/unit/services/test_query_analyzer.py -v
 pytest tests/unit/test_query_preprocessor.py -v
 pytest tests/unit/test_hyde.py -v
