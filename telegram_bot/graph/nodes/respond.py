@@ -9,10 +9,13 @@ import logging
 import time
 from typing import Any
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
 
+@observe(name="node-respond")
 async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
     """LangGraph node: send response to the user.
 

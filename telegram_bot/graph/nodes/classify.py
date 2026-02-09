@@ -12,6 +12,8 @@ import re
 import time
 from typing import Any
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +261,7 @@ def classify_query(query: str) -> str:
     return GENERAL
 
 
+@observe(name="node-classify")
 async def classify_node(state: dict[str, Any]) -> dict[str, Any]:
     """LangGraph node: classify the user query.
 
