@@ -19,6 +19,8 @@ resources:
   - ../../base/qdrant/deployment.yaml
   - ../../base/qdrant/service.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: rag-fresh
-  profile: core
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: rag-fresh
+      profile: core
+    includeSelectors: false

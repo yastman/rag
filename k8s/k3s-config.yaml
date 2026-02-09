@@ -1,0 +1,35 @@
+# k3s server configuration for VPS single-node deployment
+# Install: /etc/rancher/k3s/config.yaml (before k3s install)
+#
+# Usage:
+#   sudo mkdir -p /etc/rancher/k3s
+#   sudo cp k8s/k3s-config.yaml /etc/rancher/k3s/config.yaml
+#   curl -sfL https://get.k3s.io | sh -
+
+write-kubeconfig-mode: "0644"
+
+# Secrets encryption at rest
+secrets-encryption: true
+
+# Controller manager — garbage collect terminated pods
+kube-controller-manager-arg:
+  - "terminated-pod-gc-threshold=100"
+
+# Kubelet — log rotation
+kubelet-arg:
+  - "container-log-max-files=3"
+  - "container-log-max-size=10Mi"
+  - "image-gc-high-threshold=85"
+  - "image-gc-low-threshold=80"
+  - "streaming-connection-idle-timeout=5m"
+  - "pod-max-pids=4096"
+
+# Eviction — protect VPS from OOM (11 GB RAM, 55 GB disk)
+kubelet-arg+:
+  - "eviction-hard=memory.available<200Mi,nodefs.available<10%,imagefs.available<15%"
+  - "eviction-soft=memory.available<500Mi,nodefs.available<15%"
+  - "eviction-soft-grace-period=memory.available=1m30s,nodefs.available=1m30s"
+
+# Etcd snapshots — automated backups every 6 hours
+etcd-snapshot-schedule-cron: "0 */6 * * *"
+etcd-snapshot-retention: 10

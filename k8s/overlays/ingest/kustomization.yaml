@@ -25,6 +25,8 @@ resources:
   # Ingestion
   - ../../base/ingestion/deployment.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: rag-fresh
-  profile: ingest
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: rag-fresh
+      profile: ingest
+    includeSelectors: false
