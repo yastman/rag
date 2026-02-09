@@ -60,10 +60,7 @@ def test_promote_to_staging(registry, mock_mlflow_client):
     # Execute
     registry.promote_to_staging("1")
 
-    # Assert
-    mock_mlflow_client.transition_model_version_stage.assert_called_with(
-        name="contextual-rag-pipeline", version="1", stage="Staging"
-    )
+    # Assert — uses alias instead of deprecated stage API
     mock_mlflow_client.set_registered_model_alias.assert_called_with(
         name="contextual-rag-pipeline", alias="challenger", version="1"
     )
@@ -78,17 +75,13 @@ def test_promote_to_production_with_archive(registry, mock_mlflow_client):
     # Execute
     registry.promote_to_production("2")
 
-    # Assert
-    # 1. Check archiving of old version
-    mock_mlflow_client.transition_model_version_stage.assert_any_call(
-        name="contextual-rag-pipeline", version="1", stage="Archived"
+    # Assert — uses aliases instead of deprecated stage API
+    # 1. Check archiving of old version via alias
+    mock_mlflow_client.set_registered_model_alias.assert_any_call(
+        name="contextual-rag-pipeline", alias="archived-v1", version="1"
     )
-    # 2. Check promotion of new version
-    mock_mlflow_client.transition_model_version_stage.assert_any_call(
-        name="contextual-rag-pipeline", version="2", stage="Production"
-    )
-    # 3. Check alias update
-    mock_mlflow_client.set_registered_model_alias.assert_called_with(
+    # 2. Check promotion of new version via champion alias
+    mock_mlflow_client.set_registered_model_alias.assert_any_call(
         name="contextual-rag-pipeline", alias="champion", version="2"
     )
 
@@ -100,10 +93,9 @@ def test_promote_to_production_first_time(registry, mock_mlflow_client):
     # Execute
     registry.promote_to_production("1")
 
-    # Assert
-    # Should try to get alias but fail gracefully, then promote new one
-    mock_mlflow_client.transition_model_version_stage.assert_called_with(
-        name="contextual-rag-pipeline", version="1", stage="Production"
+    # Assert — should fail gracefully on alias lookup, then set champion alias
+    mock_mlflow_client.set_registered_model_alias.assert_called_with(
+        name="contextual-rag-pipeline", alias="champion", version="1"
     )
 
 
@@ -111,13 +103,9 @@ def test_rollback_production(registry, mock_mlflow_client):
     # Execute
     registry.rollback_production("1")
 
-    # Assert
-    # Should call promote logic but without archiving (since we are rolling back)
-    # Note: promote_to_production implementation calls get_model_version_by_alias inside
-    # but based on logic, rollback calls promote with archive_previous=False
-
-    mock_mlflow_client.transition_model_version_stage.assert_called_with(
-        name="contextual-rag-pipeline", version="1", stage="Production"
+    # Assert — rollback sets champion alias without archiving previous
+    mock_mlflow_client.set_registered_model_alias.assert_called_with(
+        name="contextual-rag-pipeline", alias="champion", version="1"
     )
 
 
