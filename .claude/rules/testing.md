@@ -4,20 +4,25 @@ paths: "tests/**/*.py"
 
 ***REMOVED*** Testing Guide
 
-Coverage: 91% (~1820 tests after RAG 2026 audit)
+Coverage: ~85% unit (2057 passed, 76 pre-existing failures). Full audit: `logs/full-pipeline-coverage-audit.txt`
 
 ***REMOVED******REMOVED*** Unit Tests
 
 ```bash
-***REMOVED*** Fast, no Docker needed
-pytest tests/unit/ -v
-pytest tests/unit/test_settings.py -v          ***REMOVED*** Single module
-pytest tests/unit/test_file.py::test_method -v ***REMOVED*** Single test
+***REMOVED*** Sequential (21 min)
+uv run pytest tests/unit/ -v
+uv run pytest tests/unit/test_settings.py -v          ***REMOVED*** Single module
+uv run pytest tests/unit/test_file.py::test_method -v ***REMOVED*** Single test
+
+***REMOVED*** Parallel with xdist (5 min, 4.22x speedup, safe for CI)
+uv run pytest tests/unit/ -n auto
 
 ***REMOVED*** With coverage
-pytest tests/unit/ --cov=telegram_bot/services --cov-report=term-missing
-make test-cov                                   ***REMOVED*** Opens htmlcov/index.html
+uv run pytest tests/unit/ --cov=telegram_bot/services --cov-report=term-missing
+make test-cov                                          ***REMOVED*** Opens htmlcov/index.html
 ```
+
+**pytest-timeout:** All tests have 30s default timeout (pyproject.toml). Override per-test with `@pytest.mark.timeout(60)`.
 
 ***REMOVED******REMOVED*** Integration Tests
 
@@ -60,6 +65,8 @@ pytest tests/chaos/test_llm_fallback.py       ***REMOVED*** LLM rate limits, par
 | `pytest-asyncio>=0.24.0` | Async test support |
 | `pytest-cov>=5.0.0` | Coverage reporting |
 | `pytest-httpx>=0.35.0` | HTTP request mocking |
+| `pytest-xdist>=3.8.0` | Parallel test execution (`-n auto`) |
+| `pytest-timeout>=2.3.0` | Per-test timeout (default 30s) |
 
 ***REMOVED******REMOVED******REMOVED*** HTTP Mocking with pytest-httpx
 
