@@ -6,7 +6,8 @@
 	ingest-dir ingest-gdrive ingest-status \
 	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
 	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
-	lock update update-pkg reinstall setup-hooks
+	lock update update-pkg reinstall setup-hooks \
+	qdrant-backup
 
 ***REMOVED*** Configurable container names & thresholds
 REDIS_CONTAINER ?= dev-redis
@@ -742,6 +743,17 @@ ingest-unified-reprocess: ***REMOVED******REMOVED*** Reprocess all error files
 
 ingest-unified-logs: ***REMOVED******REMOVED*** Show ingestion service logs
 	docker logs dev-ingestion -f --tail 100
+
+***REMOVED*** =============================================================================
+***REMOVED*** QDRANT BACKUP
+***REMOVED*** =============================================================================
+
+.PHONY: qdrant-backup
+
+qdrant-backup: ***REMOVED******REMOVED*** Create Qdrant collection snapshots (all collections)
+	@echo "$(BLUE)Creating Qdrant snapshots...$(NC)"
+	uv run python scripts/qdrant_snapshot.py
+	@echo "$(GREEN)✓ Qdrant backup complete$(NC)"
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** K3S DEPLOYMENT
