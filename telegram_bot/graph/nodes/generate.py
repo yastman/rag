@@ -13,6 +13,7 @@ from typing import Any
 
 from telegram_bot.graph.state import RAGState
 from telegram_bot.integrations.prompt_manager import get_prompt
+from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,7 @@ def _build_fallback_response(documents: list[dict[str, Any]]) -> str:
     return fallback
 
 
+@observe(name="node-generate")
 async def generate_node(state: RAGState) -> dict[str, Any]:
     """Generate an answer from retrieved documents using LLM.
 
