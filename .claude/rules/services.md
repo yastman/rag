@@ -10,7 +10,7 @@ Code patterns for `telegram_bot/services/` and `telegram_bot/integrations/`.
 
 ```
 telegram_bot/
-├── bot.py                 ***REMOVED*** PropertyBot (~244 LOC, LangGraph pipeline orchestrator)
+├── bot.py                 ***REMOVED*** PropertyBot (~260 LOC, LangGraph pipeline + score writing)
 ├── config.py              ***REMOVED*** BotConfig (pydantic-settings BaseSettings)
 ├── observability.py       ***REMOVED*** Langfuse init, @observe decorator, PII masking
 ├── preflight.py           ***REMOVED*** Health checks (Redis, Qdrant, BGE-M3, LiteLLM)
@@ -29,7 +29,7 @@ telegram_bot/
 │   ├── cache.py           ***REMOVED*** CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
 │   ├── embeddings.py      ***REMOVED*** BGEM3Embeddings + BGEM3SparseEmbeddings (LangChain)
 │   ├── event_stream.py    ***REMOVED*** EventStream for graph→bot communication
-│   ├── langfuse.py        ***REMOVED*** create_langfuse_handler() for LangGraph callbacks
+│   ├── langfuse.py        ***REMOVED*** (legacy) Langfuse callback handler — replaced by @observe
 │   ├── memory.py          ***REMOVED*** MemorySaver for conversation persistence
 │   └── prompt_manager.py  ***REMOVED*** Langfuse Prompt Management with fallback templates
 └── graph/                 ***REMOVED*** LangGraph pipeline
