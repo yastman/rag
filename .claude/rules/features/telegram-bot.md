@@ -1,129 +1,139 @@
 ---
-paths: "telegram_bot/*.py, telegram_bot/middlewares/**"
+paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**"
 ---
 
 # Telegram Bot
 
-PropertyBot handlers, middlewares, and message processing.
+LangGraph-based RAG pipeline with aiogram Telegram interface.
 
 ## Purpose
 
-Telegram interface for Bulgarian property search with streaming responses and rate limiting.
+Telegram interface for domain-configurable search (default: Bulgarian property) with LangGraph StateGraph pipeline, streaming-compatible responses, and rate limiting.
 
 ## Architecture
 
 ```
 User Message → ThrottlingMiddleware → ErrorMiddleware
             → PropertyBot.handle_query()
-            → [Routing → Cache → Search → LLM]
-            → Markdown Response
+            → make_initial_state() → build_graph() → graph.ainvoke(state)
+            → [classify → cache_check → retrieve → grade → rerank → generate → cache_store → respond]
+            → Markdown Response (with plain text fallback)
 ```
 
 ## Key Files
 
-| File | Line | Description |
-|------|------|-------------|
-| `telegram_bot/bot.py` | 35 | PropertyBot class |
-| `telegram_bot/main.py` | - | Entry point |
-| `telegram_bot/config.py` | - | BotConfig dataclass |
-| `telegram_bot/middlewares/throttling.py` | 17 | ThrottlingMiddleware |
-| `telegram_bot/middlewares/error_handler.py` | 16 | ErrorHandlerMiddleware |
+| File | Description |
+|------|-------------|
+| `telegram_bot/bot.py` | PropertyBot class (~245 LOC, LangGraph pipeline) |
+| `telegram_bot/main.py` | Entry point |
+| `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
+| `telegram_bot/graph/graph.py` | `build_graph()` — assembles 9-node StateGraph |
+| `telegram_bot/graph/state.py` | RAGState TypedDict + `make_initial_state()` |
+| `telegram_bot/graph/edges.py` | 3 routing functions |
+| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories) |
+| `telegram_bot/graph/nodes/` | 8 node modules (classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
+| `telegram_bot/integrations/langfuse.py` | `create_langfuse_handler()` for LangGraph callbacks |
+| `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
+| `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
+
+## LangGraph Pipeline (9 nodes)
+
+```
+START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
+                 → [other] → cache_check → [HIT] → respond → END
+                                          → [MISS] → retrieve → grade
+                                                       → [relevant] → rerank → generate → cache_store → respond → END
+                                                       → [retries < 2] → rewrite → retrieve (loop)
+                                                       → [retries >= 2] → generate → cache_store → respond → END
+```
+
+### Nodes
+
+| Node | File | Injected Deps |
+|------|------|---------------|
+| classify | `graph/nodes/classify.py` | — (regex-based, no external deps) |
+| cache_check | `graph/nodes/cache.py` | cache, embeddings |
+| retrieve | `graph/nodes/retrieve.py` | cache, sparse_embeddings, qdrant |
+| grade | `graph/nodes/grade.py` | — (score threshold 0.3) |
+| rerank | `graph/nodes/rerank.py` | reranker (ColBERT or None) |
+| generate | `graph/nodes/generate.py` | — (uses GraphConfig.create_llm) |
+| rewrite | `graph/nodes/rewrite.py` | llm (optional, defaults via GraphConfig) |
+| cache_store | `graph/nodes/cache.py` | cache |
+| respond | `graph/nodes/respond.py` | message (aiogram Message, injected) |
+
+### Edges (conditional routing)
+
+| Function | From → To |
+|----------|-----------|
+| `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
+| `route_cache` | cache_check → respond (hit) or retrieve (miss) |
+| `route_grade` | grade → rerank (relevant), rewrite (retry < 2), generate (fallback) |
 
 ## Bot Commands
 
 | Command | Handler | Description |
 |---------|---------|-------------|
-| `/start` | on_start | Welcome message |
-| `/help` | on_help | Usage instructions |
-| `/clear` | on_clear | Clear conversation |
-| `/stats` | on_stats | Cache statistics |
+| `/start` | cmd_start | Welcome message (domain from config) |
+| `/help` | cmd_help | Usage instructions |
+| `/clear` | cmd_clear | Clear conversation history |
+| `/stats` | cmd_stats | Cache tier hit rates |
+| `/metrics` | cmd_metrics | Pipeline p50/p95 timing |
+
+## Configuration (BotConfig)
+
+pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for env vars:
+
+| Parameter | Env Var | Default | Description |
+|-----------|---------|---------|-------------|
+| `telegram_token` | `TELEGRAM_BOT_TOKEN` | — | Bot token |
+| `domain` | `BOT_DOMAIN` | `недвижимость` | Domain topic |
+| `domain_language` | `BOT_LANGUAGE` | `ru` | Response language |
+| `rerank_provider` | `RERANK_PROVIDER` | `voyage` | colbert / none / voyage |
+| `admin_ids` | `ADMIN_IDS` | [] | Comma-separated Telegram IDs |
+
+## Service Dependencies (initialized in PropertyBot.__init__)
+
+```python
+self._cache = CacheLayerManager(redis_url=config.redis_url)
+self._embeddings = BGEM3Embeddings(base_url=config.bge_m3_url)
+self._sparse = BGEM3SparseEmbeddings(base_url=config.bge_m3_url)
+self._qdrant = QdrantService(url=config.qdrant_url, ...)
+self._reranker = ColbertRerankerService(...)  # if rerank_provider == "colbert"
+self._llm = self._graph_config.create_llm()   # ChatLiteLLM
+```
+
+## handle_query Flow
+
+```python
+state = make_initial_state(user_id, session_id, query)
+handler = create_langfuse_handler(session_id, user_id, tags)
+graph = build_graph(cache, embeddings, sparse, qdrant, reranker, llm, message)
+async with ChatActionSender.typing(...):
+    await graph.ainvoke(state, config={"callbacks": [handler]})
+```
 
 ## Middlewares
 
 ### ThrottlingMiddleware
 
-Rate limiting with TTL cache:
-
-```python
-ThrottlingMiddleware(
-    rate_limit=1.5,      # Seconds between requests
-    admin_ids=[123456],  # Exempt from throttling
-)
-```
-
-- Uses `cachetools.TTLCache(maxsize=10_000, ttl=rate_limit)`
-- Admins bypass throttling
-- Returns "⏱ Слишком частые запросы" on throttle
+Rate limiting: `cachetools.TTLCache(maxsize=10_000, ttl=1.5s)`, admins bypass.
 
 ### ErrorHandlerMiddleware
 
-Centralized error handling:
-
-```python
-# Catches all exceptions
-# Logs with exc_info=True
-# Returns user-friendly message
-"❌ Произошла ошибка при обработке запроса."
-```
-
-## Configuration
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `TELEGRAM_BOT_TOKEN` | - | Bot token from @BotFather |
-| `rate_limit` | 1.5s | Throttling window |
-| `user_context_ttl` | 30 days | CESC context lifetime |
-| `cesc_extraction_frequency` | 3 | Extract prefs every N queries |
-
-## Service Dependencies
-
-```python
-# Initialized in PropertyBot.__init__
-self.cache_service = CacheService(redis_url)
-self.voyage_service = VoyageService(api_key)
-self.qdrant_service = QdrantService(url, collection)
-self.llm_service = LLMService(api_key, base_url)
-self.query_analyzer = QueryAnalyzer(api_key, base_url)
-self.user_context_service = UserContextService(cache, llm)
-self.cesc_personalizer = CESCPersonalizer(llm)
-```
-
-## Message Flow
-
-1. **Receive message** → Middlewares (throttle, error)
-2. **Classify query** → CHITCHAT/SIMPLE/COMPLEX
-3. **Check cache** → Return cached if hit
-4. **Preprocess** → Translit, weights
-5. **Analyze** → Extract filters
-6. **Search** → Qdrant hybrid RRF
-7. **Rerank** → ColBERT rerank on VPS / Voyage rerank in dev (if COMPLEX)
-8. **Generate** → LLM answer
-9. **Cache** → Store response
-10. **Reply** → Markdown formatted
-
-## Response Formatting
-
-```python
-# Bot uses Markdown parse_mode
-await message.answer(response, parse_mode="Markdown")
-```
-
-Supported:
-- `**bold**` for emphasis
-- `• item` for lists
-- Prices in euros, distances in meters
+Catches all exceptions, logs with `exc_info=True`, returns user-friendly message.
 
 ## Dependencies
 
 - Container: `dev-bot` / `vps-bot`, 512MB RAM
-- Requires: redis, qdrant, litellm, bge-m3, user-base (VPS) | redis, qdrant, litellm, bm42, user-base (dev)
+- Requires: redis, qdrant, litellm, bge-m3
 
 ## Testing
 
 ```bash
 pytest tests/unit/test_bot.py -v
 pytest tests/unit/test_middlewares.py -v
-make e2e-test  # Full E2E with real Telegram
+pytest tests/unit/graph/ -v                    # All graph tests (~124 tests)
+pytest tests/smoke/test_langgraph_pipeline.py -v  # Smoke tests
 ```
 
 ## Troubleshooting
@@ -132,7 +142,7 @@ make e2e-test  # Full E2E with real Telegram
 |-------|-----|
 | Bot not responding | Check `docker logs dev-bot` |
 | `TELEGRAM_BOT_TOKEN` invalid | Get new token from @BotFather |
-| Services unhealthy | Check depends_on containers |
+| Services unhealthy | Run preflight: `from telegram_bot.preflight import check_dependencies` |
 
 ## Development Guide
 
@@ -140,20 +150,20 @@ make e2e-test  # Full E2E with real Telegram
 
 1. Add handler method to `PropertyBot`:
 ```python
-async def on_newcmd(self, message: Message):
+async def cmd_newcmd(self, message: Message):
     await message.answer("Response")
 ```
 
 2. Register in `_register_handlers()`:
 ```python
-self.dp.message.register(self.on_newcmd, Command("newcmd"))
+self.dp.message(Command("newcmd"))(self.cmd_newcmd)
 ```
 
-3. Add test in `tests/unit/test_bot.py`
+### Adding new graph node
 
-### Adding new middleware
-
-1. Create class in `telegram_bot/middlewares/`
-2. Inherit from `BaseMiddleware`
-3. Implement `__call__` method
-4. Register in `bot.py._setup_middlewares()`
+1. Create module in `telegram_bot/graph/nodes/`
+2. Define async function with `state: dict[str, Any]` signature
+3. Return partial state update dict
+4. Add to `build_graph()` in `graph/graph.py` with `functools.partial` for deps
+5. Add edges in `graph/graph.py`
+6. Write tests in `tests/unit/graph/`
