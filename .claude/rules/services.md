@@ -1,142 +1,117 @@
 ---
-paths: "telegram_bot/services/**/*.py"
+paths: "telegram_bot/services/**/*.py, telegram_bot/integrations/**/*.py"
 ---
 
-***REMOVED*** Service Patterns
+***REMOVED*** Service & Integration Patterns
 
-Code patterns for telegram_bot/services.
+Code patterns for `telegram_bot/services/` and `telegram_bot/integrations/`.
 
-***REMOVED******REMOVED*** VoyageService (Recommended)
+***REMOVED******REMOVED*** Directory Structure
 
-```python
-from telegram_bot.services import VoyageService
-
-***REMOVED*** Unified service for embeddings + reranking
-service = VoyageService(
-    api_key="...",
-    model_docs="voyage-4-large",     ***REMOVED*** For document indexing (1024-dim)
-    model_queries="voyage-4-lite",   ***REMOVED*** For queries (asymmetric retrieval)
-    model_rerank="rerank-2.5",       ***REMOVED*** 32K context window
-)
-
-***REMOVED*** Async methods (recommended)
-query_vec = await service.embed_query("search text")
-doc_vecs = await service.embed_documents(["doc1", "doc2"])
-results = await service.rerank("query", documents, top_k=5)
-
-***REMOVED*** Sync wrappers (for non-async code)
-query_vec = service.embed_query_sync("search text")
+```
+telegram_bot/
+├── services/              ***REMOVED*** Business logic services (LLM, search, preprocessing)
+│   ├── llm.py             ***REMOVED*** LLMService (OpenAI SDK, langfuse.openai.AsyncOpenAI)
+│   ├── query_analyzer.py  ***REMOVED*** QueryAnalyzer (LLM filter extraction, OpenAI SDK)
+│   ├── query_preprocessor.py ***REMOVED*** HyDEGenerator + QueryPreprocessor
+│   ├── query_router.py    ***REMOVED*** Legacy QueryType routing (4-type)
+│   ├── filter_extractor.py ***REMOVED*** Regex filter extraction
+│   ├── qdrant.py          ***REMOVED*** QdrantService (async, Qdrant SDK)
+│   ├── colbert_reranker.py ***REMOVED*** ColbertRerankerService (BGE-M3 /rerank)
+│   ├── voyage.py          ***REMOVED*** VoyageService (embeddings + rerank API)
+│   ├── vectorizers.py     ***REMOVED*** UserBaseVectorizer + BgeM3CacheVectorizer
+│   ├── cache.py           ***REMOVED*** Legacy CacheService (retained for reference)
+│   ├── metrics.py         ***REMOVED*** PipelineMetrics (p50/p95 tracking)
+│   ├── redis_monitor.py   ***REMOVED*** RedisHealthMonitor (background task)
+│   └── retriever.py       ***REMOVED*** RetrieverService (sync, legacy)
+├── integrations/          ***REMOVED*** LangGraph-compatible wrappers
+│   ├── cache.py           ***REMOVED*** CacheLayerManager (6-tier, ~430 LOC)
+│   ├── embeddings.py      ***REMOVED*** BGEM3Embeddings + BGEM3SparseEmbeddings (LangChain)
+│   ├── langfuse.py        ***REMOVED*** create_langfuse_handler() for LangGraph callbacks
+│   └── memory.py          ***REMOVED*** MemorySaver for conversation persistence
+└── graph/                 ***REMOVED*** LangGraph pipeline
+    ├── graph.py           ***REMOVED*** build_graph() — 9-node StateGraph assembly
+    ├── state.py           ***REMOVED*** RAGState TypedDict + make_initial_state()
+    ├── edges.py           ***REMOVED*** 3 routing functions
+    ├── config.py          ***REMOVED*** GraphConfig (service factories)
+    └── nodes/             ***REMOVED*** 8 node modules
 ```
 
-***REMOVED******REMOVED*** Local Russian Embeddings (UserBaseVectorizer)
+***REMOVED******REMOVED*** Key Patterns
+
+***REMOVED******REMOVED******REMOVED*** OpenAI SDK (LLM services)
+
+All LLM-calling services use `langfuse.openai.AsyncOpenAI`:
 
 ```python
-from telegram_bot.services import UserBaseVectorizer
+from langfuse.openai import AsyncOpenAI
 
-***REMOVED*** For semantic cache with Russian text optimization
-vectorizer = UserBaseVectorizer(
-    base_url="http://localhost:8003",  ***REMOVED*** or http://user-base:8000 in Docker
+self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, max_retries=2, timeout=30.0)
+response = await self.client.chat.completions.create(
+    model=self.model, messages=[...],
+    name="operation-name",  ***REMOVED*** type: ignore[call-overload]  ***REMOVED*** langfuse kwarg
 )
-
-***REMOVED*** Async (recommended)
-embedding = await vectorizer.aembed("двухкомнатная квартира")
-
-***REMOVED*** Sync wrapper
-embedding = vectorizer.embed("двухкомнатная квартира")
 ```
 
-**Environment:** Set `USE_LOCAL_EMBEDDINGS=true` to use USER-base instead of Voyage API for semantic cache.
+***REMOVED******REMOVED******REMOVED*** LangChain Embeddings (integrations)
+
+```python
+from telegram_bot.integrations.embeddings import BGEM3Embeddings, BGEM3SparseEmbeddings
+
+emb = BGEM3Embeddings(base_url="http://bge-m3:8000")
+vector = await emb.aembed_query("text")  ***REMOVED*** 1024-dim dense
+
+sparse = BGEM3SparseEmbeddings(base_url="http://bge-m3:8000")
+sv = await sparse.aembed_query("text")   ***REMOVED*** sparse dict
+```
+
+***REMOVED******REMOVED******REMOVED*** CacheLayerManager (integrations)
+
+```python
+from telegram_bot.integrations.cache import CacheLayerManager
+
+cache = CacheLayerManager(redis_url="redis://redis:6379")
+await cache.initialize()
+***REMOVED*** CACHE_VERSION = "v3", keys: {tier}:v3:{hash}
+```
+
+***REMOVED******REMOVED******REMOVED*** BotConfig (pydantic-settings)
+
+```python
+from telegram_bot.config import BotConfig
+
+config = BotConfig()  ***REMOVED*** Reads from .env + env vars via AliasChoices
+***REMOVED*** config.telegram_token, config.llm_base_url, config.domain, etc.
+```
+
+***REMOVED******REMOVED******REMOVED*** GraphConfig (service factories)
+
+```python
+from telegram_bot.graph.config import GraphConfig
+
+gc = GraphConfig.from_env()
+llm = gc.create_llm()                    ***REMOVED*** ChatLiteLLM
+emb = gc.create_embeddings()             ***REMOVED*** BGEM3Embeddings
+sparse = gc.create_sparse_embeddings()   ***REMOVED*** BGEM3SparseEmbeddings
+```
 
 ***REMOVED******REMOVED*** Cache Key Versioning
 
-Cache keys include `CACHE_SCHEMA_VERSION` to prevent pollution when models change:
+`CACHE_VERSION = "v3"` in `integrations/cache.py`. Key patterns:
 
-```python
-from telegram_bot.services.cache import CACHE_SCHEMA_VERSION  ***REMOVED*** "v2"
+| Pattern | Tier |
+|---------|------|
+| `sem:v3:bge1024` | Semantic cache |
+| `embeddings:v3:{hash}` | Dense embeddings |
+| `sparse:v3:{hash}` | Sparse embeddings |
+| `search:v3:{hash}` | Search results |
+| `conversation:{user_id}` | Chat history |
 
-***REMOVED*** Cache key patterns:
-***REMOVED*** sem:v2:{vectorizer_id}  - SemanticCache (e.g., sem:v2:voyage1024)
-***REMOVED*** emb:v2                   - EmbeddingsCache
-***REMOVED*** search:v2:{index_ver}    - Search results
-***REMOVED*** analysis:v2              - QueryAnalyzer
-***REMOVED*** rerank:v2                - Rerank results
-***REMOVED*** sparse:v2:{model}        - Sparse embeddings
-```
-
-Bump version when changing models. Old keys expire naturally (TTL 2h-7d).
-
-***REMOVED******REMOVED*** Query Preprocessing (QueryPreprocessor)
-
-```python
-from telegram_bot.services import QueryPreprocessor
-pp = QueryPreprocessor()
-result = pp.analyze("apartments in Sunny Beach корпус 5")
-***REMOVED*** Returns:
-***REMOVED*** {
-***REMOVED***   "normalized_query": "apartments in Солнечный берег корпус 5",  ***REMOVED*** Translit
-***REMOVED***   "rrf_weights": {"dense": 0.2, "sparse": 0.8},  ***REMOVED*** Exact query -> favor sparse
-***REMOVED***   "cache_threshold": 0.05,  ***REMOVED*** Strict for queries with IDs
-***REMOVED***   "is_exact": True
-***REMOVED*** }
-```
-
-- **Semantic queries** (no IDs): RRF weights 0.6/0.4 (dense favored), cache threshold 0.10
-- **Exact queries** (IDs, corpus, floors): RRF weights 0.2/0.8 (sparse favored), cache threshold 0.05
-
-***REMOVED******REMOVED*** Query Routing (2026 Best Practice)
-
-```python
-from telegram_bot.services import classify_query, QueryType, get_chitchat_response
-
-query_type = classify_query("Привет!")  ***REMOVED*** Returns QueryType.CHITCHAT
-if query_type == QueryType.CHITCHAT:
-    response = get_chitchat_response(query)  ***REMOVED*** Skip RAG entirely
-
-***REMOVED*** QueryType.SIMPLE  → Light RAG, skip rerank
-***REMOVED*** QueryType.COMPLEX → Full RAG + rerank
-```
-
-***REMOVED******REMOVED*** Qdrant Binary Quantization (2026 Best Practice)
-
-```python
-from telegram_bot.services import QdrantService
-
-***REMOVED*** QdrantService with quantization (default: enabled)
-qdrant = QdrantService(
-    url="http://localhost:6333",
-    collection_name="documents",
-    use_quantization=True,           ***REMOVED*** 40x faster search
-    quantization_rescore=True,       ***REMOVED*** Maintain accuracy
-    quantization_oversampling=2.0,   ***REMOVED*** Fetch 2x candidates, rescore top_k
-)
-
-***REMOVED*** A/B testing: disable quantization per-request
-results_baseline = await qdrant.hybrid_search_rrf(
-    dense_vector=query_embedding,
-    quantization_ignore=True,  ***REMOVED*** Skip quantization for this request
-)
-```
-
-***REMOVED******REMOVED*** 2026 Performance Defaults
-
-| Parameter          | Value | Purpose                             |
-| ------------------ | ----- | ----------------------------------- |
-| `search_top_k`     | 20    | Fewer candidates → faster Qdrant    |
-| `use_quantization` | true  | 40x faster, 75% less RAM            |
-| `rerank_top_k`     | 3     | Fewer chunks in LLM context         |
-| `max_tokens`       | 1024  | Faster generation                   |
-| Rerank cache TTL   | 2h    | Skip API calls for repeated queries |
+Bump version when changing models. Old keys expire naturally.
 
 ***REMOVED******REMOVED*** I/O Patterns
 
-- **Telegram Bot services**: Async (`httpx.AsyncClient`, `AsyncQdrantClient`)
-- **Search Engines**: Sync Qdrant SDK (`QdrantClient.query_points()`) with `models.Prefetch` for nested prefetch
+- **LangGraph nodes**: Async functions with `state: dict[str, Any]` signature
+- **Services**: Async (`httpx.AsyncClient`, `AsyncQdrantClient`, `AsyncOpenAI`)
+- **Search Engines (src/retrieval)**: Sync Qdrant SDK for evaluation benchmarks
 - No blocking calls in async context for bot handlers
-
-***REMOVED******REMOVED*** Legacy
-
-```python
-***REMOVED*** Legacy BGE-M3 (local model, high RAM)
-from src.models.embedding_model import get_bge_m3_model
-model = get_bge_m3_model()  ***REMOVED*** Reuses single instance, saves 4-6GB RAM
-```

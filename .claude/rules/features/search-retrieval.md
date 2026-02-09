@@ -1,5 +1,5 @@
 ---
-paths: "src/retrieval/**, **/qdrant*.py, **/retriever*.py"
+paths: "src/retrieval/**, **/qdrant*.py, **/retriever*.py, **/graph/nodes/retrieve.py, **/graph/nodes/rerank.py"
 ---
 
 ***REMOVED*** Search & Retrieval
@@ -13,11 +13,12 @@ Retrieve relevant documents using combination of dense (semantic) and sparse (ke
 ***REMOVED******REMOVED*** Architecture
 
 ```
-Query → Dense Embedding (BGE-M3) + Sparse Embedding (BGE-M3)
-     → Qdrant Prefetch (dense + sparse)
-     → RRF Fusion
-     → [Optional] ColBERT Rerank
-     → Results
+LangGraph retrieve_node:
+  Query → Dense Embedding (BGE-M3, from cache_check) + Sparse Embedding (BGE-M3)
+       → Qdrant Prefetch (dense + sparse)
+       → RRF Fusion
+       → grade_node → rerank_node (ColBERT or score-sort)
+       → Results
 
 VPS:  BGE-M3 for dense + sparse + ColBERT rerank (local CPU)
 Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
@@ -25,12 +26,41 @@ Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
 
 ***REMOVED******REMOVED*** Key Files
 
-| File | Line | Description |
-|------|------|-------------|
-| `src/retrieval/search_engines.py` | 56 | BaseSearchEngine ABC |
-| `src/retrieval/search_engines.py` | 78 | BaselineSearchEngine |
-| `telegram_bot/services/qdrant.py` | 19 | QdrantService (async) |
-| `telegram_bot/services/retriever.py` | 12 | RetrieverService (sync, legacy) |
+| File | Description |
+|------|-------------|
+| `src/retrieval/search_engines.py` | BaseSearchEngine ABC + variants |
+| `telegram_bot/services/qdrant.py` | QdrantService (async, Qdrant SDK) |
+| `telegram_bot/graph/nodes/retrieve.py` | LangGraph retrieve_node (hybrid RRF + cache) |
+| `telegram_bot/graph/nodes/grade.py` | Score-based relevance grading (threshold 0.3) |
+| `telegram_bot/graph/nodes/rerank.py` | Optional ColBERT + score-sort fallback, top-5 |
+| `telegram_bot/graph/nodes/rewrite.py` | LLM query reformulation, max 2 retries |
+| `telegram_bot/services/retriever.py` | RetrieverService (sync, legacy) |
+
+***REMOVED******REMOVED*** LangGraph retrieve_node
+
+```python
+from telegram_bot.graph.nodes.retrieve import retrieve_node
+
+***REMOVED*** Flow: search cache → sparse cache → qdrant.hybrid_search_rrf() → cache results
+result = await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdrant=qdrant)
+***REMOVED*** Returns: {documents, search_results_count, sparse_embedding, latency_stages}
+```
+
+Dense embedding comes from `state["query_embedding"]` (set by cache_check_node).
+
+***REMOVED******REMOVED*** LangGraph Agentic Nodes
+
+***REMOVED******REMOVED******REMOVED*** grade_node
+
+Score-based heuristic: `top_score > 0.3` → documents relevant.
+
+***REMOVED******REMOVED******REMOVED*** rerank_node
+
+ColBERT reranking if reranker provided, else score-sort fallback (top-5).
+
+***REMOVED******REMOVED******REMOVED*** rewrite_node
+
+LLM reformulation via ChatLiteLLM. Increments `rewrite_count`, resets embeddings for re-retrieval. Max 2 retries before fallback to generate.
 
 ***REMOVED******REMOVED*** Search Engine Variants
 
@@ -52,10 +82,7 @@ Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
 | `quantization_rescore` | true | Rescore with full vectors |
 | `quantization_oversampling` | 2.0 | Fetch 2x more candidates |
 | `small_to_big_mode` | off | off/on/auto (context expansion) |
-| `small_to_big_window_before` | 1 | Chunks before hit |
-| `small_to_big_window_after` | 1 | Chunks after hit |
 | `acorn_mode` | off | off/on/auto (filtered search optimization) |
-| `acorn_max_selectivity` | 0.4 | Max filter selectivity for ACORN |
 
 ***REMOVED******REMOVED*** RRF Weights by Query Type
 
@@ -71,18 +98,13 @@ Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
 ```python
 from telegram_bot.services.qdrant import QdrantService
 
-qdrant = QdrantService(
-    url="http://localhost:6333",
-    collection_name="contextual_bulgaria_voyage",
-)
+qdrant = QdrantService(url="http://localhost:6333", collection_name="gdrive_documents_bge")
 
 results = await qdrant.hybrid_search_rrf(
-    dense_vector=query_embedding,      ***REMOVED*** From BGE-M3 (VPS) or VoyageService (dev)
-    sparse_vector=sparse_embedding,    ***REMOVED*** From BGE-M3 sparse (VPS) or BM42 (dev)
+    dense_vector=query_embedding,
+    sparse_vector=sparse_embedding,
     filters={"city": "Несебр"},
-    top_k=10,
-    dense_weight=0.6,
-    sparse_weight=0.4,
+    top_k=20,
 )
 ```
 
@@ -95,118 +117,61 @@ response = client.query_points(
     collection_name="documents",
     prefetch=[
         models.Prefetch(query=dense_vector, using="dense", limit=100),
-        models.Prefetch(query=sparse_vector, using="bm42", limit=100),  ***REMOVED*** field name "bm42" kept, data from BGE-M3 sparse on VPS
+        models.Prefetch(query=sparse_vector, using="bm42", limit=100),
     ],
     query=models.FusionQuery(fusion=models.Fusion.RRF),
     limit=top_k,
 )
 ```
 
-***REMOVED******REMOVED******REMOVED*** Score boosting (freshness)
-
-```python
-results = await qdrant.search_with_score_boosting(
-    dense_vector=query_embedding,
-    freshness_boost=True,
-    freshness_field="created_at",
-    freshness_scale_days=7,
-)
-```
-
-***REMOVED******REMOVED******REMOVED*** MMR diversity reranking
-
-```python
-diverse_results = qdrant.mmr_rerank(
-    points=results,
-    embeddings=result_embeddings,
-    lambda_mult=0.5,  ***REMOVED*** 0=diversity, 1=relevance
-    top_k=5,
-)
-```
-
 ***REMOVED******REMOVED*** Filter Building
 
 ```python
-***REMOVED*** Exact match
-filters = {"city": "Несебр"}
-
-***REMOVED*** Range filter
-filters = {"price": {"gte": 50000, "lte": 100000}}
-
-***REMOVED*** Combined
-filters = {
-    "city": "Бургас",
-    "rooms": 2,
-    "price": {"lt": 80000}
-}
+filters = {"city": "Бургас", "rooms": 2, "price": {"lt": 80000}}
 ```
 
 ***REMOVED******REMOVED*** Binary Quantization
 
-Enabled by default for 40x faster search, 75% less RAM:
+Enabled by default for 40x faster search, 75% less RAM.
 
-```python
-***REMOVED*** Disable for A/B testing
-results = await qdrant.hybrid_search_rrf(
-    dense_vector=query_embedding,
-    quantization_ignore=True,  ***REMOVED*** Use full vectors
-)
-```
-
-**Collection selection:** `settings.get_collection_name()` appends `_binary` or `_scalar` suffix based on mode.
-
-***REMOVED******REMOVED*** Small-to-Big Expansion
-
-Fetches neighboring chunks after retrieval for more context:
-
-```python
-from telegram_bot.services.small_to_big import SmallToBigService
-
-s2b = SmallToBigService(qdrant_service, settings)
-expanded = await s2b.expand_results(
-    results=search_results,
-    window_before=1,  ***REMOVED*** 1 chunk before each hit
-    window_after=1,   ***REMOVED*** 1 chunk after each hit
-)
-```
-
-**Modes:** `off` (disabled), `on` (always expand), `auto` (expand for COMPLEX queries only)
+**Collection selection:** `BotConfig.get_collection_name()` appends `_binary` or `_scalar` suffix.
 
 ***REMOVED******REMOVED*** ACORN (Filtered Search Optimization)
 
-ACORN improves search quality when strict filters cause HNSW graph disconnection. Best for low selectivity filters (< 40% of vectors match).
+**Status (Feb 2026):** Code ready, waiting for `qdrant-client` to export `AcornSearchParams`.
 
-**Status (Feb 2026):**
-| Component | Version | ACORN Support |
-|-----------|---------|---------------|
-| Qdrant Server | 1.16+ | ✅ Supported |
-| qdrant-client (Python) | 1.16.2 | ⚠️ `AcornSearchParams` not yet exported |
+***REMOVED******REMOVED*** LangGraph Graph Assembly
 
-Code is ready — will auto-enable when SDK adds the class:
-```python
-***REMOVED*** src/retrieval/search_engines.py
-try:
-    from qdrant_client.models import AcornSearchParams
-    ACORN_AVAILABLE = True
-except ImportError:
-    ACORN_AVAILABLE = False  ***REMOVED*** Current state
+9-node StateGraph with conditional routing:
+
+```
+START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
+                 → [other] → cache_check → [HIT] → respond → END
+                                         → [MISS] → retrieve → grade
+                                                      → [relevant] → rerank → generate → cache_store → respond → END
+                                                      → [retries < 2] → rewrite → retrieve (loop)
+                                                      → [retries >= 2] → generate → cache_store → respond → END
 ```
 
+***REMOVED******REMOVED******REMOVED*** Edges
+
+| Function | From → To |
+|----------|-----------|
+| `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
+| `route_cache` | cache_check → respond (hit) or retrieve (miss) |
+| `route_grade` | grade → rerank (relevant), rewrite (retry < 2), generate (fallback) |
+
+***REMOVED******REMOVED******REMOVED*** Usage
+
 ```python
-***REMOVED*** Auto mode: ACORN enabled only with filters + low selectivity
-results = await qdrant.hybrid_search_rrf(
-    dense_vector=query_embedding,
-    filters={"city": "Несебр"},  ***REMOVED*** Triggers ACORN in auto mode
-    acorn_mode="auto",
+from telegram_bot.graph.graph import build_graph
+
+graph = build_graph(
+    cache=cache_mgr, embeddings=bge_emb,
+    sparse_embeddings=bge_sparse, qdrant=qdrant_svc,
+    reranker=colbert_svc, message=aiogram_message,
 )
-```
-
-**Modes:** `off` (disabled), `on` (always use), `auto` (use when beneficial)
-
-**To enable when SDK updates:**
-```bash
-uv lock --upgrade-package qdrant-client
-pytest tests/unit/test_acorn.py -v  ***REMOVED*** Should show 22 passed (not 8 skipped)
+result = await graph.ainvoke(initial_state, config={"callbacks": [langfuse_handler]})
 ```
 
 ***REMOVED******REMOVED*** Dependencies
@@ -219,6 +184,10 @@ pytest tests/unit/test_acorn.py -v  ***REMOVED*** Should show 22 passed (not 8 s
 ```bash
 pytest tests/unit/test_qdrant_service.py -v
 pytest tests/unit/test_search_engines.py -v
+pytest tests/unit/graph/test_retrieve_node.py -v    ***REMOVED*** 5 tests
+pytest tests/unit/graph/test_agentic_nodes.py -v    ***REMOVED*** 12 tests (grade/rerank/rewrite)
+pytest tests/unit/graph/test_edges.py -v             ***REMOVED*** 13 tests (routing)
+pytest tests/unit/graph/test_graph.py -v             ***REMOVED*** 3 tests (assembly)
 ```
 
 ***REMOVED******REMOVED*** Troubleshooting
