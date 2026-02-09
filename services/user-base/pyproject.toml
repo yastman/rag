@@ -6,9 +6,15 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.32.0",
-    "sentence-transformers>=2.2.0",
+    "sentence-transformers>=3.2.0",
     "pydantic>=2.0.0",
     "torch>=2.0.0",
+]
+
+[project.optional-dependencies]
+onnx = [
+    "onnxruntime>=1.18.0",
+    "optimum>=1.21.0",
 ]
 
 [build-system]
