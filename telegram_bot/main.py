@@ -12,6 +12,12 @@ from aiogram.exceptions import (
     TelegramServerError,
     TelegramUnauthorizedError,
 )
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from .bot import PropertyBot
 from .config import BotConfig
@@ -19,25 +25,23 @@ from .logging_config import setup_logging
 from .observability import get_langfuse_client
 
 
-def _retry_delays() -> tuple[float, float]:
-    initial = float(os.getenv("BOT_START_RETRY_DELAY_SEC", "2"))
-    max_delay = float(os.getenv("BOT_START_RETRY_MAX_SEC", "60"))
-    return max(0.5, initial), max(max_delay, 1.0)
+# Startup retry settings
+_MAX_START_ATTEMPTS = int(os.getenv("BOT_START_MAX_ATTEMPTS", "10"))
+_START_WAIT_MIN = float(os.getenv("BOT_START_RETRY_DELAY_SEC", "2"))
+_START_WAIT_MAX = float(os.getenv("BOT_START_RETRY_MAX_SEC", "60"))
 
 
 async def main():
     """Run bot."""
     # Setup structured logging
-    # Use JSON format in production, plain text in development
     json_format = os.getenv("LOG_FORMAT", "json") == "json"
     log_level = os.getenv("LOG_LEVEL", "INFO")
-    log_file = os.getenv("LOG_FILE")  # Optional: write logs to file
+    log_file = os.getenv("LOG_FILE")
 
     setup_logging(level=log_level, json_format=json_format, log_file=log_file)
     logger = logging.getLogger(__name__)
 
     # Initialize Langfuse client with PII masking FIRST (no-op when keys not set)
-    # This registers the SDK singleton with mask=... before any other code uses it
     _langfuse = get_langfuse_client()
     if _langfuse:
         logger.info("Langfuse client initialized with PII masking")
@@ -47,7 +51,6 @@ async def main():
     # Load config
     config = BotConfig()
 
-    # Validate config
     if not config.telegram_token:
         logger.error("TELEGRAM_BOT_TOKEN not set in .env")
         return
@@ -55,32 +58,24 @@ async def main():
     if not config.llm_api_key:
         logger.warning("OPENAI_API_KEY not set - LLM will not work")
 
-    # Create and start bot
     bot = PropertyBot(config)
-    delay, max_delay = _retry_delays()
+
+    @retry(
+        retry=retry_if_exception_type(
+            (TelegramRetryAfter, TelegramNetworkError, TelegramServerError, OSError)
+        ),
+        stop=stop_after_attempt(_MAX_START_ATTEMPTS),
+        wait=wait_exponential(min=_START_WAIT_MIN, max=_START_WAIT_MAX),
+        reraise=True,
+    )
+    async def _start_with_retry():
+        await bot.start()
 
     try:
-        while True:
-            try:
-                await bot.start()
-                break
-            except TelegramRetryAfter as e:
-                retry_after = max(float(e.retry_after), delay)
-                logger.warning(
-                    f"Telegram rate limit during startup. Retrying in {retry_after:.1f}s"
-                )
-                await asyncio.sleep(retry_after)
-                delay = min(max_delay, delay * 2)
-            except (TelegramNetworkError, TelegramServerError, OSError) as e:
-                logger.warning(
-                    f"Temporary Telegram/network error during startup: {e}. "
-                    f"Retrying in {delay:.1f}s"
-                )
-                await asyncio.sleep(delay)
-                delay = min(max_delay, delay * 2)
-            except (TelegramUnauthorizedError, TelegramConflictError):
-                # Fatal configuration/runtime errors; let container restart policy handle it.
-                raise
+        await _start_with_retry()
+    except (TelegramUnauthorizedError, TelegramConflictError):
+        logger.error("Fatal Telegram error — check bot token or stop other instances")
+        raise
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     finally:
