@@ -16,13 +16,6 @@ from langchain_core.messages import HumanMessage
 logger = logging.getLogger(__name__)
 
 
-def _get_llm() -> Any:
-    """Create LLM instance from GraphConfig."""
-    from telegram_bot.graph.config import GraphConfig
-
-    return GraphConfig.from_env().create_llm()
-
-
 _REWRITE_PROMPT = (
     "Ты — помощник по поиску недвижимости. "
     "Пользователь задал вопрос, но результаты поиска оказались нерелевантными.\n\n"
@@ -59,13 +52,21 @@ async def rewrite_node(
     rewrite_count = state.get("rewrite_count", 0)
 
     try:
+        from telegram_bot.graph.config import GraphConfig
+
+        config = GraphConfig.from_env()
         if llm is None:
-            llm = _get_llm()
+            llm = config.create_llm()
 
         prompt = _REWRITE_PROMPT.format(query=original_query)
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
-        rewritten = response.content if hasattr(response, "content") else str(response)
-        rewritten = rewritten.strip()
+        response = await llm.chat.completions.create(
+            model=config.llm_model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=200,
+            name="rewrite-query",  # type: ignore[call-overload]  # langfuse kwarg
+        )
+        rewritten = (response.choices[0].message.content or "").strip()
 
         if not rewritten:
             rewritten = original_query
