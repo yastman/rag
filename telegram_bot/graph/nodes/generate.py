@@ -12,6 +12,7 @@ import time
 from typing import Any
 
 from telegram_bot.graph.state import RAGState
+from telegram_bot.integrations.prompt_manager import get_prompt
 
 
 logger = logging.getLogger(__name__)
@@ -26,16 +27,19 @@ def _get_config() -> Any:
     return GraphConfig.from_env()
 
 
+_GENERATE_FALLBACK = (
+    "Ты — ассистент по {{domain}}.\n\n"
+    "Отвечай на вопросы пользователя на основе предоставленного контекста.\n"
+    "Если информации недостаточно, честно скажи об этом.\n"
+    "Всегда указывай цены в евро и расстояния в метрах.\n"
+    "Будь вежливым и полезным.\n\n"
+    "Форматируй ответ с Markdown: используй **жирный** для важного, • для списков."
+)
+
+
 def _build_system_prompt(domain: str) -> str:
     """Build system prompt with domain context."""
-    return (
-        f"Ты — ассистент по {domain}.\n\n"
-        "Отвечай на вопросы пользователя на основе предоставленного контекста.\n"
-        "Если информации недостаточно, честно скажи об этом.\n"
-        "Всегда указывай цены в евро и расстояния в метрах.\n"
-        "Будь вежливым и полезным.\n\n"
-        "Форматируй ответ с Markdown: используй **жирный** для важного, • для списков."
-    )
+    return get_prompt("generate", fallback=_GENERATE_FALLBACK, variables={"domain": domain})
 
 
 def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEXT_DOCS) -> str:
