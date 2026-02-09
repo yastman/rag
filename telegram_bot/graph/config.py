@@ -70,16 +70,14 @@ class GraphConfig:
         )
 
     def create_llm(self) -> Any:
-        """Create a ChatLiteLLM instance for the pipeline."""
-        from langchain_community.chat_models import ChatLiteLLM
+        """Create an AsyncOpenAI instance for the pipeline."""
+        from langfuse.openai import AsyncOpenAI
 
-        return ChatLiteLLM(
-            model=self.llm_model,
-            api_base=self.llm_base_url,
-            api_key=self.llm_api_key or None,
-            streaming=True,
-            temperature=self.llm_temperature,
-            max_tokens=self.llm_max_tokens,
+        return AsyncOpenAI(
+            api_key=self.llm_api_key or "no-key",
+            base_url=self.llm_base_url,
+            max_retries=2,
+            timeout=60.0,
         )
 
     def create_embeddings(self) -> Any:

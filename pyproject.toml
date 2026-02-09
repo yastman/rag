@@ -42,8 +42,7 @@ dependencies = [
     "uvloop>=0.21.0",                     ***REMOVED*** 2-4x faster asyncio event loop
     ***REMOVED*** LangGraph Pipeline (2026-02-09)
     "langgraph>=1.0.3",                   ***REMOVED*** State graph for RAG pipeline
-    "langchain-core>=0.3",                ***REMOVED*** Core abstractions (Embeddings, etc.)
-    "langchain-community>=0.3",           ***REMOVED*** Community integrations
+    "langchain-core>=1.2",                ***REMOVED*** Core abstractions (Embeddings, etc.)
     "langgraph-checkpoint-postgres>=2.0", ***REMOVED*** Postgres checkpointing for LangGraph
 ]
 
