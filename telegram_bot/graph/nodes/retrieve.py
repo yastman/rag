@@ -11,10 +11,13 @@ import logging
 import time
 from typing import Any
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
 
+@observe(name="node-retrieve")
 async def retrieve_node(
     state: dict[str, Any],
     *,
