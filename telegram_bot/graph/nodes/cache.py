@@ -10,10 +10,13 @@ import logging
 import time
 from typing import Any
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
 
+@observe(name="node-cache-check")
 async def cache_check_node(
     state: dict[str, Any],
     *,
@@ -73,6 +76,7 @@ async def cache_check_node(
     }
 
 
+@observe(name="node-cache-store")
 async def cache_store_node(
     state: dict[str, Any],
     *,
