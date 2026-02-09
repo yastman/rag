@@ -1,163 +1,129 @@
 ---
-paths: "**/cache*.py, src/cache/**"
+paths: "**/cache*.py, src/cache/**, **/integrations/cache.py"
 ---
 
 # Caching System
 
-6-tier caching system for RAG pipeline optimization.
-
-## Purpose
-
-Reduce API calls, latency, and costs by caching at multiple levels:
-- Semantic cache for LLM responses
-- Embeddings cache for query vectors
-- Search results cache
-- Rerank results cache
-- QueryAnalyzer results cache
-- Sparse embeddings cache
+6-tier caching for RAG pipeline: semantic + 5 exact caches + conversation history.
 
 ## Architecture
 
+CacheLayerManager is the sole cache implementation (CacheService legacy removed).
+
 ```
-Query → SemanticCache check → [HIT: return cached]
-                           → [MISS: Embeddings → Search → Rerank → LLM → cache result]
+LangGraph Pipeline:
+  classify → cache_check_node → [HIT] → respond
+                              → [MISS] → retrieve_node → grade → rerank → generate → cache_store_node
 ```
 
 ## Key Files
 
-| File | Line | Description |
-|------|------|-------------|
-| `telegram_bot/services/cache.py` | 33 | CacheService main class |
-| `telegram_bot/services/cache.py` | 30 | CACHE_SCHEMA_VERSION |
-| `src/cache/redis_semantic_cache.py` | - | Legacy implementation |
+| File | Description |
+|------|-------------|
+| `telegram_bot/integrations/cache.py` | CacheLayerManager (~430 LOC) |
+| `telegram_bot/graph/nodes/cache.py` | cache_check_node + cache_store_node |
+| `telegram_bot/graph/nodes/retrieve.py` | retrieve_node (hybrid RRF + search/sparse cache) |
 
-## Cache Tiers
+## Cache Tiers (CacheLayerManager)
 
 | Tier | Cache Type | TTL | Key Pattern |
 |------|------------|-----|-------------|
-| 1 | Semantic (LLM responses) | 48h | `sem:v2:{vectorizer_id}` |
-| 1 | Embeddings (query vectors) | 7d | `emb:v2:{hash}` |
-| 1 | Conversation history | ∞ | `rag_conversations:v2:{vectorizer_id}` |
-| 2 | QueryAnalyzer results | 24h | `analysis:v2:{hash}` |
-| 2 | Search results | 2h | `search:v2:{index_ver}:{hash}` |
-| 2 | Rerank results | 2h | `rerank:v2:{hash}` |
-| 2 | Sparse embeddings | 7d | `sparse:v2:{model}:{hash}` |
+| 1 | Semantic (LLM responses) | per query_type | `sem:v3:bge1024` |
+| 2 | Embeddings (dense) | 7d | `embeddings:v3:{hash}` |
+| 3 | Sparse embeddings | 7d | `sparse:v3:{hash}` |
+| 4 | Analysis results | 24h | `analysis:v3:{hash}` |
+| 5 | Search results | 2h | `search:v3:{hash}` |
+| 6 | Rerank results | 2h | `rerank:v3:{hash}` |
+| + | Conversation history | 2h | `conversation:{user_id}` (LIST, 20 msgs) |
 
-## Configuration
+## Semantic Cache Thresholds (per query_type)
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `semantic_cache_ttl` | 48h | LLM response cache lifetime |
-| `embeddings_cache_ttl` | 7d | Query embedding cache lifetime |
-| `distance_threshold` | 0.20 | Cosine distance for semantic match (lower = stricter) |
-| `CACHE_SCHEMA_VERSION` | "v2" | Bump when changing models |
+| Query Type | Threshold | TTL | Notes |
+|------------|-----------|-----|-------|
+| STRUCTURED | 0.05 | 2h | Strictest — IDs, numbers |
+| GENERAL | 0.08 | 1h | Default |
+| ENTITY | 0.10 | 1h | Named entities |
+| FAQ | 0.12 | 24h | Most lenient, long TTL |
 
-## Distance Thresholds
-
-| Query Type | Threshold | Similarity |
-|------------|-----------|------------|
-| Exact (IDs, corpus) | 0.05 | 95% required |
-| Semantic (general) | 0.10 | 90% required |
-
-## How It Works
-
-1. **Initialize:** `CacheService(redis_url)` connects to Redis
-2. **Check semantic cache:** Query embedding → Redis vector search
-3. **On HIT:** Return cached response (optionally personalize via CESC)
-4. **On MISS:** Full RAG pipeline → store result with TTL
-
-## Common Patterns
-
-### Check semantic cache
+## CacheLayerManager Usage
 
 ```python
-from telegram_bot.services.cache import CacheService
+from telegram_bot.integrations.cache import CacheLayerManager
 
-cache = CacheService(redis_url="redis://localhost:6379")
-await cache.initialize(vectorizer)  # Pass embedding function
+cache = CacheLayerManager(redis_url="redis://redis:6379")
+await cache.initialize()
 
-# Check cache
-cached = await cache.check_semantic_cache(query, threshold=0.10)
-if cached:
-    return cached["response"]
+# Semantic cache (query-type threshold)
+cached = await cache.check_semantic(query, vector=embedding, query_type="FAQ")
+await cache.store_semantic(query, response, vector=embedding, query_type="FAQ")
+
+# Exact caches (generic)
+await cache.store_exact("search", hash_key, results)
+result = await cache.get_exact("search", hash_key)
+
+# Convenience methods
+embedding = await cache.get_embedding("query text")
+await cache.store_embedding("query text", [0.1, ...])
+
+# Conversation
+await cache.store_conversation(user_id=123, role="user", content="hello")
+history = await cache.get_conversation(user_id=123, last_n=5)
+await cache.clear_conversation(user_id=123)
+
+# Metrics
+stats = cache.get_metrics()  # per-tier hits/misses/hit_rate
 ```
 
-### Store in cache
+## Graph Nodes
+
+### cache_check_node
+
+Computes embedding (cached or fresh via BGEM3Embeddings), checks semantic cache:
 
 ```python
-await cache.store_semantic_cache(
-    query=query,
-    response=llm_response,
-    metadata={"query_type": "semantic"}
-)
+result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+# Returns: {cache_hit, cached_response, query_embedding, latency_stages}
 ```
 
-### Version bumping
+### cache_store_node
 
-When changing embedding models:
+Stores response + conversation after LLM generation:
 
 ```python
-# telegram_bot/services/cache.py:30
-CACHE_SCHEMA_VERSION = "v3"  # Was "v2"
+result = await cache_store_node(state, cache=cache)
+# Stores semantic cache + conversation history
 ```
 
-Old keys expire naturally via TTL.
+### retrieve_node
 
-### Conversation history (SemanticMessageHistory)
-
-Index name includes version AND vectorizer to prevent schema mismatch:
+Hybrid RRF search with multi-level caching:
 
 ```python
-# Index format: rag_conversations:{version}:{vectorizer_id}
-# Examples:
-#   rag_conversations:v2:userbase768  (USE_LOCAL_EMBEDDINGS=true)
-#   rag_conversations:v2:voyage1024   (Voyage API)
-```
-
-**Why vectorizer_id?** Different vectorizers have different dimensions (768 vs 1024). Mixing them causes schema mismatch.
-
-**Cleanup old indices:**
-```bash
-docker exec dev-redis redis-cli FT.DROPINDEX rag_conversations DD
-docker exec dev-redis redis-cli FT.DROPINDEX "rag_conversations:v2" DD
+result = await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdrant=qdrant)
+# Flow: search cache → sparse cache → qdrant.hybrid_search_rrf() → cache results
 ```
 
 ## Dependencies
 
 - Container: `dev-redis` (6379)
 - Library: `redisvl` (lazy-loaded to avoid 7.5s import)
+- `CACHE_VERSION = "v3"` in `integrations/cache.py`
+- Vectorizer: `BgeM3CacheVectorizer` for semantic cache vectors
 
 ## Testing
 
 ```bash
-pytest tests/unit/test_cache.py -v
-pytest tests/unit/test_semantic_cache.py -v
+pytest tests/unit/integrations/test_cache_layers.py -v   # 20 tests
+pytest tests/unit/graph/test_cache_nodes.py -v            # 7 tests
+pytest tests/unit/graph/test_retrieve_node.py -v          # 5 tests
 ```
 
 ## Troubleshooting
 
 | Error | Fix |
 |-------|-----|
-| `Redis connection refused` | `docker compose -f docker-compose.dev.yml up -d redis` |
-| Cache pollution after model change | Bump `CACHE_SCHEMA_VERSION` |
-| False positive hits | Lower `distance_threshold` |
-| High miss rate | Raise `distance_threshold` or increase TTL |
-| `schema does not match` for conversation history | Old index exists; drop with `FT.DROPINDEX ... DD` |
-
-## Development Guide
-
-### Adding new cache tier
-
-1. Add TTL parameter to `CacheService.__init__`
-2. Add key pattern constant (e.g., `NEW_CACHE_PREFIX = "new:v2:"`)
-3. Implement `check_new_cache()` and `store_new_cache()` methods
-4. Add metrics tracking in `self.metrics["new"]`
-5. Write tests in `tests/unit/test_cache.py`
-
-### Monitoring cache effectiveness
-
-```python
-# Get hit/miss stats
-stats = cache.get_metrics()
-# {"semantic": {"hits": 42, "misses": 18}, ...}
-```
+| `Redis connection refused` | `docker compose up -d redis` |
+| Cache pollution after model change | Bump `CACHE_VERSION` |
+| False positive hits | Lower threshold in `cache_thresholds` |
+| High miss rate | Raise threshold or increase TTL |
+| Semantic cache timeout | Check Redis latency, adjust `cache_timeout` (default 0.3s) |
