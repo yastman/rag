@@ -24,6 +24,7 @@ async def retrieve_node(
     cache: Any,
     sparse_embeddings: Any,
     qdrant: Any,
+    embeddings: Any | None = None,
     top_k: int = 20,
 ) -> dict[str, Any]:
     """Retrieve documents via hybrid RRF search with caching.
@@ -39,6 +40,7 @@ async def retrieve_node(
         cache: CacheLayerManager instance
         sparse_embeddings: BGEM3SparseEmbeddings instance
         qdrant: QdrantService instance
+        embeddings: Optional BGEM3Embeddings for re-embedding after rewrite
         top_k: Number of results to retrieve
 
     Returns:
@@ -49,7 +51,17 @@ async def retrieve_node(
         if hasattr(state["messages"][-1], "content")
         else state["messages"][-1]["content"]
     )
-    dense_vector = state.get("query_embedding", [])
+    dense_vector = state.get("query_embedding")
+
+    # After rewrite, query_embedding is None — re-embed the rewritten query
+    if dense_vector is None and embeddings is not None:
+        dense_vector = await cache.get_embedding(query)
+        if dense_vector is None:
+            dense_vector = await embeddings.aembed_query(query)
+            await cache.store_embedding(query, dense_vector)
+
+    if not dense_vector:
+        dense_vector = []
 
     start = time.time()
 
@@ -84,9 +96,13 @@ async def retrieve_node(
     latency = (time.time() - start) * 1000
     logger.info("retrieve done (%.0fms, %d docs)", latency, len(results))
 
-    return {
+    update: dict[str, Any] = {
         "documents": results,
         "search_results_count": len(results),
         "sparse_embedding": sparse_vector,
         "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
     }
+    # Persist re-computed embedding for downstream nodes (grade, cache_store)
+    if state.get("query_embedding") is None and dense_vector:
+        update["query_embedding"] = dense_vector
+    return update
