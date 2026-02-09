@@ -10,12 +10,15 @@ import logging
 import time
 from typing import Any
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TOP_K = 5
 
 
+@observe(name="node-rerank")
 async def rerank_node(
     state: dict[str, Any],
     *,
