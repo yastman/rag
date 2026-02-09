@@ -2,9 +2,10 @@
 ***REMOVED*** BM42 Sparse Embedding Service - Optimized with uv
 
 ***REMOVED*** ====== BUILD STAGE ======
-FROM python:3.12-slim AS builder
+***REMOVED*** Pin base images — checked 2026-02-09
+FROM python:3.12-slim-bookworm AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
@@ -26,7 +27,7 @@ RUN mkdir -p /app/.cache/fastembed && \
     python -c "from fastembed import SparseTextEmbedding; SparseTextEmbedding('Qdrant/bm42-all-minilm-l6-v2-attentions')"
 
 ***REMOVED*** ====== RUNTIME STAGE ======
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 RUN groupadd -g 1001 appgroup && \
     useradd -u 1001 -g appgroup -m -d /app -s /bin/false appuser
