@@ -9,6 +9,8 @@ import os
 
 import httpx
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,7 @@ class ColbertRerankerService:
         self._client = httpx.AsyncClient(timeout=timeout)
         logger.info(f"ColbertRerankerService initialized: {base_url} (timeout={timeout}s)")
 
+    @observe(name="colbert-rerank")
     async def rerank(
         self,
         query: str,
