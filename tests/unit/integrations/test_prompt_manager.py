@@ -1,0 +1,183 @@
+"""Tests for Langfuse Prompt Management integration."""
+
+from __future__ import annotations
+
+import os
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from telegram_bot.integrations.prompt_manager import (
+    DEFAULT_CACHE_TTL,
+    _apply_fallback_vars,
+    _get_langfuse_client,
+    _reset_client,
+    get_prompt,
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_singleton():
+    """Reset the module-level singleton before each test."""
+    _reset_client()
+    yield
+    _reset_client()
+
+
+class TestGetLangfuseClient:
+    def test_returns_none_when_secret_key_not_set(self):
+        with patch.dict(os.environ, {}, clear=True):
+            client = _get_langfuse_client()
+        assert client is None
+
+    def test_returns_client_when_configured(self):
+        mock_langfuse_cls = MagicMock()
+        env = {"LANGFUSE_SECRET_KEY": "sk-lf-test", "LANGFUSE_PUBLIC_KEY": "pk-lf-test"}
+        with patch.dict(os.environ, env):
+            with patch("langfuse.Langfuse", mock_langfuse_cls):
+                result = _get_langfuse_client()
+        assert result is not None
+        mock_langfuse_cls.assert_called_once()
+
+    def test_caches_client_singleton(self):
+        env = {"LANGFUSE_SECRET_KEY": "sk-lf-test"}
+        mock_langfuse_cls = MagicMock()
+        with patch.dict(os.environ, env):
+            with patch("langfuse.Langfuse", mock_langfuse_cls):
+                first = _get_langfuse_client()
+                second = _get_langfuse_client()
+        assert first is second
+        mock_langfuse_cls.assert_called_once()
+
+    def test_returns_none_on_init_error(self):
+        env = {"LANGFUSE_SECRET_KEY": "sk-lf-test"}
+        with patch.dict(os.environ, env):
+            with patch(
+                "langfuse.Langfuse",
+                side_effect=Exception("connection failed"),
+            ):
+                result = _get_langfuse_client()
+        assert result is None
+
+
+class TestGetPrompt:
+    def test_returns_fallback_when_langfuse_disabled(self):
+        with patch.dict(os.environ, {}, clear=True):
+            result = get_prompt("test-prompt", fallback="default prompt text")
+        assert result == "default prompt text"
+
+    def test_returns_fallback_with_vars_when_langfuse_disabled(self):
+        with patch.dict(os.environ, {}, clear=True):
+            result = get_prompt(
+                "test-prompt",
+                fallback="Hello {{name}}, welcome to {{place}}!",
+                variables={"name": "John", "place": "Sofia"},
+            )
+        assert result == "Hello John, welcome to Sofia!"
+
+    def test_fetches_prompt_from_langfuse(self):
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "Langfuse prompt text"
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+
+        with patch(
+            "telegram_bot.integrations.prompt_manager._get_langfuse_client",
+            return_value=mock_client,
+        ):
+            result = get_prompt("my-prompt", fallback="fallback text")
+
+        assert result == "Langfuse prompt text"
+        mock_client.get_prompt.assert_called_once_with(
+            "my-prompt", cache_ttl_seconds=DEFAULT_CACHE_TTL, fallback="fallback text"
+        )
+        mock_prompt.compile.assert_called_once_with()
+
+    def test_compiles_with_variables(self):
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "Ассистент по недвижимость"
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+
+        with patch(
+            "telegram_bot.integrations.prompt_manager._get_langfuse_client",
+            return_value=mock_client,
+        ):
+            result = get_prompt(
+                "generate",
+                fallback="Ассистент по {{domain}}",
+                variables={"domain": "недвижимость"},
+            )
+
+        assert result == "Ассистент по недвижимость"
+        mock_prompt.compile.assert_called_once_with(domain="недвижимость")
+
+    def test_custom_cache_ttl(self):
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "cached"
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+
+        with patch(
+            "telegram_bot.integrations.prompt_manager._get_langfuse_client",
+            return_value=mock_client,
+        ):
+            get_prompt("test", fallback="fb", cache_ttl=60)
+
+        mock_client.get_prompt.assert_called_once_with("test", cache_ttl_seconds=60, fallback="fb")
+
+    def test_falls_back_on_exception(self):
+        mock_client = MagicMock()
+        mock_client.get_prompt.side_effect = Exception("API error")
+
+        with patch(
+            "telegram_bot.integrations.prompt_manager._get_langfuse_client",
+            return_value=mock_client,
+        ):
+            result = get_prompt("broken", fallback="safe fallback")
+
+        assert result == "safe fallback"
+
+    def test_falls_back_with_vars_on_exception(self):
+        mock_client = MagicMock()
+        mock_client.get_prompt.side_effect = Exception("API error")
+
+        with patch(
+            "telegram_bot.integrations.prompt_manager._get_langfuse_client",
+            return_value=mock_client,
+        ):
+            result = get_prompt("broken", fallback="Hello {{name}}", variables={"name": "World"})
+
+        assert result == "Hello World"
+
+
+class TestApplyFallbackVars:
+    def test_no_vars(self):
+        assert _apply_fallback_vars("hello", {}) == "hello"
+
+    def test_single_var(self):
+        assert _apply_fallback_vars("hi {{name}}", {"name": "Bob"}) == "hi Bob"
+
+    def test_multiple_vars(self):
+        result = _apply_fallback_vars("{{a}} and {{b}}", {"a": "X", "b": "Y"})
+        assert result == "X and Y"
+
+    def test_missing_var_unchanged(self):
+        result = _apply_fallback_vars("{{missing}}", {"other": "val"})
+        assert result == "{{missing}}"
+
+
+class TestResetClient:
+    def test_reset_allows_reinit(self):
+        instances = [MagicMock(name="client-1"), MagicMock(name="client-2")]
+        mock_langfuse_cls = MagicMock(side_effect=instances)
+        env = {"LANGFUSE_SECRET_KEY": "sk-lf-test"}
+
+        with patch.dict(os.environ, env):
+            with patch("langfuse.Langfuse", mock_langfuse_cls):
+                first = _get_langfuse_client()
+                _reset_client()
+                second = _get_langfuse_client()
+
+        assert mock_langfuse_cls.call_count == 2
+        assert first is not second

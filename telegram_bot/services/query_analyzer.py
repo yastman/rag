@@ -10,6 +10,8 @@ from typing import Any
 import openai
 from langfuse.openai import AsyncOpenAI
 
+from telegram_bot.integrations.prompt_manager import get_prompt
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +71,11 @@ class QueryAnalyzer:
             Dict with 'filters' and 'semantic_query'
         """
         try:
+            system_prompt = get_prompt("query-analysis", fallback=SYSTEM_PROMPT)
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Запрос пользователя: {query}"},
                 ],
                 response_format={"type": "json_object"},  # type: ignore[arg-type]
