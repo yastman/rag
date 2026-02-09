@@ -8,7 +8,7 @@ import httpx
 import pytest
 import redis.asyncio as redis
 
-from telegram_bot.services.cache import CacheService
+from telegram_bot.integrations.cache import CacheLayerManager
 from telegram_bot.services.qdrant import QdrantService
 from telegram_bot.services.voyage import VoyageService
 
@@ -66,9 +66,9 @@ async def qdrant_service():
 
 @pytest.fixture(scope="module")
 async def cache_service():
-    """CacheService for caching."""
+    """CacheLayerManager for caching."""
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    service = CacheService(redis_url=redis_url)
+    service = CacheLayerManager(redis_url=redis_url)
     await service.initialize()
     yield service
     await service.close()
