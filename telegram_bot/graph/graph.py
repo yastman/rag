@@ -63,6 +63,7 @@ def build_graph(
         functools.partial(
             retrieve_node_wrapper,
             cache=cache,
+            embeddings=embeddings,
             sparse_embeddings=sparse_embeddings,
             qdrant=qdrant,
         ),
@@ -138,6 +139,7 @@ async def retrieve_node_wrapper(
     state: dict[str, Any],
     *,
     cache: Any,
+    embeddings: Any | None = None,
     sparse_embeddings: Any,
     qdrant: Any,
 ) -> dict[str, Any]:
@@ -147,6 +149,7 @@ async def retrieve_node_wrapper(
     return await retrieve_node(
         state,
         cache=cache,
+        embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
     )
