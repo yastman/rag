@@ -470,7 +470,7 @@ services:
       start_period: 10s
 
   litellm:
-    image: ghcr.io/berriai/litellm:v1.81.3.rc.3
+    image: ghcr.io/berriai/litellm:main-v1.81.3-stable
     container_name: dev-litellm
     profiles: ["bot", "full"]
     ports:
