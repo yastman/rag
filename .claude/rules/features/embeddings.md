@@ -70,7 +70,7 @@ sv = await sparse.aembed_query("search text")      # dict with sparse vector
 svs = await sparse.aembed_documents(["d1", "d2"])   # list[dict]
 ```
 
-Wraps BGE-M3 `/encode/sparse` endpoint (fixed from legacy `/encode`). Returns `sparse_vecs` format.
+Wraps BGE-M3 `/encode/sparse` endpoint (fixed from legacy `/encode`). Returns `lexical_weights` format.
 
 ## Embedding Models
 
@@ -87,7 +87,7 @@ Wraps BGE-M3 `/encode/sparse` endpoint (fixed from legacy `/encode`). Returns `s
 | Endpoint | Returns | Used By |
 |----------|---------|---------|
 | `/encode/dense` | `dense_vecs` | BGEM3Embeddings |
-| `/encode/sparse` | `sparse_vecs` | BGEM3SparseEmbeddings |
+| `/encode/sparse` | `lexical_weights` | BGEM3SparseEmbeddings |
 | `/encode/hybrid` | all three | Direct API calls |
 | `/rerank` | ColBERT scores | ColbertRerankerService |
 
