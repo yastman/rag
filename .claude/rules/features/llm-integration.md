@@ -13,8 +13,8 @@ Route LLM requests through LiteLLM proxy with automatic fallback chain and obser
 ## Architecture
 
 ```
-Bot/Graph → LLMService (OpenAI SDK) → LiteLLM Proxy (:4000) → Cerebras/Groq/OpenAI
-          → generate_node (ChatLiteLLM) → LiteLLM Proxy      → Langfuse OTEL tracing
+Bot/Graph → All LLM calls (OpenAI SDK) → LiteLLM Proxy (:4000) → Cerebras/Groq/OpenAI
+          → langfuse.openai.AsyncOpenAI  → auto-tracing via Langfuse
 ```
 
 ## Key Files
@@ -25,17 +25,19 @@ Bot/Graph → LLMService (OpenAI SDK) → LiteLLM Proxy (:4000) → Cerebras/Gro
 | `telegram_bot/services/llm.py` | LLMService class (OpenAI SDK, `langfuse.openai.AsyncOpenAI`) |
 | `telegram_bot/services/query_analyzer.py` | QueryAnalyzer (OpenAI SDK) |
 | `telegram_bot/services/query_preprocessor.py` | HyDEGenerator (OpenAI SDK) |
-| `telegram_bot/graph/nodes/generate.py` | LangGraph generate_node (ChatLiteLLM via langchain) |
-| `telegram_bot/graph/nodes/rewrite.py` | LangGraph rewrite_node (ChatLiteLLM) |
+| `telegram_bot/graph/nodes/generate.py` | LangGraph generate_node (OpenAI SDK via GraphConfig) |
+| `telegram_bot/graph/nodes/rewrite.py` | LangGraph rewrite_node (OpenAI SDK via GraphConfig) |
 | `telegram_bot/graph/config.py` | GraphConfig — `create_llm()` factory |
 | `telegram_bot/integrations/langfuse.py` | `create_langfuse_handler()` for LangGraph callbacks |
 
-## Two LLM Patterns
+## LLM Pattern (unified)
 
-| Pattern | Used By | Client | Tracing |
-|---------|---------|--------|---------|
-| **OpenAI SDK** | LLMService, QueryAnalyzer, HyDEGenerator | `langfuse.openai.AsyncOpenAI` | Auto (drop-in) |
-| **ChatLiteLLM** | generate_node, rewrite_node | `langchain_community.ChatLiteLLM` | Via LangGraph callback |
+All LLM-calling code uses `langfuse.openai.AsyncOpenAI` (OpenAI SDK drop-in with auto-tracing):
+
+| Used By | Client | Tracing |
+|---------|--------|---------|
+| LLMService, QueryAnalyzer, HyDEGenerator | `langfuse.openai.AsyncOpenAI` | Auto (drop-in) |
+| generate_node, rewrite_node | `GraphConfig.create_llm()` → `AsyncOpenAI` | Auto (drop-in) |
 
 ## Model Routing
 
@@ -100,16 +102,13 @@ except (openai.APIConnectionError, openai.RateLimitError, openai.APITimeoutError
 - Builds system prompt with domain from `GraphConfig.from_env().domain`
 - Formats top-5 documents as context (title, city, price, score)
 - Includes conversation history from `state["messages"]`
-- Calls LLM via `ChatLiteLLM.ainvoke()` (langchain-community)
+- Calls LLM via `GraphConfig.create_llm().chat.completions.create()` (OpenAI SDK)
 - Falls back to document summary if LLM unavailable
 - Records `latency_stages["generate"]`
 
 ## Langfuse Integration
 
-Two tracing paths:
-
-1. **OpenAI SDK services** — `langfuse.openai.AsyncOpenAI` auto-traces all `chat.completions.create()` calls
-2. **LangGraph pipeline** — `create_langfuse_handler()` returns `langfuse.langchain.CallbackHandler`, passed as `config={"callbacks": [handler]}` to `graph.ainvoke()`
+All LLM calls auto-traced via `langfuse.openai.AsyncOpenAI` drop-in. Additionally, `create_langfuse_handler()` provides `langfuse.langchain.CallbackHandler` for LangGraph graph-level tracing (`config={"callbacks": [handler]}`).
 
 Graceful degradation: returns `None` if `LANGFUSE_SECRET_KEY` not set.
 

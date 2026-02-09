@@ -103,9 +103,9 @@ cd services/user-base && uv lock
 ### Production (pyproject.toml `[project.dependencies]`)
 
 Key packages:
-- `qdrant-client>=1.15.0` — Vector DB
+- `qdrant-client>=1.16.2` — Vector DB
 - `voyageai>=0.3.0` — Embeddings
-- `cocoindex>=0.1.60` — Ingestion
+- `cocoindex>=0.3.28` — Ingestion
 - `langfuse>=3.0.0` — Observability
 
 ### Development (`[project.optional-dependencies.dev]`)
