@@ -14,9 +14,14 @@ spec:
       labels:
         app: postgres
     spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
           image: pgvector/pgvector:pg17
+          securityContext:
+            allowPrivilegeEscalation: false
           ports:
             - containerPort: 5432
           envFrom:
