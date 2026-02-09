@@ -253,6 +253,102 @@ class QdrantService:
             logger.error(f"Qdrant search failed (graceful degradation): {e}")
             return []
 
+    @observe(name="qdrant-batch-search-rrf")
+    async def batch_search_rrf(
+        self,
+        queries: list[dict],
+        filters: dict | None = None,
+        top_k: int = 10,
+        prefetch_multiplier: int = 3,
+        rrf_k: int = 60,
+    ) -> list[dict]:
+        """Batch hybrid search for multiple queries in a single round-trip.
+
+        Sends all queries to Qdrant via query_batch_points, reducing N round-trips
+        to 1. Useful for HyDE (2-3 query variations) and multi-query scenarios.
+        Results are merged and deduplicated by point ID, keeping the best score.
+
+        Args:
+            queries: List of query dicts, each with:
+                - "dense_vector": list[float] (required)
+                - "sparse_vector": dict with "indices"/"values" (optional)
+            filters: Optional metadata filters (shared across all queries)
+            top_k: Number of results per query
+            prefetch_multiplier: Overfetch ratio for prefetch
+            rrf_k: RRF constant k
+
+        Returns:
+            Deduplicated list of results sorted by best score, capped at top_k.
+        """
+        if not queries:
+            return []
+
+        await self.ensure_collection()
+
+        query_filter = self._build_filter(filters)
+        requests = []
+
+        for q in queries:
+            dense_vector = q["dense_vector"]
+            sparse_vector = q.get("sparse_vector")
+
+            prefetch = [
+                models.Prefetch(
+                    query=dense_vector,
+                    using=self._dense_vector_name,
+                    limit=max(int(top_k * prefetch_multiplier * 0.6), top_k),
+                ),
+            ]
+
+            if sparse_vector and sparse_vector.get("indices"):
+                prefetch.append(
+                    models.Prefetch(
+                        query=models.SparseVector(
+                            indices=sparse_vector["indices"],
+                            values=sparse_vector["values"],
+                        ),
+                        using=self._sparse_vector_name,
+                        limit=max(int(top_k * prefetch_multiplier * 0.4), top_k),
+                    )
+                )
+
+            requests.append(
+                models.QueryRequest(
+                    prefetch=prefetch,
+                    query=models.RrfQuery(rrf=models.Rrf(k=rrf_k)),
+                    filter=query_filter,
+                    limit=top_k,
+                    with_payload=True,
+                )
+            )
+
+        try:
+            responses = await self._client.query_batch_points(
+                collection_name=self._collection_name,
+                requests=requests,
+            )
+
+            # Merge and deduplicate across all query responses
+            seen: dict[str, dict] = {}
+            for response in responses:
+                for point in response.points:
+                    pid = str(point.id)
+                    formatted = {
+                        "id": pid,
+                        "score": point.score,
+                        "text": point.payload.get("page_content", ""),
+                        "metadata": point.payload.get("metadata", {}),
+                    }
+                    if pid not in seen or point.score > seen[pid]["score"]:
+                        seen[pid] = formatted
+
+            merged = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
+            return merged[:top_k]
+
+        except Exception as e:
+            logger.error(f"Qdrant batch search failed (graceful degradation): {e}")
+            return []
+
     @observe(name="qdrant-search-score-boosting")
     async def search_with_score_boosting(
         self,
