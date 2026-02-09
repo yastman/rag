@@ -5,7 +5,7 @@ Verifies graph assembly and invocation with mocked services.
 For live-service E2E, use tests/smoke/test_smoke_services.py.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -62,6 +62,7 @@ async def test_full_graph_classify_to_respond():
     mock_cache.get_sparse_embedding = AsyncMock(return_value=None)
     mock_cache.store_sparse_embedding = AsyncMock()
     mock_cache.store_conversation = AsyncMock()
+    mock_cache.store_conversation_batch = AsyncMock()
 
     # Embeddings
     mock_embeddings = MagicMock()
@@ -82,9 +83,11 @@ async def test_full_graph_classify_to_respond():
         ]
     )
 
-    # LLM
+    # LLM mock (OpenAI SDK pattern: llm.chat.completions.create)
     mock_llm = MagicMock()
-    mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="Найдено 2 варианта недвижимости."))
+    mock_completion = MagicMock()
+    mock_completion.choices = [MagicMock(message=MagicMock(content="Найдено 2 варианта."))]
+    mock_llm.chat.completions.create = AsyncMock(return_value=mock_completion)
 
     # Telegram message for respond_node
     mock_message = MagicMock()
@@ -108,7 +111,19 @@ async def test_full_graph_classify_to_respond():
         query="квартиры в Несебр до 100000 евро",
     )
 
-    result = await graph.ainvoke(state)
+    # Patch generate_node's internal config to use our mock LLM
+    mock_gc = MagicMock()
+    mock_gc.create_llm.return_value = mock_llm
+    mock_gc.domain = "недвижимость"
+    mock_gc.llm_model = "gpt-4o-mini"
+    mock_gc.llm_temperature = 0.7
+    mock_gc.llm_max_tokens = 4096
+
+    with patch(
+        "telegram_bot.graph.nodes.generate._get_config",
+        return_value=mock_gc,
+    ):
+        result = await graph.ainvoke(state)
 
     # Graph should produce a response
     assert "response" in result
