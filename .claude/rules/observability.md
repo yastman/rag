@@ -36,7 +36,7 @@ make baseline-set TAG=smoke-abc-20260128     # Set current as new baseline
 
 1. **Filter:** Traces → Name = `cache-semantic-check`
 2. **Group by output:** Check `hit: true/false` distribution
-3. **Low hit rate?** Check distance thresholds in `CacheService`
+3. **Low hit rate?** Check distance thresholds in `CacheLayerManager`
 
 ### Tracking Costs
 
@@ -78,19 +78,32 @@ Config: `tests/baseline/thresholds.yaml`
 
 ## Instrumented Services
 
+### @observe Tracing (Langfuse decorator)
+
+Cache and graph nodes use `@observe` decorator for automatic span creation:
+
+| Component | Decorator | Tracked |
+|-----------|-----------|---------|
+| cache_check_node | `@observe(name="cache_check")` | hit/miss, embedding latency |
+| cache_store_node | `@observe(name="cache_store")` | store latency |
+| retrieve_node | `@observe(name="retrieve")` | search latency, results count |
+| CacheLayerManager.check_semantic | `@observe` | hit/miss, latency |
+| CacheLayerManager.store_semantic | `@observe` | latency |
+
+### Service-level Traces
+
 | Service | Trace Name | Tracked |
 |---------|------------|---------|
 | VoyageService.embed_query | voyage-embed-query | tokens, latency |
 | VoyageService.embed_documents | voyage-embed-documents | tokens, latency |
 | VoyageService.rerank | voyage-rerank | latency, top_k |
 | QdrantService.hybrid_search_rrf | qdrant-hybrid-search-rrf | latency, results |
+| QdrantService.batch_search_rrf | qdrant-batch-search-rrf | latency, batch_size |
 | QdrantService.search_with_score_boosting | qdrant-search-score-boosting | latency, results |
-| CacheService.check_semantic_cache | cache-semantic-check | hit/miss, latency |
-| CacheService.store_semantic_cache | cache-semantic-store | latency |
-| CacheService.get_cached_search | cache-search-check | hit/miss, latency |
-| CacheService.get_cached_rerank | cache-rerank-check | hit/miss, latency, layer |
+| CacheLayerManager.get_exact("search") | cache-search-check | hit/miss, latency |
+| CacheLayerManager.get_exact("rerank") | cache-rerank-check | hit/miss, latency, layer |
 | LLMService.generate_answer | llm-generate-answer | model, tokens, latency |
-| QueryRouter.classify_query | query-router | query_type (CHITCHAT/SIMPLE/COMPLEX) |
+| classify_node | query-classify | query_type (6-type taxonomy) |
 | QueryAnalyzer.analyze | query-analyzer | filters, tokens |
 | PropertyBot.handle_query | telegram-message | root trace, user_id, session_id |
 | LLMService (via LiteLLM) | Auto (OTEL) | tokens, cost, latency |
@@ -112,6 +125,20 @@ All 10 scores written via try/finally accumulator pattern in `handle_query`:
 | `no_results` | 0.0/1.0 | Query returned empty results |
 | `llm_used` | 0.0/1.0 | LLM generation was invoked |
 
+## Langfuse Prompt Management
+
+`telegram_bot/integrations/prompt_manager.py` — centralized prompt storage in Langfuse UI.
+
+```python
+from telegram_bot.integrations.prompt_manager import get_prompt
+
+prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain": "real estate"})
+```
+
+- Prompts cached client-side (`cache_ttl` param)
+- Graceful fallback to hardcoded templates when Langfuse unavailable
+- Variable substitution via `prompt.compile(**variables)`
+
 ## Langfuse v3 Stack (docker-compose.dev.yml)
 
 | Service | Port | Purpose |
@@ -121,6 +148,13 @@ All 10 scores written via try/finally accumulator pattern in `handle_query`:
 | clickhouse | 8123, 9009 | Analytics storage |
 | minio | 9090, 9091 | S3 events/media |
 | redis-langfuse | 6380 | Langfuse queues (separate from app Redis) |
+
+**Bot service env vars** (docker-compose.dev.yml):
+```yaml
+LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}   # optional, empty disables tracing
+LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+LANGFUSE_HOST: http://langfuse:3000
+```
 
 ## Baseline Module
 
