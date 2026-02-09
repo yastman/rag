@@ -73,12 +73,7 @@ class RAGModelRegistry:
         return model_version.version
 
     def promote_to_staging(self, version: str):
-        """Promote config to Staging."""
-        self.client.transition_model_version_stage(
-            name=self.model_name, version=version, stage="Staging"
-        )
-
-        # Set alias for easy reference
+        """Promote config to Staging via alias."""
         self.client.set_registered_model_alias(
             name=self.model_name, alias="challenger", version=version
         )
@@ -94,15 +89,17 @@ class RAGModelRegistry:
             archive_previous: Archive previous production version
         """
 
-        # Archive current production version
+        # Archive current production version by removing its alias
         if archive_previous:
             try:
                 current_prod = self.client.get_model_version_by_alias(
                     name=self.model_name, alias="champion"
                 )
 
-                self.client.transition_model_version_stage(
-                    name=self.model_name, version=current_prod.version, stage="Archived"
+                self.client.set_registered_model_alias(
+                    name=self.model_name,
+                    alias=f"archived-v{current_prod.version}",
+                    version=current_prod.version,
                 )
 
                 print(f"📦 Archived previous production version: {current_prod.version}")
@@ -110,12 +107,7 @@ class RAGModelRegistry:
             except Exception:
                 pass  # No current production version
 
-        # Promote new version
-        self.client.transition_model_version_stage(
-            name=self.model_name, version=version, stage="Production"
-        )
-
-        # Set alias
+        # Promote new version via alias
         self.client.set_registered_model_alias(
             name=self.model_name, alias="champion", version=version
         )
