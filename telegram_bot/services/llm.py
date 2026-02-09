@@ -146,7 +146,7 @@ class LLMService:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.7,
-                    "max_tokens": 1024,  # Reduced for faster generation (2026 best practice)
+                    "max_tokens": 4096,  # Reasoning models need headroom beyond thinking tokens
                 },
             )
             response.raise_for_status()
@@ -345,7 +345,7 @@ class LLMService:
                     "model": self.model,
                     "messages": messages,
                     "temperature": 0.7,
-                    "max_tokens": 1024,  # Reduced for faster generation (2026 best practice)
+                    "max_tokens": 4096,  # Reasoning models need headroom beyond thinking tokens
                     "stream": True,  # Enable streaming
                 },
                 timeout=60.0,
