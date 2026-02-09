@@ -47,7 +47,7 @@ class QdrantService:
             sparse_vector_name: Name of sparse vector field
             quantization_mode: One of 'off', 'scalar', 'binary' - controls collection suffix
         """
-        self._client = AsyncQdrantClient(url=url, api_key=api_key)
+        self._client = AsyncQdrantClient(url=url, api_key=api_key, prefer_grpc=True)
         self._base_collection_name = collection_name
         self._quantization_mode = quantization_mode.lower()
         self._collection_name = self._get_collection_name(collection_name, quantization_mode)
@@ -155,6 +155,11 @@ class QdrantService:
         quantization_ignore: bool | None = None,
         quantization_rescore: bool = True,
         quantization_oversampling: float = 2.0,
+        # RRF tuning
+        rrf_k: int = 60,
+        # Grouping for diverse results
+        group_by: str | None = None,
+        group_size: int = 2,
     ) -> list[dict]:
         """Hybrid search with RRF fusion (dense + sparse).
 
@@ -169,6 +174,9 @@ class QdrantService:
             quantization_ignore: If True, skip quantization (use full vectors)
             quantization_rescore: If True, rescore with original vectors
             quantization_oversampling: Oversampling factor for quantized search
+            rrf_k: RRF constant k (higher = more weight to lower-ranked results).
+            group_by: Optional payload field to group results by (e.g. "metadata.doc_id").
+            group_size: Max points per group when group_by is set.
 
         Returns:
             List of results with id, score, text, metadata
@@ -212,12 +220,28 @@ class QdrantService:
                 )
             )
 
+        rrf_query = models.RrfQuery(rrf=models.Rrf(k=rrf_k))
+
         # Execute RRF fusion search with graceful degradation
         try:
+            if group_by:
+                result = await self._client.query_points_groups(
+                    collection_name=self._collection_name,
+                    prefetch=prefetch,
+                    query=rrf_query,
+                    query_filter=self._build_filter(filters),
+                    group_by=group_by,
+                    group_size=group_size,
+                    limit=top_k,
+                    with_payload=True,
+                    search_params=search_params,
+                )
+                return self._format_group_results(result)
+
             result = await self._client.query_points(
                 collection_name=self._collection_name,
                 prefetch=prefetch,
-                query=models.FusionQuery(fusion=models.Fusion.RRF),
+                query=rrf_query,
                 query_filter=self._build_filter(filters),
                 limit=top_k,
                 with_payload=True,
@@ -455,6 +479,21 @@ class QdrantService:
             }
             for p in points
         ]
+
+    def _format_group_results(self, result: Any) -> list[dict]:
+        """Format grouped Qdrant results to flat list of dicts."""
+        results: list[dict] = []
+        for group in result.groups:
+            for p in group.hits:
+                results.append(
+                    {
+                        "id": str(p.id),
+                        "score": p.score,
+                        "text": p.payload.get("page_content", ""),
+                        "metadata": p.payload.get("metadata", {}),
+                    }
+                )
+        return results
 
     async def close(self):
         """Close the client connection."""
