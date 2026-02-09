@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bge-m3
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bge-m3
+  template:
+    metadata:
+      labels:
+        app: bge-m3
+    spec:
+      containers:
+        - name: bge-m3
+          image: rag/bge-m3:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: OMP_NUM_THREADS
+              value: "2"
+            - name: MKL_NUM_THREADS
+              value: "2"
+            - name: HF_HOME
+              value: /models/hf
+            - name: TRANSFORMERS_CACHE
+              value: /models/hf
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /models
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 200m
+            limits:
+              memory: 4Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 72
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /opt/k3s-data/hf-cache
+            type: DirectoryOrCreate
