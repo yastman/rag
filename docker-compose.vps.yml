@@ -205,7 +205,7 @@ services:
       # Local embeddings (no Voyage API needed)
       RETRIEVAL_DENSE_PROVIDER: bge_m3_api
       RETRIEVAL_SPARSE_PROVIDER: bge_m3_api
-      RERANK_PROVIDER: colbert
+      RERANK_PROVIDER: "none"  # was: colbert — CPU takes 12.6s
       BGE_M3_URL: http://bge-m3:8000
       BGE_M3_TIMEOUT: "120"
       COLBERT_TIMEOUT: "120"
