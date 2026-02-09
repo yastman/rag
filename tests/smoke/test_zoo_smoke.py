@@ -84,6 +84,54 @@ class TestZooHealth:
             assert len(data["choices"]) > 0
 
 
+bge_m3_available = pytest.mark.skipif(
+    not _is_port_open("localhost", 8000),
+    reason="BGE-M3 not running (port 8000)",
+)
+
+
+class TestBgeM3:
+    """Smoke tests for live BGE-M3 embedding service."""
+
+    BGE_M3_URL = "http://localhost:8000"
+
+    @bge_m3_available
+    async def test_bge_m3_health_detailed(self):
+        """BGE-M3 /health returns model_loaded."""
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{self.BGE_M3_URL}/health")
+            assert response.status_code == 200
+            data = response.json()
+            assert data.get("model_loaded") is True, f"Expected model_loaded=True, got: {data}"
+
+    @bge_m3_available
+    async def test_bge_m3_encode_dense(self):
+        """BGE-M3 /encode/dense returns 1024-dim embeddings."""
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{self.BGE_M3_URL}/encode/dense",
+                json={"texts": ["test query"]},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert "dense_vecs" in data, (
+                f"Missing 'dense_vecs' key in response: {list(data.keys())}"
+            )
+            vecs = data["dense_vecs"]
+            assert len(vecs) >= 1, "Expected at least one embedding"
+            assert len(vecs[0]) == 1024, f"Expected 1024-dim vector, got {len(vecs[0])}"
+
+    @bge_m3_available
+    async def test_bge_m3_encode_sparse(self):
+        """BGE-M3 /encode/sparse returns sparse vectors."""
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{self.BGE_M3_URL}/encode/sparse",
+                json={"texts": ["test query"]},
+            )
+            assert response.status_code == 200
+
+
 class TestZooCache:
     """Cache roundtrip tests."""
 
