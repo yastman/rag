@@ -284,6 +284,203 @@ class TestQdrantServiceMMR:
             assert "metadata" in point
 
 
+class TestQdrantServiceBatchSearch:
+    """Tests for batch_search_rrf method."""
+
+    @pytest.fixture
+    def service(self):
+        """Create QdrantService with mocked client."""
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
+            service = QdrantService(
+                url="http://localhost:6333",
+                collection_name="test_collection",
+            )
+            service._client = AsyncMock()
+            service._collection_validated = True
+            return service
+
+    @pytest.fixture
+    def mock_points(self):
+        """Create mock search points for batch responses."""
+        points = []
+        for i in range(3):
+            point = MagicMock()
+            point.id = f"doc_{i}"
+            point.score = 0.9 - i * 0.1
+            point.payload = {
+                "page_content": f"Content {i}",
+                "metadata": {"source": f"src_{i}"},
+            }
+            points.append(point)
+        return points
+
+    @pytest.mark.asyncio
+    async def test_batch_search_single_query(self, service, mock_points):
+        """Test batch search with a single query returns results."""
+        response = MagicMock()
+        response.points = mock_points
+
+        service._client.query_batch_points = AsyncMock(return_value=[response])
+
+        queries = [{"dense_vector": [0.1] * 1024}]
+        results = await service.batch_search_rrf(queries=queries, top_k=5)
+
+        assert len(results) == 3
+        assert results[0]["id"] == "doc_0"
+        assert results[0]["score"] == 0.9
+        service._client.query_batch_points.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_batch_search_multiple_queries(self, service):
+        """Test batch search with multiple queries merges results."""
+        # Query 1 returns doc_0, doc_1
+        p0 = MagicMock(id="doc_0", score=0.9, payload={"page_content": "A", "metadata": {}})
+        p1 = MagicMock(id="doc_1", score=0.7, payload={"page_content": "B", "metadata": {}})
+        resp1 = MagicMock(points=[p0, p1])
+
+        # Query 2 returns doc_1 (higher score), doc_2
+        p1b = MagicMock(id="doc_1", score=0.85, payload={"page_content": "B", "metadata": {}})
+        p2 = MagicMock(id="doc_2", score=0.6, payload={"page_content": "C", "metadata": {}})
+        resp2 = MagicMock(points=[p1b, p2])
+
+        service._client.query_batch_points = AsyncMock(return_value=[resp1, resp2])
+
+        queries = [
+            {"dense_vector": [0.1] * 1024},
+            {"dense_vector": [0.2] * 1024},
+        ]
+        results = await service.batch_search_rrf(queries=queries, top_k=10)
+
+        # Should have 3 unique docs
+        assert len(results) == 3
+        ids = [r["id"] for r in results]
+        assert ids == ["doc_0", "doc_1", "doc_2"]
+        # doc_1 should keep the higher score from query 2
+        assert results[1]["score"] == 0.85
+
+    @pytest.mark.asyncio
+    async def test_batch_search_dedup_keeps_best_score(self, service):
+        """Test deduplication keeps the highest score for each doc."""
+        p1 = MagicMock(id="same_doc", score=0.5, payload={"page_content": "X", "metadata": {}})
+        p2 = MagicMock(id="same_doc", score=0.95, payload={"page_content": "X", "metadata": {}})
+
+        resp1 = MagicMock(points=[p1])
+        resp2 = MagicMock(points=[p2])
+
+        service._client.query_batch_points = AsyncMock(return_value=[resp1, resp2])
+
+        queries = [
+            {"dense_vector": [0.1] * 1024},
+            {"dense_vector": [0.2] * 1024},
+        ]
+        results = await service.batch_search_rrf(queries=queries, top_k=5)
+
+        assert len(results) == 1
+        assert results[0]["score"] == 0.95
+
+    @pytest.mark.asyncio
+    async def test_batch_search_with_sparse_vectors(self, service, mock_points):
+        """Test batch search includes sparse vectors in prefetch."""
+        response = MagicMock(points=mock_points)
+        service._client.query_batch_points = AsyncMock(return_value=[response])
+
+        queries = [
+            {
+                "dense_vector": [0.1] * 1024,
+                "sparse_vector": {"indices": [1, 5, 10], "values": [0.5, 0.3, 0.2]},
+            }
+        ]
+        results = await service.batch_search_rrf(queries=queries, top_k=5)
+
+        assert len(results) == 3
+        # Verify the request has 2 prefetches (dense + sparse)
+        call_kwargs = service._client.query_batch_points.call_args.kwargs
+        req = call_kwargs["requests"][0]
+        assert len(req.prefetch) == 2
+
+    @pytest.mark.asyncio
+    async def test_batch_search_empty_queries(self, service):
+        """Test batch search with empty queries returns empty list."""
+        results = await service.batch_search_rrf(queries=[], top_k=5)
+
+        assert results == []
+        service._client.query_batch_points.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_batch_search_respects_top_k(self, service):
+        """Test batch search caps results at top_k."""
+        points = []
+        for i in range(10):
+            p = MagicMock(
+                id=f"doc_{i}",
+                score=1.0 - i * 0.05,
+                payload={"page_content": f"C{i}", "metadata": {}},
+            )
+            points.append(p)
+
+        resp = MagicMock(points=points)
+        service._client.query_batch_points = AsyncMock(return_value=[resp])
+
+        queries = [{"dense_vector": [0.1] * 1024}]
+        results = await service.batch_search_rrf(queries=queries, top_k=3)
+
+        assert len(results) == 3
+        assert results[0]["score"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_batch_search_graceful_degradation(self, service):
+        """Test batch search returns empty on error."""
+        service._client.query_batch_points = AsyncMock(side_effect=Exception("Connection lost"))
+
+        queries = [{"dense_vector": [0.1] * 1024}]
+        results = await service.batch_search_rrf(queries=queries, top_k=5)
+
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_batch_search_with_filters(self, service, mock_points):
+        """Test batch search passes filters to all queries."""
+        response = MagicMock(points=mock_points)
+        service._client.query_batch_points = AsyncMock(return_value=[response])
+
+        queries = [
+            {"dense_vector": [0.1] * 1024},
+            {"dense_vector": [0.2] * 1024},
+        ]
+        results = await service.batch_search_rrf(
+            queries=queries, filters={"city": "Sofia"}, top_k=5
+        )
+
+        assert len(results) == 3
+        call_kwargs = service._client.query_batch_points.call_args.kwargs
+        for req in call_kwargs["requests"]:
+            assert req.filter is not None
+
+    @pytest.mark.asyncio
+    async def test_batch_search_results_sorted_by_score(self, service):
+        """Test merged results are sorted by score descending."""
+        p1 = MagicMock(id="low", score=0.3, payload={"page_content": "L", "metadata": {}})
+        p2 = MagicMock(id="high", score=0.99, payload={"page_content": "H", "metadata": {}})
+        p3 = MagicMock(id="mid", score=0.6, payload={"page_content": "M", "metadata": {}})
+
+        resp1 = MagicMock(points=[p1])
+        resp2 = MagicMock(points=[p2])
+        resp3 = MagicMock(points=[p3])
+
+        service._client.query_batch_points = AsyncMock(return_value=[resp1, resp2, resp3])
+
+        queries = [
+            {"dense_vector": [0.1] * 1024},
+            {"dense_vector": [0.2] * 1024},
+            {"dense_vector": [0.3] * 1024},
+        ]
+        results = await service.batch_search_rrf(queries=queries, top_k=10)
+
+        scores = [r["score"] for r in results]
+        assert scores == sorted(scores, reverse=True)
+        assert results[0]["id"] == "high"
+
+
 class TestQdrantServiceHybridSearch:
     """Tests for hybrid_search_rrf method."""
 
