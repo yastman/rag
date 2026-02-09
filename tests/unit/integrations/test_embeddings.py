@@ -84,7 +84,7 @@ class TestBGEM3SparseEmbeddings:
         sparse_vec = {"indices": [1, 5, 10], "values": [0.1, 0.5, 0.9]}
         mock_response = httpx.Response(
             200,
-            json={"sparse_vecs": [sparse_vec]},
+            json={"lexical_weights": [sparse_vec]},
             request=httpx.Request("POST", "http://fake:8000/encode/sparse"),
         )
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
@@ -93,19 +93,19 @@ class TestBGEM3SparseEmbeddings:
         assert result == sparse_vec
 
     async def test_aembed_documents(self):
-        sparse_vecs = [
+        lexical_weights = [
             {"indices": [1], "values": [0.1]},
             {"indices": [2], "values": [0.2]},
         ]
         mock_response = httpx.Response(
             200,
-            json={"sparse_vecs": sparse_vecs},
+            json={"lexical_weights": lexical_weights},
             request=httpx.Request("POST", "http://fake:8000/encode/sparse"),
         )
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
             emb = BGEM3SparseEmbeddings(base_url="http://fake:8000")
             result = await emb.aembed_documents(["doc1", "doc2"])
-        assert result == sparse_vecs
+        assert result == lexical_weights
 
     async def test_aembed_documents_empty(self):
         emb = BGEM3SparseEmbeddings(base_url="http://fake:8000")
@@ -116,7 +116,7 @@ class TestBGEM3SparseEmbeddings:
         sparse_vec = {"indices": [1], "values": [0.5]}
         mock_response = httpx.Response(
             200,
-            json={"sparse_vecs": [sparse_vec]},
+            json={"lexical_weights": [sparse_vec]},
             request=httpx.Request("POST", "http://fake:8000/encode/sparse"),
         )
         with patch(
