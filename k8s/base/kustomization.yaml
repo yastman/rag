@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: rag
+
+resources:
+  - namespace.yaml
+  # ConfigMaps
+  - configmaps/postgres-init.yaml
+  - configmaps/litellm-config.yaml
+  # Databases
+  - postgres/pvc.yaml
+  - postgres/deployment.yaml
+  - postgres/service.yaml
+  - redis/pvc.yaml
+  - redis/deployment.yaml
+  - redis/service.yaml
+  - qdrant/pvc.yaml
+  - qdrant/deployment.yaml
+  - qdrant/service.yaml
+  # ML Services
+  - docling/pvc.yaml
+  - docling/deployment.yaml
+  - docling/service.yaml
+  - bge-m3/deployment.yaml
+  - bge-m3/service.yaml
+  - user-base/deployment.yaml
+  - user-base/service.yaml
+  # Application
+  - litellm/deployment.yaml
+  - litellm/service.yaml
+  - bot/deployment.yaml
+  - ingestion/deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: rag-fresh
