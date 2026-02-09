@@ -23,6 +23,11 @@ def isolate_otel_langfuse(monkeypatch):
         if key.startswith(prefixes):
             sys.modules.pop(key, None)
 
+    # Reset prompt_manager singleton so it picks up mocked Langfuse
+    from telegram_bot.integrations.prompt_manager import _reset_client
+
+    _reset_client()
+
     # Force environment variables (override, not setdefault)
     monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
     monkeypatch.setenv("OTEL_TRACES_EXPORTER", "none")
@@ -32,6 +37,7 @@ def isolate_otel_langfuse(monkeypatch):
     monkeypatch.setenv("LANGFUSE_ENABLED", "false")
     monkeypatch.setenv("LANGFUSE_HOST", "")
     monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
+    monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
 
     # Create no-op mocks
     mock_noop = MagicMock()
