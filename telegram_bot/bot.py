@@ -771,6 +771,17 @@ class PropertyBot:
                         await temp_message.edit_text(accumulated_text)
                 answer = accumulated_text
 
+                # Empty stream fallback: if streaming yielded nothing, use sync generation
+                if not answer.strip():
+                    logger.warning(
+                        "Stream returned empty response, falling back to generate_answer"
+                    )
+                    answer = await self.llm_service.generate_answer(query, results_for_llm)
+                    try:
+                        await temp_message.edit_text(answer, parse_mode="Markdown")
+                    except Exception:
+                        await temp_message.edit_text(answer)
+
             except Exception as e:
                 logger.error(f"Streaming error: {e}", exc_info=True)
                 answer = await self.llm_service.generate_answer(query, results_for_llm)
@@ -800,6 +811,7 @@ class PropertyBot:
                 answer,
                 vector=query_vector,
                 user_id=user_id,
+                query_type=query_type.value,
                 ttl=get_ttl_for_query(query, answer),
             )
         )
