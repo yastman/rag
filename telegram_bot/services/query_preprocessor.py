@@ -11,6 +11,8 @@ from typing import Any
 import openai
 from langfuse.openai import AsyncOpenAI
 
+from telegram_bot.integrations.prompt_manager import get_prompt
+
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +70,11 @@ class HyDEGenerator:
             Hypothetical document text for embedding
         """
         try:
+            system_prompt = get_prompt("hyde", fallback=self.HYDE_SYSTEM_PROMPT)
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self.HYDE_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": query},
                 ],
                 temperature=0.7,
