@@ -1,15 +1,9 @@
 # tests/unit/test_bot_scores.py
-"""Unit tests for bot Langfuse integration (LangGraph pipeline).
-
-With the LangGraph migration, Langfuse is integrated via create_langfuse_handler
-which returns a callback passed to graph.ainvoke(config={"callbacks": [handler]}).
-Individual scoring happens inside graph nodes, not bot.py.
-"""
+"""Tests for Langfuse score writing in handle_query."""
 
 import pytest
 
 
-# Skip entire module if aiogram not installed
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -46,7 +40,7 @@ def _create_bot(mock_config):
         patch("telegram_bot.graph.config.GraphConfig.create_llm"),
     ):
         bot = PropertyBot(mock_config)
-    return bot  # noqa: RET504 - need `with` block to exit before returning
+    return bot  # noqa: RET504
 
 
 def _make_message(text="квартиры до 100000 евро", user_id=123456789, chat_id=987654321):
@@ -63,159 +57,199 @@ def _make_message(text="квартиры до 100000 евро", user_id=12345678
     return message
 
 
-class TestLangfuseHandlerCreation:
-    """Test that Langfuse handler is created with correct parameters."""
+# Typical graph result for a full RAG pipeline (cache miss, search, rerank, generate)
+FULL_PIPELINE_RESULT = {
+    "response": "Вот квартиры до 100000 евро...",
+    "query_type": "STRUCTURED",
+    "cache_hit": False,
+    "cached_response": None,
+    "search_results_count": 5,
+    "rerank_applied": True,
+    "documents_relevant": True,
+    "latency_stages": {
+        "classify": 0.001,
+        "cache_check": 0.050,
+        "retrieve": 0.200,
+        "grade": 0.001,
+        "rerank": 0.100,
+        "generate": 0.500,
+        "respond": 0.010,
+    },
+}
 
-    @pytest.mark.asyncio
-    async def test_handler_created_with_session_id(self, mock_config):
-        """Langfuse handler should receive session_id from make_initial_state."""
+# Cache hit result (short-circuit)
+CACHE_HIT_RESULT = {
+    "response": "Cached answer here",
+    "query_type": "GENERAL",
+    "cache_hit": True,
+    "cached_response": "Cached answer here",
+    "search_results_count": 0,
+    "rerank_applied": False,
+    "documents_relevant": False,
+    "latency_stages": {
+        "classify": 0.001,
+        "cache_check": 0.020,
+        "respond": 0.005,
+    },
+}
+
+# Chitchat result (no RAG at all)
+CHITCHAT_RESULT = {
+    "response": "Привет! 👋 Я помогу найти недвижимость.",
+    "query_type": "CHITCHAT",
+    "cache_hit": False,
+    "search_results_count": 0,
+    "rerank_applied": False,
+    "latency_stages": {"classify": 0.001, "respond": 0.005},
+}
+
+
+class TestScoreWriting:
+    """Test that Langfuse scores are written after graph.ainvoke."""
+
+    async def _run_handle_query(self, mock_config, graph_result, mock_lf_client):
+        """Helper: run handle_query with mocked graph and Langfuse client."""
         bot = _create_bot(mock_config)
         mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
-        mock_handler = MagicMock()
+        mock_graph.ainvoke = AsyncMock(return_value=graph_result)
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch(
-                "telegram_bot.bot.create_langfuse_handler", return_value=mock_handler
-            ) as mock_create,
+            patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cm = AsyncMock()
             mock_cm.__aenter__ = AsyncMock()
             mock_cm.__aexit__ = AsyncMock()
             mock_cas.typing.return_value = mock_cm
+            # propagate_attributes is a context manager
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
 
             await bot.handle_query(_make_message())
 
-        mock_create.assert_called_once()
-        call_kwargs = mock_create.call_args[1]
-        assert "session_id" in call_kwargs
-        assert call_kwargs["session_id"].startswith("chat-")
+        return mock_lf_client
 
     @pytest.mark.asyncio
-    async def test_handler_created_with_user_id(self, mock_config):
-        """Langfuse handler should receive user_id as string."""
+    async def test_scores_written_full_pipeline(self, mock_config):
+        """All 12 scores should be written after a full pipeline run."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        await self._run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+
+        # Extract all score names from calls
+        score_calls = mock_lf.score_current_trace.call_args_list
+        score_names = [call.kwargs["name"] for call in score_calls]
+
+        expected_names = [
+            "query_type",
+            "latency_total_ms",
+            "semantic_cache_hit",
+            "embeddings_cache_hit",
+            "search_cache_hit",
+            "rerank_applied",
+            "rerank_cache_hit",
+            "results_count",
+            "no_results",
+            "llm_used",
+            "confidence_score",
+            "hyde_used",
+        ]
+        assert sorted(score_names) == sorted(expected_names)
+        assert mock_lf.score_current_trace.call_count == 12
+
+    @pytest.mark.asyncio
+    async def test_score_values_full_pipeline(self, mock_config):
+        """Score values should match the graph result state."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        await self._run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+
+        scores = {
+            call.kwargs["name"]: call.kwargs["value"]
+            for call in mock_lf.score_current_trace.call_args_list
+        }
+        # query_type: STRUCTURED → 2
+        assert scores["query_type"] == 2.0
+        # cache miss
+        assert scores["semantic_cache_hit"] == 0.0
+        # rerank applied
+        assert scores["rerank_applied"] == 1.0
+        # 5 results
+        assert scores["results_count"] == 5.0
+        # not empty
+        assert scores["no_results"] == 0.0
+        # generate in latency_stages → LLM used
+        assert scores["llm_used"] == 1.0
+        # latency_total_ms = sum of stages * 1000
+        expected_latency = sum(FULL_PIPELINE_RESULT["latency_stages"].values()) * 1000
+        assert abs(scores["latency_total_ms"] - expected_latency) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_score_values_cache_hit(self, mock_config):
+        """Cache hit should set semantic_cache_hit=1.0, llm_used=0.0."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        await self._run_handle_query(mock_config, CACHE_HIT_RESULT, mock_lf)
+
+        scores = {
+            call.kwargs["name"]: call.kwargs["value"]
+            for call in mock_lf.score_current_trace.call_args_list
+        }
+        assert scores["semantic_cache_hit"] == 1.0
+        assert scores["llm_used"] == 0.0
+        assert scores["rerank_applied"] == 0.0
+        assert scores["results_count"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_score_values_chitchat(self, mock_config):
+        """Chitchat should set query_type=0, no LLM, no results."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        await self._run_handle_query(mock_config, CHITCHAT_RESULT, mock_lf)
+
+        scores = {
+            call.kwargs["name"]: call.kwargs["value"]
+            for call in mock_lf.score_current_trace.call_args_list
+        }
+        # CHITCHAT → 0
+        assert scores["query_type"] == 0.0
+        assert scores["llm_used"] == 0.0
+        assert scores["results_count"] == 0.0
+        assert scores["no_results"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_scores_written_even_on_null_client(self, mock_config):
+        """When Langfuse disabled, _NullLangfuseClient.score_current_trace is called (no-op)."""
+        from telegram_bot.observability import _NullLangfuseClient
+
+        mock_lf = _NullLangfuseClient()
+
         bot = _create_bot(mock_config)
         mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
-        mock_handler = MagicMock()
+        mock_graph.ainvoke = AsyncMock(return_value=FULL_PIPELINE_RESULT)
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch(
-                "telegram_bot.bot.create_langfuse_handler", return_value=mock_handler
-            ) as mock_create,
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cm = AsyncMock()
             mock_cm.__aenter__ = AsyncMock()
             mock_cm.__aexit__ = AsyncMock()
             mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
 
-            await bot.handle_query(_make_message(user_id=42))
-
-        call_kwargs = mock_create.call_args[1]
-        assert call_kwargs["user_id"] == "42"
-
-    @pytest.mark.asyncio
-    async def test_handler_created_with_tags(self, mock_config):
-        """Langfuse handler should receive standard tags."""
-        bot = _create_bot(mock_config)
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
-        mock_handler = MagicMock()
-
-        with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch(
-                "telegram_bot.bot.create_langfuse_handler", return_value=mock_handler
-            ) as mock_create,
-            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
-        ):
-            mock_cm = AsyncMock()
-            mock_cm.__aenter__ = AsyncMock()
-            mock_cm.__aexit__ = AsyncMock()
-            mock_cas.typing.return_value = mock_cm
-
+            # Should not raise — NullClient silently ignores
             await bot.handle_query(_make_message())
-
-        call_kwargs = mock_create.call_args[1]
-        assert "tags" in call_kwargs
-        tags = call_kwargs["tags"]
-        assert "telegram" in tags
-        assert "langgraph" in tags
-
-
-class TestLangfuseCallbackPassing:
-    """Test that Langfuse callback is correctly passed to graph.ainvoke."""
-
-    @pytest.mark.asyncio
-    async def test_handler_passed_in_config_callbacks(self, mock_config):
-        """When handler exists, it should be in config.callbacks."""
-        bot = _create_bot(mock_config)
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
-        mock_handler = MagicMock()
-
-        with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.create_langfuse_handler", return_value=mock_handler),
-            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
-        ):
-            mock_cm = AsyncMock()
-            mock_cm.__aenter__ = AsyncMock()
-            mock_cm.__aexit__ = AsyncMock()
-            mock_cas.typing.return_value = mock_cm
-
-            await bot.handle_query(_make_message())
-
-        call_config = mock_graph.ainvoke.call_args[1].get("config", {})
-        assert "callbacks" in call_config
-        assert mock_handler in call_config["callbacks"]
-
-    @pytest.mark.asyncio
-    async def test_no_handler_means_empty_config(self, mock_config):
-        """When create_langfuse_handler returns None, config should be empty."""
-        bot = _create_bot(mock_config)
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
-
-        with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.create_langfuse_handler", return_value=None),
-            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
-        ):
-            mock_cm = AsyncMock()
-            mock_cm.__aenter__ = AsyncMock()
-            mock_cm.__aexit__ = AsyncMock()
-            mock_cas.typing.return_value = mock_cm
-
-            await bot.handle_query(_make_message())
-
-        call_config = mock_graph.ainvoke.call_args[1].get("config", {})
-        assert call_config == {}
-
-    @pytest.mark.asyncio
-    async def test_graph_receives_correct_state(self, mock_config):
-        """Graph should receive state with user_id, session_id, query."""
-        bot = _create_bot(mock_config)
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
-
-        with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.create_langfuse_handler", return_value=None),
-            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
-        ):
-            mock_cm = AsyncMock()
-            mock_cm.__aenter__ = AsyncMock()
-            mock_cm.__aexit__ = AsyncMock()
-            mock_cas.typing.return_value = mock_cm
-
-            await bot.handle_query(_make_message(text="студии в Несебр", user_id=42))
-
-        state = mock_graph.ainvoke.call_args[0][0]
-        assert state["messages"][0]["content"] == "студии в Несебр"
-        assert state["user_id"] == 42
-        assert "session_id" in state
