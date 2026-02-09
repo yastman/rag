@@ -23,6 +23,7 @@ def build_graph(
     reranker: Any | None = None,
     llm: Any | None = None,
     message: Any | None = None,
+    checkpointer: Any | None = None,
 ) -> Any:
     """Build and compile the RAG StateGraph.
 
@@ -34,6 +35,7 @@ def build_graph(
         reranker: Optional ColbertRerankerService
         llm: Optional LLM instance (defaults via GraphConfig)
         message: Optional aiogram Message for respond_node
+        checkpointer: Optional checkpointer for conversation persistence
 
     Returns:
         Compiled StateGraph ready for .ainvoke()
@@ -128,7 +130,7 @@ def build_graph(
     workflow.add_edge("cache_store", "respond")
     workflow.add_edge("respond", END)
 
-    return workflow.compile()
+    return workflow.compile(checkpointer=checkpointer)
 
 
 async def retrieve_node_wrapper(
