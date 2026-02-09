@@ -1,7 +1,9 @@
+***REMOVED*** syntax=docker/dockerfile:1
 FROM ghcr.io/mlflow/mlflow:v3.9.0
 
 ***REMOVED*** Install PostgreSQL driver for backend store
-RUN pip install --no-cache-dir psycopg2-binary==2.9.11
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install psycopg2-binary==2.9.11
 
 ***REMOVED*** Default port
 EXPOSE 5000
