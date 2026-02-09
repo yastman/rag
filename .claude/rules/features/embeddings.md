@@ -56,7 +56,7 @@ vectors = await emb.aembed_documents(["doc1", "doc2"])     # list[list[float]]
 vector = emb.embed_query("search text")
 ```
 
-Wraps BGE-M3 `/encode/dense` endpoint. Batching via `batch_size=32`.
+Wraps BGE-M3 `/encode/dense` endpoint (fixed from legacy `/encode`). Batching via `batch_size=32`.
 
 ### BGEM3SparseEmbeddings (sparse)
 
@@ -70,7 +70,7 @@ sv = await sparse.aembed_query("search text")      # dict with sparse vector
 svs = await sparse.aembed_documents(["d1", "d2"])   # list[dict]
 ```
 
-Wraps BGE-M3 `/encode/sparse` endpoint. Returns `sparse_vecs` format.
+Wraps BGE-M3 `/encode/sparse` endpoint (fixed from legacy `/encode`). Returns `sparse_vecs` format.
 
 ## Embedding Models
 

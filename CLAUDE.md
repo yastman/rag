@@ -34,20 +34,22 @@ make ingest-unified-status # Show ingestion stats from Postgres
 ## Architecture
 
 ```
-Input → Docling Parser → Chunker → BGE-M3 Dense + BGE-M3 Sparse → Qdrant
-     → QueryPreprocessor → RRF Fusion → ColBERT Rerank → LLM → Response
+Ingestion: Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
+Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
+           → retrieve (RRF) → grade → rerank (ColBERT) → generate → respond
 ```
 
 | Module | Purpose |
 |--------|---------|
-| `src/core/pipeline.py` | RAG orchestrator |
-| `src/retrieval/search_engines.py` | 4 search variants |
+| `telegram_bot/bot.py` | PropertyBot (~244 LOC, LangGraph orchestrator) |
+| `telegram_bot/graph/` | LangGraph 9-node RAG pipeline |
+| `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
+| `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
+| `telegram_bot/observability.py` | Langfuse init, @observe decorator, PII masking |
+| `src/retrieval/search_engines.py` | 4 search variants (evaluation) |
 | `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
-| `src/ingestion/unified/manifest.py` | Content-hash → stable UUID (rename-safe) |
-| `telegram_bot/` | Bot + services |
-| `telegram_bot/preflight.py` | Dependency health checks (Redis, Qdrant, BGE-M3, LiteLLM) |
 
-**Services:** Qdrant:6333, Redis:6379, LiteLLM:4000, Langfuse:3001
+**Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (20 svc) → see `.claude/rules/docker.md`
 
@@ -88,10 +90,9 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | Document | Content |
 |----------|---------|
 | `docs/PIPELINE_OVERVIEW.md` | Architecture |
-| `docs/QDRANT_STACK.md` | Vector DB |
+| `docs/QDRANT_STACK.md` | Vector DB (gRPC, batch, group_by) |
 | `docs/INGESTION.md` | Document ingestion pipeline |
-| `docs/CONTEXTUALIZED_EMBEDDINGS.md` | voyage-context-3 embeddings |
-| `CACHING.md` | 6-tier cache |
+| `CACHING.md` | 6-tier cache (Redis pipelines) |
 
 ## Qdrant Collections
 
@@ -107,26 +108,26 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 ## Deployment
 
 ```bash
-# Dev (with Voyage API)
-make docker-up                      # Core services
+# Dev (Docker Compose)
+make docker-up                      # Core services (5 svc, ~17s)
 make docker-bot-up                  # + bot
 
-# VPS (local embeddings, no Voyage API)
-ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml up -d"
+# Build images (parallel via Docker Bake)
+docker buildx bake --load           # All 5 custom images
+docker buildx bake bot              # Single target
+
+# VPS k3s (local embeddings, no Voyage API)
+make k3s-secrets                    # Create k8s secrets
+make k3s-push-bot                   # Transfer image to VPS
+make k3s-bot                        # Deploy bot stack
+make k3s-status                     # Check pods
 ```
 
 **VPS:** `admin@95.111.252.29:1654` (`ssh vps`) | Path: `/opt/rag-fresh`
 
-**VPS Quick Commands:**
-```bash
-ssh vps "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep vps"  # Status
-ssh vps "docker logs vps-bot --tail 30"                                   # Logs
-rsync -avz src/ vps:/opt/rag-fresh/src/ && ssh vps "docker restart vps-ingestion"  # Deploy code
-```
+**VPS Env:** `RETRIEVAL_DENSE_PROVIDER=bge_m3_api` `RETRIEVAL_SPARSE_PROVIDER=bge_m3_api` `RERANK_PROVIDER=colbert` `BGE_M3_URL=http://bge-m3:8000`
 
-**VPS Env:** `RETRIEVAL_DENSE_PROVIDER=bge_m3_api` `RETRIEVAL_SPARSE_PROVIDER=bge_m3_api` `RERANK_PROVIDER=colbert` `BGE_M3_URL=http://bge-m3:8000` `COLBERT_TIMEOUT=120` `RERANK_CANDIDATES_MAX=10`
-
-**VPS Embeddings:** Dense: BGE-M3 (local CPU) | Sparse: BGE-M3 `/encode/sparse` | Rerank: ColBERT (local CPU, graceful degradation on timeout)
+**k3s details:** → see `.claude/rules/k3s.md`
 
 ## Monitoring & Alerting
 
@@ -138,7 +139,7 @@ rsync -avz src/ vps:/opt/rag-fresh/src/ && ssh vps "docker restart vps-ingestion
 |-------|-----|
 | Redis connection refused | `docker compose up -d redis` |
 | Qdrant timeout | `use_quantization=True` |
-| Voyage 429 | Use CacheService |
+| Voyage 429 | Use CacheLayerManager |
 | Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
 | Alerts not sending | Check `TELEGRAM_ALERTING_*` env vars |
 
@@ -170,16 +171,18 @@ See `.claude/rules/` for domain-specific documentation:
 
 | File | Scope | Loads when |
 |------|-------|-----------|
-| `features/search-retrieval.md` | RRF, ACORN, quantization, small-to-big | `src/retrieval/**` |
+| `features/search-retrieval.md` | RRF, gRPC, batch, group_by, quantization | `src/retrieval/**` |
 | `features/query-processing.md` | HyDE, preprocessing, routing | `**/query*.py` |
 | `features/evaluation.md` | RAGAS, metrics, A/B tests | `src/evaluation/**` |
-| `features/caching.md` | 6-tier cache, TTL | `**/cache*.py` |
-| `features/embeddings.md` | BGE-M3, Voyage, BM42 (deprecated on VPS) | `**/embed*.py` |
+| `features/caching.md` | 6-tier cache, Redis pipelines, TTL | `**/cache*.py` |
+| `features/embeddings.md` | BGE-M3 (/encode/dense, /encode/sparse), Voyage | `**/embed*.py` |
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
-| `features/telegram-bot.md` | Handlers, middlewares | `telegram_bot/*.py` |
+| `features/telegram-bot.md` | LangGraph pipeline, bot, middlewares | `telegram_bot/*.py` |
+| `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
 | `build.md` | uv, Makefile, pre-commit hooks | `Makefile, pyproject.toml` |
 | `docker.md` | Containers, monitoring | `docker/**` |
+| `k3s.md` | k3s manifests, deployment, VPS | `k8s/**` |
 | `testing.md` | Unit tests, chaos tests, E2E | `tests/**` |
 | `skills.md` | Superpowers workflow | `docs/plans/**` |
 | `shared-tasks.md` | Shared task list between terminals | — |
