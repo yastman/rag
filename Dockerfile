@@ -2,6 +2,7 @@
 ***REMOVED*** Root Dockerfile — uv sync pattern (mirrors telegram_bot/Dockerfile)
 
 ***REMOVED*** ====== BUILD STAGE ======
+***REMOVED*** Base images pinned — checked 2026-02-09
 FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
