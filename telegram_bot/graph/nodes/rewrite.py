@@ -12,6 +12,8 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ _REWRITE_PROMPT = (
 )
 
 
+@observe(name="node-rewrite")
 async def rewrite_node(
     state: dict[str, Any],
     *,
