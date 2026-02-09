@@ -26,6 +26,7 @@ def _make_config(**overrides) -> MagicMock:
     cfg = MagicMock()
     cfg.redis_url = overrides.get("redis_url", "redis://localhost:6379")
     cfg.qdrant_url = overrides.get("qdrant_url", "http://localhost:6333")
+    cfg.qdrant_api_key = overrides.get("qdrant_api_key")
     cfg.qdrant_collection = overrides.get("qdrant_collection", "test_col")
     cfg.bge_m3_url = overrides.get("bge_m3_url", "http://localhost:8000")
     cfg.llm_base_url = overrides.get("llm_base_url", "http://localhost:4000")
@@ -261,28 +262,32 @@ class TestCheckSingleDep:
         assert result is True
         mock_verify.assert_awaited_once_with(config.redis_url)
 
-    async def test_qdrant_http_200_ok(self):
+    async def test_qdrant_collection_ok(self):
         config = _make_config()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
         client = AsyncMock(spec=httpx.AsyncClient)
-        client.get = AsyncMock(return_value=mock_resp)
 
-        result = await _check_single_dep("qdrant", config, client)
+        mock_qdrant_client = AsyncMock()
+        mock_qdrant_client.get_collection = AsyncMock(return_value=MagicMock(points_count=100))
+        mock_qdrant_client.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            result = await _check_single_dep("qdrant", config, client)
 
         assert result is True
-        client.get.assert_awaited_once_with(
-            f"{config.qdrant_url}/collections/{config.qdrant_collection}"
-        )
+        mock_qdrant_client.get_collection.assert_awaited_once_with(config.qdrant_collection)
+        mock_qdrant_client.close.assert_awaited_once()
 
-    async def test_qdrant_non_200_fails(self):
+    async def test_qdrant_exception_fails(self):
         config = _make_config()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
         client = AsyncMock(spec=httpx.AsyncClient)
-        client.get = AsyncMock(return_value=mock_resp)
 
-        result = await _check_single_dep("qdrant", config, client)
+        mock_qdrant_client = AsyncMock()
+        mock_qdrant_client.get_collection = AsyncMock(side_effect=Exception("not found"))
+        mock_qdrant_client.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
+            result = await _check_single_dep("qdrant", config, client)
+
         assert result is False
 
     async def test_bge_m3_health_ok(self):
@@ -372,10 +377,17 @@ class TestCheckDependencies:
     async def test_all_pass(self):
         config = _make_config()
 
-        with patch(
-            "telegram_bot.preflight._check_single_dep",
-            new_callable=AsyncMock,
-            return_value=True,
+        with (
+            patch(
+                "telegram_bot.preflight._check_critical_with_retry",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "telegram_bot.preflight._check_single_dep",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
         ):
             results = await check_dependencies(config)
 
@@ -386,12 +398,15 @@ class TestCheckDependencies:
     async def test_critical_failure_raises_preflight_error(self):
         config = _make_config()
 
-        async def fake_check(name, cfg, client):
+        async def fake_critical(name, cfg, client):
             return name != "redis"
 
+        async def fake_optional(name, cfg, client):
+            return True
+
         with (
-            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_check),
-            patch("telegram_bot.preflight.asyncio.sleep", new_callable=AsyncMock),
+            patch("telegram_bot.preflight._check_critical_with_retry", side_effect=fake_critical),
+            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_optional),
             pytest.raises(PreflightError) as exc_info,
         ):
             await check_dependencies(config)
@@ -401,16 +416,24 @@ class TestCheckDependencies:
     async def test_optional_failure_does_not_raise(self):
         config = _make_config()
 
-        async def fake_check(name, cfg, client):
+        async def fake_optional(name, cfg, client):
             return name != "langfuse"
 
-        with patch("telegram_bot.preflight._check_single_dep", side_effect=fake_check):
+        with (
+            patch(
+                "telegram_bot.preflight._check_critical_with_retry",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_optional),
+        ):
             results = await check_dependencies(config)
 
         assert results["langfuse"] is False
         # No PreflightError raised — optional deps don't block
 
     async def test_retry_logic_first_fail_second_pass(self):
+        """Test that tenacity retry in _check_critical_with_retry eventually passes."""
         config = _make_config()
         call_counts: dict[str, int] = {}
 
@@ -421,7 +444,7 @@ class TestCheckDependencies:
 
         with (
             patch("telegram_bot.preflight._check_single_dep", side_effect=fake_check),
-            patch("telegram_bot.preflight.asyncio.sleep", new_callable=AsyncMock),
+            patch("telegram_bot.preflight.CRITICAL_RETRY_DELAY", 0),
         ):
             results = await check_dependencies(config)
 
@@ -431,12 +454,12 @@ class TestCheckDependencies:
     async def test_redis_cache_skipped_when_redis_fails(self):
         config = _make_config()
 
-        async def fake_check(name, cfg, client):
+        async def fake_critical(name, cfg, client):
             return name != "redis"
 
         with (
-            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_check),
-            patch("telegram_bot.preflight.asyncio.sleep", new_callable=AsyncMock),
+            patch("telegram_bot.preflight._check_critical_with_retry", side_effect=fake_critical),
+            patch("telegram_bot.preflight._check_single_dep", new_callable=AsyncMock),
             pytest.raises(PreflightError),
         ):
             await check_dependencies(config)
@@ -444,14 +467,16 @@ class TestCheckDependencies:
     async def test_critical_dep_exception_treated_as_failure(self):
         config = _make_config()
 
-        async def fake_check(name, cfg, client):
-            if name == "bge_m3":
-                raise httpx.ConnectError("refused")
-            return True
+        async def fake_critical(name, cfg, client):
+            return name != "bge_m3"
 
         with (
-            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_check),
-            patch("telegram_bot.preflight.asyncio.sleep", new_callable=AsyncMock),
+            patch("telegram_bot.preflight._check_critical_with_retry", side_effect=fake_critical),
+            patch(
+                "telegram_bot.preflight._check_single_dep",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
             pytest.raises(PreflightError) as exc_info,
         ):
             await check_dependencies(config)

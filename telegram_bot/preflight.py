@@ -1,12 +1,13 @@
 """Bot dependency preflight checks with CRITICAL/OPTIONAL classification."""
 
-import asyncio
 import contextlib
 import logging
 from enum import StrEnum
 
 import httpx
 import redis.asyncio as aioredis
+from qdrant_client import AsyncQdrantClient
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .config import BotConfig
 
@@ -209,11 +210,20 @@ async def _check_single_dep(
 
     if name == "qdrant":
         collection = config.qdrant_collection
-        resp = await client.get(f"{config.qdrant_url}/collections/{collection}")
-        if resp.status_code != 200:
-            logger.error("Preflight FAIL: Qdrant collection — %s", resp.status_code)
+        qdrant = AsyncQdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key)
+        try:
+            info = await qdrant.get_collection(collection)
+            logger.info(
+                "Preflight Qdrant: collection=%s, points=%s",
+                collection,
+                info.points_count,
+            )
+            return True
+        except Exception as exc:
+            logger.error("Preflight FAIL: Qdrant — %s", exc)
             return False
-        return True
+        finally:
+            await qdrant.close()
 
     if name == "bge_m3":
         resp = await client.get(f"{config.bge_m3_url}/health")
@@ -237,6 +247,35 @@ async def _check_single_dep(
 
     logger.warning("Preflight: unknown dependency %r", name)
     return False
+
+
+async def _check_critical_with_retry(
+    dep_name: str, config: BotConfig, client: httpx.AsyncClient
+) -> bool:
+    """Check a critical dependency with tenacity retry."""
+
+    @retry(
+        stop=stop_after_attempt(CRITICAL_RETRIES),
+        wait=wait_fixed(CRITICAL_RETRY_DELAY),
+        reraise=True,
+    )
+    async def _attempt() -> bool:
+        result = await _check_single_dep(dep_name, config, client)
+        if not result:
+            msg = f"{dep_name} check returned False"
+            raise RuntimeError(msg)
+        return result
+
+    try:
+        return await _attempt()
+    except Exception as e:
+        logger.error(
+            "Preflight FAIL: %s [CRITICAL] after %d attempts — %s",
+            dep_name,
+            CRITICAL_RETRIES,
+            e,
+        )
+        return False
 
 
 async def check_dependencies(config: BotConfig) -> dict[str, bool]:
@@ -271,35 +310,7 @@ async def check_dependencies(config: BotConfig) -> dict[str, bool]:
                 continue
 
             if level == DepLevel.CRITICAL:
-                # Retry loop for critical deps
-                passed = False
-                for attempt in range(1, CRITICAL_RETRIES + 1):
-                    try:
-                        passed = await _check_single_dep(dep_name, config, client)
-                    except Exception as e:
-                        logger.error(
-                            "Preflight FAIL: %s (attempt %d/%d) — %s",
-                            dep_name,
-                            attempt,
-                            CRITICAL_RETRIES,
-                            e,
-                        )
-                        passed = False
-
-                    if passed:
-                        break
-
-                    if attempt < CRITICAL_RETRIES:
-                        logger.warning(
-                            "Preflight: %s [CRITICAL] failed (attempt %d/%d), retrying in %.0fs...",
-                            dep_name,
-                            attempt,
-                            CRITICAL_RETRIES,
-                            CRITICAL_RETRY_DELAY,
-                        )
-                        await asyncio.sleep(CRITICAL_RETRY_DELAY)
-
-                results[dep_name] = passed
+                results[dep_name] = await _check_critical_with_retry(dep_name, config, client)
             else:
                 # Single attempt for optional deps
                 try:
