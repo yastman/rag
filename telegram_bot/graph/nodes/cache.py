@@ -77,12 +77,14 @@ async def cache_store_node(
     state: dict[str, Any],
     *,
     cache: Any,
+    event_stream: Any | None = None,
 ) -> dict[str, Any]:
     """Store response in semantic cache and conversation history.
 
     Args:
         state: RAGState dict (must have response, query_embedding, query_type)
         cache: CacheLayerManager instance
+        event_stream: Optional PipelineEventStream for observability logging
 
     Returns:
         State update (pass-through response)
@@ -113,5 +115,23 @@ async def cache_store_node(
         )
 
         logger.info("cache_store: stored response + conversation (type=%s)", query_type)
+
+        # Log pipeline result event (fire-and-forget, never blocks main flow)
+        if event_stream is not None:
+            latency_stages = state.get("latency_stages", {})
+            total_latency = sum(latency_stages.values()) if latency_stages else 0
+            await event_stream.log_event(
+                "pipeline_result",
+                {
+                    "query": query[:200],
+                    "query_type": query_type,
+                    "latency_ms": round(total_latency * 1000) if total_latency else 0,
+                    "cache_hit": state.get("cache_hit", False),
+                    "search_count": state.get("search_results_count", 0),
+                    "rerank_applied": state.get("rerank_applied", False),
+                    "node_name": "cache_store",
+                    "user_id": user_id,
+                },
+            )
 
     return {"response": response}
