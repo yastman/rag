@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+data:
+  config.yaml: |
+    model_list:
+      - model_name: gpt-4o-mini
+        litellm_params:
+          model: openai/zai-glm-4.7
+          api_base: https://api.cerebras.ai/v1
+          api_key: os.environ/CEREBRAS_API_KEY
+          merge_reasoning_content_in_choices: true
+      - model_name: gpt-4o-mini-fallback
+        litellm_params:
+          model: groq/llama-3.1-70b-versatile
+          api_key: os.environ/GROQ_API_KEY
+      - model_name: gpt-4o-mini-openai
+        litellm_params:
+          model: openai/gpt-4o-mini
+          api_key: os.environ/OPENAI_API_KEY
+    general_settings:
+      master_key: os.environ/LITELLM_MASTER_KEY
+      proxy_batch_write_at: 60
+      disable_error_logs: true
+      allow_requests_on_db_unavailable: true
+    router_settings:
+      fallbacks:
+        - gpt-4o-mini: [gpt-4o-mini-fallback, gpt-4o-mini-openai]
+      retry_policy:
+        retry_count: 2
+    litellm_settings:
+      request_timeout: 600
+      set_verbose: false
+      json_logs: true
