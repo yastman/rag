@@ -16,15 +16,15 @@ dependencies = [
     "FlagEmbedding",
     "scipy",
     "sentence-transformers",  ***REMOVED*** BGE-M3 embeddings
-    "qdrant-client>=1.15.0",  ***REMOVED*** Vector database client (v1.15+ for BM42 support)
-    "fastembed>=0.7.0",       ***REMOVED*** FastEmbed for BM42 sparse embeddings
+    "qdrant-client>=1.16.2",  ***REMOVED*** Vector database client (v1.15+ for BM42 support)
+    "fastembed>=0.7.4",       ***REMOVED*** FastEmbed for BM42 sparse embeddings
     ***REMOVED*** Document Processing (2025-10-30)
-    "docling>=2.0.0",         ***REMOVED*** Advanced document chunking & structure detection
-    "docling-core>=2.0.0",    ***REMOVED*** Core types for Docling
+    "docling>=2.70.0",        ***REMOVED*** Advanced document chunking & structure detection
+    "docling-core>=2.61.0",   ***REMOVED*** Core types for Docling
     "transformers>=4.30.0",   ***REMOVED*** For HuggingFace tokenizers in HybridChunker
     ***REMOVED*** ML Platform & Evaluation (2025-10-23)
-    "mlflow>=2.22.1",        ***REMOVED*** Experiment tracking
-    "ragas>=0.2.10",          ***REMOVED*** RAG evaluation framework
+    "mlflow>=3.9.0",         ***REMOVED*** Experiment tracking
+    "ragas>=0.4.3",           ***REMOVED*** RAG evaluation framework
     "langfuse>=3.0.0",        ***REMOVED*** LLM observability & tracing
     "datasets>=3.0.0",        ***REMOVED*** For RAGAS evaluation datasets
     ***REMOVED*** Voyage AI Integration (2026-01-21)
@@ -36,7 +36,7 @@ dependencies = [
     "torch>=2.0.0",
     "torchvision>=0.15.0",  ***REMOVED*** Must be direct dep for [tool.uv.sources] to apply CPU index
     ***REMOVED*** CocoIndex Document Ingestion (2026-02-02)
-    "cocoindex>=0.1.60",                  ***REMOVED*** Data transformation framework for AI
+    "cocoindex>=0.3.28",                  ***REMOVED*** Data transformation framework for AI
     "asyncpg>=0.31.0",
     ***REMOVED*** Performance (2026-02-06)
     "uvloop>=0.21.0",                     ***REMOVED*** 2-4x faster asyncio event loop
