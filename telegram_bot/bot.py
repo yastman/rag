@@ -11,6 +11,7 @@ import httpx
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message
+from aiogram.utils.chat_action import ChatActionSender
 
 from .config import BotConfig
 from .middlewares import setup_error_middleware, setup_throttling_middleware
@@ -354,6 +355,9 @@ class PropertyBot:
     @observe(name="telegram-message")
     async def handle_query(self, message: Message):
         """Handle user query with multi-level caching RAG pipeline."""
+        # Early typing ACK — user sees "typing..." immediately
+        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
         start_time = time.perf_counter()
         metrics = PipelineMetrics.get()
         query = message.text or ""
@@ -433,9 +437,6 @@ class PropertyBot:
                 await self.cache_service.initialize()
                 self._cache_initialized = True
 
-            # Show typing indicator
-            await message.bot.send_chat_action(message.chat.id, "typing")
-
             # 0. Query preprocessing (translit + HyDE gating)
             preprocess_result = self.query_preprocessor.analyze(
                 query,
@@ -503,270 +504,19 @@ class PropertyBot:
                 return  # finally block writes scores
 
             # === MISS-LANE: parallel sparse + QueryAnalyzer, then search ===
-            metrics.inc("cache_miss")
-            t_miss = time.perf_counter()
-
-            # Parallel: QueryAnalyzer + Sparse embedding (independent, both cached)
-            async def _get_analysis():
-                cached = await self.cache_service.get_cached_analysis(clean_query)
-                if cached is not None:
-                    return cached
-                result = await self.query_analyzer.analyze(clean_query)
-                await self.cache_service.store_analysis(clean_query, result)
-                return result
-
-            async def _get_sparse():
-                cached = await self.cache_service.get_cached_sparse_embedding(clean_query)
-                if cached is not None:
-                    return cached
-                vec = await self._get_sparse_vector(clean_query)
-                if vec.get("indices"):
-                    await self.cache_service.store_sparse_embedding(clean_query, vec)
-                return vec
-
-            analysis, sparse_vector = await asyncio.gather(_get_analysis(), _get_sparse())
-            miss_parallel_ms = (time.perf_counter() - t_miss) * 1000
-            metrics.record("miss_parallel", miss_parallel_ms)
-            logger.info("miss_parallel (analyzer+sparse): %.0fms", miss_parallel_ms)
-
-            filters = analysis.get("filters", {})
-            semantic_query = analysis.get("semantic_query", query)
-            logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
-
-            # 4. Search in Qdrant with hybrid search
-            t_search = time.perf_counter()
-            results = await self.cache_service.get_cached_search(query_vector, filters)
-            if results is None:
-                # Hybrid RRF search (dense + sparse)
-                results = await self.qdrant_service.hybrid_search_rrf(
-                    dense_vector=query_vector,
-                    sparse_vector=sparse_vector,
-                    filters=filters or None,
-                    top_k=self.config.search_top_k,
-                    dense_weight=self.config.hybrid_dense_weight,
-                    sparse_weight=self.config.hybrid_sparse_weight,
-                    quantization_ignore=not self.config.qdrant_use_quantization,
-                    quantization_rescore=self.config.qdrant_quantization_rescore,
-                    quantization_oversampling=self.config.qdrant_quantization_oversampling,
-                )
-
-                # MMR diversity reranking (if enabled and enough results)
-                if self.config.mmr_enabled and len(results) > self.config.rerank_top_k:
-                    # Get embeddings for MMR calculation
-                    result_embeddings = [
-                        await self.dense_service.embed_query(r["text"])
-                        for r in results[:20]  # Limit for performance
-                    ]
-                    results = self.qdrant_service.mmr_rerank(
-                        points=results[:20],
-                        embeddings=result_embeddings,
-                        lambda_mult=self.config.mmr_lambda,
-                        top_k=self.config.rerank_top_k * 2,
-                    )
-
-                ***REMOVED*** rerank with cache (2026 best practice)
-                # Skip rerank for simple queries, few results, or if rerank disabled
-                if (
-                    results
-                    and self.rerank_service is not None
-                    and needs_rerank(query_type, len(results))
-                ):
-                    scores["rerank_applied"] = 1.0
-                    results = results[: self.config.rerank_candidates_max]
-                    doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
-
-                    # Check rerank cache first
-                    # Hash embedding for cache key (same pattern as search cache)
-                    rerank_query_hash = hashlib.sha256(str(query_vector[:10]).encode()).hexdigest()[
-                        :16
-                    ]
-                    cached_rerank = await self.cache_service.get_cached_rerank(
-                        query_hash=rerank_query_hash,
-                        chunk_ids=doc_ids,
-                    )
-
-                    if cached_rerank:
-                        scores["rerank_cache_hit"] = 1.0
-                        # Rebuild results from cached scores
-                        id_to_result = {r.get("id", str(i)): r for i, r in enumerate(results)}
-                        results = [
-                            id_to_result[item["id"]]
-                            for item in cached_rerank
-                            if item["id"] in id_to_result
-                        ][: self.config.rerank_top_k]
-                        logger.info(f"✓ Using cached rerank ({len(results)} results)")
-                    else:
-                        try:
-                            doc_texts = [r["text"] for r in results]
-                            rerank_results = await self.rerank_service.rerank(
-                                query=query,
-                                documents=doc_texts,
-                                top_k=self.config.rerank_top_k,
-                            )
-
-                            # Store rerank results in cache (dict format for JSON serialization)
-                            rerank_cache_data = [
-                                {"id": doc_ids[r["index"]], "score": r.get("score", 0.0)}
-                                for r in rerank_results
-                            ]
-                            await self.cache_service.store_rerank_results(
-                                query_hash=rerank_query_hash,
-                                chunk_ids=doc_ids,
-                                results=rerank_cache_data,
-                            )
-
-                            results = [results[r["index"]] for r in rerank_results]
-                            logger.info(f"Reranked to top {len(results)} results")
-                        except Exception as e:
-                            logger.warning(
-                                f"Rerank failed ({type(e).__name__}: {e}), "
-                                f"using base retrieval results ({len(results)} docs)"
-                            )
-                            scores["rerank_fallback"] = 1.0
-
-                await self.cache_service.store_search_results(query_vector, filters, results)
-            else:
-                scores["search_cache_hit"] = 1.0
-            search_ms = (time.perf_counter() - t_search) * 1000
-            metrics.record("qdrant_search", search_ms)
-            logger.info("qdrant_search+rerank: %.0fms", search_ms)
-
-            scores["results_count"] = float(len(results)) if results else 0.0
-            logger.info(f"Found {len(results)} results")
-
-            if not results:
-                scores["no_results"] = 1.0
-                await message.answer(
-                    "😔 Ничего не нашел по вашему запросу.\n\nПопробуйте переформулировать запрос."
-                )
-                return  # finally block writes scores
-
-            # 5. Small-to-big context expansion (optional)
-            results_for_llm = results
-            if self.config.small_to_big_mode in ("on", "auto"):
-                should_expand = self.config.small_to_big_mode == "on" or (
-                    self.config.small_to_big_mode == "auto" and query_type == QueryType.COMPLEX
-                )
-                if should_expand:
-                    expanded = await self.small_to_big_service.expand_context(
-                        chunks=results,
-                        window_before=self.config.small_to_big_window_before,
-                        window_after=self.config.small_to_big_window_after,
-                    )
-                    results_for_llm = [
-                        {
-                            "text": ec.expanded_text,
-                            "metadata": ec.original_chunk.get("metadata", {}),
-                            "score": ec.original_chunk.get("score", 0.0),
-                        }
-                        for ec in expanded
-                    ]
-                    logger.info(f"Small-to-big expanded to {len(results_for_llm)} chunks")
-
-            # 6. Get conversation history for context-aware responses
-            _conversation_history = await self.cache_service.get_conversation_history(
-                user_id, last_n=3
-            )
-
-            # Store user query in conversation
-            await self.cache_service.store_conversation_message(user_id, "user", query)
-
-            scores["llm_used"] = 1.0
-            t_llm = time.perf_counter()
-
-            # 7. Generate answer with LLM
-            temp_message = await message.answer("🔍 Генерирую ответ...")
-
-            # Confidence scoring mode (non-streaming, returns ConfidenceResult)
-            if self.config.enable_confidence_scoring:
-                result = await self.llm_service.generate_answer(
-                    query, results_for_llm, with_confidence=True
-                )
-                scores["confidence_score"] = result.confidence
-
-                if result.is_low_confidence:
-                    logger.info(
-                        f"Low confidence ({result.confidence:.2f}), using fallback response"
-                    )
-                    answer = self.llm_service.get_low_confidence_response(
-                        query, results_for_llm, result.confidence
-                    )
-                else:
-                    answer = result.answer
-
-                try:
-                    await temp_message.edit_text(answer, parse_mode="Markdown")
-                except Exception:
-                    await temp_message.edit_text(answer)
-
-            else:
-                # Standard streaming mode
-                accumulated_text = ""
-                last_sent_text = ""  # Track what we last sent
-                chunk_count = 0
-
-                try:
-                    async for chunk in self.llm_service.stream_answer(
-                        question=query,
-                        context_chunks=results_for_llm,
-                    ):
-                        accumulated_text += chunk
-                        chunk_count += 1
-
-                        # Update message every 10 chunks or when punctuation appears
-                        # Only if text actually changed
-                        if (
-                            chunk_count % 10 == 0 or chunk in ".!?\n"
-                        ) and accumulated_text != last_sent_text:
-                            try:
-                                await temp_message.edit_text(accumulated_text)
-                                last_sent_text = accumulated_text
-                            except Exception as edit_err:
-                                logger.debug("Streaming edit skipped: %s", edit_err)
-
-                    # Final update with complete answer (only if different)
-                    if accumulated_text != last_sent_text:
-                        try:
-                            await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
-                        except Exception:
-                            # Markdown parse failed — send without formatting
-                            await temp_message.edit_text(accumulated_text)
-                    answer = accumulated_text
-
-                except Exception as e:
-                    logger.error(f"Streaming error: {e}", exc_info=True)
-                    # Fallback to non-streaming
-                    answer = await self.llm_service.generate_answer(query, results_for_llm)
-                    try:
-                        await temp_message.edit_text(answer, parse_mode="Markdown")
-                    except Exception:
-                        await temp_message.edit_text(answer)
-
-            llm_ms = (time.perf_counter() - t_llm) * 1000
-            metrics.record("llm_generate", llm_ms)
-            logger.info("llm_generate: %.0fms", llm_ms)
-
-            # 8. Store assistant answer in conversation
-            await self.cache_service.store_conversation_message(user_id, "assistant", answer)
-
-            # 9. Fire-and-forget: store in semantic cache with pre-computed vector
-            def _log_store_error(task: asyncio.Task):
-                if task.cancelled():
-                    return
-                exc = task.exception()
-                if exc:
-                    logger.warning("Semantic cache store failed: %s: %s", type(exc).__name__, exc)
-
-            store_task = asyncio.create_task(
-                self.cache_service.store_semantic_cache(
+            # Keep typing indicator alive during heavy pipeline work
+            async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+                await self._run_miss_lane(
+                    message,
+                    query,
                     clean_query,
-                    answer,
-                    vector=query_vector,
-                    user_id=user_id,
-                    ttl=get_ttl_for_query(query, answer),
+                    query_vector,
+                    query_type,
+                    scores,
+                    metrics,
+                    needs_personalization,
+                    user_context,
                 )
-            )
-            store_task.add_done_callback(_log_store_error)
 
         finally:
             # Record total pipeline time
@@ -794,6 +544,266 @@ class PropertyBot:
                     langfuse.score_current_trace(name=name, value=value)
 
             self.cache_service.log_metrics()
+
+    async def _run_miss_lane(
+        self,
+        message: Message,
+        query: str,
+        clean_query: str,
+        query_vector: list,
+        query_type,
+        scores: dict,
+        metrics,
+        needs_personalization: bool,
+        user_context,
+    ):
+        """Execute the cache-miss pipeline: search -> rerank -> LLM -> cache store."""
+        user_id = message.from_user.id
+        metrics.inc("cache_miss")
+        t_miss = time.perf_counter()
+
+        # Parallel: QueryAnalyzer + Sparse embedding (independent, both cached)
+        async def _get_analysis():
+            cached = await self.cache_service.get_cached_analysis(clean_query)
+            if cached is not None:
+                return cached
+            result = await self.query_analyzer.analyze(clean_query)
+            await self.cache_service.store_analysis(clean_query, result)
+            return result
+
+        async def _get_sparse():
+            cached = await self.cache_service.get_cached_sparse_embedding(clean_query)
+            if cached is not None:
+                return cached
+            vec = await self._get_sparse_vector(clean_query)
+            if vec.get("indices"):
+                await self.cache_service.store_sparse_embedding(clean_query, vec)
+            return vec
+
+        analysis, sparse_vector = await asyncio.gather(_get_analysis(), _get_sparse())
+        miss_parallel_ms = (time.perf_counter() - t_miss) * 1000
+        metrics.record("miss_parallel", miss_parallel_ms)
+        logger.info("miss_parallel (analyzer+sparse): %.0fms", miss_parallel_ms)
+
+        filters = analysis.get("filters", {})
+        semantic_query = analysis.get("semantic_query", query)
+        logger.info(f"QueryAnalyzer: filters={filters}, semantic_query={semantic_query}")
+
+        # 4. Search in Qdrant with hybrid search
+        t_search = time.perf_counter()
+        results = await self.cache_service.get_cached_search(query_vector, filters)
+        if results is None:
+            # Hybrid RRF search (dense + sparse)
+            results = await self.qdrant_service.hybrid_search_rrf(
+                dense_vector=query_vector,
+                sparse_vector=sparse_vector,
+                filters=filters or None,
+                top_k=self.config.search_top_k,
+                dense_weight=self.config.hybrid_dense_weight,
+                sparse_weight=self.config.hybrid_sparse_weight,
+                quantization_ignore=not self.config.qdrant_use_quantization,
+                quantization_rescore=self.config.qdrant_quantization_rescore,
+                quantization_oversampling=self.config.qdrant_quantization_oversampling,
+            )
+
+            # MMR diversity reranking (if enabled and enough results)
+            if self.config.mmr_enabled and len(results) > self.config.rerank_top_k:
+                result_embeddings = [
+                    await self.dense_service.embed_query(r["text"]) for r in results[:20]
+                ]
+                results = self.qdrant_service.mmr_rerank(
+                    points=results[:20],
+                    embeddings=result_embeddings,
+                    lambda_mult=self.config.mmr_lambda,
+                    top_k=self.config.rerank_top_k * 2,
+                )
+
+            # Rerank with cache
+            if (
+                results
+                and self.rerank_service is not None
+                and needs_rerank(query_type, len(results))
+            ):
+                scores["rerank_applied"] = 1.0
+                results = results[: self.config.rerank_candidates_max]
+                doc_ids = [r.get("id", str(i)) for i, r in enumerate(results)]
+
+                rerank_query_hash = hashlib.sha256(str(query_vector[:10]).encode()).hexdigest()[:16]
+                cached_rerank = await self.cache_service.get_cached_rerank(
+                    query_hash=rerank_query_hash,
+                    chunk_ids=doc_ids,
+                )
+
+                if cached_rerank:
+                    scores["rerank_cache_hit"] = 1.0
+                    id_to_result = {r.get("id", str(i)): r for i, r in enumerate(results)}
+                    results = [
+                        id_to_result[item["id"]]
+                        for item in cached_rerank
+                        if item["id"] in id_to_result
+                    ][: self.config.rerank_top_k]
+                    logger.info(f"Using cached rerank ({len(results)} results)")
+                else:
+                    try:
+                        doc_texts = [r["text"] for r in results]
+                        rerank_results = await self.rerank_service.rerank(
+                            query=query,
+                            documents=doc_texts,
+                            top_k=self.config.rerank_top_k,
+                        )
+                        rerank_cache_data = [
+                            {"id": doc_ids[r["index"]], "score": r.get("score", 0.0)}
+                            for r in rerank_results
+                        ]
+                        await self.cache_service.store_rerank_results(
+                            query_hash=rerank_query_hash,
+                            chunk_ids=doc_ids,
+                            results=rerank_cache_data,
+                        )
+                        results = [results[r["index"]] for r in rerank_results]
+                        logger.info(f"Reranked to top {len(results)} results")
+                    except Exception as e:
+                        logger.warning(
+                            f"Rerank failed ({type(e).__name__}: {e}), "
+                            f"using base retrieval results ({len(results)} docs)"
+                        )
+                        scores["rerank_fallback"] = 1.0
+
+            await self.cache_service.store_search_results(query_vector, filters, results)
+        else:
+            scores["search_cache_hit"] = 1.0
+        search_ms = (time.perf_counter() - t_search) * 1000
+        metrics.record("qdrant_search", search_ms)
+        logger.info("qdrant_search+rerank: %.0fms", search_ms)
+
+        scores["results_count"] = float(len(results)) if results else 0.0
+        logger.info(f"Found {len(results)} results")
+
+        if not results:
+            scores["no_results"] = 1.0
+            await message.answer(
+                "Ничего не нашел по вашему запросу.\n\nПопробуйте переформулировать запрос."
+            )
+            return
+
+        # 5. Small-to-big context expansion (optional)
+        results_for_llm = results
+        if self.config.small_to_big_mode in ("on", "auto"):
+            should_expand = self.config.small_to_big_mode == "on" or (
+                self.config.small_to_big_mode == "auto" and query_type == QueryType.COMPLEX
+            )
+            if should_expand:
+                expanded = await self.small_to_big_service.expand_context(
+                    chunks=results,
+                    window_before=self.config.small_to_big_window_before,
+                    window_after=self.config.small_to_big_window_after,
+                )
+                results_for_llm = [
+                    {
+                        "text": ec.expanded_text,
+                        "metadata": ec.original_chunk.get("metadata", {}),
+                        "score": ec.original_chunk.get("score", 0.0),
+                    }
+                    for ec in expanded
+                ]
+                logger.info(f"Small-to-big expanded to {len(results_for_llm)} chunks")
+
+        # 6. Get conversation history for context-aware responses
+        _conversation_history = await self.cache_service.get_conversation_history(user_id, last_n=3)
+
+        # Store user query in conversation
+        await self.cache_service.store_conversation_message(user_id, "user", query)
+
+        scores["llm_used"] = 1.0
+        t_llm = time.perf_counter()
+
+        # 7. Generate answer with LLM
+        temp_message = await message.answer("Генерирую ответ...")
+
+        # Confidence scoring mode (non-streaming, returns ConfidenceResult)
+        if self.config.enable_confidence_scoring:
+            result = await self.llm_service.generate_answer(
+                query, results_for_llm, with_confidence=True
+            )
+            scores["confidence_score"] = result.confidence
+
+            if result.is_low_confidence:
+                logger.info(f"Low confidence ({result.confidence:.2f}), using fallback response")
+                answer = self.llm_service.get_low_confidence_response(
+                    query, results_for_llm, result.confidence
+                )
+            else:
+                answer = result.answer
+
+            try:
+                await temp_message.edit_text(answer, parse_mode="Markdown")
+            except Exception:
+                await temp_message.edit_text(answer)
+
+        else:
+            # Standard streaming mode
+            accumulated_text = ""
+            last_sent_text = ""
+            chunk_count = 0
+
+            try:
+                async for chunk in self.llm_service.stream_answer(
+                    question=query,
+                    context_chunks=results_for_llm,
+                ):
+                    accumulated_text += chunk
+                    chunk_count += 1
+
+                    if (
+                        chunk_count % 10 == 0 or chunk in ".!?\n"
+                    ) and accumulated_text != last_sent_text:
+                        try:
+                            await temp_message.edit_text(accumulated_text)
+                            last_sent_text = accumulated_text
+                        except Exception as edit_err:
+                            logger.debug("Streaming edit skipped: %s", edit_err)
+
+                # Final update with complete answer (only if different)
+                if accumulated_text != last_sent_text:
+                    try:
+                        await temp_message.edit_text(accumulated_text, parse_mode="Markdown")
+                    except Exception:
+                        await temp_message.edit_text(accumulated_text)
+                answer = accumulated_text
+
+            except Exception as e:
+                logger.error(f"Streaming error: {e}", exc_info=True)
+                answer = await self.llm_service.generate_answer(query, results_for_llm)
+                try:
+                    await temp_message.edit_text(answer, parse_mode="Markdown")
+                except Exception:
+                    await temp_message.edit_text(answer)
+
+        llm_ms = (time.perf_counter() - t_llm) * 1000
+        metrics.record("llm_generate", llm_ms)
+        logger.info("llm_generate: %.0fms", llm_ms)
+
+        # 8. Store assistant answer in conversation
+        await self.cache_service.store_conversation_message(user_id, "assistant", answer)
+
+        # 9. Fire-and-forget: store in semantic cache with pre-computed vector
+        def _log_store_error(task: asyncio.Task):
+            if task.cancelled():
+                return
+            exc = task.exception()
+            if exc:
+                logger.warning("Semantic cache store failed: %s: %s", type(exc).__name__, exc)
+
+        store_task = asyncio.create_task(
+            self.cache_service.store_semantic_cache(
+                clean_query,
+                answer,
+                vector=query_vector,
+                user_id=user_id,
+                ttl=get_ttl_for_query(query, answer),
+            )
+        )
+        store_task.add_done_callback(_log_store_error)
 
     async def _get_sparse_vector(self, text: str) -> dict:
         """Generate sparse vector via BGE-M3 API.
