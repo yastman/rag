@@ -106,9 +106,11 @@ async def cache_store_node(
             query_type=query_type,
         )
 
-        # Store conversation messages
-        await cache.store_conversation(user_id=user_id, role="user", content=query)
-        await cache.store_conversation(user_id=user_id, role="assistant", content=response)
+        # Store conversation messages (single pipeline round-trip)
+        await cache.store_conversation_batch(
+            user_id=user_id,
+            messages=[("user", query), ("assistant", response)],
+        )
 
         logger.info("cache_store: stored response + conversation (type=%s)", query_type)
 

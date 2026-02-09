@@ -363,18 +363,43 @@ class CacheLayerManager:
     # ========== Conversation History ==========
 
     async def store_conversation(self, user_id: int, role: str, content: str) -> None:
-        """Store conversation message in Redis LIST."""
+        """Store conversation message in Redis LIST (pipelined: 1 round-trip)."""
         if not self.redis:
             return
 
         key = f"conversation:{user_id}"
         message = json.dumps({"role": role, "content": content, "timestamp": time.time()})
         try:
-            await self.redis.lpush(key, message)
-            await self.redis.ltrim(key, 0, self.conversation_max_messages - 1)
-            await self.redis.expire(key, self.conversation_ttl)
+            async with self.redis.pipeline(transaction=False) as pipe:
+                pipe.lpush(key, message)
+                pipe.ltrim(key, 0, self.conversation_max_messages - 1)
+                pipe.expire(key, self.conversation_ttl)
+                await pipe.execute()
         except Exception as e:
             logger.error("Conversation store error: %s: %s", type(e).__name__, e)
+
+    async def store_conversation_batch(self, user_id: int, messages: list[tuple[str, str]]) -> None:
+        """Store multiple conversation messages in one pipeline round-trip.
+
+        Args:
+            user_id: Telegram user ID
+            messages: List of (role, content) tuples
+        """
+        if not self.redis or not messages:
+            return
+
+        key = f"conversation:{user_id}"
+        now = time.time()
+        try:
+            async with self.redis.pipeline(transaction=False) as pipe:
+                for role, content in messages:
+                    encoded = json.dumps({"role": role, "content": content, "timestamp": now})
+                    pipe.lpush(key, encoded)
+                pipe.ltrim(key, 0, self.conversation_max_messages - 1)
+                pipe.expire(key, self.conversation_ttl)
+                await pipe.execute()
+        except Exception as e:
+            logger.error("Conversation batch store error: %s: %s", type(e).__name__, e)
 
     async def get_conversation(self, user_id: int, last_n: int = 5) -> list[dict[str, Any]]:
         """Get recent conversation messages."""
