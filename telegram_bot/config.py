@@ -113,6 +113,10 @@ class BotConfig:
         ]
     )
 
+    # Domain configuration (configurable per deployment)
+    domain: str = os.getenv("BOT_DOMAIN", "недвижимость")
+    domain_language: str = os.getenv("BOT_LANGUAGE", "ru")
+
     # Guardrails
     enable_confidence_scoring: bool = (
         os.getenv("ENABLE_CONFIDENCE_SCORING", "false").lower() == "true"
