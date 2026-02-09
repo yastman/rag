@@ -57,18 +57,16 @@ class TestGraphConfig:
     def test_create_llm(self):
         from telegram_bot.graph.config import GraphConfig
 
-        with patch("langchain_community.chat_models.ChatLiteLLM") as mock_cls:
+        with patch("langfuse.openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
             cfg = GraphConfig(llm_model="test-model", llm_base_url="http://test:4000")
             llm = cfg.create_llm()
         assert llm is not None
         mock_cls.assert_called_once_with(
-            model="test-model",
-            api_base="http://test:4000",
-            api_key=None,
-            streaming=True,
-            temperature=0.7,
-            max_tokens=4096,
+            api_key="no-key",
+            base_url="http://test:4000",
+            max_retries=2,
+            timeout=60.0,
         )
 
     def test_create_embeddings(self):
