@@ -1,6 +1,7 @@
 """Unit tests for guardrails features.
 
-Tests confidence scoring, low confidence fallback, and off-topic detection.
+Tests confidence scoring and low confidence fallback in LLMService.
+Off-topic detection is now handled by classify_node in the LangGraph pipeline.
 """
 
 import json
@@ -9,12 +10,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from telegram_bot.services.llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
-from telegram_bot.services.query_router import (
-    QueryType,
-    classify_query,
-    get_off_topic_response,
-    is_off_topic,
-)
 
 
 def _mock_completion(content: str) -> MagicMock:
@@ -214,84 +209,6 @@ class TestConfidenceParsingEdgeCases:
         assert result.confidence == 0.5  # Default when missing
 
 
-class TestOffTopicDetection:
-    """Tests for off-topic query detection."""
-
-    @pytest.mark.parametrize(
-        "query,expected_type",
-        [
-            # Programming/Tech
-            ("Как написать функцию на python?", QueryType.OFF_TOPIC),
-            ("What is kubernetes?", QueryType.OFF_TOPIC),
-            ("Помоги с docker контейнером", QueryType.OFF_TOPIC),
-            # Medical
-            ("Какие симптомы гриппа?", QueryType.OFF_TOPIC),
-            ("Нужен рецепт лекарства", QueryType.OFF_TOPIC),
-            # Cooking
-            ("Рецепт борща", QueryType.OFF_TOPIC),
-            ("How to cook pasta?", QueryType.OFF_TOPIC),
-            # Legal (non-property)
-            ("Как подать на развод?", QueryType.OFF_TOPIC),
-            # Finance (non-property)
-            ("Курс биткоина сегодня", QueryType.OFF_TOPIC),
-            ("Как торговать на бирже?", QueryType.OFF_TOPIC),
-            # Entertainment
-            ("Посоветуй хороший фильм", QueryType.OFF_TOPIC),
-            ("Best video games 2024", QueryType.OFF_TOPIC),
-        ],
-    )
-    def test_off_topic_queries_detected(self, query: str, expected_type: QueryType):
-        """Test various off-topic queries are correctly classified."""
-        result = classify_query(query)
-        assert result == expected_type
-
-    @pytest.mark.parametrize(
-        "query,expected_type",
-        [
-            # Real estate queries should NOT be off-topic
-            ("Квартира в Несебре до 50000 евро", QueryType.COMPLEX),
-            ("Дом у моря", QueryType.COMPLEX),
-            ("сколько стоит квартира", QueryType.SIMPLE),
-            ("2 комнаты в Бургасе", QueryType.SIMPLE),
-            # Chitchat should still work
-            ("Привет", QueryType.CHITCHAT),
-            ("Спасибо за помощь", QueryType.CHITCHAT),
-        ],
-    )
-    def test_real_estate_queries_not_off_topic(self, query: str, expected_type: QueryType):
-        """Test real estate queries are not classified as off-topic."""
-        result = classify_query(query)
-        assert result == expected_type
-
-    def test_is_off_topic_helper(self):
-        """Test is_off_topic helper function."""
-        assert is_off_topic("Как написать алгоритм?") is True
-        assert is_off_topic("Квартира в Варне") is False
-
-    def test_get_off_topic_response_returns_string(self):
-        """Test get_off_topic_response returns a valid response."""
-        response = get_off_topic_response()
-
-        assert isinstance(response, str)
-        assert len(response) > 0
-        assert "недвижимост" in response.lower()
-
-
-class TestQueryTypeEnum:
-    """Tests for QueryType enum."""
-
-    def test_off_topic_enum_value(self):
-        """Test OFF_TOPIC is a valid QueryType."""
-        assert QueryType.OFF_TOPIC.value == "off_topic"
-
-    def test_all_query_types_present(self):
-        """Test all expected query types are defined."""
-        expected_types = {"chitchat", "simple", "complex", "off_topic"}
-        actual_types = {qt.value for qt in QueryType}
-
-        assert expected_types == actual_types
-
-
 class TestLowConfidenceResponse:
     """Tests for low confidence response generation."""
 
@@ -360,15 +277,3 @@ class TestGuardrailsIntegration:
         assert result.confidence >= LOW_CONFIDENCE_THRESHOLD
         assert result.is_low_confidence is False
         assert "Sofia" in result.answer
-
-    async def test_off_topic_query_flow(self):
-        """Test complete flow for off-topic queries."""
-        query = "Как приготовить пиццу?"
-
-        # Should be classified as off-topic
-        query_type = classify_query(query)
-        assert query_type == QueryType.OFF_TOPIC
-
-        # Should get appropriate response
-        response = get_off_topic_response()
-        assert "недвижимост" in response.lower()
