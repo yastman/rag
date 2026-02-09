@@ -2,6 +2,7 @@
 # Root Dockerfile — uv sync pattern (mirrors telegram_bot/Dockerfile)
 
 # ====== BUILD STAGE ======
+# Base images pinned — checked 2026-02-09
 FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \

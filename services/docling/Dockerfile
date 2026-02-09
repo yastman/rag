@@ -14,7 +14,8 @@ ARG PYTHON_VERSION=3.12
 # =============================================================================
 # BUILD STAGE
 # =============================================================================
-FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-bookworm-slim AS builder
+# Pin uv version — checked 2026-02-09
+FROM ghcr.io/astral-sh/uv:0.9-python${PYTHON_VERSION}-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
