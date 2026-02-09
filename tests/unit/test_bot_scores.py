@@ -1,432 +1,221 @@
 # tests/unit/test_bot_scores.py
-"""Unit tests for bot handler Langfuse scores."""
+"""Unit tests for bot Langfuse integration (LangGraph pipeline).
 
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+With the LangGraph migration, Langfuse is integrated via create_langfuse_handler
+which returns a callback passed to graph.ainvoke(config={"callbacks": [handler]}).
+Individual scoring happens inside graph nodes, not bot.py.
+"""
 
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def isolate_bot_modules():
-    """Clear telegram_bot modules to ensure fresh imports."""
-    prefixes = ("telegram_bot.", "langfuse", "opentelemetry")
+# Skip entire module if aiogram not installed
+pytest.importorskip("aiogram", reason="aiogram not installed")
 
-    def _clear():
-        for key in list(sys.modules.keys()):
-            if key.startswith(prefixes):
-                sys.modules.pop(key, None)
+from unittest.mock import AsyncMock, MagicMock, patch
 
-    _clear()
-    yield
-    _clear()
+from telegram_bot.bot import PropertyBot
+from telegram_bot.config import BotConfig
 
 
-EXPECTED_SCORE_NAMES = {
-    "query_type",
-    "latency_total_ms",
-    "semantic_cache_hit",
-    "embeddings_cache_hit",
-    "search_cache_hit",
-    "rerank_applied",
-    "rerank_cache_hit",
-    "results_count",
-    "no_results",
-    "llm_used",
-    "hyde_used",
-    "confidence_score",
-}
+@pytest.fixture
+def mock_config():
+    """Create mock bot config."""
+    return BotConfig(
+        telegram_token="test-token",
+        voyage_api_key="voyage-key",
+        llm_api_key="llm-key",
+        llm_base_url="https://api.example.com/v1",
+        llm_model="gpt-4o-mini",
+        qdrant_url="http://localhost:6333",
+        qdrant_api_key="qdrant-key",
+        qdrant_collection="test_collection",
+        redis_url="redis://localhost:6379",
+        rerank_provider="none",
+    )
 
 
-class TestHandleQueryScores:
-    """Tests for handle_query Langfuse scores."""
+def _create_bot(mock_config):
+    """Create PropertyBot with all deps mocked."""
+    with (
+        patch("telegram_bot.bot.Bot"),
+        patch("telegram_bot.integrations.cache.CacheLayerManager"),
+        patch("telegram_bot.integrations.embeddings.BGEM3Embeddings"),
+        patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+        patch("telegram_bot.services.qdrant.QdrantService"),
+        patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+    ):
+        bot = PropertyBot(mock_config)
+    return bot  # noqa: RET504 - need `with` block to exit before returning
 
-    @pytest.fixture
-    def mock_message(self):
-        """Create mock Telegram message."""
-        message = MagicMock()
-        message.text = "квартиры до 100000 евро"
-        message.from_user.id = 123456789
-        message.chat.id = 987654321
-        message.message_id = 42
-        message.answer = AsyncMock()
-        message.bot.send_chat_action = AsyncMock()
-        return message
 
-    @pytest.fixture
-    def bot_handler(self):
-        """Create PropertyBot handler with mocked services."""
-        from telegram_bot.bot import PropertyBot
-        from telegram_bot.config import BotConfig
-        from telegram_bot.services import QueryType
+def _make_message(text="квартиры до 100000 евро", user_id=123456789, chat_id=987654321):
+    """Create mock Telegram message."""
+    message = MagicMock()
+    message.text = text
+    message.from_user = MagicMock()
+    message.from_user.id = user_id
+    message.chat = MagicMock()
+    message.chat.id = chat_id
+    message.bot = MagicMock()
+    message.bot.send_chat_action = AsyncMock()
+    message.answer = AsyncMock()
+    return message
 
-        handler = PropertyBot.__new__(PropertyBot)
-        # BotConfig with ALL fields that handle_query accesses before classify_query
-        handler.config = BotConfig(
-            telegram_token="test",
-            voyage_api_key="test",
-            llm_api_key="test",
-            llm_model="test-model",
-            cesc_enabled=False,
-            # Fields used for context_fingerprint / cache key before classify_query:
-            voyage_model_queries="voyage-3-lite",
-            voyage_model_rerank="rerank-2",
-            qdrant_collection="test-collection",
-            qdrant_url="http://localhost:6333",
-            redis_url="redis://localhost:6379",
-        )
-        handler._cache_initialized = True
 
-        handler.cache_service = MagicMock()
-        handler.cache_service.initialize = AsyncMock()
-        handler.cache_service.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
-        handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
-        handler.cache_service.log_metrics = MagicMock()
-
-        # Services required by handle_query pipeline
-        handler.query_preprocessor = MagicMock()
-        handler.query_preprocessor.analyze = MagicMock(
-            return_value={
-                "use_hyde": False,
-                "normalized_query": "test",
-                "rrf_weights": {"dense": 0.6, "sparse": 0.4},
-            }
-        )
-        handler.hyde_generator = None
-        handler.dense_service = MagicMock()
-        handler.dense_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
-
-        handler._test_query_type = QueryType.COMPLEX
-        return handler
+class TestLangfuseHandlerCreation:
+    """Test that Langfuse handler is created with correct parameters."""
 
     @pytest.mark.asyncio
-    async def test_scores_cache_hit(self, bot_handler, mock_message):
-        """Should score semantic_cache_hit=1.0 on cache hit."""
+    async def test_handler_created_with_session_id(self, mock_config):
+        """Langfuse handler should receive session_id from make_initial_state."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
+        mock_handler = MagicMock()
+
         with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query", autospec=True) as mock_classify_query,
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch(
+                "telegram_bot.bot.create_langfuse_handler", return_value=mock_handler
+            ) as mock_create,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify_query.return_value = bot_handler._test_query_type
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
 
-            await bot_handler.handle_query(mock_message)
+            await bot.handle_query(_make_message())
 
-            # Find the semantic_cache_hit score call
-            score_calls = [
-                c
-                for c in mock_langfuse.score_current_trace.call_args_list
-                if c.kwargs.get("name") == "semantic_cache_hit"
-            ]
-            assert len(score_calls) == 1
-            assert score_calls[0].kwargs["value"] == 1.0
+        mock_create.assert_called_once()
+        call_kwargs = mock_create.call_args[1]
+        assert "session_id" in call_kwargs
+        assert call_kwargs["session_id"].startswith("chat-")
 
     @pytest.mark.asyncio
-    async def test_scores_query_type(self, bot_handler, mock_message):
-        """Should score query_type based on classification."""
+    async def test_handler_created_with_user_id(self, mock_config):
+        """Langfuse handler should receive user_id as string."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
+        mock_handler = MagicMock()
+
         with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query", autospec=True) as mock_classify_query,
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch(
+                "telegram_bot.bot.create_langfuse_handler", return_value=mock_handler
+            ) as mock_create,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify_query.return_value = bot_handler._test_query_type
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
 
-            await bot_handler.handle_query(mock_message)
+            await bot.handle_query(_make_message(user_id=42))
 
-            # Verify classify_query was actually called (catches early exception)
-            mock_classify_query.assert_called_once()
-
-            # Find the query_type score call
-            score_calls = [
-                c
-                for c in mock_langfuse.score_current_trace.call_args_list
-                if c.kwargs.get("name") == "query_type"
-            ]
-            assert len(score_calls) == 1, (
-                f"Expected 1 query_type score, got {len(score_calls)}. "
-                f"All scores: {[c.kwargs.get('name') for c in mock_langfuse.score_current_trace.call_args_list]}"
-            )
-            # COMPLEX = 2.0
-            assert score_calls[0].kwargs["value"] == 2.0, (
-                f"Expected query_type=2.0 (COMPLEX), got {score_calls[0].kwargs['value']}"
-            )
-
-
-class TestHandleQueryScoresAllPaths:
-    """Tests for scores on all exit paths."""
-
-    @pytest.fixture
-    def mock_message(self):
-        """Create mock Telegram message."""
-        message = MagicMock()
-        message.text = "квартиры до 100000 евро"
-        message.from_user.id = 123456789
-        message.chat.id = 987654321
-        message.message_id = 42
-        message.answer = AsyncMock()
-        message.bot.send_chat_action = AsyncMock()
-        return message
-
-    @pytest.fixture
-    def bot_handler_full(self):
-        """Create PropertyBot handler with all services mocked."""
-        from telegram_bot.bot import PropertyBot
-        from telegram_bot.config import BotConfig
-
-        handler = PropertyBot.__new__(PropertyBot)
-        handler.config = BotConfig(
-            telegram_token="test",
-            voyage_api_key="test",
-            llm_api_key="test",
-            llm_model="test-model",
-            cesc_enabled=False,
-        )
-        handler._cache_initialized = True
-
-        # Mock all services
-        handler.cache_service = MagicMock()
-        handler.cache_service.initialize = AsyncMock()
-        handler.cache_service.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
-        handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
-        handler.cache_service.log_metrics = MagicMock()
-
-        # Services required by handle_query pipeline
-        handler.query_preprocessor = MagicMock()
-        handler.query_preprocessor.analyze = MagicMock(
-            return_value={
-                "use_hyde": False,
-                "normalized_query": "test",
-                "rrf_weights": {"dense": 0.6, "sparse": 0.4},
-            }
-        )
-        handler.hyde_generator = None
-        handler.dense_service = MagicMock()
-        handler.dense_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
-
-        return handler
+        call_kwargs = mock_create.call_args[1]
+        assert call_kwargs["user_id"] == "42"
 
     @pytest.mark.asyncio
-    async def test_all_10_scores_on_cache_hit(self, bot_handler_full, mock_message):
-        """Cache hit path should write all 10 scores."""
-        from telegram_bot.services import QueryType
+    async def test_handler_created_with_tags(self, mock_config):
+        """Langfuse handler should receive standard tags."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
+        mock_handler = MagicMock()
 
         with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query") as mock_classify,
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch(
+                "telegram_bot.bot.create_langfuse_handler", return_value=mock_handler
+            ) as mock_create,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify.return_value = QueryType.COMPLEX
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
 
-            await bot_handler_full.handle_query(mock_message)
+            await bot.handle_query(_make_message())
 
-            score_names = {
-                c.kwargs["name"] for c in mock_langfuse.score_current_trace.call_args_list
-            }
-            assert score_names == EXPECTED_SCORE_NAMES, (
-                f"Missing: {EXPECTED_SCORE_NAMES - score_names}"
-            )
+        call_kwargs = mock_create.call_args[1]
+        assert "tags" in call_kwargs
+        tags = call_kwargs["tags"]
+        assert "telegram" in tags
+        assert "langgraph" in tags
+
+
+class TestLangfuseCallbackPassing:
+    """Test that Langfuse callback is correctly passed to graph.ainvoke."""
 
     @pytest.mark.asyncio
-    async def test_all_10_scores_on_llm_path(self, bot_handler_full, mock_message):
-        """LLM generation path should write all 10 scores with correct values."""
-        from telegram_bot.services import QueryType
-
-        # Configure for cache miss + LLM path
-        bot_handler_full.cache_service.check_semantic_cache = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.get_cached_analysis = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.get_cached_search = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.get_cached_sparse_embedding = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.get_cached_rerank = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.store_analysis = AsyncMock()
-        bot_handler_full.cache_service.store_search_results = AsyncMock()
-        bot_handler_full.cache_service.store_sparse_embedding = AsyncMock()
-        bot_handler_full.cache_service.store_rerank_results = AsyncMock()
-        bot_handler_full.cache_service.get_conversation_history = AsyncMock(return_value=[])
-        bot_handler_full.cache_service.store_conversation_message = AsyncMock()
-        bot_handler_full.cache_service.store_semantic_cache = AsyncMock()
-
-        # Mock query analyzer
-        bot_handler_full.query_analyzer = MagicMock()
-        bot_handler_full.query_analyzer.analyze = AsyncMock(
-            return_value={"filters": {}, "semantic_query": "test"}
-        )
-
-        # Mock Qdrant service
-        bot_handler_full.qdrant_service = MagicMock()
-        bot_handler_full.qdrant_service.hybrid_search_rrf = AsyncMock(
-            return_value=[{"text": "Result 1", "id": "1"}, {"text": "Result 2", "id": "2"}]
-        )
-
-        # Mock rerank service (ColBERT or Voyage - bot uses self.rerank_service)
-        bot_handler_full.rerank_service = MagicMock()
-        bot_handler_full.rerank_service.rerank = AsyncMock(
-            return_value=[{"index": 0, "score": 0.9}, {"index": 1, "score": 0.8}]
-        )
-        bot_handler_full.voyage_service = None
-
-        # Mock LLM service - stream_answer must return async iterator directly
-        bot_handler_full.llm_service = MagicMock()
-        bot_handler_full.llm_service.stream_answer = MagicMock(
-            return_value=AsyncIteratorMock(["Test ", "answer"])
-        )
-        bot_handler_full.llm_service.generate_answer = AsyncMock(return_value="Fallback answer")
-
-        # Mock sparse vector
-        bot_handler_full._http_client = MagicMock()
-        bot_handler_full._get_sparse_vector = AsyncMock(
-            return_value={"indices": [1, 2], "values": [0.5, 0.3]}
-        )
+    async def test_handler_passed_in_config_callbacks(self, mock_config):
+        """When handler exists, it should be in config.callbacks."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
+        mock_handler = MagicMock()
 
         with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query") as mock_classify,
-            patch("telegram_bot.bot.needs_rerank") as mock_needs_rerank,
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_langfuse_handler", return_value=mock_handler),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify.return_value = QueryType.COMPLEX
-            mock_needs_rerank.return_value = True
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
 
-            # Mock message.answer to return a message for editing
-            mock_temp_message = MagicMock()
-            mock_temp_message.edit_text = AsyncMock()
-            mock_message.answer = AsyncMock(return_value=mock_temp_message)
+            await bot.handle_query(_make_message())
 
-            await bot_handler_full.handle_query(mock_message)
-
-            score_names = {
-                c.kwargs["name"] for c in mock_langfuse.score_current_trace.call_args_list
-            }
-            assert score_names == EXPECTED_SCORE_NAMES
-
-            # Verify LLM-specific scores
-            scores_dict = {
-                c.kwargs["name"]: c.kwargs["value"]
-                for c in mock_langfuse.score_current_trace.call_args_list
-            }
-            assert scores_dict["llm_used"] == 1.0
-            assert scores_dict["semantic_cache_hit"] == 0.0
-            assert scores_dict["results_count"] == 2.0
+        call_config = mock_graph.ainvoke.call_args[1].get("config", {})
+        assert "callbacks" in call_config
+        assert mock_handler in call_config["callbacks"]
 
     @pytest.mark.asyncio
-    async def test_all_10_scores_on_no_results_path(self, bot_handler_full, mock_message):
-        """No results path should write all 10 scores with no_results=1.0."""
-        from telegram_bot.services import QueryType
-
-        # Configure for no results path
-        bot_handler_full.cache_service.check_semantic_cache = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.get_cached_analysis = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.get_cached_search = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.get_cached_sparse_embedding = AsyncMock(return_value=None)
-        bot_handler_full.cache_service.store_analysis = AsyncMock()
-        bot_handler_full.cache_service.store_search_results = AsyncMock()
-        bot_handler_full.cache_service.store_sparse_embedding = AsyncMock()
-
-        bot_handler_full.query_analyzer = MagicMock()
-        bot_handler_full.query_analyzer.analyze = AsyncMock(
-            return_value={"filters": {}, "semantic_query": "test"}
-        )
-
-        bot_handler_full.qdrant_service = MagicMock()
-        bot_handler_full.qdrant_service.hybrid_search_rrf = AsyncMock(return_value=[])
-
-        bot_handler_full.rerank_service = None
-        bot_handler_full.voyage_service = None
-
-        bot_handler_full._get_sparse_vector = AsyncMock(return_value={"indices": [], "values": []})
+    async def test_no_handler_means_empty_config(self, mock_config):
+        """When create_langfuse_handler returns None, config should be empty."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
 
         with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query") as mock_classify,
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_langfuse_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify.return_value = QueryType.SIMPLE
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
 
-            await bot_handler_full.handle_query(mock_message)
+            await bot.handle_query(_make_message())
 
-            score_names = {
-                c.kwargs["name"] for c in mock_langfuse.score_current_trace.call_args_list
-            }
-            assert score_names == EXPECTED_SCORE_NAMES
-
-            scores_dict = {
-                c.kwargs["name"]: c.kwargs["value"]
-                for c in mock_langfuse.score_current_trace.call_args_list
-            }
-            assert scores_dict["no_results"] == 1.0
-            assert scores_dict["llm_used"] == 0.0
-            assert scores_dict["results_count"] == 0.0
+        call_config = mock_graph.ainvoke.call_args[1].get("config", {})
+        assert call_config == {}
 
     @pytest.mark.asyncio
-    async def test_all_10_scores_on_chitchat_path(self, bot_handler_full, mock_message):
-        """CHITCHAT path should write all 10 scores with query_type=0."""
-        from telegram_bot.services import QueryType
-
-        mock_message.text = "Привет!"
-
-        with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query") as mock_classify,
-            patch("telegram_bot.bot.get_chitchat_response") as mock_chitchat,
-        ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify.return_value = QueryType.CHITCHAT
-            mock_chitchat.return_value = "Привет! Чем могу помочь?"
-
-            await bot_handler_full.handle_query(mock_message)
-
-            score_names = {
-                c.kwargs["name"] for c in mock_langfuse.score_current_trace.call_args_list
-            }
-            assert score_names == EXPECTED_SCORE_NAMES
-
-            scores_dict = {
-                c.kwargs["name"]: c.kwargs["value"]
-                for c in mock_langfuse.score_current_trace.call_args_list
-            }
-            assert scores_dict["query_type"] == 0.0  # CHITCHAT
-            assert scores_dict["semantic_cache_hit"] == 0.0
-            assert scores_dict["llm_used"] == 0.0
-
-    @pytest.mark.asyncio
-    async def test_latency_recorded_positive(self, bot_handler_full, mock_message):
-        """latency_total_ms should be > 0."""
-        from telegram_bot.services import QueryType
+    async def test_graph_receives_correct_state(self, mock_config):
+        """Graph should receive state with user_id, session_id, query."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
 
         with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query") as mock_classify,
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_langfuse_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify.return_value = QueryType.COMPLEX
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
 
-            await bot_handler_full.handle_query(mock_message)
+            await bot.handle_query(_make_message(text="студии в Несебр", user_id=42))
 
-            latency_calls = [
-                c
-                for c in mock_langfuse.score_current_trace.call_args_list
-                if c.kwargs["name"] == "latency_total_ms"
-            ]
-            assert len(latency_calls) == 1
-            assert latency_calls[0].kwargs["value"] > 0
-
-
-class AsyncIteratorMock:
-    """Mock for async iterator (streaming)."""
-
-    def __init__(self, items):
-        self.items = iter(items)
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        try:
-            return next(self.items)
-        except StopIteration:
-            raise StopAsyncIteration
+        state = mock_graph.ainvoke.call_args[0][0]
+        assert state["messages"][0]["content"] == "студии в Несебр"
+        assert state["user_id"] == 42
+        assert "session_id" in state
