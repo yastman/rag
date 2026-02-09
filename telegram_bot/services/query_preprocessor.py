@@ -25,7 +25,7 @@ class HyDEGenerator:
     """
 
     # System prompt for generating hypothetical documents
-    HYDE_SYSTEM_PROMPT = """Ты - эксперт по недвижимости в Болгарии.
+    HYDE_SYSTEM_PROMPT = """Ты - эксперт по недвижимости.
 Твоя задача: написать короткий гипотетический ответ на вопрос пользователя,
 как если бы ты описывал идеальный результат поиска.
 
