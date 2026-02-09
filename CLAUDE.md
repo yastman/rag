@@ -9,6 +9,7 @@ uv sync                    # Install all dependencies
 make check                 # Lint + types
 make test                  # All tests
 make test-unit             # Unit tests only (fast)
+uv run pytest tests/unit/ -n auto  # Parallel (4x faster, ~5 min)
 make docker-up             # Start core services (5 containers, ~17s)
 make docker-bot-up         # Core + bot/litellm
 make docker-full-up        # All services (20 containers)
