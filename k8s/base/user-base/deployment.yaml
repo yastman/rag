@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-base
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: user-base
+  template:
+    metadata:
+      labels:
+        app: user-base
+    spec:
+      containers:
+        - name: user-base
+          image: rag/user-base:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+          env:
+            - name: HF_HOME
+              value: /models/hf
+            - name: TRANSFORMERS_CACHE
+              value: /models/hf
+            - name: SENTENCE_TRANSFORMERS_HOME
+              value: /models/sentence-transformers
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /models
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            failureThreshold: 48
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: hf-cache
+          hostPath:
+            path: /opt/k3s-data/hf-cache
+            type: DirectoryOrCreate
