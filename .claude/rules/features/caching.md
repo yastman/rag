@@ -65,13 +65,28 @@ result = await cache.get_exact("search", hash_key)
 embedding = await cache.get_embedding("query text")
 await cache.store_embedding("query text", [0.1, ...])
 
-# Conversation
+# Conversation (single message, uses Redis pipeline: 1 round-trip)
 await cache.store_conversation(user_id=123, role="user", content="hello")
+# Batch conversation (multiple messages in 1 pipeline round-trip)
+await cache.store_conversation_batch(user_id=123, messages=[("user", "hi"), ("assistant", "hello")])
 history = await cache.get_conversation(user_id=123, last_n=5)
 await cache.clear_conversation(user_id=123)
 
 # Metrics
 stats = cache.get_metrics()  # per-tier hits/misses/hit_rate
+```
+
+## Redis Pipelines
+
+Both `store_conversation` and `store_conversation_batch` use async Redis pipelines:
+
+```python
+async with self.redis.pipeline(transaction=False) as pipe:
+    for role, content in messages:
+        pipe.rpush(key, json.dumps({"role": role, "content": content}))
+    pipe.ltrim(key, -max_messages, -1)
+    pipe.expire(key, ttl)
+    await pipe.execute()  # Single round-trip for all operations
 ```
 
 ## Graph Nodes
@@ -87,11 +102,11 @@ result = await cache_check_node(state, cache=cache, embeddings=embeddings)
 
 ### cache_store_node
 
-Stores response + conversation after LLM generation:
+Stores response + conversation after LLM generation (uses `store_conversation_batch`):
 
 ```python
 result = await cache_store_node(state, cache=cache)
-# Stores semantic cache + conversation history
+# Stores semantic cache + conversation history (batch pipeline, 1 round-trip)
 ```
 
 ### retrieve_node
@@ -113,7 +128,7 @@ result = await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdran
 ## Testing
 
 ```bash
-pytest tests/unit/integrations/test_cache_layers.py -v   # 20 tests
+pytest tests/unit/integrations/test_cache_layers.py -v   # 23 tests
 pytest tests/unit/graph/test_cache_nodes.py -v            # 7 tests
 pytest tests/unit/graph/test_retrieve_node.py -v          # 5 tests
 ```
