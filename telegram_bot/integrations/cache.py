@@ -391,6 +391,16 @@ class CacheLayerManager:
             logger.error("Conversation get error: %s: %s", type(e).__name__, e)
             return []
 
+    async def clear_conversation(self, user_id: int) -> None:
+        """Clear conversation history for a user."""
+        if not self.redis:
+            return
+        key = f"conversation:{user_id}"
+        try:
+            await self.redis.delete(key)
+        except Exception as e:
+            logger.error("Conversation clear error: %s: %s", type(e).__name__, e)
+
     # ========== Metrics ==========
 
     def get_metrics(self) -> dict[str, Any]:
