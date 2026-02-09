@@ -97,7 +97,7 @@ class TestCommandHandlers:
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
         assert "Привет" in call_args
-        assert "бот по недвижимости" in call_args
+        assert "недвижимость" in call_args
 
     @pytest.mark.asyncio
     @patch("telegram_bot.bot.Bot")
@@ -591,6 +591,10 @@ class TestHandleQuery:
         message.from_user = MagicMock()
         message.from_user.id = 12345
         message.answer = AsyncMock()
+        message.chat = MagicMock()
+        message.chat.id = 12345
+        message.bot = MagicMock()
+        message.bot.send_chat_action = AsyncMock()
 
         await bot.handle_query(message)
 
