@@ -68,7 +68,7 @@ def make_session_id(session_type: str, identifier: int | str) -> str:
 
 
 class PropertyBot:
-    """Telegram bot for Bulgarian property search."""
+    """Telegram bot for domain-specific search (configurable via BOT_DOMAIN)."""
 
     def __init__(self, config: BotConfig):
         """Initialize bot with services."""
@@ -206,12 +206,13 @@ class PropertyBot:
 
     async def cmd_start(self, message: Message):
         """Handle /start command."""
+        domain = self.config.domain
         await message.answer(
-            "👋 Привет! Я бот по недвижимости в Болгарии.\n\n"
+            f"Привет! Я бот-помощник по теме: {domain}.\n\n"
             "Задавай вопросы вроде:\n"
-            "• Покажи квартиры дешевле 100 000 евро\n"
-            "• 3-комнатные в Солнечный берег\n"
-            "• Студии до 350м от моря\n\n"
+            "- Покажи квартиры дешевле 100 000 евро\n"
+            "- 3-комнатные в Солнечный берег\n"
+            "- Студии до 350м от моря\n\n"
             "Используй /help для помощи."
         )
 
