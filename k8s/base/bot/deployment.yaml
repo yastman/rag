@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bot
+  template:
+    metadata:
+      labels:
+        app: bot
+    spec:
+      initContainers:
+        - name: wait-for-redis
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z redis 6379; do echo "waiting for redis..."; sleep 3; done']
+        - name: wait-for-qdrant
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z qdrant 6333; do echo "waiting for qdrant..."; sleep 3; done']
+        - name: wait-for-bge-m3
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z bge-m3 8000; do echo "waiting for bge-m3..."; sleep 5; done']
+        - name: wait-for-user-base
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z user-base 8000; do echo "waiting for user-base..."; sleep 5; done']
+        - name: wait-for-litellm
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z litellm 4000; do echo "waiting for litellm..."; sleep 3; done']
+      containers:
+        - name: bot
+          image: rag/bot:latest
+          imagePullPolicy: Never
+          env:
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: TELEGRAM_BOT_TOKEN
+            - name: RETRIEVAL_DENSE_PROVIDER
+              value: bge_m3_api
+            - name: RETRIEVAL_SPARSE_PROVIDER
+              value: bge_m3_api
+            - name: RERANK_PROVIDER
+              value: colbert
+            - name: BGE_M3_URL
+              value: http://bge-m3:8000
+            - name: BGE_M3_TIMEOUT
+              value: "120"
+            - name: COLBERT_TIMEOUT
+              value: "120"
+            - name: RERANK_CANDIDATES_MAX
+              value: "5"
+            - name: USE_LOCAL_EMBEDDINGS
+              value: "true"
+            - name: USER_BASE_URL
+              value: http://user-base:8000
+            - name: REDIS_URL
+              value: redis://redis:6379
+            - name: QDRANT_URL
+              value: http://qdrant:6333
+            - name: QDRANT_COLLECTION
+              value: gdrive_documents_bge
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: LITELLM_MASTER_KEY
+            - name: LLM_BASE_URL
+              value: http://litellm:4000
+            - name: LLM_MODEL
+              value: gpt-4o-mini
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 50m
+            limits:
+              memory: 512Mi
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "kill -0 1"]
+            failureThreshold: 12
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "kill -0 1"]
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
