@@ -747,7 +747,8 @@ ingest-unified-logs: ***REMOVED******REMOVED*** Show ingestion service logs
 ***REMOVED*** K3S DEPLOYMENT
 ***REMOVED*** =============================================================================
 
-.PHONY: k3s-core k3s-bot k3s-ingest k3s-full k3s-status k3s-logs k3s-down k3s-secrets k3s-ingest-start k3s-ingest-stop
+.PHONY: k3s-core k3s-bot k3s-ingest k3s-full k3s-status k3s-logs k3s-down k3s-secrets k3s-ingest-start k3s-ingest-stop \
+	k3s-build k3s-build-bot k3s-build-ingest k3s-push-all k3s-prepull
 
 k3s-core: ***REMOVED******REMOVED*** Deploy core services (postgres, redis, qdrant) to k3s
 	kubectl apply -k k8s/overlays/core/ --load-restrictor=LoadRestrictionsNone
