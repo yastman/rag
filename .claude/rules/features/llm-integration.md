@@ -1,5 +1,5 @@
 ---
-paths: "**/llm*.py, docker/litellm/**, src/contextualization/**"
+paths: "**/llm*.py, docker/litellm/**, src/contextualization/**, **/generate.py"
 ---
 
 # LLM Integration
@@ -13,18 +13,29 @@ Route LLM requests through LiteLLM proxy with automatic fallback chain and obser
 ## Architecture
 
 ```
-Bot → LLMService → LiteLLM Proxy (:4000) → Cerebras/Groq/OpenAI
-                                        → Langfuse OTEL tracing
+Bot/Graph → LLMService (OpenAI SDK) → LiteLLM Proxy (:4000) → Cerebras/Groq/OpenAI
+          → generate_node (ChatLiteLLM) → LiteLLM Proxy      → Langfuse OTEL tracing
 ```
 
 ## Key Files
 
-| File | Line | Description |
-|------|------|-------------|
-| `docker/litellm/config.yaml` | 1 | Model list, router settings |
-| `telegram_bot/services/llm.py` | 15 | LLMService class |
-| `src/contextualization/base.py` | - | BaseContextualizer |
-| `src/contextualization/openai.py` | - | OpenAI implementation |
+| File | Description |
+|------|-------------|
+| `docker/litellm/config.yaml` | Model list, router settings |
+| `telegram_bot/services/llm.py` | LLMService class (OpenAI SDK, `langfuse.openai.AsyncOpenAI`) |
+| `telegram_bot/services/query_analyzer.py` | QueryAnalyzer (OpenAI SDK) |
+| `telegram_bot/services/query_preprocessor.py` | HyDEGenerator (OpenAI SDK) |
+| `telegram_bot/graph/nodes/generate.py` | LangGraph generate_node (ChatLiteLLM via langchain) |
+| `telegram_bot/graph/nodes/rewrite.py` | LangGraph rewrite_node (ChatLiteLLM) |
+| `telegram_bot/graph/config.py` | GraphConfig — `create_llm()` factory |
+| `telegram_bot/integrations/langfuse.py` | `create_langfuse_handler()` for LangGraph callbacks |
+
+## Two LLM Patterns
+
+| Pattern | Used By | Client | Tracing |
+|---------|---------|--------|---------|
+| **OpenAI SDK** | LLMService, QueryAnalyzer, HyDEGenerator | `langfuse.openai.AsyncOpenAI` | Auto (drop-in) |
+| **ChatLiteLLM** | generate_node, rewrite_node | `langchain_community.ChatLiteLLM` | Via LangGraph callback |
 
 ## Model Routing
 
@@ -40,124 +51,80 @@ Bot → LLMService → LiteLLM Proxy (:4000) → Cerebras/Groq/OpenAI
 Cerebras → [error] → Groq → [error] → OpenAI
 ```
 
-Configured in `docker/litellm/config.yaml`:
-
-```yaml
-router_settings:
-  fallbacks:
-    - gpt-4o-mini: [gpt-4o-mini-fallback, gpt-4o-mini-openai]
-  retry_policy:
-    retry_count: 2
-```
-
 ## Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `LLM_BASE_URL` | http://litellm:4000 | LiteLLM proxy URL |
 | `LLM_MODEL` | gpt-4o-mini | Model alias |
-| `max_tokens` | 1024 | Response length limit |
-| `temperature` | 0.0 | For deterministic responses |
+| `max_tokens` | 4096 | Response length limit |
+| `temperature` | 0.7 | For generate_node and LLMService |
 
-## Common Patterns
+## OpenAI SDK Pattern (services)
 
-### LLMService usage
+All LLM-calling services use `langfuse.openai.AsyncOpenAI` drop-in for auto-tracing:
 
-```python
-from telegram_bot.services.llm import LLMService
-
-llm = LLMService(
-    api_key=litellm_key,
-    base_url="http://localhost:4000",
-    model="gpt-4o-mini",
-)
-
-# Generate answer from context
-answer = await llm.generate_answer(
-    question="Какие квартиры в Несебре?",
-    context_chunks=search_results,
-    system_prompt=None,  # Uses default Bulgarian RE prompt
-)
-```
-
-### Streaming response
+| Service | File | SDK Client |
+|---------|------|-----------|
+| `LLMService` | `telegram_bot/services/llm.py` | `AsyncOpenAI` |
+| `QueryAnalyzer` | `telegram_bot/services/query_analyzer.py` | `AsyncOpenAI` |
+| `HyDEGenerator` | `telegram_bot/services/query_preprocessor.py` | `AsyncOpenAI` |
 
 ```python
-async for chunk in llm.generate_stream(question, context):
-    await message.edit_text(accumulated + chunk)
+from langfuse.openai import AsyncOpenAI
+
+class MyService:
+    def __init__(self, api_key: str, base_url: str, model: str = "gpt-4o-mini"):
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, max_retries=2, timeout=30.0)
+
+    async def call_llm(self, query: str) -> str:
+        response = await self.client.chat.completions.create(
+            model=self.model, messages=[...],
+            name="my-operation",  # type: ignore[call-overload]  # langfuse kwarg
+        )
+        return response.choices[0].message.content
 ```
 
-### Custom system prompt
+### Error handling
 
 ```python
-answer = await llm.generate_answer(
-    question=query,
-    context_chunks=results,
-    system_prompt="Ты эксперт по недвижимости. Отвечай кратко.",
-)
+except (openai.APIConnectionError, openai.RateLimitError, openai.APITimeoutError) as e:
+    logger.error("API error: %s", e)
+    return fallback_value
 ```
 
-## Default System Prompt
+## generate_node (LangGraph)
 
-```
-Ты - ассистент по недвижимости в Болгарии.
-Отвечай на вопросы пользователя на основе предоставленного контекста.
-Если информации недостаточно, честно скажи об этом.
-Всегда указывай цены в евро и расстояния в метрах.
-Будь вежливым и полезным.
-Форматируй ответ с Markdown: используй **жирный** для важного, • для списков.
-```
+`telegram_bot/graph/nodes/generate.py` — LLM answer generation as a LangGraph node.
+
+- Builds system prompt with domain from `GraphConfig.from_env().domain`
+- Formats top-5 documents as context (title, city, price, score)
+- Includes conversation history from `state["messages"]`
+- Calls LLM via `ChatLiteLLM.ainvoke()` (langchain-community)
+- Falls back to document summary if LLM unavailable
+- Records `latency_stages["generate"]`
+
+## Langfuse Integration
+
+Two tracing paths:
+
+1. **OpenAI SDK services** — `langfuse.openai.AsyncOpenAI` auto-traces all `chat.completions.create()` calls
+2. **LangGraph pipeline** — `create_langfuse_handler()` returns `langfuse.langchain.CallbackHandler`, passed as `config={"callbacks": [handler]}` to `graph.ainvoke()`
+
+Graceful degradation: returns `None` if `LANGFUSE_SECRET_KEY` not set.
 
 ## Guardrails
 
-### Confidence Scoring
-
-LLMService returns confidence scores with responses:
+### Confidence Scoring (LLMService)
 
 ```python
-from telegram_bot.services.llm import LLMService, LOW_CONFIDENCE_THRESHOLD
-
-result = await llm.generate_with_confidence(question, context)
-# result.answer, result.confidence, result.sources
-
-if result.confidence < LOW_CONFIDENCE_THRESHOLD:  # 0.3
-    return create_low_confidence_response(result)
+result = await llm.generate_answer(question, context, with_confidence=True)
+# result.answer, result.confidence, result.is_low_confidence
 ```
 
 ### Off-Topic Detection
 
-QueryRouter detects off-topic queries (non-real-estate):
-
-```python
-from telegram_bot.services.query_router import classify_query, QueryType, get_off_topic_response
-
-if classify_query(query) == QueryType.OFF_TOPIC:
-    return get_off_topic_response()  # "Я специализируюсь на недвижимости..."
-```
-
-**Off-topic examples:** recipes, crypto, movies, sports
-
-### Chaos Testing
-
-Tests for graceful degradation when services fail:
-
-```bash
-pytest tests/chaos/ -v
-# test_qdrant_failures.py - Timeout, connection refused
-# test_redis_failures.py - Disconnect, pool exhaustion
-# test_llm_fallback.py - Rate limits, parsing errors
-```
-
-## Langfuse Integration
-
-LiteLLM sends traces to Langfuse via OTEL:
-
-```yaml
-litellm_settings:
-  callbacks: ["langfuse_otel"]
-```
-
-All LLM calls appear in Langfuse UI at http://localhost:3001
+Handled by `classify_node` (6-type taxonomy) in the LangGraph pipeline.
 
 ## Dependencies
 
@@ -169,6 +136,9 @@ All LLM calls appear in Langfuse UI at http://localhost:3001
 
 ```bash
 pytest tests/unit/test_llm_service.py -v
+pytest tests/unit/services/test_query_analyzer.py -v
+pytest tests/unit/test_hyde.py -v
+pytest tests/unit/graph/test_generate_node.py -v
 ```
 
 ## Troubleshooting
@@ -183,14 +153,7 @@ pytest tests/unit/test_llm_service.py -v
 
 ### Adding new LLM provider
 
-1. Add model to `docker/litellm/config.yaml`:
-```yaml
-- model_name: gpt-4o-mini-new
-  litellm_params:
-    model: provider/model-name
-    api_key: os.environ/NEW_API_KEY
-```
-
+1. Add model to `docker/litellm/config.yaml`
 2. Add to fallback chain if needed
 3. Add API key to `.env`
 4. Restart LiteLLM: `docker compose restart litellm`
