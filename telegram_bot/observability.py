@@ -103,9 +103,11 @@ if LANGFUSE_ENABLED:
     from langfuse import Langfuse
     from langfuse import get_client as _real_get_client
     from langfuse import observe as _real_observe
+    from langfuse import propagate_attributes as _real_propagate
 
     observe = _real_observe
     get_client = _real_get_client
+    propagate_attributes = _real_propagate
 
     def get_langfuse_client() -> Langfuse:
         """Get Langfuse client with PII masking enabled."""
@@ -117,8 +119,16 @@ if LANGFUSE_ENABLED:
 
     logger.info("Langfuse observability ENABLED")
 else:
+    from contextlib import contextmanager
+
     observe = _noop_observe
     get_client = _noop_get_client
+
+    @contextmanager
+    def _noop_propagate(**kwargs: Any):
+        yield
+
+    propagate_attributes = _noop_propagate
 
     def get_langfuse_client() -> None:  # type: ignore[return]
         """Langfuse disabled — return None."""
