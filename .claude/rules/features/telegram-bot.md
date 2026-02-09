@@ -99,7 +99,7 @@ self._embeddings = BGEM3Embeddings(base_url=config.bge_m3_url)
 self._sparse = BGEM3SparseEmbeddings(base_url=config.bge_m3_url)
 self._qdrant = QdrantService(url=config.qdrant_url, ...)
 self._reranker = ColbertRerankerService(...)  ***REMOVED*** if rerank_provider == "colbert"
-self._llm = self._graph_config.create_llm()   ***REMOVED*** ChatLiteLLM
+self._llm = self._graph_config.create_llm()   ***REMOVED*** langfuse.openai.AsyncOpenAI
 ```
 
 ***REMOVED******REMOVED*** handle_query Flow
