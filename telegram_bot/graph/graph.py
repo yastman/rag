@@ -24,6 +24,7 @@ def build_graph(
     llm: Any | None = None,
     message: Any | None = None,
     checkpointer: Any | None = None,
+    event_stream: Any | None = None,
 ) -> Any:
     """Build and compile the RAG StateGraph.
 
@@ -83,7 +84,7 @@ def build_graph(
 
     workflow.add_node(
         "cache_store",
-        functools.partial(cache_store_node, cache=cache),
+        functools.partial(cache_store_node, cache=cache, event_stream=event_stream),
     )
 
     workflow.add_node(
