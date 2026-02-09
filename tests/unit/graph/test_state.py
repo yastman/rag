@@ -1,0 +1,57 @@
+"""Tests for RAGState schema and initial state factory."""
+
+from __future__ import annotations
+
+
+class TestRAGState:
+    def test_has_required_fields(self):
+        from telegram_bot.graph.state import RAGState
+
+        annotations = RAGState.__annotations__
+        required = [
+            "messages",
+            "user_id",
+            "session_id",
+            "query_type",
+            "cache_hit",
+            "cached_response",
+            "query_embedding",
+            "sparse_embedding",
+            "documents",
+            "documents_relevant",
+            "rewrite_count",
+            "response",
+            "latency_stages",
+            "search_results_count",
+            "rerank_applied",
+        ]
+        for field in required:
+            assert field in annotations, f"Missing field: {field}"
+
+    def test_initial_state_factory(self):
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=123, session_id="s-abc", query="test")
+        assert state["user_id"] == 123
+        assert state["session_id"] == "s-abc"
+        assert state["cache_hit"] is False
+        assert state["rewrite_count"] == 0
+        assert len(state["messages"]) == 1
+        assert state["documents"] == []
+        assert state["documents_relevant"] is False
+        assert state["response"] == ""
+        assert state["latency_stages"] == {}
+        assert state["search_results_count"] == 0
+        assert state["rerank_applied"] is False
+        assert state["query_embedding"] is None
+        assert state["sparse_embedding"] is None
+        assert state["cached_response"] is None
+        assert state["query_type"] == ""
+
+    def test_messages_contains_user_query(self):
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s-1", query="Привет!")
+        msg = state["messages"][0]
+        assert msg["role"] == "user"
+        assert msg["content"] == "Привет!"
