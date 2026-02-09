@@ -1,10 +1,10 @@
 ---
-paths: "**/embed*.py, **/vector*.py, **/voyage*.py, services/bge-m3-api/**, services/bm42/**, services/user-base/**"
+paths: "**/embed*.py, **/vector*.py, **/voyage*.py, services/bge-m3-api/**, services/bm42/**, services/user-base/**, **/integrations/embeddings.py"
 ---
 
 # Embeddings
 
-Voyage AI, USER-base, BGE-M3, and BM42 embedding services.
+BGE-M3, Voyage AI, USER-base, and BM42 embedding services + LangChain wrappers.
 
 ## Purpose
 
@@ -22,152 +22,81 @@ Dev:
   Dense:  Voyage voyage-4-large (indexing) / voyage-4-lite (queries)
   Sparse: BM42 (deprecated on VPS, replaced by BGE-M3 /encode/sparse)
   Cache:  USER-base (768-dim)
+
+LangGraph Pipeline (via integrations/embeddings.py):
+  BGEM3Embeddings (dense, LangChain Embeddings)
+  BGEM3SparseEmbeddings (sparse, custom wrapper)
 ```
 
 ## Key Files
 
-| File | Line | Description |
-|------|------|-------------|
-| `telegram_bot/services/voyage.py` | 26 | VoyageService class |
-| `telegram_bot/services/vectorizers.py` | 18 | UserBaseVectorizer |
-| `services/bge-m3-api/app.py` | 41 | BGE-M3 FastAPI endpoints |
-| `services/bm42/main.py` | 22 | BM42 FastAPI service |
-| `services/user-base/main.py` | 20 | USER-base FastAPI service |
+| File | Description |
+|------|-------------|
+| `telegram_bot/integrations/embeddings.py` | BGEM3Embeddings + BGEM3SparseEmbeddings (LangChain-compatible) |
+| `telegram_bot/services/voyage.py` | VoyageService class |
+| `telegram_bot/services/vectorizers.py` | UserBaseVectorizer + BgeM3CacheVectorizer |
+| `telegram_bot/services/colbert_reranker.py` | ColbertRerankerService |
+| `services/bge-m3-api/app.py` | BGE-M3 FastAPI endpoints |
+| `services/user-base/main.py` | USER-base FastAPI service |
+
+## LangChain Wrappers (LangGraph integration)
+
+### BGEM3Embeddings (dense)
+
+```python
+from telegram_bot.integrations.embeddings import BGEM3Embeddings
+
+emb = BGEM3Embeddings(base_url="http://bge-m3:8000", timeout=120.0)
+
+# Async (used by cache_check_node)
+vector = await emb.aembed_query("search text")            # list[float], 1024-dim
+vectors = await emb.aembed_documents(["doc1", "doc2"])     # list[list[float]]
+
+# Sync (for non-async code)
+vector = emb.embed_query("search text")
+```
+
+Wraps BGE-M3 `/encode/dense` endpoint. Batching via `batch_size=32`.
+
+### BGEM3SparseEmbeddings (sparse)
+
+```python
+from telegram_bot.integrations.embeddings import BGEM3SparseEmbeddings
+
+sparse = BGEM3SparseEmbeddings(base_url="http://bge-m3:8000")
+
+# Async (used by retrieve_node)
+sv = await sparse.aembed_query("search text")      # dict with sparse vector
+svs = await sparse.aembed_documents(["d1", "d2"])   # list[dict]
+```
+
+Wraps BGE-M3 `/encode/sparse` endpoint. Returns `sparse_vecs` format.
 
 ## Embedding Models
 
 | Model | Dim | Use Case | Container |
 |-------|-----|----------|-----------|
+| BGE-M3 | 1024 | Dense + sparse + ColBERT | dev-bge-m3:8000 |
 | voyage-4-large | 1024 | Document indexing | API |
 | voyage-4-lite | 1024 | Query embedding | API |
-| voyage-context-3 | 1024 | Contextualized chunks | API |
 | deepvk/USER-base | 768 | Russian semantic cache | dev-user-base:8003 |
-| BGE-M3 | 1024 | Dense + sparse + ColBERT | dev-bge-m3:8000 |
 | BM42 | sparse | Keyword matching (DEPRECATED on VPS) | dev-bm42:8002 |
 
-## Configuration
+## BGE-M3 API Endpoints
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `VOYAGE_BATCH_SIZE` | 128 | Texts per API request |
-| `MATRYOSHKA_DIMS` | (2048,1024,512,256) | Available dimensions |
-| Retry attempts | 6 | With exponential backoff |
-
-## Common Patterns
-
-##***REMOVED***Service (recommended)
-
-```python
-from telegram_bot.services.voyage import VoyageService
-
-service = VoyageService(
-    api_key=api_key,
-    model_docs="voyage-4-large",    # For indexing
-    model_queries="voyage-4-lite",  # For queries (asymmetric)
-    model_rerank="rerank-2.5",
-)
-
-# Async (recommended)
-query_vec = await service.embed_query("search text")
-doc_vecs = await service.embed_documents(["doc1", "doc2"])
-results = await service.rerank("query", documents, top_k=5)
-
-# Sync wrappers
-query_vec = service.embed_query_sync("search text")
-```
-
-### UserBaseVectorizer (Russian cache)
-
-```python
-from telegram_bot.services.vectorizers import UserBaseVectorizer
-
-vectorizer = UserBaseVectorizer(base_url="http://localhost:8003")
-
-# Async
-embedding = await vectorizer.aembed("двухкомнатная квартира")
-
-# Sync
-embedding = vectorizer.embed("двухкомнатная квартира")
-```
-
-### BGE-M3 API (hybrid)
-
-```python
-import httpx
-
-async with httpx.AsyncClient() as client:
-    # Dense only
-    resp = await client.post("http://localhost:8000/encode/dense",
-        json={"texts": ["text"]})
-    dense = resp.json()["dense_vecs"]
-
-    # Sparse only
-    resp = await client.post("http://localhost:8000/encode/sparse",
-        json={"texts": ["text"]})
-    sparse = resp.json()["lexical_weights"]
-
-    # All three (most efficient)
-    resp = await client.post("http://localhost:8000/encode/hybrid",
-        json={"texts": ["text"]})
-    result = resp.json()  # dense_vecs, lexical_weights, colbert_vecs
-```
-
-### BM42 sparse
-
-```python
-resp = await client.post("http://localhost:8002/embed",
-    json={"text": "search query"})
-sparse = resp.json()  # {"indices": [...], "values": [...]}
-```
-
-## Contextualized Embeddings (voyage-context-3)
-
-Process document chunks together to capture cross-chunk context:
-
-```python
-from src.models.contextualized_embedding import ContextualizedEmbeddingService
-
-service = ContextualizedEmbeddingService(
-    api_key=api_key,
-    output_dimension=1024,  # 2048, 1024, 512, or 256
-)
-
-# Embed document chunks together (context-aware)
-doc_chunks = [["intro", "body", "conclusion"]]  # Chunks from one doc
-result = await service.embed_documents(doc_chunks)
-# result.embeddings: one vector per chunk, context-aware
-
-# Embed query (single text)
-query_vec = await service.embed_query("search query")
-```
-
-**Feature flag:** `use_contextualized_embeddings=true`
-**API limits:** 1000 docs, 16K chunks, 32K tokens/doc, 120K total tokens
-**Best for:** Legal docs, technical docs (structure matters)
-
-See `docs/CONTEXTUALIZED_EMBEDDINGS.md` for full documentation.
-
-## Asymmetric Retrieval
-
-Documents indexed with `voyage-4-large` (high quality, one-time cost).
-Queries embedded with `voyage-4-lite` (fast, cheap, continuous).
-Both share embedding space → compatible for search.
-
-## Matryoshka Embeddings
-
-Voyage-4 supports variable dimensions:
-
-```python
-# Lower dimensions for faster search
-embedding = await service.embed_query(text, output_dimension=512)
-```
+| Endpoint | Returns | Used By |
+|----------|---------|---------|
+| `/encode/dense` | `dense_vecs` | BGEM3Embeddings |
+| `/encode/sparse` | `sparse_vecs` | BGEM3SparseEmbeddings |
+| `/encode/hybrid` | all three | Direct API calls |
+| `/rerank` | ColBERT scores | ColbertRerankerService |
 
 ## Dependencies
 
 | Container | Port | RAM | Purpose |
 |-----------|------|-----|---------|
 | dev-bge-m3 | 8000 | 4GB | Dense + sparse + ColBERT |
-| dev-bm42 | 8002 | 1GB | BM42 sparse |
+| dev-bm42 | 8002 | 1GB | BM42 sparse (deprecated) |
 | dev-user-base | 8003 | 2GB | Russian semantic |
 
 ## Testing
@@ -175,13 +104,14 @@ embedding = await service.embed_query(text, output_dimension=512)
 ```bash
 pytest tests/unit/test_voyage_service.py -v
 pytest tests/unit/test_vectorizers.py -v
+pytest tests/unit/integrations/test_embeddings.py -v  # LangChain wrappers
 ```
 
 ## Troubleshooting
 
 | Error | Fix |
 |-------|-----|
-| `Voyage API 429` | Use CacheService, add delays |
+| `Voyage API 429` | Use CacheLayerManager, add delays |
 | `Connection refused :8003` | `docker compose up -d user-base` |
 | Slow BGE-M3 | Check OMP_NUM_THREADS=4 |
 
@@ -192,5 +122,5 @@ pytest tests/unit/test_vectorizers.py -v
 1. Create FastAPI service in `services/new-model/`
 2. Add Dockerfile with model pre-download
 3. Add to `docker-compose.dev.yml`
-4. Create client class in `telegram_bot/services/`
+4. Create LangChain wrapper in `telegram_bot/integrations/embeddings.py`
 5. Add tests
