@@ -1,0 +1,101 @@
+"""GraphConfig — configuration for LangGraph RAG pipeline.
+
+Provides service factories for LLM, embeddings, and cache thresholds.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class GraphConfig:
+    """Configuration for the RAG LangGraph pipeline."""
+
+    llm_base_url: str = "http://litellm:4000"
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o-mini"
+    llm_temperature: float = 0.7
+    llm_max_tokens: int = 4096
+
+    bge_m3_url: str = "http://bge-m3:8000"
+    bge_m3_timeout: float = 120.0
+
+    qdrant_url: str = "http://qdrant:6333"
+    qdrant_collection: str = "gdrive_documents_bge"
+    search_top_k: int = 20
+
+    redis_url: str = "redis://redis:6379"
+
+    domain: str = "недвижимость"
+    domain_language: str = "ru"
+
+    max_rewrite_attempts: int = 2
+
+    cache_thresholds: dict[str, float] = field(
+        default_factory=lambda: {
+            "FAQ": 0.12,
+            "ENTITY": 0.10,
+            "GENERAL": 0.08,
+            "STRUCTURED": 0.05,
+        }
+    )
+
+    cache_ttl: dict[str, int] = field(
+        default_factory=lambda: {
+            "FAQ": 86400,  # 24h
+            "ENTITY": 3600,  # 1h
+            "GENERAL": 3600,  # 1h
+            "STRUCTURED": 7200,  # 2h
+        }
+    )
+
+    @classmethod
+    def from_env(cls) -> GraphConfig:
+        """Create GraphConfig from environment variables."""
+        return cls(
+            llm_base_url=os.getenv("LLM_BASE_URL", "http://litellm:4000"),
+            llm_api_key=os.getenv("OPENAI_API_KEY", ""),
+            llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            bge_m3_url=os.getenv("BGE_M3_URL", "http://bge-m3:8000"),
+            bge_m3_timeout=float(os.getenv("BGE_M3_TIMEOUT", "120.0")),
+            qdrant_url=os.getenv("QDRANT_URL", "http://qdrant:6333"),
+            qdrant_collection=os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge"),
+            search_top_k=int(os.getenv("SEARCH_TOP_K", "20")),
+            redis_url=os.getenv("REDIS_URL", "redis://redis:6379"),
+            domain=os.getenv("BOT_DOMAIN", "недвижимость"),
+            domain_language=os.getenv("BOT_LANGUAGE", "ru"),
+        )
+
+    def create_llm(self) -> Any:
+        """Create a ChatLiteLLM instance for the pipeline."""
+        from langchain_community.chat_models import ChatLiteLLM
+
+        return ChatLiteLLM(
+            model=self.llm_model,
+            api_base=self.llm_base_url,
+            api_key=self.llm_api_key or None,
+            streaming=True,
+            temperature=self.llm_temperature,
+            max_tokens=self.llm_max_tokens,
+        )
+
+    def create_embeddings(self) -> Any:
+        """Create BGEM3Embeddings instance."""
+        from telegram_bot.integrations.embeddings import BGEM3Embeddings
+
+        return BGEM3Embeddings(
+            base_url=self.bge_m3_url,
+            timeout=self.bge_m3_timeout,
+        )
+
+    def create_sparse_embeddings(self) -> Any:
+        """Create BGEM3SparseEmbeddings instance."""
+        from telegram_bot.integrations.embeddings import BGEM3SparseEmbeddings
+
+        return BGEM3SparseEmbeddings(
+            base_url=self.bge_m3_url,
+            timeout=self.bge_m3_timeout,
+        )
