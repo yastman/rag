@@ -1,137 +1,261 @@
 """Bot configuration."""
 
-import os
-from dataclasses import dataclass, field
-
-from dotenv import load_dotenv
+from pydantic import AliasChoices, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-load_dotenv()
-
-
-@dataclass
-class BotConfig:
+class BotConfig(BaseSettings):
     """Telegram bot configuration."""
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
     # Telegram
-    telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    telegram_token: str = Field(
+        default="", validation_alias=AliasChoices("telegram_token", "TELEGRAM_BOT_TOKEN")
+    )
 
     # Services
-    bge_m3_url: str = os.getenv("BGE_M3_URL", "http://localhost:8000")
-    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
-    qdrant_url: str = os.getenv("QDRANT_URL", "http://localhost:6333")
-    qdrant_api_key: str | None = os.getenv("QDRANT_API_KEY") or None
-    qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "contextual_bulgaria_voyage4")
+    bge_m3_url: str = Field(
+        default="http://localhost:8000", validation_alias=AliasChoices("bge_m3_url", "BGE_M3_URL")
+    )
+    redis_url: str = Field(
+        default="redis://localhost:6379", validation_alias=AliasChoices("redis_url", "REDIS_URL")
+    )
+    qdrant_url: str = Field(
+        default="http://localhost:6333", validation_alias=AliasChoices("qdrant_url", "QDRANT_URL")
+    )
+    qdrant_api_key: str | None = Field(
+        default=None, validation_alias=AliasChoices("qdrant_api_key", "QDRANT_API_KEY")
+    )
+    qdrant_collection: str = Field(
+        default="contextual_bulgaria_voyage4",
+        validation_alias=AliasChoices("qdrant_collection", "QDRANT_COLLECTION"),
+    )
 
-    # LLM (OpenAI compatible API - GLM-4)
-    llm_api_key: str = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
-    llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.cerebras.ai/v1")
-    llm_model: str = os.getenv("LLM_MODEL", "zai-glm-4.7")
+    # LLM (OpenAI compatible API)
+    llm_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("llm_api_key", "LLM_API_KEY", "OPENAI_API_KEY"),
+    )
+    llm_base_url: str = Field(
+        default="https://api.cerebras.ai/v1",
+        validation_alias=AliasChoices("llm_base_url", "LLM_BASE_URL"),
+    )
+    llm_model: str = Field(
+        default="zai-glm-4.7", validation_alias=AliasChoices("llm_model", "LLM_MODEL")
+    )
 
     # RAG settings
     top_k: int = 5
-    min_score: float = 0.3  # Lower threshold for better recall with filters
+    min_score: float = 0.3
 
     # Voyage AI Configuration
-    voyage_api_key: str = os.getenv("VOYAGE_API_KEY", "")
-    # Asymmetric retrieval: documents use large model, queries use lite model
-    voyage_model_docs: str = os.getenv("VOYAGE_MODEL_DOCS", "voyage-4-large")
-    voyage_model_queries: str = os.getenv("VOYAGE_MODEL_QUERIES", "voyage-4-lite")
-    voyage_model_rerank: str = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2.5")
-    # Matryoshka embedding dimensions (2048, 1024, 512, 256)
-    # Lower dimensions = less storage, faster search, slightly lower quality
-    voyage_embedding_dim: int = int(os.getenv("VOYAGE_EMBEDDING_DIM", "1024"))
+    voyage_api_key: str = Field(
+        default="", validation_alias=AliasChoices("voyage_api_key", "VOYAGE_API_KEY")
+    )
+    voyage_model_docs: str = Field(
+        default="voyage-4-large",
+        validation_alias=AliasChoices("voyage_model_docs", "VOYAGE_MODEL_DOCS"),
+    )
+    voyage_model_queries: str = Field(
+        default="voyage-4-lite",
+        validation_alias=AliasChoices("voyage_model_queries", "VOYAGE_MODEL_QUERIES"),
+    )
+    voyage_model_rerank: str = Field(
+        default="rerank-2.5",
+        validation_alias=AliasChoices("voyage_model_rerank", "VOYAGE_RERANK_MODEL"),
+    )
+    voyage_embedding_dim: int = Field(
+        default=1024,
+        validation_alias=AliasChoices("voyage_embedding_dim", "VOYAGE_EMBEDDING_DIM"),
+    )
 
     # Legacy (for backward compatibility)
-    voyage_embed_model: str = os.getenv("VOYAGE_EMBED_MODEL", "voyage-3-large")
-    voyage_cache_model: str = os.getenv("VOYAGE_CACHE_MODEL", "voyage-3-lite")
-    voyage_rerank_model: str = os.getenv("VOYAGE_RERANK_MODEL", "rerank-2")
+    voyage_embed_model: str = Field(
+        default="voyage-3-large",
+        validation_alias=AliasChoices("voyage_embed_model", "VOYAGE_EMBED_MODEL"),
+    )
+    voyage_cache_model: str = Field(
+        default="voyage-3-lite",
+        validation_alias=AliasChoices("voyage_cache_model", "VOYAGE_CACHE_MODEL"),
+    )
+    voyage_rerank_model: str = Field(
+        default="rerank-2",
+        validation_alias=AliasChoices("voyage_rerank_model", "VOYAGE_RERANK_MODEL"),
+    )
 
     # Search Configuration
-    # 2026 best practice: fewer chunks in LLM context = faster generation
-    search_top_k: int = int(os.getenv("SEARCH_TOP_K", "20"))  # Reduced from 50->30->20
-    rerank_top_k: int = int(os.getenv("RERANK_TOP_K", "3"))  # Reduced from 5
-    rerank_candidates_max: int = int(os.getenv("RERANK_CANDIDATES_MAX", "10"))
+    search_top_k: int = Field(
+        default=20, validation_alias=AliasChoices("search_top_k", "SEARCH_TOP_K")
+    )
+    rerank_top_k: int = Field(
+        default=3, validation_alias=AliasChoices("rerank_top_k", "RERANK_TOP_K")
+    )
+    rerank_candidates_max: int = Field(
+        default=10,
+        validation_alias=AliasChoices("rerank_candidates_max", "RERANK_CANDIDATES_MAX"),
+    )
 
-    # CESC Configuration (Contextual Extraction and Storage of Conversation)
-    cesc_enabled: bool = os.getenv("CESC_ENABLED", "true").lower() == "true"
-    cesc_extraction_frequency: int = int(os.getenv("CESC_EXTRACTION_FREQUENCY", "3"))
-    user_context_ttl: int = int(os.getenv("USER_CONTEXT_TTL", str(30 * 24 * 3600)))
+    # CESC Configuration
+    cesc_enabled: bool = Field(
+        default=True, validation_alias=AliasChoices("cesc_enabled", "CESC_ENABLED")
+    )
+    cesc_extraction_frequency: int = Field(
+        default=3,
+        validation_alias=AliasChoices("cesc_extraction_frequency", "CESC_EXTRACTION_FREQUENCY"),
+    )
+    user_context_ttl: int = Field(
+        default=30 * 24 * 3600,
+        validation_alias=AliasChoices("user_context_ttl", "USER_CONTEXT_TTL"),
+    )
 
     # Retrieval provider (bge_m3_api | voyage)
-    retrieval_dense_provider: str = os.getenv("RETRIEVAL_DENSE_PROVIDER", "voyage")
+    retrieval_dense_provider: str = Field(
+        default="voyage",
+        validation_alias=AliasChoices("retrieval_dense_provider", "RETRIEVAL_DENSE_PROVIDER"),
+    )
 
     # Rerank provider (colbert | none | voyage)
-    rerank_provider: str = os.getenv("RERANK_PROVIDER", "voyage")
+    rerank_provider: str = Field(
+        default="voyage", validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER")
+    )
 
     # Hybrid Search Configuration
-    hybrid_dense_weight: float = float(os.getenv("HYBRID_DENSE_WEIGHT", "0.6"))
-    hybrid_sparse_weight: float = float(os.getenv("HYBRID_SPARSE_WEIGHT", "0.4"))
+    hybrid_dense_weight: float = Field(
+        default=0.6,
+        validation_alias=AliasChoices("hybrid_dense_weight", "HYBRID_DENSE_WEIGHT"),
+    )
+    hybrid_sparse_weight: float = Field(
+        default=0.4,
+        validation_alias=AliasChoices("hybrid_sparse_weight", "HYBRID_SPARSE_WEIGHT"),
+    )
 
     # Score Boosting Configuration
-    freshness_boost_enabled: bool = os.getenv("FRESHNESS_BOOST", "false").lower() == "true"
-    freshness_field: str = os.getenv("FRESHNESS_FIELD", "created_at")
-    freshness_scale_days: int = int(os.getenv("FRESHNESS_SCALE_DAYS", "30"))
-
-    # MMR Diversity Configuration (disabled by default - Voyage rerank is sufficient)
-    # Enable only for diversity-focused use cases via MMR_ENABLED=true
-    mmr_enabled: bool = os.getenv("MMR_ENABLED", "false").lower() == "true"
-    mmr_lambda: float = float(os.getenv("MMR_LAMBDA", "0.7"))
-
-    # Qdrant Quantization Configuration (2026 best practice)
-    # Binary quantization: 40x faster, -75% RAM for dim >= 1024
-    # Scalar (INT8): 4x faster, better accuracy than binary
-    #
-    # quantization_mode: off | scalar | binary (controls collection suffix)
-    #   - off: Use base collection without quantization
-    #   - scalar: Use *_scalar collection (INT8 quantization)
-    #   - binary: Use *_binary collection (binary quantization, fastest)
-    qdrant_quantization_mode: str = os.getenv("QDRANT_QUANTIZATION_MODE", "off")
-    qdrant_use_quantization: bool = os.getenv("QDRANT_USE_QUANTIZATION", "true").lower() == "true"
-    qdrant_quantization_rescore: bool = (
-        os.getenv("QDRANT_QUANTIZATION_RESCORE", "true").lower() == "true"
+    freshness_boost_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("freshness_boost_enabled", "FRESHNESS_BOOST"),
     )
-    qdrant_quantization_oversampling: float = float(
-        os.getenv("QDRANT_QUANTIZATION_OVERSAMPLING", "2.0")
+    freshness_field: str = Field(
+        default="created_at",
+        validation_alias=AliasChoices("freshness_field", "FRESHNESS_FIELD"),
     )
-    qdrant_quantization_always_ram: bool = (
-        os.getenv("QDRANT_QUANTIZATION_ALWAYS_RAM", "true").lower() == "true"
+    freshness_scale_days: int = Field(
+        default=30,
+        validation_alias=AliasChoices("freshness_scale_days", "FRESHNESS_SCALE_DAYS"),
+    )
+
+    # MMR Diversity Configuration
+    mmr_enabled: bool = Field(
+        default=False, validation_alias=AliasChoices("mmr_enabled", "MMR_ENABLED")
+    )
+    mmr_lambda: float = Field(
+        default=0.7, validation_alias=AliasChoices("mmr_lambda", "MMR_LAMBDA")
+    )
+
+    # Qdrant Quantization Configuration
+    qdrant_quantization_mode: str = Field(
+        default="off",
+        validation_alias=AliasChoices("qdrant_quantization_mode", "QDRANT_QUANTIZATION_MODE"),
+    )
+    qdrant_use_quantization: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("qdrant_use_quantization", "QDRANT_USE_QUANTIZATION"),
+    )
+    qdrant_quantization_rescore: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("qdrant_quantization_rescore", "QDRANT_QUANTIZATION_RESCORE"),
+    )
+    qdrant_quantization_oversampling: float = Field(
+        default=2.0,
+        validation_alias=AliasChoices(
+            "qdrant_quantization_oversampling", "QDRANT_QUANTIZATION_OVERSAMPLING"
+        ),
+    )
+    qdrant_quantization_always_ram: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "qdrant_quantization_always_ram", "QDRANT_QUANTIZATION_ALWAYS_RAM"
+        ),
     )
 
     # HyDE (Hypothetical Document Embeddings)
-    use_hyde: bool = os.getenv("USE_HYDE", "false").lower() == "true"
-    hyde_min_words: int = int(os.getenv("HYDE_MIN_WORDS", "5"))
+    use_hyde: bool = Field(default=False, validation_alias=AliasChoices("use_hyde", "USE_HYDE"))
+    hyde_min_words: int = Field(
+        default=5, validation_alias=AliasChoices("hyde_min_words", "HYDE_MIN_WORDS")
+    )
 
     # Semantic cache tuning
-    semantic_cache_threshold: float = float(os.getenv("SEMANTIC_CACHE_THRESHOLD", "0.10"))
-    semantic_cache_ttl_default: int = int(os.getenv("SEMANTIC_CACHE_TTL_DEFAULT", "3600"))
+    semantic_cache_threshold: float = Field(
+        default=0.10,
+        validation_alias=AliasChoices("semantic_cache_threshold", "SEMANTIC_CACHE_THRESHOLD"),
+    )
+    semantic_cache_ttl_default: int = Field(
+        default=3600,
+        validation_alias=AliasChoices("semantic_cache_ttl_default", "SEMANTIC_CACHE_TTL_DEFAULT"),
+    )
 
     # Admin user IDs (comma-separated Telegram user IDs)
-    admin_ids: list[int] = field(
-        default_factory=lambda: [
-            int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()
-        ]
+    admin_ids: list[int] = Field(
+        default_factory=list, validation_alias=AliasChoices("admin_ids", "ADMIN_IDS")
     )
+
+    @field_validator("admin_ids", mode="before")
+    @classmethod
+    def parse_admin_ids(cls, v: object) -> list[int]:
+        if isinstance(v, str):
+            return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        return []
 
     # Domain configuration (configurable per deployment)
-    domain: str = os.getenv("BOT_DOMAIN", "недвижимость")
-    domain_language: str = os.getenv("BOT_LANGUAGE", "ru")
+    domain: str = Field(
+        default="недвижимость", validation_alias=AliasChoices("domain", "BOT_DOMAIN")
+    )
+    domain_language: str = Field(
+        default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
+    )
 
     # Guardrails
-    enable_confidence_scoring: bool = (
-        os.getenv("ENABLE_CONFIDENCE_SCORING", "false").lower() == "true"
+    enable_confidence_scoring: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("enable_confidence_scoring", "ENABLE_CONFIDENCE_SCORING"),
     )
-    enable_off_topic_detection: bool = (
-        os.getenv("ENABLE_OFF_TOPIC_DETECTION", "true").lower() == "true"
+    enable_off_topic_detection: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("enable_off_topic_detection", "ENABLE_OFF_TOPIC_DETECTION"),
     )
-    low_confidence_threshold: float = float(os.getenv("LOW_CONFIDENCE_THRESHOLD", "0.3"))
+    low_confidence_threshold: float = Field(
+        default=0.3,
+        validation_alias=AliasChoices("low_confidence_threshold", "LOW_CONFIDENCE_THRESHOLD"),
+    )
 
     # Small-to-big context expansion
-    small_to_big_mode: str = os.getenv("SMALL_TO_BIG_MODE", "off").lower()  # off|on|auto
-    small_to_big_window_before: int = int(os.getenv("SMALL_TO_BIG_WINDOW_BEFORE", "1"))
-    small_to_big_window_after: int = int(os.getenv("SMALL_TO_BIG_WINDOW_AFTER", "1"))
-    max_expanded_chunks: int = int(os.getenv("MAX_EXPANDED_CHUNKS", "10"))
-    max_context_tokens: int = int(os.getenv("MAX_CONTEXT_TOKENS", "8000"))
+    small_to_big_mode: str = Field(
+        default="off",
+        validation_alias=AliasChoices("small_to_big_mode", "SMALL_TO_BIG_MODE"),
+    )
+    small_to_big_window_before: int = Field(
+        default=1,
+        validation_alias=AliasChoices("small_to_big_window_before", "SMALL_TO_BIG_WINDOW_BEFORE"),
+    )
+    small_to_big_window_after: int = Field(
+        default=1,
+        validation_alias=AliasChoices("small_to_big_window_after", "SMALL_TO_BIG_WINDOW_AFTER"),
+    )
+    max_expanded_chunks: int = Field(
+        default=10,
+        validation_alias=AliasChoices("max_expanded_chunks", "MAX_EXPANDED_CHUNKS"),
+    )
+    max_context_tokens: int = Field(
+        default=8000,
+        validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
+    )
 
     def get_collection_name(self) -> str:
         """Get collection name based on quantization mode.
@@ -143,7 +267,6 @@ class BotConfig:
             - 'binary': base_binary
         """
         base = self.qdrant_collection
-        # Strip existing suffixes
         for suffix in ["_binary", "_scalar"]:
             base = base.removesuffix(suffix)
 
@@ -152,5 +275,4 @@ class BotConfig:
             return f"{base}_scalar"
         if mode == "binary":
             return f"{base}_binary"
-        # off or any other value
         return base
