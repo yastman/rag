@@ -225,22 +225,70 @@ class TestExactCaches:
         assert mgr._metrics["search"]["hits"] == 1
 
 
+def _make_pipeline_mock():
+    """Create a mock Redis pipeline with async context manager support."""
+    pipe = AsyncMock()
+    pipe.lpush = MagicMock(return_value=pipe)
+    pipe.ltrim = MagicMock(return_value=pipe)
+    pipe.expire = MagicMock(return_value=pipe)
+    pipe.execute = AsyncMock(return_value=[True, True, True])
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=False)
+    return pipe
+
+
 class TestConversationHistory:
     """Test conversation history (Redis LIST)."""
 
     @pytest.mark.asyncio
     async def test_store_conversation(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        pipe = _make_pipeline_mock()
         mgr.redis = AsyncMock()
-        mgr.redis.lpush = AsyncMock()
-        mgr.redis.ltrim = AsyncMock()
-        mgr.redis.expire = AsyncMock()
+        mgr.redis.pipeline = MagicMock(return_value=pipe)
 
         await mgr.store_conversation(user_id=123, role="user", content="hello")
 
-        mgr.redis.lpush.assert_awaited_once()
-        mgr.redis.ltrim.assert_awaited_once()
-        mgr.redis.expire.assert_awaited_once()
+        pipe.lpush.assert_called_once()
+        pipe.ltrim.assert_called_once()
+        pipe.expire.assert_called_once()
+        pipe.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_store_conversation_batch(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        pipe = _make_pipeline_mock()
+        mgr.redis = AsyncMock()
+        mgr.redis.pipeline = MagicMock(return_value=pipe)
+
+        await mgr.store_conversation_batch(
+            user_id=123,
+            messages=[("user", "hello"), ("assistant", "hi")],
+        )
+
+        # 2 lpush calls (one per message), 1 ltrim, 1 expire
+        assert pipe.lpush.call_count == 2
+        pipe.ltrim.assert_called_once()
+        pipe.expire.assert_called_once()
+        pipe.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_store_conversation_batch_empty(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = AsyncMock()
+        mgr.redis.pipeline = MagicMock()
+
+        await mgr.store_conversation_batch(user_id=123, messages=[])
+
+        mgr.redis.pipeline.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_store_conversation_batch_disabled(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = None
+
+        # Should not raise
+        await mgr.store_conversation_batch(user_id=123, messages=[("user", "hi")])
 
     @pytest.mark.asyncio
     async def test_get_conversation(self):
