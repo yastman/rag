@@ -92,3 +92,36 @@ docker-compose*.yml
 # Node / frontend
 node_modules/
 package-lock.json
+
+# Logs directory
+logs/
+
+# Additional caches and tool dirs
+.deepeval/
+.cache/
+
+# Legacy code
+legacy/
+
+# Coverage artifacts
+coverage.json
+coverage_report_final.txt
+
+# Infrastructure (not needed in app images)
+k8s/
+deploy/
+drive-sync/
+
+# Build/CI config (not needed in images)
+docker-bake.hcl
+renovate.json
+release-please-config.json
+.release-please-manifest.json
+.pre-commit-config.yaml
+Makefile
+Dockerfile*
+
+# Standalone scripts (not part of app)
+debug_chunks.py
+simple_index_test.py
+test_cache.py
