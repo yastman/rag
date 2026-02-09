@@ -201,6 +201,15 @@ Bot connects to: `@test_nika_homes_bot` (configured via `TELEGRAM_BOT_TOKEN`)
 
 Bot responses use Markdown formatting (`parse_mode="Markdown"`).
 
+**Bot Langfuse env vars** (docker-compose.dev.yml):
+```yaml
+LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}   # optional, empty disables tracing
+LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+LANGFUSE_HOST: http://langfuse:3000
+```
+
+Graceful degradation: tracing disabled when keys are empty (via `observability.py`).
+
 ## Monitoring & Alerting
 
 ```bash
