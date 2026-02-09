@@ -11,8 +11,6 @@ import logging
 import time
 from typing import Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-
 from telegram_bot.graph.state import RAGState
 
 
@@ -21,18 +19,11 @@ logger = logging.getLogger(__name__)
 _MAX_CONTEXT_DOCS = 5
 
 
-def _get_domain() -> str:
-    """Get domain from GraphConfig (env-based)."""
+def _get_config() -> Any:
+    """Get GraphConfig from environment."""
     from telegram_bot.graph.config import GraphConfig
 
-    return GraphConfig.from_env().domain
-
-
-def _get_llm() -> Any:
-    """Create LLM instance from GraphConfig."""
-    from telegram_bot.graph.config import GraphConfig
-
-    return GraphConfig.from_env().create_llm()
+    return GraphConfig.from_env()
 
 
 def _build_system_prompt(domain: str) -> str:
@@ -113,23 +104,21 @@ async def generate_node(state: RAGState) -> dict[str, Any]:
     documents = state.get("documents", [])
     messages = state.get("messages", [])
 
-    domain = _get_domain()
+    config = _get_config()
     context = _format_context(documents)
-    system_prompt = _build_system_prompt(domain)
+    system_prompt = _build_system_prompt(config.domain)
 
-    # Build conversation messages for LLM
-    llm_messages: list[BaseMessage] = [SystemMessage(content=system_prompt)]
+    # Build OpenAI-format messages
+    llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
 
     # Add conversation history (all messages except the last user message)
     for msg in messages[:-1]:
         role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
         content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
         if role in ("user", "human"):
-            llm_messages.append(HumanMessage(content=str(content)))
+            llm_messages.append({"role": "user", "content": str(content)})
         elif role in ("assistant", "ai"):
-            from langchain_core.messages import AIMessage
-
-            llm_messages.append(AIMessage(content=str(content)))
+            llm_messages.append({"role": "assistant", "content": str(content)})
 
     # Add current query with context
     last_msg = messages[-1] if messages else None
@@ -144,12 +133,18 @@ async def generate_node(state: RAGState) -> dict[str, Any]:
     user_content = (
         f"Контекст:\n{context}\n\nВопрос: {query}\n\nОтветь на вопрос на основе контекста выше."
     )
-    llm_messages.append(HumanMessage(content=user_content))
+    llm_messages.append({"role": "user", "content": user_content})
 
     try:
-        llm = _get_llm()
-        response = await llm.ainvoke(llm_messages)
-        answer = response.content if hasattr(response, "content") else str(response)
+        llm = config.create_llm()
+        response = await llm.chat.completions.create(
+            model=config.llm_model,
+            messages=llm_messages,
+            temperature=config.llm_temperature,
+            max_tokens=config.llm_max_tokens,
+            name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+        )
+        answer = response.choices[0].message.content or ""
     except Exception:
         logger.exception("generate_node: LLM call failed, using fallback")
         answer = _build_fallback_response(documents)

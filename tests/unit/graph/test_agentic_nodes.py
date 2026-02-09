@@ -142,6 +142,17 @@ class TestRerankNode:
 # --- rewrite_node tests ---
 
 
+def _make_mock_llm(content: str = "rewritten query") -> MagicMock:
+    """Create mock AsyncOpenAI client for rewrite_node tests."""
+    mock_choice = MagicMock()
+    mock_choice.message.content = content
+    mock_response = MagicMock(choices=[mock_choice])
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+    return mock_client
+
+
 class TestRewriteNode:
     @pytest.mark.asyncio
     async def test_rewrite_increments_count(self):
@@ -151,10 +162,7 @@ class TestRewriteNode:
         state = make_initial_state(user_id=1, session_id="s", query="test query")
         state["rewrite_count"] = 0
 
-        mock_llm = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = "improved query about real estate"
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = _make_mock_llm("improved query about real estate")
 
         result = await rewrite_node(state, llm=mock_llm)
         assert result["rewrite_count"] == 1
@@ -169,10 +177,7 @@ class TestRewriteNode:
 
         state = make_initial_state(user_id=1, session_id="s", query="original query")
 
-        mock_llm = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = "rewritten query"
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = _make_mock_llm("rewritten query")
 
         result = await rewrite_node(state, llm=mock_llm)
         # Should return messages list with a HumanMessage
@@ -187,8 +192,8 @@ class TestRewriteNode:
 
         state = make_initial_state(user_id=1, session_id="s", query="original query")
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.side_effect = RuntimeError("LLM unavailable")
+        mock_llm = MagicMock()
+        mock_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
 
         result = await rewrite_node(state, llm=mock_llm)
         assert result["rewrite_count"] == 1
@@ -203,10 +208,7 @@ class TestRewriteNode:
         state = make_initial_state(user_id=1, session_id="s", query="query v2")
         state["rewrite_count"] = 1
 
-        mock_llm = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = "query v3"
-        mock_llm.ainvoke.return_value = mock_response
+        mock_llm = _make_mock_llm("query v3")
 
         result = await rewrite_node(state, llm=mock_llm)
         assert result["rewrite_count"] == 2
