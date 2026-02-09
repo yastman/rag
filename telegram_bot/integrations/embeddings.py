@@ -13,6 +13,8 @@ from typing import Any
 import httpx
 from langchain_core.embeddings import Embeddings
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,7 @@ class BGEM3Embeddings(Embeddings):
     def _make_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=self.timeout)
 
+    @observe(name="bge-m3-dense-embed")
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
@@ -82,6 +85,7 @@ class BGEM3SparseEmbeddings:
     def _make_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(timeout=self.timeout)
 
+    @observe(name="bge-m3-sparse-embed")
     async def aembed_query(self, text: str) -> dict[str, Any]:
         async with self._make_client() as client:
             response = await client.post(
@@ -90,8 +94,9 @@ class BGEM3SparseEmbeddings:
             )
             response.raise_for_status()
             data: dict[str, list[dict[str, Any]]] = response.json()
-            return data["sparse_vecs"][0]
+            return data["lexical_weights"][0]
 
+    @observe(name="bge-m3-sparse-embed-batch")
     async def aembed_documents(self, texts: list[str]) -> list[dict[str, Any]]:
         if not texts:
             return []
@@ -102,4 +107,4 @@ class BGEM3SparseEmbeddings:
             )
             response.raise_for_status()
             data: dict[str, list[dict[str, Any]]] = response.json()
-            return data["sparse_vecs"]
+            return data["lexical_weights"]
