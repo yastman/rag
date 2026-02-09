@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as redis
 
+from telegram_bot.observability import observe
+
 
 if TYPE_CHECKING:
     from redisvl.extensions.cache.llm import SemanticCache
@@ -173,6 +175,7 @@ class CacheLayerManager:
 
     # ========== Semantic Cache ==========
 
+    @observe(name="cache-semantic-check")
     async def check_semantic(
         self,
         query: str,
@@ -243,6 +246,7 @@ class CacheLayerManager:
             self._metrics["semantic"]["misses"] += 1
             return None
 
+    @observe(name="cache-semantic-store")
     async def store_semantic(
         self,
         query: str,
@@ -270,6 +274,7 @@ class CacheLayerManager:
 
     # ========== Exact Caches (SET/GET) ==========
 
+    @observe(name="cache-exact-get")
     async def get_exact(self, tier: str, key: str) -> Any | None:
         """Get value from exact cache tier.
 
@@ -296,6 +301,7 @@ class CacheLayerManager:
             self._metrics[tier]["misses"] += 1
             return None
 
+    @observe(name="cache-exact-store")
     async def store_exact(self, tier: str, key: str, value: Any, ttl: int | None = None) -> None:
         """Store value in exact cache tier.
 
@@ -317,10 +323,12 @@ class CacheLayerManager:
 
     # ========== Convenience: Embeddings ==========
 
+    @observe(name="cache-embedding-get")
     async def get_embedding(self, text: str, model: str = "bge-m3") -> list[float] | None:
         """Get cached dense embedding."""
         return await self.get_exact("embeddings", _hash(f"{model}:{text}"))
 
+    @observe(name="cache-embedding-store")
     async def store_embedding(
         self, text: str, embedding: list[float], model: str = "bge-m3"
     ) -> None:
@@ -362,6 +370,7 @@ class CacheLayerManager:
 
     # ========== Conversation History ==========
 
+    @observe(name="cache-conversation-store")
     async def store_conversation(self, user_id: int, role: str, content: str) -> None:
         """Store conversation message in Redis LIST (pipelined: 1 round-trip)."""
         if not self.redis:
@@ -401,6 +410,7 @@ class CacheLayerManager:
         except Exception as e:
             logger.error("Conversation batch store error: %s: %s", type(e).__name__, e)
 
+    @observe(name="cache-conversation-get")
     async def get_conversation(self, user_id: int, last_n: int = 5) -> list[dict[str, Any]]:
         """Get recent conversation messages."""
         if not self.redis:
