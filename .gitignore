@@ -188,3 +188,6 @@ reports/
 .worktrees/
 drive-sync/
 CLAUDE.local.md
+
+# k8s secrets (never commit)
+k8s/secrets/
