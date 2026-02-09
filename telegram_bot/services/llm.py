@@ -1,4 +1,7 @@
-"""LLM service for answer generation with confidence scoring."""
+"""LLM service for answer generation with confidence scoring.
+
+Uses OpenAI SDK via Langfuse drop-in replacement for auto-tracing.
+"""
 
 import json
 import logging
@@ -7,9 +10,8 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
-
-from telegram_bot.observability import get_client, observe
+import openai
+from langfuse.openai import AsyncOpenAI
 
 
 logger = logging.getLogger(__name__)
@@ -36,33 +38,26 @@ class ConfidenceResult:
 
 
 class LLMService:
-    """Generate answers using LLM (OpenAI-compatible API)."""
+    """Generate answers using LLM (OpenAI-compatible API via LiteLLM)."""
 
     def __init__(
         self,
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-4o-mini",
-        client: httpx.AsyncClient | None = None,
         low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
     ):
-        """Initialize LLM service.
-
-        Args:
-            api_key: OpenAI API key
-            base_url: API base URL (for OpenAI-compatible APIs)
-            model: Model name
-            client: Optional httpx.AsyncClient for dependency injection (testing)
-            low_confidence_threshold: Confidence below this triggers fallback
-        """
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self._owns_client = client is None
-        self.client = client or httpx.AsyncClient(timeout=60.0)
         self.low_confidence_threshold = low_confidence_threshold
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=self.base_url,
+            max_retries=2,
+            timeout=60.0,
+        )
 
-    @observe(name="llm-generate-answer", as_type="generation")
     async def generate_answer(
         self,
         question: str,
@@ -70,135 +65,68 @@ class LLMService:
         system_prompt: str | None = None,
         with_confidence: bool = False,
     ) -> str | ConfidenceResult:
-        """
-        Generate answer based on question and retrieved context with graceful degradation.
-
-        Args:
-            question: User question
-            context_chunks: Retrieved chunks from Qdrant
-            system_prompt: Custom system prompt
-            with_confidence: If True, return ConfidenceResult with confidence scoring
-
-        Returns:
-            Generated answer string, or ConfidenceResult if with_confidence=True.
-            Returns fallback message on error.
-        """
-        langfuse = get_client()
-
-        # Track generation start
-        langfuse.update_current_generation(
-            input={
-                "question_preview": question[:100],
-                "context_count": len(context_chunks),
-                "with_confidence": with_confidence,
-            },
-            model=self.model,
-        )
-
+        """Generate answer based on question and retrieved context."""
         try:
-            # Build context from chunks
             context = self._format_context(context_chunks)
 
-            # Default system prompt
             if not system_prompt:
                 if with_confidence:
                     system_prompt = self._get_confidence_system_prompt()
                 else:
-                    system_prompt = """Ты - ассистент по недвижимости.
+                    system_prompt = (
+                        "Ты - ассистент по недвижимости.\n\n"
+                        "Отвечай на вопросы пользователя на основе предоставленного контекста.\n"
+                        "Если информации недостаточно, честно скажи об этом.\n"
+                        "Всегда указывай цены в евро и расстояния в метрах.\n"
+                        "Будь вежливым и полезным.\n\n"
+                        "Форматируй ответ с Markdown: используй **жирный** для важного, • для списков."
+                    )
 
-Отвечай на вопросы пользователя на основе предоставленного контекста.
-Если информации недостаточно, честно скажи об этом.
-Всегда указывай цены в евро и расстояния в метрах.
-Будь вежливым и полезным.
-
-Форматируй ответ с Markdown: используй **жирный** для важного, • для списков."""
-
-            # Build user message
             if with_confidence:
-                user_content = f"""Контекст:
-{context}
-
-Вопрос: {question}
-
-Ответь на вопрос на основе контекста выше. Верни JSON с полями "answer" и "confidence"."""
+                user_content = (
+                    f"Контекст:\n{context}\n\n"
+                    f"Вопрос: {question}\n\n"
+                    "Ответь на вопрос на основе контекста выше. "
+                    'Верни JSON с полями "answer" и "confidence".'
+                )
             else:
-                user_content = f"""Контекст:
-{context}
+                user_content = (
+                    f"Контекст:\n{context}\n\n"
+                    f"Вопрос: {question}\n\n"
+                    "Ответь на вопрос на основе контекста выше."
+                )
 
-Вопрос: {question}
-
-Ответь на вопрос на основе контекста выше."""
-
-            # Build messages
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ]
 
-            # Call LLM API
-            response = await self.client.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": 0.7,
-                    "max_tokens": 4096,  # Reasoning models need headroom beyond thinking tokens
-                },
-            )
-            response.raise_for_status()
-
-            data = response.json()
-            message = data["choices"][0]["message"]
-            # Support reasoning models: content may be in "reasoning_content"
-            raw_answer = (
-                message.get("content")
-                or message.get("reasoning_content")
-                or message.get("reasoning")
-                or ""
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,  # type: ignore[arg-type]
+                temperature=0.7,
+                max_tokens=4096,
+                name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
 
-            # Parse confidence if requested
+            message = response.choices[0].message
+            raw_answer = message.content or ""
+
             if with_confidence:
-                result = self._parse_confidence_response(raw_answer, question, context_chunks)
-                # Track completion with confidence
-                langfuse.update_current_generation(
-                    output={
-                        "answer_length": len(result.answer),
-                        "confidence": result.confidence,
-                        "is_low_confidence": result.is_low_confidence,
-                    },
-                    usage_details={
-                        "input": data.get("usage", {}).get("prompt_tokens", 0),
-                        "output": data.get("usage", {}).get("completion_tokens", 0),
-                    },
-                )
-                return result
-
-            # Track completion with usage
-            langfuse.update_current_generation(
-                output={"answer_length": len(raw_answer)},
-                usage_details={
-                    "input": data.get("usage", {}).get("prompt_tokens", 0),
-                    "output": data.get("usage", {}).get("completion_tokens", 0),
-                },
-            )
+                return self._parse_confidence_response(raw_answer, question, context_chunks)
 
             return raw_answer
 
-        except httpx.TimeoutException as e:
-            logger.error(f"LLM API timeout: {e}")
+        except (openai.APITimeoutError, openai.APIConnectionError) as e:
+            logger.error(f"LLM API timeout/connection: {e}")
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
                     answer=fallback, confidence=0.0, is_low_confidence=True, raw_response=None
                 )
             return fallback
-        except httpx.HTTPStatusError as e:
-            logger.error(f"LLM API HTTP error {e.response.status_code}: {e}")
+        except openai.RateLimitError as e:
+            logger.error(f"LLM API rate limit: {e}")
             fallback = self._get_fallback_answer(question, context_chunks)
             if with_confidence:
                 return ConfidenceResult(
@@ -216,55 +144,39 @@ class LLMService:
 
     def _get_confidence_system_prompt(self) -> str:
         """Get system prompt that requests confidence scoring."""
-        return """Ты - ассистент по недвижимости.
-
-Отвечай на вопросы пользователя на основе предоставленного контекста.
-Всегда указывай цены в евро и расстояния в метрах.
-
-ВАЖНО: Верни ответ в формате JSON:
-{
-    "answer": "твой ответ здесь (используй Markdown: **жирный** для важного, • для списков)",
-    "confidence": 0.85
-}
-
-Оцени confidence (уверенность) от 0.0 до 1.0:
-- 0.9-1.0: Ответ полностью основан на контексте, все факты подтверждены
-- 0.7-0.9: Ответ в основном основан на контексте, минимальные допущения
-- 0.5-0.7: Частичный ответ, некоторая информация отсутствует в контексте
-- 0.3-0.5: Слабый ответ, много информации отсутствует
-- 0.0-0.3: Ответ не основан на контексте или контекст нерелевантен
-
-Если контекст не содержит релевантной информации, установи confidence < 0.5."""
+        return (
+            "Ты - ассистент по недвижимости.\n\n"
+            "Отвечай на вопросы пользователя на основе предоставленного контекста.\n"
+            "Всегда указывай цены в евро и расстояния в метрах.\n\n"
+            "ВАЖНО: Верни ответ в формате JSON:\n"
+            "{\n"
+            '    "answer": "твой ответ здесь (используй Markdown: **жирный** для важного, • для списков)",\n'
+            '    "confidence": 0.85\n'
+            "}\n\n"
+            "Оцени confidence (уверенность) от 0.0 до 1.0:\n"
+            "- 0.9-1.0: Ответ полностью основан на контексте, все факты подтверждены\n"
+            "- 0.7-0.9: Ответ в основном основан на контексте, минимальные допущения\n"
+            "- 0.5-0.7: Частичный ответ, некоторая информация отсутствует в контексте\n"
+            "- 0.3-0.5: Слабый ответ, много информации отсутствует\n"
+            "- 0.0-0.3: Ответ не основан на контексте или контекст нерелевантен\n\n"
+            "Если контекст не содержит релевантной информации, установи confidence < 0.5."
+        )
 
     def _parse_confidence_response(
         self, raw_response: str, question: str, context_chunks: list[dict[str, Any]]
     ) -> ConfidenceResult:
-        """Parse LLM response with confidence scoring.
-
-        Args:
-            raw_response: Raw LLM response (expected JSON format)
-            question: Original question (for fallback)
-            context_chunks: Context chunks (for fallback)
-
-        Returns:
-            ConfidenceResult with parsed answer and confidence
-        """
+        """Parse LLM response with confidence scoring."""
         try:
-            # Try to extract JSON from response
-            # Handle cases where LLM wraps JSON in markdown code blocks
             json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_response, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
             else:
-                # Try to find raw JSON
                 json_match = re.search(r"\{[^{}]*\"answer\"[^{}]*\}", raw_response, re.DOTALL)
                 json_str = json_match.group(0) if json_match else raw_response.strip()
 
             data = json.loads(json_str)
             answer = data.get("answer", raw_response)
             confidence = float(data.get("confidence", 0.5))
-
-            # Clamp confidence to valid range
             confidence = max(0.0, min(1.0, confidence))
 
             return ConfidenceResult(
@@ -276,7 +188,6 @@ class LLMService:
 
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             logger.warning(f"Failed to parse confidence response: {e}")
-            # Return raw response with medium confidence (parsing failed)
             return ConfidenceResult(
                 answer=raw_response,
                 confidence=0.5,
@@ -290,105 +201,53 @@ class LLMService:
         context_chunks: list[dict[str, Any]],
         system_prompt: str | None = None,
     ) -> AsyncGenerator[str, None]:
-        """
-        Stream answer generation token by token with graceful degradation.
-
-        Allows real-time display of LLM response in Telegram bot.
-        Reduces perceived latency - user sees first tokens in ~0.1s.
-
-        Args:
-            question: User question
-            context_chunks: Retrieved chunks from Qdrant
-            system_prompt: Custom system prompt
-
-        Yields:
-            Text chunks as they arrive from LLM. Yields fallback on error.
-        """
+        """Stream answer generation token by token."""
         try:
-            # Build context
             context = self._format_context(context_chunks)
 
-            # Default system prompt
             if not system_prompt:
-                system_prompt = """Ты - ассистент по недвижимости.
+                system_prompt = (
+                    "Ты - ассистент по недвижимости.\n\n"
+                    "Отвечай на вопросы пользователя на основе предоставленного контекста.\n"
+                    "Если информации недостаточно, честно скажи об этом.\n"
+                    "Всегда указывай цены в евро и расстояния в метрах.\n"
+                    "Будь вежливым и полезным.\n\n"
+                    "Форматируй ответ с Markdown: используй **жирный** для важного, • для списков."
+                )
 
-Отвечай на вопросы пользователя на основе предоставленного контекста.
-Если информации недостаточно, честно скажи об этом.
-Всегда указывай цены в евро и расстояния в метрах.
-Будь вежливым и полезным.
-
-Форматируй ответ с Markdown: используй **жирный** для важного, • для списков."""
-
-            # Build messages
             messages = [
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
-                    "content": f"""Контекст:
-{context}
-
-Вопрос: {question}
-
-Ответь на вопрос на основе контекста выше.""",
+                    "content": (
+                        f"Контекст:\n{context}\n\n"
+                        f"Вопрос: {question}\n\n"
+                        "Ответь на вопрос на основе контекста выше."
+                    ),
                 },
             ]
 
-            # Stream LLM response
-            async with self.client.stream(
-                "POST",
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": 0.7,
-                    "max_tokens": 4096,  # Reasoning models need headroom beyond thinking tokens
-                    "stream": True,  # Enable streaming
-                },
-                timeout=60.0,
-            ) as response:
-                response.raise_for_status()
+            stream = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,  # type: ignore[arg-type]
+                temperature=0.7,
+                max_tokens=4096,
+                stream=True,
+                stream_options={"include_usage": True},
+                name="stream-answer",  # type: ignore[call-overload]  # langfuse kwarg
+            )
 
-                # Parse SSE stream
-                async for line in response.aiter_lines():
-                    if not line.strip():
-                        continue
+            async for chunk in stream:
+                if chunk.usage:
+                    continue
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    yield delta.content
 
-                    # SSE format: "data: {...}"
-                    if line.startswith("data: "):
-                        data_str = line[6:]  # Remove "data: " prefix
-
-                        # Skip [DONE] marker
-                        if data_str == "[DONE]":
-                            break
-
-                        try:
-                            data = json.loads(data_str)
-                            delta = data.get("choices", [{}])[0].get("delta", {})
-                            # Support both regular and reasoning models:
-                            # reasoning models (e.g. zai-glm-4.7) send tokens
-                            # as "reasoning_content" or "reasoning" instead of "content"
-                            content = (
-                                delta.get("content")
-                                or delta.get("reasoning_content")
-                                or delta.get("reasoning")
-                                or ""
-                            )
-
-                            if content:
-                                yield content
-
-                        except json.JSONDecodeError:
-                            continue
-
-        except httpx.TimeoutException as e:
-            logger.error(f"LLM streaming timeout: {e}")
-            yield self._get_fallback_answer(question, context_chunks)
-        except httpx.HTTPStatusError as e:
-            logger.error(f"LLM streaming HTTP error {e.response.status_code}: {e}")
+        except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
+            logger.error(f"LLM streaming error: {e}")
             yield self._get_fallback_answer(question, context_chunks)
         except Exception as e:
             logger.error(f"LLM streaming failed: {e}", exc_info=True)
@@ -405,7 +264,6 @@ class LLMService:
             metadata = chunk.get("metadata", {})
             score = chunk.get("score", 0)
 
-            # Add metadata info if available
             meta_str = ""
             if "title" in metadata:
                 meta_str += f"Название: {metadata['title']}\n"
@@ -419,22 +277,10 @@ class LLMService:
         return "\n\n---\n\n".join(context_parts)
 
     def _get_fallback_answer(self, question: str, context_chunks: list[dict[str, Any]]) -> str:
-        """
-        Generate fallback answer when LLM API fails.
-
-        Returns raw search results as a simple text response.
-
-        Args:
-            question: User question
-            context_chunks: Retrieved context chunks
-
-        Returns:
-            Simple formatted answer with search results
-        """
+        """Generate fallback answer when LLM API fails."""
         if not context_chunks:
             return "⚠️ Извините, сервис временно недоступен.\n\nПопробуйте повторить запрос позже."
 
-        # Format first 3 results as simple text
         fallback = "⚠️ Сервис генерации ответов временно недоступен.\n\n"
         fallback += "Вот найденные объекты по вашему запросу:\n\n"
 
@@ -464,19 +310,7 @@ class LLMService:
     def get_low_confidence_response(
         self, question: str, context_chunks: list[dict[str, Any]], confidence: float
     ) -> str:
-        """
-        Generate response when confidence is below threshold.
-
-        Indicates uncertainty while still providing available information.
-
-        Args:
-            question: User question
-            context_chunks: Retrieved context chunks
-            confidence: The confidence score that triggered this fallback
-
-        Returns:
-            Formatted response indicating low confidence
-        """
+        """Generate response when confidence is below threshold."""
         response = "⚠️ **Не уверен в точности ответа**\n\n"
         response += f"Моя уверенность в ответе: {confidence:.0%}\n\n"
 
@@ -516,48 +350,20 @@ class LLMService:
         return response
 
     async def generate(self, prompt: str, max_tokens: int = 200) -> str:
-        """Simple text generation for internal use (CESC, preference extraction).
-
-        Uses low temperature for more deterministic/structured output.
-
-        Args:
-            prompt: Text prompt to send to LLM
-            max_tokens: Maximum tokens in response (default: 200)
-
-        Returns:
-            Generated text from LLM
-
-        Raises:
-            Exception: If LLM API call fails
-        """
+        """Simple text generation for internal use (CESC, preference extraction)."""
         try:
-            response = await self.client.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                    "max_tokens": max_tokens,
-                },
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],  # type: ignore[arg-type]
+                temperature=0.3,
+                max_tokens=max_tokens,
+                name="generate-simple",  # type: ignore[call-overload]  # langfuse kwarg
             )
-            response.raise_for_status()
-            data = response.json()
-            message = data["choices"][0]["message"]
-            return (
-                message.get("content")
-                or message.get("reasoning_content")
-                or message.get("reasoning")
-                or ""
-            )
+            return response.choices[0].message.content or ""
         except Exception as e:
             logger.error(f"LLM generate failed: {e}")
             raise
 
     async def close(self):
-        """Close HTTP client if owned by this instance."""
-        if self._owns_client:
-            await self.client.aclose()
+        """Close the underlying HTTP client."""
+        await self.client.close()

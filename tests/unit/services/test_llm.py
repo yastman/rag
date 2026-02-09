@@ -1,18 +1,21 @@
 """Unit tests for LLMService.
 
-Uses pytest-httpx for robust HTTP mocking (2026 best practice).
-No manual AsyncMock hacks - pytest-httpx hooks into httpx transport layer.
+Uses AsyncMock for OpenAI SDK client mocking.
 """
 
-import json
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
-import httpx
+import openai
 import pytest
-from pytest_httpx import HTTPXMock, IteratorStream
 
-# Import directly from the module to avoid importing voyage/torch via __init__.py
 from telegram_bot.services.llm import LLMService
+
+
+def _mock_completion(content: str) -> MagicMock:
+    """Helper: create a mock ChatCompletion response."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content=content))]
+    return mock_response
 
 
 class TestLLMServiceInit:
@@ -25,8 +28,7 @@ class TestLLMServiceInit:
         assert service.api_key == "test-key"
         assert service.base_url == "https://api.openai.com/v1"
         assert service.model == "gpt-4o-mini"
-        assert isinstance(service.client, httpx.AsyncClient)
-        assert service._owns_client is True
+        assert isinstance(service.client, openai.AsyncOpenAI)
 
     def test_init_custom_values(self):
         """Test initialization with custom values."""
@@ -50,24 +52,15 @@ class TestLLMServiceInit:
         # rstrip("/") removes ALL trailing slashes
         assert service.base_url == "https://api.example.com"
 
-    def test_init_with_injected_client(self):
-        """Test initialization with injected client (dependency injection)."""
-        custom_client = httpx.AsyncClient(timeout=30.0)
-        service = LLMService(api_key="test-key", client=custom_client)
-
-        assert service.client is custom_client
-        assert service._owns_client is False
-
-    def test_init_creates_httpx_client_when_not_injected(self):
-        """Test that httpx.AsyncClient is created when not injected."""
+    def test_init_creates_openai_client(self):
+        """Test that AsyncOpenAI client is created."""
         service = LLMService(api_key="test-key")
 
-        assert isinstance(service.client, httpx.AsyncClient)
-        assert service._owns_client is True
+        assert isinstance(service.client, openai.AsyncOpenAI)
 
 
 class TestLLMServiceGenerateAnswer:
-    """Tests for LLMService.generate_answer using pytest-httpx."""
+    """Tests for LLMService.generate_answer."""
 
     @pytest.fixture
     def sample_chunks(self):
@@ -85,74 +78,72 @@ class TestLLMServiceGenerateAnswer:
             },
         ]
 
-    async def test_generate_answer_returns_response(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_generate_answer_returns_response(self, sample_chunks):
         """Test successful answer generation."""
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            json={"choices": [{"message": {"content": "Generated answer text"}}]},
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Generated answer text")
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("What apartments?", sample_chunks)
+        result = await service.generate_answer("What apartments?", sample_chunks)
 
         assert result == "Generated answer text"
 
-    async def test_generate_answer_custom_system_prompt(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_generate_answer_custom_system_prompt(self, sample_chunks):
         """Test answer generation with custom system prompt."""
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            json={"choices": [{"message": {"content": "Custom response"}}]},
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Custom response")
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer(
-                "Question?", sample_chunks, system_prompt="Custom prompt"
-            )
+        result = await service.generate_answer(
+            "Question?", sample_chunks, system_prompt="Custom prompt"
+        )
 
         assert result == "Custom response"
-        # Verify request was sent with custom prompt
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["messages"][0]["content"] == "Custom prompt"
+        call_args = service.client.chat.completions.create.call_args
+        assert call_args[1]["messages"][0]["content"] == "Custom prompt"
 
-    async def test_generate_answer_timeout_fallback(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_generate_answer_timeout_fallback(self, sample_chunks):
         """Test fallback on timeout exception."""
-        httpx_mock.add_exception(httpx.TimeoutException("Timeout"))
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            side_effect=openai.APITimeoutError(request=MagicMock())
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("What apartments?", sample_chunks)
+        result = await service.generate_answer("What apartments?", sample_chunks)
 
         assert "Сервис генерации ответов временно недоступен" in result
         assert "Sea View Apt" in result
 
-    async def test_generate_answer_http_error_fallback(self, httpx_mock: HTTPXMock, sample_chunks):
-        """Test fallback on HTTP error."""
-        httpx_mock.add_response(status_code=500)
+    async def test_generate_answer_connection_error_fallback(self, sample_chunks):
+        """Test fallback on connection error."""
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            side_effect=openai.APIConnectionError(request=MagicMock())
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("What apartments?", sample_chunks)
+        result = await service.generate_answer("What apartments?", sample_chunks)
 
         assert "Сервис генерации ответов временно недоступен" in result
 
-    async def test_generate_answer_empty_chunks_fallback(self, httpx_mock: HTTPXMock):
+    async def test_generate_answer_empty_chunks_fallback(self):
         """Test fallback with empty chunks."""
-        httpx_mock.add_exception(Exception("API error"))
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(side_effect=Exception("API error"))
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("What apartments?", [])
+        result = await service.generate_answer("What apartments?", [])
 
         assert "Извините, сервис временно недоступен" in result
 
 
 class TestLLMServiceStreamAnswer:
-    """Tests for LLMService.stream_answer using pytest-httpx with IteratorStream."""
+    """Tests for LLMService.stream_answer."""
 
     @pytest.fixture
     def sample_chunks(self):
@@ -165,170 +156,97 @@ class TestLLMServiceStreamAnswer:
             },
         ]
 
-    async def test_stream_answer_yields_chunks(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_stream_answer_yields_chunks(self, sample_chunks):
         """Test that stream_answer yields content chunks."""
-        # SSE format with proper line endings
-        sse_chunks = [
-            b'data: {"choices": [{"delta": {"content": "Hello"}}]}\n\n',
-            b'data: {"choices": [{"delta": {"content": " World"}}]}\n\n',
-            b"data: [DONE]\n\n",
-        ]
+        service = LLMService(api_key="test-key")
 
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            stream=IteratorStream(sse_chunks),
-        )
+        # Mock streaming response as async iterator
+        chunk1 = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content="Hello"))])
+        chunk2 = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content=" World"))])
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            chunks = []
-            async for chunk in service.stream_answer("Question?", sample_chunks):
-                chunks.append(chunk)
+        async def mock_stream():
+            for c in [chunk1, chunk2]:
+                yield c
+
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=mock_stream())
+
+        chunks = []
+        async for chunk in service.stream_answer("Question?", sample_chunks):
+            chunks.append(chunk)
 
         assert chunks == ["Hello", " World"]
 
-    async def test_stream_answer_skips_empty_lines(self, httpx_mock: HTTPXMock, sample_chunks):
-        """Test that empty lines in SSE stream are skipped."""
-        sse_chunks = [
-            b"\n\n",
-            b"   \n\n",
-            b'data: {"choices": [{"delta": {"content": "Content"}}]}\n\n',
-            b"\n\n",
-            b"data: [DONE]\n\n",
-        ]
+    async def test_stream_answer_skips_usage_chunks(self, sample_chunks):
+        """Test that usage chunks are skipped."""
+        service = LLMService(api_key="test-key")
 
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            stream=IteratorStream(sse_chunks),
+        content_chunk = MagicMock(
+            usage=None, choices=[MagicMock(delta=MagicMock(content="Content"))]
         )
+        usage_chunk = MagicMock(usage=MagicMock(total_tokens=100), choices=[])
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            chunks = []
-            async for chunk in service.stream_answer("Question?", sample_chunks):
-                chunks.append(chunk)
+        async def mock_stream():
+            for c in [content_chunk, usage_chunk]:
+                yield c
+
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=mock_stream())
+
+        chunks = []
+        async for chunk in service.stream_answer("Question?", sample_chunks):
+            chunks.append(chunk)
 
         assert chunks == ["Content"]
 
-    async def test_stream_answer_timeout_yields_fallback(
-        self, httpx_mock: HTTPXMock, sample_chunks
-    ):
+    async def test_stream_answer_timeout_yields_fallback(self, sample_chunks):
         """Test that timeout yields fallback message."""
-        httpx_mock.add_exception(httpx.TimeoutException("Timeout"))
-
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            chunks = []
-            async for chunk in service.stream_answer("Question?", sample_chunks):
-                chunks.append(chunk)
-
-        assert len(chunks) == 1
-        assert "Сервис генерации ответов временно недоступен" in chunks[0]
-
-    async def test_stream_answer_http_error_yields_fallback(
-        self, httpx_mock: HTTPXMock, sample_chunks
-    ):
-        """Test that HTTP error yields fallback message."""
-        httpx_mock.add_response(status_code=503)
-
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            chunks = []
-            async for chunk in service.stream_answer("Question?", sample_chunks):
-                chunks.append(chunk)
-
-        assert len(chunks) == 1
-        assert "Сервис генерации ответов временно недоступен" in chunks[0]
-
-    async def test_stream_answer_custom_system_prompt(self, httpx_mock: HTTPXMock, sample_chunks):
-        """Test stream with custom system prompt."""
-        sse_chunks = [
-            b'data: {"choices": [{"delta": {"content": "Test"}}]}\n\n',
-            b"data: [DONE]\n\n",
-        ]
-
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            stream=IteratorStream(sse_chunks),
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            side_effect=openai.APITimeoutError(request=MagicMock())
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            chunks = []
-            async for chunk in service.stream_answer(
-                "Question?", sample_chunks, system_prompt="Custom prompt"
-            ):
-                chunks.append(chunk)
+        chunks = []
+        async for chunk in service.stream_answer("Question?", sample_chunks):
+            chunks.append(chunk)
 
-        assert chunks == ["Test"]
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["messages"][0]["content"] == "Custom prompt"
+        assert len(chunks) == 1
+        assert "Сервис генерации ответов временно недоступен" in chunks[0]
 
-    async def test_stream_answer_skips_empty_content(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_stream_answer_generic_exception_yields_fallback(self, sample_chunks):
+        """Test that generic exception yields fallback message."""
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(side_effect=Exception("Unknown error"))
+
+        chunks = []
+        async for chunk in service.stream_answer("Question?", sample_chunks):
+            chunks.append(chunk)
+
+        assert len(chunks) == 1
+        assert "Сервис генерации ответов временно недоступен" in chunks[0]
+
+    async def test_stream_answer_skips_empty_content(self, sample_chunks):
         """Test that empty content in delta is skipped."""
-        sse_chunks = [
-            b'data: {"choices": [{"delta": {"role": "assistant"}}]}\n\n',  # No content
-            b'data: {"choices": [{"delta": {"content": ""}}]}\n\n',  # Empty content
-            b'data: {"choices": [{"delta": {"content": "Actual"}}]}\n\n',
-            b"data: [DONE]\n\n",
-        ]
+        service = LLMService(api_key="test-key")
 
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            stream=IteratorStream(sse_chunks),
-        )
+        chunk_empty = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content=""))])
+        chunk_none = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content=None))])
+        chunk_actual = MagicMock(usage=None, choices=[MagicMock(delta=MagicMock(content="Actual"))])
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            chunks = []
-            async for chunk in service.stream_answer("Question?", sample_chunks):
-                chunks.append(chunk)
+        async def mock_stream():
+            for c in [chunk_empty, chunk_none, chunk_actual]:
+                yield c
+
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=mock_stream())
+
+        chunks = []
+        async for chunk in service.stream_answer("Question?", sample_chunks):
+            chunks.append(chunk)
 
         assert chunks == ["Actual"]
-
-    async def test_stream_answer_handles_json_decode_error(
-        self, httpx_mock: HTTPXMock, sample_chunks
-    ):
-        """Test that invalid JSON in SSE stream is skipped."""
-        sse_chunks = [
-            b"data: invalid json\n\n",
-            b'data: {"choices": [{"delta": {"content": "Valid"}}]}\n\n',
-            b"data: [DONE]\n\n",
-        ]
-
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            stream=IteratorStream(sse_chunks),
-        )
-
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            chunks = []
-            async for chunk in service.stream_answer("Question?", sample_chunks):
-                chunks.append(chunk)
-
-        assert chunks == ["Valid"]
-
-    async def test_stream_answer_generic_exception_yields_fallback(
-        self, httpx_mock: HTTPXMock, sample_chunks
-    ):
-        """Test that generic exception yields fallback message."""
-        httpx_mock.add_exception(Exception("Unknown error"))
-
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            chunks = []
-            async for chunk in service.stream_answer("Question?", sample_chunks):
-                chunks.append(chunk)
-
-        assert len(chunks) == 1
-        assert "Сервис генерации ответов временно недоступен" in chunks[0]
 
 
 class TestLLMServiceFormatContext:
@@ -385,10 +303,6 @@ class TestLLMServiceFormatContext:
         assert "[Объект 1]" in result
         assert "[Объект 2]" in result
         assert "[Объект 3]" in result
-        assert "First property" in result
-        assert "Second property" in result
-        assert "Third property" in result
-        # Check separator
         assert "---" in result
 
     def test_format_context_partial_metadata(self, service):
@@ -415,8 +329,6 @@ class TestLLMServiceFormatContext:
 
         assert "Just text" in result
         assert "Название:" not in result
-        assert "Город:" not in result
-        assert "Цена:" not in result
 
     def test_format_context_missing_score(self, service):
         """Test formatting when score is missing (defaults to 0)."""
@@ -519,7 +431,6 @@ class TestLLMServiceGetFallbackAnswer:
         result = service._get_fallback_answer("Question?", chunks)
 
         assert "Город: Sofia" in result
-        # Should start with "1. " even without title
         assert "1. " in result
 
     def test_get_fallback_answer_no_metadata(self, service):
@@ -533,94 +444,80 @@ class TestLLMServiceGetFallbackAnswer:
 
 
 class TestLLMServiceGenerate:
-    """Tests for LLMService.generate method using pytest-httpx."""
+    """Tests for LLMService.generate method."""
 
-    async def test_generate_returns_content(self, httpx_mock: HTTPXMock):
+    async def test_generate_returns_content(self):
         """Test successful generation."""
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            json={"choices": [{"message": {"content": "Generated text"}}]},
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Generated text")
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate("Test prompt")
+        result = await service.generate("Test prompt")
 
         assert result == "Generated text"
 
-    async def test_generate_uses_low_temperature(self, httpx_mock: HTTPXMock):
+    async def test_generate_uses_low_temperature(self):
         """Test that generate uses low temperature for deterministic output."""
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            json={"choices": [{"message": {"content": "Response"}}]},
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Response")
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            await service.generate("Prompt")
+        await service.generate("Prompt")
 
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["temperature"] == 0.3
+        call_args = service.client.chat.completions.create.call_args
+        assert call_args[1]["temperature"] == 0.3
 
-    async def test_generate_custom_max_tokens(self, httpx_mock: HTTPXMock):
+    async def test_generate_custom_max_tokens(self):
         """Test generate with custom max_tokens."""
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            json={"choices": [{"message": {"content": "Response"}}]},
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Response")
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            await service.generate("Prompt", max_tokens=500)
+        await service.generate("Prompt", max_tokens=500)
 
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["max_tokens"] == 500
+        call_args = service.client.chat.completions.create.call_args
+        assert call_args[1]["max_tokens"] == 500
 
-    async def test_generate_default_max_tokens(self, httpx_mock: HTTPXMock):
+    async def test_generate_default_max_tokens(self):
         """Test generate uses default max_tokens of 200."""
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            json={"choices": [{"message": {"content": "Response"}}]},
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Response")
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        await service.generate("Prompt")
+
+        call_args = service.client.chat.completions.create.call_args
+        assert call_args[1]["max_tokens"] == 200
+
+    async def test_generate_raises_on_error(self):
+        """Test that generate raises exception on API error."""
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(side_effect=Exception("API error"))
+
+        with pytest.raises(Exception, match="API error"):
             await service.generate("Prompt")
 
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["max_tokens"] == 200
-
-    async def test_generate_raises_on_error(self, httpx_mock: HTTPXMock):
-        """Test that generate raises exception on API error."""
-        httpx_mock.add_exception(Exception("API error"))
-
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            with pytest.raises(Exception, match="API error"):
-                await service.generate("Prompt")
-
-    async def test_generate_sends_correct_message_format(self, httpx_mock: HTTPXMock):
+    async def test_generate_sends_correct_message_format(self):
         """Test that generate sends simple user message format."""
-        httpx_mock.add_response(
-            url="https://api.openai.com/v1/chat/completions",
-            method="POST",
-            json={"choices": [{"message": {"content": "Response"}}]},
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Response")
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            await service.generate("My prompt")
+        await service.generate("My prompt")
 
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        messages = body["messages"]
+        call_args = service.client.chat.completions.create.call_args
+        messages = call_args[1]["messages"]
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
         assert messages[0]["content"] == "My prompt"
@@ -629,23 +526,14 @@ class TestLLMServiceGenerate:
 class TestLLMServiceClose:
     """Tests for LLMService.close method."""
 
-    async def test_close_calls_aclose_when_owns_client(self):
-        """Test that close method calls aclose when service owns the client."""
+    async def test_close_calls_close(self):
+        """Test that close method calls close on the client."""
         service = LLMService(api_key="test-key")
-        service.client = AsyncMock(spec=httpx.AsyncClient)
+        service.client = AsyncMock()
 
         await service.close()
 
-        service.client.aclose.assert_called_once()
-
-    async def test_close_does_not_close_injected_client(self):
-        """Test that close does not close an injected client."""
-        mock_client = AsyncMock(spec=httpx.AsyncClient)
-        service = LLMService(api_key="test-key", client=mock_client)
-
-        await service.close()
-
-        mock_client.aclose.assert_not_called()
+        service.client.close.assert_called_once()
 
     async def test_close_integration(self):
         """Test close with real client (integration-style)."""

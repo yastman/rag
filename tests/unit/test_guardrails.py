@@ -4,10 +4,9 @@ Tests confidence scoring, low confidence fallback, and off-topic detection.
 """
 
 import json
+from unittest.mock import AsyncMock, MagicMock
 
-import httpx
 import pytest
-from pytest_httpx import HTTPXMock
 
 from telegram_bot.services.llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
 from telegram_bot.services.query_router import (
@@ -16,6 +15,13 @@ from telegram_bot.services.query_router import (
     get_off_topic_response,
     is_off_topic,
 )
+
+
+def _mock_completion(content: str) -> MagicMock:
+    """Helper: create a mock ChatCompletion response."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content=content))]
+    return mock_response
 
 
 class TestConfidenceResult:
@@ -71,83 +77,90 @@ class TestConfidenceScoring:
             }
         ]
 
-    async def test_generate_answer_with_confidence(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_generate_answer_with_confidence(self, sample_chunks):
         """Test generate_answer returns ConfidenceResult when with_confidence=True."""
         response_json = json.dumps({"answer": "Found an apartment", "confidence": 0.85})
-        httpx_mock.add_response(json={"choices": [{"message": {"content": response_json}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(response_json)
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer(
-                "Find apartments", sample_chunks, with_confidence=True
-            )
+        result = await service.generate_answer(
+            "Find apartments", sample_chunks, with_confidence=True
+        )
 
         assert isinstance(result, ConfidenceResult)
         assert result.answer == "Found an apartment"
         assert result.confidence == 0.85
         assert result.is_low_confidence is False
 
-    async def test_generate_answer_without_confidence(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_generate_answer_without_confidence(self, sample_chunks):
         """Test generate_answer returns string when with_confidence=False."""
-        httpx_mock.add_response(json={"choices": [{"message": {"content": "Plain answer"}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Plain answer")
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer(
-                "Find apartments", sample_chunks, with_confidence=False
-            )
+        result = await service.generate_answer(
+            "Find apartments", sample_chunks, with_confidence=False
+        )
 
         assert isinstance(result, str)
         assert result == "Plain answer"
 
-    async def test_low_confidence_detection(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_low_confidence_detection(self, sample_chunks):
         """Test is_low_confidence is True when confidence < threshold."""
         response_json = json.dumps({"answer": "Uncertain answer", "confidence": 0.2})
-        httpx_mock.add_response(json={"choices": [{"message": {"content": response_json}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(response_json)
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
+        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
         assert result.is_low_confidence is True
         assert result.confidence < LOW_CONFIDENCE_THRESHOLD
 
-    async def test_confidence_parsing_from_markdown_json(
-        self, httpx_mock: HTTPXMock, sample_chunks
-    ):
+    async def test_confidence_parsing_from_markdown_json(self, sample_chunks):
         """Test parsing confidence from JSON wrapped in markdown code blocks."""
         response = """```json
 {"answer": "Markdown wrapped", "confidence": 0.75}
 ```"""
-        httpx_mock.add_response(json={"choices": [{"message": {"content": response}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=_mock_completion(response))
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
+        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
         assert result.answer == "Markdown wrapped"
         assert result.confidence == 0.75
 
-    async def test_confidence_clamped_to_valid_range(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_confidence_clamped_to_valid_range(self, sample_chunks):
         """Test confidence values outside 0-1 are clamped."""
-        # Test value > 1
         response_json = json.dumps({"answer": "Test", "confidence": 1.5})
-        httpx_mock.add_response(json={"choices": [{"message": {"content": response_json}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(response_json)
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
+        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
         assert result.confidence == 1.0
 
-    async def test_negative_confidence_clamped(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_negative_confidence_clamped(self, sample_chunks):
         """Test negative confidence is clamped to 0."""
         response_json = json.dumps({"answer": "Test", "confidence": -0.5})
-        httpx_mock.add_response(json={"choices": [{"message": {"content": response_json}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(response_json)
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
+        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
         assert result.confidence == 0.0
 
@@ -159,37 +172,43 @@ class TestConfidenceParsingEdgeCases:
     def sample_chunks(self):
         return [{"text": "Test", "metadata": {}, "score": 0.9}]
 
-    async def test_malformed_json_returns_raw_response(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_malformed_json_returns_raw_response(self, sample_chunks):
         """Test malformed JSON returns raw response with default confidence."""
-        httpx_mock.add_response(json={"choices": [{"message": {"content": "Not JSON at all"}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Not JSON at all")
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
+        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
         assert result.answer == "Not JSON at all"
         assert result.confidence == 0.5  # Default on parse failure
 
-    async def test_missing_answer_field(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_missing_answer_field(self, sample_chunks):
         """Test missing answer field uses raw response."""
         response_json = json.dumps({"confidence": 0.8})
-        httpx_mock.add_response(json={"choices": [{"message": {"content": response_json}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(response_json)
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
+        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
         # Should use raw response as answer
         assert result.confidence == 0.8
 
-    async def test_missing_confidence_uses_default(self, httpx_mock: HTTPXMock, sample_chunks):
+    async def test_missing_confidence_uses_default(self, sample_chunks):
         """Test missing confidence field uses default value."""
         response_json = json.dumps({"answer": "Answer only"})
-        httpx_mock.add_response(json={"choices": [{"message": {"content": response_json}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(response_json)
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
+        result = await service.generate_answer("Query", sample_chunks, with_confidence=True)
 
         assert result.answer == "Answer only"
         assert result.confidence == 0.5  # Default when missing
@@ -323,20 +342,20 @@ class TestGuardrailsIntegration:
             }
         ]
 
-    async def test_high_confidence_answer_returned_as_is(
-        self, httpx_mock: HTTPXMock, sample_chunks
-    ):
+    async def test_high_confidence_answer_returned_as_is(self, sample_chunks):
         """Test high confidence answers are returned without modification."""
         response_json = json.dumps(
             {"answer": "Great apartment in Sofia for 45000€", "confidence": 0.9}
         )
-        httpx_mock.add_response(json={"choices": [{"message": {"content": response_json}}]})
+        service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion(response_json)
+        )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
-            result = await service.generate_answer(
-                "Find apartments in Sofia", sample_chunks, with_confidence=True
-            )
+        result = await service.generate_answer(
+            "Find apartments in Sofia", sample_chunks, with_confidence=True
+        )
 
         assert result.confidence >= LOW_CONFIDENCE_THRESHOLD
         assert result.is_low_confidence is False

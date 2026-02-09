@@ -1,11 +1,18 @@
 """Unit tests for telegram_bot/services/llm.py."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import httpx
+import openai
 import pytest
 
 from telegram_bot.services.llm import LLMService
+
+
+def _mock_completion(content: str) -> MagicMock:
+    """Helper: create a mock ChatCompletion response."""
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock(message=MagicMock(content=content))]
+    return mock_response
 
 
 class TestLLMServiceInit:
@@ -31,12 +38,14 @@ class TestLLMServiceInit:
         assert service.base_url == "https://custom.api.com/v1"  # Trailing slash removed
         assert service.model == "custom-model"
 
-    def test_init_creates_http_client(self):
-        """Test that HTTP client is created."""
+    def test_init_creates_openai_client(self):
+        """Test that AsyncOpenAI client is created."""
+        from openai import AsyncOpenAI
+
         service = LLMService(api_key="test-key")
 
         assert service.client is not None
-        assert isinstance(service.client, httpx.AsyncClient)
+        assert isinstance(service.client, AsyncOpenAI)
 
 
 class TestFormatContext:
@@ -170,81 +179,67 @@ class TestGenerateAnswer:
     async def test_generate_answer_success(self):
         """Test successful answer generation."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            return_value=_mock_completion("Generated answer")
+        )
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "Generated answer"}}]
-        }
-        mock_response.raise_for_status = MagicMock()
+        result = await service.generate_answer(
+            question="What apartments?",
+            context_chunks=[{"text": "Some context", "score": 0.9}],
+        )
 
-        with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
-
-            result = await service.generate_answer(
-                question="What apartments?",
-                context_chunks=[{"text": "Some context", "score": 0.9}],
-            )
-
-            assert result == "Generated answer"
+        assert result == "Generated answer"
 
     @pytest.mark.asyncio
     async def test_generate_answer_timeout(self):
         """Test timeout returns fallback."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            side_effect=openai.APITimeoutError(request=MagicMock())
+        )
 
-        with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.side_effect = httpx.TimeoutException("Timeout")
+        result = await service.generate_answer(
+            question="What apartments?",
+            context_chunks=[{"text": "Context", "metadata": {"title": "Apt"}}],
+        )
 
-            result = await service.generate_answer(
-                question="What apartments?",
-                context_chunks=[{"text": "Context", "metadata": {"title": "Apt"}}],
-            )
-
-            assert "⚠️" in result
-            assert "Apt" in result
+        assert "⚠️" in result
+        assert "Apt" in result
 
     @pytest.mark.asyncio
     async def test_generate_answer_http_error(self):
-        """Test HTTP error returns fallback."""
+        """Test API error returns fallback."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(
+            side_effect=openai.APIConnectionError(request=MagicMock())
+        )
 
-        mock_response = MagicMock()
-        mock_response.status_code = 500
+        result = await service.generate_answer(
+            question="What?",
+            context_chunks=[],
+        )
 
-        with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.side_effect = httpx.HTTPStatusError(
-                "Error", request=MagicMock(), response=mock_response
-            )
-
-            result = await service.generate_answer(
-                question="What?",
-                context_chunks=[],
-            )
-
-            assert "⚠️" in result
+        assert "⚠️" in result
 
     @pytest.mark.asyncio
     async def test_generate_answer_custom_system_prompt(self):
         """Test using custom system prompt."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=_mock_completion("Answer"))
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"choices": [{"message": {"content": "Answer"}}]}
-        mock_response.raise_for_status = MagicMock()
+        await service.generate_answer(
+            question="Q?",
+            context_chunks=[],
+            system_prompt="Custom prompt",
+        )
 
-        with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
-
-            await service.generate_answer(
-                question="Q?",
-                context_chunks=[],
-                system_prompt="Custom prompt",
-            )
-
-            # Verify the custom prompt was used
-            call_args = mock_post.call_args
-            json_data = call_args[1]["json"]
-            assert json_data["messages"][0]["content"] == "Custom prompt"
+        call_args = service.client.chat.completions.create.call_args
+        messages = call_args[1]["messages"]
+        assert messages[0]["content"] == "Custom prompt"
 
 
 class TestGenerate:
@@ -254,62 +249,46 @@ class TestGenerate:
     async def test_generate_success(self):
         """Test successful text generation."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=_mock_completion("Result"))
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"choices": [{"message": {"content": "Result"}}]}
-        mock_response.raise_for_status = MagicMock()
+        result = await service.generate("Test prompt")
 
-        with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
-
-            result = await service.generate("Test prompt")
-
-            assert result == "Result"
+        assert result == "Result"
 
     @pytest.mark.asyncio
     async def test_generate_uses_low_temperature(self):
         """Test that generate uses low temperature (0.3)."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=_mock_completion("Result"))
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"choices": [{"message": {"content": "Result"}}]}
-        mock_response.raise_for_status = MagicMock()
+        await service.generate("Prompt")
 
-        with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
-
-            await service.generate("Prompt")
-
-            json_data = mock_post.call_args[1]["json"]
-            assert json_data["temperature"] == 0.3
+        call_args = service.client.chat.completions.create.call_args
+        assert call_args[1]["temperature"] == 0.3
 
     @pytest.mark.asyncio
     async def test_generate_custom_max_tokens(self):
         """Test generate with custom max_tokens."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(return_value=_mock_completion("Result"))
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"choices": [{"message": {"content": "Result"}}]}
-        mock_response.raise_for_status = MagicMock()
+        await service.generate("Prompt", max_tokens=500)
 
-        with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
-
-            await service.generate("Prompt", max_tokens=500)
-
-            json_data = mock_post.call_args[1]["json"]
-            assert json_data["max_tokens"] == 500
+        call_args = service.client.chat.completions.create.call_args
+        assert call_args[1]["max_tokens"] == 500
 
     @pytest.mark.asyncio
     async def test_generate_raises_on_error(self):
         """Test that generate raises exceptions (doesn't use fallback)."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
+        service.client.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
 
-        with patch.object(service.client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.side_effect = Exception("API Error")
-
-            with pytest.raises(Exception, match="API Error"):
-                await service.generate("Prompt")
+        with pytest.raises(Exception, match="API Error"):
+            await service.generate("Prompt")
 
 
 class TestClose:
@@ -317,10 +296,22 @@ class TestClose:
 
     @pytest.mark.asyncio
     async def test_close_closes_client(self):
-        """Test that close() closes the HTTP client."""
+        """Test that close() closes the client."""
         service = LLMService(api_key="test-key")
+        service.client = AsyncMock()
 
-        with patch.object(service.client, "aclose", new_callable=AsyncMock) as mock_close:
-            await service.close()
+        await service.close()
 
-            mock_close.assert_called_once()
+        service.client.close.assert_called_once()
+
+
+class TestOpenAISDKMigration:
+    """Test that LLMService uses OpenAI SDK instead of raw httpx."""
+
+    def test_uses_openai_sdk_not_httpx(self):
+        """Verify LLMService uses openai.AsyncOpenAI, not raw httpx."""
+        from openai import AsyncOpenAI
+
+        service = LLMService(api_key="test-key", base_url="http://fake:4000")
+        assert hasattr(service, "client")
+        assert isinstance(service.client, AsyncOpenAI)
