@@ -4,5 +4,7 @@ kind: Kustomization
 resources:
   - ../../base/
 
-commonLabels:
-  profile: full
+labels:
+  - pairs:
+      profile: full
+    includeSelectors: false

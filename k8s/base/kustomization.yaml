@@ -32,5 +32,7 @@ resources:
   - bot/deployment.yaml
   - ingestion/deployment.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: rag-fresh
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: rag-fresh
+    includeSelectors: false

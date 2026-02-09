@@ -27,6 +27,8 @@ resources:
   - ../../base/litellm/service.yaml
   - ../../base/bot/deployment.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: rag-fresh
-  profile: bot
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: rag-fresh
+      profile: bot
+    includeSelectors: false
