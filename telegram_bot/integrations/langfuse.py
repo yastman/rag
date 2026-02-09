@@ -27,7 +27,7 @@ def create_langfuse_handler(
     try:
         from langfuse.langchain import CallbackHandler
 
-        return CallbackHandler(
+        return CallbackHandler(  # type: ignore[call-arg]
             session_id=session_id,
             user_id=user_id,
             tags=tags or ["telegram", "rag", "langgraph"],
