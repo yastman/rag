@@ -112,7 +112,7 @@ RUN_INTEGRATION_TESTS=1 pytest tests/integration/test_unified_ingestion_e2e.py -
 | Error | Fix |
 |-------|-----|
 | Docling returns 0 chunks | Don't set `tokenizer="word"`, use `None` |
-| Voyage 429 | Use CacheService or reduce batch size |
+| Voyage 429 | Use CacheLayerManager or reduce batch size |
 | `Event loop is closed` | StateManager resets pool between sync calls |
 | `asyncio.run()` nested | Use `*_sync()` methods in mutate() |
 | Missing payload fields | Check `test_payload_contract.py` |
