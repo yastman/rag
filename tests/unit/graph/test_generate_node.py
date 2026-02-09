@@ -9,6 +9,25 @@ import pytest
 from telegram_bot.graph.state import make_initial_state
 
 
+def _make_mock_config(llm_answer: str = "Ответ.") -> tuple[MagicMock, MagicMock]:
+    """Create mock GraphConfig + AsyncOpenAI client for generate_node tests."""
+    mock_choice = MagicMock()
+    mock_choice.message.content = llm_answer
+    mock_response = MagicMock(choices=[mock_choice])
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    mock_config = MagicMock()
+    mock_config.domain = "недвижимость"
+    mock_config.llm_model = "gpt-4o-mini"
+    mock_config.llm_temperature = 0.7
+    mock_config.llm_max_tokens = 4096
+    mock_config.create_llm.return_value = mock_client
+
+    return mock_config, mock_client
+
+
 def _make_state_with_docs(
     query: str = "Какие квартиры в Несебре?",
     documents: list | None = None,
@@ -42,27 +61,25 @@ class TestGenerateNode:
         """generate_node calls LLM with formatted context and returns response."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        mock_llm = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = "В Несебре есть квартира за 65000€ и студия за 35000€."
-        mock_llm.ainvoke.return_value = mock_response
-
+        mock_config, mock_client = _make_mock_config(
+            "В Несебре есть квартира за 65000€ и студия за 35000€."
+        )
         state = _make_state_with_docs()
 
         with patch(
-            "telegram_bot.graph.nodes.generate._get_llm",
-            return_value=mock_llm,
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
         ):
             result = await generate_node(state)
 
         assert result["response"] == "В Несебре есть квартира за 65000€ и студия за 35000€."
         assert "generate" in result["latency_stages"]
-        mock_llm.ainvoke.assert_called_once()
+        mock_client.chat.completions.create.assert_called_once()
 
         # Verify prompt contains context from docs
-        call_args = mock_llm.ainvoke.call_args[0][0]
-        # call_args is a list of messages
-        messages_text = " ".join(str(m) for m in call_args)
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        messages_text = " ".join(m["content"] for m in messages)
         assert "Несебр" in messages_text
 
     @pytest.mark.asyncio
@@ -70,10 +87,7 @@ class TestGenerateNode:
         """generate_node includes conversation history in the prompt."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        mock_llm = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = "Ответ с учётом контекста разговора."
-        mock_llm.ainvoke.return_value = mock_response
+        mock_config, mock_client = _make_mock_config("Ответ с учётом контекста разговора.")
 
         history = [
             {"role": "user", "content": "Привет"},
@@ -85,15 +99,16 @@ class TestGenerateNode:
         )
 
         with patch(
-            "telegram_bot.graph.nodes.generate._get_llm",
-            return_value=mock_llm,
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
         ):
             result = await generate_node(state)
 
         assert result["response"] == "Ответ с учётом контекста разговора."
         # Verify conversation history is included in messages
-        call_args = mock_llm.ainvoke.call_args[0][0]
-        messages_text = " ".join(str(m) for m in call_args)
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        messages_text = " ".join(m["content"] for m in messages)
         assert "Привет" in messages_text
         assert "Здравствуйте" in messages_text
 
@@ -102,14 +117,14 @@ class TestGenerateNode:
         """generate_node returns fallback response when LLM fails."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        mock_llm = AsyncMock()
-        mock_llm.ainvoke.side_effect = Exception("LLM unavailable")
+        mock_config, mock_client = _make_mock_config()
+        mock_client.chat.completions.create = AsyncMock(side_effect=Exception("LLM unavailable"))
 
         state = _make_state_with_docs()
 
         with patch(
-            "telegram_bot.graph.nodes.generate._get_llm",
-            return_value=mock_llm,
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
         ):
             result = await generate_node(state)
 
@@ -123,37 +138,27 @@ class TestGenerateNode:
         """generate_node builds system prompt with domain from config."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        mock_llm = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = "Ответ."
-        mock_llm.ainvoke.return_value = mock_response
-
+        mock_config, mock_client = _make_mock_config()
         state = _make_state_with_docs()
 
         with patch(
-            "telegram_bot.graph.nodes.generate._get_llm",
-            return_value=mock_llm,
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
         ):
-            with patch(
-                "telegram_bot.graph.nodes.generate._get_domain",
-                return_value="недвижимость",
-            ):
-                await generate_node(state)
+            await generate_node(state)
 
         # System prompt should contain domain
-        call_args = mock_llm.ainvoke.call_args[0][0]
-        system_msg = call_args[0]
-        assert "недвижимость" in str(system_msg)
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        system_msg = messages[0]
+        assert "недвижимость" in system_msg["content"]
 
     @pytest.mark.asyncio
     async def test_limits_to_top_5_docs(self) -> None:
         """generate_node formats only top-5 documents for context."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        mock_llm = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = "Ответ."
-        mock_llm.ainvoke.return_value = mock_response
+        mock_config, mock_client = _make_mock_config()
 
         docs = [
             {"text": f"Doc {i}", "score": 1.0 - i * 0.1, "metadata": {"title": f"Doc {i}"}}
@@ -162,14 +167,15 @@ class TestGenerateNode:
         state = _make_state_with_docs(documents=docs)
 
         with patch(
-            "telegram_bot.graph.nodes.generate._get_llm",
-            return_value=mock_llm,
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
         ):
             await generate_node(state)
 
         # Check that context has at most 5 documents
-        call_args = mock_llm.ainvoke.call_args[0][0]
-        messages_text = " ".join(str(m) for m in call_args)
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        messages_text = " ".join(m["content"] for m in messages)
         assert "Doc 0" in messages_text
         assert "Doc 4" in messages_text
         assert "Doc 5" not in messages_text
@@ -179,16 +185,12 @@ class TestGenerateNode:
         """generate_node handles empty documents gracefully."""
         from telegram_bot.graph.nodes.generate import generate_node
 
-        mock_llm = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = "К сожалению, информации не найдено."
-        mock_llm.ainvoke.return_value = mock_response
-
+        mock_config, _mock_client = _make_mock_config("К сожалению, информации не найдено.")
         state = _make_state_with_docs(documents=[])
 
         with patch(
-            "telegram_bot.graph.nodes.generate._get_llm",
-            return_value=mock_llm,
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
         ):
             result = await generate_node(state)
 
