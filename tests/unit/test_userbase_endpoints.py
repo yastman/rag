@@ -6,7 +6,7 @@ Uses httpx.AsyncClient + ASGITransport for async endpoint testing.
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -66,6 +66,12 @@ class TestHealthEndpoint:
         assert "status" in data
         assert "model" in data
         assert "dimension" in data
+        assert "backend" in data
+
+    async def test_health_backend_default_is_pytorch(self, client: httpx.AsyncClient):
+        resp = await client.get("/health")
+        data = resp.json()
+        assert data["backend"] == "pytorch"
 
     async def test_health_dimension_is_768(self, client: httpx.AsyncClient):
         resp = await client.get("/health")
@@ -124,3 +130,51 @@ class TestEmbedBatchEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["embeddings"] == [] or isinstance(data["embeddings"], list)
+
+
+class TestLoadModelBackend:
+    """Tests for _load_model backend selection and fallback."""
+
+    def test_default_backend_is_pytorch(self):
+        """Default EMBEDDING_BACKEND loads pytorch."""
+        with patch.object(userbase_main, "EMBEDDING_BACKEND", "pytorch"):
+            model = userbase_main._load_model()
+            assert userbase_main._active_backend == "pytorch"
+            assert model is _mock_model_instance
+
+    def test_onnx_backend_falls_back_on_import_error(self):
+        """ONNX backend falls back to pytorch when onnxruntime not installed."""
+        with (
+            patch.object(userbase_main, "EMBEDDING_BACKEND", "onnx"),
+            patch.dict(sys.modules, {"onnxruntime": None}),
+        ):
+            model = userbase_main._load_model()
+            assert userbase_main._active_backend == "pytorch"
+            assert model is _mock_model_instance
+
+    def test_onnx_backend_loads_when_available(self):
+        """ONNX backend used when onnxruntime is importable."""
+        mock_ort = MagicMock()
+        with (
+            patch.object(userbase_main, "EMBEDDING_BACKEND", "onnx"),
+            patch.dict(sys.modules, {"onnxruntime": mock_ort}),
+        ):
+            userbase_main._load_model()
+            assert userbase_main._active_backend == "onnx"
+            _mock_st_class.assert_called_with("deepvk/USER2-base", backend="onnx")
+
+    def test_onnx_backend_falls_back_on_exception(self):
+        """ONNX backend falls back to pytorch on any SentenceTransformer error."""
+        mock_ort = MagicMock()
+        _mock_st_class.side_effect = [RuntimeError("ONNX export failed"), _mock_model_instance]
+        try:
+            with (
+                patch.object(userbase_main, "EMBEDDING_BACKEND", "onnx"),
+                patch.dict(sys.modules, {"onnxruntime": mock_ort}),
+            ):
+                model = userbase_main._load_model()
+                assert userbase_main._active_backend == "pytorch"
+                assert model is _mock_model_instance
+        finally:
+            _mock_st_class.side_effect = None
+            _mock_st_class.return_value = _mock_model_instance
