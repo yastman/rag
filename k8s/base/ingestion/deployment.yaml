@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestion
+spec:
+  replicas: 0  # Scale up manually: kubectl scale deployment ingestion -n rag --replicas=1
+  selector:
+    matchLabels:
+      app: ingestion
+  template:
+    metadata:
+      labels:
+        app: ingestion
+    spec:
+      terminationGracePeriodSeconds: 30
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z postgres 5432; do echo "waiting for postgres..."; sleep 3; done']
+        - name: wait-for-qdrant
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z qdrant 6333; do echo "waiting for qdrant..."; sleep 3; done']
+        - name: wait-for-docling
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z docling 5001; do echo "waiting for docling..."; sleep 5; done']
+        - name: wait-for-bge-m3
+          image: busybox:1.37
+          command: ['sh', '-c', 'until nc -z bge-m3 8000; do echo "waiting for bge-m3..."; sleep 5; done']
+      containers:
+        - name: ingestion
+          image: rag/ingestion:latest
+          imagePullPolicy: Never
+          env:
+            - name: GDRIVE_SYNC_DIR
+              value: /data/drive-sync
+            - name: INGESTION_DATABASE_URL
+              value: postgresql://postgres:postgres@postgres:5432/cocoindex
+            - name: QDRANT_URL
+              value: http://qdrant:6333
+            - name: DOCLING_URL
+              value: http://docling:5001
+            - name: GDRIVE_COLLECTION_NAME
+              value: gdrive_documents_bge
+            - name: USE_LOCAL_DENSE_EMBEDDINGS
+              value: "true"
+            - name: BGE_M3_URL
+              value: http://bge-m3:8000
+            - name: BGE_M3_TIMEOUT
+              value: "600"
+            - name: BGE_M3_CONCURRENCY
+              value: "1"
+          volumeMounts:
+            - name: drive-sync
+              mountPath: /data/drive-sync
+              readOnly: true
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 50m
+            limits:
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command: ["pgrep", "-f", "src.ingestion"]
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+            initialDelaySeconds: 60
+      volumes:
+        - name: drive-sync
+          hostPath:
+            path: /srv/drive-sync
+            type: Directory
