@@ -29,12 +29,11 @@ Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
 | File | Description |
 |------|-------------|
 | `src/retrieval/search_engines.py` | BaseSearchEngine ABC + variants |
-| `telegram_bot/services/qdrant.py` | QdrantService (async, Qdrant SDK) |
+| `telegram_bot/services/qdrant.py` | QdrantService (async, gRPC, batch, group_by) |
 | `telegram_bot/graph/nodes/retrieve.py` | LangGraph retrieve_node (hybrid RRF + cache) |
 | `telegram_bot/graph/nodes/grade.py` | Score-based relevance grading (threshold 0.3) |
 | `telegram_bot/graph/nodes/rerank.py` | Optional ColBERT + score-sort fallback, top-5 |
 | `telegram_bot/graph/nodes/rewrite.py` | LLM query reformulation, max 2 retries |
-| `telegram_bot/services/retriever.py` | RetrieverService (sync, legacy) |
 
 ***REMOVED******REMOVED*** LangGraph retrieve_node
 
@@ -60,7 +59,7 @@ ColBERT reranking if reranker provided, else score-sort fallback (top-5).
 
 ***REMOVED******REMOVED******REMOVED*** rewrite_node
 
-LLM reformulation via ChatLiteLLM. Increments `rewrite_count`, resets embeddings for re-retrieval. Max 2 retries before fallback to generate.
+LLM reformulation via OpenAI SDK (`GraphConfig.create_llm()`). Increments `rewrite_count`, resets embeddings for re-retrieval. Max 2 retries before fallback to generate.
 
 ***REMOVED******REMOVED*** Search Engine Variants
 
@@ -77,6 +76,7 @@ LLM reformulation via ChatLiteLLM. Increments `rewrite_count`, resets embeddings
 |-----------|---------|-------------|
 | `dense_weight` | 0.6 | RRF weight for dense vectors |
 | `sparse_weight` | 0.4 | RRF weight for sparse vectors |
+| `rrf_k` | 60 | RRF constant (configurable) |
 | `prefetch_multiplier` | 3 | Overfetch ratio for RRF |
 | `quantization_mode` | binary | off/scalar/binary (32x compression) |
 | `quantization_rescore` | true | Rescore with full vectors |
@@ -98,12 +98,38 @@ LLM reformulation via ChatLiteLLM. Increments `rewrite_count`, resets embeddings
 ```python
 from telegram_bot.services.qdrant import QdrantService
 
+***REMOVED*** Uses prefer_grpc=True for faster gRPC connections
 qdrant = QdrantService(url="http://localhost:6333", collection_name="gdrive_documents_bge")
 
 results = await qdrant.hybrid_search_rrf(
     dense_vector=query_embedding,
     sparse_vector=sparse_embedding,
     filters={"city": "Несебр"},
+    top_k=20,
+)
+```
+
+***REMOVED******REMOVED******REMOVED*** Batch search (multi-query, single round-trip)
+
+```python
+***REMOVED*** batch_search_rrf — sends multiple queries via query_batch_points()
+results = await qdrant.batch_search_rrf(
+    queries=[
+        {"dense_vector": emb1, "sparse_vector": sp1},
+        {"dense_vector": emb2, "sparse_vector": sp2},
+    ],
+    top_k=20,
+)
+***REMOVED*** Deduplicates results by point ID
+```
+
+***REMOVED******REMOVED******REMOVED*** Group-by for diverse results
+
+```python
+***REMOVED*** Uses query_points_groups() for diversity within search results
+results = await qdrant.hybrid_search_rrf(
+    dense_vector=emb, sparse_vector=sparse,
+    group_by="doc_id", group_size=2,
     top_k=20,
 )
 ```
@@ -177,6 +203,8 @@ result = await graph.ainvoke(initial_state, config={"callbacks": [langfuse_handl
 ***REMOVED******REMOVED*** Dependencies
 
 - Container: `dev-qdrant` / `vps-qdrant` (6333, 6334 gRPC)
+- Client: `AsyncQdrantClient(prefer_grpc=True)` — uses gRPC for faster queries
+- Dep: `grpcio` (required for gRPC transport)
 - Collections: `gdrive_documents_bge` (VPS), `contextual_bulgaria_voyage` (dev), `legal_documents` (dev)
 
 ***REMOVED******REMOVED*** Testing
