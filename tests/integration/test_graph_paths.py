@@ -133,6 +133,7 @@ def _make_mock_graph_config(llm_mock: MagicMock) -> MagicMock:
     gc.rewrite_model = "test-model"
     gc.rewrite_max_tokens = 64
     gc.skip_rerank_threshold = 0.95
+    gc.relevance_threshold_rrf = 0.005
     gc.streaming_enabled = False
     gc.create_llm.return_value = llm_mock
     return gc
@@ -299,7 +300,7 @@ async def test_path_happy_retrieve_rerank_generate():
 async def test_path_rewrite_loop_then_success():
     """Irrelevant docs trigger rewrite, second retrieve finds relevant docs."""
     irrelevant_docs = [
-        {"text": "Нерелевантный текст", "score": 0.1, "id": "x1", "metadata": {}},
+        {"text": "Нерелевантный текст", "score": 0.003, "id": "x1", "metadata": {}},
     ]
     relevant_docs = [
         {
@@ -369,7 +370,7 @@ async def test_path_rewrite_loop_then_success():
 async def test_path_rewrite_exhausted_fallback():
     """When rewrite_count >= 2, skip rewrite and go straight to generate."""
     irrelevant_docs = [
-        {"text": "Не очень релевантный текст", "score": 0.15, "id": "z1", "metadata": {}},
+        {"text": "Не очень релевантный текст", "score": 0.003, "id": "z1", "metadata": {}},
     ]
     mocks = _make_graph_mocks(
         qdrant_results=irrelevant_docs,
@@ -418,7 +419,7 @@ async def test_path_rewrite_exhausted_fallback():
 async def test_path_rewrite_ineffective_fallback():
     """When rewrite_effective=False (even with retries left), skip rewrite → generate."""
     irrelevant_docs = [
-        {"text": "Не очень релевантный текст", "score": 0.15, "id": "z1", "metadata": {}},
+        {"text": "Не очень релевантный текст", "score": 0.003, "id": "z1", "metadata": {}},
     ]
     mocks = _make_graph_mocks(
         qdrant_results=irrelevant_docs,
