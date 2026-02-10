@@ -57,8 +57,8 @@ class TestValidationQueries:
 
     def test_cache_hit_queries_mix(self):
         cold = get_queries_for_collection("legal_documents")
-        cache = get_cache_hit_queries(cold, count=5)
-        assert len(cache) <= 5
+        cache = get_cache_hit_queries(cold, count=10)
+        assert len(cache) <= 10
         # All cache queries should be from cold set
         for q in cache:
             assert q in cold
