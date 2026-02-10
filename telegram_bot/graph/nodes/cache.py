@@ -10,6 +10,7 @@ import logging
 import time
 from typing import Any
 
+from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
 from telegram_bot.observability import observe
 
 
@@ -46,7 +47,7 @@ async def cache_check_node(
     embedding = await cache.get_embedding(query)
     embeddings_cache_hit = embedding is not None
     if embedding is None:
-        if hasattr(embeddings, "aembed_hybrid"):
+        if isinstance(embeddings, BGEM3HybridEmbeddings):
             # Hybrid: get both dense + sparse in one call, cache both
             embedding, sparse = await embeddings.aembed_hybrid(query)
             await cache.store_embedding(query, embedding)
