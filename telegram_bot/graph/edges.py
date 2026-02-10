@@ -33,9 +33,9 @@ def route_cache(
 def route_grade(
     state: dict[str, Any],
 ) -> Literal["rerank", "rewrite", "generate"]:
-    """Route after grading: relevant → rerank, not relevant + retries < 2 → rewrite, else → generate."""
+    """Route after grading: relevant → rerank, not relevant + retries < 2 + effective → rewrite, else → generate."""
     if state.get("documents_relevant", False):
         return "rerank"
-    if state.get("rewrite_count", 0) < 2:
+    if state.get("rewrite_count", 0) < 2 and state.get("rewrite_effective", True):
         return "rewrite"
     return "generate"

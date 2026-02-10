@@ -212,3 +212,42 @@ class TestRewriteNode:
 
         result = await rewrite_node(state, llm=mock_llm)
         assert result["rewrite_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_rewrite_empty_content_sets_ineffective(self):
+        """When LLM returns empty content, rewrite_effective=False."""
+        from telegram_bot.graph.nodes.rewrite import rewrite_node
+
+        mock_llm = _make_mock_llm("")  # empty content after strip
+
+        state = make_initial_state(user_id=1, session_id="s", query="тест")
+        result = await rewrite_node(state, llm=mock_llm)
+
+        assert result["rewrite_effective"] is False
+        assert result["rewrite_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_rewrite_same_text_sets_ineffective(self):
+        """When LLM returns the same text as original, rewrite_effective=False."""
+        from telegram_bot.graph.nodes.rewrite import rewrite_node
+
+        mock_llm = _make_mock_llm("тест")  # same as original query
+
+        state = make_initial_state(user_id=1, session_id="s", query="тест")
+        result = await rewrite_node(state, llm=mock_llm)
+
+        assert result["rewrite_effective"] is False
+        assert result["rewrite_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_rewrite_with_content_sets_effective(self):
+        """When LLM returns valid content, rewrite_effective=True."""
+        from telegram_bot.graph.nodes.rewrite import rewrite_node
+
+        mock_llm = _make_mock_llm("переформулированный запрос")
+
+        state = make_initial_state(user_id=1, session_id="s", query="тест")
+        result = await rewrite_node(state, llm=mock_llm)
+
+        assert result["rewrite_effective"] is True
+        assert result["rewrite_count"] == 1

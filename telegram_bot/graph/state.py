@@ -24,6 +24,7 @@ class RAGState(TypedDict):
     documents: list[dict[str, Any]]
     documents_relevant: bool
     rewrite_count: int
+    rewrite_effective: bool
     response: str
     latency_stages: dict[str, float]
     search_results_count: int
@@ -44,6 +45,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "documents": [],
         "documents_relevant": False,
         "rewrite_count": 0,
+        "rewrite_effective": True,
         "response": "",
         "latency_stages": {},
         "search_results_count": 0,
