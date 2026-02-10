@@ -21,6 +21,7 @@ DEFAULT_CACHE_TTL = 300
 _langfuse_client: Any | None = None
 _langfuse_init_attempted: bool = False
 _missing_prompts_until: dict[str, float] = {}
+_known_prompts_until: dict[str, float] = {}
 
 
 def _get_langfuse_client() -> Any | None:
@@ -76,6 +77,19 @@ def get_prompt(
     if _is_temporarily_missing(name):
         return _apply_fallback_vars(fallback, vars_)
 
+    if not _is_temporarily_known(name):
+        available = _probe_prompt_available(client, name)
+        if available is False:
+            _missing_prompts_until[name] = time.monotonic() + cache_ttl
+            logger.debug(
+                "Prompt '%s' not found in Langfuse API, using fallback for %ds",
+                name,
+                cache_ttl,
+            )
+            return _apply_fallback_vars(fallback, vars_)
+        if available is True:
+            _known_prompts_until[name] = time.monotonic() + cache_ttl
+
     try:
         # Do not pass fallback to SDK: for missing prompts SDK logs noisy warnings on each call.
         # We handle fallback ourselves and cache "not found" locally.
@@ -88,7 +102,7 @@ def get_prompt(
         if _is_prompt_not_found(e):
             # Avoid hitting Langfuse on every request when prompt/label is absent.
             _missing_prompts_until[name] = time.monotonic() + cache_ttl
-            logger.warning(
+            logger.debug(
                 "Prompt '%s' not found in Langfuse, using fallback for %ds",
                 name,
                 cache_ttl,
@@ -127,9 +141,47 @@ def _is_temporarily_missing(name: str) -> bool:
     return False
 
 
+def _is_temporarily_known(name: str) -> bool:
+    """True when prompt is in local known-available TTL window."""
+    until = _known_prompts_until.get(name)
+    if until is None:
+        return False
+    if until > time.monotonic():
+        return True
+    _known_prompts_until.pop(name, None)
+    return False
+
+
+def _probe_prompt_available(client: Any, name: str) -> bool | None:
+    """Probe prompt existence via Langfuse API without triggering SDK warning logs.
+
+    Returns:
+        True: prompt exists for target label
+        False: prompt not found (404)
+        None: probing unavailable/failed, caller may proceed with optimistic fetch
+    """
+    api = getattr(client, "api", None)
+    if api is None or not hasattr(api, "prompts"):
+        return None
+
+    label = os.getenv("LANGFUSE_PROMPT_LABEL", "production")
+
+    try:
+        api.prompts.get(prompt_name=name, label=label)
+        return True
+    except Exception as e:
+        # Avoid hard dependency on specific SDK exception type at import time.
+        status = getattr(e, "status_code", None)
+        if status == 404 or _is_prompt_not_found(e):
+            return False
+        logger.debug("Prompt availability probe failed for '%s': %s", name, e)
+        return None
+
+
 def _reset_client() -> None:
     """Reset the Langfuse client singleton (for testing)."""
     global _langfuse_client, _langfuse_init_attempted
     _langfuse_client = None
     _langfuse_init_attempted = False
     _missing_prompts_until.clear()
+    _known_prompts_until.clear()
