@@ -756,6 +756,25 @@ qdrant-backup: ## Create Qdrant collection snapshots (all collections)
 	@echo "$(GREEN)✓ Qdrant backup complete$(NC)"
 
 # =============================================================================
+# TRACE VALIDATION (#110)
+# =============================================================================
+
+.PHONY: validate-traces validate-traces-fast
+
+validate-traces: ## Full rebuild + trace validation + report
+	@echo "$(BLUE)Full rebuild + validation...$(NC)"
+	$(COMPOSE_CMD) build --no-cache telegram-bot litellm bge-m3
+	$(COMPOSE_CMD) --profile core --profile bot --profile ml up -d --wait
+	uv run python scripts/validate_traces.py --report
+	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
+
+validate-traces-fast: ## No rebuild, just start stack + trace validation + report
+	@echo "$(BLUE)Fast validation (no rebuild)...$(NC)"
+	$(COMPOSE_CMD) --profile core --profile bot --profile ml up -d --wait
+	uv run python scripts/validate_traces.py --report
+	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
+
+# =============================================================================
 # K3S DEPLOYMENT
 # =============================================================================
 
