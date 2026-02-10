@@ -309,12 +309,34 @@ async def run_single_query(
 
 
 async def _flush_redis_caches(cache: Any) -> None:
-    """Flush all Redis caches to ensure true cold run."""
-    if hasattr(cache, "redis") and cache.redis:
-        await cache.redis.flushdb()
-        logger.info("  Redis FLUSHDB complete — all caches cleared")
-    else:
+    """Clear cache keys for cold run without dropping RediSearch index."""
+    if not hasattr(cache, "redis") or not cache.redis:
         logger.warning("  Redis not available — cannot flush caches, cold run may be warm")
+        return
+
+    deleted = 0
+    patterns = [
+        "embeddings:v3:*",
+        "sparse:v3:*",
+        "analysis:v3:*",
+        "search:v3:*",
+        "rerank:v3:*",
+        "conversation:*",
+    ]
+    for pattern in patterns:
+        keys = [k async for k in cache.redis.scan_iter(match=pattern)]  # type: ignore[misc]
+        if keys:
+            deleted += len(keys)
+            await cache.redis.delete(*keys)  # type: ignore[misc]
+
+    # Semantic cache has its own key namespace and index lifecycle.
+    if hasattr(cache, "semantic_cache") and cache.semantic_cache:
+        try:
+            await cache.semantic_cache.aclear()
+        except Exception as e:
+            logger.warning("  Semantic cache clear failed: %s", e)
+
+    logger.info("  Redis cache key clear complete — deleted %d keys", deleted)
 
 
 async def run_collection_validation(
