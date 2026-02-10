@@ -476,6 +476,30 @@ class TestWriteLangfuseScores:
         }
         assert calls["latency_total_ms"] == 0.0
 
+    def test_real_scores_from_state(self):
+        """Hardcoded scores should now use real state values."""
+        from telegram_bot.bot import _write_langfuse_scores
+
+        mock_lf = MagicMock()
+        result = {
+            "query_type": "FAQ",
+            "cache_hit": False,
+            "search_results_count": 20,
+            "rerank_applied": True,
+            "latency_stages": {"generate": 1.0},
+            "pipeline_wall_ms": 5000.0,
+            "embeddings_cache_hit": True,
+            "search_cache_hit": False,
+            "grade_confidence": 0.016,
+        }
+        _write_langfuse_scores(mock_lf, result)
+        calls = {
+            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
+        }
+        assert calls["embeddings_cache_hit"] == 1.0
+        assert calls["search_cache_hit"] == 0.0
+        assert calls["confidence_score"] == 0.016
+
 
 class TestMakeSessionId:
     """Test make_session_id utility function."""
