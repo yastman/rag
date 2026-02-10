@@ -24,7 +24,7 @@ os.environ.setdefault("OTEL_LOGS_EXPORTER", "none")
 
 # Disable Langfuse completely (belt and suspenders)
 os.environ.setdefault("LANGFUSE_ENABLED", "false")
-os.environ.setdefault("LANGFUSE_HOST", "")
+os.environ.setdefault("LANGFUSE_HOST", "http://localhost:3001")
 
 # Load environment variables before any imports
 load_dotenv()
