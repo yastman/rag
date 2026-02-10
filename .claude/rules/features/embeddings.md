@@ -24,15 +24,16 @@ Dev:
   Cache:  USER-base (768-dim)
 
 LangGraph Pipeline (via integrations/embeddings.py):
-  BGEM3Embeddings (dense, LangChain Embeddings)
-  BGEM3SparseEmbeddings (sparse, custom wrapper)
+  BGEM3HybridEmbeddings (dense+sparse in 1 call, shared httpx.AsyncClient)
+  BGEM3Embeddings (dense only, LangChain Embeddings) — legacy
+  BGEM3SparseEmbeddings (sparse only, custom wrapper) — legacy
 ```
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `telegram_bot/integrations/embeddings.py` | BGEM3Embeddings + BGEM3SparseEmbeddings (LangChain-compatible) |
+| `telegram_bot/integrations/embeddings.py` | BGEM3HybridEmbeddings (preferred) + legacy BGEM3Embeddings/BGEM3SparseEmbeddings |
 | `telegram_bot/services/voyage.py` | VoyageService class |
 | `telegram_bot/services/vectorizers.py` | UserBaseVectorizer + BgeM3CacheVectorizer |
 | `telegram_bot/services/colbert_reranker.py` | ColbertRerankerService |
@@ -41,7 +42,22 @@ LangGraph Pipeline (via integrations/embeddings.py):
 
 ## LangChain Wrappers (LangGraph integration)
 
-### BGEM3Embeddings (dense)
+### BGEM3HybridEmbeddings (preferred — single API call)
+
+```python
+from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
+
+emb = BGEM3HybridEmbeddings(base_url="http://bge-m3:8000", timeout=120.0)
+# Shared httpx.AsyncClient with connection pooling (reused across calls)
+
+# Returns (dense, sparse) tuple in one /encode/hybrid call
+dense, sparse = await emb.aembed_hybrid("search text")    # (list[float], dict)
+
+# Also works as LangChain Embeddings (dense only)
+vector = await emb.aembed_query("search text")             # list[float], 1024-dim
+```
+
+### BGEM3Embeddings (dense) — legacy, use BGEM3HybridEmbeddings instead
 
 ```python
 from telegram_bot.integrations.embeddings import BGEM3Embeddings
@@ -58,7 +74,7 @@ vector = emb.embed_query("search text")
 
 Wraps BGE-M3 `/encode/dense` endpoint (fixed from legacy `/encode`). Batching via `batch_size=32`.
 
-### BGEM3SparseEmbeddings (sparse)
+### BGEM3SparseEmbeddings (sparse) — legacy, use BGEM3HybridEmbeddings instead
 
 ```python
 from telegram_bot.integrations.embeddings import BGEM3SparseEmbeddings
@@ -88,7 +104,7 @@ Wraps BGE-M3 `/encode/sparse` endpoint (fixed from legacy `/encode`). Returns `l
 |----------|---------|---------|
 | `/encode/dense` | `dense_vecs` | BGEM3Embeddings |
 | `/encode/sparse` | `lexical_weights` | BGEM3SparseEmbeddings |
-| `/encode/hybrid` | all three | Direct API calls |
+| `/encode/hybrid` | `dense_vecs` + `lexical_weights` | BGEM3HybridEmbeddings (preferred) |
 | `/rerank` | ColBERT scores | ColbertRerankerService |
 
 ## Dependencies

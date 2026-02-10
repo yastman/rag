@@ -37,7 +37,7 @@ make ingest-unified-status # Show ingestion stats from Postgres
 ```
 Ingestion: Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
 Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
-           → retrieve (RRF) → grade → rerank (ColBERT) → generate → respond
+           → retrieve (RRF, hybrid embed 1-call) → grade → rerank (ColBERT) → generate → respond
 ```
 
 | Module | Purpose |
@@ -107,7 +107,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
 | `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `RELEVANCE_THRESHOLD_RRF=0.005`
 
 ## Deployment
 
@@ -179,7 +179,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/query-processing.md` | HyDE, preprocessing, routing | `**/query*.py` |
 | `features/evaluation.md` | RAGAS, metrics, A/B tests | `src/evaluation/**` |
 | `features/caching.md` | 6-tier cache, Redis pipelines, TTL | `**/cache*.py` |
-| `features/embeddings.md` | BGE-M3 (/encode/dense, /encode/sparse), Voyage | `**/embed*.py` |
+| `features/embeddings.md` | BGE-M3 (/encode/hybrid, dense, sparse), Voyage | `**/embed*.py` |
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
 | `features/telegram-bot.md` | LangGraph pipeline, bot, middlewares | `telegram_bot/*.py` |

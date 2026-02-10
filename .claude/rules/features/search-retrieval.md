@@ -31,7 +31,7 @@ Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
 | `src/retrieval/search_engines.py` | BaseSearchEngine ABC + variants |
 | `telegram_bot/services/qdrant.py` | QdrantService (async, gRPC, batch, group_by) |
 | `telegram_bot/graph/nodes/retrieve.py` | LangGraph retrieve_node (hybrid RRF + cache) |
-| `telegram_bot/graph/nodes/grade.py` | Score-based relevance grading (threshold 0.3) |
+| `telegram_bot/graph/nodes/grade.py` | Score-based relevance grading (RRF threshold 0.005) |
 | `telegram_bot/graph/nodes/rerank.py` | Optional ColBERT + score-sort fallback, top-5 |
 | `telegram_bot/graph/nodes/rewrite.py` | LLM query reformulation, max 2 retries |
 
@@ -53,7 +53,7 @@ Dense embedding comes from `state["query_embedding"]` (set by cache_check_node).
 
 ### grade_node
 
-Score-based heuristic: `top_score > 0.3` → documents relevant. Also sets `grade_confidence` (= top_score) and `skip_rerank` (true when `top_score >= skip_rerank_threshold`).
+Score-based heuristic: `top_score > relevance_threshold_rrf` (default 0.005, env `RELEVANCE_THRESHOLD_RRF`) → documents relevant. RRF scores use scale `1/(k+rank)` where k=60, so typical scores are 0.001–0.016. Also sets `grade_confidence` (= top_score) and `skip_rerank` (true when `top_score >= skip_rerank_threshold`).
 
 ### rerank_node
 
@@ -78,7 +78,8 @@ LLM reformulation via OpenAI SDK (`GraphConfig.create_llm()`). Increments `rewri
 |-----------|---------|-------------|
 | `dense_weight` | 0.6 | RRF weight for dense vectors |
 | `sparse_weight` | 0.4 | RRF weight for sparse vectors |
-| `rrf_k` | 60 | RRF constant (configurable) |
+| `rrf_k` | 60 | RRF constant, scores = 1/(k+rank) |
+| `relevance_threshold_rrf` | 0.005 | Grade threshold for RRF scores (env `RELEVANCE_THRESHOLD_RRF`) |
 | `prefetch_multiplier` | 3 | Overfetch ratio for RRF |
 | `quantization_mode` | binary | off/scalar/binary (32x compression) |
 | `quantization_rescore` | true | Rescore with full vectors |
