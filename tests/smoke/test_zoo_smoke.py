@@ -155,8 +155,8 @@ class TestZooCache:
         text = f"zoo_smoke_sparse_test_{int(time.time())}"
         sparse_vector = {"indices": [1, 5, 10], "values": [0.5, 0.3, 0.2]}
 
-        await cache_service.store_sparse_embedding(text, sparse_vector, model_name="bm42")
-        cached = await cache_service.get_cached_sparse_embedding(text, model_name="bm42")
+        await cache_service.store_sparse_embedding(text, sparse_vector, model="bm42")
+        cached = await cache_service.get_sparse_embedding(text, model="bm42")
 
         assert cached is not None
         assert cached["indices"] == [1, 5, 10]
@@ -183,25 +183,28 @@ class TestZooEndToEnd:
         """Second identical request should have cache hits."""
         import time
 
-        # Reset metrics
-        for cache_type in cache_service.metrics:
-            cache_service.metrics[cache_type] = {"hits": 0, "misses": 0}
+        baseline = cache_service.get_metrics()
+        base_hits = baseline["analysis"]["hits"]
+        base_misses = baseline["analysis"]["misses"]
 
         query = f"zoo_e2e_test_{int(time.time())}"
         analysis = {"filters": {"test": True}, "semantic_query": query}
 
         # First request - should be MISS
-        await cache_service.get_cached_analysis(query)
-        first_misses = cache_service.metrics["analyzer"]["misses"]
-        assert first_misses >= 1, "First request should miss"
+        key = cache_service.make_hash(query)
+        await cache_service.get_exact("analysis", key)
+        after_first = cache_service.get_metrics()
+        first_misses = after_first["analysis"]["misses"] - base_misses
+        assert first_misses >= 1, "First request should miss in analysis tier"
 
         # Store result
-        await cache_service.store_analysis(query, analysis)
+        await cache_service.store_exact("analysis", key, analysis)
 
         # Second request - should be HIT
-        cached = await cache_service.get_cached_analysis(query)
-        second_hits = cache_service.metrics["analyzer"]["hits"]
+        cached = await cache_service.get_exact("analysis", key)
+        after_second = cache_service.get_metrics()
+        second_hits = after_second["analysis"]["hits"] - base_hits
 
         assert cached is not None, "Second request should return cached result"
-        assert second_hits >= 1, "Second request should be a cache hit"
+        assert second_hits >= 1, "Second request should be a cache hit in analysis tier"
         assert cached["semantic_query"] == query
