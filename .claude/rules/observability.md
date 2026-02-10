@@ -145,21 +145,21 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 
 12 scores written via `_write_langfuse_scores(lf, result)` in `bot.py` after `graph.ainvoke()`:
 
-**Latency convention:** All `latency_stages` values are in **seconds** (float). The score writer computes `latency_total_ms = sum(stages.values()) * 1000`.
+**Latency convention:** `latency_total_ms` is **wall-time** measured via `time.perf_counter` in `handle_query` (pipeline_wall_ms), NOT sum of stages. All `latency_stages` values are in **seconds** (float) for per-stage breakdown only.
 
 | Score | Values | Purpose |
 |-------|--------|---------|
 | `query_type` | 0/1/2 | CHITCHAT/SIMPLE/COMPLEX (via `_QUERY_TYPE_SCORE` mapping) |
-| `latency_total_ms` | float | End-to-end request latency (sum of seconds * 1000) |
+| `latency_total_ms` | float | End-to-end wall-time latency (perf_counter, ms) |
 | `semantic_cache_hit` | 0.0/1.0 | Semantic cache effectiveness |
-| `embeddings_cache_hit` | 0.0/1.0 | Embeddings cache (not yet tracked in state, default 0.0) |
-| `search_cache_hit` | 0.0/1.0 | Search results cache (not yet tracked in state, default 0.0) |
+| `embeddings_cache_hit` | 0.0/1.0 | Embeddings cache (real value from state) |
+| `search_cache_hit` | 0.0/1.0 | Search results cache (real value from state) |
 | `rerank_applied` | 0.0/1.0 | Whether reranking was performed |
 | `rerank_cache_hit` | 0.0/1.0 | Rerank cache (not yet tracked in state, default 0.0) |
 | `results_count` | 0-N | Number of retrieved documents |
 | `no_results` | 0.0/1.0 | Query returned empty results |
 | `llm_used` | 0.0/1.0 | LLM generation was invoked |
-| `confidence_score` | 0.0 | Not yet tracked in LangGraph state |
+| `confidence_score` | 0.0-1.0 | Grade confidence (real value from state) |
 | `hyde_used` | 0.0 | Not yet tracked in LangGraph state |
 
 **Implementation:** `get_client().score_current_trace(name=..., value=...)` (Langfuse SDK v3)
