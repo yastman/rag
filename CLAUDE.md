@@ -10,9 +10,10 @@ make check                 # Lint + types
 make test                  # All tests
 make test-unit             # Unit tests only (fast)
 uv run pytest tests/unit/ -n auto  # Parallel (4x faster, ~5 min)
+uv run pytest tests/integration/test_graph_paths.py -v  # Graph path tests (~5s, no Docker)
 make docker-up             # Start core services (5 containers, ~17s)
 make docker-bot-up         # Core + bot/litellm
-make docker-full-up        # All services (20 containers)
+make docker-full-up        # All services (19 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
 make monitoring-up         # Start alerting stack
 make ingest-unified        # Run unified ingestion (CocoIndex v3.2.1)
@@ -27,7 +28,7 @@ make ingest-unified-status # Show ingestion stats from Postgres
 
 **Contextual RAG Pipeline** — Production RAG with hybrid search (RRF + ColBERT rerank), BGE-M3 embeddings (local CPU), multi-level caching, Telegram bot.
 
-**Stack:** Python 3.12 | Cerebras via LiteLLM | BGE-M3 (local) | Qdrant | Redis | CocoIndex
+**Stack:** Python 3.12 | gpt-oss-120b (Cerebras) via LiteLLM | BGE-M3 (local) | Qdrant | Redis | CocoIndex
 
 **Use cases:** Bulgarian property (192 docs), Ukrainian Criminal Code (1,294 docs)
 
@@ -41,7 +42,7 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 
 | Module | Purpose |
 |--------|---------|
-| `telegram_bot/bot.py` | PropertyBot (~260 LOC, LangGraph orchestrator + score writing) |
+| `telegram_bot/bot.py` | PropertyBot (~300 LOC, LangGraph orchestrator + score writing) |
 | `telegram_bot/graph/` | LangGraph 9-node RAG pipeline |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
@@ -53,13 +54,13 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 
 **Observability:** Langfuse v3 — 35 observations/trace, 12 scores, `OTEL_SERVICE_NAME=rag-bot` → see `.claude/rules/observability.md`
 
-**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (20 svc) → see `.claude/rules/docker.md`
+**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (19 svc) → see `.claude/rules/docker.md`
 
 ## Code Style
 
 - **Linter/Formatter:** Ruff | **Types:** MyPy (strict in CI) | **Line length:** 100 | **Docstrings:** Google style
 - **Pre-commit:** ruff-check (--fix) → ruff-format → trailing-whitespace → check-yaml/toml/json
-- **CI:** lint (ruff + mypy) → test (unit, `-m "not legacy_api"`) → baseline-compare (PR only)
+- **CI:** lint (`uv run` ruff + mypy) → test (unit, `-m "not legacy_api"`) → baseline-compare (PR only)
 - **Commits:** `feat(scope): message` | `fix(scope): message` | `docs(scope): message`
 
 ## Dependency Management
@@ -182,6 +183,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
 | `features/telegram-bot.md` | LangGraph pipeline, bot, middlewares | `telegram_bot/*.py` |
+| `features/user-personalization.md` | CESC, user context, preferences | `**/user_context*.py` |
 | `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
 | `observability.md` | Langfuse v3, @observe, scores, baseline | `telegram_bot/observability.py, tests/baseline/**` |
 | `build.md` | uv, Makefile, pre-commit hooks | `Makefile, pyproject.toml` |
