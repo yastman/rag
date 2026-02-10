@@ -36,23 +36,34 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
         logger.info("grade: no documents, marking not relevant (%.3fs)", elapsed)
         return {
             "documents_relevant": False,
+            "grade_confidence": 0.0,
+            "skip_rerank": False,
             "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
         }
 
     top_score = max(doc.get("score", 0) for doc in documents)
     relevant = top_score > RELEVANCE_THRESHOLD
 
+    # Early termination: skip rerank when confidence is high enough
+    from telegram_bot.graph.config import GraphConfig
+
+    config = GraphConfig.from_env()
+    skip_rerank = relevant and top_score >= config.skip_rerank_threshold
+
     elapsed = time.perf_counter() - t0
     logger.info(
-        "grade: top_score=%.3f threshold=%.3f relevant=%s (%d docs, %.3fs)",
+        "grade: top_score=%.3f threshold=%.3f relevant=%s skip_rerank=%s (%d docs, %.3fs)",
         top_score,
         RELEVANCE_THRESHOLD,
         relevant,
+        skip_rerank,
         len(documents),
         elapsed,
     )
 
     return {
         "documents_relevant": relevant,
+        "grade_confidence": top_score,
+        "skip_rerank": skip_rerank,
         "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
     }

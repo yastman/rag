@@ -57,23 +57,51 @@ class TestRouteGrade:
         state["rewrite_count"] = 0
         assert route_grade(state) == "rerank"
 
+    def test_skip_rerank_routes_to_generate(self):
+        state = {
+            "documents_relevant": True,
+            "rewrite_count": 0,
+            "rewrite_effective": True,
+            "grade_confidence": 0.95,
+            "skip_rerank": True,
+        }
+        assert route_grade(state) == "generate"
+
+    def test_no_skip_rerank_routes_to_rerank(self):
+        state = {
+            "documents_relevant": True,
+            "rewrite_count": 0,
+            "rewrite_effective": True,
+            "grade_confidence": 0.5,
+            "skip_rerank": False,
+        }
+        assert route_grade(state) == "rerank"
+
     def test_not_relevant_first_attempt_routes_to_rewrite(self):
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["documents_relevant"] = False
         state["rewrite_count"] = 0
         assert route_grade(state) == "rewrite"
 
-    def test_not_relevant_second_attempt_routes_to_rewrite(self):
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents_relevant"] = False
-        state["rewrite_count"] = 1
-        assert route_grade(state) == "rewrite"
-
-    def test_not_relevant_max_retries_routes_to_generate(self):
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents_relevant"] = False
-        state["rewrite_count"] = 2
+    def test_not_relevant_max_rewrite_attempts_routes_to_generate(self):
+        """max_rewrite_attempts=1 (default), rewrite_count=1 → generate."""
+        state = {
+            "documents_relevant": False,
+            "rewrite_count": 1,
+            "rewrite_effective": True,
+            "max_rewrite_attempts": 1,
+        }
         assert route_grade(state) == "generate"
+
+    def test_max_rewrite_attempts_from_state(self):
+        """With max_rewrite_attempts=3, rewrite_count=2 still rewrites."""
+        state = {
+            "documents_relevant": False,
+            "rewrite_count": 2,
+            "rewrite_effective": True,
+            "max_rewrite_attempts": 3,
+        }
+        assert route_grade(state) == "rewrite"
 
     def test_not_relevant_exceeded_retries_routes_to_generate(self):
         state = make_initial_state(user_id=1, session_id="s", query="test")
@@ -85,7 +113,7 @@ class TestRouteGrade:
         """If rewrite was ineffective, skip further rewrites."""
         state = {
             "documents_relevant": False,
-            "rewrite_count": 1,
+            "rewrite_count": 0,
             "rewrite_effective": False,
         }
         assert route_grade(state) == "generate"
@@ -94,7 +122,7 @@ class TestRouteGrade:
         """If rewrite was effective but docs still not relevant, allow another rewrite."""
         state = {
             "documents_relevant": False,
-            "rewrite_count": 1,
+            "rewrite_count": 0,
             "rewrite_effective": True,
         }
         assert route_grade(state) == "rewrite"
