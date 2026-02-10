@@ -165,3 +165,59 @@ class TestRetrieveNode:
 
         cache.store_search_results.assert_awaited_once()
         cache.store_sparse_embedding.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_parallel_embeddings_after_rewrite(self):
+        """After rewrite (query_embedding=None), dense+sparse fetched in parallel."""
+        import asyncio
+
+        state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = None  # simulates post-rewrite
+
+        call_order: list[str] = []
+
+        async def mock_dense_embed(query):
+            call_order.append("dense_start")
+            await asyncio.sleep(0.01)
+            call_order.append("dense_end")
+            return [0.1] * 1024
+
+        async def mock_sparse_embed(query):
+            call_order.append("sparse_start")
+            await asyncio.sleep(0.01)
+            call_order.append("sparse_end")
+            return {"indices": [1, 2], "values": [0.5, 0.3]}
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=None)
+        cache.store_embedding = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_sparse_embedding = AsyncMock()
+        cache.store_search_results = AsyncMock()
+
+        embeddings = AsyncMock()
+        embeddings.aembed_query = AsyncMock(side_effect=mock_dense_embed)
+
+        sparse_embeddings = AsyncMock()
+        sparse_embeddings.aembed_query = AsyncMock(side_effect=mock_sparse_embed)
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=_make_docs(3))
+
+        result = await retrieve_node(
+            state,
+            cache=cache,
+            embeddings=embeddings,
+            sparse_embeddings=sparse_embeddings,
+            qdrant=qdrant,
+        )
+
+        assert len(result["documents"]) == 3
+        # Both embeddings should have been computed
+        embeddings.aembed_query.assert_awaited_once()
+        sparse_embeddings.aembed_query.assert_awaited_once()
+        # Check parallel execution: sparse_start should appear before dense_end
+        assert "sparse_start" in call_order
+        assert "dense_start" in call_order
