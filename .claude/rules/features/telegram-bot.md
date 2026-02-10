@@ -30,7 +30,7 @@ User Message → ThrottlingMiddleware → ErrorMiddleware
 | `telegram_bot/graph/graph.py` | `build_graph()` — assembles 9-node StateGraph |
 | `telegram_bot/graph/state.py` | RAGState TypedDict (20 fields incl. `grade_confidence`, `skip_rerank`, `max_rewrite_attempts`, `rewrite_effective`, `response_sent`) + `make_initial_state()` |
 | `telegram_bot/graph/edges.py` | 3 routing functions (`route_grade` checks `grade_confidence` → skip rerank, `max_rewrite_attempts` + `rewrite_effective`) |
-| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `skip_rerank_threshold=0.85`, `generate_max_tokens=2048`, `max_rewrite_attempts=1`, `rewrite_model`/`rewrite_max_tokens`, `streaming_enabled`) |
+| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `skip_rerank_threshold=0.012`, `generate_max_tokens=2048`, `max_rewrite_attempts=1`, `rewrite_model`/`rewrite_max_tokens`, `streaming_enabled`) |
 | `telegram_bot/graph/nodes/` | 8 node modules (classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, PII masking |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
@@ -42,8 +42,8 @@ User Message → ThrottlingMiddleware → ErrorMiddleware
 START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
                  → [other] → cache_check → [HIT] → respond → END
                                           → [MISS] → retrieve → grade
-                                                       → [relevant + confidence >= 0.85] → generate → cache_store → respond → END (skip rerank)
-                                                       → [relevant + confidence < 0.85] → rerank → generate → cache_store → respond → END
+                                                       → [relevant + confidence >= 0.012] → generate → cache_store → respond → END (skip rerank)
+                                                       → [relevant + confidence < 0.012] → rerank → generate → cache_store → respond → END
                                                        → [count < max_rewrite_attempts AND effective] → rewrite → retrieve (loop)
                                                        → [count >= max_rewrite_attempts] → generate → cache_store → respond → END
 ```
@@ -55,7 +55,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 | classify | `graph/nodes/classify.py` | — (regex-based, no external deps) |
 | cache_check | `graph/nodes/cache.py` | cache, embeddings |
 | retrieve | `graph/nodes/retrieve.py` | cache, sparse_embeddings, qdrant (parallel dense+sparse on re-embed) |
-| grade | `graph/nodes/grade.py` | — (score threshold 0.3, returns `grade_confidence`) |
+| grade | `graph/nodes/grade.py` | — (RRF threshold 0.005, returns `grade_confidence`) |
 | rerank | `graph/nodes/rerank.py` | reranker (ColBERT or None) |
 | generate | `graph/nodes/generate.py` | message (aiogram Message, for streaming; uses GraphConfig.create_llm) |
 | rewrite | `graph/nodes/rewrite.py` | llm (optional, uses `config.rewrite_model`/`rewrite_max_tokens`) |
@@ -97,7 +97,7 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 
 | Parameter | Env Var | Default | Description |
 |-----------|---------|---------|-------------|
-| `skip_rerank_threshold` | `SKIP_RERANK_THRESHOLD` | `0.85` | Skip rerank when grade confidence >= threshold |
+| `skip_rerank_threshold` | `SKIP_RERANK_THRESHOLD` | `0.012` | Skip rerank when grade confidence >= threshold (RRF scale) |
 | `max_rewrite_attempts` | `MAX_REWRITE_ATTEMPTS` | `1` | Max query rewrites before fallback |
 | `generate_max_tokens` | `GENERATE_MAX_TOKENS` | `2048` | Token cap for LLM generation |
 | `rewrite_max_tokens` | `REWRITE_MAX_TOKENS` | `64` | Token budget for rewrite LLM call |
@@ -108,7 +108,8 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 
 ```python
 self._cache = CacheLayerManager(redis_url=config.redis_url)
-self._embeddings = BGEM3Embeddings(base_url=config.bge_m3_url)
+self._hybrid = BGEM3HybridEmbeddings(base_url=config.bge_m3_url)
+self._embeddings = self._hybrid  # primary embeddings provider
 self._sparse = BGEM3SparseEmbeddings(base_url=config.bge_m3_url)
 self._qdrant = QdrantService(url=config.qdrant_url, ...)
 self._reranker = ColbertRerankerService(...)  # if rerank_provider == "colbert"
@@ -163,7 +164,7 @@ Catches all exceptions, logs with `exc_info=True`, returns user-friendly message
 ```bash
 pytest tests/unit/test_bot_handlers.py -v
 pytest tests/unit/test_middlewares.py -v
-pytest tests/unit/graph/ -v                    # All graph tests (~106 tests)
+pytest tests/unit/graph/ -v                    # All graph tests (~122 tests)
 pytest tests/integration/test_graph_paths.py -v          # 6 graph path integration tests (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 ```
