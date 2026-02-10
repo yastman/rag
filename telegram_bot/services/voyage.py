@@ -8,6 +8,7 @@ Instrumented with Langfuse @observe for LLM observability (2026-01-28).
 
 import asyncio
 import logging
+from typing import cast
 
 import voyageai
 from tenacity import (
@@ -114,7 +115,7 @@ class VoyageService:
         if not texts:
             return []
 
-        all_embeddings = []
+        all_embeddings: list[list[float]] = []
         total_tokens = 0
 
         for i in range(0, len(texts), self.BATCH_SIZE):
@@ -127,7 +128,7 @@ class VoyageService:
                 model=self._model_docs,
                 input_type=input_type,
             )
-            all_embeddings.extend(response.embeddings)
+            all_embeddings.extend(cast(list[list[float]], response.embeddings))
             if hasattr(response, "usage") and response.usage:
                 total_tokens += getattr(response.usage, "total_tokens", 0)
 
@@ -194,7 +195,7 @@ class VoyageService:
             output={"dimensions": len(response.embeddings[0])},
         )
 
-        return response.embeddings[0]
+        return cast(list[float], response.embeddings[0])
 
     @observe(name="voyage-rerank", as_type="generation")
     @retry(
@@ -324,7 +325,7 @@ class VoyageService:
         if not texts:
             return []
 
-        all_embeddings = []
+        all_embeddings: list[list[float]] = []
         total_tokens = 0
 
         for i in range(0, len(texts), self.BATCH_SIZE):
@@ -337,7 +338,7 @@ class VoyageService:
                 input_type=input_type,
                 output_dimension=output_dimension,
             )
-            all_embeddings.extend(response.embeddings)
+            all_embeddings.extend(cast(list[list[float]], response.embeddings))
             if hasattr(response, "usage") and response.usage:
                 total_tokens += getattr(response.usage, "total_tokens", 0)
 
@@ -414,7 +415,7 @@ class VoyageService:
             output={"dimensions": output_dimension},
         )
 
-        return response.embeddings[0]
+        return cast(list[float], response.embeddings[0])
 
     # Sync methods for compatibility with existing code
     def embed_documents_sync(
