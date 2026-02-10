@@ -112,7 +112,7 @@ if LANGFUSE_ENABLED:
     def get_langfuse_client() -> Langfuse:
         """Get Langfuse client with PII masking enabled."""
         return Langfuse(
-            mask=mask_pii,
+            mask=mask_pii,  # type: ignore[arg-type]  # MaskFunction stub mismatch
             flush_at=50,
             flush_interval=5,
         )
@@ -121,16 +121,16 @@ if LANGFUSE_ENABLED:
 else:
     from contextlib import contextmanager
 
-    observe = _noop_observe
-    get_client = _noop_get_client
+    observe = _noop_observe  # type: ignore[assignment]  # noop stub for disabled Langfuse
+    get_client = _noop_get_client  # type: ignore[assignment]  # noop stub for disabled Langfuse
 
     @contextmanager
     def _noop_propagate(**kwargs: Any):
         yield
 
-    propagate_attributes = _noop_propagate
+    propagate_attributes = _noop_propagate  # type: ignore[assignment]  # noop stub
 
-    def get_langfuse_client() -> None:  # type: ignore[return]
+    def get_langfuse_client() -> None:  # type: ignore[misc]  # conditional return type
         """Langfuse disabled — return None."""
         return
 
