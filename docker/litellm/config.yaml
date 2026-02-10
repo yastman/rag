@@ -17,6 +17,14 @@ model_list:
       max_tokens: 4096
       merge_reasoning_content_in_choices: true
 
+  # GPT-OSS-120B: OpenAI open-weight reasoning on Cerebras (3000 tok/s)
+  - model_name: gpt-oss-120b
+    litellm_params:
+      model: cerebras/gpt-oss-120b
+      api_key: os.environ/CEREBRAS_API_KEY
+      max_tokens: 4096
+      merge_reasoning_content_in_choices: true
+
   # Fallback 1: Groq (fast, free tier)
   - model_name: gpt-4o-mini-fallback
     litellm_params:
