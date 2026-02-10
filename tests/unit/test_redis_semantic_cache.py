@@ -5,17 +5,30 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-# Pre-mock dependencies to avoid runtime overhead/connection attempts
-sys.modules["redis"] = MagicMock()
-sys.modules["redis.asyncio"] = MagicMock()
-sys.modules["opentelemetry"] = MagicMock()
-sys.modules["opentelemetry.trace"] = MagicMock()
-sys.modules["redisvl"] = MagicMock()
-sys.modules["redisvl.extensions.message_history"] = MagicMock()
-sys.modules["redisvl.query.filter"] = MagicMock()
-sys.modules["redisvl.utils.vectorize"] = MagicMock()
+_MOCKED_MODULES = [
+    "redis",
+    "redis.asyncio",
+    "opentelemetry",
+    "opentelemetry.trace",
+    "redisvl",
+    "redisvl.extensions.message_history",
+    "redisvl.query.filter",
+    "redisvl.utils.vectorize",
+]
+_saved = {name: sys.modules.get(name) for name in _MOCKED_MODULES}
+for name in _MOCKED_MODULES:
+    sys.modules[name] = MagicMock()
 
 from src.cache.redis_semantic_cache import RedisSemanticCache
+
+
+for name in _MOCKED_MODULES:
+    if _saved[name] is None:
+        sys.modules.pop(name, None)
+    else:
+        sys.modules[name] = _saved[name]
+
+del _saved
 
 
 @pytest.fixture
