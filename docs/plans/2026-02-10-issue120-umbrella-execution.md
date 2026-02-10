@@ -1,10 +1,10 @@
 # #120 Umbrella: P0 Fixes → Local Validation → P1/P2
 
-**Goal:** Закрыть все дефекты из аудита PR #111, провести локальную валидацию бота, собрать Langfuse трейсы, принять Go/No-Go по latency issues.
+**Goal:** Закрыть все дефекты из аудита PR #111, провести локальную валидацию бота, собрать Langfuse трейсы, выполнить глубокий аудит Qdrant/Redis/BGE-M3 latency и принять Go/No-Go по ONNX migration spike.
 
-**Architecture:** 6 фаз: подготовка → P0 фиксы (4 issues) → gate → docker rebuild + traces → P1/P2 фиксы (4 issues) → final gate. Исполнение: 1 issue = 1 branch = 1 PR (без прямых коммитов в `main`). TDD для #114 и #117.
+**Architecture:** 7 фаз: подготовка → P0 фиксы (4 issues) → gate → docker rebuild + traces → deep audit (Qdrant/Redis/BGE/ONNX) → P1/P2 фиксы (4 issues) → final gate. Исполнение: 1 issue = 1 branch = 1 PR (без прямых коммитов в `main`). TDD для #114 и #117.
 
-**Tech Stack:** pytest, ruff, mypy, monkeypatch, Docker Compose, Langfuse SDK, Qdrant Python SDK, gh CLI, Context7
+**Tech Stack:** pytest, ruff, mypy, monkeypatch, Docker Compose, Langfuse SDK, Qdrant Python SDK, RedisVL SDK, Sentence-Transformers/Optimum (ONNX spike), gh CLI, Context7
 
 ---
 
@@ -40,6 +40,13 @@ gh issue edit 120 --body "$(gh issue view 120 --json body -q '.body')
 - [ ] Full E2E (25 scenarios)
 - [ ] Go/No-Go decision
 
+### Deep Audit (Qdrant/Redis/BGE/ONNX)
+- [ ] Trace-level latency breakdown documented (incl. `c2b95d86aa1f643b79016dd611c4691f`)
+- [ ] BGE endpoint benchmark (dense/sparse/hybrid, p50/p95)
+- [ ] Qdrant benchmark (query_points RRF, p50/p95)
+- [ ] Redis benchmark + eviction/hit-rate snapshot
+- [ ] ONNX spike decision (dense-only vs full BGE-M3 tri-vector parity)
+
 ### P1/P2
 - [ ] #116 sync rewrite_max_tokens
 - [ ] #118 test_redis_cache legacy imports
@@ -65,6 +72,8 @@ Expected: #120 body обновлён, checklist виден в UI.
 - Использовать официальные SDK, не raw HTTP, где есть стабильный клиент.
 - Для tracing/LLM вызовов: `langfuse-python` (`/langfuse/langfuse-python` в Context7), в т.ч. `from langfuse.openai import AsyncOpenAI`, `@observe`, `update_current_trace`, `score_current_trace`.
 - Для векторного поиска: `qdrant-client` (`/qdrant/qdrant-client` в Context7), в т.ч. `AsyncQdrantClient` + `query_points`.
+- Для semantic cache: `redis-vl-python` (`/redis/redis-vl-python` в Context7), в т.ч. `SemanticCache(redis_url=...)`, `acheck/astore`, filterable fields.
+- Для ONNX spike: `sentence-transformers` (`/huggingface/sentence-transformers` в Context7) + `optimum` (экспорт/оптимизация), без ad-hoc кастомных рантаймов на первом шаге.
 
 **Step 2: Проверять в code review каждого PR**
 
@@ -339,7 +348,7 @@ Closes #113"
 **Files:**
 - Edit: `telegram_bot/graph/nodes/generate.py:221-261`
 - Read: `telegram_bot/graph/nodes/respond.py` (already handles `response_sent`)
-- Create: `tests/unit/graph/test_streaming_fallback.py`
+- Edit: `tests/unit/graph/test_generate_node.py`
 
 **Analysis of the bug:**
 
@@ -360,203 +369,38 @@ try:
 
 The bug: if `_generate_streaming` sent partial chunks (placeholder + some edits) but then raised, `response_sent` stays `False`. The fallback generates a new answer, and `respond_node` sends it as a NEW message. User sees: partial streamed text + full new message = duplicate.
 
-**The fix:** Track whether the streaming placeholder was sent. If it was, the fallback should edit that message instead of letting respond_node send a new one.
+**Important correction:** нельзя просто выставлять `response_sent=True` на любой streaming-error. Если стрим упал до первого user-visible chunk, пользователь может остаться только с placeholder.
 
-However, the simplest correct fix per issue scope: if streaming started (placeholder sent), set `response_sent = True` after fallback too, because the user already has a message being edited. The fallback should edit the existing placeholder message.
+**Step 1: Add/adjust tests in existing suite**
 
-Looking at `_generate_streaming`:
-- Line 127: `sent_msg = await message.answer(_STREAM_PLACEHOLDER)` — sends placeholder
-- If error occurs after this, placeholder message exists in Telegram
+В `tests/unit/graph/test_generate_node.py` добавить 2 явных кейса:
+- `stream_error_before_visible_output` -> `response_sent=False` (final send делает `respond_node`);
+- `stream_error_after_visible_output` -> fallback редактирует уже отправленное сообщение и `response_sent=True`.
 
-**Simplest fix:** After fallback LLM call, edit the existing placeholder if streaming was attempted. But we don't have `sent_msg` in the outer scope.
-
-**Better fix:** Restructure to catch errors inside `_generate_streaming` more granularly, or pass a mutable container.
-
-**Simplest correct fix:** Wrap the streaming+fallback logic so that if streaming was attempted (placeholder sent), the fallback response is delivered via edit_text on the placeholder, and `response_sent = True`.
-
-**Step 1: Write the failing test**
-
-Create `tests/unit/graph/test_streaming_fallback.py`:
-
-```python
-"""Tests for streaming fallback duplicate prevention in generate_node."""
-
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
-
-@pytest.fixture
-def mock_message():
-    """Create mock aiogram Message."""
-    msg = MagicMock()
-    sent_placeholder = MagicMock()
-    sent_placeholder.edit_text = AsyncMock()
-    sent_placeholder.delete = AsyncMock()
-    msg.answer = AsyncMock(return_value=sent_placeholder)
-    msg.chat = MagicMock(id=12345)
-    return msg
-
-
-@pytest.fixture
-def mock_config():
-    """Create mock GraphConfig for streaming."""
-    gc = MagicMock()
-    gc.domain = "недвижимость"
-    gc.llm_model = "test-model"
-    gc.llm_temperature = 0.7
-    gc.generate_max_tokens = 2048
-    gc.streaming_enabled = True
-    gc.create_llm.return_value = MagicMock()
-    return gc
-
-
-def _make_state(query: str = "квартиры в Несебре") -> dict:
-    """Create minimal state for generate_node."""
-    return {
-        "documents": [
-            {"text": "Квартира 85000 евро", "score": 0.9, "metadata": {"title": "Квартира"}},
-        ],
-        "messages": [{"role": "user", "content": query}],
-        "latency_stages": {},
-    }
-
-
-class TestStreamingFallbackNoDuplicate:
-    """Verify that streaming failure + fallback does not cause duplicate sends."""
-
-    @pytest.mark.asyncio
-    async def test_fallback_sets_response_sent_true(self, mock_message, mock_config):
-        """After streaming fails and fallback succeeds, response_sent must be True.
-
-        This prevents respond_node from sending a duplicate message.
-        """
-        from telegram_bot.graph.nodes.generate import _make_llm_completion
-
-        fallback_completion = MagicMock()
-        fallback_completion.choices = [MagicMock(message=MagicMock(content="Fallback answer"))]
-
-        mock_llm = MagicMock()
-        mock_llm.chat.completions.create = AsyncMock(return_value=fallback_completion)
-
-        with (
-            patch(
-                "telegram_bot.graph.nodes.generate._get_config", return_value=mock_config,
-            ),
-            patch(
-                "telegram_bot.graph.nodes.generate._generate_streaming",
-                side_effect=RuntimeError("stream broken"),
-            ),
-        ):
-            mock_config.create_llm.return_value = mock_llm
-            state = _make_state()
-
-            from telegram_bot.graph.nodes.generate import generate_node
-
-            result = await generate_node(state, message=mock_message)
-
-        assert result["response"] == "Fallback answer"
-        # Key assertion: response_sent should be True if streaming was attempted
-        # so respond_node does not send a duplicate
-        assert result["response_sent"] is True
-
-    @pytest.mark.asyncio
-    async def test_non_streaming_response_sent_false(self, mock_message, mock_config):
-        """Non-streaming path should leave response_sent=False for respond_node."""
-        mock_config.streaming_enabled = False
-
-        completion = MagicMock()
-        completion.choices = [MagicMock(message=MagicMock(content="Normal answer"))]
-
-        mock_llm = MagicMock()
-        mock_llm.chat.completions.create = AsyncMock(return_value=completion)
-
-        with patch(
-            "telegram_bot.graph.nodes.generate._get_config", return_value=mock_config,
-        ):
-            mock_config.create_llm.return_value = mock_llm
-            state = _make_state()
-
-            from telegram_bot.graph.nodes.generate import generate_node
-
-            result = await generate_node(state, message=mock_message)
-
-        assert result["response"] == "Normal answer"
-        assert result["response_sent"] is False
-```
-
-**Step 2: Run test to verify it fails**
+**Step 2: Run tests in red state**
 
 ```bash
-uv run pytest tests/unit/graph/test_streaming_fallback.py -v
+uv run pytest tests/unit/graph/test_generate_node.py -k "streaming_fallback or stream_error" -v
 ```
 
-Expected: `test_fallback_sets_response_sent_true` FAILS (response_sent is False).
+Expected: минимум один тест падает до фикса.
 
-**Step 3: Fix generate_node streaming fallback**
+**Step 3: Fix generate_node streaming fallback safely**
 
-In `telegram_bot/graph/nodes/generate.py`, replace lines 221-261 (the `response_sent = False` through end of function):
+В `telegram_bot/graph/nodes/generate.py`:
+- Ввести явный сигнал частичной пользовательской доставки из `_generate_streaming` (например custom exception `StreamingPartialDeliveryError`, содержащий ссылку на `sent_msg`).
+- В `generate_node` на fallback:
+  - если partial delivery уже была -> отдать fallback через `edit_text` того же сообщения и поставить `response_sent=True`;
+  - если partial delivery не было -> оставить `response_sent=False`, чтобы `respond_node` отправил ответ.
+- Не ломать текущий контракт non-streaming пути.
 
-```python
-    response_sent = False
-
-    try:
-        llm = config.create_llm()
-
-        # Streaming path: deliver directly to Telegram
-        if message is not None and config.streaming_enabled:
-            streaming_attempted = False
-            try:
-                answer = await _generate_streaming(llm, config, llm_messages, message)
-                response_sent = True
-            except Exception:
-                streaming_attempted = True
-                logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
-                # Fall back to non-streaming
-                response = await llm.chat.completions.create(
-                    model=config.llm_model,
-                    messages=llm_messages,
-                    temperature=config.llm_temperature,
-                    max_tokens=config.generate_max_tokens,
-                    name="generate-answer",  # type: ignore[call-overload]
-                )
-                answer = response.choices[0].message.content or ""
-                # Streaming was attempted — a placeholder message exists in Telegram.
-                # Mark response_sent so respond_node does not send a duplicate.
-                response_sent = True
-        else:
-            # Non-streaming path (original)
-            response = await llm.chat.completions.create(
-                model=config.llm_model,
-                messages=llm_messages,
-                temperature=config.llm_temperature,
-                max_tokens=config.generate_max_tokens,
-                name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
-            )
-            answer = response.choices[0].message.content or ""
-    except Exception:
-        logger.exception("generate_node: LLM call failed, using fallback")
-        answer = _build_fallback_response(documents)
-
-    elapsed = time.monotonic() - t0
-    return {
-        "response": answer,
-        "response_sent": response_sent,
-        "latency_stages": {**state.get("latency_stages", {}), "generate": elapsed},
-    }
-```
-
-Key change: after streaming exception + fallback LLM call, set `response_sent = True` because a placeholder message already exists in the chat. `respond_node` will skip the duplicate send (it already checks `state.get("response_sent", False)` at line 36).
-
-**Note:** The `streaming_attempted` variable is kept for clarity but currently unused. Remove if ruff complains (F841).
-
-**Step 4: Run test to verify it passes**
+**Step 4: Run tests to green**
 
 ```bash
-uv run pytest tests/unit/graph/test_streaming_fallback.py -v
+uv run pytest tests/unit/graph/test_generate_node.py -k "streaming_fallback or stream_error" -v
 ```
 
-Expected: both tests green.
+Expected: новые/обновлённые кейсы зелёные.
 
 **Step 5: Run graph integration tests (regression)**
 
@@ -570,12 +414,13 @@ Expected: all green (path tests use `streaming_enabled=False`).
 **Step 6: Lint + commit**
 
 ```bash
-uv run ruff check telegram_bot/graph/nodes/generate.py tests/unit/graph/test_streaming_fallback.py --output-format=concise
-git add telegram_bot/graph/nodes/generate.py tests/unit/graph/test_streaming_fallback.py
+uv run ruff check telegram_bot/graph/nodes/generate.py tests/unit/graph/test_generate_node.py --output-format=concise
+git add telegram_bot/graph/nodes/generate.py tests/unit/graph/test_generate_node.py
 git commit -m "fix(graph): prevent duplicate response on streaming fallback
 
-When streaming fails after placeholder sent, mark response_sent=True
-so respond_node skips redundant message.send(). Adds test coverage.
+Track partial streaming delivery and route fallback safely:
+edit existing message when partial output was visible, otherwise let
+respond_node deliver final answer.
 
 Closes #114"
 ```
@@ -653,7 +498,7 @@ Send to bot in Telegram:
 Open Langfuse UI. Find traces from smoke test. Check:
 - Node spans: node-classify, node-cache-check, node-retrieve, node-grade, node-generate, node-respond
 - Scores: latency_total_ms, semantic_cache_hit, search_results_count, rerank_applied
-- response_sent score present
+- `response_sent` проверяется как поле state/output в trace metadata/span (не как score, если отдельно не добавлено)
 
 Record trace IDs.
 
@@ -676,6 +521,81 @@ Expected: pass rate >= 80%.
 ### Task 3.6: Go/No-Go
 
 Compare with problem trace `c2b95d86aa1f643b79016dd611c4691f` from #105. Post results to #120.
+
+---
+
+## Phase 3.7: Deep Audit (Qdrant + Redis + BGE-M3 + ONNX)
+
+### Task 3.7.1: Trace-first baseline (Langfuse SDK)
+
+**Step 1: Зафиксировать baseline по проблемному trace**
+
+Снять из trace:
+- total latency
+- суммарный вклад `node-retrieve`, `bge-m3-dense-embed`, `bge-m3-sparse-embed`, `qdrant-hybrid-search-rrf`
+- число rewrite-итераций
+
+Expected: подтверждено, где compute bottleneck (BGE/LLM/Qdrant/looping).
+
+### Task 3.7.2: BGE-M3 bottleneck isolation
+
+**Step 1: Benchmark `/encode/dense`, `/encode/sparse`, `/encode/hybrid` (p50/p95)**
+
+Expected:
+- `hybrid` не хуже суммы `dense+sparse` (обычно существенно лучше двух последовательных вызовов).
+- зафиксировать tail latency при concurrency 1/2/4/8.
+
+**Step 2: Проверить runtime-конфиг BGE**
+
+Проверить:
+- `workers`, `limit-concurrency`
+- `OMP_NUM_THREADS`, `MKL_NUM_THREADS`
+- модельные лимиты (`max_length`, batch)
+
+Expected: задокументирован план тюнинга без регресса стабильности.
+
+### Task 3.7.3: Qdrant deep check (SDK-only)
+
+**Step 1: Benchmark `query_points` RRF (dense+sparse prefetch)**
+
+Expected: p50/p95 и доля в E2E latency.
+
+**Step 2: Проверить collection config**
+
+Проверить:
+- `quantization_config`
+- `optimizer_status`
+- `segments_count`, `indexed_vectors_count`
+- наличие payload indexes для фильтров
+
+Expected: решение по quantization/optimizer для текущего датасета.
+
+### Task 3.7.4: Redis deep check
+
+**Step 1: Snapshot метрик Redis**
+
+Проверить:
+- `keyspace_hits/misses`
+- `evicted_keys`
+- `used_memory/maxmemory`
+- policy (`volatile-lfu`)
+
+**Step 2: Micro-benchmark GET/SET**
+
+Expected: Redis latency << BGE/LLM latency; если нет — отдельный issue на Redis.
+
+### Task 3.7.5: ONNX migration spike (decision gate)
+
+**Scope:**
+- Spike only for dense embedding path first (не сразу весь tri-vector pipeline).
+- Проверить качество/совместимость и throughput.
+
+**Decision rule:**
+- Если ONNX даёт >=20-30% выигрыш на dense path без заметной quality деградации, открыть implementation issue.
+- Если нет стабильного выигрыша/паритета для BGE-M3 tri-vector, оставить PyTorch для sparse/colbert и использовать гибридную схему.
+
+Deliverable:
+- комментарий в #120 с таблицей baseline vs candidate (p50/p95/quality).
 
 ---
 
@@ -797,142 +717,65 @@ Closes #118"
 
 ---
 
-### Task 4.3: #117 — Qdrant error vs no-results
+### Task 4.3: #117 — Qdrant error vs no-results (без shared mutable state)
 
 **Files:**
-- Edit: `telegram_bot/services/qdrant.py:251-254`
+- Edit: `telegram_bot/services/qdrant.py`
+- Edit: `telegram_bot/graph/nodes/retrieve.py`
+- Edit: `telegram_bot/graph/state.py`
 - Create: `tests/unit/test_qdrant_error_signal.py`
 
-**Step 1: Write the failing test**
+**Step 1: Write failing tests (service + retrieve node)**
 
-Create `tests/unit/test_qdrant_error_signal.py`:
+Покрыть два сценария:
+- backend exception -> `backend_error=True` + `error_type` заполнен;
+- genuine empty results -> `backend_error=False`.
 
-```python
-"""Tests for Qdrant error signal distinction from empty results."""
+Примечание: следуем SDK-first (Context7): используем `AsyncQdrantClient` и его вызовы/исключения, без raw HTTP.
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
-
-@pytest.fixture
-def qdrant_service():
-    """Create QdrantService with mocked client."""
-    with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client_cls.return_value = mock_client
-
-        from telegram_bot.services.qdrant import QdrantService
-
-        svc = QdrantService(
-            url="http://localhost:6333",
-            collection_name="test_collection",
-        )
-        svc._client = mock_client
-        svc._collection_verified = True
-        yield svc, mock_client
-
-
-class TestQdrantErrorSignal:
-    """Verify error vs empty-results distinction."""
-
-    @pytest.mark.asyncio
-    async def test_search_error_returns_empty_with_error_flag(self, qdrant_service):
-        """When Qdrant raises, result is [] but qdrant_error metadata is set."""
-        svc, mock_client = qdrant_service
-        mock_client.query_points = AsyncMock(side_effect=RuntimeError("connection refused"))
-
-        results = await svc.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            sparse_vector={"indices": [1], "values": [0.5]},
-        )
-        assert results == []
-        assert svc.last_search_error is True
-
-    @pytest.mark.asyncio
-    async def test_empty_results_no_error_flag(self, qdrant_service):
-        """When Qdrant returns empty, no error flag."""
-        svc, mock_client = qdrant_service
-        mock_result = MagicMock()
-        mock_result.points = []
-        mock_client.query_points = AsyncMock(return_value=mock_result)
-
-        results = await svc.hybrid_search_rrf(
-            dense_vector=[0.1] * 1024,
-            sparse_vector={"indices": [1], "values": [0.5]},
-        )
-        assert results == []
-        assert svc.last_search_error is False
-```
-
-**Step 2: Run test to verify it fails**
+**Step 2: Run tests in red state**
 
 ```bash
 uv run pytest tests/unit/test_qdrant_error_signal.py -v
 ```
 
-Expected: FAIL (no `last_search_error` attribute).
+Expected: FAIL (сигнал backend_error ещё не реализован).
 
-**Step 3: Add error tracking to QdrantService**
+**Step 3: Add per-call meta signal**
 
-In `telegram_bot/services/qdrant.py`:
+В `telegram_bot/services/qdrant.py`:
+- Добавить opt-in API: `hybrid_search_rrf(..., return_meta: bool = False)`.
+- Если `return_meta=False`: сохранить текущий контракт `list[dict]`.
+- Если `return_meta=True`: возвращать `(results, meta)` где:
+  - `backend_error: bool`
+  - `error_type: str | None`
+  - `error_message: str | None`
 
-Add to `__init__` (after other instance vars):
+В `telegram_bot/graph/nodes/retrieve.py`:
+- Вызывать `hybrid_search_rrf(..., return_meta=True)`;
+- сохранять в state: `retrieval_backend_error`, `retrieval_error_type`.
 
-```python
-        self.last_search_error: bool = False
-```
-
-In `hybrid_search_rrf` method, before the try block add:
-
-```python
-        self.last_search_error = False
-```
-
-In the except block (line 251-254), change:
-
-```python
-        except Exception as e:
-            # Graceful degradation: return empty list on any Qdrant error
-            logger.error(f"Qdrant search failed (graceful degradation): {e}")
-            self.last_search_error = True
-            return []
-```
-
-Do the same for `batch_search_rrf` except block (line 349-351):
-
-```python
-        except Exception as e:
-            logger.error(f"Qdrant batch search failed (graceful degradation): {e}")
-            self.last_search_error = True
-            return []
-```
+В `telegram_bot/graph/state.py`:
+- Добавить новые поля в `RAGState`.
 
 **Step 4: Run tests**
 
 ```bash
 uv run pytest tests/unit/test_qdrant_error_signal.py -v
+uv run pytest tests/unit/test_qdrant_service.py tests/unit/graph/test_retrieve_node.py -q
 ```
 
-Expected: both green.
+Expected: green, контракт для текущих call-sites не ломается.
 
-**Step 5: Run existing qdrant tests (regression)**
-
-```bash
-uv run pytest tests/unit/test_qdrant_service.py -q
-```
-
-Expected: green.
-
-**Step 6: Lint + commit**
+**Step 5: Lint + commit**
 
 ```bash
-uv run ruff check telegram_bot/services/qdrant.py tests/unit/test_qdrant_error_signal.py --output-format=concise
-git add telegram_bot/services/qdrant.py tests/unit/test_qdrant_error_signal.py
-git commit -m "feat(qdrant): add last_search_error flag for error observability
+uv run ruff check telegram_bot/services/qdrant.py telegram_bot/graph/nodes/retrieve.py telegram_bot/graph/state.py tests/unit/test_qdrant_error_signal.py --output-format=concise
+git add telegram_bot/services/qdrant.py telegram_bot/graph/nodes/retrieve.py telegram_bot/graph/state.py tests/unit/test_qdrant_error_signal.py
+git commit -m "feat(qdrant): add per-call backend_error meta for retrieval observability
 
-Distinguish backend errors from genuine empty results. Graceful
-degradation preserved (still returns []). Flag readable by pipeline.
+Differentiate backend failures from genuine empty search results while
+preserving graceful degradation and existing default API contract.
 
 Closes #117"
 ```
@@ -942,46 +785,51 @@ Closes #117"
 ### Task 4.4: #119 — mypy duplicate module name
 
 **Files:**
-- Edit: `pyproject.toml:237-274` (mypy config section)
+- Edit: `pyproject.toml` (точечно, только если реально нужно)
 
 **Problem:** `services/user-base/main.py` and `services/bm42/main.py` both resolve as module `main` — mypy duplicate-module-name error.
 
-**Step 1: Add exclude pattern to mypy config**
-
-In `pyproject.toml`, after line 242 (`ignore_missing_imports = true`), add:
-
-```toml
-exclude = [
-    "services/user-base/",
-    "services/bm42/",
-]
-```
-
-**Step 2: Verify**
-
-```bash
-uv run mypy src telegram_bot --ignore-missing-imports 2>&1 | grep -i "duplicate"
-```
-
-Expected: no duplicate module errors.
-
-**Step 3: Full mypy run**
+**Step 1: Reproduce with CI-aligned commands**
 
 ```bash
 uv run mypy src telegram_bot --ignore-missing-imports
 ```
 
-Expected: clean (or only pre-existing warnings, no new errors).
+Expected: если duplicate не воспроизводится в этом контуре, config не менять.
 
-**Step 4: Lint + commit**
+**Step 2: Reproduce service-only issue отдельно**
+
+```bash
+uv run mypy services --ignore-missing-imports
+```
+
+Expected: duplicate error воспроизводится только для standalone services.
+
+**Step 3: Fix минимально-инвазивно**
+
+Предпочтительно:
+- Для service-only typecheck использовать `--explicit-package-bases`, либо
+- добавить отдельную команду/target для `services/*`, не затрагивая основной CI path.
+
+Избегать широкого global `exclude`, если проблема не влияет на `src telegram_bot`.
+
+**Step 4: Verify**
+
+```bash
+uv run mypy src telegram_bot --ignore-missing-imports
+uv run mypy services --ignore-missing-imports --explicit-package-bases
+```
+
+Expected: нет duplicate-module ошибок в обоих контурах.
+
+**Step 5: Commit**
 
 ```bash
 git add pyproject.toml
-git commit -m "fix(mypy): exclude standalone services with duplicate main.py
+git commit -m "fix(mypy): resolve duplicate module names in standalone services
 
-services/user-base/ and services/bm42/ each have main.py, causing
-duplicate module name errors. These are standalone FastAPI services,
-not part of the main package.
+Align mypy configuration/commands so standalone service entrypoints
+do not conflict while preserving main CI typecheck scope.
 
 Closes #119"
 ```
