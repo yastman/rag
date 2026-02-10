@@ -232,6 +232,7 @@ class PropertyBot:
             session_id=make_session_id("chat", message.chat.id),
             query=message.text or "",
         )
+        state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
 
         with propagate_attributes(
             session_id=state["session_id"],
