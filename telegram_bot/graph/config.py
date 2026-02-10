@@ -21,7 +21,7 @@ class GraphConfig:
     llm_max_tokens: int = 4096
     generate_max_tokens: int = 2048
     rewrite_model: str = "gpt-4o-mini"
-    rewrite_max_tokens: int = 200
+    rewrite_max_tokens: int = 64
 
     bge_m3_url: str = "http://bge-m3:8000"
     bge_m3_timeout: float = 120.0
