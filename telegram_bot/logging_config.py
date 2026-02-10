@@ -79,6 +79,7 @@ def setup_logging(
     console_handler.setLevel(level)
 
     # Set formatter
+    formatter: logging.Formatter
     if json_format:
         formatter = JSONFormatter()
     else:
