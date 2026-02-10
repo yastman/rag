@@ -56,7 +56,7 @@ class PipelineEventStream:
         try:
             entry_id: str = await self._redis.xadd(
                 STREAM_KEY,
-                fields,
+                fields,  # type: ignore[arg-type]
                 maxlen=STREAM_MAXLEN,
                 approximate=True,
             )

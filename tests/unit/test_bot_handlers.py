@@ -304,6 +304,36 @@ class TestHandleQuery:
             call_config = mock_graph.ainvoke.call_args[1].get("config", {})
             assert call_config == {}
 
+    @pytest.mark.asyncio
+    async def test_handle_query_passes_max_rewrite_attempts(self, mock_config):
+        """Test that handle_query sets max_rewrite_attempts from graph config."""
+        bot, _ = _create_bot(mock_config)
+        bot._graph_config.max_rewrite_attempts = 3
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok", "query_type": "GENERAL"})
+
+        with patch("telegram_bot.bot.build_graph", return_value=mock_graph):
+            message = MagicMock()
+            message.text = "квартиры"
+            message.from_user = MagicMock()
+            message.from_user.id = 12345
+            message.chat = MagicMock()
+            message.chat.id = 12345
+            message.bot = MagicMock()
+            message.bot.send_chat_action = AsyncMock()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock()
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_query(message)
+
+            state_arg = mock_graph.ainvoke.call_args[0][0]
+            assert state_arg["max_rewrite_attempts"] == 3
+
 
 class TestBotLifecycle:
     """Test bot start/stop lifecycle."""
