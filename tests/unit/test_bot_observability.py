@@ -26,7 +26,6 @@ class TestHandleQueryObservability:
         """Create PropertyBot handler with mocked services."""
         from telegram_bot.bot import PropertyBot
         from telegram_bot.config import BotConfig
-        from telegram_bot.services import QueryType
 
         # Avoid running PropertyBot.__init__ in unit tests (aiogram + real services)
         handler = PropertyBot.__new__(PropertyBot)
@@ -61,7 +60,7 @@ class TestHandleQueryObservability:
         handler.dense_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
 
         # Router decision is external; make it deterministic
-        handler._test_query_type = QueryType.COMPLEX
+        handler._test_query_type = "COMPLEX"
 
         return handler
 
