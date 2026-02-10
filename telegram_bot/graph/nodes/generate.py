@@ -22,6 +22,16 @@ from telegram_bot.observability import observe
 
 logger = logging.getLogger(__name__)
 
+
+class StreamingPartialDeliveryError(Exception):
+    """Raised when streaming delivered partial content to user then failed."""
+
+    def __init__(self, sent_msg: Any, partial_text: str):
+        self.sent_msg = sent_msg
+        self.partial_text = partial_text
+        super().__init__(f"Streaming failed after delivering {len(partial_text)} chars")
+
+
 _MAX_CONTEXT_DOCS = 5
 _STREAM_EDIT_INTERVAL = 0.3  # 300ms throttle for Telegram edit_text
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
@@ -138,17 +148,25 @@ async def _generate_streaming(
         name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
     )
 
-    async for chunk in stream:
-        if not chunk.choices:
-            continue
-        delta = chunk.choices[0].delta
-        if delta and delta.content:
-            accumulated += delta.content
-            now = time.monotonic()
-            if now - last_edit >= _STREAM_EDIT_INTERVAL:
-                with contextlib.suppress(Exception):
-                    await sent_msg.edit_text(accumulated)
-                last_edit = now
+    try:
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                accumulated += delta.content
+                now = time.monotonic()
+                if now - last_edit >= _STREAM_EDIT_INTERVAL:
+                    with contextlib.suppress(Exception):
+                        await sent_msg.edit_text(accumulated)
+                    last_edit = now
+    except Exception:
+        if accumulated:
+            raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
+        # No real content delivered — clean up placeholder
+        with contextlib.suppress(Exception):
+            await sent_msg.delete()
+        raise
 
     if not accumulated:
         # Stream produced no content — clean up placeholder
@@ -227,6 +245,28 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         if message is not None and config.streaming_enabled:
             try:
                 answer = await _generate_streaming(llm, config, llm_messages, message)
+                response_sent = True
+            except StreamingPartialDeliveryError as e:
+                logger.warning(
+                    "Streaming failed after partial delivery (%d chars), "
+                    "falling back to non-streaming with edit",
+                    len(e.partial_text),
+                    exc_info=True,
+                )
+                response = await llm.chat.completions.create(
+                    model=config.llm_model,
+                    messages=llm_messages,
+                    temperature=config.llm_temperature,
+                    max_tokens=config.generate_max_tokens,
+                    name="generate-answer",  # type: ignore[call-overload]
+                )
+                answer = response.choices[0].message.content or ""
+                # Edit existing message with fallback answer
+                try:
+                    await e.sent_msg.edit_text(answer, parse_mode="Markdown")
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        await e.sent_msg.edit_text(answer)
                 response_sent = True
             except Exception:
                 logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
