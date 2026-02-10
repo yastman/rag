@@ -54,7 +54,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 |------|------|---------------|
 | classify | `graph/nodes/classify.py` | — (regex-based, no external deps) |
 | cache_check | `graph/nodes/cache.py` | cache, embeddings |
-| retrieve | `graph/nodes/retrieve.py` | cache, sparse_embeddings, qdrant |
+| retrieve | `graph/nodes/retrieve.py` | cache, sparse_embeddings, qdrant (parallel dense+sparse on re-embed) |
 | grade | `graph/nodes/grade.py` | — (score threshold 0.3, returns `grade_confidence`) |
 | rerank | `graph/nodes/rerank.py` | reranker (ColBERT or None) |
 | generate | `graph/nodes/generate.py` | — (uses GraphConfig.create_llm) |
