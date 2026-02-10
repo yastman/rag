@@ -16,6 +16,15 @@ class TestGraphConfig:
         assert cfg.bge_m3_url == "http://bge-m3:8000"
         assert cfg.search_top_k == 20
         assert cfg.max_rewrite_attempts == 1
+        assert cfg.rewrite_max_tokens == 64
+
+    def test_from_env_rewrite_max_tokens(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        env = {"REWRITE_MAX_TOKENS": "128"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.rewrite_max_tokens == 128
 
     def test_from_env_max_rewrite_attempts(self):
         from telegram_bot.graph.config import GraphConfig
