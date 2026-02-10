@@ -31,6 +31,7 @@ dependencies = [
     "voyageai>=0.3.0",        ***REMOVED*** AI embeddings and reranking
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
     "redis>=7.0.1",
+    "redisvl>=0.13.2",
     "aiogram>=3.22.0",
     # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
     "torch>=2.0.0",
