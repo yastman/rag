@@ -54,5 +54,6 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "documents_relevant": relevant,
+        "grade_confidence": top_score,
         "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
     }
