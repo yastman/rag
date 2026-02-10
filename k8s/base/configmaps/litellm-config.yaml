@@ -7,14 +7,20 @@ data:
     model_list:
       - model_name: gpt-4o-mini
         litellm_params:
-          model: openai/zai-glm-4.7
-          api_base: https://api.cerebras.ai/v1
+          model: cerebras/gpt-oss-120b
           api_key: os.environ/CEREBRAS_API_KEY
           max_tokens: 4096
           merge_reasoning_content_in_choices: true
       - model_name: gpt-oss-120b
         litellm_params:
           model: cerebras/gpt-oss-120b
+          api_key: os.environ/CEREBRAS_API_KEY
+          max_tokens: 4096
+          merge_reasoning_content_in_choices: true
+      - model_name: gpt-4o-mini-cerebras-glm
+        litellm_params:
+          model: openai/zai-glm-4.7
+          api_base: https://api.cerebras.ai/v1
           api_key: os.environ/CEREBRAS_API_KEY
           max_tokens: 4096
           merge_reasoning_content_in_choices: true
@@ -33,7 +39,7 @@ data:
       allow_requests_on_db_unavailable: true
     router_settings:
       fallbacks:
-        - gpt-4o-mini: [gpt-4o-mini-fallback, gpt-4o-mini-openai]
+        - gpt-4o-mini: [gpt-4o-mini-cerebras-glm, gpt-4o-mini-fallback, gpt-4o-mini-openai]
       retry_policy:
         retry_count: 2
     litellm_settings:
