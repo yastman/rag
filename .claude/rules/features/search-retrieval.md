@@ -47,11 +47,13 @@ result = await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdran
 
 Dense embedding comes from `state["query_embedding"]` (set by cache_check_node).
 
+**Parallel re-embed path:** After rewrite (`query_embedding=None`), dense and sparse embeddings are computed simultaneously via `asyncio.gather`, saving ~0.5-1s.
+
 ## LangGraph Agentic Nodes
 
 ### grade_node
 
-Score-based heuristic: `top_score > 0.3` → documents relevant.
+Score-based heuristic: `top_score > 0.3` → documents relevant. Also sets `grade_confidence` (= top_score) and `skip_rerank` (true when `top_score >= skip_rerank_threshold`).
 
 ### rerank_node
 
@@ -59,7 +61,7 @@ ColBERT reranking if reranker provided, else score-sort fallback (top-5).
 
 ### rewrite_node
 
-LLM reformulation via OpenAI SDK (`GraphConfig.create_llm()`). Increments `rewrite_count`, resets embeddings for re-retrieval. Max 2 retries before fallback to generate.
+LLM reformulation via OpenAI SDK (`GraphConfig.create_llm()`). Increments `rewrite_count`, resets embeddings for re-retrieval. Max `max_rewrite_attempts` (default 1) retries before fallback to generate.
 
 ## Search Engine Variants
 
@@ -83,6 +85,8 @@ LLM reformulation via OpenAI SDK (`GraphConfig.create_llm()`). Increments `rewri
 | `quantization_oversampling` | 2.0 | Fetch 2x more candidates |
 | `small_to_big_mode` | off | off/on/auto (context expansion) |
 | `acorn_mode` | off | off/on/auto (filtered search optimization) |
+| `skip_rerank_threshold` | 0.85 | Skip ColBERT rerank when grade confidence >= threshold |
+| `generate_max_tokens` | 2048 | Token cap for LLM generation (env: `GENERATE_MAX_TOKENS`) |
 
 ## RRF Weights by Query Type
 
@@ -174,9 +178,10 @@ Enabled by default for 40x faster search, 75% less RAM.
 START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
                  → [other] → cache_check → [HIT] → respond → END
                                          → [MISS] → retrieve → grade
+                                                      → [relevant + high confidence] → generate → cache_store → respond → END
                                                       → [relevant] → rerank → generate → cache_store → respond → END
-                                                      → [retries < 2] → rewrite → retrieve (loop)
-                                                      → [retries >= 2] → generate → cache_store → respond → END
+                                                      → [count < max_rewrite_attempts AND effective] → rewrite → retrieve (loop)
+                                                      → [count >= max_rewrite_attempts] → generate → cache_store → respond → END
 ```
 
 ### Edges
@@ -185,7 +190,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 |----------|-----------|
 | `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
 | `route_cache` | cache_check → respond (hit) or retrieve (miss) |
-| `route_grade` | grade → rerank (relevant), rewrite (retry < 2), generate (fallback) |
+| `route_grade` | grade → generate (skip_rerank), rerank (relevant), rewrite (count < max_rewrite_attempts AND effective), generate (fallback) |
 
 ### Usage
 
@@ -212,7 +217,7 @@ result = await graph.ainvoke(initial_state, config={"callbacks": [langfuse_handl
 ```bash
 pytest tests/unit/test_qdrant_service.py -v
 pytest tests/unit/test_search_engines.py -v
-pytest tests/unit/graph/test_retrieve_node.py -v    # 5 tests
+pytest tests/unit/graph/test_retrieve_node.py -v    # 6 tests
 pytest tests/unit/graph/test_agentic_nodes.py -v    # 12 tests (grade/rerank/rewrite)
 pytest tests/unit/graph/test_edges.py -v             # 13 tests (routing)
 pytest tests/unit/graph/test_graph.py -v             # 3 tests (assembly)

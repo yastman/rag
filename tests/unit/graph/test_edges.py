@@ -109,11 +109,28 @@ class TestRouteGrade:
         state["rewrite_count"] = 5
         assert route_grade(state) == "generate"
 
+    def test_custom_max_rewrite_attempts(self):
+        """With max_rewrite_attempts=3, rewrite_count=2 still allows rewrite."""
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["documents_relevant"] = False
+        state["rewrite_count"] = 2
+        state["max_rewrite_attempts"] = 3
+        assert route_grade(state) == "rewrite"
+
+    def test_custom_max_rewrite_attempts_exhausted(self):
+        """With max_rewrite_attempts=3, rewrite_count=3 → generate."""
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["documents_relevant"] = False
+        state["rewrite_count"] = 3
+        state["max_rewrite_attempts"] = 3
+        assert route_grade(state) == "generate"
+
     def test_route_grade_rewrite_ineffective_goes_to_generate(self):
         """If rewrite was ineffective, skip further rewrites."""
         state = {
             "documents_relevant": False,
             "rewrite_count": 0,
+            "max_rewrite_attempts": 1,
             "rewrite_effective": False,
         }
         assert route_grade(state) == "generate"
@@ -123,6 +140,7 @@ class TestRouteGrade:
         state = {
             "documents_relevant": False,
             "rewrite_count": 0,
+            "max_rewrite_attempts": 1,
             "rewrite_effective": True,
         }
         assert route_grade(state) == "rewrite"
