@@ -10,7 +10,7 @@ Code patterns for `telegram_bot/services/` and `telegram_bot/integrations/`.
 
 ```
 telegram_bot/
-├── bot.py                 ***REMOVED*** PropertyBot (~260 LOC, LangGraph pipeline + score writing)
+├── bot.py                 ***REMOVED*** PropertyBot (~300 LOC, LangGraph orchestrator + score writing)
 ├── config.py              ***REMOVED*** BotConfig (pydantic-settings BaseSettings)
 ├── observability.py       ***REMOVED*** Langfuse init, @observe decorator, PII masking
 ├── preflight.py           ***REMOVED*** Health checks (Redis, Qdrant, BGE-M3, LiteLLM)
