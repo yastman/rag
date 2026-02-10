@@ -9,13 +9,19 @@ import time
 
 import pytest
 
-from telegram_bot.services import (
-    CacheService,
-    LLMService,
-    QueryPreprocessor,
-    RetrieverService,
-    VoyageService,
-)
+
+pytestmark = pytest.mark.legacy_api
+
+try:
+    from telegram_bot.services import (
+        CacheService,
+        LLMService,
+        QueryPreprocessor,
+        RetrieverService,
+        VoyageService,
+    )
+except ImportError:
+    pytest.skip("Legacy imports removed in LangGraph migration", allow_module_level=True)
 
 
 def skip_if_missing_keys():

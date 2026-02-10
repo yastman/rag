@@ -8,11 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from telegram_bot.services.query_router import (
-    QueryType,
-    classify_query,
-    get_chitchat_response,
-)
+
+pytestmark = pytest.mark.legacy_api
+
+try:
+    from telegram_bot.services.query_router import (
+        QueryType,
+        classify_query,
+        get_chitchat_response,
+    )
+except ImportError:
+    pytest.skip("Legacy imports removed in LangGraph migration", allow_module_level=True)
+
 from tests.load.chat_simulator import run_parallel_chats
 from tests.load.metrics_collector import (
     LoadMetrics,
@@ -75,6 +82,7 @@ async def services(load_config):
         yield {"voyage": voyage, "qdrant": qdrant, "cache": cache}
     else:
         from telegram_bot.services.cache import CacheService
+
         from telegram_bot.services.qdrant import QdrantService
         from telegram_bot.services.voyage import VoyageService
 
