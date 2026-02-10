@@ -697,7 +697,7 @@ Expected: collected (with legacy_api marker), no import error during collection.
 **Step 3: Verify it's excluded in CI mode**
 
 ```bash
-uv run pytest tests/integration/test_redis_cache.py -m "not legacy_api" --collect-only
+uv run pytest tests/integration/test_redis_cache.py -m "not legacy_api" --collect-only || true
 ```
 
 Expected: 0 tests collected.

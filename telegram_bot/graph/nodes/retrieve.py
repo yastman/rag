@@ -91,6 +91,9 @@ async def retrieve_node(
             "documents": cached_results,
             "search_results_count": len(cached_results),
             "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
+            # Clear stale backend-error markers from previous turns/branches.
+            "retrieval_backend_error": False,
+            "retrieval_error_type": None,
         }
 
     # Step 2: Get sparse embedding (cached or compute)
