@@ -8,6 +8,9 @@ from telegram_bot.graph.nodes.retrieve import retrieve_node
 from telegram_bot.graph.state import make_initial_state
 
 
+_OK_META = {"backend_error": False, "error_type": None, "error_message": None}
+
+
 def _make_docs(n: int = 3) -> list[dict]:
     """Create mock search results."""
     return [
@@ -39,7 +42,7 @@ class TestRetrieveNode:
         )
 
         qdrant = AsyncMock()
-        qdrant.hybrid_search_rrf = AsyncMock(return_value=mock_docs)
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(mock_docs, _OK_META))
 
         result = await retrieve_node(
             state,
@@ -94,7 +97,7 @@ class TestRetrieveNode:
         sparse_embeddings.aembed_query = AsyncMock(return_value={"indices": [1], "values": [0.1]})
 
         qdrant = AsyncMock()
-        qdrant.hybrid_search_rrf = AsyncMock(return_value=[])
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=([], _OK_META))
 
         result = await retrieve_node(
             state,
@@ -121,7 +124,7 @@ class TestRetrieveNode:
 
         sparse_embeddings = AsyncMock()
         qdrant = AsyncMock()
-        qdrant.hybrid_search_rrf = AsyncMock(return_value=_make_docs(2))
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(_make_docs(2), _OK_META))
 
         await retrieve_node(
             state,
@@ -154,7 +157,7 @@ class TestRetrieveNode:
         sparse_embeddings.aembed_query = AsyncMock(return_value={"indices": [1], "values": [0.5]})
 
         qdrant = AsyncMock()
-        qdrant.hybrid_search_rrf = AsyncMock(return_value=mock_docs)
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(mock_docs, _OK_META))
 
         await retrieve_node(
             state,
@@ -204,7 +207,7 @@ class TestRetrieveNode:
         sparse_embeddings.aembed_query = AsyncMock(side_effect=mock_sparse_embed)
 
         qdrant = AsyncMock()
-        qdrant.hybrid_search_rrf = AsyncMock(return_value=_make_docs(3))
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(_make_docs(3), _OK_META))
 
         result = await retrieve_node(
             state,
