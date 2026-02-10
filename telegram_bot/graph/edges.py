@@ -36,6 +36,7 @@ def route_grade(
     """Route after grading: relevant → rerank, not relevant + retries < 2 + effective → rewrite, else → generate."""
     if state.get("documents_relevant", False):
         return "rerank"
-    if state.get("rewrite_count", 0) < 2 and state.get("rewrite_effective", True):
+    max_attempts = state.get("max_rewrite_attempts", 1)
+    if state.get("rewrite_count", 0) < max_attempts and state.get("rewrite_effective", True):
         return "rewrite"
     return "generate"
