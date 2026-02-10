@@ -133,7 +133,7 @@ async def _generate_streaming(
         model=config.llm_model,
         messages=llm_messages,
         temperature=config.llm_temperature,
-        max_tokens=config.llm_max_tokens,
+        max_tokens=config.generate_max_tokens,
         stream=True,
         name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
     )
@@ -235,7 +235,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     model=config.llm_model,
                     messages=llm_messages,
                     temperature=config.llm_temperature,
-                    max_tokens=config.llm_max_tokens,
+                    max_tokens=config.generate_max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]
                 )
                 answer = response.choices[0].message.content or ""
@@ -245,7 +245,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                 model=config.llm_model,
                 messages=llm_messages,
                 temperature=config.llm_temperature,
-                max_tokens=config.llm_max_tokens,
+                max_tokens=config.generate_max_tokens,
                 name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
             answer = response.choices[0].message.content or ""
