@@ -105,13 +105,15 @@ class PropertyBot:
 
         # Initialize LangGraph service dependencies
         from .integrations.cache import CacheLayerManager
-        from .integrations.embeddings import BGEM3Embeddings, BGEM3SparseEmbeddings
+        from .integrations.embeddings import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
         from .services.qdrant import QdrantService
 
         self._cache = CacheLayerManager(redis_url=config.redis_url)
-        self._embeddings = BGEM3Embeddings(
+        self._hybrid = BGEM3HybridEmbeddings(
             base_url=config.bge_m3_url,
         )
+        # Use hybrid as primary embeddings provider
+        self._embeddings = self._hybrid
         self._sparse = BGEM3SparseEmbeddings(
             base_url=config.bge_m3_url,
         )
@@ -305,6 +307,10 @@ class PropertyBot:
         await self._redis_monitor.stop()
         await self._cache.close()
         await self._qdrant.close()
+        if hasattr(self._embeddings, "aclose"):
+            await self._embeddings.aclose()
+        if hasattr(self._sparse, "aclose"):
+            await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
         await self.bot.session.close()

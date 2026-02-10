@@ -54,7 +54,8 @@ class TestCacheCheckNode:
         cache.check_semantic = AsyncMock(return_value=None)
         cache.get_embedding = AsyncMock(return_value=None)
 
-        embeddings = AsyncMock()
+        # Non-hybrid embeddings (no aembed_hybrid attr)
+        embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1024)
 
         result = await cache_check_node(state, cache=cache, embeddings=embeddings)
@@ -93,12 +94,34 @@ class TestCacheCheckNode:
         cache.check_semantic = AsyncMock(return_value=None)
         cache.store_embedding = AsyncMock()
 
-        embeddings = AsyncMock()
+        # Non-hybrid embeddings (no aembed_hybrid attr)
+        embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(return_value=[0.3] * 1024)
 
         await cache_check_node(state, cache=cache, embeddings=embeddings)
 
         cache.store_embedding.assert_awaited_once_with("new query", [0.3] * 1024)
+
+    @pytest.mark.asyncio
+    async def test_hybrid_stores_both_embeddings(self):
+        """When hybrid embeddings available, cache both dense and sparse."""
+        state = make_initial_state(user_id=1, session_id="s1", query="hybrid query")
+        state["query_type"] = "GENERAL"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=None)
+        cache.check_semantic = AsyncMock(return_value=None)
+        cache.store_embedding = AsyncMock()
+        cache.store_sparse_embedding = AsyncMock()
+
+        sparse_vec = {"indices": [1, 5], "values": [0.1, 0.5]}
+        embeddings = AsyncMock()
+        embeddings.aembed_hybrid = AsyncMock(return_value=([0.3] * 1024, sparse_vec))
+
+        await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        cache.store_embedding.assert_awaited_once_with("hybrid query", [0.3] * 1024)
+        cache.store_sparse_embedding.assert_awaited_once_with("hybrid query", sparse_vec)
 
 
 class TestCacheStoreNode:
