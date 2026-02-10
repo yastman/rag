@@ -28,9 +28,9 @@ User Message → ThrottlingMiddleware → ErrorMiddleware
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
 | `telegram_bot/graph/graph.py` | `build_graph()` — assembles 9-node StateGraph |
-| `telegram_bot/graph/state.py` | RAGState TypedDict (17 fields incl. `rewrite_effective`) + `make_initial_state()` |
-| `telegram_bot/graph/edges.py` | 3 routing functions (`route_grade` checks `rewrite_effective`) |
-| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `rewrite_model`/`rewrite_max_tokens`) |
+| `telegram_bot/graph/state.py` | RAGState TypedDict (18 fields incl. `max_rewrite_attempts`, `rewrite_effective`) + `make_initial_state()` |
+| `telegram_bot/graph/edges.py` | 3 routing functions (`route_grade` checks `max_rewrite_attempts` + `rewrite_effective`) |
+| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `max_rewrite_attempts=1`, `rewrite_max_tokens=64`) |
 | `telegram_bot/graph/nodes/` | 8 node modules (classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, PII masking |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
@@ -43,8 +43,8 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
                  → [other] → cache_check → [HIT] → respond → END
                                           → [MISS] → retrieve → grade
                                                        → [relevant] → rerank → generate → cache_store → respond → END
-                                                       → [retries < 2 AND effective] → rewrite → retrieve (loop)
-                                                       → [retries >= 2] → generate → cache_store → respond → END
+                                                       → [count < max_rewrite_attempts AND effective] → rewrite → retrieve (loop)
+                                                       → [count >= max_rewrite_attempts] → generate → cache_store → respond → END
 ```
 
 ### Nodes
@@ -67,7 +67,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 |----------|-----------|
 | `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
 | `route_cache` | cache_check → respond (hit) or retrieve (miss) |
-| `route_grade` | grade → rerank (relevant), rewrite (retry < 2 AND `rewrite_effective`), generate (fallback) |
+| `route_grade` | grade → rerank (relevant), rewrite (count < `max_rewrite_attempts` AND `rewrite_effective`), generate (fallback) |
 
 ## Bot Commands
 
@@ -90,6 +90,15 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `domain_language` | `BOT_LANGUAGE` | `ru` | Response language |
 | `rerank_provider` | `RERANK_PROVIDER` | `voyage` | colbert / none / voyage |
 | `admin_ids` | `ADMIN_IDS` | [] | Comma-separated Telegram IDs |
+
+### GraphConfig (pipeline tuning)
+
+| Parameter | Env Var | Default | Description |
+|-----------|---------|---------|-------------|
+| `max_rewrite_attempts` | `MAX_REWRITE_ATTEMPTS` | `1` | Max query rewrites before fallback |
+| `rewrite_max_tokens` | `REWRITE_MAX_TOKENS` | `64` | Token budget for rewrite LLM call |
+| `rewrite_model` | `REWRITE_MODEL` | `gpt-4o-mini` | Model for rewrites |
+| `bge_m3_timeout` | `BGE_M3_TIMEOUT` | `120.0` | BGE-M3 API timeout (seconds) |
 
 ## Service Dependencies (initialized in PropertyBot.__init__)
 
@@ -135,7 +144,7 @@ Catches all exceptions, logs with `exc_info=True`, returns user-friendly message
 ```bash
 pytest tests/unit/test_bot.py -v
 pytest tests/unit/test_middlewares.py -v
-pytest tests/unit/graph/ -v                              # All graph unit tests (~124 tests)
+pytest tests/unit/graph/ -v                    # All graph tests (~100 tests)
 pytest tests/integration/test_graph_paths.py -v          # 6 graph path integration tests (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 ```
