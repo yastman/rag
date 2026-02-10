@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -43,7 +44,7 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
         result: State dict returned by graph.ainvoke().
     """
     latency_stages = result.get("latency_stages", {})
-    total_ms = sum(latency_stages.values()) * 1000
+    total_ms = result.get("pipeline_wall_ms", 0.0)
 
     scores = {
         "query_type": _QUERY_TYPE_SCORE.get(result.get("query_type", ""), 1.0),
@@ -226,6 +227,7 @@ class PropertyBot:
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message):
         """Handle user query via LangGraph RAG pipeline."""
+        pipeline_start = time.perf_counter()
         # Early typing ACK — user sees "typing..." immediately
         assert message.bot is not None
         assert message.from_user is not None
@@ -256,6 +258,9 @@ class PropertyBot:
 
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                 result = await graph.ainvoke(state)
+
+            # Wall-time for accurate latency_total_ms
+            result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
 
             # Update trace with input/output and metadata
             lf = get_client()
