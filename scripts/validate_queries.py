@@ -331,10 +331,11 @@ def get_warmup_queries(collection: str, count: int = 3) -> list[ValidationQuery]
 
 def get_cache_hit_queries(
     cold_queries: list[ValidationQuery],
-    count: int = 5,
+    count: int = 10,
 ) -> list[ValidationQuery]:
     """Select queries to repeat for cache-hit testing."""
-    # Pick a mix: some easy (likely cached) + some hard
-    easy = [q for q in cold_queries if q.difficulty == "easy"][:2]
+    # Pick a mix: easy (likely cached) + medium + hard
+    easy = [q for q in cold_queries if q.difficulty == "easy"][:4]
+    medium = [q for q in cold_queries if q.difficulty == "medium"][:3]
     hard = [q for q in cold_queries if q.difficulty == "hard"][:3]
-    return (easy + hard)[:count]
+    return (easy + medium + hard)[:count]
