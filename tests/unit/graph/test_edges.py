@@ -112,22 +112,24 @@ class TestRouteGrade:
         }
         assert route_grade(state) == "rewrite"
 
-    def test_high_confidence_skips_rerank(self):
-        """When grade_confidence >= skip_rerank_threshold, route directly to generate."""
+    def test_skip_rerank_routes_to_generate(self):
+        """When skip_rerank=True (set by grade_node), route directly to generate."""
         state = {
             "documents_relevant": True,
             "rewrite_count": 0,
             "rewrite_effective": True,
             "grade_confidence": 0.95,
+            "skip_rerank": True,
         }
         assert route_grade(state) == "generate"
 
-    def test_relevant_low_confidence_routes_to_rerank(self):
-        """Relevant docs with low confidence still go through rerank."""
+    def test_no_skip_rerank_routes_to_rerank(self):
+        """When skip_rerank=False, relevant docs go through rerank."""
         state = {
             "documents_relevant": True,
             "rewrite_count": 0,
             "rewrite_effective": True,
             "grade_confidence": 0.5,
+            "skip_rerank": False,
         }
         assert route_grade(state) == "rerank"
