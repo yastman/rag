@@ -6,6 +6,7 @@ import pytest
 
 from telegram_bot.graph.nodes.retrieve import retrieve_node
 from telegram_bot.graph.state import make_initial_state
+from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
 
 
 _OK_META = {"backend_error": False, "error_type": None, "error_message": None}
@@ -266,7 +267,7 @@ class TestRetrieveNode:
         cache.store_search_results = AsyncMock()
 
         sparse_vec = {"indices": [1, 2], "values": [0.5, 0.3]}
-        embeddings = AsyncMock()
+        embeddings = AsyncMock(spec=BGEM3HybridEmbeddings)
         embeddings.aembed_hybrid = AsyncMock(return_value=([0.1] * 1024, sparse_vec))
 
         sparse_embeddings = AsyncMock()
