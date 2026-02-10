@@ -82,6 +82,30 @@ class TestRetrieveNode:
         qdrant.hybrid_search_rrf.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_cache_hit_clears_stale_backend_error_flags(self):
+        state = make_initial_state(user_id=1, session_id="s1", query="cached query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.2] * 1024
+        state["retrieval_backend_error"] = True
+        state["retrieval_error_type"] = "TimeoutError"
+
+        cached_docs = _make_docs(1)
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=cached_docs)
+        qdrant = AsyncMock()
+        sparse_embeddings = AsyncMock()
+
+        result = await retrieve_node(
+            state,
+            cache=cache,
+            sparse_embeddings=sparse_embeddings,
+            qdrant=qdrant,
+        )
+
+        assert result["retrieval_backend_error"] is False
+        assert result["retrieval_error_type"] is None
+
+    @pytest.mark.asyncio
     async def test_handles_empty_results(self):
         state = make_initial_state(user_id=1, session_id="s1", query="obscure query")
         state["query_type"] = "GENERAL"
