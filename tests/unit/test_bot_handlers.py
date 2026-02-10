@@ -33,7 +33,7 @@ def mock_config():
 BOT_INIT_PATCHES = [
     "telegram_bot.bot.Bot",
     "telegram_bot.integrations.cache.CacheLayerManager",
-    "telegram_bot.integrations.embeddings.BGEM3Embeddings",
+    "telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings",
     "telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings",
     "telegram_bot.services.qdrant.QdrantService",
     "telegram_bot.graph.config.GraphConfig.create_llm",
@@ -46,7 +46,7 @@ def _create_bot(mock_config):
     with (
         patch("telegram_bot.bot.Bot") as mock_bot,
         patch("telegram_bot.integrations.cache.CacheLayerManager") as mock_cache,
-        patch("telegram_bot.integrations.embeddings.BGEM3Embeddings") as mock_emb,
+        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings") as mock_emb,
         patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
         patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
         patch("telegram_bot.graph.config.GraphConfig.create_llm") as mock_llm,
@@ -71,7 +71,7 @@ class TestPropertyBotInit:
         with (
             patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.integrations.cache.CacheLayerManager") as mock_cache,
-            patch("telegram_bot.integrations.embeddings.BGEM3Embeddings") as mock_emb,
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings") as mock_emb,
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
             patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
             patch("telegram_bot.graph.config.GraphConfig.create_llm"),
@@ -387,6 +387,10 @@ class TestBotLifecycle:
         bot._cache.close = AsyncMock()
         bot._qdrant = MagicMock()
         bot._qdrant.close = AsyncMock()
+        bot._embeddings = MagicMock()
+        bot._embeddings.aclose = AsyncMock()
+        bot._sparse = MagicMock()
+        bot._sparse.aclose = AsyncMock()
         bot._reranker = None
         bot.bot = MagicMock()
         bot.bot.session = MagicMock()
@@ -398,6 +402,8 @@ class TestBotLifecycle:
 
         bot._cache.close.assert_called_once()
         bot._qdrant.close.assert_called_once()
+        bot._embeddings.aclose.assert_awaited_once()
+        bot._sparse.aclose.assert_awaited_once()
 
 
 class TestSetupMiddlewares:
@@ -410,7 +416,7 @@ class TestSetupMiddlewares:
         with (
             patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.integrations.cache.CacheLayerManager"),
-            patch("telegram_bot.integrations.embeddings.BGEM3Embeddings"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService"),
             patch("telegram_bot.graph.config.GraphConfig.create_llm"),

@@ -195,7 +195,7 @@ class TestRetrieveNode:
 
     @pytest.mark.asyncio
     async def test_parallel_embeddings_after_rewrite(self):
-        """After rewrite (query_embedding=None), dense+sparse fetched in parallel."""
+        """After rewrite (query_embedding=None), fallback parallel dense+sparse."""
         import asyncio
 
         state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
@@ -224,7 +224,8 @@ class TestRetrieveNode:
         cache.store_sparse_embedding = AsyncMock()
         cache.store_search_results = AsyncMock()
 
-        embeddings = AsyncMock()
+        # Non-hybrid embeddings → falls through to parallel path
+        embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(side_effect=mock_dense_embed)
 
         sparse_embeddings = AsyncMock()
@@ -248,3 +249,42 @@ class TestRetrieveNode:
         # Check parallel execution: sparse_start should appear before dense_end
         assert "sparse_start" in call_order
         assert "dense_start" in call_order
+
+    @pytest.mark.asyncio
+    async def test_hybrid_embedding_after_rewrite(self):
+        """After rewrite, hybrid embeddings uses single /encode/hybrid call."""
+        state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = None  # simulates post-rewrite
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=None)
+        cache.store_embedding = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_sparse_embedding = AsyncMock()
+        cache.store_search_results = AsyncMock()
+
+        sparse_vec = {"indices": [1, 2], "values": [0.5, 0.3]}
+        embeddings = AsyncMock()
+        embeddings.aembed_hybrid = AsyncMock(return_value=([0.1] * 1024, sparse_vec))
+
+        sparse_embeddings = AsyncMock()
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(_make_docs(3), _OK_META))
+
+        result = await retrieve_node(
+            state,
+            cache=cache,
+            embeddings=embeddings,
+            sparse_embeddings=sparse_embeddings,
+            qdrant=qdrant,
+        )
+
+        assert len(result["documents"]) == 3
+        embeddings.aembed_hybrid.assert_awaited_once_with("rewritten query")
+        cache.store_embedding.assert_awaited_once()
+        cache.store_sparse_embedding.assert_awaited_once()
+        # sparse_embeddings should NOT be called — hybrid provided both
+        sparse_embeddings.aembed_query.assert_not_awaited()

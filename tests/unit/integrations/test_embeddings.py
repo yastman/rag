@@ -127,3 +127,83 @@ class TestBGEM3SparseEmbeddings:
             mock_post.assert_called_once()
             call_args = mock_post.call_args
             assert "/encode/sparse" in call_args[0][0]
+
+
+class TestBGEM3HybridEmbeddings:
+    async def test_aembed_hybrid_returns_dense_and_sparse(self):
+        """Hybrid embed returns both dense_vecs and lexical_weights from one call."""
+        hybrid_response = {
+            "dense_vecs": [[0.1, 0.2, 0.3]],
+            "lexical_weights": [{"indices": [1, 5], "values": [0.1, 0.5]}],
+        }
+        mock_response = httpx.Response(
+            200,
+            json=hybrid_response,
+            request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
+        )
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
+            from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
+
+            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            dense, sparse = await emb.aembed_hybrid("test query")
+        assert dense == [0.1, 0.2, 0.3]
+        assert sparse == {"indices": [1, 5], "values": [0.1, 0.5]}
+
+    async def test_posts_to_hybrid_endpoint(self):
+        hybrid_response = {
+            "dense_vecs": [[0.1]],
+            "lexical_weights": [{"indices": [1], "values": [0.1]}],
+        }
+        mock_response = httpx.Response(
+            200,
+            json=hybrid_response,
+            request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
+        )
+        with patch(
+            "httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response
+        ) as mock_post:
+            from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
+
+            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            await emb.aembed_hybrid("test")
+            mock_post.assert_called_once()
+            call_args = mock_post.call_args
+            assert "/encode/hybrid" in call_args[0][0]
+
+    async def test_shared_client_reused(self):
+        """Client is created once and reused across calls."""
+        hybrid_response = {
+            "dense_vecs": [[0.1]],
+            "lexical_weights": [{"indices": [1], "values": [0.1]}],
+        }
+        mock_response = httpx.Response(
+            200,
+            json=hybrid_response,
+            request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
+        )
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
+            from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
+
+            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            await emb.aembed_hybrid("test1")
+            await emb.aembed_hybrid("test2")
+            # Same client instance used (shared)
+            assert emb._client is not None
+
+    async def test_aembed_query_delegates_to_hybrid(self):
+        """aembed_query returns only dense part from hybrid call."""
+        hybrid_response = {
+            "dense_vecs": [[0.1, 0.2]],
+            "lexical_weights": [{"indices": [1], "values": [0.5]}],
+        }
+        mock_response = httpx.Response(
+            200,
+            json=hybrid_response,
+            request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
+        )
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
+            from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
+
+            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            result = await emb.aembed_query("test")
+        assert result == [0.1, 0.2]

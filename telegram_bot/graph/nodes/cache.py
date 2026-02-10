@@ -42,11 +42,17 @@ async def cache_check_node(
 
     start = time.perf_counter()
 
-    # Step 1: Get or compute dense embedding
+    # Step 1: Get or compute dense embedding (prefer hybrid for efficiency)
     embedding = await cache.get_embedding(query)
     if embedding is None:
-        embedding = await embeddings.aembed_query(query)
-        await cache.store_embedding(query, embedding)
+        if hasattr(embeddings, "aembed_hybrid"):
+            # Hybrid: get both dense + sparse in one call, cache both
+            embedding, sparse = await embeddings.aembed_hybrid(query)
+            await cache.store_embedding(query, embedding)
+            await cache.store_sparse_embedding(query, sparse)
+        else:
+            embedding = await embeddings.aembed_query(query)
+            await cache.store_embedding(query, embedding)
 
     # Step 2: Check semantic cache with query-type threshold
     cached = await cache.check_semantic(
