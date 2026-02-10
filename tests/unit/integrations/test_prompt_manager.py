@@ -89,7 +89,7 @@ class TestGetPrompt:
 
         assert result == "Langfuse prompt text"
         mock_client.get_prompt.assert_called_once_with(
-            "my-prompt", cache_ttl_seconds=DEFAULT_CACHE_TTL, fallback="fallback text"
+            "my-prompt", cache_ttl_seconds=DEFAULT_CACHE_TTL
         )
         mock_prompt.compile.assert_called_once_with()
 
@@ -124,7 +124,7 @@ class TestGetPrompt:
         ):
             get_prompt("test", fallback="fb", cache_ttl=60)
 
-        mock_client.get_prompt.assert_called_once_with("test", cache_ttl_seconds=60, fallback="fb")
+        mock_client.get_prompt.assert_called_once_with("test", cache_ttl_seconds=60)
 
     def test_falls_back_on_exception(self):
         mock_client = MagicMock()
@@ -149,6 +149,24 @@ class TestGetPrompt:
             result = get_prompt("broken", fallback="Hello {{name}}", variables={"name": "World"})
 
         assert result == "Hello World"
+
+    def test_not_found_error_is_temporarily_cached(self):
+        mock_client = MagicMock()
+        mock_client.get_prompt.side_effect = Exception(
+            "status_code: 404, body: {'message': \"Prompt not found: 'generate'\"}"
+        )
+
+        with patch(
+            "telegram_bot.integrations.prompt_manager._get_langfuse_client",
+            return_value=mock_client,
+        ):
+            first = get_prompt("generate", fallback="fallback", cache_ttl=60)
+            second = get_prompt("generate", fallback="fallback", cache_ttl=60)
+
+        assert first == "fallback"
+        assert second == "fallback"
+        # 2nd call should use local missing-cache and skip Langfuse call.
+        assert mock_client.get_prompt.call_count == 1
 
 
 class TestApplyFallbackVars:
