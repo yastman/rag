@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from dotenv import load_dotenv
 from langfuse import Langfuse
 
 
@@ -46,7 +47,7 @@ logger = logging.getLogger(__name__)
 # Reference trace from issue #105
 REFERENCE_TRACE_ID = "c2b95d86aa1f643b79016dd611c4691f"
 
-COLLECTIONS_TO_CHECK = ["legal_documents", "contextual_bulgaria_voyage"]
+COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
 
 
 @dataclass
@@ -100,7 +101,7 @@ def detect_runner_mode(collection: str) -> str:
     """Detect runner mode based on collection embedding requirements.
 
     Returns:
-        'langgraph_bge' for BGE-M3 collections (legal_documents, gdrive_documents_bge).
+        'langgraph_bge' for BGE-M3 collections (gdrive_documents_bge).
         'voyage_compatible' for Voyage-embedded collections (contextual_bulgaria_voyage).
     """
     voyage_collections = {"contextual_bulgaria_voyage", "gdrive_documents_scalar"}
@@ -265,7 +266,7 @@ async def run_single_query(
             _write_langfuse_scores(lf, result)
             return result
 
-        result = await _run(langfuse_observation_id=trace_id)  # type: ignore[call-arg]
+        result = await _run(langfuse_trace_id=trace_id)
 
     wall_ms = (time.perf_counter() - wall_start) * 1000
     result["pipeline_wall_ms"] = wall_ms
@@ -764,6 +765,7 @@ async def run_validation(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    load_dotenv()  # Load .env before checking Langfuse config
     parser = argparse.ArgumentParser(description="Trace validation runner")
     parser.add_argument(
         "--collection",
