@@ -64,7 +64,7 @@ async def retrieve_node(
             sparse_cached = await cache.get_sparse_embedding(query)
 
             async def _get_dense() -> list[float]:
-                vec = await embeddings.aembed_query(query)
+                vec: list[float] = await embeddings.aembed_query(query)
                 await cache.store_embedding(query, vec)
                 return vec
 
