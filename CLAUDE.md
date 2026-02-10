@@ -57,8 +57,9 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 
 ## Code Style
 
-- **Linter/Formatter:** Ruff | **Types:** MyPy | **Line length:** 100 | **Docstrings:** Google style
+- **Linter/Formatter:** Ruff | **Types:** MyPy (strict in CI) | **Line length:** 100 | **Docstrings:** Google style
 - **Pre-commit:** ruff-check (--fix) → ruff-format → trailing-whitespace → check-yaml/toml/json
+- **CI:** lint (ruff + mypy) → test (unit, `-m "not legacy_api"`) → baseline-compare (PR only)
 - **Commits:** `feat(scope): message` | `fix(scope): message` | `docs(scope): message`
 
 ## Dependency Management
