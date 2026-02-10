@@ -32,11 +32,28 @@ jobs:
         run: ruff format --check src/ telegram_bot/ tests/
 
       - name: Type check
-        run: mypy src/ --ignore-missing-imports --no-error-summary || true
+        run: mypy src/ --ignore-missing-imports --no-error-summary
 
-  ***REMOVED*** Tests require external services (Qdrant, Redis, BGE-M3)
-  ***REMOVED*** Run locally with: make local-up && pytest tests/
-  ***REMOVED*** TODO: Add service containers for CI testing
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit/ -q -x -m "not legacy_api" --timeout=30
 
   ***REMOVED*** Baseline comparison - runs when Langfuse secrets are configured
   ***REMOVED*** Compares current smoke tests against main-latest baseline
