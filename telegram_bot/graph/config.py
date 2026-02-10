@@ -19,6 +19,8 @@ class GraphConfig:
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.7
     llm_max_tokens: int = 4096
+    rewrite_model: str = "gpt-4o-mini"
+    rewrite_max_tokens: int = 200
 
     bge_m3_url: str = "http://bge-m3:8000"
     bge_m3_timeout: float = 120.0
@@ -57,8 +59,12 @@ class GraphConfig:
         """Create GraphConfig from environment variables."""
         return cls(
             llm_base_url=os.getenv("LLM_BASE_URL", "http://litellm:4000"),
-            llm_api_key=os.getenv("OPENAI_API_KEY", ""),
+            llm_api_key=os.getenv(
+                "LLM_API_KEY", os.getenv("OPENAI_API_KEY", "")
+            ),  # LLM_API_KEY preferred
             llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            rewrite_model=os.getenv("REWRITE_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini")),
+            rewrite_max_tokens=int(os.getenv("REWRITE_MAX_TOKENS", "200")),
             bge_m3_url=os.getenv("BGE_M3_URL", "http://bge-m3:8000"),
             bge_m3_timeout=float(os.getenv("BGE_M3_TIMEOUT", "120.0")),
             qdrant_url=os.getenv("QDRANT_URL", "http://qdrant:6333"),

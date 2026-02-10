@@ -80,3 +80,21 @@ class TestRouteGrade:
         state["documents_relevant"] = False
         state["rewrite_count"] = 5
         assert route_grade(state) == "generate"
+
+    def test_route_grade_rewrite_ineffective_goes_to_generate(self):
+        """If rewrite was ineffective, skip further rewrites."""
+        state = {
+            "documents_relevant": False,
+            "rewrite_count": 1,
+            "rewrite_effective": False,
+        }
+        assert route_grade(state) == "generate"
+
+    def test_route_grade_rewrite_effective_allows_retry(self):
+        """If rewrite was effective but docs still not relevant, allow another rewrite."""
+        state = {
+            "documents_relevant": False,
+            "rewrite_count": 1,
+            "rewrite_effective": True,
+        }
+        assert route_grade(state) == "rewrite"
