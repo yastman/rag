@@ -61,6 +61,24 @@ class _MockAsyncStream:
         return chunk
 
 
+class _MockFailingStream:
+    """Async iterator that yields some chunks then raises RuntimeError."""
+
+    def __init__(self, good_texts: list[str]):
+        self._chunks = [_MockStreamChunk(t) for t in good_texts]
+        self._index = 0
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._index >= len(self._chunks):
+            raise RuntimeError("stream connection lost")
+        chunk = self._chunks[self._index]
+        self._index += 1
+        return chunk
+
+
 def _make_streaming_client(chunks: list[str]) -> MagicMock:
     """Create mock client that returns a streaming response."""
     mock_client = MagicMock()
@@ -423,3 +441,90 @@ class TestGenerateNodeStreaming:
 
         assert result["response"] == "Fallback from empty stream."
         assert result["response_sent"] is False
+
+    @pytest.mark.asyncio
+    async def test_stream_error_before_visible_output(self) -> None:
+        """Stream fails before any real content is visible: response_sent=False."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Fallback answer."
+        mock_fallback_response = MagicMock(choices=[mock_choice])
+
+        mock_client = MagicMock()
+        # Stream fails immediately (no chunks delivered), then fallback succeeds
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[_MockFailingStream([]), mock_fallback_response],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        sent_msg.delete = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["response"] == "Fallback answer."
+        assert result["response_sent"] is False
+
+    @pytest.mark.asyncio
+    async def test_stream_error_after_visible_output(self) -> None:
+        """Stream delivers partial content then fails: edits existing msg, response_sent=True."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Fallback complete answer."
+        mock_fallback_response = MagicMock(choices=[mock_choice])
+
+        mock_client = MagicMock()
+        # Stream yields real chunks then fails, then fallback succeeds
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _MockFailingStream(["Квартира ", "в Несебре "]),
+                mock_fallback_response,
+            ],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        # Fallback answer is the response
+        assert result["response"] == "Fallback complete answer."
+        # KEY: response_sent=True because partial content was already visible
+        assert result["response_sent"] is True
+        # Fallback was edited into existing message (last edit_text call)
+        last_edit_call = sent_msg.edit_text.call_args_list[-1]
+        assert last_edit_call.args[0] == "Fallback complete answer."
