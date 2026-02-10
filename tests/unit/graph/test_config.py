@@ -108,6 +108,12 @@ class TestGraphConfig:
         assert sparse.base_url == "http://bge:8000"
         assert sparse.timeout == 60.0
 
+    def test_generate_max_tokens_default(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        assert cfg.generate_max_tokens == 2048
+
     def test_from_env_defaults(self):
         from telegram_bot.graph.config import GraphConfig
 
