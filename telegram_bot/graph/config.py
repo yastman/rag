@@ -20,7 +20,7 @@ class GraphConfig:
     llm_temperature: float = 0.7
     llm_max_tokens: int = 4096
     rewrite_model: str = "gpt-4o-mini"
-    rewrite_max_tokens: int = 200
+    rewrite_max_tokens: int = 64
 
     bge_m3_url: str = "http://bge-m3:8000"
     bge_m3_timeout: float = 120.0
@@ -64,7 +64,7 @@ class GraphConfig:
             ),  # LLM_API_KEY preferred
             llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
             rewrite_model=os.getenv("REWRITE_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini")),
-            rewrite_max_tokens=int(os.getenv("REWRITE_MAX_TOKENS", "200")),
+            rewrite_max_tokens=int(os.getenv("REWRITE_MAX_TOKENS", "64")),
             bge_m3_url=os.getenv("BGE_M3_URL", "http://bge-m3:8000"),
             bge_m3_timeout=float(os.getenv("BGE_M3_TIMEOUT", "120.0")),
             qdrant_url=os.getenv("QDRANT_URL", "http://qdrant:6333"),
