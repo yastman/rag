@@ -52,8 +52,8 @@ QDRANT_API_KEY = os.getenv(
 DEFAULT_COLLECTION = "legal_documents"
 
 ***REMOVED*** Legacy collection names (deprecated - for reference only)
-***REMOVED*** COLLECTION_BASELINE = "uk_civil_code_v2"
-***REMOVED*** COLLECTION_CONTEXTUAL_KG = "uk_civil_code_contextual_kg"
+COLLECTION_BASELINE = "uk_civil_code_v2"
+COLLECTION_CONTEXTUAL_KG = "uk_civil_code_contextual_kg"
 
 ***REMOVED*** Vector dimensions (BGE-M3)
 DENSE_VECTOR_SIZE = 1024
