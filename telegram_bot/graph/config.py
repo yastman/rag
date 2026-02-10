@@ -35,6 +35,7 @@ class GraphConfig:
     domain_language: str = "ru"
 
     max_rewrite_attempts: int = 2
+    streaming_enabled: bool = True
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -73,6 +74,7 @@ class GraphConfig:
             redis_url=os.getenv("REDIS_URL", "redis://redis:6379"),
             domain=os.getenv("BOT_DOMAIN", "недвижимость"),
             domain_language=os.getenv("BOT_LANGUAGE", "ru"),
+            streaming_enabled=os.getenv("STREAMING_ENABLED", "true").lower() == "true",
         )
 
     def create_llm(self) -> Any:
