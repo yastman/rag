@@ -27,7 +27,7 @@ telegram_bot/
 │   └── redis_monitor.py   ***REMOVED*** RedisHealthMonitor (background task)
 ├── integrations/          ***REMOVED*** LangGraph-compatible wrappers
 │   ├── cache.py           ***REMOVED*** CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
-│   ├── embeddings.py      ***REMOVED*** BGEM3Embeddings + BGEM3SparseEmbeddings (LangChain)
+│   ├── embeddings.py      ***REMOVED*** BGEM3HybridEmbeddings (preferred) + legacy Dense/Sparse
 │   ├── event_stream.py    ***REMOVED*** EventStream for graph→bot communication
 │   ├── langfuse.py        ***REMOVED*** (legacy) Langfuse callback handler — replaced by @observe
 │   ├── memory.py          ***REMOVED*** MemorySaver for conversation persistence
@@ -56,16 +56,15 @@ response = await self.client.chat.completions.create(
 )
 ```
 
-***REMOVED******REMOVED******REMOVED*** LangChain Embeddings (integrations)
+***REMOVED******REMOVED******REMOVED*** Embeddings (integrations)
 
 ```python
-from telegram_bot.integrations.embeddings import BGEM3Embeddings, BGEM3SparseEmbeddings
+from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
 
-emb = BGEM3Embeddings(base_url="http://bge-m3:8000")
-vector = await emb.aembed_query("text")  ***REMOVED*** 1024-dim dense
-
-sparse = BGEM3SparseEmbeddings(base_url="http://bge-m3:8000")
-sv = await sparse.aembed_query("text")   ***REMOVED*** sparse dict
+***REMOVED*** Preferred: single /encode/hybrid call, shared httpx.AsyncClient
+emb = BGEM3HybridEmbeddings(base_url="http://bge-m3:8000")
+dense, sparse = await emb.aembed_hybrid("text")  ***REMOVED*** (list[float], dict) in 1 call
+vector = await emb.aembed_query("text")           ***REMOVED*** dense only (LangChain compat)
 ```
 
 ***REMOVED******REMOVED******REMOVED*** QdrantService (gRPC + batch)
@@ -111,11 +110,11 @@ prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain
 ```python
 from telegram_bot.graph.config import GraphConfig
 
-gc = GraphConfig.from_env()              ***REMOVED*** reads MAX_REWRITE_ATTEMPTS, REWRITE_MAX_TOKENS, etc.
+gc = GraphConfig.from_env()              ***REMOVED*** reads MAX_REWRITE_ATTEMPTS, SKIP_RERANK_THRESHOLD, etc.
 llm = gc.create_llm()                    ***REMOVED*** langfuse.openai.AsyncOpenAI
-emb = gc.create_embeddings()             ***REMOVED*** BGEM3Embeddings
+hybrid = gc.create_hybrid_embeddings()   ***REMOVED*** BGEM3HybridEmbeddings (preferred)
 sparse = gc.create_sparse_embeddings()   ***REMOVED*** BGEM3SparseEmbeddings
-***REMOVED*** gc.max_rewrite_attempts (default 1), gc.rewrite_max_tokens (default 64)
+***REMOVED*** gc.skip_rerank_threshold (0.012), gc.relevance_threshold_rrf (0.005)
 ```
 
 ***REMOVED******REMOVED*** Cache Key Versioning
