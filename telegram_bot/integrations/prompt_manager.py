@@ -74,8 +74,8 @@ def get_prompt(
     try:
         prompt = client.get_prompt(name, cache_ttl_seconds=cache_ttl, fallback=fallback)
         if vars_:
-            return prompt.compile(**vars_)
-        return prompt.compile()
+            return str(prompt.compile(**vars_))
+        return str(prompt.compile())
     except Exception:
         logger.warning("Failed to fetch prompt '%s', using fallback", name, exc_info=True)
         return _apply_fallback_vars(fallback, vars_)

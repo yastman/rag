@@ -96,7 +96,7 @@ class SmallToBigService:
         if not chunks:
             return []
 
-        expanded_results = []
+        expanded_results: list[ExpandedChunk] = []
         seen_chunk_ids = set()
         total_tokens = 0
 
@@ -239,8 +239,8 @@ class SmallToBigService:
             return [
                 {
                     "id": str(p.id),
-                    "text": p.payload.get("page_content", ""),
-                    "metadata": p.payload.get("metadata", {}),
+                    "text": (p.payload or {}).get("page_content", ""),
+                    "metadata": (p.payload or {}).get("metadata", {}),
                     "score": 0.0,  # Neighbors don't have search scores
                 }
                 for p in points
