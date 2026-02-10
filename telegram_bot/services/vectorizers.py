@@ -6,7 +6,7 @@ Best-in-class for RU semantic matching (STS 74.35 on ruMTEB).
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from redisvl.utils.vectorize import BaseVectorizer
@@ -89,7 +89,7 @@ class UserBaseVectorizer(BaseVectorizer):
         response = client.post("/embed", json={"text": text})
         response.raise_for_status()
         data = response.json()
-        return data["embedding"]
+        return cast(list[float], data["embedding"])
 
     def embed_many(
         self,
@@ -113,7 +113,7 @@ class UserBaseVectorizer(BaseVectorizer):
         response = client.post("/embed_batch", json={"texts": texts})
         response.raise_for_status()
         data = response.json()
-        return data["embeddings"]
+        return cast(list[list[float]], data["embeddings"])
 
     async def aembed(
         self,
@@ -137,7 +137,7 @@ class UserBaseVectorizer(BaseVectorizer):
         response = await client.post("/embed", json={"text": text})
         response.raise_for_status()
         data = response.json()
-        return data["embedding"]
+        return cast(list[float], data["embedding"])
 
     async def aembed_many(
         self,
@@ -161,7 +161,7 @@ class UserBaseVectorizer(BaseVectorizer):
         response = await client.post("/embed_batch", json={"texts": texts})
         response.raise_for_status()
         data = response.json()
-        return data["embeddings"]
+        return cast(list[list[float]], data["embeddings"])
 
     async def aclose(self):
         """Close HTTP clients."""
@@ -217,7 +217,7 @@ class BgeM3CacheVectorizer(BaseVectorizer):
         response.raise_for_status()
         data = response.json()
         vecs = data.get("dense_vecs") or data.get("embeddings")
-        return vecs[0]
+        return cast(list[float], vecs[0])
 
     async def aembed_many(
         self, texts: list[str], preprocess: Any = None, as_buffer: bool = False, **kwargs: Any
@@ -228,4 +228,4 @@ class BgeM3CacheVectorizer(BaseVectorizer):
         response = await self._async_client.post("/encode/dense", json={"texts": texts})
         response.raise_for_status()
         data = response.json()
-        return data.get("dense_vecs") or data.get("embeddings")
+        return cast(list[list[float]], data.get("dense_vecs") or data.get("embeddings"))
