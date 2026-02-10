@@ -21,6 +21,7 @@ class TestRAGState:
             "documents_relevant",
             "rewrite_count",
             "rewrite_effective",
+            "max_rewrite_attempts",
             "response",
             "latency_stages",
             "search_results_count",
@@ -56,6 +57,13 @@ class TestRAGState:
         msg = state["messages"][0]
         assert msg["role"] == "user"
         assert msg["content"] == "Привет!"
+
+    def test_initial_state_has_max_rewrite_attempts(self):
+        """Initial state includes max_rewrite_attempts=1."""
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        assert state["max_rewrite_attempts"] == 1
 
     def test_initial_state_has_rewrite_effective(self):
         """Initial state includes rewrite_effective=True."""
