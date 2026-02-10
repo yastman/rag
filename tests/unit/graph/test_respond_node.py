@@ -65,3 +65,16 @@ class TestRespondNode:
 
         assert result["latency_stages"]["classify"] == 0.01
         assert "respond" in result["latency_stages"]
+
+    async def test_skips_sending_when_response_sent(self):
+        """respond_node skips message.answer when response_sent=True (streaming)."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Already streamed"
+        state["message"] = message
+        state["response_sent"] = True
+
+        result = await respond_node(state)
+
+        message.answer.assert_not_called()
+        assert "respond" in result["latency_stages"]
