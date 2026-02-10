@@ -73,6 +73,17 @@ pytest tests/chaos/test_redis_failures.py     ***REMOVED*** Redis disconnect/poo
 pytest tests/chaos/test_llm_fallback.py       ***REMOVED*** LLM rate limits, parsing errors
 ```
 
+***REMOVED******REMOVED*** Trace Validation Tests
+
+```bash
+uv run pytest tests/unit/test_validate_queries.py tests/unit/test_validate_aggregates.py -v
+```
+
+| File | Tests | Covers |
+|------|-------|--------|
+| `test_validate_queries.py` | 10 | Query sets, collection mapping, warmup/cache selection |
+| `test_validate_aggregates.py` | 8 | p50/p95, phase split, score_rate, node latencies |
+
 ***REMOVED******REMOVED*** Notes
 
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
