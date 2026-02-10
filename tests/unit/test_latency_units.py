@@ -89,6 +89,7 @@ class TestLatencyUnitsConsistency:
             "cache_hit": False,
             "rerank_applied": False,
             "search_results_count": 5,
+            "pipeline_wall_ms": 2862.0,  # wall-time, not sum of stages
             "latency_stages": {
                 "classify": 0.001,  # 1ms
                 "cache_check": 0.050,  # 50ms
@@ -102,9 +103,8 @@ class TestLatencyUnitsConsistency:
 
         _write_langfuse_scores(mock_lf, result)
 
-        # sum = 2.862s → 2862ms
-        expected_ms = sum(result["latency_stages"].values()) * 1000
-        assert abs(expected_ms - 2862.0) < 1.0
+        # latency_total_ms reads pipeline_wall_ms directly (wall-time)
+        expected_ms = result["pipeline_wall_ms"]
 
         # Verify the actual score value matches
         calls = mock_lf.score_current_trace.call_args_list

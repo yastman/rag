@@ -66,6 +66,10 @@ FULL_PIPELINE_RESULT = {
     "search_results_count": 5,
     "rerank_applied": True,
     "documents_relevant": True,
+    "embeddings_cache_hit": False,
+    "search_cache_hit": False,
+    "grade_confidence": 0.85,
+    "pipeline_wall_ms": 862.0,
     "latency_stages": {
         "classify": 0.001,
         "cache_check": 0.050,
@@ -186,9 +190,12 @@ class TestScoreWriting:
         assert scores["no_results"] == 0.0
         # generate in latency_stages → LLM used
         assert scores["llm_used"] == 1.0
-        # latency_total_ms = sum of stages * 1000
-        expected_latency = sum(FULL_PIPELINE_RESULT["latency_stages"].values()) * 1000
-        assert abs(scores["latency_total_ms"] - expected_latency) < 0.01
+        # latency_total_ms = pipeline_wall_ms (wall-time, not sum of stages)
+        assert abs(scores["latency_total_ms"] - FULL_PIPELINE_RESULT["pipeline_wall_ms"]) < 0.01
+        # embeddings/search cache misses, confidence from grade
+        assert scores["embeddings_cache_hit"] == 0.0
+        assert scores["search_cache_hit"] == 0.0
+        assert scores["confidence_score"] == 0.85
 
     @pytest.mark.asyncio
     async def test_score_values_cache_hit(self, mock_config):

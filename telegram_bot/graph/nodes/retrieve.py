@@ -11,6 +11,7 @@ import logging
 import time
 from typing import Any
 
+from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
 from telegram_bot.observability import observe
 
 
@@ -64,7 +65,7 @@ async def retrieve_node(
                 dense_vector = await embeddings.aembed_query(query)
                 await cache.store_embedding(query, dense_vector)
                 sparse_vector = sparse_cached
-            elif hasattr(embeddings, "aembed_hybrid"):
+            elif isinstance(embeddings, BGEM3HybridEmbeddings):
                 # Hybrid: single call for both dense + sparse
                 dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
                 await cache.store_embedding(query, dense_vector)
