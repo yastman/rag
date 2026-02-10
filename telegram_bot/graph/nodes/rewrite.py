@@ -63,19 +63,23 @@ async def rewrite_node(
 
         prompt = _REWRITE_PROMPT.format(query=original_query)
         response = await llm.chat.completions.create(
-            model=config.llm_model,
+            model=config.rewrite_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            max_tokens=200,
+            max_tokens=config.rewrite_max_tokens,
             name="rewrite-query",  # type: ignore[call-overload]  # langfuse kwarg
         )
         rewritten = (response.choices[0].message.content or "").strip()
 
-        if not rewritten:
+        if not rewritten or rewritten == original_query:
             rewritten = original_query
+            effective = False
+        else:
+            effective = True
     except Exception:
         logger.exception("rewrite_node: LLM rewrite failed, keeping original query")
         rewritten = original_query
+        effective = False
 
     elapsed = time.perf_counter() - t0
     logger.info(
@@ -89,6 +93,7 @@ async def rewrite_node(
     return {
         "messages": [HumanMessage(content=rewritten)],
         "rewrite_count": rewrite_count + 1,
+        "rewrite_effective": effective,
         "query_embedding": None,
         "sparse_embedding": None,
         "latency_stages": {**state.get("latency_stages", {}), "rewrite": elapsed},
