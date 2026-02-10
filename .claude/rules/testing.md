@@ -4,7 +4,9 @@ paths: "tests/**/*.py"
 
 # Testing Guide
 
-Coverage: ~85% unit (2057 passed, 76 pre-existing failures). Full audit: `logs/full-pipeline-coverage-audit.txt`
+Coverage: ~85% unit. Full audit: `logs/full-pipeline-coverage-audit.txt`
+
+**Markers:** `legacy_api` — tests for pre-LangGraph API (excluded from CI).
 
 ## Unit Tests
 
@@ -56,6 +58,7 @@ pytest tests/chaos/test_llm_fallback.py       # LLM rate limits, parsing errors
 
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Integration tests require: `make docker-up`
+- CI runs unit tests with `-m "not legacy_api" --timeout=30` (see `.github/workflows/ci.yml`)
 
 ## Test Dependencies
 
