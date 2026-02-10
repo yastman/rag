@@ -210,7 +210,6 @@ class ContextualRetrieval:
         json_str = re.sub(r",\s*}", "}", json_str)
         return re.sub(r",\s*]", "]", json_str)
 
-
     def _validate_metadata(self, metadata: dict) -> dict:
         """Validate and fill default values for metadata."""
         defaults = {
