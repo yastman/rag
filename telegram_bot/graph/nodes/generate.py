@@ -262,12 +262,21 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                 )
                 answer = response.choices[0].message.content or ""
                 # Edit existing message with fallback answer
+                delivered = False
                 try:
                     await e.sent_msg.edit_text(answer, parse_mode="Markdown")
+                    delivered = True
                 except Exception:
-                    with contextlib.suppress(Exception):
+                    try:
                         await e.sent_msg.edit_text(answer)
-                response_sent = True
+                        delivered = True
+                    except Exception:
+                        logger.warning(
+                            "Failed to deliver fallback edit after partial stream; "
+                            "respond_node will send final answer",
+                            exc_info=True,
+                        )
+                response_sent = delivered
             except Exception:
                 logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
                 # Fall back to non-streaming
