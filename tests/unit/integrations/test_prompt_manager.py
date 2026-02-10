@@ -168,6 +168,24 @@ class TestGetPrompt:
         # 2nd call should use local missing-cache and skip Langfuse call.
         assert mock_client.get_prompt.call_count == 1
 
+    def test_api_probe_skips_sdk_get_prompt_for_missing_prompt(self):
+        from langfuse.api.core.api_error import ApiError
+
+        mock_client = MagicMock()
+        mock_client.api.prompts.get.side_effect = ApiError(
+            status_code=404, body={"message": "missing"}
+        )
+
+        with patch(
+            "telegram_bot.integrations.prompt_manager._get_langfuse_client",
+            return_value=mock_client,
+        ):
+            result = get_prompt("generate", fallback="fallback", cache_ttl=60)
+
+        assert result == "fallback"
+        mock_client.api.prompts.get.assert_called_once()
+        mock_client.get_prompt.assert_not_called()
+
 
 class TestApplyFallbackVars:
     def test_no_vars(self):
