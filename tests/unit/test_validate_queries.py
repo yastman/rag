@@ -2,6 +2,7 @@
 
 from scripts.validate_queries import (
     EDGE_CASE_QUERIES,
+    GDRIVE_BGE_QUERIES,
     LEGAL_QUERIES,
     PROPERTY_QUERIES,
     ValidationQuery,
@@ -23,6 +24,9 @@ class TestValidationQueries:
     def test_edge_case_queries_count(self):
         assert len(EDGE_CASE_QUERIES) == 3
 
+    def test_gdrive_bge_queries_count(self):
+        assert len(GDRIVE_BGE_QUERIES) == 30  # 10 easy + 10 medium + 10 hard
+
     def test_get_queries_for_legal(self):
         queries = get_queries_for_collection("legal_documents")
         # 10 legal + 3 edge cases
@@ -33,6 +37,12 @@ class TestValidationQueries:
         queries = get_queries_for_collection("contextual_bulgaria_voyage")
         # 14 property + 3 edge cases
         assert len(queries) == 17
+
+    def test_get_queries_for_gdrive_bge(self):
+        queries = get_queries_for_collection("gdrive_documents_bge")
+        # 30 gdrive_bge + 3 edge cases
+        assert len(queries) == 33
+        assert all(isinstance(q, ValidationQuery) for q in queries)
 
     def test_get_queries_unknown_collection(self):
         queries = get_queries_for_collection("nonexistent")
@@ -54,7 +64,7 @@ class TestValidationQueries:
             assert q in cold
 
     def test_all_queries_have_required_fields(self):
-        all_queries = PROPERTY_QUERIES + LEGAL_QUERIES + EDGE_CASE_QUERIES
+        all_queries = PROPERTY_QUERIES + LEGAL_QUERIES + GDRIVE_BGE_QUERIES + EDGE_CASE_QUERIES
         for q in all_queries:
             assert q.text, f"Empty text: {q}"
             assert q.source in ("smoke", "eval", "manual"), f"Bad source: {q.source}"

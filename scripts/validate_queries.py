@@ -145,6 +145,143 @@ LEGAL_QUERIES: list[ValidationQuery] = [
     ),
 ]
 
+# Bulgarian property queries with BGE-M3 embeddings (gdrive_documents_bge)
+GDRIVE_BGE_QUERIES: list[ValidationQuery] = [
+    # EASY (10)
+    ValidationQuery("квартира в Несебре", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("студия на Солнечном берегу", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("цена дома в Равде", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("аренда апартаментов", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("однокомнатная квартира цена", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("недвижимость в Болгарии", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("жильё у моря", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("купить квартиру Бургас", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("сколько стоит студия", "smoke", "easy", "gdrive_documents_bge"),
+    ValidationQuery("квартира первая линия", "smoke", "easy", "gdrive_documents_bge"),
+    # MEDIUM (10)
+    ValidationQuery(
+        "квартира до 50000 евро с мебелью",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "двухкомнатная с видом на море",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "новостройка с рассрочкой",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "комплекс с бассейном и паркингом",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "квартира с ремонтом под ключ",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "апартаменты рядом с пляжем до 40000",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "студия в закрытом комплексе",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "жильё для сдачи в аренду инвестиции",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "квартира с балконом и кондиционером",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "дом с участком в пригороде",
+        "smoke",
+        "medium",
+        "gdrive_documents_bge",
+    ),
+    # HARD (10)
+    ValidationQuery(
+        "сравни цены Солнечный берег vs Святой Влас 2024",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "что лучше купить студию или однокомнатную для инвестиций",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "комплексы с управляющей компанией и гарантированной арендой",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "найди все варианты с рассрочкой на 2-3 года без первого взноса",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "какой район в Бургасской области самый перспективный для покупки",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "апартаменты с двумя спальнями в Harmony Suites или Tarsis Club",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "покупка через юрлицо vs физлицо налоги",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "квартира с документами для ВНЖ в Болгарии",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "самые дешёвые варианты на первой линии с мебелью",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+    ValidationQuery(
+        "что включает цена под ключ: мебель, техника, ремонт",
+        "smoke",
+        "hard",
+        "gdrive_documents_bge",
+    ),
+]
+
 # Manual edge cases
 EDGE_CASE_QUERIES: list[ValidationQuery] = [
     # Should trigger rewrite (nonsensical → low relevance → rewrite)
@@ -179,6 +316,8 @@ def get_queries_for_collection(collection: str) -> list[ValidationQuery]:
         result.extend(LEGAL_QUERIES)
     elif collection == "contextual_bulgaria_voyage":
         result.extend(PROPERTY_QUERIES)
+    elif collection == "gdrive_documents_bge":
+        result.extend(GDRIVE_BGE_QUERIES)
     # Edge cases apply to any collection
     result.extend(EDGE_CASE_QUERIES)
     return result
