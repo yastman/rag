@@ -98,6 +98,7 @@ async def retrieve_node(
         return {
             "documents": cached_results,
             "search_results_count": len(cached_results),
+            "search_cache_hit": True,
             "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
             # Clear stale backend-error markers from previous turns/branches.
             "retrieval_backend_error": False,
@@ -129,6 +130,7 @@ async def retrieve_node(
     update: dict[str, Any] = {
         "documents": results,
         "search_results_count": len(results),
+        "search_cache_hit": False,
         "sparse_embedding": sparse_vector,
         "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
         "retrieval_backend_error": search_meta["backend_error"],
