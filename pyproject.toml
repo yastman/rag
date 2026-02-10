@@ -240,6 +240,7 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  ***REMOVED*** Set to true for strict mode
 ignore_missing_imports = true  ***REMOVED*** Ignore missing stubs for now
+explicit_package_bases = true  ***REMOVED*** Resolve duplicate module names in services/
 
 ***REMOVED*** Per-module overrides
 [[tool.mypy.overrides]]
