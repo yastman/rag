@@ -15,6 +15,7 @@ make docker-up             # Start core services (5 containers, ~17s)
 make docker-bot-up         # Core + bot/litellm
 make docker-full-up        # All services (19 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
+make validate-traces-fast  # Trace validation (cold+cache, Langfuse report)
 make monitoring-up         # Start alerting stack
 make ingest-unified        # Run unified ingestion (CocoIndex v3.2.1)
 make ingest-unified-watch  # Continuous mode with FlowLiveUpdater
@@ -49,6 +50,7 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 | `telegram_bot/observability.py` | Langfuse init, @observe decorator, PII masking |
 | `src/retrieval/search_engines.py` | 4 search variants (evaluation) |
 | `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
+| `scripts/validate_*.py` | Trace validation runner + query goldset |
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001
 
