@@ -106,15 +106,16 @@ from telegram_bot.integrations.prompt_manager import get_prompt
 prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain": "real estate"})
 ```
 
-***REMOVED******REMOVED******REMOVED*** GraphConfig (service factories)
+***REMOVED******REMOVED******REMOVED*** GraphConfig (service factories + pipeline tuning)
 
 ```python
 from telegram_bot.graph.config import GraphConfig
 
-gc = GraphConfig.from_env()
+gc = GraphConfig.from_env()              ***REMOVED*** reads MAX_REWRITE_ATTEMPTS, REWRITE_MAX_TOKENS, etc.
 llm = gc.create_llm()                    ***REMOVED*** langfuse.openai.AsyncOpenAI
 emb = gc.create_embeddings()             ***REMOVED*** BGEM3Embeddings
 sparse = gc.create_sparse_embeddings()   ***REMOVED*** BGEM3SparseEmbeddings
+***REMOVED*** gc.max_rewrite_attempts (default 1), gc.rewrite_max_tokens (default 64)
 ```
 
 ***REMOVED******REMOVED*** Cache Key Versioning
