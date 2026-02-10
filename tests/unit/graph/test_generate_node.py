@@ -181,6 +181,24 @@ class TestGenerateNode:
         assert "Doc 5" not in messages_text
 
     @pytest.mark.asyncio
+    async def test_respects_generate_max_tokens(self) -> None:
+        """generate_node passes generate_max_tokens from config to LLM call."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config("Short answer.")
+        mock_config.generate_max_tokens = 512
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        assert call_kwargs.kwargs.get("max_tokens") == 512
+
+    @pytest.mark.asyncio
     async def test_empty_documents_fallback(self) -> None:
         """generate_node handles empty documents gracefully."""
         from telegram_bot.graph.nodes.generate import generate_node

@@ -147,7 +147,7 @@ async def generate_node(state: RAGState) -> dict[str, Any]:
             model=config.llm_model,
             messages=llm_messages,
             temperature=config.llm_temperature,
-            max_tokens=config.llm_max_tokens,
+            max_tokens=config.generate_max_tokens,
             name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
         )
         answer = response.choices[0].message.content or ""
