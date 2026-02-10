@@ -247,6 +247,8 @@ async def run_single_query(
                 message=None,  # no Telegram message — headless mode
             )
             result = await graph.ainvoke(state)
+            # Compute wall-time BEFORE writing scores so latency_total_ms is correct
+            result["pipeline_wall_ms"] = (time.perf_counter() - wall_start) * 1000
             # Write metadata/scores while still inside active observation context
             lf = get_client()
             lf.update_current_trace(
@@ -268,8 +270,7 @@ async def run_single_query(
 
         result = await _run(langfuse_trace_id=trace_id)
 
-    wall_ms = (time.perf_counter() - wall_start) * 1000
-    result["pipeline_wall_ms"] = wall_ms
+    wall_ms = result.get("pipeline_wall_ms", (time.perf_counter() - wall_start) * 1000)
 
     logger.info(
         "  [%s] %.0fms | cache=%s rerank=%s results=%d | %s",
@@ -307,6 +308,15 @@ async def run_single_query(
     )
 
 
+async def _flush_redis_caches(cache: Any) -> None:
+    """Flush all Redis caches to ensure true cold run."""
+    if hasattr(cache, "redis") and cache.redis:
+        await cache.redis.flushdb()
+        logger.info("  Redis FLUSHDB complete — all caches cleared")
+    else:
+        logger.warning("  Redis not available — cannot flush caches, cold run may be warm")
+
+
 async def run_collection_validation(
     collection: str,
     run: ValidationRun,
@@ -334,13 +344,15 @@ async def run_collection_validation(
 
     results: list[TraceResult] = []
 
-    # Phase 1: Warmup (discard)
+    # Phase 1: Warmup (discard) — warms up connections, LLM, embeddings
     warmup_queries = get_warmup_queries(collection, count=3)
     logger.info("Phase 1: Warmup (%d queries, discarded)", len(warmup_queries))
     for q in warmup_queries:
         await run_single_query(q, services, run_meta, phase="warmup")
 
-    # Phase 2: Cold run
+    # Phase 2: Cold run — flush caches for true cold measurement
+    logger.info("Phase 2: Flushing Redis caches for true cold run...")
+    await _flush_redis_caches(services["cache"])
     cold_queries = get_queries_for_collection(collection)
     logger.info("Phase 2: Cold run (%d queries)", len(cold_queries))
     for q in cold_queries:
