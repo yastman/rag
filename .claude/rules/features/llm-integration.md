@@ -28,7 +28,7 @@ Bot/Graph → All LLM calls (OpenAI SDK) → LiteLLM Proxy (:4000) → Cerebras/
 | `telegram_bot/graph/nodes/generate.py` | LangGraph generate_node (OpenAI SDK via GraphConfig) |
 | `telegram_bot/graph/nodes/rewrite.py` | LangGraph rewrite_node (OpenAI SDK via GraphConfig) |
 | `telegram_bot/graph/config.py` | GraphConfig — `create_llm()` factory |
-| `telegram_bot/integrations/langfuse.py` | `create_langfuse_handler()` for LangGraph callbacks |
+| `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes` |
 
 ## LLM Pattern (unified)
 
@@ -61,6 +61,8 @@ Cerebras → [error] → Groq → [error] → OpenAI
 | `LLM_MODEL` | gpt-4o-mini | Model alias |
 | `max_tokens` | 4096 | Response length limit |
 | `temperature` | 0.7 | For generate_node and LLMService |
+| `REWRITE_MODEL` | gpt-4o-mini | Separate model for rewrite_node (defaults to LLM_MODEL) |
+| `REWRITE_MAX_TOKENS` | 200 | Max tokens for query rewrite (short output) |
 
 ## OpenAI SDK Pattern (services)
 
@@ -104,13 +106,23 @@ except (openai.APIConnectionError, openai.RateLimitError, openai.APITimeoutError
 - Includes conversation history from `state["messages"]`
 - Calls LLM via `GraphConfig.create_llm().chat.completions.create()` (OpenAI SDK)
 - Falls back to document summary if LLM unavailable
-- Records `latency_stages["generate"]`
+- Records `latency_stages["generate"]` (seconds)
+
+## rewrite_node (LangGraph)
+
+`telegram_bot/graph/nodes/rewrite.py` — LLM query reformulation for better retrieval.
+
+- Uses `config.rewrite_model` and `config.rewrite_max_tokens` (separate from generate)
+- Sets `rewrite_effective=False` if LLM returns empty/unchanged content
+- `route_grade` checks `rewrite_effective` before allowing another retry
+- Resets `query_embedding=None` to force re-embedding after rewrite
+- Records `latency_stages["rewrite"]` (seconds)
 
 ## Langfuse Integration
 
-All LLM calls auto-traced via `langfuse.openai.AsyncOpenAI` drop-in. Additionally, `create_langfuse_handler()` provides `langfuse.langchain.CallbackHandler` for LangGraph graph-level tracing (`config={"callbacks": [handler]}`).
+All LLM calls auto-traced via `langfuse.openai.AsyncOpenAI` drop-in. Graph-level tracing uses `@observe` decorator + `propagate_attributes()` context manager (Langfuse SDK v3). Scores written via `_write_langfuse_scores()` in `bot.py`.
 
-Graceful degradation: returns `None` if `LANGFUSE_SECRET_KEY` not set.
+Graceful degradation: `_NullLangfuseClient` stub when `LANGFUSE_SECRET_KEY` not set.
 
 ## Guardrails
 

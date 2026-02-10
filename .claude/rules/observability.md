@@ -145,10 +145,12 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 
 12 scores written via `_write_langfuse_scores(lf, result)` in `bot.py` after `graph.ainvoke()`:
 
+**Latency convention:** All `latency_stages` values are in **seconds** (float). The score writer computes `latency_total_ms = sum(stages.values()) * 1000`.
+
 | Score | Values | Purpose |
 |-------|--------|---------|
 | `query_type` | 0/1/2 | CHITCHAT/SIMPLE/COMPLEX (via `_QUERY_TYPE_SCORE` mapping) |
-| `latency_total_ms` | float | End-to-end request latency |
+| `latency_total_ms` | float | End-to-end request latency (sum of seconds * 1000) |
 | `semantic_cache_hit` | 0.0/1.0 | Semantic cache effectiveness |
 | `embeddings_cache_hit` | 0.0/1.0 | Embeddings cache (not yet tracked in state, default 0.0) |
 | `search_cache_hit` | 0.0/1.0 | Search results cache (not yet tracked in state, default 0.0) |
