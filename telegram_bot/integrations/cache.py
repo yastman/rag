@@ -136,7 +136,7 @@ class CacheLayerManager:
                 socket_connect_timeout=2,
                 socket_timeout=2,
             )
-            await self.redis.ping()
+            await self.redis.ping()  # type: ignore[misc]
             logger.info("Redis connected: %s", self.redis_url)
         except Exception as e:
             logger.error("Redis connection failed: %s: %s", type(e).__name__, e)
@@ -235,7 +235,7 @@ class CacheLayerManager:
                     threshold,
                     query_type,
                 )
-                return results[0].get("response", "")
+                return str(results[0].get("response", ""))
 
             self._metrics["semantic"]["misses"] += 1
             logger.debug("Semantic MISS (%.0fms, type=%s)", latency_ms, query_type)
@@ -418,7 +418,7 @@ class CacheLayerManager:
 
         key = f"conversation:{user_id}"
         try:
-            raw = await self.redis.lrange(key, 0, last_n - 1)
+            raw = await self.redis.lrange(key, 0, last_n - 1)  # type: ignore[misc]
             if not raw:
                 return []
             return [json.loads(msg) for msg in raw]
