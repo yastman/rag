@@ -528,3 +528,45 @@ class TestGenerateNodeStreaming:
         # Fallback was edited into existing message (last edit_text call)
         last_edit_call = sent_msg.edit_text.call_args_list[-1]
         assert last_edit_call.args[0] == "Fallback complete answer."
+
+    @pytest.mark.asyncio
+    async def test_stream_error_partial_and_edit_fails_falls_back_to_respond_node(self) -> None:
+        """If fallback edit fails after partial stream, respond_node must send final answer."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Final fallback answer."
+        mock_fallback_response = MagicMock(choices=[mock_choice])
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _MockFailingStream(["partial "]),
+                mock_fallback_response,
+            ],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        # First call may happen during stream; subsequent fallback edits fail.
+        sent_msg.edit_text = AsyncMock(side_effect=Exception("edit failed"))
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["response"] == "Final fallback answer."
+        assert result["response_sent"] is False
