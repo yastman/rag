@@ -25,10 +25,14 @@ class RAGState(TypedDict):
     documents_relevant: bool
     rewrite_count: int
     rewrite_effective: bool
+    max_rewrite_attempts: int
     response: str
     latency_stages: dict[str, float]
     search_results_count: int
     rerank_applied: bool
+    grade_confidence: float
+    skip_rerank: bool
+    response_sent: bool
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -46,8 +50,12 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "documents_relevant": False,
         "rewrite_count": 0,
         "rewrite_effective": True,
+        "max_rewrite_attempts": 1,
         "response": "",
         "latency_stages": {},
         "search_results_count": 0,
         "rerank_applied": False,
+        "grade_confidence": 0.0,
+        "skip_rerank": False,
+        "response_sent": False,
     }

@@ -1,3 +1,4 @@
+***REMOVED*** mypy: ignore-errors
 ***REMOVED***!/usr/bin/env python3
 """Test bot services without Telegram."""
 
