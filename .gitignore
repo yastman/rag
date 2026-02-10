@@ -191,3 +191,6 @@ CLAUDE.local.md
 
 # k8s secrets (never commit)
 k8s/secrets/
+
+# Validation reports (generated, not committed)
+docs/reports/
