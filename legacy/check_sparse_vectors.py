@@ -29,13 +29,7 @@ def get_collection_info(collection_name: str):
 
 def try_update_collection_with_sparse(collection_name: str):
     """Try to add sparse vectors to existing collection (will likely fail)."""
-    update_payload = {
-        "sparse_vectors": {
-            "sparse": {
-                "modifier": "idf"
-            }
-        }
-    }
+    update_payload = {"sparse_vectors": {"sparse": {"modifier": "idf"}}}
 
     response = requests.patch(
         f"{QDRANT_URL}/collections/{collection_name}",

@@ -63,6 +63,7 @@ Cerebras → [error] → Groq → [error] → OpenAI
 | `temperature` | 0.7 | For generate_node and LLMService |
 | `REWRITE_MODEL` | gpt-4o-mini | Separate model for rewrite_node (defaults to LLM_MODEL) |
 | `REWRITE_MAX_TOKENS` | 200 | Max tokens for query rewrite (short output) |
+| `STREAMING_ENABLED` | true | Stream generate_node output to Telegram (feature flag) |
 
 ## OpenAI SDK Pattern (services)
 
@@ -104,8 +105,9 @@ except (openai.APIConnectionError, openai.RateLimitError, openai.APITimeoutError
 - Builds system prompt with domain from `GraphConfig.from_env().domain`
 - Formats top-5 documents as context (title, city, price, score)
 - Includes conversation history from `state["messages"]`
-- Calls LLM via `GraphConfig.create_llm().chat.completions.create()` (OpenAI SDK)
-- Falls back to document summary if LLM unavailable
+- **Streaming path** (when `message` injected + `streaming_enabled`): sends placeholder → streams via `stream=True` → edits Telegram message every 300ms → finalizes with Markdown → sets `response_sent=True`
+- **Non-streaming path**: calls `create_llm().chat.completions.create()` (OpenAI SDK)
+- Falls back to non-streaming if streaming fails, then to document summary if LLM unavailable
 - Records `latency_stages["generate"]` (seconds)
 
 ## rewrite_node (LangGraph)

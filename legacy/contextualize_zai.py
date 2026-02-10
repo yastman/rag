@@ -132,7 +132,7 @@ class ContextualRetrievalZAI:
                 response_text = message.get("reasoning_content") or message.get("content", "")
 
                 if not response_text:
-                    # Если оба поля пустые - fallback
+                    # If both fields are empty - fallback
                     print("WARNING: Empty response from Z.AI API")
                     return self._fallback_extraction(chunk_text)
 

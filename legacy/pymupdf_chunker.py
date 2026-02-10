@@ -95,7 +95,6 @@ class PyMuPDFChunker:
         # Detect structure and chunk
         return self.chunk_by_structure(normalized_text, pages_text)
 
-
     def normalize_text(self, text: str) -> str:
         """
         Normalize text for better processing.
@@ -115,11 +114,11 @@ class PyMuPDFChunker:
         text = text.replace("\xad", "")  # Another variant
 
         # 3. Join broken lines (word continues on next line)
-        # Pattern: "слово-\nслово" → "словослово"
+        # Pattern: "word-\nword" → "wordword"
         text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)
 
         # 4. Join lines without punctuation
-        # Pattern: "слово\nслово" → "слово слово"
+        # Pattern: "word\nword" → "word word"
         # BUT: DO NOT join if next line starts with legal structure markers
         # Use negative lookahead to prevent joining before Статья, Глава, etc.
         text = re.sub(
