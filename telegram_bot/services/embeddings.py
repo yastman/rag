@@ -1,5 +1,7 @@
 """BGE-M3 embedding service."""
 
+from typing import cast
+
 import httpx
 
 
@@ -32,7 +34,7 @@ class EmbeddingService:
         response.raise_for_status()
         data = response.json()
         # Return first embedding (we only sent one text)
-        return data["dense_vecs"][0]
+        return cast(list[float], data["dense_vecs"][0])
 
     async def close(self):
         """Close HTTP client."""

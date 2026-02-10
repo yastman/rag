@@ -8,6 +8,9 @@ from src.contextualization.base import ContextualizedChunk
 from src.contextualization.openai import OpenAIContextualizer
 
 
+pytestmark = pytest.mark.legacy_api
+
+
 class TestOpenAIContextualizerInit:
     """Tests for OpenAIContextualizer.__init__."""
 

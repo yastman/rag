@@ -52,13 +52,30 @@ async def retrieve_node(
         else state["messages"][-1]["content"]
     )
     dense_vector = state.get("query_embedding")
+    sparse_vector: Any = None
 
     # After rewrite, query_embedding is None — re-embed the rewritten query
     if dense_vector is None and embeddings is not None:
         dense_vector = await cache.get_embedding(query)
         if dense_vector is None:
-            dense_vector = await embeddings.aembed_query(query)
-            await cache.store_embedding(query, dense_vector)
+            # Parallel: compute dense + sparse simultaneously (saves ~0.5-1s)
+            import asyncio
+
+            sparse_cached = await cache.get_sparse_embedding(query)
+
+            async def _get_dense() -> list[float]:
+                vec: list[float] = await embeddings.aembed_query(query)
+                await cache.store_embedding(query, vec)
+                return vec
+
+            async def _get_sparse() -> Any:
+                if sparse_cached is not None:
+                    return sparse_cached
+                vec = await sparse_embeddings.aembed_query(query)
+                await cache.store_sparse_embedding(query, vec)
+                return vec
+
+            dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
 
     if not dense_vector:
         dense_vector = []
@@ -77,10 +94,11 @@ async def retrieve_node(
         }
 
     # Step 2: Get sparse embedding (cached or compute)
-    sparse_vector = await cache.get_sparse_embedding(query)
     if sparse_vector is None:
-        sparse_vector = await sparse_embeddings.aembed_query(query)
-        await cache.store_sparse_embedding(query, sparse_vector)
+        sparse_vector = await cache.get_sparse_embedding(query)
+        if sparse_vector is None:
+            sparse_vector = await sparse_embeddings.aembed_query(query)
+            await cache.store_sparse_embedding(query, sparse_vector)
 
     # Step 3: Hybrid search via Qdrant SDK (RRF fusion)
     results = await qdrant.hybrid_search_rrf(

@@ -22,17 +22,17 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Install linters
-        run: uv tool install ruff && uv tool install mypy
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev
 
       - name: Ruff lint
-        run: ruff check src/ telegram_bot/ tests/ --output-format=github
+        run: uv run ruff check src/ telegram_bot/ tests/ --output-format=github
 
       - name: Ruff format check
-        run: ruff format --check src/ telegram_bot/ tests/
+        run: uv run ruff format --check src/ telegram_bot/ tests/
 
       - name: Type check
-        run: mypy src/ --ignore-missing-imports --no-error-summary
+        run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 
   test:
     name: Unit Tests
@@ -50,7 +50,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --group dev
 
       - name: Run unit tests
         run: uv run pytest tests/unit/ -q -x -m "not legacy_api" --timeout=30
