@@ -7,11 +7,11 @@ prefetch, FusionQuery, and ColBERT reranking.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
 
-from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
 from telegram_bot.observability import observe
 
 
@@ -65,15 +65,15 @@ async def retrieve_node(
                 dense_vector = await embeddings.aembed_query(query)
                 await cache.store_embedding(query, dense_vector)
                 sparse_vector = sparse_cached
-            elif isinstance(embeddings, BGEM3HybridEmbeddings):
+            elif callable(
+                getattr(embeddings, "aembed_hybrid", None)
+            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
                 # Hybrid: single call for both dense + sparse
                 dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
                 await cache.store_embedding(query, dense_vector)
                 await cache.store_sparse_embedding(query, sparse_vector)
             else:
                 # Fallback: parallel dense + sparse (old path)
-                import asyncio
-
                 async def _get_dense() -> list[float]:
                     vec: list[float] = await embeddings.aembed_query(query)
                     await cache.store_embedding(query, vec)
