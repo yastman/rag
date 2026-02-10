@@ -160,7 +160,9 @@ class QdrantService:
         # Grouping for diverse results
         group_by: str | None = None,
         group_size: int = 2,
-    ) -> list[dict]:
+        # Per-call error meta (#117)
+        return_meta: bool = False,
+    ) -> list[dict] | tuple[list[dict], dict[str, Any]]:
         """Hybrid search with RRF fusion (dense + sparse).
 
         Args:
@@ -177,9 +179,12 @@ class QdrantService:
             rrf_k: RRF constant k (higher = more weight to lower-ranked results).
             group_by: Optional payload field to group results by (e.g. "metadata.doc_id").
             group_size: Max points per group when group_by is set.
+            return_meta: If True, return (results, meta) tuple with backend_error info.
 
         Returns:
-            List of results with id, score, text, metadata
+            If return_meta=False: list of results (backward compatible).
+            If return_meta=True: (results, meta) where meta has
+                backend_error, error_type, error_message.
         """
         await self.ensure_collection()
         # Build prefetch queries
@@ -221,6 +226,11 @@ class QdrantService:
             )
 
         rrf_query = models.RrfQuery(rrf=models.Rrf(k=rrf_k))
+        ok_meta: dict[str, Any] = {
+            "backend_error": False,
+            "error_type": None,
+            "error_message": None,
+        }
 
         # Execute RRF fusion search with graceful degradation
         try:
@@ -236,7 +246,10 @@ class QdrantService:
                     with_payload=True,
                     search_params=search_params,
                 )
-                return self._format_group_results(group_result)
+                results = self._format_group_results(group_result)
+                if return_meta:
+                    return results, ok_meta
+                return results
 
             result = await self._client.query_points(
                 collection_name=self._collection_name,
@@ -247,10 +260,19 @@ class QdrantService:
                 with_payload=True,
                 search_params=search_params,
             )
-            return self._format_results(result.points)
+            results = self._format_results(result.points)
+            if return_meta:
+                return results, ok_meta
+            return results
         except Exception as e:
             # Graceful degradation: return empty list on any Qdrant error
             logger.error(f"Qdrant search failed (graceful degradation): {e}")
+            if return_meta:
+                return [], {
+                    "backend_error": True,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                }
             return []
 
     @observe(name="qdrant-batch-search-rrf")

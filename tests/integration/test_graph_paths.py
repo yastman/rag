@@ -90,10 +90,10 @@ def _make_graph_mocks(
             "metadata": {"title": "Студия", "city": "Солнечный берег", "price": 60000},
         },
     ]
+    _ok_meta = {"backend_error": False, "error_type": None, "error_message": None}
+    _docs = qdrant_results if qdrant_results is not None else default_docs
     qdrant = MagicMock()
-    qdrant.hybrid_search_rrf = AsyncMock(
-        return_value=qdrant_results if qdrant_results is not None else default_docs
-    )
+    qdrant.hybrid_search_rrf = AsyncMock(return_value=(_docs, _ok_meta))
 
     # -- Reranker (ColBERT) --
     reranker = MagicMock()
@@ -313,7 +313,10 @@ async def test_path_rewrite_loop_then_success():
     mocks = _make_graph_mocks()
 
     # Qdrant: 1st call → irrelevant, 2nd call → relevant
-    mocks["qdrant"].hybrid_search_rrf = AsyncMock(side_effect=[irrelevant_docs, relevant_docs])
+    _ok_meta = {"backend_error": False, "error_type": None, "error_message": None}
+    mocks["qdrant"].hybrid_search_rrf = AsyncMock(
+        side_effect=[(irrelevant_docs, _ok_meta), (relevant_docs, _ok_meta)]
+    )
 
     # LLM: 1st call → rewrite query, 2nd call → generate answer
     rewrite_completion = _make_llm_completion("квартира Несебр недорого")
