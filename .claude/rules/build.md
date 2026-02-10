@@ -72,6 +72,14 @@ git commit --no-verify
 git commit --no-verify -m "feat: ... (skip hooks: pre-existing E402)"
 ```
 
+## CI Pipeline (`.github/workflows/ci.yml`)
+
+| Job | Purpose |
+|-----|---------|
+| `lint` | Ruff lint + format + mypy (strict, no `\|\| true`) |
+| `test` | Unit tests (`-m "not legacy_api" --timeout=30`) |
+| `baseline-compare` | PR-only: Langfuse regression check |
+
 ## Lock File
 
 **File:** `uv.lock` (committed to git)
