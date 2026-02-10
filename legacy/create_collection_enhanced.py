@@ -14,7 +14,7 @@ from config import (
 )
 
 
-def create_enhanced_collection(collection_name: str = None):
+def create_enhanced_collection(collection_name: str | None = None):
     """Create Qdrant collection with enhanced schema for contextual retrieval + KG."""
 
     # Use default collection if not specified

@@ -3,6 +3,7 @@
 import hashlib
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
@@ -34,7 +35,7 @@ _QUERY_TYPE_SCORE = {
 }
 
 
-def _write_langfuse_scores(lf: object, result: dict) -> None:
+def _write_langfuse_scores(lf: Any, result: dict) -> None:
     """Write 12 Langfuse scores from graph result state.
 
     Args:
@@ -196,6 +197,7 @@ class PropertyBot:
 
     async def cmd_clear(self, message: Message):
         """Handle /clear command - clear conversation history."""
+        assert message.from_user is not None
         user_id = message.from_user.id
         await self._cache.clear_conversation(user_id)
         await message.answer("✅ История диалога очищена.")
@@ -225,13 +227,17 @@ class PropertyBot:
     async def handle_query(self, message: Message):
         """Handle user query via LangGraph RAG pipeline."""
         # Early typing ACK — user sees "typing..." immediately
-        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        assert message.bot is not None
+        assert message.from_user is not None
+        bot = message.bot
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
         state = make_initial_state(
             user_id=message.from_user.id,
             session_id=make_session_id("chat", message.chat.id),
             query=message.text or "",
         )
+        state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
 
         with propagate_attributes(
             session_id=state["session_id"],
@@ -248,7 +254,7 @@ class PropertyBot:
                 message=message,
             )
 
-            async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+            async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                 result = await graph.ainvoke(state)
 
             # Update trace with input/output and metadata
