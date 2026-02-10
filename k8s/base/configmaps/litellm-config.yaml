@@ -10,6 +10,7 @@ data:
           model: openai/zai-glm-4.7
           api_base: https://api.cerebras.ai/v1
           api_key: os.environ/CEREBRAS_API_KEY
+          max_tokens: 4096
           merge_reasoning_content_in_choices: true
       - model_name: gpt-4o-mini-fallback
         litellm_params:
