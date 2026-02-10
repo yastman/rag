@@ -377,7 +377,7 @@ async def test_path_rewrite_exhausted_fallback():
             embeddings=mocks["embeddings"],
             sparse_embeddings=mocks["sparse_embeddings"],
             qdrant=mocks["qdrant"],
-            reranker=None,  # no reranker for this path
+            reranker=mocks["reranker"],  # real mock to detect incorrect routing
             llm=mocks["llm"],
             message=mocks["message"],
         )
@@ -395,8 +395,58 @@ async def test_path_rewrite_exhausted_fallback():
     assert result["rewrite_count"] == 2  # not incremented — rewrite node not entered
     assert result["documents_relevant"] is False
     assert result["response"] == "К сожалению, точных совпадений не найдено."
-    assert result["rerank_applied"] is False  # rerank node not entered in this branch
 
     # Service call counts
     mocks["qdrant"].hybrid_search_rrf.assert_awaited_once()
     mocks["llm"].chat.completions.create.assert_awaited_once()  # generate only
+    mocks["reranker"].rerank.assert_not_awaited()  # rerank node must be skipped
+
+
+# ---------------------------------------------------------------------------
+# Path 6: classify → cache_check(MISS) → retrieve → grade(irrelevant)
+#        → generate (rewrite_effective=False) → cache_store → respond → END
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_rewrite_ineffective_fallback():
+    """When rewrite_effective=False (even with retries left), skip rewrite → generate."""
+    irrelevant_docs = [
+        {"text": "Не очень релевантный текст", "score": 0.15, "id": "z1", "metadata": {}},
+    ]
+    mocks = _make_graph_mocks(
+        qdrant_results=irrelevant_docs,
+        llm_response="К сожалению, ничего подходящего не найдено.",
+    )
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    # rewrite_count=1 (< 2, retries left) but rewrite_effective=False
+    state = make_initial_state(
+        user_id=6, session_id="test-path6", query="уютная квартира с видом на море"
+    )
+    state["rewrite_count"] = 1
+    state["rewrite_effective"] = False
+
+    with _patch_graph_configs(mock_gc):
+        result = await graph.ainvoke(state)
+
+    # State assertions
+    assert result["rewrite_count"] == 1  # rewrite node not entered
+    assert result["documents_relevant"] is False
+    assert result["response"] == "К сожалению, ничего подходящего не найдено."
+
+    # Service call counts
+    mocks["qdrant"].hybrid_search_rrf.assert_awaited_once()
+    mocks["llm"].chat.completions.create.assert_awaited_once()  # generate only
+    mocks["reranker"].rerank.assert_not_awaited()  # rerank skipped
