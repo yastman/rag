@@ -545,6 +545,9 @@ services:
       LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
+      # Latency knobs
+      MAX_REWRITE_ATTEMPTS: "${MAX_REWRITE_ATTEMPTS:-1}"
+      REWRITE_MAX_TOKENS: "${REWRITE_MAX_TOKENS:-64}"
       # Domain configuration
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
