@@ -196,6 +196,10 @@ LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
 LANGFUSE_HOST: http://langfuse:3000
 ```
 
+## Trace Validation (#110)
+
+`scripts/validate_traces.py` uses `@observe`, `propagate_attributes`, `update_current_trace` for headless LangGraph runs. After flush, `enrich_results_from_langfuse()` fetches scores + node spans by trace_id via Langfuse API. Reference trace `c2b95d86` — anomalous (5213s), not reproducible.
+
 ## Baseline Module
 
 ```
