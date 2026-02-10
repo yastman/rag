@@ -3,10 +3,14 @@
 Formats top-5 retrieved documents as context, builds system prompt with
 domain from GraphConfig, includes conversation history, and calls LLM.
 Falls back to a summary of retrieved docs if LLM is unavailable.
+
+Supports streaming delivery to Telegram: sends placeholder message,
+edits with accumulated chunks (throttled 300ms), finalizes with Markdown.
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from typing import Any
@@ -19,6 +23,8 @@ from telegram_bot.observability import observe
 logger = logging.getLogger(__name__)
 
 _MAX_CONTEXT_DOCS = 5
+_STREAM_EDIT_INTERVAL = 0.3  # 300ms throttle for Telegram edit_text
+_STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
 
 
 def _get_config() -> Any:
@@ -94,8 +100,76 @@ def _build_fallback_response(documents: list[dict[str, Any]]) -> str:
     return fallback
 
 
+async def _generate_streaming(
+    llm: Any,
+    config: Any,
+    llm_messages: list[dict[str, str]],
+    message: Any,
+) -> str:
+    """Stream LLM response directly to Telegram via message editing.
+
+    Sends a placeholder message, then edits it with accumulated text as chunks
+    arrive from the OpenAI streaming API. Throttles edits to _STREAM_EDIT_INTERVAL.
+    Finalizes with Markdown parse_mode (falls back to plain text).
+
+    Args:
+        llm: AsyncOpenAI client instance.
+        config: GraphConfig with model parameters.
+        llm_messages: OpenAI-format message list.
+        message: aiogram Message object for Telegram delivery.
+
+    Returns:
+        Complete response text.
+
+    Raises:
+        Exception: On any streaming failure (caller handles fallback).
+    """
+    sent_msg = await message.answer(_STREAM_PLACEHOLDER)
+
+    accumulated = ""
+    last_edit = 0.0
+
+    stream = await llm.chat.completions.create(
+        model=config.llm_model,
+        messages=llm_messages,
+        temperature=config.llm_temperature,
+        max_tokens=config.llm_max_tokens,
+        stream=True,
+        name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+    )
+
+    async for chunk in stream:
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        if delta and delta.content:
+            accumulated += delta.content
+            now = time.monotonic()
+            if now - last_edit >= _STREAM_EDIT_INTERVAL:
+                with contextlib.suppress(Exception):
+                    await sent_msg.edit_text(accumulated)
+                last_edit = now
+
+    if not accumulated:
+        # Stream produced no content — clean up placeholder
+        with contextlib.suppress(Exception):
+            await sent_msg.delete()
+        raise ValueError("Streaming produced empty response")
+
+    # Final edit with Markdown formatting
+    try:
+        await sent_msg.edit_text(accumulated, parse_mode="Markdown")
+    except Exception:
+        try:
+            await sent_msg.edit_text(accumulated)
+        except Exception:
+            logger.warning("Failed to finalize streaming message")
+
+    return accumulated
+
+
 @observe(name="node-generate")
-async def generate_node(state: RAGState) -> dict[str, Any]:
+async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[str, Any]:
     """Generate an answer from retrieved documents using LLM.
 
     Builds a prompt with:
@@ -103,7 +177,10 @@ async def generate_node(state: RAGState) -> dict[str, Any]:
     - Formatted context from top-5 documents
     - Conversation history from state messages
 
-    Returns partial state update with response and latency.
+    When message is provided and streaming is enabled, streams the response
+    directly to Telegram via edit_text. Falls back to non-streaming on error.
+
+    Returns partial state update with response, response_sent flag, and latency.
     """
     t0 = time.monotonic()
 
@@ -141,16 +218,37 @@ async def generate_node(state: RAGState) -> dict[str, Any]:
     )
     llm_messages.append({"role": "user", "content": user_content})
 
+    response_sent = False
+
     try:
         llm = config.create_llm()
-        response = await llm.chat.completions.create(
-            model=config.llm_model,
-            messages=llm_messages,
-            temperature=config.llm_temperature,
-            max_tokens=config.llm_max_tokens,
-            name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
-        )
-        answer = response.choices[0].message.content or ""
+
+        # Streaming path: deliver directly to Telegram
+        if message is not None and config.streaming_enabled:
+            try:
+                answer = await _generate_streaming(llm, config, llm_messages, message)
+                response_sent = True
+            except Exception:
+                logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
+                # Fall back to non-streaming
+                response = await llm.chat.completions.create(
+                    model=config.llm_model,
+                    messages=llm_messages,
+                    temperature=config.llm_temperature,
+                    max_tokens=config.llm_max_tokens,
+                    name="generate-answer",  # type: ignore[call-overload]
+                )
+                answer = response.choices[0].message.content or ""
+        else:
+            # Non-streaming path (original)
+            response = await llm.chat.completions.create(
+                model=config.llm_model,
+                messages=llm_messages,
+                temperature=config.llm_temperature,
+                max_tokens=config.llm_max_tokens,
+                name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+            )
+            answer = response.choices[0].message.content or ""
     except Exception:
         logger.exception("generate_node: LLM call failed, using fallback")
         answer = _build_fallback_response(documents)
@@ -158,5 +256,6 @@ async def generate_node(state: RAGState) -> dict[str, Any]:
     elapsed = time.monotonic() - t0
     return {
         "response": answer,
+        "response_sent": response_sent,
         "latency_stages": {**state.get("latency_stages", {}), "generate": elapsed},
     }

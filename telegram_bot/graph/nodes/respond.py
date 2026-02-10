@@ -32,6 +32,13 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
     if not response:
         response = "Извините, не удалось сформировать ответ. Попробуйте переформулировать вопрос."
 
+    # Skip sending if streaming already delivered the response
+    if state.get("response_sent", False):
+        elapsed = time.perf_counter() - t0
+        return {
+            "latency_stages": {**state.get("latency_stages", {}), "respond": elapsed},
+        }
+
     if message is not None:
         try:
             await message.answer(response, parse_mode="Markdown")
