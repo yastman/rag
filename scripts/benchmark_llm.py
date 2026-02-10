@@ -91,7 +91,7 @@ async def _call(
 
     usage = data.get("usage", {})
     out_tok = usage.get("completion_tokens", 0)
-    content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
 
     return {
         "latency": round(elapsed, 3),
