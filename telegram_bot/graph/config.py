@@ -34,7 +34,7 @@ class GraphConfig:
     domain: str = "недвижимость"
     domain_language: str = "ru"
 
-    max_rewrite_attempts: int = 2
+    max_rewrite_attempts: int = 1
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -73,6 +73,7 @@ class GraphConfig:
             redis_url=os.getenv("REDIS_URL", "redis://redis:6379"),
             domain=os.getenv("BOT_DOMAIN", "недвижимость"),
             domain_language=os.getenv("BOT_LANGUAGE", "ru"),
+            max_rewrite_attempts=int(os.getenv("MAX_REWRITE_ATTEMPTS", "1")),
         )
 
     def create_llm(self) -> Any:
