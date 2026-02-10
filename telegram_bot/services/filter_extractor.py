@@ -17,7 +17,7 @@ class FilterExtractor:
         Returns:
             Dict with extracted filters like {"price": {"lt": 100000}}
         """
-        filters = {}
+        filters: dict[str, Any] = {}
 
         ***REMOVED*** Price filters
         price_filter = self._extract_price(query)
