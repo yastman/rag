@@ -21,10 +21,12 @@ class TestRAGState:
             "documents_relevant",
             "rewrite_count",
             "rewrite_effective",
+            "max_rewrite_attempts",
             "response",
             "latency_stages",
             "search_results_count",
             "rerank_applied",
+            "grade_confidence",
         ]
         for field in required:
             assert field in annotations, f"Missing field: {field}"
@@ -57,9 +59,23 @@ class TestRAGState:
         assert msg["role"] == "user"
         assert msg["content"] == "Привет!"
 
+    def test_initial_state_has_max_rewrite_attempts(self):
+        """Initial state includes max_rewrite_attempts=1."""
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        assert state["max_rewrite_attempts"] == 1
+
     def test_initial_state_has_rewrite_effective(self):
         """Initial state includes rewrite_effective=True."""
         from telegram_bot.graph.state import make_initial_state
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
         assert state["rewrite_effective"] is True
+
+    def test_initial_state_has_grade_confidence(self):
+        """Initial state includes grade_confidence=0.0."""
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        assert state["grade_confidence"] == 0.0
