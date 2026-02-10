@@ -63,13 +63,13 @@ async def retrieve_node(
     if not dense_vector:
         dense_vector = []
 
-    start = time.time()
+    start = time.perf_counter()
 
     # Step 1: Check search cache
     cached_results = await cache.get_search_results(dense_vector)
     if cached_results is not None:
-        latency = (time.time() - start) * 1000
-        logger.info("retrieve HIT search cache (%.0fms, %d docs)", latency, len(cached_results))
+        latency = time.perf_counter() - start
+        logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
         return {
             "documents": cached_results,
             "search_results_count": len(cached_results),
@@ -93,8 +93,8 @@ async def retrieve_node(
     if results:
         await cache.store_search_results(dense_vector, None, results)
 
-    latency = (time.time() - start) * 1000
-    logger.info("retrieve done (%.0fms, %d docs)", latency, len(results))
+    latency = time.perf_counter() - start
+    logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
 
     update: dict[str, Any] = {
         "documents": results,

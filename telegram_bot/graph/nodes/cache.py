@@ -40,7 +40,7 @@ async def cache_check_node(
     )
     query_type = state.get("query_type", "GENERAL")
 
-    start = time.time()
+    start = time.perf_counter()
 
     # Step 1: Get or compute dense embedding
     embedding = await cache.get_embedding(query)
@@ -55,10 +55,10 @@ async def cache_check_node(
         query_type=query_type,
     )
 
-    latency = (time.time() - start) * 1000
+    latency = time.perf_counter() - start
 
     if cached:
-        logger.info("cache_check HIT (%.0fms, type=%s)", latency, query_type)
+        logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
         return {
             "cache_hit": True,
             "cached_response": cached,
@@ -67,7 +67,7 @@ async def cache_check_node(
             "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
         }
 
-    logger.info("cache_check MISS (%.0fms, type=%s)", latency, query_type)
+    logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
     return {
         "cache_hit": False,
         "cached_response": None,
