@@ -225,7 +225,7 @@ class QdrantService:
         # Execute RRF fusion search with graceful degradation
         try:
             if group_by:
-                result = await self._client.query_points_groups(
+                group_result = await self._client.query_points_groups(
                     collection_name=self._collection_name,
                     prefetch=prefetch,
                     query=rrf_query,
@@ -236,7 +236,7 @@ class QdrantService:
                     with_payload=True,
                     search_params=search_params,
                 )
-                return self._format_group_results(result)
+                return self._format_group_results(group_result)
 
             result = await self._client.query_points(
                 collection_name=self._collection_name,
@@ -333,11 +333,12 @@ class QdrantService:
             for response in responses:
                 for point in response.points:
                     pid = str(point.id)
+                    payload = point.payload or {}
                     formatted = {
                         "id": pid,
                         "score": point.score,
-                        "text": point.payload.get("page_content", ""),
-                        "metadata": point.payload.get("metadata", {}),
+                        "text": payload.get("page_content", ""),
+                        "metadata": payload.get("metadata", {}),
                     }
                     if pid not in seen or point.score > seen[pid]["score"]:
                         seen[pid] = formatted
@@ -409,7 +410,8 @@ class QdrantService:
                 base_score = point.score
 
                 # Get datetime from payload
-                created_at = point.payload.get("metadata", {}).get(freshness_field)
+                payload = point.payload or {}
+                created_at = payload.get("metadata", {}).get(freshness_field)
                 if created_at:
                     try:
                         if isinstance(created_at, str):
@@ -562,7 +564,7 @@ class QdrantService:
                     )
                 )
 
-        return models.Filter(must=conditions) if conditions else None
+        return models.Filter(must=conditions) if conditions else None  # type: ignore[arg-type]  # list invariance
 
     def _format_results(self, points: list[Any]) -> list[dict]:
         """Format Qdrant points to standard dict format."""
