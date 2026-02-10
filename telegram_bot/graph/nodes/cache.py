@@ -44,6 +44,7 @@ async def cache_check_node(
 
     # Step 1: Get or compute dense embedding (prefer hybrid for efficiency)
     embedding = await cache.get_embedding(query)
+    embeddings_cache_hit = embedding is not None
     if embedding is None:
         if hasattr(embeddings, "aembed_hybrid"):
             # Hybrid: get both dense + sparse in one call, cache both
@@ -70,6 +71,7 @@ async def cache_check_node(
             "cached_response": cached,
             "query_embedding": embedding,
             "response": cached,
+            "embeddings_cache_hit": embeddings_cache_hit,
             "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
         }
 
@@ -78,6 +80,7 @@ async def cache_check_node(
         "cache_hit": False,
         "cached_response": None,
         "query_embedding": embedding,
+        "embeddings_cache_hit": embeddings_cache_hit,
         "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
     }
 
