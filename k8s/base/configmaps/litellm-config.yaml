@@ -12,6 +12,12 @@ data:
           api_key: os.environ/CEREBRAS_API_KEY
           max_tokens: 4096
           merge_reasoning_content_in_choices: true
+      - model_name: gpt-oss-120b
+        litellm_params:
+          model: cerebras/gpt-oss-120b
+          api_key: os.environ/CEREBRAS_API_KEY
+          max_tokens: 4096
+          merge_reasoning_content_in_choices: true
       - model_name: gpt-4o-mini-fallback
         litellm_params:
           model: groq/llama-3.1-70b-versatile
