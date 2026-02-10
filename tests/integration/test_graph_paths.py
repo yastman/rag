@@ -130,7 +130,7 @@ def _make_mock_graph_config(llm_mock: MagicMock) -> MagicMock:
     gc.llm_temperature = 0.7
     gc.llm_max_tokens = 4096
     gc.rewrite_model = "test-model"
-    gc.rewrite_max_tokens = 200
+    gc.rewrite_max_tokens = 64
     gc.create_llm.return_value = llm_mock
     return gc
 
