@@ -435,6 +435,42 @@ class TestRegisterHandlers:
         assert hasattr(bot, "handle_query")
 
 
+class TestWriteLangfuseScores:
+    """Test _write_langfuse_scores score writing."""
+
+    def test_latency_total_ms_uses_wall_time(self):
+        """latency_total_ms should use pipeline_wall_ms from state, not sum of stages."""
+        from telegram_bot.bot import _write_langfuse_scores
+
+        mock_lf = MagicMock()
+        result = {
+            "query_type": "GENERAL",
+            "cache_hit": False,
+            "search_results_count": 20,
+            "rerank_applied": False,
+            "latency_stages": {"cache_check": 5.0, "retrieve": 8.0, "generate": 3.0},
+            "pipeline_wall_ms": 7500.0,  # wall-time set by handle_query
+        }
+        _write_langfuse_scores(mock_lf, result)
+        # Find the latency_total_ms call
+        calls = {
+            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
+        }
+        assert calls["latency_total_ms"] == 7500.0
+
+    def test_latency_total_ms_fallback_zero(self):
+        """Without pipeline_wall_ms, latency_total_ms should be 0."""
+        from telegram_bot.bot import _write_langfuse_scores
+
+        mock_lf = MagicMock()
+        result = {"query_type": "FAQ", "latency_stages": {}}
+        _write_langfuse_scores(mock_lf, result)
+        calls = {
+            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
+        }
+        assert calls["latency_total_ms"] == 0.0
+
+
 class TestMakeSessionId:
     """Test make_session_id utility function."""
 
