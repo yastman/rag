@@ -19,6 +19,7 @@ class GraphConfig:
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.7
     llm_max_tokens: int = 4096
+    generate_max_tokens: int = 2048
     rewrite_model: str = "gpt-4o-mini"
     rewrite_max_tokens: int = 64
 
@@ -35,6 +36,7 @@ class GraphConfig:
     domain_language: str = "ru"
 
     max_rewrite_attempts: int = 1
+    skip_rerank_threshold: float = 0.85
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -65,6 +67,7 @@ class GraphConfig:
             llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
             rewrite_model=os.getenv("REWRITE_MODEL", os.getenv("LLM_MODEL", "gpt-4o-mini")),
             rewrite_max_tokens=int(os.getenv("REWRITE_MAX_TOKENS", "64")),
+            generate_max_tokens=int(os.getenv("GENERATE_MAX_TOKENS", "2048")),
             bge_m3_url=os.getenv("BGE_M3_URL", "http://bge-m3:8000"),
             bge_m3_timeout=float(os.getenv("BGE_M3_TIMEOUT", "120.0")),
             qdrant_url=os.getenv("QDRANT_URL", "http://qdrant:6333"),
@@ -74,6 +77,7 @@ class GraphConfig:
             domain=os.getenv("BOT_DOMAIN", "недвижимость"),
             domain_language=os.getenv("BOT_LANGUAGE", "ru"),
             max_rewrite_attempts=int(os.getenv("MAX_REWRITE_ATTEMPTS", "1")),
+            skip_rerank_threshold=float(os.getenv("SKIP_RERANK_THRESHOLD", "0.85")),
         )
 
     def create_llm(self) -> Any:
