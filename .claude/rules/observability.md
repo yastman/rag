@@ -115,9 +115,10 @@ Config: `tests/baseline/thresholds.yaml`
 
 | Service | Span Name | as_type |
 |---------|-----------|---------|
+| BGEM3HybridEmbeddings.aembed_hybrid | `bge-m3-hybrid-embed` | span |
+| BGEM3HybridEmbeddings.aembed_hybrid_batch | `bge-m3-hybrid-embed-batch` | span |
 | BGEM3Embeddings.aembed_documents | `bge-m3-dense-embed` | span |
 | BGEM3SparseEmbeddings.aembed_query | `bge-m3-sparse-embed` | span |
-| BGEM3SparseEmbeddings.aembed_documents | `bge-m3-sparse-embed-batch` | span |
 | ColbertRerankerService.rerank | `colbert-rerank` | span |
 | QdrantService.hybrid_search_rrf | `qdrant-hybrid-search-rrf` | span |
 | QdrantService.batch_search_rrf | `qdrant-batch-search-rrf` | span |

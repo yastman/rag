@@ -93,11 +93,17 @@ async with self.redis.pipeline(transaction=False) as pipe:
 
 ### cache_check_node
 
-Computes embedding (cached or fresh via BGEM3Embeddings), checks semantic cache:
+Computes embedding (cached or fresh), checks semantic cache. Uses capability-based detection (`callable + iscoroutinefunction` on `aembed_hybrid`) for hybrid path:
+
+1. Check embedding cache → if miss:
+   - **BGEM3HybridEmbeddings**: `aembed_hybrid()` → dense + sparse in 1 call, cache both
+   - **Other**: `aembed_query()` → dense only
+2. Check semantic cache with dense vector
+3. Returns `embeddings_cache_hit` flag for Langfuse scoring
 
 ```python
 result = await cache_check_node(state, cache=cache, embeddings=embeddings)
-# Returns: {cache_hit, cached_response, query_embedding, latency_stages}
+# Returns: {cache_hit, cached_response, query_embedding, embeddings_cache_hit, latency_stages}
 ```
 
 ### cache_store_node
