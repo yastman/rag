@@ -28,9 +28,9 @@ User Message → ThrottlingMiddleware → ErrorMiddleware
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
 | `telegram_bot/graph/graph.py` | `build_graph()` — assembles 9-node StateGraph |
-| `telegram_bot/graph/state.py` | RAGState TypedDict + `make_initial_state()` |
-| `telegram_bot/graph/edges.py` | 3 routing functions |
-| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories) |
+| `telegram_bot/graph/state.py` | RAGState TypedDict (17 fields incl. `rewrite_effective`) + `make_initial_state()` |
+| `telegram_bot/graph/edges.py` | 3 routing functions (`route_grade` checks `rewrite_effective`) |
+| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `rewrite_model`/`rewrite_max_tokens`) |
 | `telegram_bot/graph/nodes/` | 8 node modules (classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, PII masking |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
@@ -43,7 +43,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
                  → [other] → cache_check → [HIT] → respond → END
                                           → [MISS] → retrieve → grade
                                                        → [relevant] → rerank → generate → cache_store → respond → END
-                                                       → [retries < 2] → rewrite → retrieve (loop)
+                                                       → [retries < 2 AND effective] → rewrite → retrieve (loop)
                                                        → [retries >= 2] → generate → cache_store → respond → END
 ```
 
@@ -57,7 +57,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 | grade | `graph/nodes/grade.py` | — (score threshold 0.3) |
 | rerank | `graph/nodes/rerank.py` | reranker (ColBERT or None) |
 | generate | `graph/nodes/generate.py` | — (uses GraphConfig.create_llm) |
-| rewrite | `graph/nodes/rewrite.py` | llm (optional, defaults via GraphConfig) |
+| rewrite | `graph/nodes/rewrite.py` | llm (optional, uses `config.rewrite_model`/`rewrite_max_tokens`) |
 | cache_store | `graph/nodes/cache.py` | cache |
 | respond | `graph/nodes/respond.py` | message (aiogram Message, injected) |
 
@@ -67,7 +67,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 |----------|-----------|
 | `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
 | `route_cache` | cache_check → respond (hit) or retrieve (miss) |
-| `route_grade` | grade → rerank (relevant), rewrite (retry < 2), generate (fallback) |
+| `route_grade` | grade → rerank (relevant), rewrite (retry < 2 AND `rewrite_effective`), generate (fallback) |
 
 ## Bot Commands
 
