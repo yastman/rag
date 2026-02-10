@@ -1,14 +1,25 @@
 #!/usr/bin/env python3
-"""Test Redis semantic cache connectivity and basic operations."""
+"""Test Redis semantic cache connectivity and basic operations.
+
+Legacy integration test — requires live Redis. Run manually:
+    python tests/integration/test_redis_cache.py
+
+Excluded from CI via @pytest.mark.legacy_api marker.
+"""
 
 import asyncio
 import os
 import sys
 from pathlib import Path
 
+import pytest
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+# Mark entire module as legacy (skipped in CI: -m "not legacy_api")
+pytestmark = pytest.mark.legacy_api
+
+# Add src to path for legacy import
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from cache.redis_semantic_cache import RedisSemanticCache
 
