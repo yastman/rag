@@ -36,7 +36,7 @@ class GraphConfig:
     domain_language: str = "ru"
 
     max_rewrite_attempts: int = 1
-    skip_rerank_threshold: float = 0.85
+    skip_rerank_threshold: float = 0.012
     relevance_threshold_rrf: float = 0.005
     streaming_enabled: bool = True
 
@@ -79,7 +79,7 @@ class GraphConfig:
             domain=os.getenv("BOT_DOMAIN", "недвижимость"),
             domain_language=os.getenv("BOT_LANGUAGE", "ru"),
             max_rewrite_attempts=int(os.getenv("MAX_REWRITE_ATTEMPTS", "1")),
-            skip_rerank_threshold=float(os.getenv("SKIP_RERANK_THRESHOLD", "0.85")),
+            skip_rerank_threshold=float(os.getenv("SKIP_RERANK_THRESHOLD", "0.012")),
             relevance_threshold_rrf=float(os.getenv("RELEVANCE_THRESHOLD_RRF", "0.005")),
             streaming_enabled=os.getenv("STREAMING_ENABLED", "true").lower() == "true",
         )
