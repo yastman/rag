@@ -8,7 +8,7 @@ from typing import Any
 
 from aiogram import BaseMiddleware, Dispatcher
 from aiogram.types import CallbackQuery, Message, TelegramObject
-from cachetools import TTLCache
+from cachetools import TTLCache  # type: ignore[import-untyped]
 
 
 logger = logging.getLogger(__name__)

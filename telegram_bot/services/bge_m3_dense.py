@@ -6,6 +6,7 @@ Replaces VoyageService for dense retrieval when RETRIEVAL_DENSE_PROVIDER=bge_m3_
 
 import logging
 import os
+from typing import cast
 
 import httpx
 
@@ -59,7 +60,7 @@ class BgeM3DenseService:
         )
         response.raise_for_status()
         data = response.json()
-        return data["dense_vecs"][0]
+        return cast(list[float], data["dense_vecs"][0])
 
     async def embed_documents(
         self,
@@ -93,7 +94,7 @@ class BgeM3DenseService:
             )
             response.raise_for_status()
             data = response.json()
-            all_embeddings.extend(data["dense_vecs"])
+            all_embeddings.extend(cast(list[list[float]], data["dense_vecs"]))
 
         return all_embeddings
 
