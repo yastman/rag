@@ -238,17 +238,21 @@ class TestHandleQuery:
             message.bot.send_chat_action.assert_called_once_with(chat_id=12345, action="typing")
 
     @pytest.mark.asyncio
-    async def test_handle_query_passes_langfuse_handler(self, mock_config):
-        """Test that Langfuse handler is created and passed to graph."""
+    async def test_handle_query_writes_langfuse_trace(self, mock_config):
+        """Test that handle_query updates Langfuse trace and writes scores."""
         bot, _ = _create_bot(mock_config)
 
         mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
-        mock_handler = MagicMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={"response": "ok", "query_type": "GENERAL", "latency_stages": {}}
+        )
+        mock_lf = MagicMock()
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.create_langfuse_handler", return_value=mock_handler),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = MagicMock()
             message.text = "test"
@@ -267,24 +271,27 @@ class TestHandleQuery:
 
                 await bot.handle_query(message)
 
-            # Check that callbacks were passed
-            call_config = mock_graph.ainvoke.call_args[1].get("config", {})
-            assert mock_handler in call_config.get("callbacks", [])
+            mock_lf.update_current_trace.assert_called_once()
+            mock_write_scores.assert_called_once_with(mock_lf, mock_graph.ainvoke.return_value)
 
     @pytest.mark.asyncio
-    async def test_handle_query_no_langfuse(self, mock_config):
-        """Test handle_query works without Langfuse."""
+    async def test_handle_query_passes_state_to_graph(self, mock_config):
+        """Test that handle_query passes correct initial state to graph."""
         bot, _ = _create_bot(mock_config)
 
         mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
+        mock_graph.ainvoke = AsyncMock(
+            return_value={"response": "ok", "query_type": "GENERAL", "latency_stages": {}}
+        )
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.create_langfuse_handler", return_value=None),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = MagicMock()
-            message.text = "test"
+            message.text = "квартиры"
             message.from_user = MagicMock()
             message.from_user.id = 12345
             message.chat = MagicMock()
@@ -300,9 +307,9 @@ class TestHandleQuery:
 
                 await bot.handle_query(message)
 
-            # Empty config when no handler
-            call_config = mock_graph.ainvoke.call_args[1].get("config", {})
-            assert call_config == {}
+            state_arg = mock_graph.ainvoke.call_args[0][0]
+            assert state_arg["user_id"] == 12345
+            assert "квартиры" in str(state_arg["messages"])
 
     @pytest.mark.asyncio
     async def test_handle_query_passes_max_rewrite_attempts(self, mock_config):
