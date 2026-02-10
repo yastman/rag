@@ -28,6 +28,25 @@ make test-cov                                          # Opens htmlcov/index.htm
 
 ## Integration Tests
 
+### Graph Path Tests (no Docker required)
+
+6 deterministic tests verifying all `route_grade` branches through `graph.ainvoke()` with mocked services:
+
+```bash
+uv run pytest tests/integration/test_graph_paths.py -v   # ~5s, fully mocked
+```
+
+| Test | Path |
+|------|------|
+| `test_path_chitchat_early_exit` | classify(CHITCHAT) → respond |
+| `test_path_cache_hit` | cache_check(HIT) → respond |
+| `test_path_happy_retrieve_rerank_generate` | retrieve → rerank → generate |
+| `test_path_rewrite_loop_then_success` | grade(irrelevant) → rewrite → retrieve |
+| `test_path_rewrite_exhausted_fallback` | rewrite_count >= 2 → generate |
+| `test_path_rewrite_ineffective_fallback` | rewrite_effective=False → generate |
+
+### Service Integration Tests (require Docker)
+
 Require Docker services: `make docker-up`
 
 ```bash

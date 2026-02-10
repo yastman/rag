@@ -34,9 +34,9 @@ class RetrieverService:
         # Initialize client with error handling
         try:
             if api_key:
-                self.client = QdrantClient(url=url, api_key=api_key, timeout=5.0)
+                self.client = QdrantClient(url=url, api_key=api_key, timeout=5)
             else:
-                self.client = QdrantClient(url=url, timeout=5.0)
+                self.client = QdrantClient(url=url, timeout=5)
 
             # Test connection
             self.client.get_collections()
@@ -91,8 +91,8 @@ class RetrieverService:
             for point in results.points:
                 formatted_results.append(
                     {
-                        "text": point.payload.get("page_content", ""),
-                        "metadata": point.payload.get("metadata", {}),
+                        "text": (point.payload or {}).get("page_content", ""),
+                        "metadata": (point.payload or {}).get("metadata", {}),
                         "score": point.score,
                     }
                 )
@@ -167,4 +167,4 @@ class RetrieverService:
         if not conditions:
             return None
 
-        return models.Filter(must=conditions)
+        return models.Filter(must=conditions)  # type: ignore[arg-type]

@@ -34,7 +34,9 @@ except ImportError:
         def decorator(func):
             return func
 
-        return decorator if args and callable(args[0]) else decorator
+        if args and callable(args[0]):
+            return decorator
+        return decorator
 
 
 from prompts import format_enhanced_chunk_context

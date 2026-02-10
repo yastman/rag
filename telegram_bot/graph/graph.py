@@ -35,7 +35,7 @@ def build_graph(
         qdrant: QdrantService instance
         reranker: Optional ColbertRerankerService
         llm: Optional LLM instance (defaults via GraphConfig)
-        message: Optional aiogram Message for respond_node
+        message: Optional aiogram Message for streaming generate + respond_node
         checkpointer: Optional checkpointer for conversation persistence
 
     Returns:
@@ -43,7 +43,6 @@ def build_graph(
     """
     from telegram_bot.graph.nodes.cache import cache_check_node, cache_store_node
     from telegram_bot.graph.nodes.classify import classify_node
-    from telegram_bot.graph.nodes.generate import generate_node
     from telegram_bot.graph.nodes.grade import grade_node
     from telegram_bot.graph.nodes.rerank import rerank_node
     from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -76,7 +75,10 @@ def build_graph(
         functools.partial(rerank_node, reranker=reranker),
     )
 
-    workflow.add_node("generate", generate_node)
+    workflow.add_node(
+        "generate",
+        _make_generate_node(message),
+    )
 
     workflow.add_node(
         "rewrite",
@@ -153,6 +155,19 @@ async def retrieve_node_wrapper(
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
     )
+
+
+def _make_generate_node(message: Any | None):
+    """Create generate_node with message injected for streaming delivery."""
+    from telegram_bot.graph.nodes.generate import generate_node
+
+    if message is None:
+        return generate_node
+
+    async def generate_with_message(state: RAGState) -> dict[str, Any]:
+        return await generate_node(state, message=message)
+
+    return generate_with_message
 
 
 def _make_respond_node(message: Any | None):
