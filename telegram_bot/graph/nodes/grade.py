@@ -15,8 +15,6 @@ from telegram_bot.observability import observe
 
 logger = logging.getLogger(__name__)
 
-RELEVANCE_THRESHOLD = 0.3
-
 
 @observe(name="node-grade")
 async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -42,19 +40,23 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
         }
 
     top_score = max(doc.get("score", 0) for doc in documents)
-    relevant = top_score > RELEVANCE_THRESHOLD
 
-    # Early termination: skip rerank when confidence is high enough
+    # RRF scores = 1/(k+rank), k=60 → rank 1 = ~0.016, rank 10 = ~0.014
+    # Threshold must be below typical top-1 RRF score
     from telegram_bot.graph.config import GraphConfig
 
     config = GraphConfig.from_env()
+    relevance_threshold = config.relevance_threshold_rrf
+    relevant = top_score > relevance_threshold
+
+    # Early termination: skip rerank when confidence is high enough
     skip_rerank = relevant and top_score >= config.skip_rerank_threshold
 
     elapsed = time.perf_counter() - t0
     logger.info(
         "grade: top_score=%.3f threshold=%.3f relevant=%s skip_rerank=%s (%d docs, %.3fs)",
         top_score,
-        RELEVANCE_THRESHOLD,
+        relevance_threshold,
         relevant,
         skip_rerank,
         len(documents),

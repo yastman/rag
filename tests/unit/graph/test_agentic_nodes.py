@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -29,13 +29,13 @@ class TestGradeNode:
 
     @pytest.mark.asyncio
     async def test_not_relevant_documents(self):
-        """Documents with top score <= 0.3 are not relevant."""
+        """Documents with top score <= 0.005 are not relevant."""
         from telegram_bot.graph.nodes.grade import grade_node
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["documents"] = [
-            {"text": "doc1", "score": 0.2},
-            {"text": "doc2", "score": 0.1},
+            {"text": "doc1", "score": 0.003},
+            {"text": "doc2", "score": 0.001},
         ]
         result = await grade_node(state)
         assert result["documents_relevant"] is False
@@ -52,13 +52,52 @@ class TestGradeNode:
 
     @pytest.mark.asyncio
     async def test_threshold_boundary(self):
-        """Score exactly at threshold (0.3) is NOT relevant (strictly >)."""
+        """Score exactly at threshold (0.005) is NOT relevant (strictly >)."""
         from telegram_bot.graph.nodes.grade import grade_node
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = [{"text": "doc1", "score": 0.3}]
+        state["documents"] = [{"text": "doc1", "score": 0.005}]
         result = await grade_node(state)
         assert result["documents_relevant"] is False
+
+
+class TestGradeNodeRRFScores:
+    @pytest.mark.asyncio
+    async def test_rrf_scores_are_relevant(self):
+        """RRF scores ~0.016 should be considered relevant (not irrelevant)."""
+        from telegram_bot.graph.nodes.grade import grade_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="квартиры")
+        state["documents"] = [
+            {"score": 0.016, "text": "doc1"},  # RRF rank 1: 1/61 ≈ 0.016
+            {"score": 0.015, "text": "doc2"},
+            {"score": 0.014, "text": "doc3"},
+        ]
+        result = await grade_node(state)
+        assert result["documents_relevant"] is True
+
+    @pytest.mark.asyncio
+    async def test_very_low_scores_are_not_relevant(self):
+        """Scores near zero should still be irrelevant."""
+        from telegram_bot.graph.nodes.grade import grade_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["documents"] = [
+            {"score": 0.001, "text": "garbage"},
+        ]
+        result = await grade_node(state)
+        assert result["documents_relevant"] is False
+
+    @pytest.mark.asyncio
+    async def test_threshold_configurable_via_env(self):
+        """RELEVANCE_THRESHOLD_RRF env var should override default."""
+        from telegram_bot.graph.nodes.grade import grade_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["documents"] = [{"score": 0.008, "text": "doc1"}]
+        with patch.dict("os.environ", {"RELEVANCE_THRESHOLD_RRF": "0.01"}):
+            result = await grade_node(state)
+        assert result["documents_relevant"] is False  # 0.008 < 0.01
 
 
 # --- rerank_node tests ---
