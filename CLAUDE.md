@@ -12,7 +12,7 @@ make test-unit             # Unit tests only (fast)
 uv run pytest tests/unit/ -n auto  # Parallel (4x faster, ~5 min)
 make docker-up             # Start core services (5 containers, ~17s)
 make docker-bot-up         # Core + bot/litellm
-make docker-full-up        # All services (20 containers)
+make docker-full-up        # All services (19 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
 make monitoring-up         # Start alerting stack
 make ingest-unified        # Run unified ingestion (CocoIndex v3.2.1)
@@ -41,7 +41,7 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 
 | Module | Purpose |
 |--------|---------|
-| `telegram_bot/bot.py` | PropertyBot (~260 LOC, LangGraph orchestrator + score writing) |
+| `telegram_bot/bot.py` | PropertyBot (~300 LOC, LangGraph orchestrator + score writing) |
 | `telegram_bot/graph/` | LangGraph 9-node RAG pipeline |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
@@ -53,7 +53,7 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 
 **Observability:** Langfuse v3 — 35 observations/trace, 12 scores, `OTEL_SERVICE_NAME=rag-bot` → see `.claude/rules/observability.md`
 
-**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (20 svc) → see `.claude/rules/docker.md`
+**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (19 svc) → see `.claude/rules/docker.md`
 
 ## Code Style
 
@@ -182,6 +182,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
 | `features/telegram-bot.md` | LangGraph pipeline, bot, middlewares | `telegram_bot/*.py` |
+| `features/user-personalization.md` | CESC, user context, preferences | `**/user_context*.py` |
 | `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
 | `observability.md` | Langfuse v3, @observe, scores, baseline | `telegram_bot/observability.py, tests/baseline/**` |
 | `build.md` | uv, Makefile, pre-commit hooks | `Makefile, pyproject.toml` |
