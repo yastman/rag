@@ -31,7 +31,6 @@ _ensure_redisvl_mock()
 
 from telegram_bot.graph.nodes.cache import cache_check_node, cache_store_node
 from telegram_bot.graph.state import make_initial_state
-from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
 
 
 def _make_mock_config():
@@ -116,7 +115,7 @@ class TestCacheCheckNode:
         cache.store_sparse_embedding = AsyncMock()
 
         sparse_vec = {"indices": [1, 5], "values": [0.1, 0.5]}
-        embeddings = AsyncMock(spec=BGEM3HybridEmbeddings)
+        embeddings = MagicMock()
         embeddings.aembed_hybrid = AsyncMock(return_value=([0.3] * 1024, sparse_vec))
 
         await cache_check_node(state, cache=cache, embeddings=embeddings)
