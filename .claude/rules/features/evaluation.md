@@ -133,6 +133,24 @@ Graph-based retrieval for complex queries:
 - Container: `dev-lightrag` (9621) - experimental
 - Langfuse for trace comparison
 
+## Trace Validation (#110)
+
+Runtime validation pipeline: rebuild → run queries → collect Langfuse traces → report.
+
+| File | Purpose |
+|------|---------|
+| `scripts/validate_queries.py` | 30+ queries/collection (gdrive_bge, legal, edge cases) |
+| `scripts/validate_traces.py` | Runner: cold/cache phases, Langfuse enrichment, p50/p95 report |
+| `docs/reports/` | Generated reports (gitignored) |
+
+```bash
+make validate-traces       # Full rebuild + validation
+make validate-traces-fast  # No rebuild, just run
+uv run python scripts/validate_traces.py --collection gdrive_documents_bge --report
+```
+
+**Baseline (2026-02-10):** cold p50=2480ms, p95=5585ms. generate node = 97% of latency.
+
 ## Testing
 
 ```bash
