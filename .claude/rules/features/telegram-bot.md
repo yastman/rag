@@ -135,9 +135,12 @@ Catches all exceptions, logs with `exc_info=True`, returns user-friendly message
 ```bash
 pytest tests/unit/test_bot.py -v
 pytest tests/unit/test_middlewares.py -v
-pytest tests/unit/graph/ -v                    # All graph tests (~124 tests)
-pytest tests/smoke/test_langgraph_pipeline.py -v  # Smoke tests
+pytest tests/unit/graph/ -v                              # All graph unit tests (~124 tests)
+pytest tests/integration/test_graph_paths.py -v          # 6 graph path integration tests (~5s, no Docker)
+pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 ```
+
+**Graph path tests** (`test_graph_paths.py`): Cover all 6 `route_grade` branches with mocked services. No Docker required.
 
 ## Troubleshooting
 
