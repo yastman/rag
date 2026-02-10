@@ -30,6 +30,7 @@ class RAGState(TypedDict):
     latency_stages: dict[str, float]
     search_results_count: int
     rerank_applied: bool
+    grade_confidence: float
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -52,4 +53,5 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "latency_stages": {},
         "search_results_count": 0,
         "rerank_applied": False,
+        "grade_confidence": 0.0,
     }
