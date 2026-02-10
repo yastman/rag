@@ -58,24 +58,32 @@ async def retrieve_node(
     if dense_vector is None and embeddings is not None:
         dense_vector = await cache.get_embedding(query)
         if dense_vector is None:
-            # Parallel: compute dense + sparse simultaneously (saves ~0.5-1s)
-            import asyncio
-
             sparse_cached = await cache.get_sparse_embedding(query)
+            if sparse_cached is not None:
+                # Dense miss, sparse cached → just compute dense
+                dense_vector = await embeddings.aembed_query(query)
+                await cache.store_embedding(query, dense_vector)
+                sparse_vector = sparse_cached
+            elif hasattr(embeddings, "aembed_hybrid"):
+                # Hybrid: single call for both dense + sparse
+                dense_vector, sparse_vector = await embeddings.aembed_hybrid(query)
+                await cache.store_embedding(query, dense_vector)
+                await cache.store_sparse_embedding(query, sparse_vector)
+            else:
+                # Fallback: parallel dense + sparse (old path)
+                import asyncio
 
-            async def _get_dense() -> list[float]:
-                vec: list[float] = await embeddings.aembed_query(query)
-                await cache.store_embedding(query, vec)
-                return vec
+                async def _get_dense() -> list[float]:
+                    vec: list[float] = await embeddings.aembed_query(query)
+                    await cache.store_embedding(query, vec)
+                    return vec
 
-            async def _get_sparse() -> Any:
-                if sparse_cached is not None:
-                    return sparse_cached
-                vec = await sparse_embeddings.aembed_query(query)
-                await cache.store_sparse_embedding(query, vec)
-                return vec
+                async def _get_sparse() -> Any:
+                    vec = await sparse_embeddings.aembed_query(query)
+                    await cache.store_sparse_embedding(query, vec)
+                    return vec
 
-            dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
+                dense_vector, sparse_vector = await asyncio.gather(_get_dense(), _get_sparse())
 
     if not dense_vector:
         dense_vector = []
