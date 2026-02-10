@@ -348,7 +348,7 @@ async def run_collection_validation(
         results.append(result)
 
     # Phase 3: Cache-hit run (duplicates from cold)
-    cache_queries = get_cache_hit_queries(cold_queries, count=5)
+    cache_queries = get_cache_hit_queries(cold_queries, count=10)
     logger.info("Phase 3: Cache-hit run (%d queries)", len(cache_queries))
     for q in cache_queries:
         result = await run_single_query(q, services, run_meta, phase="cache_hit")
