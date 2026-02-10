@@ -123,14 +123,17 @@ def _make_graph_mocks(
 
 
 def _make_mock_graph_config(llm_mock: MagicMock) -> MagicMock:
-    """Create a mock GraphConfig with all required fields."""
+    """Create a mock GraphConfig with all required typed fields."""
     gc = MagicMock()
     gc.domain = "недвижимость"
     gc.llm_model = "test-model"
     gc.llm_temperature = 0.7
     gc.llm_max_tokens = 4096
+    gc.generate_max_tokens = 2048
     gc.rewrite_model = "test-model"
     gc.rewrite_max_tokens = 64
+    gc.skip_rerank_threshold = 0.95
+    gc.streaming_enabled = False
     gc.create_llm.return_value = llm_mock
     return gc
 
