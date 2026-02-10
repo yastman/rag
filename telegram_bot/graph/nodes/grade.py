@@ -42,12 +42,19 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
     top_score = max(doc.get("score", 0) for doc in documents)
     relevant = top_score > RELEVANCE_THRESHOLD
 
+    # Determine skip_rerank from config threshold
+    from telegram_bot.graph.config import GraphConfig
+
+    config = GraphConfig.from_env()
+    skip_rerank = relevant and top_score >= config.skip_rerank_threshold
+
     elapsed = time.perf_counter() - t0
     logger.info(
-        "grade: top_score=%.3f threshold=%.3f relevant=%s (%d docs, %.3fs)",
+        "grade: top_score=%.3f threshold=%.3f relevant=%s skip_rerank=%s (%d docs, %.3fs)",
         top_score,
         RELEVANCE_THRESHOLD,
         relevant,
+        skip_rerank,
         len(documents),
         elapsed,
     )
@@ -55,5 +62,6 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
     return {
         "documents_relevant": relevant,
         "grade_confidence": top_score,
+        "skip_rerank": skip_rerank,
         "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
     }
