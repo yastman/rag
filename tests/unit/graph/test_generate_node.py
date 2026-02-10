@@ -9,7 +9,10 @@ import pytest
 from telegram_bot.graph.state import make_initial_state
 
 
-def _make_mock_config(llm_answer: str = "Ответ.") -> tuple[MagicMock, MagicMock]:
+def _make_mock_config(
+    llm_answer: str = "Ответ.",
+    streaming_enabled: bool = True,
+) -> tuple[MagicMock, MagicMock]:
     """Create mock GraphConfig + AsyncOpenAI client for generate_node tests."""
     mock_choice = MagicMock()
     mock_choice.message.content = llm_answer
@@ -23,9 +26,48 @@ def _make_mock_config(llm_answer: str = "Ответ.") -> tuple[MagicMock, Magic
     mock_config.llm_model = "gpt-4o-mini"
     mock_config.llm_temperature = 0.7
     mock_config.llm_max_tokens = 4096
+    mock_config.streaming_enabled = streaming_enabled
     mock_config.create_llm.return_value = mock_client
 
     return mock_config, mock_client
+
+
+class _MockStreamChunk:
+    """Mock OpenAI streaming chunk with delta content."""
+
+    def __init__(self, content: str | None = None):
+        delta = MagicMock()
+        delta.content = content
+        choice = MagicMock()
+        choice.delta = delta
+        self.choices = [choice] if content is not None else []
+
+
+class _MockAsyncStream:
+    """Async iterator that yields mock stream chunks."""
+
+    def __init__(self, texts: list[str]):
+        self._chunks = [_MockStreamChunk(t) for t in texts]
+        self._index = 0
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._index >= len(self._chunks):
+            raise StopAsyncIteration
+        chunk = self._chunks[self._index]
+        self._index += 1
+        return chunk
+
+
+def _make_streaming_client(chunks: list[str]) -> MagicMock:
+    """Create mock client that returns a streaming response."""
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(
+        return_value=_MockAsyncStream(chunks),
+    )
+    return mock_client
 
 
 def _make_state_with_docs(
@@ -181,6 +223,24 @@ class TestGenerateNode:
         assert "Doc 5" not in messages_text
 
     @pytest.mark.asyncio
+    async def test_respects_generate_max_tokens(self) -> None:
+        """generate_node passes generate_max_tokens from config to LLM call."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config("Short answer.")
+        mock_config.generate_max_tokens = 512
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        assert call_kwargs.kwargs.get("max_tokens") == 512
+
+    @pytest.mark.asyncio
     async def test_empty_documents_fallback(self) -> None:
         """generate_node handles empty documents gracefully."""
         from telegram_bot.graph.nodes.generate import generate_node
@@ -195,3 +255,171 @@ class TestGenerateNode:
             result = await generate_node(state)
 
         assert result["response"] != ""
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_returns_response_sent_false(self) -> None:
+        """generate_node without message sets response_sent=False."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, _mock_client = _make_mock_config("Ответ.")
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state)
+
+        assert result["response_sent"] is False
+
+
+class TestGenerateNodeStreaming:
+    """Test generate_node streaming delivery to Telegram."""
+
+    @pytest.mark.asyncio
+    async def test_streaming_sends_placeholder_and_edits(self) -> None:
+        """Streaming sends placeholder, edits with chunks, finalizes with Markdown."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        chunks = ["Квартира ", "в Несебре ", "стоит 65000€."]
+        mock_client = _make_streaming_client(chunks)
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.llm_max_tokens = 4096
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        # Mock aiogram message
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        # Placeholder sent
+        message.answer.assert_awaited_once()
+        placeholder_text = message.answer.call_args[0][0]
+        assert "⏳" in placeholder_text or "Генерирую" in placeholder_text
+
+        # Response contains all chunks
+        full_text = "Квартира в Несебре стоит 65000€."
+        assert result["response"] == full_text
+        assert result["response_sent"] is True
+        assert "generate" in result["latency_stages"]
+
+        # Final edit_text called with Markdown (last call)
+        last_call = sent_msg.edit_text.call_args_list[-1]
+        assert last_call.args[0] == full_text
+
+        # stream=True was passed to LLM
+        create_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert create_kwargs["stream"] is True
+
+    @pytest.mark.asyncio
+    async def test_streaming_fallback_on_stream_error(self) -> None:
+        """When streaming fails, falls back to non-streaming LLM call."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        # First call (stream=True) raises, second call (non-stream) succeeds
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Fallback answer."
+        mock_response = MagicMock(choices=[mock_choice])
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[Exception("stream error"), mock_response],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.llm_max_tokens = 4096
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=AsyncMock())
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["response"] == "Fallback answer."
+        assert result["response_sent"] is False
+
+    @pytest.mark.asyncio
+    async def test_streaming_disabled_uses_non_streaming(self) -> None:
+        """When streaming_enabled=False, uses non-streaming even with message."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, _mock_client = _make_mock_config("Non-stream answer.", streaming_enabled=False)
+
+        message = AsyncMock()
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["response"] == "Non-stream answer."
+        assert result["response_sent"] is False
+        # message.answer should NOT have been called (respond_node handles it)
+        message.answer.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_streaming_empty_response_falls_back(self) -> None:
+        """Streaming with empty chunks falls back to non-streaming."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        # Stream produces no content
+        mock_client = _make_streaming_client([])
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Fallback from empty stream."
+        mock_fallback_response = MagicMock(choices=[mock_choice])
+
+        # First call returns empty stream, second call returns normal response
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[_MockAsyncStream([]), mock_fallback_response],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.llm_max_tokens = 4096
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.delete = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["response"] == "Fallback from empty stream."
+        assert result["response_sent"] is False
