@@ -15,7 +15,15 @@ class TestGraphConfig:
         assert cfg.llm_model == "gpt-4o-mini"
         assert cfg.bge_m3_url == "http://bge-m3:8000"
         assert cfg.search_top_k == 20
-        assert cfg.max_rewrite_attempts == 2
+        assert cfg.max_rewrite_attempts == 1
+
+    def test_from_env_max_rewrite_attempts(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        env = {"MAX_REWRITE_ATTEMPTS": "3"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.max_rewrite_attempts == 3
 
     def test_from_env(self):
         from telegram_bot.graph.config import GraphConfig
