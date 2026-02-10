@@ -32,7 +32,7 @@ jobs:
         run: ruff format --check src/ telegram_bot/ tests/
 
       - name: Type check
-        run: mypy src/ --ignore-missing-imports --no-error-summary
+        run: mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 
   test:
     name: Unit Tests
