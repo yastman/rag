@@ -33,20 +33,12 @@ def route_cache(
 def route_grade(
     state: dict[str, Any],
 ) -> Literal["rerank", "rewrite", "generate"]:
-    """Route after grading: high confidence → generate (skip rerank), relevant → rerank, not relevant + retries → rewrite/generate."""
+    """Route after grading: skip_rerank → generate, relevant → rerank, not relevant + retries → rewrite/generate."""
     if state.get("documents_relevant", False):
-        confidence = state.get("grade_confidence", 0.0)
-        if confidence >= _get_skip_rerank_threshold():
+        if state.get("skip_rerank", False):
             return "generate"
         return "rerank"
     max_attempts = state.get("max_rewrite_attempts", 1)
     if state.get("rewrite_count", 0) < max_attempts and state.get("rewrite_effective", True):
         return "rewrite"
     return "generate"
-
-
-def _get_skip_rerank_threshold() -> float:
-    """Get skip_rerank_threshold from env var."""
-    import os
-
-    return float(os.getenv("SKIP_RERANK_THRESHOLD", "0.85"))
