@@ -33,6 +33,8 @@ class RAGState(TypedDict):
     grade_confidence: float
     skip_rerank: bool
     response_sent: bool
+    retrieval_backend_error: bool
+    retrieval_error_type: str | None
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -58,4 +60,6 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "grade_confidence": 0.0,
         "skip_rerank": False,
         "response_sent": False,
+        "retrieval_backend_error": False,
+        "retrieval_error_type": None,
     }

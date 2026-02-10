@@ -101,14 +101,15 @@ async def retrieve_node(
             await cache.store_sparse_embedding(query, sparse_vector)
 
     # Step 3: Hybrid search via Qdrant SDK (RRF fusion)
-    results = await qdrant.hybrid_search_rrf(
+    results, search_meta = await qdrant.hybrid_search_rrf(
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
         top_k=top_k,
+        return_meta=True,
     )
 
-    # Step 4: Cache results
-    if results:
+    # Step 4: Cache results (only on successful backend response)
+    if results and not search_meta["backend_error"]:
         await cache.store_search_results(dense_vector, None, results)
 
     latency = time.perf_counter() - start
@@ -119,6 +120,8 @@ async def retrieve_node(
         "search_results_count": len(results),
         "sparse_embedding": sparse_vector,
         "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
+        "retrieval_backend_error": search_meta["backend_error"],
+        "retrieval_error_type": search_meta.get("error_type"),
     }
     # Persist re-computed embedding for downstream nodes (grade, cache_store)
     if state.get("query_embedding") is None and dense_vector:
