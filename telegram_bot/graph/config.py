@@ -40,6 +40,7 @@ class GraphConfig:
     relevance_threshold_rrf: float = 0.005
     score_improvement_delta: float = 0.001
     streaming_enabled: bool = True
+    rerank_provider: str = "colbert"
     # Response length control rollout (#129)
     response_style_enabled: bool = False
     response_style_shadow_mode: bool = False
@@ -91,6 +92,7 @@ class GraphConfig:
             relevance_threshold_rrf=float(os.getenv("RELEVANCE_THRESHOLD_RRF", "0.005")),
             score_improvement_delta=float(os.getenv("SCORE_IMPROVEMENT_DELTA", "0.001")),
             streaming_enabled=os.getenv("STREAMING_ENABLED", "true").lower() == "true",
+            rerank_provider=os.getenv("RERANK_PROVIDER", "colbert"),
             response_style_enabled=os.getenv("RESPONSE_STYLE_ENABLED", "false").lower() == "true",
             response_style_shadow_mode=os.getenv("RESPONSE_STYLE_SHADOW_MODE", "false").lower()
             == "true",

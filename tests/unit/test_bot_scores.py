@@ -303,6 +303,23 @@ class TestScoreWriting:
         assert "answer_to_question_ratio" in score_names
 
     @pytest.mark.asyncio
+    async def test_empty_style_without_policy_mode_does_not_emit_style_applied(self, mock_config):
+        """Legacy/cache paths may include empty response_style without enforced policy."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        legacy_result = {
+            **CACHE_HIT_RESULT,
+            "response_style": "",
+            # response_policy_mode intentionally missing
+        }
+        await self._run_handle_query(mock_config, legacy_result, mock_lf)
+
+        score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
+        assert "response_style_applied" not in score_names
+
+    @pytest.mark.asyncio
     async def test_scores_written_even_on_null_client(self, mock_config):
         """When Langfuse disabled, _NullLangfuseClient.score_current_trace is called (no-op)."""
         from telegram_bot.observability import _NullLangfuseClient

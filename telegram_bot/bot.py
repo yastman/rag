@@ -117,12 +117,13 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
             name="answer_to_question_ratio",
             value=float(result["answer_to_question_ratio"]),
         )
-    policy_mode = str(result.get("response_policy_mode", "enforced"))
-    if "response_style" in result and policy_mode == "enforced":
+    policy_mode = str(result.get("response_policy_mode", "disabled"))
+    response_style = str(result.get("response_style", "")).strip()
+    if response_style and policy_mode == "enforced":
         style_map = {"short": 0, "balanced": 1, "detailed": 2}
         lf.score_current_trace(
             name="response_style_applied",
-            value=float(style_map.get(result["response_style"], 1)),
+            value=float(style_map.get(response_style, 1)),
         )
 
     # --- Voice transcription scores (#151) ---
