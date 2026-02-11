@@ -7,6 +7,7 @@ transcribed text that feeds into the classify → ... pipeline.
 
 from __future__ import annotations
 
+import html
 import io
 import logging
 import time
@@ -41,6 +42,8 @@ def make_transcribe_node(
         start = time.perf_counter()
 
         voice_audio = state["voice_audio"]
+        if voice_audio is None:
+            raise ValueError("voice_audio is None — transcribe_node requires audio data")
         buf = io.BytesIO(voice_audio)
         buf.name = "voice.ogg"
 
@@ -67,8 +70,8 @@ def make_transcribe_node(
         if show_transcription and message is not None:
             try:
                 await message.answer(
-                    f"\U0001f3a4 _{text}_",
-                    parse_mode="Markdown",
+                    f"\U0001f3a4 <i>{html.escape(text)}</i>",
+                    parse_mode="HTML",
                 )
             except Exception:
                 logger.warning("Failed to send transcription preview", exc_info=True)
@@ -78,6 +81,7 @@ def make_transcribe_node(
             "stt_duration_ms": stt_duration_ms,
             "query": text,
             "messages": [{"role": "user", "content": text}],
+            "voice_audio": None,  # Free memory — audio no longer needed
         }
 
     return transcribe_node
