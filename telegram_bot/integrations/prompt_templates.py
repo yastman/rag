@@ -54,9 +54,9 @@ CONTRACT_PROMPTS: dict[ResponseStyle, str] = {
 
 # LASER-D inspired token budgets: (style, difficulty) -> max_tokens
 TOKEN_LIMITS: dict[tuple[ResponseStyle, str], int] = {
-    ("short", "easy"): 50,
-    ("short", "medium"): 80,
-    ("short", "hard"): 100,
+    ("short", "easy"): 100,
+    ("short", "medium"): 130,
+    ("short", "hard"): 150,
     ("balanced", "easy"): 100,
     ("balanced", "medium"): 150,
     ("balanced", "hard"): 200,
