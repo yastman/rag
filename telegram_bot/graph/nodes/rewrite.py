@@ -104,9 +104,6 @@ async def rewrite_node(
         "rewrite_effective": effective,
         "query_embedding": None,
         "sparse_embedding": None,
-        "latency_stages": {
-            **state.get("latency_stages", {}),
-            "rewrite": elapsed,
-            "rewrite_provider_model": rewrite_actual_model,
-        },
+        "rewrite_provider_model": rewrite_actual_model,
+        "latency_stages": {**state.get("latency_stages", {}), "rewrite": elapsed},
     }
