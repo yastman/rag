@@ -30,6 +30,9 @@ def _make_llm_completion(content: str) -> MagicMock:
     """Create a mock OpenAI ChatCompletion response."""
     completion = MagicMock()
     completion.choices = [MagicMock(message=MagicMock(content=content))]
+    # Set serializable values to avoid MagicMock in state (needed for checkpointer)
+    completion.model = "test-model"
+    completion.usage = None
     return completion
 
 
@@ -138,6 +141,9 @@ def _make_mock_graph_config(llm_mock: MagicMock) -> MagicMock:
     gc.score_improvement_delta = 0.001
     gc.streaming_enabled = False
     gc.create_llm.return_value = llm_mock
+    # Needed by _create_summarize_model when checkpointer is active (#154)
+    gc.llm_base_url = "http://localhost:4000"
+    gc.llm_api_key = "test-key"
     return gc
 
 
@@ -593,3 +599,63 @@ async def test_path_voice_transcribe_full_rag():
     mocks["qdrant"].hybrid_search_rrf.assert_awaited_once()
     mocks["reranker"].rerank.assert_awaited_once()
     mocks["llm"].chat.completions.create.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Conversation Memory: checkpointer persists messages across invocations
+# ---------------------------------------------------------------------------
+
+
+class TestConversationMemory:
+    @pytest.mark.integration
+    async def test_second_query_sees_first_in_messages(self):
+        """With MemorySaver, second invocation sees first query in messages."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        checkpointer = MemorySaver()
+        mocks = _make_graph_mocks(llm_response="Найдено 2 варианта.")
+        mock_gc = _make_mock_graph_config(mocks["llm"])
+
+        # Build without message mock — avoids MagicMock serialization in state
+        graph_kwargs = {k: v for k, v in mocks.items() if k != "message"}
+
+        with _patch_graph_configs(mock_gc):
+            graph = build_graph(**graph_kwargs, checkpointer=checkpointer)
+
+        config = {"configurable": {"thread_id": "test-user-mem"}}
+
+        # First query
+        state1 = make_initial_state(user_id=1, session_id="s", query="Цены в Банско?")
+
+        with traced_pipeline(session_id="test-memory-1", user_id="integration"):
+            with _patch_graph_configs(mock_gc):
+                result1 = await graph.ainvoke(state1, config=config)
+
+        assert result1["response"]
+
+        # Reset mocks for second invocation
+        mocks["cache"].get_embedding = AsyncMock(return_value=None)
+        mocks["cache"].check_semantic = AsyncMock(return_value=None)
+        mocks["cache"].get_search_results = AsyncMock(return_value=None)
+        mocks["cache"].get_sparse_embedding = AsyncMock(return_value=None)
+        mocks["llm"].chat.completions.create = AsyncMock(
+            return_value=_make_llm_completion("Вот квартиры в Несебре.")
+        )
+
+        # Second query — should see first query in messages via checkpointer
+        state2 = make_initial_state(user_id=1, session_id="s", query="А в Несебре?")
+
+        with traced_pipeline(session_id="test-memory-2", user_id="integration"):
+            with _patch_graph_configs(mock_gc):
+                result2 = await graph.ainvoke(state2, config=config)
+
+        # Verify messages contain history from first query
+        messages = result2.get("messages", [])
+        contents = [
+            m.get("content", "") if isinstance(m, dict) else getattr(m, "content", "")
+            for m in messages
+        ]
+        all_text = " ".join(str(c) for c in contents)
+        assert "Банско" in all_text or "Цены" in all_text, (
+            f"Expected first query in message history, got: {all_text[:200]}"
+        )
