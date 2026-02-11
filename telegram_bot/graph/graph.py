@@ -110,6 +110,26 @@ def build_graph(
         _make_respond_node(message),
     )
 
+    # Conversation memory: SDK summarization (langmem) — only when checkpointer is active
+    if checkpointer is not None:
+        from langchain_core.messages.utils import count_tokens_approximately
+        from langmem.short_term import SummarizationNode
+
+        from telegram_bot.graph.config import GraphConfig
+
+        config = GraphConfig.from_env()
+        summarize_model = _create_summarize_model(config)
+        summarize = SummarizationNode(
+            model=summarize_model,
+            max_tokens=512,
+            max_tokens_before_summary=1024,
+            max_summary_tokens=256,
+            token_counter=count_tokens_approximately,
+            input_messages_key="messages",
+            output_messages_key="messages",
+        )
+        workflow.add_node("summarize", summarize)
+
     # Edges
     workflow.add_conditional_edges(
         START,
@@ -155,7 +175,12 @@ def build_graph(
     workflow.add_edge("rewrite", "retrieve")
     workflow.add_edge("generate", "cache_store")
     workflow.add_edge("cache_store", "respond")
-    workflow.add_edge("respond", END)
+
+    if checkpointer is not None:
+        workflow.add_edge("respond", "summarize")
+        workflow.add_edge("summarize", END)
+    else:
+        workflow.add_edge("respond", END)
 
     return workflow.compile(checkpointer=checkpointer)
 
@@ -177,6 +202,18 @@ async def retrieve_node_wrapper(
         embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
+    )
+
+
+def _create_summarize_model(config: Any) -> Any:
+    """Create a LangChain ChatOpenAI for SummarizationNode via LiteLLM proxy."""
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        model=config.llm_model,
+        api_key=config.llm_api_key or "no-key",
+        base_url=config.llm_base_url,
+        max_tokens=256,
     )
 
 
