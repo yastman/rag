@@ -153,6 +153,40 @@ class TestCommandHandlers:
         assert "очищена" in message.answer.call_args[0][0].lower()
 
     @pytest.mark.asyncio
+    async def test_cmd_clear_uses_checkpointer_delete_thread(self, mock_config):
+        """Test /clear calls checkpointer.adelete_thread for SDK-native cleanup."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        bot._checkpointer = AsyncMock()
+
+        message = MagicMock()
+        message.from_user = MagicMock(id=12345)
+        message.answer = AsyncMock()
+
+        await bot.cmd_clear(message)
+
+        bot._checkpointer.adelete_thread.assert_awaited_once_with("12345")
+        bot._cache.clear_conversation.assert_awaited_once_with(12345)
+
+    @pytest.mark.asyncio
+    async def test_cmd_clear_handles_no_checkpointer(self, mock_config):
+        """Test /clear works when checkpointer is None (fallback)."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        bot._checkpointer = None
+
+        message = MagicMock()
+        message.from_user = MagicMock(id=12345)
+        message.answer = AsyncMock()
+
+        await bot.cmd_clear(message)
+
+        bot._cache.clear_conversation.assert_awaited_once_with(12345)
+        message.answer.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_cmd_stats(self, mock_config):
         """Test /stats command handler."""
         bot, _ = _create_bot(mock_config)
