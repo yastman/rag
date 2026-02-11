@@ -6,9 +6,13 @@ import pytest
 
 from scripts.validate_traces import (
     TraceResult,
+    ValidationRun,
+    aggregate_node_payloads,
     check_langfuse_config,
     compute_aggregates,
     evaluate_go_no_go,
+    format_phase_summary,
+    generate_report,
 )
 
 
@@ -207,3 +211,91 @@ class TestLangfusePreflight:
             pytest.raises(SystemExit),
         ):
             check_langfuse_config()
+
+    def test_auth_probe_does_not_flush_client(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+        monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
+
+        mock_lf = MagicMock()
+        with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
+            check_langfuse_config()
+
+        mock_lf.api.trace.list.assert_called_once_with(limit=1)
+        mock_lf.flush.assert_not_called()
+
+
+class TestAggregateNodePayloads:
+    """Payload byte aggregation for heavy-node observability checks."""
+
+    def test_aggregates_p50_by_node_and_field(self):
+        r1 = _make_result(phase="cold", latency=100)
+        r1.node_payload_bytes = {
+            "retrieve": {"input": 120, "output": 180, "metadata": 301, "total": 601},
+            "generate": {"input": 130, "output": 250, "metadata": 301, "total": 681},
+        }
+        r2 = _make_result(phase="cold", latency=110)
+        r2.node_payload_bytes = {
+            "retrieve": {"input": 140, "output": 170, "metadata": 301, "total": 611},
+            "generate": {"input": 150, "output": 260, "metadata": 301, "total": 711},
+        }
+
+        payloads = aggregate_node_payloads([r1, r2])
+
+        assert payloads["retrieve"]["input_p50"] == pytest.approx(130.0)
+        assert payloads["retrieve"]["output_p50"] == pytest.approx(175.0)
+        assert payloads["retrieve"]["metadata_p50"] == pytest.approx(301.0)
+        assert payloads["generate"]["total_p50"] == pytest.approx(696.0)
+
+    def test_ignores_nodes_without_payload_data(self):
+        r1 = _make_result(phase="cold", latency=100)
+        r1.node_payload_bytes = {}
+        payloads = aggregate_node_payloads([r1])
+        assert payloads == {}
+
+
+class TestReportAndSummary:
+    """Report and console summary formatting should expose p90 explicitly."""
+
+    def test_generate_report_includes_latency_p90_row(self, tmp_path):
+        run = ValidationRun(
+            run_id="run-1",
+            git_sha="abc123",
+            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+            collections=["c1"],
+            skip_rerank_threshold=0.012,
+            relevance_threshold_rrf=0.005,
+            results=[],
+        )
+        aggregates = {
+            "cold": {
+                "n": 1,
+                "latency_p50": 100.0,
+                "latency_p90": 130.0,
+                "latency_p95": 150.0,
+                "latency_mean": 110.0,
+                "latency_max": 160.0,
+                "semantic_cache_hit_rate": 0.0,
+                "search_cache_hit_rate": 0.0,
+                "rerank_applied_rate": 0.0,
+                "rewrite_rate": 0.0,
+                "results_count_mean": 20.0,
+                "node_p50": {},
+                "node_p95": {},
+            }
+        }
+        out = tmp_path / "report.md"
+        generate_report(run, aggregates, out)
+        text = out.read_text(encoding="utf-8")
+        assert "| latency p90 | 130 ms |" in text
+
+    def test_format_phase_summary_includes_p90(self):
+        agg = {
+            "n": 3,
+            "latency_p50": 100.0,
+            "latency_p90": 140.0,
+            "latency_p95": 160.0,
+            "latency_mean": 120.0,
+        }
+        line = format_phase_summary("cold", agg)
+        assert "p90=140ms" in line
