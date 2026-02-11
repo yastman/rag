@@ -1,4 +1,4 @@
-"""Graph path integration tests — verify all 5 routing paths through graph.ainvoke().
+"""Graph path integration tests — verify all routing paths through graph.ainvoke().
 
 Tests build the real LangGraph StateGraph with mocked services,
 invoke it with deterministic queries, and assert:
@@ -534,3 +534,62 @@ async def test_path_rewrite_stopped_by_score_guard():
     assert mocks["qdrant"].hybrid_search_rrf.await_count == 2  # retrieve twice
     assert mocks["llm"].chat.completions.create.await_count == 2  # rewrite + generate
     mocks["reranker"].rerank.assert_not_awaited()  # rerank skipped (never relevant)
+
+
+# ---------------------------------------------------------------------------
+# Path 8: START → transcribe → classify → cache_check(MISS) → retrieve
+#        → grade(relevant) → rerank → generate → cache_store → respond → END
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_voice_transcribe_full_rag():
+    """Voice message goes through transcribe → classify → full RAG pipeline."""
+    mocks = _make_graph_mocks(llm_response="Найдено 2 варианта квартир.")
+
+    # Add audio transcription mock to LLM
+    transcript_mock = MagicMock(text="уютная квартира с видом на море")
+    mocks["llm"].audio.transcriptions.create = AsyncMock(return_value=transcript_mock)
+
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+            show_transcription=True,
+            voice_language="ru",
+            stt_model="whisper",
+        )
+
+    # Voice state: voice_audio present → route_start → transcribe
+    state = make_initial_state(user_id=8, session_id="test-path8", query="")
+    state["voice_audio"] = b"fake-ogg-data"
+    state["voice_duration_s"] = 5.0
+    state["input_type"] = "voice"
+
+    with traced_pipeline(session_id="test-voice-path", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
+
+    # Transcribe node ran and set text
+    assert result["stt_text"] == "уютная квартира с видом на море"
+    assert result["input_type"] == "voice"
+    assert result["stt_duration_ms"] > 0
+
+    # Full RAG pipeline ran after transcribe
+    assert result["cache_hit"] is False
+    assert result["documents_relevant"] is True
+    assert result["rerank_applied"] is True
+    assert result["response"] == "Найдено 2 варианта квартир."
+
+    # Service call counts
+    mocks["llm"].audio.transcriptions.create.assert_awaited_once()
+    mocks["qdrant"].hybrid_search_rrf.assert_awaited_once()
+    mocks["reranker"].rerank.assert_awaited_once()
+    mocks["llm"].chat.completions.create.assert_awaited_once()
