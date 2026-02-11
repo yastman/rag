@@ -79,11 +79,11 @@ voice = [
     "livekit-plugins-elevenlabs~=1.0",
     "livekit-plugins-openai~=1.0",
     "livekit~=1.0",
-    "fastapi",
-    "uvicorn",
-    "httpx",
-    "opentelemetry-sdk",
-    "opentelemetry-exporter-otlp-proto-http",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
+    "opentelemetry-sdk>=1.39.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.39.0",
 ]
 
 # All optional dependencies
