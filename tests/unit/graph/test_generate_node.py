@@ -44,6 +44,7 @@ class _MockStreamChunk:
         choice.delta = delta
         self.choices = [choice] if content is not None else []
         self.model = model
+        self.usage = None
 
 
 class _MockAsyncStream:
@@ -998,4 +999,46 @@ class TestGenerateNodeLatencyBreakdown:
             result = await generate_node(state, message=message)
 
         assert result["llm_stream_recovery"] is True
+        assert result["llm_timeout"] is False
+
+    @pytest.mark.asyncio
+    async def test_partial_stream_recovery_true_even_if_edit_delivery_fails(self) -> None:
+        """Fallback answer success counts as recovery even when edit delivery fails."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Fallback complete answer."
+        mock_fallback_response = MagicMock(choices=[mock_choice])
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _MockFailingStream(["partial "]),
+                mock_fallback_response,
+            ],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock(side_effect=Exception("edit fail"))
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["llm_stream_recovery"] is True
+        assert result["response_sent"] is False
         assert result["llm_timeout"] is False
