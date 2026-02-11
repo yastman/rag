@@ -292,15 +292,21 @@ class TestCheckSingleDep:
 
     async def test_bge_m3_health_ok(self):
         config = _make_config()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
+        health_resp = MagicMock()
+        health_resp.status_code = 200
+        warmup_resp = MagicMock()
+        warmup_resp.status_code = 200
+        warmup_resp.json = MagicMock(return_value={"processing_time": 0.5})
+
         client = AsyncMock(spec=httpx.AsyncClient)
-        client.get = AsyncMock(return_value=mock_resp)
+        client.get = AsyncMock(return_value=health_resp)
+        client.post = AsyncMock(return_value=warmup_resp)
 
         result = await _check_single_dep("bge_m3", config, client)
 
         assert result is True
         client.get.assert_awaited_once_with(f"{config.bge_m3_url}/health")
+        client.post.assert_awaited_once()
 
     async def test_bge_m3_non_200_fails(self):
         config = _make_config()
@@ -311,6 +317,21 @@ class TestCheckSingleDep:
 
         result = await _check_single_dep("bge_m3", config, client)
         assert result is False
+
+    async def test_bge_m3_warmup_failure_still_passes(self):
+        """Warmup encode failure is non-fatal — health check already passed."""
+        config = _make_config()
+        health_resp = MagicMock()
+        health_resp.status_code = 200
+        warmup_resp = MagicMock()
+        warmup_resp.status_code = 500
+
+        client = AsyncMock(spec=httpx.AsyncClient)
+        client.get = AsyncMock(return_value=health_resp)
+        client.post = AsyncMock(return_value=warmup_resp)
+
+        result = await _check_single_dep("bge_m3", config, client)
+        assert result is True
 
     async def test_litellm_health_ok(self):
         config = _make_config()
