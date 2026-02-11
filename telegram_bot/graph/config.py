@@ -40,6 +40,13 @@ class GraphConfig:
     relevance_threshold_rrf: float = 0.005
     score_improvement_delta: float = 0.001
     streaming_enabled: bool = True
+    # Response length control rollout (#129)
+    response_style_enabled: bool = False
+    response_style_shadow_mode: bool = False
+    # Voice transcription (#151)
+    show_transcription: bool = True
+    voice_language: str = "ru"
+    stt_model: str = "whisper"
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -84,6 +91,12 @@ class GraphConfig:
             relevance_threshold_rrf=float(os.getenv("RELEVANCE_THRESHOLD_RRF", "0.005")),
             score_improvement_delta=float(os.getenv("SCORE_IMPROVEMENT_DELTA", "0.001")),
             streaming_enabled=os.getenv("STREAMING_ENABLED", "true").lower() == "true",
+            response_style_enabled=os.getenv("RESPONSE_STYLE_ENABLED", "false").lower() == "true",
+            response_style_shadow_mode=os.getenv("RESPONSE_STYLE_SHADOW_MODE", "false").lower()
+            == "true",
+            show_transcription=os.getenv("SHOW_TRANSCRIPTION", "true").lower() == "true",
+            voice_language=os.getenv("VOICE_LANGUAGE", "ru"),
+            stt_model=os.getenv("STT_MODEL", "whisper"),
         )
 
     def create_llm(self) -> Any:
