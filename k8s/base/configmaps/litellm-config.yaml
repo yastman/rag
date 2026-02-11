@@ -32,6 +32,13 @@ data:
         litellm_params:
           model: openai/gpt-4o-mini
           api_key: os.environ/OPENAI_API_KEY
+      # Speech-to-text: Whisper via OpenAI
+      - model_name: whisper
+        litellm_params:
+          model: whisper-1
+          api_key: os.environ/OPENAI_API_KEY
+        model_info:
+          mode: audio_transcription
     general_settings:
       master_key: os.environ/LITELLM_MASTER_KEY
       proxy_batch_write_at: 60
