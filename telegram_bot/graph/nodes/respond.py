@@ -9,7 +9,7 @@ import logging
 import time
 from typing import Any
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -46,8 +46,12 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
             logger.warning("Markdown parse failed, falling back to plain text")
             try:
                 await message.answer(response)
-            except Exception:
+            except Exception as e:
                 logger.exception("Failed to send response")
+                get_client().update_current_span(
+                    level="ERROR",
+                    status_message=f"Telegram send failed: {str(e)[:200]}",
+                )
 
     elapsed = time.perf_counter() - t0
     return {
