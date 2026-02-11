@@ -49,6 +49,12 @@ class RAGState(TypedDict):
     llm_timeout: bool
     llm_stream_recovery: bool
     streaming_enabled: bool
+    # Voice transcription (#151)
+    voice_audio: bytes | None
+    voice_duration_s: float | None
+    stt_text: str | None
+    stt_duration_ms: float | None
+    input_type: str  # "text" or "voice"
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -90,4 +96,10 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "llm_timeout": False,
         "llm_stream_recovery": False,
         "streaming_enabled": False,
+        # Voice transcription (#151)
+        "voice_audio": None,
+        "voice_duration_s": None,
+        "stt_text": None,
+        "stt_duration_ms": None,
+        "input_type": "text",
     }
