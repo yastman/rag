@@ -36,6 +36,7 @@ class QdrantService:
         dense_vector_name: str = "dense",
         sparse_vector_name: str = "bm42",
         quantization_mode: str = "off",
+        timeout: int = 30,
     ):
         """Initialize Qdrant service.
 
@@ -46,8 +47,11 @@ class QdrantService:
             dense_vector_name: Name of dense vector field
             sparse_vector_name: Name of sparse vector field
             quantization_mode: One of 'off', 'scalar', 'binary' - controls collection suffix
+            timeout: Connection timeout in seconds (default 30)
         """
-        self._client = AsyncQdrantClient(url=url, api_key=api_key, prefer_grpc=True)
+        self._client = AsyncQdrantClient(
+            url=url, api_key=api_key, prefer_grpc=True, timeout=timeout
+        )
         self._base_collection_name = collection_name
         self._quantization_mode = quantization_mode.lower()
         self._collection_name = self._get_collection_name(collection_name, quantization_mode)
