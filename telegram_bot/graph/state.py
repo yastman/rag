@@ -56,6 +56,12 @@ class RAGState(TypedDict):
     answer_words: int
     answer_chars: int
     answer_to_question_ratio: float
+    # Voice transcription (#151)
+    voice_audio: bytes | None
+    voice_duration_s: float | None
+    stt_text: str | None
+    stt_duration_ms: float | None
+    input_type: str  # "text" or "voice"
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -104,4 +110,10 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "answer_words": 0,
         "answer_chars": 0,
         "answer_to_question_ratio": 0.0,
+        # Voice transcription (#151)
+        "voice_audio": None,
+        "voice_duration_s": None,
+        "stt_text": None,
+        "stt_duration_ms": None,
+        "input_type": "text",
     }
