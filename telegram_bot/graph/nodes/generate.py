@@ -303,6 +303,9 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                 )
                 answer = response_obj.choices[0].message.content or ""
                 actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
+                # Recovery is successful once fallback LLM response is produced,
+                # even if edit delivery fails and respond_node sends later.
+                stream_recovery = True
                 # Edit existing message with fallback answer
                 delivered = False
                 try:
@@ -319,7 +322,6 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                             exc_info=True,
                         )
                 response_sent = delivered
-                stream_recovery = delivered
             except Exception:
                 logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
                 get_client().update_current_span(
