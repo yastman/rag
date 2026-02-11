@@ -118,6 +118,31 @@ Usage:
 | rewrite_node | `node-rewrite` |
 | respond_node | `node-respond` |
 
+### Payload Bloat Prevention (#143)
+
+4 heavy nodes use `@observe(capture_input=False, capture_output=False)` to disable auto-capture of full LangGraph state (documents, embeddings, messages). Instead, they log curated metadata via `get_client().update_current_span(input={...}, output={...})`.
+
+| Heavy Node | Curated Input | Curated Output |
+|------------|---------------|----------------|
+| retrieve_node | query_preview, query_hash, query_type, top_k | results_count, top_score, min_score, search_cache_hit, duration_ms |
+| generate_node | query_preview, query_hash, context_docs_count, streaming_enabled | response_length, llm_provider_model, llm_ttft_ms, token_usage, duration_ms |
+| cache_check_node | query_preview, query_hash, query_type | cache_hit, embeddings_cache_hit, hit_layer, duration_ms |
+| cache_store_node | query_preview, query_hash, response_length | stored, stored_semantic, stored_conversation, duration_ms |
+
+Light nodes (classify, grade, rerank, rewrite, respond) keep default auto-capture — their state is small.
+
+**Pattern:**
+```python
+@observe(name="node-retrieve", capture_input=False, capture_output=False)
+async def retrieve_node(state, ...):
+    lf = get_client()
+    lf.update_current_span(input={"query_preview": query[:120], ...})
+    # ... node logic ...
+    lf.update_current_span(output={"results_count": len(results), ...})
+```
+
+**Forbidden keys** in curated spans: `documents`, `query_embedding`, `sparse_embedding`, `state`, `messages`.
+
 ### Error Span Tracking (#103 P1.2)
 
 4 nodes call `get_client().update_current_span(level=..., status_message=...)` on failure:
@@ -247,9 +272,11 @@ LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
 LANGFUSE_HOST: http://langfuse:3000
 ```
 
-## Trace Validation (#110)
+## Trace Validation (#110, #143)
 
 `scripts/validate_traces.py` uses `@observe`, `propagate_attributes`, `update_current_trace` for headless LangGraph runs. After flush, `enrich_results_from_langfuse()` fetches scores + node spans by trace_id via Langfuse API. Reference trace `c2b95d86` — anomalous (5213s), not reproducible.
+
+Go/No-Go criterion `generate_p50_lt_2s` (renamed from `ttft_p50_lt_2s` in #143) measures full generation latency in non-streaming validation mode. True TTFT requires a streaming phase (see #144).
 
 ## Baseline Module
 
