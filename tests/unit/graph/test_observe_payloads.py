@@ -32,6 +32,7 @@ class TestHeavyNodesDisableAutoCapture:
             "telegram_bot.graph.nodes.retrieve",
             "telegram_bot.graph.nodes.generate",
             "telegram_bot.graph.nodes.cache",
+            "telegram_bot.graph.nodes.respond",
         ]
         for mod in node_modules:
             if mod in sys.modules:
@@ -79,6 +80,11 @@ class TestHeavyNodesDisableAutoCapture:
         assert kwargs.get("capture_output") is False, (
             "node-cache-store must set capture_output=False"
         )
+
+    def test_respond_node_disables_auto_capture(self):
+        kwargs = self.observe_calls.get("node-respond", {})
+        assert kwargs.get("capture_input") is False, "node-respond must set capture_input=False"
+        assert kwargs.get("capture_output") is False, "node-respond must set capture_output=False"
 
 
 # ---------------------------------------------------------------------------
@@ -199,3 +205,53 @@ class TestCuratedSpanPayloads:
             "generate_node must call update_current_span for input and output"
         )
         _assert_no_forbidden_keys(payloads, "node-generate")
+
+    @pytest.mark.asyncio
+    async def test_cache_check_node_curated_payload(self):
+        from telegram_bot.graph.nodes.cache import cache_check_node
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.1] * 16)
+        cache.check_semantic = AsyncMock(return_value=None)
+        cache.store_embedding = AsyncMock()
+        cache.store_sparse_embedding = AsyncMock()
+
+        embeddings = AsyncMock()
+        mock_lf = MagicMock()
+        with patch("telegram_bot.graph.nodes.cache.get_client", return_value=mock_lf):
+            await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        payloads = _extract_span_payloads(mock_lf)
+        assert len(payloads) >= 2, (
+            "cache_check_node must call update_current_span for input and output"
+        )
+        _assert_no_forbidden_keys(payloads, "node-cache-check")
+
+    @pytest.mark.asyncio
+    async def test_cache_store_node_curated_payload(self):
+        from telegram_bot.graph.nodes.cache import cache_store_node
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+        state["response"] = "Answer"
+        state["query_embedding"] = [0.2] * 16
+        state["search_results_count"] = 5
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+        cache.store_conversation_batch = AsyncMock()
+
+        mock_lf = MagicMock()
+        with patch("telegram_bot.graph.nodes.cache.get_client", return_value=mock_lf):
+            await cache_store_node(state, cache=cache)
+
+        payloads = _extract_span_payloads(mock_lf)
+        assert len(payloads) >= 2, (
+            "cache_store_node must call update_current_span for input and output"
+        )
+        _assert_no_forbidden_keys(payloads, "node-cache-store")
