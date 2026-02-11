@@ -247,6 +247,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     response_sent = False
     actual_model = config.llm_model
     ttft_ms = 0.0
+    response_obj: Any | None = None
 
     # Curated span metadata
     lf = get_client()
@@ -312,26 +313,26 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     status_message="Streaming failed, using non-streaming fallback",
                 )
                 # Fall back to non-streaming
-                response = await llm.chat.completions.create(
+                response_obj = await llm.chat.completions.create(
                     model=config.llm_model,
                     messages=llm_messages,
                     temperature=config.llm_temperature,
                     max_tokens=config.generate_max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]
                 )
-                answer = response.choices[0].message.content or ""
-                actual_model = getattr(response, "model", config.llm_model) or config.llm_model
+                answer = response_obj.choices[0].message.content or ""
+                actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
         else:
             # Non-streaming path (original)
-            response = await llm.chat.completions.create(
+            response_obj = await llm.chat.completions.create(
                 model=config.llm_model,
                 messages=llm_messages,
                 temperature=config.llm_temperature,
                 max_tokens=config.generate_max_tokens,
                 name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
-            answer = response.choices[0].message.content or ""
-            actual_model = getattr(response, "model", config.llm_model) or config.llm_model
+            answer = response_obj.choices[0].message.content or ""
+            actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
     except Exception as e:
         logger.exception("generate_node: LLM call failed, using fallback")
         get_client().update_current_span(
@@ -352,8 +353,8 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         "fallback_used": actual_model == "fallback",
         "response_sent": response_sent,
     }
-    if "response" in locals():
-        usage = getattr(response, "usage", None)
+    if response_obj is not None:
+        usage = getattr(response_obj, "usage", None)
         if usage is not None:
             span_output["token_usage"] = {
                 "prompt_tokens": getattr(usage, "prompt_tokens", None),
