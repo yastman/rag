@@ -227,6 +227,20 @@ class BotConfig(BaseSettings):
         default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
     )
 
+    # Voice transcription
+    show_transcription: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("show_transcription", "SHOW_TRANSCRIPTION"),
+    )
+    voice_language: str = Field(
+        default="ru",
+        validation_alias=AliasChoices("voice_language", "VOICE_LANGUAGE"),
+    )
+    stt_model: str = Field(
+        default="whisper",
+        validation_alias=AliasChoices("stt_model", "STT_MODEL"),
+    )
+
     # Guardrails
     enable_confidence_scoring: bool = Field(
         default=False,
