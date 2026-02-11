@@ -79,6 +79,15 @@ FULL_PIPELINE_RESULT = {
         "generate": 0.500,
         "respond": 0.010,
     },
+    # Latency breakdown (#147)
+    "llm_ttft_ms": 150.0,
+    "llm_response_duration_ms": 450.0,
+    "llm_decode_ms": 300.0,
+    "llm_tps": 42.5,
+    "llm_queue_ms": None,
+    "llm_timeout": False,
+    "llm_stream_recovery": False,
+    "streaming_enabled": True,
 }
 
 # Cache hit result (short-circuit)
@@ -95,6 +104,12 @@ CACHE_HIT_RESULT = {
         "cache_check": 0.020,
         "respond": 0.005,
     },
+    "llm_decode_ms": None,
+    "llm_tps": None,
+    "llm_queue_ms": None,
+    "llm_timeout": False,
+    "llm_stream_recovery": False,
+    "streaming_enabled": False,
 }
 
 # Chitchat result (no RAG at all)
@@ -105,6 +120,12 @@ CHITCHAT_RESULT = {
     "search_results_count": 0,
     "rerank_applied": False,
     "latency_stages": {"classify": 0.001, "respond": 0.005},
+    "llm_decode_ms": None,
+    "llm_tps": None,
+    "llm_queue_ms": None,
+    "llm_timeout": False,
+    "llm_stream_recovery": False,
+    "streaming_enabled": False,
 }
 
 
@@ -137,7 +158,7 @@ class TestScoreWriting:
 
     @pytest.mark.asyncio
     async def test_scores_written_full_pipeline(self, mock_config):
-        """All 12 scores should be written after a full pipeline run."""
+        """All scores should be written after a full pipeline run."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
         mock_lf.score_current_trace = MagicMock()
@@ -149,6 +170,7 @@ class TestScoreWriting:
         score_names = [call.kwargs["name"] for call in score_calls]
 
         expected_names = [
+            # Original 14
             "query_type",
             "latency_total_ms",
             "semantic_cache_hit",
@@ -161,9 +183,18 @@ class TestScoreWriting:
             "llm_used",
             "confidence_score",
             "hyde_used",
+            "llm_ttft_ms",
+            "llm_response_duration_ms",
+            # Latency breakdown (#147): streaming path
+            "streaming_enabled",
+            "llm_timeout",
+            "llm_stream_recovery",
+            "llm_decode_ms",
+            "llm_tps",
+            "llm_queue_unavailable",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.score_current_trace.call_count == 12
+        assert mock_lf.score_current_trace.call_count == 20
 
     @pytest.mark.asyncio
     async def test_score_values_full_pipeline(self, mock_config):
@@ -260,3 +291,112 @@ class TestScoreWriting:
 
             # Should not raise — NullClient silently ignores
             await bot.handle_query(_make_message())
+
+
+class TestLatencyBreakdownScores:
+    """Test latency breakdown score writing (#147)."""
+
+    async def _run_handle_query(self, mock_config, graph_result, mock_lf_client):
+        """Helper: run handle_query with mocked graph and Langfuse client."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=graph_result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        return mock_lf_client
+
+    @pytest.mark.asyncio
+    async def test_streaming_path_writes_numeric_and_boolean_scores(self, mock_config):
+        """Streaming: writes llm_decode_ms, llm_tps as NUMERIC; boolean flags."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        await self._run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+
+        calls = mock_lf.score_current_trace.call_args_list
+        score_map = {c.kwargs["name"]: c.kwargs for c in calls}
+
+        # NUMERIC scores written
+        assert score_map["llm_decode_ms"]["value"] == 300.0
+        assert score_map["llm_tps"]["value"] == 42.5
+
+        # BOOLEAN flags
+        assert score_map["streaming_enabled"]["value"] == 1
+        assert score_map["streaming_enabled"]["data_type"] == "BOOLEAN"
+        assert score_map["llm_timeout"]["value"] == 0
+        assert score_map["llm_timeout"]["data_type"] == "BOOLEAN"
+        assert score_map["llm_stream_recovery"]["value"] == 0
+        assert score_map["llm_stream_recovery"]["data_type"] == "BOOLEAN"
+
+        # queue_unavailable because queue_ms is None
+        assert score_map["llm_queue_unavailable"]["value"] == 1
+        assert score_map["llm_queue_unavailable"]["data_type"] == "BOOLEAN"
+        # No llm_decode_unavailable (decode_ms was written)
+        assert "llm_decode_unavailable" not in score_map
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_writes_unavailable_flags(self, mock_config):
+        """Non-streaming: writes *_unavailable BOOLEAN flags, skips NUMERIC decode/tps."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        await self._run_handle_query(mock_config, CACHE_HIT_RESULT, mock_lf)
+
+        calls = mock_lf.score_current_trace.call_args_list
+        score_map = {c.kwargs["name"]: c.kwargs for c in calls}
+
+        # NUMERIC scores NOT written
+        assert "llm_decode_ms" not in score_map
+        assert "llm_tps" not in score_map
+        assert "llm_queue_ms" not in score_map
+
+        # Unavailable flags written
+        assert score_map["llm_decode_unavailable"]["value"] == 1
+        assert score_map["llm_decode_unavailable"]["data_type"] == "BOOLEAN"
+        assert score_map["llm_tps_unavailable"]["value"] == 1
+        assert score_map["llm_queue_unavailable"]["value"] == 1
+
+        # streaming_enabled = False
+        assert score_map["streaming_enabled"]["value"] == 0
+        assert score_map["streaming_enabled"]["data_type"] == "BOOLEAN"
+
+    @pytest.mark.asyncio
+    async def test_hard_fail_writes_timeout_true(self, mock_config):
+        """Hard LLM failure: llm_timeout=1 BOOLEAN."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        timeout_result = {
+            **CHITCHAT_RESULT,
+            "llm_timeout": True,
+            "llm_stream_recovery": False,
+            "streaming_enabled": False,
+            "llm_decode_ms": None,
+            "llm_tps": None,
+            "llm_queue_ms": None,
+        }
+
+        await self._run_handle_query(mock_config, timeout_result, mock_lf)
+
+        calls = mock_lf.score_current_trace.call_args_list
+        score_map = {c.kwargs["name"]: c.kwargs for c in calls}
+
+        assert score_map["llm_timeout"]["value"] == 1
+        assert score_map["llm_timeout"]["data_type"] == "BOOLEAN"
