@@ -319,3 +319,63 @@ class TestRewriteNode:
 
         assert result["rewrite_effective"] is True
         assert result["rewrite_count"] == 1
+
+
+# --- grade_node score_improved tests ---
+
+
+class TestGradeNodeScoreImproved:
+    @pytest.mark.asyncio
+    async def test_first_grade_always_improved(self):
+        """First grade (prev=0.0) always sets score_improved=True."""
+        from telegram_bot.graph.nodes.grade import grade_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["documents"] = [{"text": "doc", "score": 0.003}]
+        # grade_confidence starts at 0.0
+        result = await grade_node(state)
+        assert result["score_improved"] is True
+
+    @pytest.mark.asyncio
+    async def test_score_improved_above_delta(self):
+        """Score improved by >= delta → score_improved=True."""
+        from telegram_bot.graph.nodes.grade import grade_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["grade_confidence"] = 0.003  # previous top score
+        state["documents"] = [{"text": "doc", "score": 0.005}]  # delta = 0.002 > 0.001
+        result = await grade_node(state)
+        assert result["score_improved"] is True
+
+    @pytest.mark.asyncio
+    async def test_score_not_improved_below_delta(self):
+        """Score didn't improve enough → score_improved=False."""
+        from telegram_bot.graph.nodes.grade import grade_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["grade_confidence"] = 0.004  # previous top score
+        state["documents"] = [{"text": "doc", "score": 0.0045}]  # delta = 0.0005 < 0.001
+        result = await grade_node(state)
+        assert result["score_improved"] is False
+
+    @pytest.mark.asyncio
+    async def test_score_decreased_not_improved(self):
+        """Score got worse → score_improved=False."""
+        from telegram_bot.graph.nodes.grade import grade_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["grade_confidence"] = 0.006
+        state["documents"] = [{"text": "doc", "score": 0.004}]  # worse
+        result = await grade_node(state)
+        assert result["score_improved"] is False
+
+    @pytest.mark.asyncio
+    async def test_empty_docs_not_improved(self):
+        """Empty documents → score_improved=False."""
+        from telegram_bot.graph.nodes.grade import grade_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["grade_confidence"] = 0.005
+        state["documents"] = []
+        result = await grade_node(state)
+        assert result["score_improved"] is False
