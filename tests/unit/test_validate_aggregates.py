@@ -187,6 +187,80 @@ class TestEvaluateGoNoGo:
         assert criteria["cold_p90_lt_8s"]["passed"] is False
         assert criteria["cold_p90_lt_8s"]["actual"] == "9000 ms"
 
+    def test_ttft_criterion_skip_on_small_sample(self):
+        """n < 3 streaming samples -> skipped=True, passed=True."""
+        aggregates = {
+            "cold": {
+                "latency_p50": 3000,
+                "latency_p90": 5000,
+                "latency_p95": 6000,
+                "node_p50": {"generate": 1500},
+            },
+            "cache_hit": {"latency_p50": 500},
+            "streaming": {"n": 2, "ttft_sample_count": 2, "ttft_p50": 800.0},
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        assert "ttft_p50_lt_1000ms" in criteria
+        assert criteria["ttft_p50_lt_1000ms"]["skipped"] is True
+        assert criteria["ttft_p50_lt_1000ms"]["passed"] is True
+
+    def test_ttft_criterion_pass_under_threshold(self):
+        """TTFT p50 < 1000ms with sufficient samples -> passed."""
+        aggregates = {
+            "cold": {
+                "latency_p50": 3000,
+                "latency_p90": 5000,
+                "latency_p95": 6000,
+                "node_p50": {"generate": 1500},
+            },
+            "cache_hit": {"latency_p50": 500},
+            "streaming": {"n": 5, "ttft_sample_count": 5, "ttft_p50": 700.0},
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        c = criteria["ttft_p50_lt_1000ms"]
+        assert c["passed"] is True
+        assert c["skipped"] is False
+        assert "700" in c["actual"]
+
+    def test_ttft_criterion_fail_over_threshold(self):
+        """TTFT p50 >= 1000ms -> failed."""
+        aggregates = {
+            "cold": {
+                "latency_p50": 3000,
+                "latency_p90": 5000,
+                "latency_p95": 6000,
+                "node_p50": {"generate": 1500},
+            },
+            "cache_hit": {"latency_p50": 500},
+            "streaming": {"n": 5, "ttft_sample_count": 5, "ttft_p50": 1200.0},
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        c = criteria["ttft_p50_lt_1000ms"]
+        assert c["passed"] is False
+        assert c["skipped"] is False
+
+    def test_ttft_criterion_no_streaming_data(self):
+        """No streaming aggregates -> skipped (n=0)."""
+        aggregates = {
+            "cold": {
+                "latency_p50": 3000,
+                "latency_p90": 5000,
+                "latency_p95": 6000,
+                "node_p50": {"generate": 1500},
+            },
+            "cache_hit": {"latency_p50": 500},
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        assert criteria["ttft_p50_lt_1000ms"]["skipped"] is True
+
 
 class TestLangfusePreflight:
     """Langfuse preflight should fail fast on incomplete/invalid credentials."""
@@ -301,6 +375,99 @@ class TestReportAndSummary:
         line = format_phase_summary("cold", agg)
         assert "p90=140ms" in line
 
+    def test_go_no_go_renders_skip_status(self, tmp_path):
+        """Skipped criteria render as '[-] SKIP', not '[x] PASS'."""
+        run = ValidationRun(
+            run_id="run-1",
+            git_sha="abc123",
+            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+            collections=["c1"],
+            skip_rerank_threshold=0.012,
+            relevance_threshold_rrf=0.005,
+            results=[],
+        )
+        aggregates = {
+            "cold": {
+                "n": 1,
+                "latency_p50": 100.0,
+                "latency_p90": 130.0,
+                "latency_p95": 150.0,
+                "latency_mean": 110.0,
+                "latency_max": 160.0,
+                "semantic_cache_hit_rate": 0.0,
+                "search_cache_hit_rate": 0.0,
+                "rerank_applied_rate": 0.0,
+                "rewrite_rate": 0.0,
+                "results_count_mean": 20.0,
+                "node_p50": {},
+                "node_p95": {},
+            }
+        }
+        go_no_go = {
+            "cold_p50_lt_5s": {
+                "target": "< 5000 ms",
+                "actual": "100 ms",
+                "passed": True,
+                "skipped": False,
+            },
+            "ttft_p50_lt_1000ms": {
+                "target": "< 1000 ms",
+                "actual": "N/A (n=0, need >= 3)",
+                "passed": True,
+                "skipped": True,
+            },
+        }
+        out = tmp_path / "report.md"
+        generate_report(run, aggregates, out, go_no_go=go_no_go)
+        text = out.read_text(encoding="utf-8")
+
+        assert "[-] SKIP" in text
+        assert "[x] PASS" in text
+
+    def test_report_includes_streaming_ttft_section(self, tmp_path):
+        """Report includes Streaming TTFT section when streaming aggregates exist."""
+        run = ValidationRun(
+            run_id="run-1",
+            git_sha="abc123",
+            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+            collections=["c1"],
+            skip_rerank_threshold=0.012,
+            relevance_threshold_rrf=0.005,
+            results=[],
+        )
+        aggregates = {
+            "cold": {
+                "n": 1,
+                "latency_p50": 100.0,
+                "latency_p90": 130.0,
+                "latency_p95": 150.0,
+                "latency_mean": 110.0,
+                "latency_max": 160.0,
+                "semantic_cache_hit_rate": 0.0,
+                "search_cache_hit_rate": 0.0,
+                "rerank_applied_rate": 0.0,
+                "rewrite_rate": 0.0,
+                "results_count_mean": 20.0,
+                "node_p50": {},
+                "node_p95": {},
+            },
+            "streaming": {
+                "n": 5,
+                "ttft_sample_count": 5,
+                "ttft_p50": 450.0,
+                "ttft_p95": 800.0,
+                "ttft_mean": 500.0,
+                "ttft_max": 900.0,
+            },
+        }
+        out = tmp_path / "report.md"
+        generate_report(run, aggregates, out)
+        text = out.read_text(encoding="utf-8")
+
+        assert "## Streaming TTFT" in text
+        assert "| ttft p50 | 450 ms |" in text
+        assert "| sample count | 5 |" in text
+
 
 class TestCollectionResolution:
     """Report collections must reflect actually validated collections only."""
@@ -323,3 +490,144 @@ class TestCollectionResolution:
     def test_falls_back_to_discovered_if_results_empty(self):
         discovered = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
         assert resolve_report_collections(discovered, []) == discovered
+
+
+class TestFakeMessage:
+    """FakeMessage / FakeSentMessage for streaming TTFT measurement."""
+
+    async def test_answer_records_timestamp_and_returns_sent(self):
+        from scripts.validate_traces import FakeMessage
+
+        msg = FakeMessage()
+        assert msg.t_answer_called is None
+        assert msg.sent is None
+
+        sent = await msg.answer("placeholder")
+        assert msg.t_answer_called is not None
+        assert msg.sent is sent
+
+    async def test_edit_text_records_first_edit_timestamp(self):
+        from scripts.validate_traces import FakeMessage
+
+        msg = FakeMessage()
+        sent = await msg.answer("placeholder")
+        assert sent.t_first_edit is None
+
+        await sent.edit_text("chunk 1")
+        t1 = sent.t_first_edit
+        assert t1 is not None
+        assert sent.edit_calls_count == 1
+        assert sent.last_text_len == 7  # len("chunk 1")
+
+        await sent.edit_text("chunk 1 more")
+        assert sent.t_first_edit == t1  # first edit unchanged
+        assert sent.edit_calls_count == 2
+        assert sent.last_text_len == 12
+
+    async def test_ttft_calculation_positive(self):
+        from scripts.validate_traces import FakeMessage
+
+        msg = FakeMessage()
+        sent = await msg.answer("placeholder")
+        await sent.edit_text("first chunk")
+
+        ttft = (sent.t_first_edit - msg.t_answer_called) * 1000
+        assert ttft >= 0
+
+    async def test_no_edits_gives_none_ttft(self):
+        from scripts.validate_traces import FakeMessage
+
+        msg = FakeMessage()
+        sent = await msg.answer("placeholder")
+        assert sent.t_first_edit is None
+
+    async def test_delete_is_noop(self):
+        from scripts.validate_traces import FakeMessage
+
+        msg = FakeMessage()
+        sent = await msg.answer("placeholder")
+        await sent.delete()  # should not raise
+
+
+class TestStreamingAggregation:
+    """Streaming TTFT aggregation in compute_aggregates."""
+
+    def test_streaming_phase_produces_ttft_aggregates(self):
+        """Streaming results with valid TTFT produce ttft_p50/p95/mean/max."""
+        results = [
+            _make_result(phase="streaming", latency=2000),
+            _make_result(phase="streaming", latency=2100),
+            _make_result(phase="streaming", latency=1900),
+        ]
+        results[0].state["streaming_ttft_ms"] = 400.0
+        results[1].state["streaming_ttft_ms"] = 600.0
+        results[2].state["streaming_ttft_ms"] = 500.0
+
+        agg = compute_aggregates(results)
+
+        assert "streaming" in agg
+        s = agg["streaming"]
+        assert s["n"] == 3
+        assert s["ttft_sample_count"] == 3
+        assert s["ttft_p50"] == pytest.approx(500.0, abs=1)
+        assert s["ttft_mean"] == pytest.approx(500.0, abs=1)
+        assert s["ttft_max"] == pytest.approx(600.0, abs=1)
+
+    def test_streaming_excludes_none_ttft_from_aggregates(self):
+        """Results with streaming_ttft_ms=None are excluded from TTFT stats."""
+        results = [
+            _make_result(phase="streaming", latency=2000),
+            _make_result(phase="streaming", latency=2100),
+            _make_result(phase="streaming", latency=1900),
+        ]
+        results[0].state["streaming_ttft_ms"] = 400.0
+        results[1].state["streaming_ttft_ms"] = None
+        results[2].state["streaming_ttft_ms"] = 600.0
+
+        agg = compute_aggregates(results)
+
+        s = agg["streaming"]
+        assert s["n"] == 3
+        assert s["ttft_sample_count"] == 2
+        assert s["ttft_p50"] == pytest.approx(500.0, abs=1)
+
+    def test_streaming_not_mixed_into_cold(self):
+        """Streaming results must not appear in cold aggregates."""
+        results = [
+            _make_result(phase="cold", latency=3000),
+            _make_result(phase="streaming", latency=2000),
+        ]
+        results[1].state["streaming_ttft_ms"] = 500.0
+
+        agg = compute_aggregates(results)
+
+        assert agg["cold"]["n"] == 1
+        assert agg["streaming"]["n"] == 1
+
+    def test_no_streaming_results_no_streaming_key(self):
+        """No streaming results -> no 'streaming' key in aggregates."""
+        results = [_make_result(phase="cold", latency=3000)]
+        agg = compute_aggregates(results)
+        assert "streaming" not in agg
+
+    def test_all_none_ttft_no_streaming_key(self):
+        """All streaming results with None TTFT -> no 'streaming' key."""
+        results = [_make_result(phase="streaming", latency=2000)]
+        agg = compute_aggregates(results)
+        assert "streaming" not in agg
+
+    def test_non_numeric_ttft_ignored(self):
+        """Non-numeric TTFT values must be ignored from streaming stats."""
+        results = [
+            _make_result(phase="streaming", latency=2000),
+            _make_result(phase="streaming", latency=2100),
+        ]
+        results[0].state["streaming_ttft_ms"] = 450.0
+        results[1].state["streaming_ttft_ms"] = "450ms"
+
+        agg = compute_aggregates(results)
+
+        s = agg["streaming"]
+        assert s["n"] == 2
+        assert s["ttft_sample_count"] == 1
+        assert s["ttft_p50"] == pytest.approx(450.0, abs=1)
