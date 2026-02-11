@@ -16,6 +16,7 @@ class TestQueryRequest:
         assert req.query == "test question"
         assert req.user_id == 0
         assert req.session_id == ""
+        assert req.channel == "api"
         assert req.langfuse_trace_id is None
 
     def test_full_request(self):
@@ -23,10 +24,12 @@ class TestQueryRequest:
             query="test question",
             user_id=123,
             session_id="sess-1",
+            channel="voice",
             langfuse_trace_id="trace-abc",
         )
         assert req.user_id == 123
         assert req.session_id == "sess-1"
+        assert req.channel == "voice"
         assert req.langfuse_trace_id == "trace-abc"
 
     def test_empty_query_rejected(self):
