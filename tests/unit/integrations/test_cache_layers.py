@@ -64,6 +64,31 @@ class TestCacheLayerManagerInitialize:
     """Test async initialization."""
 
     @pytest.mark.asyncio
+    async def test_initialize_uses_hardened_connection_params(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(return_value=True)
+
+        with (
+            patch(
+                "telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis
+            ) as mock_from_url,
+            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
+        ):
+            await mgr.initialize()
+
+        call_kwargs = mock_from_url.call_args[1]
+        assert call_kwargs["socket_timeout"] == 5
+        assert call_kwargs["socket_connect_timeout"] == 5
+        assert call_kwargs["retry_on_timeout"] is True
+        assert call_kwargs["health_check_interval"] == 30
+
+        from redis.retry import Retry
+
+        assert isinstance(call_kwargs["retry"], Retry)
+
+    @pytest.mark.asyncio
     async def test_initialize_connects_redis(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
 
