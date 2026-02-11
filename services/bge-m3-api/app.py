@@ -5,6 +5,7 @@ Multi-vector embeddings: dense + sparse + colbert
 
 import logging
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 import numpy as np
@@ -20,13 +21,6 @@ from config import settings
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
-# FastAPI app
-app = FastAPI(
-    title="BGE-M3 Embeddings API",
-    description="Multi-vector embeddings API (dense + sparse + colbert)",
-    version="1.0.0",
-)
-
 # Prometheus metrics
 encode_requests_total = Counter(
     "bge_encode_requests_total", "Total encoding requests", ["encode_type"]
@@ -37,6 +31,36 @@ model_loaded = Gauge("bge_model_loaded", "Model loaded status (1=loaded, 0=not l
 
 # Global model instance
 _model = None
+_warmed_up = False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Eager model loading + warmup encode at startup."""
+    global _warmed_up
+    logger.info("Starting model warmup...")
+    start = time.time()
+    model = get_model()
+    model.encode(
+        ["warmup query"],
+        batch_size=1,
+        max_length=64,
+        return_dense=True,
+        return_sparse=True,
+        return_colbert_vecs=False,
+    )
+    elapsed = time.time() - start
+    _warmed_up = True
+    logger.info("Warmup complete in %.2fs", elapsed)
+    yield
+
+
+app = FastAPI(
+    title="BGE-M3 Embeddings API",
+    description="Multi-vector embeddings API (dense + sparse + colbert)",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
 def get_model():
@@ -149,7 +173,7 @@ def compute_maxsim_scores(query_vecs: np.ndarray, doc_vecs_list: list[np.ndarray
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "ok", "model_loaded": _model is not None}
+    return {"status": "ok", "model_loaded": _model is not None, "warmed_up": _warmed_up}
 
 
 @app.post("/encode/dense", response_model=DenseResponse)
