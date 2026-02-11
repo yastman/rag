@@ -54,7 +54,7 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001
 
-**Observability:** Langfuse v3 — 35 observations/trace, 12 scores, `OTEL_SERVICE_NAME=rag-bot` → see `.claude/rules/observability.md`
+**Observability:** Langfuse v3 — 35 observations/trace, 12 scores, error spans on 4 nodes, `OTEL_SERVICE_NAME=rag-bot` → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (19 svc) → see `.claude/rules/docker.md`
 
