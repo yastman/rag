@@ -281,15 +281,15 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     len(e.partial_text),
                     exc_info=True,
                 )
-                response = await llm.chat.completions.create(
+                response_obj = await llm.chat.completions.create(
                     model=config.llm_model,
                     messages=llm_messages,
                     temperature=config.llm_temperature,
                     max_tokens=config.generate_max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]
                 )
-                answer = response.choices[0].message.content or ""
-                actual_model = getattr(response, "model", config.llm_model) or config.llm_model
+                answer = response_obj.choices[0].message.content or ""
+                actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
                 # Edit existing message with fallback answer
                 delivered = False
                 try:

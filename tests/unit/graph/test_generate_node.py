@@ -690,3 +690,54 @@ class TestGenerateNodeProviderMetadata:
         assert result["llm_provider_model"] == "fallback"
         assert result["llm_ttft_ms"] == 0.0
         assert result["llm_response_duration_ms"] > 0
+
+    @pytest.mark.asyncio
+    async def test_partial_stream_fallback_preserves_token_usage_in_span(self) -> None:
+        """StreamingPartialDeliveryError fallback should keep token_usage in curated span output."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Fallback complete answer."
+        usage = MagicMock(prompt_tokens=123, completion_tokens=45, total_tokens=168)
+        mock_fallback_response = MagicMock(choices=[mock_choice], model="gpt-4o-mini", usage=usage)
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _MockFailingStream(["Квартира ", "в Несебре "]),  # partial stream then error
+                mock_fallback_response,  # non-stream fallback response
+            ],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+        mock_lf = MagicMock()
+
+        state = _make_state_with_docs()
+
+        with (
+            patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+            patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+        ):
+            await generate_node(state, message=message)
+
+        output_calls = [
+            c.kwargs["output"]
+            for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        assert output_calls, "generate_node must emit output span"
+        final_output = output_calls[-1]
+        assert final_output["token_usage"]["prompt_tokens"] == 123
+        assert final_output["token_usage"]["completion_tokens"] == 45
+        assert final_output["token_usage"]["total_tokens"] == 168
