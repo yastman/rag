@@ -27,6 +27,10 @@ from .services.redis_monitor import RedisHealthMonitor
 
 logger = logging.getLogger(__name__)
 
+# --- Checkpoint namespace constants (versioned for safe migration) ---
+_CHECKPOINT_NS_TEXT = "tg:text:v1"
+_CHECKPOINT_NS_VOICE = "tg:voice:v1"
+
 # --- Query type mapping for scores ---
 _QUERY_TYPE_SCORE = {
     "CHITCHAT": 0.0,
@@ -52,7 +56,7 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
 
     scores = {
         "query_type": _QUERY_TYPE_SCORE.get(result.get("query_type", ""), 1.0),
-        "latency_total_ms": total_ms,
+        "latency_total_ms": result.get("user_perceived_wall_ms", total_ms),
         "semantic_cache_hit": 1.0 if result.get("cache_hit") else 0.0,
         "embeddings_cache_hit": 1.0 if result.get("embeddings_cache_hit") else 0.0,
         "search_cache_hit": 1.0 if result.get("search_cache_hit") else 0.0,
@@ -138,6 +142,11 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
     if voice_dur is not None:
         lf.score_current_trace(name="voice_duration_s", value=float(voice_dur))
 
+    # --- Conversation memory summarization (#154) ---
+    summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
+    if summarize_ms > 0:
+        lf.score_current_trace(name="summarize_ms", value=summarize_ms)
+
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
     """Create unified session_id format: {type}-{hash}-{YYYYMMDD}.
@@ -215,6 +224,9 @@ class PropertyBot:
         # Redis health monitor (periodic background task)
         self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
 
+        # Conversation memory checkpointer (initialized in start())
+        self._checkpointer: Any = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -279,6 +291,13 @@ class PropertyBot:
         """Handle /clear command - clear conversation history."""
         assert message.from_user is not None
         user_id = message.from_user.id
+
+        if self._checkpointer is not None:
+            try:
+                await self._checkpointer.adelete_thread(str(user_id))
+            except Exception:
+                logger.warning("Failed to clear checkpointer thread %s", user_id, exc_info=True)
+
         await self._cache.clear_conversation(user_id)
         await message.answer("✅ История диалога очищена.")
 
@@ -417,13 +436,23 @@ class PropertyBot:
                 reranker=self._reranker,
                 llm=self._llm,
                 message=message,
+                checkpointer=self._checkpointer,
             )
 
+            invoke_config = {
+                "configurable": {
+                    "thread_id": str(message.from_user.id),
+                    "checkpoint_ns": _CHECKPOINT_NS_TEXT,
+                }
+            }
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                result = await graph.ainvoke(state)
+                result = await graph.ainvoke(state, config=invoke_config)
 
             # Wall-time for accurate latency_total_ms
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
+            # User-perceived latency excludes post-respond summarization
+            summarize_s = result.get("latency_stages", {}).get("summarize", 0)
+            result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
 
             # Update trace with input/output and metadata
             lf = get_client()
@@ -496,14 +525,21 @@ class PropertyBot:
                 reranker=self._reranker,
                 llm=self._llm,
                 message=message,
+                checkpointer=self._checkpointer,
                 show_transcription=self.config.show_transcription,
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
             )
 
+            invoke_config = {
+                "configurable": {
+                    "thread_id": str(message.from_user.id),
+                    "checkpoint_ns": _CHECKPOINT_NS_VOICE,
+                }
+            }
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                    result = await graph.ainvoke(state)
+                    result = await graph.ainvoke(state, config=invoke_config)
             except ValueError as e:
                 if "Empty transcription" in str(e):
                     await message.answer("Голосовое сообщение не содержит речи.")
@@ -517,6 +553,9 @@ class PropertyBot:
                 return
 
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
+            # User-perceived latency excludes post-respond summarization
+            summarize_s = result.get("latency_stages", {}).get("summarize", 0)
+            result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
 
             lf = get_client()
             lf.update_current_trace(
@@ -545,6 +584,21 @@ class PropertyBot:
             await self._cache.initialize()
             self._cache_initialized = True
             logger.info("Cache service ready")
+
+        # Initialize conversation memory checkpointer (SDK)
+        from .integrations.memory import create_fallback_checkpointer, create_redis_checkpointer
+
+        try:
+            self._checkpointer = create_redis_checkpointer(
+                self.config.redis_url,
+                ttl_minutes=7 * 24 * 60,  # 7 days; SDK uses minutes
+                refresh_on_read=True,  # idle-based retention
+            )
+            await self._checkpointer.asetup()
+            logger.info("Conversation memory checkpointer ready (Redis)")
+        except Exception:
+            logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
+            self._checkpointer = create_fallback_checkpointer()
 
         # Preflight dependency checks
         from .preflight import check_dependencies
