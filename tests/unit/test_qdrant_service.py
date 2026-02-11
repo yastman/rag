@@ -1,7 +1,6 @@
 """Tests for QdrantService quantization parameters."""
 
 import sys
-from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -668,6 +667,7 @@ class TestQdrantServiceScoreBoosting:
                 collection_name="test_collection",
             )
             service._client = AsyncMock()
+            service._collection_validated = True
             return service
 
     @pytest.mark.asyncio
@@ -690,155 +690,107 @@ class TestQdrantServiceScoreBoosting:
         assert results[0]["score"] == 0.8
 
     @pytest.mark.asyncio
-    async def test_score_boosting_with_fresh_document(self, service):
-        """Test freshness boost increases score for new documents."""
-        from datetime import datetime
-
-        # Create document with recent timestamp
-        now = datetime.now(UTC)
+    async def test_score_boosting_uses_formula_query(self, service):
+        """Test that freshness boost uses server-side FormulaQuery."""
         mock_point = MagicMock()
         mock_point.id = "1"
-        mock_point.score = 0.7
-        mock_point.payload = {
-            "page_content": "recent doc",
-            "metadata": {"created_at": now.isoformat()},
-        }
+        mock_point.score = 0.85
+        mock_point.payload = {"page_content": "recent doc", "metadata": {}}
 
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
 
-        results = await service.search_with_score_boosting(
+        await service.search_with_score_boosting(
             dense_vector=[0.1] * 1024,
             freshness_boost=True,
             freshness_scale_days=7,
             top_k=5,
         )
 
-        assert len(results) == 1
-        # Fresh documents should have boosted score
-        # Base score is 0.7, boost adds up to 0.1
+        call_args = service._client.query_points.call_args
+        query_arg = call_args.kwargs.get("query") or call_args[1].get("query")
+        assert hasattr(query_arg, "formula"), "Expected FormulaQuery with formula attribute"
 
     @pytest.mark.asyncio
-    async def test_score_boosting_with_old_document(self, service):
-        """Test freshness boost is minimal for old documents."""
-        from datetime import datetime, timedelta
-
-        # Create document with old timestamp
-        old_date = datetime.now(UTC) - timedelta(days=30)
-        mock_point = MagicMock()
-        mock_point.id = "1"
-        mock_point.score = 0.7
-        mock_point.payload = {
-            "page_content": "old doc",
-            "metadata": {"created_at": old_date.isoformat()},
-        }
-
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        results = await service.search_with_score_boosting(
-            dense_vector=[0.1] * 1024,
-            freshness_boost=True,
-            freshness_scale_days=7,
-            top_k=5,
-        )
-
-        assert len(results) == 1
-
-    @pytest.mark.asyncio
-    async def test_score_boosting_reorders_by_freshness(self, service):
-        """Test fresher documents can overtake older ones."""
-        from datetime import datetime, timedelta
-
-        now = datetime.now(UTC)
-        old_date = now - timedelta(days=30)
-
-        # Old doc with higher base score
-        old_point = MagicMock()
-        old_point.id = "old"
-        old_point.score = 0.85
-        old_point.payload = {
-            "page_content": "old doc",
-            "metadata": {"created_at": old_date.isoformat()},
-        }
-
-        # New doc with slightly lower base score
-        new_point = MagicMock()
-        new_point.id = "new"
-        new_point.score = 0.80
-        new_point.payload = {
-            "page_content": "new doc",
-            "metadata": {"created_at": now.isoformat()},
-        }
-
-        service._client.query_points = AsyncMock(
-            return_value=MagicMock(points=[old_point, new_point])
-        )
-
-        results = await service.search_with_score_boosting(
-            dense_vector=[0.1] * 1024,
-            freshness_boost=True,
-            freshness_scale_days=7,
-            top_k=2,
-        )
-
-        # With freshness boost, newer doc may come first
-        assert len(results) == 2
-
-    @pytest.mark.asyncio
-    async def test_score_boosting_handles_missing_date(self, service):
-        """Test graceful handling of missing date field."""
-        mock_point = MagicMock()
-        mock_point.id = "1"
-        mock_point.score = 0.8
-        mock_point.payload = {
-            "page_content": "no date",
-            "metadata": {},  # No created_at
-        }
-
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        results = await service.search_with_score_boosting(
-            dense_vector=[0.1] * 1024,
-            freshness_boost=True,
-            top_k=5,
-        )
-
-        assert len(results) == 1
-        # Should return without error, using base score
-
-    @pytest.mark.asyncio
-    async def test_score_boosting_handles_invalid_date(self, service):
-        """Test graceful handling of invalid date format."""
-        mock_point = MagicMock()
-        mock_point.id = "1"
-        mock_point.score = 0.8
-        mock_point.payload = {
-            "page_content": "bad date",
-            "metadata": {"created_at": "not-a-date"},
-        }
-
-        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
-
-        results = await service.search_with_score_boosting(
-            dense_vector=[0.1] * 1024,
-            freshness_boost=True,
-            top_k=5,
-        )
-
-        assert len(results) == 1
-        # Should return without error
-
-    @pytest.mark.asyncio
-    async def test_score_boosting_fallback_on_error(self, service):
-        """Test fallback to normal search when boosting fails."""
+    async def test_score_boosting_prefetch_structure(self, service):
+        """Verify prefetch contains dense query with correct limit."""
         mock_point = MagicMock()
         mock_point.id = "1"
         mock_point.score = 0.8
         mock_point.payload = {"page_content": "test", "metadata": {}}
 
-        # First call fails, second succeeds
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        await service.search_with_score_boosting(
+            dense_vector=[0.1] * 1024,
+            freshness_boost=True,
+            top_k=10,
+        )
+
+        call_args = service._client.query_points.call_args
+        prefetch = call_args.kwargs.get("prefetch")
+        assert prefetch is not None
+        assert prefetch.limit == 10
+
+    @pytest.mark.asyncio
+    async def test_score_boosting_custom_scale(self, service):
+        """Verify custom freshness_scale_days reaches FormulaQuery."""
+        mock_point = MagicMock()
+        mock_point.id = "1"
+        mock_point.score = 0.8
+        mock_point.payload = {"page_content": "test", "metadata": {}}
+
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        await service.search_with_score_boosting(
+            dense_vector=[0.1] * 1024,
+            freshness_boost=True,
+            freshness_scale_days=14,
+            top_k=5,
+        )
+
+        call_args = service._client.query_points.call_args
+        query = call_args.kwargs.get("query")
+        sum_expr = query.formula
+        mult_expr = sum_expr.sum[1]
+        decay_expr = mult_expr.mult[1]
+        assert decay_expr.exp_decay.scale == 14.0
+
+    @pytest.mark.asyncio
+    async def test_score_boosting_custom_field(self, service):
+        """Verify custom freshness_field reaches FormulaQuery."""
+        mock_point = MagicMock()
+        mock_point.id = "1"
+        mock_point.score = 0.8
+        mock_point.payload = {"page_content": "test", "metadata": {}}
+
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        await service.search_with_score_boosting(
+            dense_vector=[0.1] * 1024,
+            freshness_boost=True,
+            freshness_field="updated_at",
+            top_k=5,
+        )
+
+        call_args = service._client.query_points.call_args
+        query = call_args.kwargs.get("query")
+        sum_expr = query.formula
+        mult_expr = sum_expr.sum[1]
+        decay_expr = mult_expr.mult[1]
+        assert decay_expr.exp_decay.x.datetime_key == "metadata.updated_at"
+
+    @pytest.mark.asyncio
+    async def test_score_boosting_fallback_on_error(self, service):
+        """Test fallback to normal search when FormulaQuery fails."""
+        mock_point = MagicMock()
+        mock_point.id = "1"
+        mock_point.score = 0.8
+        mock_point.payload = {"page_content": "test", "metadata": {}}
+
+        # First call (FormulaQuery) fails, second (plain) succeeds
         service._client.query_points = AsyncMock(
             side_effect=[
-                Exception("First query failed"),
+                Exception("FormulaQuery failed"),
                 MagicMock(points=[mock_point]),
             ]
         )
