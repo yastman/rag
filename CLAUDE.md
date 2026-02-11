@@ -36,10 +36,11 @@ make ingest-unified-status # Show ingestion stats from Postgres
 ## Architecture
 
 ```
-Ingestion: Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Bot:       Query → LangGraph StateGraph (10 nodes) → classify → cache_check
-           → retrieve (RRF, hybrid embed 1-call) → grade → rerank (ColBERT) → generate → respond
-Voice:     Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
+Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
+Bot:        Query → LangGraph StateGraph (10 nodes) → classify → cache_check
+            → retrieve (RRF, hybrid embed 1-call) → grade → rerank (ColBERT) → generate → respond
+Voice STT:  Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
+Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API (FastAPI)
 ```
 
 | Module | Purpose |
@@ -49,15 +50,17 @@ Voice:     Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same p
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
 | `telegram_bot/observability.py` | Langfuse init, @observe decorator, PII masking |
+| `src/api/` | RAG API (FastAPI wrapper around LangGraph, POST /query) |
+| `src/voice/` | Voice Bot (LiveKit Agent + ElevenLabs + SIP trunk + transcripts) |
 | `src/retrieval/search_engines.py` | 4 search variants (evaluation) |
 | `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
 | `scripts/validate_*.py` | Trace validation runner + query goldset |
 
-**Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001
+**Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
 **Observability:** Langfuse v3 — 35 observations/trace, 14 scores, curated spans on 5 heavy nodes (no auto-capture), error spans on 4 nodes, traced_pipeline for orphan prevention → see `.claude/rules/observability.md`
 
-**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (19 svc) → see `.claude/rules/docker.md`
+**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
 
 ## Code Style
 
@@ -89,7 +92,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 
 1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 2. Copy `.env.example` → `.env`
-3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` (Whisper STT), `LANGFUSE_*` (VPS: `VOYAGE_API_KEY` not needed, uses local BGE-M3)
+3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` (Whisper STT), `LANGFUSE_*` | Voice: `ELEVENLABS_API_KEY`, `LIVEKIT_*`, `LIFECELL_SIP_*`
 4. `uv sync && make docker-up`
 
 ## Key Docs
@@ -159,7 +162,6 @@ make k3s-status                     # Check pods
 ```
 
 **Details:** `.claude/rules/skills.md`
-
 ## Long-Running Commands
 
 For docker build, large tests (> 30 sec) — use tmux + logs:
@@ -186,6 +188,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
 | `features/telegram-bot.md` | LangGraph pipeline, bot, middlewares | `telegram_bot/*.py` |
+| `features/voice-bot.md` | LiveKit Agent, SIP, RAG API, /call | `src/voice/**, src/api/**` |
 | `features/user-personalization.md` | CESC, user context, preferences | `**/user_context*.py` |
 | `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
 | `observability.md` | Langfuse v3, @observe, scores, baseline | `telegram_bot/observability.py, tests/baseline/**` |
