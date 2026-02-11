@@ -135,6 +135,12 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("hybrid_sparse_weight", "HYBRID_SPARSE_WEIGHT"),
     )
 
+    ***REMOVED*** Connection
+    qdrant_timeout: int = Field(
+        default=30,
+        validation_alias=AliasChoices("qdrant_timeout", "QDRANT_TIMEOUT"),
+    )
+
     # Score Boosting Configuration
     freshness_boost_enabled: bool = Field(
         default=False,
