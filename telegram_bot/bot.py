@@ -37,7 +37,7 @@ _QUERY_TYPE_SCORE = {
 
 
 def _write_langfuse_scores(lf: Any, result: dict) -> None:
-    """Write 14 Langfuse scores from graph result state.
+    """Write Langfuse scores (14 original + up to 10 latency breakdown) from graph result state.
 
     Args:
         lf: Langfuse client (from get_client(), may be _NullLangfuseClient).
@@ -65,6 +65,43 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
 
     for name, value in scores.items():
         lf.score_current_trace(name=name, value=value)
+
+    # --- Latency breakdown (#147) ---
+    # Always-written BOOLEAN flags
+    lf.score_current_trace(
+        name="streaming_enabled",
+        value=1 if result.get("streaming_enabled") else 0,
+        data_type="BOOLEAN",
+    )
+    lf.score_current_trace(
+        name="llm_timeout",
+        value=1 if result.get("llm_timeout") else 0,
+        data_type="BOOLEAN",
+    )
+    lf.score_current_trace(
+        name="llm_stream_recovery",
+        value=1 if result.get("llm_stream_recovery") else 0,
+        data_type="BOOLEAN",
+    )
+
+    # Conditional NUMERIC + paired unavailable BOOLEAN flags
+    decode_ms = result.get("llm_decode_ms")
+    if decode_ms is not None:
+        lf.score_current_trace(name="llm_decode_ms", value=float(decode_ms))
+    else:
+        lf.score_current_trace(name="llm_decode_unavailable", value=1, data_type="BOOLEAN")
+
+    tps = result.get("llm_tps")
+    if tps is not None:
+        lf.score_current_trace(name="llm_tps", value=float(tps))
+    else:
+        lf.score_current_trace(name="llm_tps_unavailable", value=1, data_type="BOOLEAN")
+
+    queue_ms = result.get("llm_queue_ms")
+    if queue_ms is not None:
+        lf.score_current_trace(name="llm_queue_ms", value=float(queue_ms))
+    else:
+        lf.score_current_trace(name="llm_queue_unavailable", value=1, data_type="BOOLEAN")
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
