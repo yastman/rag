@@ -318,6 +318,19 @@ class TestRewriteNode:
         result = await rewrite_node(state, llm=mock_llm)
 
         assert result["rewrite_effective"] is True
+
+    @pytest.mark.asyncio
+    async def test_rewrite_latency_stages_contains_only_numeric_values(self):
+        """latency_stages must keep only numeric durations."""
+        from telegram_bot.graph.nodes.rewrite import rewrite_node
+
+        mock_llm = _make_mock_llm("переформулированный запрос")
+        state = make_initial_state(user_id=1, session_id="s", query="тест")
+        result = await rewrite_node(state, llm=mock_llm)
+
+        stages = result["latency_stages"]
+        assert set(stages.keys()) == {"rewrite"}
+        assert isinstance(stages["rewrite"], float)
         assert result["rewrite_count"] == 1
 
 
