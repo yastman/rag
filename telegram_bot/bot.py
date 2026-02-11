@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import UTC, datetime
@@ -323,6 +324,10 @@ class PropertyBot:
             return
 
         phone = parts[1]
+        if not re.match(r"^\+?\d{10,15}$", phone):
+            await message.answer("Неверный формат номера. Пример: +380501234567")
+            return
+
         lead_desc = parts[2] if len(parts) > 2 else ""
 
         try:
@@ -334,50 +339,52 @@ class PropertyBot:
                 api_secret=self.config.livekit_api_secret,
             )
 
-            room_name = f"voice-call-{uuid.uuid4().hex[:8]}"
-            call_id = str(uuid.uuid4())
+            try:
+                room_name = f"voice-call-{uuid.uuid4().hex[:8]}"
+                call_id = str(uuid.uuid4())
 
-            # 1. Dispatch voice agent to room
-            await lk.agent_dispatch.create_dispatch(
-                api.CreateAgentDispatchRequest(
-                    agent_name="voice-bot",
-                    room=room_name,
-                    metadata=json.dumps(
-                        {
-                            "call_id": call_id,
-                            "phone": phone,
-                            "lead_data": {
-                                "description": lead_desc,
-                                "triggered_by": message.from_user.id,
-                            },
-                            "callback_chat_id": message.chat.id,
-                        }
-                    ),
+                # 1. Dispatch voice agent to room
+                await lk.agent_dispatch.create_dispatch(
+                    api.CreateAgentDispatchRequest(
+                        agent_name="voice-bot",
+                        room=room_name,
+                        metadata=json.dumps(
+                            {
+                                "call_id": call_id,
+                                "phone": phone,
+                                "lead_data": {
+                                    "description": lead_desc,
+                                    "triggered_by": message.from_user.id,
+                                },
+                                "callback_chat_id": message.chat.id,
+                            }
+                        ),
+                    )
                 )
-            )
 
-            # 2. Create SIP participant (dials the phone)
-            await lk.sip.create_sip_participant(
-                api.CreateSIPParticipantRequest(
-                    room_name=room_name,
-                    sip_trunk_id=self.config.sip_trunk_id,
-                    sip_call_to=phone,
-                    participant_identity=f"phone-{phone}",
-                    participant_name="Phone User",
-                    krisp_enabled=True,
-                    wait_until_answered=True,
+                # 2. Create SIP participant (dials the phone)
+                await lk.sip.create_sip_participant(
+                    api.CreateSIPParticipantRequest(
+                        room_name=room_name,
+                        sip_trunk_id=self.config.sip_trunk_id,
+                        sip_call_to=phone,
+                        participant_identity=f"phone-{phone}",
+                        participant_name="Phone User",
+                        krisp_enabled=True,
+                        wait_until_answered=True,
+                    )
                 )
-            )
 
-            await lk.aclose()
-            await message.answer(
-                f"Звонок инициирован!\nID: `{call_id}`\nТелефон: {phone}\nRoom: {room_name}",
-                parse_mode="Markdown",
-            )
+                await message.answer(
+                    f"Звонок инициирован!\nID: `{call_id}`\nТелефон: {phone}\nRoom: {room_name}",
+                    parse_mode="Markdown",
+                )
+            finally:
+                await lk.aclose()
 
-        except Exception as e:
-            logger.exception("Failed to initiate call")
-            await message.answer(f"Ошибка инициации звонка: {e}")
+        except Exception:
+            logger.exception("Failed to initiate call to %s", phone)
+            await message.answer("Ошибка инициации звонка. Попробуйте позже.")
 
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message):
