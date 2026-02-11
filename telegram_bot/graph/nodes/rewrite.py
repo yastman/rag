@@ -70,6 +70,9 @@ async def rewrite_node(
             name="rewrite-query",  # type: ignore[call-overload]  # langfuse kwarg
         )
         rewritten = (response.choices[0].message.content or "").strip()
+        rewrite_actual_model = (
+            getattr(response, "model", config.rewrite_model) or config.rewrite_model
+        )
 
         if not rewritten or rewritten == original_query:
             rewritten = original_query
@@ -84,6 +87,7 @@ async def rewrite_node(
         )
         rewritten = original_query
         effective = False
+        rewrite_actual_model = "fallback"
 
     elapsed = time.perf_counter() - t0
     logger.info(
@@ -100,5 +104,9 @@ async def rewrite_node(
         "rewrite_effective": effective,
         "query_embedding": None,
         "sparse_embedding": None,
-        "latency_stages": {**state.get("latency_stages", {}), "rewrite": elapsed},
+        "latency_stages": {
+            **state.get("latency_stages", {}),
+            "rewrite": elapsed,
+            "rewrite_provider_model": rewrite_actual_model,
+        },
     }
