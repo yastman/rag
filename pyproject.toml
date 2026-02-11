@@ -45,6 +45,9 @@ dependencies = [
     "langgraph>=1.0.3",                   # State graph for RAG pipeline
     "langchain-core>=1.2",                # Core abstractions (Embeddings, etc.)
     "langgraph-checkpoint-postgres>=2.0", # Postgres checkpointing for LangGraph
+    # Conversation memory (#154)
+    "langgraph-checkpoint-redis>=0.2.0",  # Redis checkpointer for LangGraph
+    "langmem>=0.0.30",                    # SummarizationNode for conversation compression
 ]
 
 [project.optional-dependencies]
