@@ -116,6 +116,7 @@ def build_graph(
         from langmem.short_term import SummarizationNode
 
         from telegram_bot.graph.config import GraphConfig
+        from telegram_bot.observability import observe
 
         config = GraphConfig.from_env()
         summarize_model = _create_summarize_model(config)
@@ -128,7 +129,12 @@ def build_graph(
             input_messages_key="messages",
             output_messages_key="messages",
         )
-        workflow.add_node("summarize", summarize)
+
+        @observe(name="node-summarize", capture_input=False, capture_output=False)
+        async def summarize_wrapper(state: dict[str, Any]) -> dict[str, Any]:
+            return await summarize.ainvoke(state)
+
+        workflow.add_node("summarize", summarize_wrapper)
 
     # Edges
     workflow.add_conditional_edges(
@@ -210,10 +216,19 @@ def _create_summarize_model(config: Any) -> Any:
     from langchain_openai import ChatOpenAI
     from pydantic import SecretStr
 
+    from telegram_bot.observability import LANGFUSE_ENABLED
+
+    callbacks: list[Any] = []
+    if LANGFUSE_ENABLED:
+        from langfuse.langchain import CallbackHandler
+
+        callbacks.append(CallbackHandler())
+
     return ChatOpenAI(
         model=config.llm_model,
         api_key=SecretStr(config.llm_api_key or "no-key"),
         base_url=config.llm_base_url,
+        callbacks=callbacks,
     )
 
 
