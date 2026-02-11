@@ -8,17 +8,18 @@ prefetch, FusionQuery, and ColBERT reranking.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from typing import Any
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
 
 
-@observe(name="node-retrieve")
+@observe(name="node-retrieve", capture_input=False, capture_output=False)
 async def retrieve_node(
     state: dict[str, Any],
     *,
@@ -47,11 +48,26 @@ async def retrieve_node(
     Returns:
         State update with documents, search_results_count, sparse_embedding
     """
+    messages = state.get("messages") or []
+    last_msg = messages[-1] if messages else {}
     query = (
-        state["messages"][-1].content
-        if hasattr(state["messages"][-1], "content")
-        else state["messages"][-1]["content"]
+        last_msg.content
+        if hasattr(last_msg, "content")
+        else (last_msg.get("content", "") if isinstance(last_msg, dict) else "")
     )
+
+    # Curated span metadata (replaces auto-captured full state)
+    lf = get_client()
+    lf.update_current_span(
+        input={
+            "query_preview": query[:120],
+            "query_len": len(query),
+            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
+            "query_type": state.get("query_type"),
+            "top_k": top_k,
+        }
+    )
+
     dense_vector = state.get("query_embedding")
     sparse_vector: Any = None
 
@@ -96,6 +112,13 @@ async def retrieve_node(
     if cached_results is not None:
         latency = time.perf_counter() - start
         logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
+        lf.update_current_span(
+            output={
+                "results_count": len(cached_results),
+                "search_cache_hit": True,
+                "duration_ms": round(latency * 1000, 1),
+            }
+        )
         return {
             "documents": cached_results,
             "search_results_count": len(cached_results),
@@ -133,6 +156,19 @@ async def retrieve_node(
 
     latency = time.perf_counter() - start
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
+
+    scores = [d.get("score", 0) for d in results if isinstance(d, dict)]
+    lf.update_current_span(
+        output={
+            "results_count": len(results),
+            "top_score": round(scores[0], 4) if scores else None,
+            "min_score": round(scores[-1], 4) if scores else None,
+            "search_cache_hit": False,
+            "retrieval_backend_error": search_meta.get("backend_error", False),
+            "retrieval_error_type": search_meta.get("error_type"),
+            "duration_ms": round(latency * 1000, 1),
+        }
+    )
 
     update: dict[str, Any] = {
         "documents": results,
