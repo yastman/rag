@@ -626,6 +626,36 @@ class TestQdrantServiceHybridSearch:
         assert result["metadata"]["city"] == "Sofia"
 
 
+class TestQdrantServiceTimeout:
+    """Tests for explicit timeout configuration."""
+
+    def test_default_timeout(self):
+        """Verify AsyncQdrantClient receives timeout=30 by default."""
+        import telegram_bot.services.qdrant as qdrant_mod
+
+        with patch.object(qdrant_mod, "AsyncQdrantClient") as mock_client:
+            qdrant_mod.QdrantService(url="http://localhost:6333")
+            mock_client.assert_called_once_with(
+                url="http://localhost:6333",
+                api_key=None,
+                prefer_grpc=True,
+                timeout=30,
+            )
+
+    def test_custom_timeout(self):
+        """Verify custom timeout is passed through."""
+        import telegram_bot.services.qdrant as qdrant_mod
+
+        with patch.object(qdrant_mod, "AsyncQdrantClient") as mock_client:
+            qdrant_mod.QdrantService(url="http://localhost:6333", timeout=60)
+            mock_client.assert_called_once_with(
+                url="http://localhost:6333",
+                api_key=None,
+                prefer_grpc=True,
+                timeout=60,
+            )
+
+
 class TestQdrantServiceScoreBoosting:
     """Tests for search_with_score_boosting method."""
 
