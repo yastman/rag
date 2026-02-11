@@ -49,6 +49,13 @@ class RAGState(TypedDict):
     llm_timeout: bool
     llm_stream_recovery: bool
     streaming_enabled: bool
+    # Response length control (#129)
+    response_style: str
+    response_difficulty: str
+    response_style_reasoning: str
+    answer_words: int
+    answer_chars: int
+    answer_to_question_ratio: float
     # Voice transcription (#151)
     voice_audio: bytes | None
     voice_duration_s: float | None
@@ -96,6 +103,13 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "llm_timeout": False,
         "llm_stream_recovery": False,
         "streaming_enabled": False,
+        # Response length control (#129)
+        "response_style": "",
+        "response_difficulty": "",
+        "response_style_reasoning": "",
+        "answer_words": 0,
+        "answer_chars": 0,
+        "answer_to_question_ratio": 0.0,
         # Voice transcription (#151)
         "voice_audio": None,
         "voice_duration_s": None,
