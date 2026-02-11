@@ -135,7 +135,6 @@ async def cache_store_node(
     Returns:
         State update (pass-through response)
     """
-    start = time.perf_counter()
     response = state.get("response", "")
     embedding = state.get("query_embedding")
     query_type = state.get("query_type", "GENERAL")
@@ -158,6 +157,7 @@ async def cache_store_node(
             "search_results_count": state.get("search_results_count", 0),
         }
     )
+    start = time.perf_counter()
 
     # Store in semantic cache if we have both response and embedding
     if response and embedding:
