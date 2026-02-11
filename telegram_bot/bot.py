@@ -114,7 +114,8 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
             name="answer_to_question_ratio",
             value=float(result["answer_to_question_ratio"]),
         )
-    if "response_style" in result:
+    policy_mode = str(result.get("response_policy_mode", "enforced"))
+    if "response_style" in result and policy_mode == "enforced":
         style_map = {"short": 0, "balanced": 1, "detailed": 2}
         lf.score_current_trace(
             name="response_style_applied",
