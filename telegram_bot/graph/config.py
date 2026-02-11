@@ -38,6 +38,7 @@ class GraphConfig:
     max_rewrite_attempts: int = 1
     skip_rerank_threshold: float = 0.012
     relevance_threshold_rrf: float = 0.005
+    score_improvement_delta: float = 0.001
     streaming_enabled: bool = True
 
     cache_thresholds: dict[str, float] = field(
@@ -81,6 +82,7 @@ class GraphConfig:
             max_rewrite_attempts=int(os.getenv("MAX_REWRITE_ATTEMPTS", "1")),
             skip_rerank_threshold=float(os.getenv("SKIP_RERANK_THRESHOLD", "0.012")),
             relevance_threshold_rrf=float(os.getenv("RELEVANCE_THRESHOLD_RRF", "0.005")),
+            score_improvement_delta=float(os.getenv("SCORE_IMPROVEMENT_DELTA", "0.001")),
             streaming_enabled=os.getenv("STREAMING_ENABLED", "true").lower() == "true",
         )
 

@@ -6,6 +6,12 @@ from telegram_bot.graph.edges import route_by_query_type, route_cache, route_gra
 from telegram_bot.graph.state import make_initial_state
 
 
+def test_initial_state_has_score_improved():
+    """make_initial_state должен включать score_improved=True."""
+    state = make_initial_state(user_id=1, session_id="s", query="test")
+    assert state["score_improved"] is True
+
+
 class TestRouteByQueryType:
     def test_chitchat_routes_to_respond(self):
         state = make_initial_state(user_id=1, session_id="s", query="hi")
