@@ -1,272 +1,253 @@
-# Redis Hardening: Connection Params Implementation Plan
+# Redis Hardening: Connection Params — Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+## Goal
 
-**Goal:** Harden Redis SDK connection parameters — increase timeouts, enable retry-on-timeout with exponential backoff, add health_check_interval, bump redis-py to 7.1.0.
+Унифицировать параметры Redis-соединений во всех connection points: поднять таймауты до 5s,
+добавить retry с exponential backoff, включить health_check_interval, обновить redis-py до >=7.1.0.
 
-**Architecture:** Single-point change in `CacheLayerManager.initialize()` (primary connection pool used by bot pipeline) + consistency update in `RedisHealthMonitor`. Preflight connections are short-lived diagnostic — no changes needed. Uses redis-py `Retry` with `ExponentialBackoff` for robust retry policy.
+## Issue
 
-**Tech Stack:** redis-py >= 7.1.0, redis.asyncio, redis.backoff.ExponentialBackoff, redis.retry.Retry
-
-**Issue:** [#121](https://github.com/yastman/rag/issues/121) | **Milestone:** Stream-D: Infra-Perf
-
----
+https://github.com/yastman/rag/issues/121 | Milestone: Stream-D: Infra-Perf
 
 ## Текущее состояние (аудит)
 
-### Connection points
+Все точки подключения к Redis:
 
-| File | Line | socket_timeout | socket_connect_timeout | retry_on_timeout | health_check | Роль |
-|------|------|---------------|----------------------|-----------------|-------------|------|
-| `telegram_bot/integrations/cache.py` | 132-138 | **2s** | **2s** | ❌ | ❌ | PRIMARY — бот pipeline |
-| `telegram_bot/services/redis_monitor.py` | 44-50 | 5s | 5s | ❌ | ❌ | Background health monitor |
-| `telegram_bot/preflight.py` | 71, 134 | ❌ | ❌ | ❌ | ❌ | Short-lived diagnostic |
-| `src/cache/redis_semantic_cache.py` | 53 | ❌ | ❌ | ❌ | ❌ | Legacy evaluation |
-| `scripts/setup_redis_indexes.py` | 213-217 | 10s | 5s | ❌ | ❌ | One-off script |
+| # | Файл | Строка | socket_connect_timeout | socket_timeout | retry_on_timeout | retry | health_check_interval | Роль |
+|---|------|--------|------------------------|----------------|------------------|-------|-----------------------|------|
+| 1 | telegram_bot/integrations/cache.py | L132-138 | 2s | 2s | — | — | — | PRIMARY — бот pipeline |
+| 2 | telegram_bot/services/redis_monitor.py | L44-50 | 5s | 5s | — | — | — | Background health monitor |
+| 3 | telegram_bot/preflight.py | L71 | — | — | — | — | — | Short-lived diagnostic |
+| 4 | telegram_bot/preflight.py | L134 | — | — | — | — | — | Short-lived diagnostic |
+| 5 | src/cache/redis_semantic_cache.py | L53 | — | — | — | — | — | Legacy evaluation |
 
-### pyproject.toml
+pyproject.toml L33: "redis>=7.0.1"
 
-```
-"redis>=7.0.1"   # line 33
-```
-
-### Docker
-
-Все среды: `redis:8.4.0`. VPS уже имеет `--maxmemory-policy volatile-lfu`.
-
----
+Docker: redis:8.4.0 (docker-compose.dev.yml L39), maxmemory-policy=volatile-lfu уже настроена.
 
 ## Target параметры
 
-| Параметр | Было | Станет | Обоснование |
-|----------|------|--------|-------------|
-| `socket_timeout` | 2s | 5s | 2s слишком агрессивно для pipeline ops |
-| `socket_connect_timeout` | 2s | 5s | Согласованность с socket_timeout |
-| `retry_on_timeout` | not set | `True` | Автоматический retry при timeout |
-| `retry` | not set | `Retry(ExponentialBackoff(), 3)` | Exponential backoff вместо simple retry |
-| `health_check_interval` | not set | 30 | PING каждые 30с на idle connections |
-| `redis>=` | 7.0.1 | 7.1.0 | Минимальная версия для стабильного retry API |
+    # Единый набор для production connection points (#1, #2)
+    redis.from_url(
+        url,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+        retry_on_timeout=True,
+        retry=Retry(ExponentialBackoff(), 3),
+        health_check_interval=30,
+    )
 
----
+    # pyproject.toml
+    "redis>=7.1.0"
 
-## Task 1: Bump redis version in pyproject.toml
+Импорты:
 
-**Files:**
-- Modify: `pyproject.toml:33`
-
-**Step 1: Update version constraint**
-
-В `pyproject.toml` строка 33, заменить:
-
-```python
-# Было:
-"redis>=7.0.1",
-# Станет:
-"redis>=7.1.0",
-```
-
-**Step 2: Run uv lock**
-
-Run: `uv lock`
-Expected: lockfile updated, no conflicts
-
-**Step 3: Commit**
-
-```bash
-git add pyproject.toml uv.lock
-git commit -m "build(deps): bump redis minimum to >=7.1.0 for stable retry API"
-```
-
----
-
-## Task 2: Harden CacheLayerManager connection params
-
-**Files:**
-- Modify: `telegram_bot/integrations/cache.py:28,132-138`
-- Test: `tests/unit/integrations/test_cache_layers.py`
-
-**Step 1: Write the failing test**
-
-В `tests/unit/integrations/test_cache_layers.py`, добавить в класс `TestCacheLayerManagerInitialize`:
-
-```python
-@pytest.mark.asyncio
-async def test_initialize_uses_hardened_connection_params(self):
-    """Verify Redis from_url is called with timeout, retry, and health_check params."""
-    mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-
-    mock_redis = AsyncMock()
-    mock_redis.ping = AsyncMock(return_value=True)
-
-    with (
-        patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis) as mock_from_url,
-        patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
-    ):
-        await mgr.initialize()
-
-    mock_from_url.assert_called_once()
-    call_kwargs = mock_from_url.call_args[1]
-
-    # Timeout params
-    assert call_kwargs["socket_timeout"] == 5
-    assert call_kwargs["socket_connect_timeout"] == 5
-
-    # Retry params
-    assert call_kwargs["retry_on_timeout"] is True
-    assert call_kwargs["health_check_interval"] == 30
-
-    # Retry object with ExponentialBackoff
-    retry_obj = call_kwargs["retry"]
     from redis.backoff import ExponentialBackoff
     from redis.retry import Retry
-
-    assert isinstance(retry_obj, Retry)
-    assert isinstance(retry_obj._backoff, ExponentialBackoff)
-```
-
-**Step 2: Run test to verify it fails**
-
-Run: `uv run pytest tests/unit/integrations/test_cache_layers.py::TestCacheLayerManagerInitialize::test_initialize_uses_hardened_connection_params -v`
-Expected: FAIL — `socket_timeout` is 2 not 5, missing retry params
-
-**Step 3: Update CacheLayerManager.initialize()**
-
-В `telegram_bot/integrations/cache.py`, добавить импорты (после строки 28):
-
-```python
-from redis.backoff import ExponentialBackoff
-from redis.retry import Retry
-```
-
-Заменить блок `from_url` (строки 132-138):
-
-```python
-# Было:
-self.redis = redis.from_url(
-    self.redis_url,
-    encoding="utf-8",
-    decode_responses=True,
-    socket_connect_timeout=2,
-    socket_timeout=2,
-)
-
-# Станет:
-self.redis = redis.from_url(
-    self.redis_url,
-    encoding="utf-8",
-    decode_responses=True,
-    socket_connect_timeout=5,
-    socket_timeout=5,
-    retry_on_timeout=True,
-    retry=Retry(ExponentialBackoff(), 3),
-    health_check_interval=30,
-)
-```
-
-**Step 4: Run test to verify it passes**
-
-Run: `uv run pytest tests/unit/integrations/test_cache_layers.py::TestCacheLayerManagerInitialize::test_initialize_uses_hardened_connection_params -v`
-Expected: PASS
-
-**Step 5: Run full cache test suite**
-
-Run: `uv run pytest tests/unit/integrations/test_cache_layers.py -v`
-Expected: All 23+ tests PASS
-
-**Step 6: Commit**
-
-```bash
-git add telegram_bot/integrations/cache.py tests/unit/integrations/test_cache_layers.py
-git commit -m "fix(redis): harden CacheLayerManager connection — 5s timeout, retry, health_check
-
-- socket_timeout: 2s → 5s
-- socket_connect_timeout: 2s → 5s
-- retry_on_timeout: True
-- retry: ExponentialBackoff with 3 attempts
-- health_check_interval: 30s
-
-Closes #121"
-```
-
----
-
-## Task 3: Update RedisHealthMonitor for consistency
-
-**Files:**
-- Modify: `telegram_bot/services/redis_monitor.py:15,44-50`
-
-**Step 1: Update RedisHealthMonitor.start()**
-
-В `telegram_bot/services/redis_monitor.py`, добавить импорты:
-
-```python
-from redis.backoff import ExponentialBackoff
-from redis.retry import Retry
-```
-
-Обновить `from_url` вызов (строки 44-50):
-
-```python
-# Было:
-self._redis = aioredis.from_url(
-    self.redis_url,
-    encoding="utf-8",
-    decode_responses=True,
-    socket_connect_timeout=5,
-    socket_timeout=5,
-)
-
-# Станет:
-self._redis = aioredis.from_url(
-    self.redis_url,
-    encoding="utf-8",
-    decode_responses=True,
-    socket_connect_timeout=5,
-    socket_timeout=5,
-    retry_on_timeout=True,
-    retry=Retry(ExponentialBackoff(), 3),
-    health_check_interval=30,
-)
-```
-
-**Step 2: Run existing tests**
-
-Run: `uv run pytest tests/unit/ -k "redis_monitor or health_monitor" -v`
-Expected: PASS (or no tests — monitor не имеет unit-тестов)
-
-**Step 3: Run full unit suite to check no regressions**
-
-Run: `uv run pytest tests/unit/ -n auto --timeout=30`
-Expected: All tests PASS
-
-**Step 4: Commit**
-
-```bash
-git add telegram_bot/services/redis_monitor.py
-git commit -m "fix(redis): harden RedisHealthMonitor connection params for consistency"
-```
-
----
-
-## Task 4: Lint + type check
-
-**Step 1: Run ruff + mypy**
-
-Run: `make check`
-Expected: No errors
-
-**Step 2: Fix any issues (if any)**
-
-Ruff может потребовать сортировку импортов. MyPy может потребовать type ignore для Retry._backoff.
-
----
 
 ## Файлы НЕ затрагиваемые (обоснование)
 
 | Файл | Причина |
 |------|---------|
-| `telegram_bot/preflight.py` | Short-lived diagnostic connections (open → check → close). Retry/health_check бессмысленны. |
-| `src/cache/redis_semantic_cache.py` | Legacy evaluation code, не используется в production bot pipeline. |
-| `scripts/setup_redis_indexes.py` | One-off script, уже имеет разумные timeouts. |
-| `docker-compose*.yml` | Redis server config не меняется (уже на 8.4.0, VPS имеет volatile-lfu). |
-| `tests/chaos/test_redis_failures.py` | Тестирует legacy `CacheService`, не `CacheLayerManager`. |
+| telegram_bot/preflight.py (L71, L134) | Short-lived diagnostic connections (open -> check -> close). Retry/health_check бессмысленны. Уже имеет tenacity retry на уровне check_dependencies. |
+| src/cache/redis_semantic_cache.py | Legacy evaluation code, не используется в production bot pipeline. Находится в src/ и не должен зависеть от telegram_bot/. |
+| docker-compose*.yml | Redis server config не меняется (уже на 8.4.0, VPS имеет volatile-lfu). |
+
+---
+
+## Task 1: Bump redis version in pyproject.toml (1 мин)
+
+Файл: pyproject.toml, L33
+
+Заменить:
+
+    "redis>=7.0.1",
+
+На:
+
+    "redis>=7.1.0",
+
+Затем:
+
+    uv lock
+
+Expected: lockfile updated, no conflicts. redisvl>=0.13.2 требует redis>=5.0 — compatible.
+
+---
+
+## Task 2: Harden CacheLayerManager connection params (5 мин)
+
+Файлы:
+- Modify: telegram_bot/integrations/cache.py (L28, L132-138)
+- Test: tests/unit/integrations/test_cache_layers.py
+
+### Step 1: Write failing test
+
+В tests/unit/integrations/test_cache_layers.py добавить тест:
+
+    @pytest.mark.asyncio
+    async def test_initialize_uses_hardened_connection_params(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(return_value=True)
+
+        with (
+            patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis) as mock_from_url,
+            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
+        ):
+            await mgr.initialize()
+
+        call_kwargs = mock_from_url.call_args[1]
+        assert call_kwargs["socket_timeout"] == 5
+        assert call_kwargs["socket_connect_timeout"] == 5
+        assert call_kwargs["retry_on_timeout"] is True
+        assert call_kwargs["health_check_interval"] == 30
+
+        from redis.backoff import ExponentialBackoff
+        from redis.retry import Retry
+        assert isinstance(call_kwargs["retry"], Retry)
+
+### Step 2: Run test — should FAIL
+
+    uv run pytest tests/unit/integrations/test_cache_layers.py -k "hardened" -v
+
+Expected: FAIL (socket_timeout is 2 not 5, missing retry params)
+
+### Step 3: Update CacheLayerManager.initialize()
+
+В telegram_bot/integrations/cache.py:
+
+Добавить импорты после L28 (import redis.asyncio as redis):
+
+    from redis.backoff import ExponentialBackoff
+    from redis.retry import Retry
+
+Заменить L132-138:
+
+    # Было:
+    self.redis = redis.from_url(
+        self.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
+
+    # Станет:
+    self.redis = redis.from_url(
+        self.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+        retry_on_timeout=True,
+        retry=Retry(ExponentialBackoff(), 3),
+        health_check_interval=30,
+    )
+
+### Step 4: Run test — should PASS
+
+    uv run pytest tests/unit/integrations/test_cache_layers.py -k "hardened" -v
+
+### Step 5: Run full cache test suite
+
+    uv run pytest tests/unit/integrations/test_cache_layers.py -v
+
+Expected: All 23+ tests PASS
+
+---
+
+## Task 3: Update RedisHealthMonitor for consistency (3 мин)
+
+Файл: telegram_bot/services/redis_monitor.py (L15, L44-50)
+
+### Step 1: Add imports
+
+Добавить после L15 (import redis.asyncio as aioredis):
+
+    from redis.backoff import ExponentialBackoff
+    from redis.retry import Retry
+
+### Step 2: Update from_url call
+
+Заменить L44-50:
+
+    # Было:
+    self._redis = aioredis.from_url(
+        self.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+    )
+
+    # Станет:
+    self._redis = aioredis.from_url(
+        self.redis_url,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+        retry_on_timeout=True,
+        retry=Retry(ExponentialBackoff(), 3),
+        health_check_interval=30,
+    )
+
+---
+
+## Task 4: Lint + type check (2 мин)
+
+    make check
+
+Expected: No errors. Ruff может потребовать сортировку импортов.
+
+---
+
+## Task 5: Full test suite (3 мин)
+
+    uv run pytest tests/unit/ -n auto --timeout=30
+
+Expected: All tests PASS
+
+---
+
+## Test Strategy
+
+    # Существующие тесты (должны пройти без изменений)
+    uv run pytest tests/unit/integrations/test_cache_layers.py -v    # 23 tests
+    uv run pytest tests/unit/graph/test_cache_nodes.py -v            # 7 tests
+    uv run pytest tests/unit/graph/test_retrieve_node.py -v          # 5 tests
+
+    # Новый тест на hardened params
+    uv run pytest tests/unit/integrations/test_cache_layers.py -k "hardened" -v
+
+    # Полный прогон
+    uv run pytest tests/unit/ -n auto
+
+    # Lint + types
+    make check
+
+## Acceptance Criteria
+
+1. redis>=7.1.0 в pyproject.toml
+2. CacheLayerManager.initialize() использует socket_timeout=5, socket_connect_timeout=5, retry_on_timeout=True, retry=Retry(ExponentialBackoff(), 3), health_check_interval=30
+3. RedisHealthMonitor.start() использует те же параметры
+4. Новый unit-тест на hardened params проходит
+5. Все существующие unit-тесты проходят
+6. make check (ruff + mypy) проходит
+
+## Effort Estimate
+
+**S** (Small) — 1 час
+
+2 точечных замены from_url + 1 тест + version bump. Никаких архитектурных изменений.
+
+## Риски
+
+- **redis-py 7.1.0 + redisvl**: redisvl>=0.13.2 требует redis>=5.0. redis 7.1.0 compatible.
+- **health_check_interval + async**: поддерживается в redis.asyncio с redis-py 4.5+.
+- **Retry в preflight**: preflight уже имеет tenacity retry. Redis-level retry дополняет — не конфликтуют.
+- **ExponentialBackoff defaults**: base=0.064s, cap=512s. Для 3 retries: ~0.064s, ~0.128s, ~0.256s. Суммарно < 0.5s задержки.
