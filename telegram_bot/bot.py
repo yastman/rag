@@ -124,6 +124,7 @@ class PropertyBot:
             api_key=config.qdrant_api_key,
             collection_name=config.qdrant_collection,
             quantization_mode=config.qdrant_quantization_mode,
+            timeout=config.qdrant_timeout,
         )
 
         # Rerank provider (feature flag)
