@@ -107,6 +107,7 @@ class TestCacheStoreNodeEventStream:
         assert data["search_count"] == 5
         assert data["rerank_applied"] is True
         assert data["cache_hit"] is False
+        assert data["latency_ms"] == 510
 
     async def test_cache_store_works_without_event_stream(self):
         from telegram_bot.graph.nodes.cache import cache_store_node
@@ -141,3 +142,29 @@ class TestCacheStoreNodeEventStream:
         await cache_store_node(state, cache=cache, event_stream=event_stream)
 
         event_stream.log_event.assert_not_awaited()
+
+    async def test_cache_store_ignores_non_numeric_latency_values(self):
+        from telegram_bot.graph.nodes.cache import cache_store_node
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated answer"
+        state["latency_stages"] = {
+            "cache_check": 0.01,
+            "rewrite": 0.20,
+            "rewrite_provider_model": "gpt-4o-mini",
+        }
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+        cache.store_conversation_batch = AsyncMock()
+        event_stream = AsyncMock()
+        event_stream.log_event = AsyncMock(return_value="entry-id")
+
+        await cache_store_node(state, cache=cache, event_stream=event_stream)
+
+        event_stream.log_event.assert_awaited_once()
+        data = event_stream.log_event.call_args[0][1]
+        assert data["latency_ms"] == 210
