@@ -136,7 +136,11 @@ async def cache_store_node(
         # Log pipeline result event (fire-and-forget, never blocks main flow)
         if event_stream is not None:
             latency_stages = state.get("latency_stages", {})
-            total_latency = sum(latency_stages.values()) if latency_stages else 0
+            total_latency = (
+                sum(v for v in latency_stages.values() if isinstance(v, int | float))
+                if latency_stages
+                else 0
+            )
             await event_stream.log_event(
                 "pipeline_result",
                 {

@@ -1,104 +1,127 @@
-# tests/unit/test_bot_observability.py
-"""Unit tests for bot handler observability."""
+"""Unit tests for bot-level Langfuse trace metadata."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from telegram_bot.bot import PropertyBot
+from telegram_bot.config import BotConfig
+
+
+def _create_bot(mock_config: BotConfig) -> PropertyBot:
+    with (
+        patch("telegram_bot.bot.Bot"),
+        patch("telegram_bot.integrations.cache.CacheLayerManager"),
+        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
+        patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+        patch("telegram_bot.services.qdrant.QdrantService"),
+        patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+    ):
+        return PropertyBot(mock_config)
+
+
+@pytest.fixture
+def mock_config() -> BotConfig:
+    return BotConfig(
+        telegram_token="test-token",
+        voyage_api_key="voyage-key",
+        llm_api_key="llm-key",
+        llm_base_url="https://api.example.com/v1",
+        llm_model="gpt-4o-mini",
+        qdrant_url="http://localhost:6333",
+        qdrant_api_key="qdrant-key",
+        qdrant_collection="test_collection",
+        redis_url="redis://localhost:6379",
+        rerank_provider="none",
+    )
+
+
+@pytest.fixture
+def mock_message() -> MagicMock:
+    message = MagicMock()
+    message.text = "квартиры до 100000 евро"
+    message.from_user = MagicMock()
+    message.from_user.id = 123456789
+    message.chat = MagicMock()
+    message.chat.id = 987654321
+    message.bot = MagicMock()
+    message.bot.send_chat_action = AsyncMock()
+    return message
+
 
 class TestHandleQueryObservability:
-    """Tests for handle_query Langfuse instrumentation."""
+    @pytest.mark.asyncio
+    async def test_handle_query_updates_trace(
+        self, mock_config: BotConfig, mock_message: MagicMock
+    ):
+        bot = _create_bot(mock_config)
 
-    @pytest.fixture
-    def mock_message(self):
-        """Create mock Telegram message."""
-        message = MagicMock()
-        message.text = "квартиры до 100000 евро"
-        message.from_user.id = 123456789
-        message.chat.id = 987654321
-        message.message_id = 42
-        message.answer = AsyncMock()
-        message.bot.send_chat_action = AsyncMock()
-        return message
-
-    @pytest.fixture
-    def bot_handler(self):
-        """Create PropertyBot handler with mocked services."""
-        from telegram_bot.bot import PropertyBot
-        from telegram_bot.config import BotConfig
-
-        # Avoid running PropertyBot.__init__ in unit tests (aiogram + real services)
-        handler = PropertyBot.__new__(PropertyBot)
-
-        handler.config = BotConfig(
-            telegram_token="test",
-            voyage_api_key="test",
-            llm_api_key="test",
-            llm_model="test-model",
-            cesc_enabled=False,  # keep handle_query on the simplest path
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={"response": "ok", "query_type": "GENERAL", "latency_stages": {}}
         )
-        handler._cache_initialized = True
+        mock_lf = MagicMock()
 
-        # Mock services used by handle_query
-        handler.cache_service = MagicMock()
-        handler.cache_service.initialize = AsyncMock()
-        handler.cache_service.get_cached_embedding = AsyncMock(return_value=[0.1] * 1024)
-        handler.cache_service.check_semantic_cache = AsyncMock(return_value="Cached answer")
-        handler.cache_service.log_metrics = MagicMock()
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
 
-        # Query preprocessor and HyDE (required by handle_query pipeline)
-        handler.query_preprocessor = MagicMock()
-        handler.query_preprocessor.analyze = MagicMock(
+            await bot.handle_query(mock_message)
+
+        mock_lf.update_current_trace.assert_called_once()
+        kwargs = mock_lf.update_current_trace.call_args.kwargs
+        assert kwargs["input"]["query"] == "квартиры до 100000 евро"
+        assert kwargs["output"]["response"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_handle_query_includes_expected_metadata_fields(
+        self,
+        mock_config: BotConfig,
+        mock_message: MagicMock,
+    ):
+        bot = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
             return_value={
-                "use_hyde": False,
-                "normalized_query": "test",
-                "rrf_weights": {"dense": 0.6, "sparse": 0.4},
+                "response": "Найдено 2 варианта.",
+                "query_type": "GENERAL",
+                "cache_hit": False,
+                "search_results_count": 2,
+                "rerank_applied": True,
+                "llm_provider_model": "cerebras/gpt-oss-120b",
+                "llm_ttft_ms": 450.0,
+                "latency_stages": {"generate": 1.2},
             }
         )
-        handler.hyde_generator = None
-        handler.dense_service = MagicMock()
-        handler.dense_service.embed_query = AsyncMock(return_value=[0.1] * 1024)
+        mock_lf = MagicMock()
 
-        # Router decision is external; make it deterministic
-        handler._test_query_type = "COMPLEX"
-
-        return handler
-
-    @pytest.mark.asyncio
-    async def test_handle_query_updates_trace(self, bot_handler, mock_message):
-        """handle_query should call langfuse.update_current_trace."""
         with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query", autospec=True) as mock_classify_query,
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify_query.return_value = bot_handler._test_query_type
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
 
-            await bot_handler.handle_query(mock_message)
+            await bot.handle_query(mock_message)
 
-            mock_langfuse.update_current_trace.assert_called_once()
-            call_kwargs = mock_langfuse.update_current_trace.call_args.kwargs
-            assert call_kwargs["user_id"] == "123456789"
-            # Session ID format: chat-{hash}-{YYYYMMDD}
-            assert call_kwargs["session_id"].startswith("chat-")
-            assert "telegram" in call_kwargs["tags"]
-
-    @pytest.mark.asyncio
-    async def test_handle_query_includes_context_fingerprint(self, bot_handler, mock_message):
-        """handle_query should include context_fingerprint in metadata."""
-        with (
-            patch("telegram_bot.bot.get_client") as mock_get_client,
-            patch("telegram_bot.bot.classify_query", autospec=True) as mock_classify_query,
-        ):
-            mock_langfuse = MagicMock()
-            mock_get_client.return_value = mock_langfuse
-            mock_classify_query.return_value = bot_handler._test_query_type
-
-            await bot_handler.handle_query(mock_message)
-
-            call_kwargs = mock_langfuse.update_current_trace.call_args.kwargs
-            metadata = call_kwargs["metadata"]
-            assert "tenant" in metadata
-            assert "cache_schema" in metadata
-            assert "retrieval_version" in metadata
+        metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        assert metadata["query_type"] == "GENERAL"
+        assert metadata["cache_hit"] is False
+        assert metadata["search_results_count"] == 2
+        assert metadata["rerank_applied"] is True
+        assert metadata["llm_provider_model"] == "cerebras/gpt-oss-120b"
+        assert metadata["llm_ttft_ms"] == 450.0

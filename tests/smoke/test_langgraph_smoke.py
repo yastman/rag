@@ -78,10 +78,13 @@ async def test_full_graph_classify_to_respond():
     # Qdrant
     mock_qdrant = MagicMock()
     mock_qdrant.hybrid_search_rrf = AsyncMock(
-        return_value=[
-            {"text": "Квартира в Несебр, 85000 евро", "score": 0.9, "id": "1"},
-            {"text": "Студия в Солнечный берег, 60000 евро", "score": 0.85, "id": "2"},
-        ]
+        return_value=(
+            [
+                {"text": "Квартира в Несебр, 85000 евро", "score": 0.9, "id": "1"},
+                {"text": "Студия в Солнечный берег, 60000 евро", "score": 0.85, "id": "2"},
+            ],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
     )
 
     # LLM mock (OpenAI SDK pattern: llm.chat.completions.create)
