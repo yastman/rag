@@ -37,7 +37,7 @@ _QUERY_TYPE_SCORE = {
 
 
 def _write_langfuse_scores(lf: Any, result: dict) -> None:
-    """Write 12 Langfuse scores from graph result state.
+    """Write 14 Langfuse scores from graph result state.
 
     Args:
         lf: Langfuse client (from get_client(), may be _NullLangfuseClient).
@@ -59,6 +59,8 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
         "llm_used": 1.0 if "generate" in latency_stages else 0.0,
         "confidence_score": float(result.get("grade_confidence", 0.0)),
         "hyde_used": 0.0,  # HyDE not implemented in current pipeline
+        "llm_ttft_ms": float(result.get("llm_ttft_ms", 0.0)),
+        "llm_response_duration_ms": float(result.get("llm_response_duration_ms", 0.0)),
     }
 
     for name, value in scores.items():
@@ -274,10 +276,12 @@ class PropertyBot:
                     "cache_hit": result.get("cache_hit", False),
                     "search_results_count": result.get("search_results_count", 0),
                     "rerank_applied": result.get("rerank_applied", False),
+                    "llm_provider_model": result.get("llm_provider_model", ""),
+                    "llm_ttft_ms": result.get("llm_ttft_ms", 0.0),
                 },
             )
 
-            # Write all 12 Langfuse scores (guaranteed on all exit paths)
+            # Write all 14 Langfuse scores (guaranteed on all exit paths)
             _write_langfuse_scores(lf, result)
 
     async def start(self):
