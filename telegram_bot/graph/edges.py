@@ -1,6 +1,7 @@
 """Conditional edge functions for RAG LangGraph pipeline.
 
-Three routing functions that control the graph flow:
+Four routing functions that control the graph flow:
+- route_start: START → transcribe or classify
 - route_by_query_type: classify → respond or cache_check
 - route_cache: cache_check → respond or retrieve
 - route_grade: grade → rerank, rewrite, or generate
@@ -9,6 +10,15 @@ Three routing functions that control the graph flow:
 from __future__ import annotations
 
 from typing import Any, Literal
+
+
+def route_start(
+    state: dict[str, Any],
+) -> Literal["transcribe", "classify"]:
+    """Route at START: voice messages → transcribe, text → classify."""
+    if state.get("voice_audio") is not None:
+        return "transcribe"
+    return "classify"
 
 
 def route_by_query_type(
