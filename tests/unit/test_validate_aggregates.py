@@ -2,7 +2,7 @@
 
 import pytest
 
-from scripts.validate_traces import TraceResult, compute_aggregates
+from scripts.validate_traces import TraceResult, compute_aggregates, evaluate_go_no_go
 
 
 def _make_result(
@@ -98,3 +98,16 @@ class TestComputeAggregates:
     def test_empty_results(self):
         agg = compute_aggregates([])
         assert agg == {}
+
+
+class TestEvaluateGoNoGo:
+    """Test gate evaluation edge cases."""
+
+    def test_handles_empty_cold_results(self):
+        criteria = evaluate_go_no_go(
+            {"cold": {}, "cache_hit": {}},
+            [],
+            orphan_rate=0.0,
+        )
+        assert criteria["cold_over_10s_lt_15pct"]["actual"] == "0.0% (0/0)"
+        assert criteria["orphan_traces_zero"]["passed"] is True
