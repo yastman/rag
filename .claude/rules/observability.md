@@ -120,7 +120,7 @@ Usage:
 
 ### Payload Bloat Prevention (#143)
 
-4 heavy nodes use `@observe(capture_input=False, capture_output=False)` to disable auto-capture of full LangGraph state (documents, embeddings, messages). Instead, they log curated metadata via `get_client().update_current_span(input={...}, output={...})`.
+5 heavy nodes use `@observe(capture_input=False, capture_output=False)` to disable auto-capture of full LangGraph state (documents, embeddings, messages). Instead, they log curated metadata via `get_client().update_current_span(input={...}, output={...})`.
 
 | Heavy Node | Curated Input | Curated Output |
 |------------|---------------|----------------|
@@ -128,8 +128,9 @@ Usage:
 | generate_node | query_preview, query_hash, context_docs_count, streaming_enabled | response_length, llm_provider_model, llm_ttft_ms, token_usage, duration_ms |
 | cache_check_node | query_preview, query_hash, query_type | cache_hit, embeddings_cache_hit, hit_layer, duration_ms |
 | cache_store_node | query_preview, query_hash, response_length | stored, stored_semantic, stored_conversation, duration_ms |
+| respond_node | response_length, response_sent, has_message | respond_skipped, respond_delivered, used_markdown, duration_ms |
 
-Light nodes (classify, grade, rerank, rewrite, respond) keep default auto-capture — their state is small.
+Light nodes (classify, grade, rerank, rewrite) keep default auto-capture — their state is small.
 
 **Pattern:**
 ```python
