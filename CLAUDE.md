@@ -37,14 +37,15 @@ make ingest-unified-status # Show ingestion stats from Postgres
 
 ```
 Ingestion: Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
+Bot:       Query → LangGraph StateGraph (10 nodes) → classify → cache_check
            → retrieve (RRF, hybrid embed 1-call) → grade → rerank (ColBERT) → generate → respond
+Voice:     Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
 ```
 
 | Module | Purpose |
 |--------|---------|
 | `telegram_bot/bot.py` | PropertyBot (~300 LOC, LangGraph orchestrator + score writing) |
-| `telegram_bot/graph/` | LangGraph 9-node RAG pipeline |
+| `telegram_bot/graph/` | LangGraph 10-node RAG pipeline (incl. transcribe for voice) |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
 | `telegram_bot/observability.py` | Langfuse init, @observe decorator, PII masking |
@@ -88,7 +89,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 
 1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 2. Copy `.env.example` → `.env`
-3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `LANGFUSE_*` (VPS: `VOYAGE_API_KEY` not needed, uses local BGE-M3)
+3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` (Whisper STT), `LANGFUSE_*` (VPS: `VOYAGE_API_KEY` not needed, uses local BGE-M3)
 4. `uv sync && make docker-up`
 
 ## Key Docs
@@ -109,7 +110,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
 | `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`
 
 ## Deployment
 
