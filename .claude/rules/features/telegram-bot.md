@@ -13,32 +13,40 @@ Telegram interface for domain-configurable search (default: Bulgarian property) 
 ## Architecture
 
 ```
-User Message → ThrottlingMiddleware → ErrorMiddleware
-            → PropertyBot.handle_query()
-            → make_initial_state() → build_graph() → graph.ainvoke(state)
-            → [classify → cache_check → retrieve → grade → rerank → generate → cache_store → respond]
-            → Markdown Response (with plain text fallback)
+Text:  User Message → ThrottlingMiddleware → ErrorMiddleware
+                   → PropertyBot.handle_query()
+                   → make_initial_state() → build_graph() → graph.ainvoke(state)
+                   → [classify → cache_check → retrieve → grade → rerank → generate → cache_store → respond]
+                   → Markdown Response (with plain text fallback)
+
+Voice: Voice Message → PropertyBot.handle_voice()
+                    → download .ogg → make_initial_state(voice_audio=bytes)
+                    → [transcribe → classify → ... same pipeline]
+                    → Markdown Response
 ```
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `telegram_bot/bot.py` | PropertyBot class (~290 LOC, LangGraph pipeline + score writing) |
+| `telegram_bot/bot.py` | PropertyBot class (~400 LOC, LangGraph pipeline + score writing + voice handler) |
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
-| `telegram_bot/graph/graph.py` | `build_graph()` — assembles 9-node StateGraph |
-| `telegram_bot/graph/state.py` | RAGState TypedDict (20 fields incl. `grade_confidence`, `skip_rerank`, `max_rewrite_attempts`, `rewrite_effective`, `response_sent`) + `make_initial_state()` |
-| `telegram_bot/graph/edges.py` | 3 routing functions (`route_grade` checks `grade_confidence` → skip rerank, `max_rewrite_attempts` + `rewrite_effective`) |
-| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `skip_rerank_threshold=0.012`, `generate_max_tokens=2048`, `max_rewrite_attempts=1`, `rewrite_model`/`rewrite_max_tokens`, `streaming_enabled`) |
-| `telegram_bot/graph/nodes/` | 8 node modules (classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
+| `telegram_bot/graph/graph.py` | `build_graph()` — assembles 10-node StateGraph |
+| `telegram_bot/graph/state.py` | RAGState TypedDict (25 fields incl. voice_audio, stt_text, input_type) + `make_initial_state()` |
+| `telegram_bot/graph/edges.py` | 4 routing functions (`route_start` voice→transcribe/classify, `route_grade` checks `grade_confidence`) |
+| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `show_transcription`, `voice_language`, `stt_model`, `streaming_enabled`) |
+| `telegram_bot/graph/nodes/` | 9 node modules (transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, PII masking |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 
-## LangGraph Pipeline (9 nodes)
+## LangGraph Pipeline (10 nodes)
 
 ```
+START → [voice_audio?] → transcribe → classify → ...
+      → [text]         → classify → ...
+
 START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
                  → [other] → cache_check → [HIT] → respond → END
                                           → [MISS] → retrieve → grade
@@ -52,6 +60,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 | Node | File | Injected Deps |
 |------|------|---------------|
+| transcribe | `graph/nodes/transcribe.py` | llm (AsyncOpenAI, Whisper API via LiteLLM), message (optional preview) |
 | classify | `graph/nodes/classify.py` | — (regex-based, no external deps) |
 | cache_check | `graph/nodes/cache.py` | cache, embeddings |
 | retrieve | `graph/nodes/retrieve.py` | cache, sparse_embeddings, qdrant (parallel dense+sparse on re-embed) |
@@ -66,6 +75,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 | Function | From → To |
 |----------|-----------|
+| `route_start` | START → transcribe (voice_audio present) or classify (text) |
 | `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
 | `route_cache` | cache_check → respond (hit) or retrieve (miss) |
 | `route_grade` | grade → generate (relevant + confidence >= `skip_rerank_threshold`), rerank (relevant + low confidence), rewrite (count < `max_rewrite_attempts` AND `rewrite_effective`), generate (fallback) |
@@ -92,6 +102,9 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `rerank_provider` | `RERANK_PROVIDER` | `voyage` | colbert / none / voyage |
 | `admin_ids` | `ADMIN_IDS` | [] | Comma-separated Telegram IDs |
 | `streaming_enabled` | `STREAMING_ENABLED` | `true` | Stream LLM output to Telegram via edit_text |
+| `show_transcription` | `SHOW_TRANSCRIPTION` | `true` | Show transcribed text before RAG response |
+| `voice_language` | `VOICE_LANGUAGE` | `ru` | Whisper language hint (ISO code) |
+| `stt_model` | `STT_MODEL` | `whisper` | LiteLLM model name for STT |
 
 ### GraphConfig (pipeline tuning)
 
@@ -115,6 +128,27 @@ self._qdrant = QdrantService(url=config.qdrant_url, ...)
 self._reranker = ColbertRerankerService(...)  # if rerank_provider == "colbert"
 self._llm = self._graph_config.create_llm()   # langfuse.openai.AsyncOpenAI
 ```
+
+## handle_voice Flow
+
+```python
+# Download .ogg → bytes → inject into state
+voice = message.voice
+file = await bot.get_file(voice.file_id)
+buf = io.BytesIO()
+await bot.download_file(file.file_path, destination=buf)
+
+state = make_initial_state(user_id, session_id, query="")
+state["voice_audio"] = buf.getvalue()
+state["voice_duration_s"] = float(voice.duration)
+state["input_type"] = "voice"
+
+# Same graph.ainvoke(state) — transcribe_node runs first via route_start
+```
+
+**Error handling:** Empty transcription → "Голосовое не содержит речи." | API error → "Не удалось распознать. Попробуйте текстом."
+
+**Langfuse scores:** `input_type` (CATEGORICAL), `stt_duration_ms` (NUMERIC), `voice_duration_s` (NUMERIC)
 
 ## handle_query Flow
 
@@ -164,8 +198,8 @@ Catches all exceptions, logs with `exc_info=True`, returns user-friendly message
 ```bash
 pytest tests/unit/test_bot_handlers.py -v
 pytest tests/unit/test_middlewares.py -v
-pytest tests/unit/graph/ -v                    # All graph tests (~122 tests)
-pytest tests/integration/test_graph_paths.py -v          # 6 graph path integration tests (~5s, no Docker)
+pytest tests/unit/graph/ -v                    # All graph tests (incl. test_transcribe_node.py)
+pytest tests/integration/test_graph_paths.py -v          # Graph path tests incl. voice flow (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 ```
 
