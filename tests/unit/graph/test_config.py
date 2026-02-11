@@ -138,3 +138,17 @@ class TestGraphConfig:
             cfg = GraphConfig.from_env()
         assert cfg.response_style_enabled is True
         assert cfg.response_style_shadow_mode is True
+
+    def test_rerank_provider_default_colbert(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        assert cfg.rerank_provider == "colbert"
+
+    def test_rerank_provider_from_env(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        env = {"RERANK_PROVIDER": "none"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.rerank_provider == "none"
