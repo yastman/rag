@@ -15,16 +15,36 @@ from langgraph.checkpoint.memory import MemorySaver
 logger = logging.getLogger(__name__)
 
 
-def create_redis_checkpointer(redis_url: str) -> Any:
+def create_redis_checkpointer(
+    redis_url: str,
+    *,
+    ttl_minutes: int | None = None,
+    refresh_on_read: bool = True,
+) -> Any:
     """Create AsyncRedisSaver for persistent conversation memory (SDK).
 
-    Must be called inside a running event loop.
+    Args:
+        redis_url: Redis connection string.
+        ttl_minutes: Checkpoint TTL in minutes. None = no expiry.
+        refresh_on_read: Sliding expiration for active threads.
+
     Caller must: ``await checkpointer.asetup()`` before use.
     """
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 
-    logger.info("Creating AsyncRedisSaver (redis_url=%s...)", redis_url[:30])
-    return AsyncRedisSaver(redis_url=redis_url)
+    kwargs: dict[str, Any] = {"redis_url": redis_url}
+    if ttl_minutes is not None:
+        kwargs["ttl"] = {
+            "default_ttl": ttl_minutes,
+            "refresh_on_read": refresh_on_read,
+        }
+
+    logger.info(
+        "Creating AsyncRedisSaver (ttl_minutes=%s, refresh_on_read=%s)",
+        ttl_minutes,
+        refresh_on_read,
+    )
+    return AsyncRedisSaver(**kwargs)
 
 
 def create_fallback_checkpointer() -> MemorySaver:
