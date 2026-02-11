@@ -13,6 +13,8 @@ import contextlib
 import logging
 
 import redis.asyncio as aioredis
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
 
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,9 @@ class RedisHealthMonitor:
             decode_responses=True,
             socket_connect_timeout=5,
             socket_timeout=5,
+            retry_on_timeout=True,
+            retry=Retry(ExponentialBackoff(), 3),
+            health_check_interval=30,
         )
         self._task = asyncio.create_task(self._loop(), name="redis-health-monitor")
         logger.info(
