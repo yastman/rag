@@ -39,6 +39,10 @@ def route_grade(
             return "generate"
         return "rerank"
     max_attempts = state.get("max_rewrite_attempts", 1)
-    if state.get("rewrite_count", 0) < max_attempts and state.get("rewrite_effective", True):
+    if (
+        state.get("rewrite_count", 0) < max_attempts
+        and state.get("rewrite_effective", True)
+        and state.get("score_improved", True)
+    ):
         return "rewrite"
     return "generate"
