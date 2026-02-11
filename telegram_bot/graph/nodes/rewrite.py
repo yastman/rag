@@ -12,7 +12,7 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -76,8 +76,12 @@ async def rewrite_node(
             effective = False
         else:
             effective = True
-    except Exception:
+    except Exception as e:
         logger.exception("rewrite_node: LLM rewrite failed, keeping original query")
+        get_client().update_current_span(
+            level="ERROR",
+            status_message=f"Rewrite LLM failed: {str(e)[:200]}",
+        )
         rewritten = original_query
         effective = False
 
