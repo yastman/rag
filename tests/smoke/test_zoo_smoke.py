@@ -132,17 +132,17 @@ class TestBgeM3:
             assert response.status_code == 200
 
 
-@pytest.mark.legacy_api
+@pytest.mark.smoke
 class TestZooCache:
-    """Cache roundtrip tests (legacy CacheService API)."""
+    """Cache roundtrip tests (requires live Redis)."""
 
     @pytest.fixture
     async def cache_service(self):
-        """CacheService for testing."""
-        from telegram_bot.integrations.cache import CacheLayerManager as CacheService
+        """CacheLayerManager for testing."""
+        from telegram_bot.integrations.cache import CacheLayerManager
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        service = CacheService(redis_url=redis_url)
+        service = CacheLayerManager(redis_url=redis_url)
         await service.initialize()
         yield service
         await service.close()
@@ -163,17 +163,17 @@ class TestZooCache:
         assert cached["values"] == [0.5, 0.3, 0.2]
 
 
-@pytest.mark.legacy_api
+@pytest.mark.smoke
 class TestZooEndToEnd:
-    """End-to-end validation (legacy CacheService API)."""
+    """End-to-end cache validation (requires live Redis)."""
 
     @pytest.fixture
     async def cache_service(self):
-        """CacheService for testing."""
-        from telegram_bot.integrations.cache import CacheLayerManager as CacheService
+        """CacheLayerManager for testing."""
+        from telegram_bot.integrations.cache import CacheLayerManager
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        service = CacheService(redis_url=redis_url)
+        service = CacheLayerManager(redis_url=redis_url)
         await service.initialize()
         yield service
         await service.close()
