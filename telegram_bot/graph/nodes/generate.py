@@ -250,20 +250,21 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     style_enabled = bool(getattr(config, "response_style_enabled", False))
     shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
 
-    legacy_system_prompt = _build_system_prompt(config.domain)
     legacy_max_tokens = int(config.generate_max_tokens)
 
-    style_system_prompt = build_system_prompt_with_manager(
-        style=style_info.style,
-        difficulty=style_info.difficulty,
-        domain=config.domain,
-    )
-    style_budget = get_token_limit(style_info.style, style_info.difficulty)
-    effective_style_budget = min(style_budget, legacy_max_tokens)
-
     use_style = style_enabled and not shadow_mode
-    system_prompt = style_system_prompt if use_style else legacy_system_prompt
-    max_tokens = effective_style_budget if use_style else legacy_max_tokens
+    if use_style:
+        style_system_prompt = build_system_prompt_with_manager(
+            style=style_info.style,
+            difficulty=style_info.difficulty,
+            domain=config.domain,
+        )
+        style_budget = get_token_limit(style_info.style, style_info.difficulty)
+        system_prompt = style_system_prompt
+        max_tokens = min(style_budget, legacy_max_tokens)
+    else:
+        system_prompt = _build_system_prompt(config.domain)
+        max_tokens = legacy_max_tokens
 
     # Build OpenAI-format messages
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]

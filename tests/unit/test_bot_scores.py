@@ -95,6 +95,7 @@ FULL_PIPELINE_RESULT = {
     "answer_words": 12,
     "answer_chars": 65,
     "answer_to_question_ratio": 2.4,
+    "response_policy_mode": "enforced",
 }
 
 # Cache hit result (short-circuit)
@@ -241,6 +242,10 @@ class TestScoreWriting:
         assert scores["embeddings_cache_hit"] == 0.0
         assert scores["search_cache_hit"] == 0.0
         assert scores["confidence_score"] == 0.85
+        assert scores["answer_words"] == 12.0
+        assert scores["answer_chars"] == 65.0
+        assert scores["answer_to_question_ratio"] == 2.4
+        assert scores["response_style_applied"] == 1.0  # balanced
 
     @pytest.mark.asyncio
     async def test_score_values_cache_hit(self, mock_config):
@@ -278,6 +283,24 @@ class TestScoreWriting:
         assert scores["llm_used"] == 0.0
         assert scores["results_count"] == 0.0
         assert scores["no_results"] == 1.0
+
+    @pytest.mark.asyncio
+    async def test_shadow_mode_does_not_emit_style_applied(self, mock_config):
+        """Shadow policy mode must not emit response_style_applied metric."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        shadow_result = {
+            **FULL_PIPELINE_RESULT,
+            "response_policy_mode": "shadow",
+            "response_style": "short",
+        }
+        await self._run_handle_query(mock_config, shadow_result, mock_lf)
+
+        score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
+        assert "response_style_applied" not in score_names
+        assert "answer_to_question_ratio" in score_names
 
     @pytest.mark.asyncio
     async def test_scores_written_even_on_null_client(self, mock_config):
