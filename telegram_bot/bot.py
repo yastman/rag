@@ -378,6 +378,11 @@ class PropertyBot:
         await bot.download_file(file.file_path, destination=buf)
         voice_bytes = buf.getvalue()
 
+        # Guard: Whisper API limit is 25 MB
+        if len(voice_bytes) > 25 * 1024 * 1024:
+            await message.answer("Голосовое сообщение слишком длинное. Максимум ~16 минут.")
+            return
+
         state = make_initial_state(
             user_id=message.from_user.id,
             session_id=make_session_id("chat", message.chat.id),
@@ -401,9 +406,9 @@ class PropertyBot:
                 reranker=self._reranker,
                 llm=self._llm,
                 message=message,
-                show_transcription=self._graph_config.show_transcription,
-                voice_language=self._graph_config.voice_language,
-                stt_model=self._graph_config.stt_model,
+                show_transcription=self.config.show_transcription,
+                voice_language=self.config.voice_language,
+                stt_model=self.config.stt_model,
             )
 
             try:
@@ -415,10 +420,11 @@ class PropertyBot:
                     return
                 raise
             except Exception:
+                logger.exception("Voice pipeline failed")
                 await message.answer(
                     "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
                 )
-                raise
+                return
 
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
 
