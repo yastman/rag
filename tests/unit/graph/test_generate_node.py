@@ -28,6 +28,7 @@ def _make_mock_config(
     mock_config.llm_model = "gpt-4o-mini"
     mock_config.llm_temperature = 0.7
     mock_config.llm_max_tokens = 4096
+    mock_config.generate_max_tokens = 2048
     mock_config.streaming_enabled = streaming_enabled
     mock_config.create_llm.return_value = mock_client
 
