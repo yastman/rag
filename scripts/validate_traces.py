@@ -50,6 +50,45 @@ REFERENCE_TRACE_ID = "c2b95d86aa1f643b79016dd611c4691f"
 COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
 
 
+class FakeSentMessage:
+    """Records edit_text calls for TTFT measurement.
+
+    Minimal aiogram sent-message stand-in: tracks first edit timestamp
+    and call count without Telegram I/O.
+    """
+
+    def __init__(self) -> None:
+        self.t_first_edit: float | None = None
+        self.edit_calls_count: int = 0
+        self.last_text_len: int = 0
+
+    async def edit_text(self, text: str, **kwargs: Any) -> None:
+        self.edit_calls_count += 1
+        self.last_text_len = len(text)
+        if self.t_first_edit is None:
+            self.t_first_edit = time.monotonic()
+
+    async def delete(self) -> None:
+        pass
+
+
+class FakeMessage:
+    """Minimal aiogram Message stand-in for streaming validation.
+
+    Provides answer() → FakeSentMessage with timestamp recording.
+    TTFT = sent.t_first_edit - self.t_answer_called (seconds).
+    """
+
+    def __init__(self) -> None:
+        self.t_answer_called: float | None = None
+        self.sent: FakeSentMessage | None = None
+
+    async def answer(self, text: str, **kwargs: Any) -> FakeSentMessage:
+        self.t_answer_called = time.monotonic()
+        self.sent = FakeSentMessage()
+        return self.sent
+
+
 @dataclass
 class TraceResult:
     """Result from a single validation query."""
@@ -742,6 +781,23 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
                 agg["node_p95"][node] = float(np.percentile(vals, 95))
 
         aggregates[phase] = agg
+
+    # Streaming TTFT aggregation (separate from cold/cache_hit latency stats)
+    streaming_results = [r for r in results if r.phase == "streaming"]
+    ttft_values = [
+        r.state["streaming_ttft_ms"]
+        for r in streaming_results
+        if r.state.get("streaming_ttft_ms") is not None
+    ]
+    if ttft_values:
+        aggregates["streaming"] = {
+            "n": len(streaming_results),
+            "ttft_sample_count": len(ttft_values),
+            "ttft_p50": float(np.percentile(ttft_values, 50)),
+            "ttft_p95": float(np.percentile(ttft_values, 95)),
+            "ttft_mean": float(np.mean(ttft_values)),
+            "ttft_max": float(np.max(ttft_values)),
+        }
 
     return aggregates
 
