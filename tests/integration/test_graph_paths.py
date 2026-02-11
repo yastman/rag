@@ -465,3 +465,72 @@ async def test_path_rewrite_ineffective_fallback():
     mocks["qdrant"].hybrid_search_rrf.assert_awaited_once()
     mocks["llm"].chat.completions.create.assert_awaited_once()  # generate only
     mocks["reranker"].rerank.assert_not_awaited()  # rerank skipped
+
+
+# ---------------------------------------------------------------------------
+# Path 7: classify → cache_check(MISS) → retrieve → grade(irrelevant)
+#        → rewrite → retrieve → grade(irrelevant, score not improved)
+#        → generate (score_improved=False) → cache_store → respond → END
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_rewrite_stopped_by_score_guard():
+    """grade(not relevant, score not improved) → generate (skip rewrite)."""
+    # First retrieve: score=0.003 (not relevant, prev=0.0 → improved=True → rewrite)
+    first_docs = [
+        {"text": "Нерелевантный текст", "score": 0.003, "id": "x1", "metadata": {}},
+    ]
+    # Second retrieve: score=0.0031 (delta=0.0001 < 0.001 → improved=False → generate)
+    second_docs = [
+        {"text": "Немного другой текст", "score": 0.0031, "id": "x2", "metadata": {}},
+    ]
+
+    mocks = _make_graph_mocks()
+
+    # Qdrant: 1st call → low score, 2nd call → barely higher (delta < threshold)
+    _ok_meta = {"backend_error": False, "error_type": None, "error_message": None}
+    mocks["qdrant"].hybrid_search_rrf = AsyncMock(
+        side_effect=[(first_docs, _ok_meta), (second_docs, _ok_meta)]
+    )
+
+    # LLM: 1st call → rewrite, 2nd call → generate answer
+    rewrite_completion = _make_llm_completion("переформулированный запрос")
+    generate_completion = _make_llm_completion("К сожалению, точных совпадений не найдено.")
+    mocks["llm"].chat.completions.create = AsyncMock(
+        side_effect=[rewrite_completion, generate_completion]
+    )
+
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+    mock_gc.max_rewrite_attempts = 3  # allow many retries
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    state = make_initial_state(
+        user_id=7, session_id="test-path7", query="уютная квартира с видом на море"
+    )
+    state["max_rewrite_attempts"] = 3  # allow many retries
+
+    with traced_pipeline(session_id="test-score-guard", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
+
+    # State assertions: rewrite happened once, then stopped by score guard
+    assert result["rewrite_count"] == 1
+    assert result["documents_relevant"] is False
+    assert result["score_improved"] is False
+    assert result["response"] == "К сожалению, точных совпадений не найдено."
+
+    # Service call counts
+    assert mocks["qdrant"].hybrid_search_rrf.await_count == 2  # retrieve twice
+    assert mocks["llm"].chat.completions.create.await_count == 2  # rewrite + generate
+    mocks["reranker"].rerank.assert_not_awaited()  # rerank skipped (never relevant)
