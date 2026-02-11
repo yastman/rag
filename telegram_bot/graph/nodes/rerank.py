@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Any
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -76,8 +76,12 @@ async def rerank_node(
                 "rerank_applied": True,
                 "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
             }
-        except Exception:
+        except Exception as e:
             logger.exception("rerank: ColBERT failed, falling back to score sort")
+            get_client().update_current_span(
+                level="ERROR",
+                status_message=f"ColBERT rerank failed: {str(e)[:200]}",
+            )
 
     # Fallback: sort by existing score, take top-k
     sorted_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
