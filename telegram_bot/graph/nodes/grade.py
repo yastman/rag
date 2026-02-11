@@ -28,6 +28,7 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
     t0 = time.perf_counter()
 
     documents = state.get("documents", [])
+    prev_confidence = state.get("grade_confidence", 0.0)
 
     if not documents:
         elapsed = time.perf_counter() - t0
@@ -36,6 +37,7 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
             "documents_relevant": False,
             "grade_confidence": 0.0,
             "skip_rerank": False,
+            "score_improved": False,
             "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
         }
 
@@ -52,10 +54,18 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
     # Early termination: skip rerank when confidence is high enough
     skip_rerank = relevant and top_score >= config.skip_rerank_threshold
 
+    # Score improvement check for rewrite guard
+    delta = top_score - prev_confidence
+    score_improved = delta >= config.score_improvement_delta or prev_confidence == 0.0
+
     elapsed = time.perf_counter() - t0
     logger.info(
-        "grade: top_score=%.3f threshold=%.3f relevant=%s skip_rerank=%s (%d docs, %.3fs)",
+        "grade: top_score=%.4f prev=%.4f delta=%.4f improved=%s "
+        "threshold=%.3f relevant=%s skip_rerank=%s (%d docs, %.3fs)",
         top_score,
+        prev_confidence,
+        delta,
+        score_improved,
         relevance_threshold,
         relevant,
         skip_rerank,
@@ -67,5 +77,6 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
         "documents_relevant": relevant,
         "grade_confidence": top_score,
         "skip_rerank": skip_rerank,
+        "score_improved": score_improved,
         "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
     }
