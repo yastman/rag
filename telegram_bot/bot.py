@@ -215,6 +215,9 @@ class PropertyBot:
         # Redis health monitor (periodic background task)
         self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
 
+        # Conversation memory checkpointer (initialized in start())
+        self._checkpointer: Any = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -417,10 +420,12 @@ class PropertyBot:
                 reranker=self._reranker,
                 llm=self._llm,
                 message=message,
+                checkpointer=self._checkpointer,
             )
 
+            invoke_config = {"configurable": {"thread_id": str(message.from_user.id)}}
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                result = await graph.ainvoke(state)
+                result = await graph.ainvoke(state, config=invoke_config)
 
             # Wall-time for accurate latency_total_ms
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
@@ -496,14 +501,16 @@ class PropertyBot:
                 reranker=self._reranker,
                 llm=self._llm,
                 message=message,
+                checkpointer=self._checkpointer,
                 show_transcription=self.config.show_transcription,
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
             )
 
+            invoke_config = {"configurable": {"thread_id": str(message.from_user.id)}}
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                    result = await graph.ainvoke(state)
+                    result = await graph.ainvoke(state, config=invoke_config)
             except ValueError as e:
                 if "Empty transcription" in str(e):
                     await message.answer("Голосовое сообщение не содержит речи.")
@@ -545,6 +552,17 @@ class PropertyBot:
             await self._cache.initialize()
             self._cache_initialized = True
             logger.info("Cache service ready")
+
+        # Initialize conversation memory checkpointer (SDK)
+        from .integrations.memory import create_fallback_checkpointer, create_redis_checkpointer
+
+        try:
+            self._checkpointer = create_redis_checkpointer(self.config.redis_url)
+            await self._checkpointer.asetup()
+            logger.info("Conversation memory checkpointer ready (Redis)")
+        except Exception:
+            logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
+            self._checkpointer = create_fallback_checkpointer()
 
         # Preflight dependency checks
         from .preflight import check_dependencies
