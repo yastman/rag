@@ -448,3 +448,19 @@ class TestStreamingAggregation:
         results = [_make_result(phase="streaming", latency=2000)]
         agg = compute_aggregates(results)
         assert "streaming" not in agg
+
+    def test_non_numeric_ttft_ignored(self):
+        """Non-numeric TTFT values must be ignored from streaming stats."""
+        results = [
+            _make_result(phase="streaming", latency=2000),
+            _make_result(phase="streaming", latency=2100),
+        ]
+        results[0].state["streaming_ttft_ms"] = 450.0
+        results[1].state["streaming_ttft_ms"] = "450ms"
+
+        agg = compute_aggregates(results)
+
+        s = agg["streaming"]
+        assert s["n"] == 2
+        assert s["ttft_sample_count"] == 1
+        assert s["ttft_p50"] == pytest.approx(450.0, abs=1)
