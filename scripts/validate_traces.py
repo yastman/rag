@@ -447,6 +447,149 @@ async def enrich_results_from_langfuse(
     return results
 
 
+def check_orphan_traces(results: list[TraceResult]) -> float:
+    """Check for orphan traces (missing session_id in Langfuse).
+
+    Returns fraction of traces that are orphans (0.0 = none, 1.0 = all).
+    A trace is "orphan" if Langfuse has no session_id for it.
+    """
+    lf = Langfuse()
+    total = 0
+    orphans = 0
+    for r in results:
+        if r.phase == "warmup":
+            continue
+        total += 1
+        try:
+            trace = lf.api.trace.get(r.trace_id)
+            session_id = getattr(trace, "session_id", None)
+            if not session_id:
+                orphans += 1
+                logger.warning("Orphan trace (no session_id): %s", r.trace_id)
+        except Exception as e:
+            logger.warning("Failed to check trace %s: %s", r.trace_id, e)
+    lf.flush()
+    rate = orphans / total if total > 0 else 0.0
+    logger.info("Orphan trace check: %d/%d (%.1f%%)", orphans, total, rate * 100)
+    return rate
+
+
+def evaluate_go_no_go(
+    aggregates: dict[str, Any],
+    results: list[TraceResult],
+    orphan_rate: float = 0.0,
+) -> dict[str, dict[str, Any]]:
+    """Evaluate Go/No-Go criteria for Gate 1.
+
+    Returns dict of criterion_name -> {target, actual, passed}.
+    Criteria from issue #101 + roadmap Gate 1:
+      1. cold_p50 < 5000ms
+      2. cold_p90 < 8000ms (using p95 as conservative proxy)
+      3. cold queries > 10s < 15%
+      4. cache_hit p50 < 1500ms
+      5. p50 TTFT (generate node) < 2000ms
+      6. rewrite calls >= 2 <= 10%
+      7. rewrite completion_tokens p50 <= 96
+      8. ERROR observations = 0 new
+      9. orphan traces = 0%
+    """
+    cold = aggregates.get("cold", {})
+    cache = aggregates.get("cache_hit", {})
+    cold_results = [r for r in results if r.phase == "cold"]
+
+    criteria: dict[str, dict[str, Any]] = {}
+
+    # 1. Cold p50 < 5s
+    cold_p50 = cold.get("latency_p50", 99999)
+    criteria["cold_p50_lt_5s"] = {
+        "target": "< 5000 ms",
+        "actual": f"{cold_p50:.0f} ms",
+        "passed": cold_p50 < 5000,
+    }
+
+    # 2. Cold p90 < 8s (use p95 as conservative estimate with n=33)
+    cold_p95 = cold.get("latency_p95", 99999)
+    criteria["cold_p90_lt_8s"] = {
+        "target": "< 8000 ms",
+        "actual": f"{cold_p95:.0f} ms (p95)",
+        "passed": cold_p95 < 8000,
+    }
+
+    # 3. Cold queries > 10s < 15%
+    if cold_results:
+        over_10s = sum(1 for r in cold_results if r.latency_wall_ms > 10000)
+        pct_over_10s = over_10s / len(cold_results)
+    else:
+        pct_over_10s = 0.0
+    criteria["cold_over_10s_lt_15pct"] = {
+        "target": "< 15%",
+        "actual": f"{pct_over_10s:.1%} ({over_10s}/{len(cold_results)})",
+        "passed": pct_over_10s < 0.15,
+    }
+
+    # 4. Cache-hit p50 < 1.5s
+    cache_p50 = cache.get("latency_p50", 99999)
+    criteria["cache_hit_p50_lt_1500ms"] = {
+        "target": "< 1500 ms",
+        "actual": f"{cache_p50:.0f} ms",
+        "passed": cache_p50 < 1500,
+    }
+
+    # 5. TTFT p50 (generate node start) < 2s
+    generate_p50 = cold.get("node_p50", {}).get("generate", 99999)
+    criteria["ttft_p50_lt_2s"] = {
+        "target": "< 2000 ms",
+        "actual": f"{generate_p50:.0f} ms",
+        "passed": generate_p50 < 2000,
+    }
+
+    # 6. Rewrite calls >= 2 <= 10%
+    if cold_results:
+        multi_rewrite = sum(1 for r in cold_results if (r.state.get("rewrite_count", 0) or 0) >= 2)
+        multi_rewrite_pct = multi_rewrite / len(cold_results)
+    else:
+        multi_rewrite_pct = 0.0
+    criteria["multi_rewrite_le_10pct"] = {
+        "target": "<= 10%",
+        "actual": f"{multi_rewrite_pct:.1%}",
+        "passed": multi_rewrite_pct <= 0.10,
+    }
+
+    # 7. Rewrite completion_tokens p50 <= 96 (from Langfuse scores if available)
+    rewrite_tokens: list[float] = []
+    for r in cold_results:
+        if "rewrite_completion_tokens" in r.scores:
+            rewrite_tokens.append(r.scores["rewrite_completion_tokens"])
+    tokens_p50 = float(np.percentile(rewrite_tokens, 50)) if rewrite_tokens else 0.0
+    criteria["rewrite_tokens_p50_le_96"] = {
+        "target": "<= 96 tokens",
+        "actual": f"{tokens_p50:.0f} tokens" if rewrite_tokens else "N/A (no rewrites)",
+        "passed": tokens_p50 <= 96,
+    }
+
+    # 8. ERROR observations = 0 new
+    error_count = sum(
+        1
+        for r in results
+        if r.phase != "warmup"
+        and any(v for k, v in r.scores.items() if "error" in k.lower() and v > 0)
+    )
+    criteria["zero_errors"] = {
+        "target": "0",
+        "actual": str(error_count),
+        "passed": error_count == 0,
+    }
+
+    # 9. Orphan traces = 0%
+    criteria["orphan_traces_zero"] = {
+        "target": "0%",
+        "actual": f"{orphan_rate:.1%}",
+        "passed": orphan_rate == 0.0,
+    }
+
+    return criteria
+
+
 async def fetch_reference_trace_metrics(
     reference_trace_id: str,
 ) -> dict[str, Any] | None:
@@ -566,6 +709,7 @@ def generate_report(
     aggregates: dict[str, Any],
     output_path: Path,
     reference_metrics: dict[str, Any] | None = None,
+    go_no_go: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """Generate markdown validation report."""
     lines: list[str] = []
@@ -652,11 +796,21 @@ def generate_report(
     # Go/No-Go
     lines.append("## Go/No-Go Recommendation")
     lines.append("")
-    lines.append("<!-- Fill after reviewing metrics -->")
-    lines.append(
-        "- [ ] Latency issues from trace c2b95d86 are reproducible → proceed with #107/#108/#109"
-    )
-    lines.append("- [ ] Issues NOT reproducible → close or narrow scope with evidence")
+    if go_no_go:
+        all_passed = all(c["passed"] for c in go_no_go.values())
+        verdict = "GO — all criteria passed" if all_passed else "NO-GO — see failures below"
+        lines.append(f"**Verdict: {verdict}**")
+        lines.append("")
+        lines.append("| # | Criterion | Target | Actual | Status |")
+        lines.append("|---|-----------|--------|--------|--------|")
+        for i, (name, c) in enumerate(go_no_go.items(), 1):
+            status = "[x] PASS" if c["passed"] else "[ ] **FAIL**"
+            lines.append(f"| {i} | {name} | {c['target']} | {c['actual']} | {status} |")
+        lines.append("")
+        passed = sum(1 for c in go_no_go.values() if c["passed"])
+        lines.append(f"**Score: {passed}/{len(go_no_go)} criteria passed**")
+    else:
+        lines.append("<!-- Go/No-Go data not available — run with --report -->")
     lines.append("")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -744,6 +898,24 @@ async def run_validation(args: argparse.Namespace) -> None:
     # Compute aggregates
     aggregates = compute_aggregates(all_results)
 
+    # Check orphan traces
+    logger.info("Checking orphan traces...")
+    orphan_rate = check_orphan_traces(all_results)
+
+    # Evaluate Go/No-Go criteria
+    go_no_go = evaluate_go_no_go(aggregates, all_results, orphan_rate=orphan_rate)
+    all_passed = all(c["passed"] for c in go_no_go.values())
+    passed_count = sum(1 for c in go_no_go.values() if c["passed"])
+    logger.info(
+        "Go/No-Go: %s (%d/%d criteria passed)",
+        "GO" if all_passed else "NO-GO",
+        passed_count,
+        len(go_no_go),
+    )
+    for name, c in go_no_go.items():
+        status = "PASS" if c["passed"] else "FAIL"
+        logger.info("  [%s] %s: %s (target: %s)", status, name, c["actual"], c["target"])
+
     # Print summary to console
     for phase, agg in aggregates.items():
         logger.info(
@@ -760,7 +932,13 @@ async def run_validation(args: argparse.Namespace) -> None:
         report_path = Path(
             f"docs/reports/{run.started_at.strftime('%Y-%m-%d')}-validation-{run_id[:8]}.md"
         )
-        generate_report(run, aggregates, report_path, reference_metrics=reference_metrics)
+        generate_report(
+            run,
+            aggregates,
+            report_path,
+            reference_metrics=reference_metrics,
+            go_no_go=go_no_go,
+        )
 
     # Also dump raw JSON for programmatic use
     raw_path = Path(
@@ -774,6 +952,8 @@ async def run_validation(args: argparse.Namespace) -> None:
         "skip_rerank_threshold": run.skip_rerank_threshold,
         "relevance_threshold_rrf": run.relevance_threshold_rrf,
         "aggregates": aggregates,
+        "go_no_go": go_no_go,
+        "orphan_rate": orphan_rate,
         "reference_trace_id": REFERENCE_TRACE_ID,
         "reference_metrics": reference_metrics,
         "traces": [
