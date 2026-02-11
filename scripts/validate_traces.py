@@ -49,6 +49,47 @@ REFERENCE_TRACE_ID = "c2b95d86aa1f643b79016dd611c4691f"
 
 COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
 
+STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
+
+
+class FakeSentMessage:
+    """Records edit_text calls for TTFT measurement.
+
+    Minimal aiogram sent-message stand-in: tracks first edit timestamp
+    and call count without Telegram I/O.
+    """
+
+    def __init__(self) -> None:
+        self.t_first_edit: float | None = None
+        self.edit_calls_count: int = 0
+        self.last_text_len: int = 0
+
+    async def edit_text(self, text: str, **kwargs: Any) -> None:
+        self.edit_calls_count += 1
+        self.last_text_len = len(text)
+        if self.t_first_edit is None:
+            self.t_first_edit = time.monotonic()
+
+    async def delete(self) -> None:
+        pass
+
+
+class FakeMessage:
+    """Minimal aiogram Message stand-in for streaming validation.
+
+    Provides answer() → FakeSentMessage with timestamp recording.
+    TTFT = sent.t_first_edit - self.t_answer_called (seconds).
+    """
+
+    def __init__(self) -> None:
+        self.t_answer_called: float | None = None
+        self.sent: FakeSentMessage | None = None
+
+    async def answer(self, text: str, **kwargs: Any) -> FakeSentMessage:
+        self.t_answer_called = time.monotonic()
+        self.sent = FakeSentMessage()
+        return self.sent
+
 
 @dataclass
 class TraceResult:
@@ -221,6 +262,8 @@ async def run_single_query(
     services: dict[str, Any],
     run_meta: dict[str, str],
     phase: str,
+    *,
+    message: Any | None = None,
 ) -> TraceResult:
     """Execute a single query through LangGraph pipeline with Langfuse tracing."""
     from telegram_bot.bot import _write_langfuse_scores
@@ -249,36 +292,44 @@ async def run_single_query(
 
         @observe(name="validation-query")
         async def _run() -> Any:
-            graph = build_graph(
-                cache=services["cache"],
-                embeddings=services["embeddings"],
-                sparse_embeddings=services["sparse_embeddings"],
-                qdrant=services["qdrant"],
-                reranker=services["reranker"],
-                llm=services["llm"],
-                message=None,  # no Telegram message — headless mode
-            )
-            result = await graph.ainvoke(state)
-            # Compute wall-time BEFORE writing scores so latency_total_ms is correct
-            result["pipeline_wall_ms"] = (time.perf_counter() - wall_start) * 1000
-            # Write metadata/scores while still inside active observation context
-            lf = get_client()
-            lf.update_current_trace(
-                input={"query": query.text},
-                output={"response": result.get("response", "")[:200]},
-                metadata={
-                    "validation_run_id": run_meta["run_id"],
-                    "git_sha": run_meta["git_sha"],
-                    "collection": run_meta["collection"],
-                    "query_set": query.source,
-                    "query_difficulty": query.difficulty,
-                    "phase": phase,
-                    "skip_rerank_threshold": config.skip_rerank_threshold,
-                    "relevance_threshold_rrf": config.relevance_threshold_rrf,
-                },
-            )
-            _write_langfuse_scores(lf, result)
-            return result
+            # Force streaming when fake message provided, restore in finally
+            orig_streaming = config.streaming_enabled
+            if message is not None:
+                config.streaming_enabled = True
+
+            try:
+                graph = build_graph(
+                    cache=services["cache"],
+                    embeddings=services["embeddings"],
+                    sparse_embeddings=services["sparse_embeddings"],
+                    qdrant=services["qdrant"],
+                    reranker=services["reranker"],
+                    llm=services["llm"],
+                    message=message,
+                )
+                result = await graph.ainvoke(state)
+                # Compute wall-time BEFORE writing scores so latency_total_ms is correct
+                result["pipeline_wall_ms"] = (time.perf_counter() - wall_start) * 1000
+                # Write metadata/scores while still inside active observation context
+                lf = get_client()
+                lf.update_current_trace(
+                    input={"query": query.text},
+                    output={"response": result.get("response", "")[:200]},
+                    metadata={
+                        "validation_run_id": run_meta["run_id"],
+                        "git_sha": run_meta["git_sha"],
+                        "collection": run_meta["collection"],
+                        "query_set": query.source,
+                        "query_difficulty": query.difficulty,
+                        "phase": phase,
+                        "skip_rerank_threshold": config.skip_rerank_threshold,
+                        "relevance_threshold_rrf": config.relevance_threshold_rrf,
+                    },
+                )
+                _write_langfuse_scores(lf, result)
+                return result
+            finally:
+                config.streaming_enabled = orig_streaming
 
         result = await _run(langfuse_trace_id=trace_id)
 
@@ -398,6 +449,30 @@ async def run_collection_validation(
     logger.info("Phase 3: Cache-hit run (%d queries)", len(cache_queries))
     for q in cache_queries:
         result = await run_single_query(q, services, run_meta, phase="cache_hit")
+        results.append(result)
+
+    # Phase 4: Streaming TTFT (first N cold queries, deterministic)
+    # Note: semantic cache may return cached_response here, bypassing LLM streaming.
+    # This is acceptable for MVP — TTFT=None for those queries, excluded from aggregates.
+    streaming_queries = cold_queries[:STREAMING_QUERY_COUNT]
+    logger.info("Phase 4: Streaming TTFT (%d queries)", len(streaming_queries))
+    for q in streaming_queries:
+        fake_msg = FakeMessage()
+        result = await run_single_query(
+            q,
+            services,
+            run_meta,
+            phase="streaming",
+            message=fake_msg,
+        )
+        if (
+            fake_msg.t_answer_called is not None
+            and fake_msg.sent is not None
+            and fake_msg.sent.t_first_edit is not None
+        ):
+            ttft = (fake_msg.sent.t_first_edit - fake_msg.t_answer_called) * 1000
+            if ttft >= 0:
+                result.state["streaming_ttft_ms"] = ttft
         results.append(result)
 
     # Cleanup
@@ -628,6 +703,26 @@ def evaluate_go_no_go(
         "passed": orphan_rate == 0.0,
     }
 
+    # 10. Streaming TTFT p50 < 1000ms (skipped if sample < 3)
+    streaming = aggregates.get("streaming", {})
+    ttft_p50 = streaming.get("ttft_p50")
+    ttft_n = streaming.get("ttft_sample_count", 0)
+
+    if ttft_n < 3:
+        criteria["ttft_p50_lt_1000ms"] = {
+            "target": "< 1000 ms",
+            "actual": f"N/A (n={ttft_n}, need >= 3)",
+            "passed": True,
+            "skipped": True,
+        }
+    else:
+        criteria["ttft_p50_lt_1000ms"] = {
+            "target": "< 1000 ms",
+            "actual": f"{ttft_p50:.0f} ms (n={ttft_n})",
+            "passed": ttft_p50 < 1000,
+            "skipped": False,
+        }
+
     return criteria
 
 
@@ -742,6 +837,24 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
                 agg["node_p95"][node] = float(np.percentile(vals, 95))
 
         aggregates[phase] = agg
+
+    # Streaming TTFT aggregation (separate from cold/cache_hit latency stats)
+    streaming_results = [r for r in results if r.phase == "streaming"]
+    ttft_values: list[float] = []
+    for r in streaming_results:
+        ttft = r.state.get("streaming_ttft_ms")
+        if isinstance(ttft, bool) or not isinstance(ttft, int | float):
+            continue
+        ttft_values.append(float(ttft))
+    if ttft_values:
+        aggregates["streaming"] = {
+            "n": len(streaming_results),
+            "ttft_sample_count": len(ttft_values),
+            "ttft_p50": float(np.percentile(ttft_values, 50)),
+            "ttft_p95": float(np.percentile(ttft_values, 95)),
+            "ttft_mean": float(np.mean(ttft_values)),
+            "ttft_max": float(np.max(ttft_values)),
+        }
 
     return aggregates
 
@@ -879,6 +992,20 @@ def generate_report(
                 lines.append(f"| {node} | {p50:.0f} | {p95:.0f} |")
             lines.append("")
 
+    # Streaming TTFT section
+    streaming_agg = aggregates.get("streaming")
+    if streaming_agg:
+        lines.append(f"## Streaming TTFT (n={streaming_agg['n']})")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| ttft p50 | {streaming_agg['ttft_p50']:.0f} ms |")
+        lines.append(f"| ttft p95 | {streaming_agg['ttft_p95']:.0f} ms |")
+        lines.append(f"| ttft mean | {streaming_agg['ttft_mean']:.0f} ms |")
+        lines.append(f"| ttft max | {streaming_agg['ttft_max']:.0f} ms |")
+        lines.append(f"| sample count | {streaming_agg['ttft_sample_count']} |")
+        lines.append("")
+
     # All trace details
     lines.append("## Trace Details")
     lines.append("")
@@ -907,7 +1034,12 @@ def generate_report(
         lines.append("| # | Criterion | Target | Actual | Status |")
         lines.append("|---|-----------|--------|--------|--------|")
         for i, (name, c) in enumerate(go_no_go.items(), 1):
-            status = "[x] PASS" if c["passed"] else "[ ] **FAIL**"
+            if c.get("skipped"):
+                status = "[-] SKIP"
+            elif c["passed"]:
+                status = "[x] PASS"
+            else:
+                status = "[ ] **FAIL**"
             lines.append(f"| {i} | {name} | {c['target']} | {c['actual']} | {status} |")
         lines.append("")
         passed = sum(1 for c in go_no_go.values() if c["passed"])
@@ -915,7 +1047,8 @@ def generate_report(
         lines.append("")
         lines.append(
             "_Note: `generate_p50_lt_2s` measures full generation latency in "
-            "non-streaming validation mode; true TTFT requires a streaming phase._"
+            "non-streaming mode. `ttft_p50_lt_1000ms` measures real first-token "
+            "latency from the streaming phase._"
         )
     else:
         lines.append("<!-- Go/No-Go data not available — run with --report -->")
@@ -1045,12 +1178,31 @@ async def run_validation(args: argparse.Namespace) -> None:
         len(go_no_go),
     )
     for name, c in go_no_go.items():
-        status = "PASS" if c["passed"] else "FAIL"
+        if c.get("skipped"):
+            status = "SKIP"
+        elif c["passed"]:
+            status = "PASS"
+        else:
+            status = "FAIL"
         logger.info("  [%s] %s: %s (target: %s)", status, name, c["actual"], c["target"])
 
     # Print summary to console
     for phase, agg in aggregates.items():
+        if phase == "streaming":
+            continue  # handled separately below
         logger.info("%s", format_phase_summary(phase, agg))
+
+    # Streaming TTFT summary
+    streaming_agg = aggregates.get("streaming")
+    if streaming_agg:
+        logger.info(
+            "streaming TTFT (n=%d, samples=%d): p50=%.0fms p95=%.0fms mean=%.0fms",
+            streaming_agg["n"],
+            streaming_agg["ttft_sample_count"],
+            streaming_agg["ttft_p50"],
+            streaming_agg["ttft_p95"],
+            streaming_agg["ttft_mean"],
+        )
 
     # Generate report
     if args.report:
