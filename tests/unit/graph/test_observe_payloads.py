@@ -255,3 +255,26 @@ class TestCuratedSpanPayloads:
             "cache_store_node must call update_current_span for input and output"
         )
         _assert_no_forbidden_keys(payloads, "node-cache-store")
+
+    @pytest.mark.asyncio
+    async def test_respond_node_curated_payload(self):
+        from telegram_bot.graph.nodes.respond import respond_node
+
+        state = {
+            "response": "Краткий ответ",
+            "response_sent": False,
+            "message": None,
+            "latency_stages": {},
+            # Heavy keys should not leak via curated span payloads
+            "documents": [{"text": "doc"}],
+            "query_embedding": [0.1, 0.2],
+            "messages": [{"role": "user", "content": "q"}],
+        }
+
+        mock_lf = MagicMock()
+        with patch("telegram_bot.graph.nodes.respond.get_client", return_value=mock_lf):
+            await respond_node(state)
+
+        payloads = _extract_span_payloads(mock_lf)
+        assert len(payloads) >= 2, "respond_node must call update_current_span for input/output"
+        _assert_no_forbidden_keys(payloads, "node-respond")
