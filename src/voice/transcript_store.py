@@ -21,6 +21,12 @@ class TranscriptStore:
         self._database_url = database_url
         self._pool: asyncpg.Pool | None = None
 
+    @property
+    def _db(self) -> asyncpg.Pool:
+        if self._pool is None:
+            raise RuntimeError("TranscriptStore not initialized. Call initialize() first.")
+        return self._pool
+
     async def initialize(self) -> None:
         self._pool = await asyncpg.create_pool(self._database_url, min_size=1, max_size=5)
 
@@ -35,7 +41,7 @@ class TranscriptStore:
         callback_chat_id: int | None = None,
     ) -> str:
         call_id = str(uuid.uuid4())
-        async with self._pool.acquire() as conn:
+        async with self._db.acquire() as conn:
             await conn.execute(
                 """INSERT INTO call_transcripts (id, phone, lead_data, callback_chat_id)
                    VALUES ($1, $2, $3, $4)""",
@@ -47,7 +53,7 @@ class TranscriptStore:
         return call_id
 
     async def update_status(self, call_id: str, status: CallStatus) -> None:
-        async with self._pool.acquire() as conn:
+        async with self._db.acquire() as conn:
             await conn.execute(
                 """UPDATE call_transcripts SET status = $1, updated_at = NOW()
                    WHERE id = $2""",
@@ -59,7 +65,7 @@ class TranscriptStore:
         self, call_id: str, role: str, text: str, timestamp_ms: int
     ) -> None:
         entry = {"role": role, "text": text, "timestamp_ms": timestamp_ms}
-        async with self._pool.acquire() as conn:
+        async with self._db.acquire() as conn:
             await conn.execute(
                 """UPDATE call_transcripts
                    SET transcript = transcript || $1::jsonb, updated_at = NOW()
@@ -75,7 +81,7 @@ class TranscriptStore:
         validation_result: dict | None = None,
         langfuse_trace_id: str | None = None,
     ) -> None:
-        async with self._pool.acquire() as conn:
+        async with self._db.acquire() as conn:
             await conn.execute(
                 """UPDATE call_transcripts
                    SET status = $1, duration_sec = $2,
@@ -90,7 +96,7 @@ class TranscriptStore:
             )
 
     async def get_call(self, call_id: str) -> dict | None:
-        async with self._pool.acquire() as conn:
+        async with self._db.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT * FROM call_transcripts WHERE id = $1",
                 uuid.UUID(call_id),
