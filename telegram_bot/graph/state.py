@@ -35,6 +35,7 @@ class RAGState(TypedDict):
     response_sent: bool
     embeddings_cache_hit: bool
     search_cache_hit: bool
+    score_improved: bool
     retrieval_backend_error: bool
     retrieval_error_type: str | None
 
@@ -64,6 +65,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "response_sent": False,
         "embeddings_cache_hit": False,
         "search_cache_hit": False,
+        "score_improved": True,
         "retrieval_backend_error": False,
         "retrieval_error_type": None,
     }
