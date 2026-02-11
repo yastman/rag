@@ -84,6 +84,26 @@ Config: `tests/baseline/thresholds.yaml`
 |-----------|-----------|---------|
 | `bot.py` handle_query | `telegram-rag-query` | Root span, session_id, user_id, tags |
 
+### Entry Point Pattern (Orphan Prevention)
+
+All entry points that invoke @observe-decorated code MUST use `traced_pipeline` or `propagate_attributes`.
+Without this, each @observe call creates a separate root trace (session=None, userId=None).
+
+Rule: `traced_pipeline` → `@observe(root)` → nested `@observe(children)`
+
+| Entry Point | File | session_id format |
+|-------------|------|-------------------|
+| Telegram bot | bot.py:handle_query | chat-{hash}-{YYYYMMDD} |
+| Validation | scripts/validate_traces.py | validate-{run_id[:8]} |
+| Smoke tests | tests/smoke/test_langgraph_smoke.py | smoke-test-{YYYYMMDD} |
+| Integration | tests/integration/test_graph_paths.py | test-{path-name} |
+
+Usage:
+
+    from telegram_bot.observability import traced_pipeline
+    with traced_pipeline(session_id="...", user_id="..."):
+        result = await graph.ainvoke(state)
+
 ### Graph Nodes (9 nodes, all covered)
 
 | Node | Span Name |
@@ -98,7 +118,7 @@ Config: `tests/baseline/thresholds.yaml`
 | rewrite_node | `node-rewrite` |
 | respond_node | `node-respond` |
 
-### Cache (8 methods)
+### Cache (9 methods)
 
 | Method | Span Name |
 |--------|-----------|
@@ -110,6 +130,7 @@ Config: `tests/baseline/thresholds.yaml`
 | store_embedding | `cache-embedding-store` |
 | get_conversation | `cache-conversation-get` |
 | store_conversation | `cache-conversation-store` |
+| store_conversation_batch | `cache-conversation-batch-store` |
 
 ### Services
 

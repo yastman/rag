@@ -135,3 +135,21 @@ else:
         return
 
     logger.info("Langfuse observability DISABLED (LANGFUSE_SECRET_KEY not set)")
+
+
+def traced_pipeline(
+    *,
+    session_id: str,
+    user_id: str,
+    tags: list[str] | None = None,
+):
+    """Context manager for pipeline-level trace propagation.
+
+    Wraps propagate_attributes with sensible defaults.
+    Use at any entry point that invokes @observe-decorated functions.
+    """
+    return propagate_attributes(
+        session_id=session_id,
+        user_id=user_id,
+        tags=tags or [],
+    )

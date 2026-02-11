@@ -26,6 +26,8 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import redis.asyncio as redis
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
 
 from telegram_bot.observability import observe
 
@@ -133,8 +135,11 @@ class CacheLayerManager:
                 self.redis_url,
                 encoding="utf-8",
                 decode_responses=True,
-                socket_connect_timeout=2,
-                socket_timeout=2,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+                retry_on_timeout=True,
+                retry=Retry(ExponentialBackoff(), 3),
+                health_check_interval=30,
             )
             await self.redis.ping()  # type: ignore[misc]
             logger.info("Redis connected: %s", self.redis_url)
@@ -387,6 +392,7 @@ class CacheLayerManager:
         except Exception as e:
             logger.error("Conversation store error: %s: %s", type(e).__name__, e)
 
+    @observe(name="cache-conversation-batch-store")
     async def store_conversation_batch(self, user_id: int, messages: list[tuple[str, str]]) -> None:
         """Store multiple conversation messages in one pipeline round-trip.
 
