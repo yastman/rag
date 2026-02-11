@@ -789,6 +789,22 @@ def format_phase_summary(phase: str, agg: dict[str, Any]) -> str:
     )
 
 
+def resolve_report_collections(
+    discovered_collections: list[str],
+    results: list[TraceResult],
+) -> list[str]:
+    """Resolve collections for report output from actually validated traces."""
+    if not discovered_collections:
+        return []
+
+    seen = {r.collection for r in results if r.phase != "warmup"}
+    if not seen:
+        return discovered_collections
+
+    validated = [c for c in discovered_collections if c in seen]
+    return validated or discovered_collections
+
+
 def generate_report(
     run: ValidationRun,
     aggregates: dict[str, Any],
@@ -973,7 +989,6 @@ async def run_validation(args: argparse.Namespace) -> None:
         logger.error("No collections available for validation, aborting")
         sys.exit(1)
 
-    run.collections = collections
     logger.info("Collections to validate: %s", collections)
 
     # Run validation per collection
@@ -986,6 +1001,12 @@ async def run_validation(args: argparse.Namespace) -> None:
         logger.error("No traces collected (all collections skipped or failed), aborting")
         sys.exit(1)
 
+    validated_collections = resolve_report_collections(collections, all_results)
+    skipped = set(collections) - set(validated_collections)
+    if skipped:
+        logger.warning("Collections discovered but skipped (no traces): %s", sorted(skipped))
+
+    run.collections = validated_collections
     run.results = all_results
 
     # Flush Langfuse
@@ -1054,6 +1075,9 @@ async def run_validation(args: argparse.Namespace) -> None:
         "git_sha": run.git_sha,
         "started_at": run.started_at.isoformat(),
         "collections": run.collections,
+        "collections_discovered": collections,
+        "collections_validated": validated_collections,
+        "collections_skipped": sorted(skipped),
         "skip_rerank_threshold": run.skip_rerank_threshold,
         "relevance_threshold_rrf": run.relevance_threshold_rrf,
         "aggregates": aggregates,
