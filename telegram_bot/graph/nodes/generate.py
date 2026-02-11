@@ -116,7 +116,7 @@ async def _generate_streaming(
     config: Any,
     llm_messages: list[dict[str, str]],
     message: Any,
-) -> tuple[str, str, float]:
+) -> tuple[str, str, float, int | None]:
     """Stream LLM response directly to Telegram via message editing.
 
     Sends a placeholder message, then edits it with accumulated text as chunks
@@ -130,7 +130,7 @@ async def _generate_streaming(
         message: aiogram Message object for Telegram delivery.
 
     Returns:
-        Tuple of (response_text, actual_model, ttft_ms).
+        Tuple of (response_text, actual_model, ttft_ms, completion_tokens).
 
     Raises:
         Exception: On any streaming failure (caller handles fallback).
@@ -141,6 +141,7 @@ async def _generate_streaming(
     last_edit = 0.0
     ttft_ms = 0.0
     actual_model = config.llm_model
+    completion_tokens: int | None = None
 
     stream = await llm.chat.completions.create(
         model=config.llm_model,
@@ -154,6 +155,10 @@ async def _generate_streaming(
     t_stream_start = time.monotonic()
     try:
         async for chunk in stream:
+            if hasattr(chunk, "usage") and chunk.usage is not None:
+                ct = getattr(chunk.usage, "completion_tokens", None)
+                if ct is not None:
+                    completion_tokens = ct
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -191,7 +196,12 @@ async def _generate_streaming(
         except Exception:
             logger.warning("Failed to finalize streaming message")
 
-    return accumulated, actual_model, ttft_ms
+    return accumulated, actual_model, ttft_ms, completion_tokens
+
+
+def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float | None:
+    """Return provider-reported queue time in ms, or None if unavailable/unreliable."""
+    return None
 
 
 @observe(name="node-generate", capture_input=False, capture_output=False)
@@ -248,6 +258,9 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     actual_model = config.llm_model
     ttft_ms = 0.0
     response_obj: Any | None = None
+    completion_tokens: int | None = None
+    stream_recovery = False
+    hard_timeout = False
 
     # Curated span metadata
     lf = get_client()
@@ -267,7 +280,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         # Streaming path: deliver directly to Telegram
         if message is not None and config.streaming_enabled:
             try:
-                answer, actual_model, ttft_ms = await _generate_streaming(
+                answer, actual_model, ttft_ms, completion_tokens = await _generate_streaming(
                     llm,
                     config,
                     llm_messages,
@@ -306,6 +319,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                             exc_info=True,
                         )
                 response_sent = delivered
+                stream_recovery = delivered
             except Exception:
                 logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
                 get_client().update_current_span(
@@ -322,6 +336,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                 )
                 answer = response_obj.choices[0].message.content or ""
                 actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
+                stream_recovery = True
         else:
             # Non-streaming path (original)
             response_obj = await llm.chat.completions.create(
@@ -342,6 +357,8 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         answer = _build_fallback_response(documents)
         actual_model = "fallback"
         ttft_ms = 0.0
+        hard_timeout = True
+        stream_recovery = False
 
     elapsed = time.monotonic() - t0
 
@@ -363,6 +380,20 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
             }
     lf.update_current_span(output=span_output)
 
+    # --- Latency breakdown (#147) ---
+    streaming_was_enabled = bool(message is not None and config.streaming_enabled)
+    llm_decode_ms: float | None = None
+    llm_tps: float | None = None
+    llm_queue_ms: float | None = _extract_queue_ms_from_provider_headers(response_obj)
+
+    if streaming_was_enabled and ttft_ms > 0:
+        response_duration_ms = elapsed * 1000
+        llm_decode_ms = response_duration_ms - ttft_ms
+        if llm_decode_ms < 0:
+            llm_decode_ms = 0.0
+        if completion_tokens is not None and llm_decode_ms > 0:
+            llm_tps = completion_tokens / (llm_decode_ms / 1000)
+
     return {
         "response": answer,
         "response_sent": response_sent,
@@ -370,4 +401,11 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         "llm_ttft_ms": ttft_ms,
         "llm_response_duration_ms": elapsed * 1000,
         "latency_stages": {**state.get("latency_stages", {}), "generate": elapsed},
+        # Latency breakdown (#147)
+        "llm_decode_ms": llm_decode_ms,
+        "llm_tps": llm_tps,
+        "llm_queue_ms": llm_queue_ms,
+        "llm_timeout": hard_timeout,
+        "llm_stream_recovery": stream_recovery,
+        "streaming_enabled": streaming_was_enabled,
     }
