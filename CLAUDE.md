@@ -54,7 +54,7 @@ Bot:       Query → LangGraph StateGraph (9 nodes) → classify → cache_check
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001
 
-**Observability:** Langfuse v3 — 35 observations/trace, 12 scores, error spans on 4 nodes, `OTEL_SERVICE_NAME=rag-bot` → see `.claude/rules/observability.md`
+**Observability:** Langfuse v3 — 35 observations/trace, 14 scores (incl. TTFT, provider metadata), error spans on 4 nodes, traced_pipeline for orphan prevention → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `full` (19 svc) → see `.claude/rules/docker.md`
 
@@ -109,7 +109,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
 | `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`
 
 ## Deployment
 
@@ -143,8 +143,8 @@ make k3s-status                     # Check pods
 
 | Error | Fix |
 |-------|-----|
-| Redis connection refused | `docker compose up -d redis` |
-| Qdrant timeout | `use_quantization=True` |
+| Redis connection refused | `docker compose up -d redis` (hardened: ExponentialBackoff retry, health_check_interval=30) |
+| Qdrant timeout | `QDRANT_TIMEOUT=30` (explicit timeout + FormulaQuery for score boosting) |
 | Voyage 429 | Use CacheLayerManager |
 | Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
 | Alerts not sending | Check `TELEGRAM_ALERTING_*` env vars |
