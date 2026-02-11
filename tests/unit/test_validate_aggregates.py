@@ -1,8 +1,15 @@
 """Tests for validation metrics aggregation."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-from scripts.validate_traces import TraceResult, compute_aggregates, evaluate_go_no_go
+from scripts.validate_traces import (
+    TraceResult,
+    check_langfuse_config,
+    compute_aggregates,
+    evaluate_go_no_go,
+)
 
 
 def _make_result(
@@ -101,6 +108,21 @@ class TestComputeAggregates:
         agg = compute_aggregates([])
         assert agg == {}
 
+    def test_cold_aggregates_include_p90(self):
+        """Aggregates should expose p90 explicitly for Go/No-Go checks."""
+        results = [
+            _make_result(latency=100),
+            _make_result(latency=200),
+            _make_result(latency=300),
+            _make_result(latency=400),
+            _make_result(latency=500),
+        ]
+        agg = compute_aggregates(results)
+
+        assert "latency_p90" in agg["cold"]
+        assert agg["cold"]["latency_p90"] > agg["cold"]["latency_p50"]
+        assert agg["cold"]["latency_p90"] <= agg["cold"]["latency_max"]
+
 
 class TestEvaluateGoNoGo:
     """Test gate evaluation edge cases."""
@@ -142,3 +164,46 @@ class TestEvaluateGoNoGo:
         ]
         criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
         assert criteria["zero_errors"]["passed"] is False
+
+    def test_uses_cold_p90_metric_when_available(self):
+        """Criterion key says p90, so evaluator must prefer latency_p90 over p95."""
+        aggregates = {
+            "cold": {
+                "latency_p50": 3000,
+                "latency_p90": 9000,
+                "latency_p95": 1000,
+                "node_p50": {"generate": 1500},
+            },
+            "cache_hit": {"latency_p50": 500},
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        assert criteria["cold_p90_lt_8s"]["passed"] is False
+        assert criteria["cold_p90_lt_8s"]["actual"] == "9000 ms"
+
+
+class TestLangfusePreflight:
+    """Langfuse preflight should fail fast on incomplete/invalid credentials."""
+
+    def test_requires_public_key(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "test-secret")
+        monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
+        monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+
+        with pytest.raises(SystemExit):
+            check_langfuse_config()
+
+    def test_fails_on_invalid_credentials(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+        monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
+
+        mock_lf = MagicMock()
+        mock_lf.api.trace.list.side_effect = RuntimeError("Invalid credentials")
+
+        with (
+            patch("scripts.validate_traces.Langfuse", return_value=mock_lf),
+            pytest.raises(SystemExit),
+        ):
+            check_langfuse_config()

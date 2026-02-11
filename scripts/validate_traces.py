@@ -86,13 +86,25 @@ class ValidationRun:
 
 def check_langfuse_config() -> None:
     """Preflight: verify Langfuse credentials are set. Fail-fast."""
+    public = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     secret = os.getenv("LANGFUSE_SECRET_KEY", "")
     host = os.getenv("LANGFUSE_HOST", "")
+    if not public:
+        logger.error("LANGFUSE_PUBLIC_KEY not set — cannot authenticate Langfuse API")
+        sys.exit(1)
     if not secret:
         logger.error("LANGFUSE_SECRET_KEY not set — cannot record traces")
         sys.exit(1)
     if not host:
         logger.error("LANGFUSE_HOST not set — cannot connect to Langfuse")
+        sys.exit(1)
+    try:
+        # Fast auth probe: catches stale/invalid keys before long validation run.
+        lf = Langfuse()
+        lf.api.trace.list(limit=1)
+        lf.flush()
+    except Exception as e:
+        logger.error("Langfuse auth check failed: %s", e)
         sys.exit(1)
     logger.info("Langfuse config OK: host=%s", host)
 
@@ -489,7 +501,7 @@ def evaluate_go_no_go(
     Returns dict of criterion_name -> {target, actual, passed}.
     Criteria from issue #101 + roadmap Gate 1:
       1. cold_p50 < 5000ms
-      2. cold_p90 < 8000ms (using p95 as conservative proxy)
+      2. cold_p90 < 8000ms
       3. cold queries > 10s < 15%
       4. cache_hit p50 < 1500ms
       5. p50 TTFT (generate node) < 2000ms
@@ -512,12 +524,12 @@ def evaluate_go_no_go(
         "passed": cold_p50 < 5000,
     }
 
-    # 2. Cold p90 < 8s (use p95 as conservative estimate with n=33)
-    cold_p95 = cold.get("latency_p95", 99999)
+    # 2. Cold p90 < 8s (fallback to p95 for backward compatibility)
+    cold_p90 = cold.get("latency_p90", cold.get("latency_p95", 99999))
     criteria["cold_p90_lt_8s"] = {
         "target": "< 8000 ms",
-        "actual": f"{cold_p95:.0f} ms (p95)",
-        "passed": cold_p95 < 8000,
+        "actual": f"{cold_p90:.0f} ms",
+        "passed": cold_p90 < 8000,
     }
 
     # 3. Cold queries > 10s < 15%
@@ -642,6 +654,7 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
         agg: dict[str, Any] = {
             "n": len(phase_results),
             "latency_p50": float(np.percentile(latencies, 50)),
+            "latency_p90": float(np.percentile(latencies, 90)),
             "latency_p95": float(np.percentile(latencies, 95)),
             "latency_mean": float(np.mean(latencies)),
             "latency_max": float(np.max(latencies)),
