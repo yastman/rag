@@ -121,6 +121,18 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
             value=float(style_map.get(result["response_style"], 1)),
         )
 
+    # --- Voice transcription scores (#151) ---
+    input_type = result.get("input_type", "text")
+    lf.score_current_trace(name="input_type", value=input_type, data_type="CATEGORICAL")
+
+    stt_ms = result.get("stt_duration_ms")
+    if stt_ms is not None:
+        lf.score_current_trace(name="stt_duration_ms", value=float(stt_ms))
+
+    voice_dur = result.get("voice_duration_s")
+    if voice_dur is not None:
+        lf.score_current_trace(name="voice_duration_s", value=float(voice_dur))
+
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
     """Create unified session_id format: {type}-{hash}-{YYYYMMDD}.
