@@ -427,9 +427,13 @@ async def enrich_results_from_langfuse(
                     value = getattr(score, "value", 0)
                     if name:
                         r.scores[name] = float(value)
-            # Populate node span durations from observations
+            # Populate node span durations and error count from observations
+            observation_error_count = 0
             if hasattr(trace, "observations") and trace.observations:
                 for obs in trace.observations:
+                    level = getattr(obs, "level", None)
+                    if level and str(level).upper().endswith("ERROR"):
+                        observation_error_count += 1
                     obs_name = getattr(obs, "name", "") or ""
                     if not obs_name.startswith("node-"):
                         continue
@@ -439,6 +443,7 @@ async def enrich_results_from_langfuse(
                     if start_time and end_time:
                         delta_ms = (end_time - start_time).total_seconds() * 1000
                         r.node_spans_ms[node_name] = delta_ms
+            r.state["observation_error_count"] = observation_error_count
             enriched += 1
         except Exception as e:
             logger.warning("Failed to enrich trace %s: %s", r.trace_id, e)
@@ -568,16 +573,20 @@ def evaluate_go_no_go(
         "passed": tokens_p50 <= 96,
     }
 
-    # 8. ERROR observations = 0 new
-    error_count = sum(
+    # 8. ERROR observations = 0 new (from scores + observation levels)
+    score_error_count = sum(
         1
         for r in results
         if r.phase != "warmup"
         and any(v for k, v in r.scores.items() if "error" in k.lower() and v > 0)
     )
+    observation_error_count = sum(
+        int(r.state.get("observation_error_count", 0) or 0) for r in results if r.phase != "warmup"
+    )
+    error_count = score_error_count + observation_error_count
     criteria["zero_errors"] = {
         "target": "0",
-        "actual": str(error_count),
+        "actual": f"{error_count} (scores={score_error_count}, observations={observation_error_count})",
         "passed": error_count == 0,
     }
 

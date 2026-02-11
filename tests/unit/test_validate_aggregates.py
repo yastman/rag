@@ -12,6 +12,7 @@ def _make_result(
     rerank: bool = True,
     results_count: int = 10,
     rewrite_count: int = 0,
+    observation_error_count: int = 0,
     latency_stages: dict | None = None,
 ) -> TraceResult:
     return TraceResult(
@@ -29,6 +30,7 @@ def _make_result(
             "rerank_applied": rerank,
             "search_results_count": results_count,
             "rewrite_count": rewrite_count,
+            "observation_error_count": observation_error_count,
             "latency_stages": latency_stages or {},
         },
     )
@@ -128,3 +130,15 @@ class TestEvaluateGoNoGo:
         assert "generate_p50_lt_2s" in criteria, "Criterion must be named 'generate_p50_lt_2s'"
         assert "ttft_p50_lt_2s" not in criteria, "Old 'ttft_p50_lt_2s' key must not exist"
         assert criteria["generate_p50_lt_2s"]["passed"] is True  # 1500 < 2000
+
+    def test_zero_errors_fails_on_observation_level_errors(self):
+        aggregates = {
+            "cold": {"latency_p50": 1000, "latency_p95": 1200, "node_p50": {"generate": 800}},
+            "cache_hit": {"latency_p50": 100},
+        }
+        results = [
+            _make_result(phase="cold", latency=1000, observation_error_count=1),
+            _make_result(phase="cache_hit", latency=120),
+        ]
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+        assert criteria["zero_errors"]["passed"] is False

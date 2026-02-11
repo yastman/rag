@@ -55,11 +55,14 @@ class TestGenerateNodeErrorSpan:
         ):
             result = await generate_node(state)
 
-        mock_lf.update_current_span.assert_called_once()
-        call_kwargs = mock_lf.update_current_span.call_args.kwargs
-        assert call_kwargs["level"] == "ERROR"
-        assert "LLM failed" in call_kwargs["status_message"]
-        assert "LLM unavailable" in call_kwargs["status_message"]
+        error_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if c.kwargs.get("level") == "ERROR"
+        ]
+        assert error_calls, "generate_node must emit ERROR span when LLM fails"
+        assert "LLM failed" in error_calls[-1]["status_message"]
+        assert "LLM unavailable" in error_calls[-1]["status_message"]
         # Fallback response still returned
         assert result["response"] != ""
 
@@ -145,9 +148,12 @@ class TestRespondNodeErrorSpan:
         with patch("telegram_bot.graph.nodes.respond.get_client", return_value=mock_lf):
             result = await respond_node(state)
 
-        mock_lf.update_current_span.assert_called_once()
-        call_kwargs = mock_lf.update_current_span.call_args.kwargs
-        assert call_kwargs["level"] == "ERROR"
-        assert "Telegram send failed" in call_kwargs["status_message"]
+        error_calls = [
+            c.kwargs
+            for c in mock_lf.update_current_span.call_args_list
+            if c.kwargs.get("level") == "ERROR"
+        ]
+        assert error_calls, "respond_node must emit ERROR span on Telegram send failure"
+        assert "Telegram send failed" in error_calls[-1]["status_message"]
         # Node still returns latency
         assert "respond" in result["latency_stages"]
