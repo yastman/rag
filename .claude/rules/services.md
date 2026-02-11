@@ -102,8 +102,12 @@ await cache.initialize()
 from telegram_bot.integrations.prompt_manager import get_prompt
 
 # Fetches prompt from Langfuse with fallback to hardcoded template
+# Pre-checks via API probe → caches missing/known status with TTL → no SDK warning logs
 prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain": "real estate"})
 ```
+
+Flow: `_probe_prompt_available()` (API) → TTL cache hit/miss → `client.get_prompt()` (SDK) or fallback.
+Missing prompts cached 300s to avoid repeated API calls and SDK `generate-label:production` warnings.
 
 ### GraphConfig (service factories + pipeline tuning)
 

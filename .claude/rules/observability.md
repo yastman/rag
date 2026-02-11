@@ -175,9 +175,11 @@ from telegram_bot.integrations.prompt_manager import get_prompt
 prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain": "real estate"})
 ```
 
-- Prompts cached client-side (`cache_ttl` param)
-- Graceful fallback to hardcoded templates when Langfuse unavailable
+- **API probe pre-check**: `_probe_prompt_available()` calls `api.prompts.get()` before SDK `get_prompt()` — avoids noisy `generate-label:production` warnings
+- **TTL cache**: missing prompts cached in `_missing_prompts_until` (default 300s), known in `_known_prompts_until` — no repeated API calls
+- Graceful fallback to hardcoded templates when Langfuse unavailable or prompt absent
 - Variable substitution via `prompt.compile(**variables)`
+- Missing prompt messages at DEBUG level (no production log noise)
 
 ## Langfuse v3 Stack (docker-compose.dev.yml)
 
