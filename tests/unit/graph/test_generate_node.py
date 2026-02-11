@@ -28,6 +28,7 @@ def _make_mock_config(
     mock_config.llm_model = "gpt-4o-mini"
     mock_config.llm_temperature = 0.7
     mock_config.llm_max_tokens = 4096
+    mock_config.generate_max_tokens = 2048
     mock_config.streaming_enabled = streaming_enabled
     mock_config.create_llm.return_value = mock_client
 
@@ -1042,3 +1043,93 @@ class TestGenerateNodeLatencyBreakdown:
         assert result["llm_stream_recovery"] is True
         assert result["response_sent"] is False
         assert result["llm_timeout"] is False
+
+
+class TestGenerateNodeResponseStyle:
+    """Test adaptive response length control (#129)."""
+
+    @pytest.mark.asyncio
+    async def test_short_query_sets_response_style(self) -> None:
+        """Short factoid query -> response_style='short', metrics present."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, _mock_client = _make_mock_config("73,000€ в Солнечном берегу.")
+        state = _make_state_with_docs(query="сколько стоит студия")
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state)
+
+        assert result["response_style"] == "short"
+        assert result["response_difficulty"] == "easy"
+        assert result["response_style_reasoning"] == "explicit_short_trigger"
+        assert result["answer_words"] > 0
+        assert result["answer_chars"] > 0
+        assert result["answer_to_question_ratio"] > 0
+
+    @pytest.mark.asyncio
+    async def test_detailed_query_sets_response_style(self) -> None:
+        """Comparison query -> response_style='detailed'."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, _mock_client = _make_mock_config(
+            "Несебр дешевле, но Равда ближе к пляжу. Вот таблица сравнения..."
+        )
+        state = _make_state_with_docs(query="сравни цены Несебр vs Равда подробно")
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state)
+
+        assert result["response_style"] == "detailed"
+        assert result["answer_words"] > 0
+        assert result["answer_to_question_ratio"] > 0
+
+    @pytest.mark.asyncio
+    async def test_style_budget_capped_by_generate_max_tokens(self) -> None:
+        """Budget must be detector-derived but never exceed config.generate_max_tokens."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config("Short answer.")
+        mock_config.response_style_enabled = True
+        mock_config.response_style_shadow_mode = False
+        mock_config.generate_max_tokens = 40
+        # "сколько стоит" -> short/easy baseline budget=50, capped to 40
+        state = _make_state_with_docs(query="сколько стоит студия")
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        assert call_kwargs.kwargs.get("max_tokens") == 40
+
+    @pytest.mark.asyncio
+    async def test_shadow_mode_keeps_legacy_prompt(self) -> None:
+        """Shadow mode computes style metrics but uses legacy prompt/tokens."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config("Legacy answer.")
+        mock_config.response_style_enabled = True
+        mock_config.response_style_shadow_mode = True
+        mock_config.generate_max_tokens = 2048
+        state = _make_state_with_docs(query="сколько стоит студия")
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state)
+
+        # Style fields are populated (shadow collects metrics)
+        assert result["response_style"] == "short"
+        assert result["response_policy_mode"] == "shadow"
+        # But legacy max_tokens is used
+        call_kwargs = mock_client.chat.completions.create.call_args
+        assert call_kwargs.kwargs.get("max_tokens") == 2048
