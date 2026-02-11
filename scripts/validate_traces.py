@@ -49,6 +49,8 @@ REFERENCE_TRACE_ID = "c2b95d86aa1f643b79016dd611c4691f"
 
 COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
 
+STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
+
 
 class FakeSentMessage:
     """Records edit_text calls for TTFT measurement.
@@ -290,40 +292,44 @@ async def run_single_query(
 
         @observe(name="validation-query")
         async def _run() -> Any:
-            # Force streaming when fake message provided
+            # Force streaming when fake message provided, restore in finally
+            orig_streaming = config.streaming_enabled
             if message is not None:
                 config.streaming_enabled = True
 
-            graph = build_graph(
-                cache=services["cache"],
-                embeddings=services["embeddings"],
-                sparse_embeddings=services["sparse_embeddings"],
-                qdrant=services["qdrant"],
-                reranker=services["reranker"],
-                llm=services["llm"],
-                message=message,
-            )
-            result = await graph.ainvoke(state)
-            # Compute wall-time BEFORE writing scores so latency_total_ms is correct
-            result["pipeline_wall_ms"] = (time.perf_counter() - wall_start) * 1000
-            # Write metadata/scores while still inside active observation context
-            lf = get_client()
-            lf.update_current_trace(
-                input={"query": query.text},
-                output={"response": result.get("response", "")[:200]},
-                metadata={
-                    "validation_run_id": run_meta["run_id"],
-                    "git_sha": run_meta["git_sha"],
-                    "collection": run_meta["collection"],
-                    "query_set": query.source,
-                    "query_difficulty": query.difficulty,
-                    "phase": phase,
-                    "skip_rerank_threshold": config.skip_rerank_threshold,
-                    "relevance_threshold_rrf": config.relevance_threshold_rrf,
-                },
-            )
-            _write_langfuse_scores(lf, result)
-            return result
+            try:
+                graph = build_graph(
+                    cache=services["cache"],
+                    embeddings=services["embeddings"],
+                    sparse_embeddings=services["sparse_embeddings"],
+                    qdrant=services["qdrant"],
+                    reranker=services["reranker"],
+                    llm=services["llm"],
+                    message=message,
+                )
+                result = await graph.ainvoke(state)
+                # Compute wall-time BEFORE writing scores so latency_total_ms is correct
+                result["pipeline_wall_ms"] = (time.perf_counter() - wall_start) * 1000
+                # Write metadata/scores while still inside active observation context
+                lf = get_client()
+                lf.update_current_trace(
+                    input={"query": query.text},
+                    output={"response": result.get("response", "")[:200]},
+                    metadata={
+                        "validation_run_id": run_meta["run_id"],
+                        "git_sha": run_meta["git_sha"],
+                        "collection": run_meta["collection"],
+                        "query_set": query.source,
+                        "query_difficulty": query.difficulty,
+                        "phase": phase,
+                        "skip_rerank_threshold": config.skip_rerank_threshold,
+                        "relevance_threshold_rrf": config.relevance_threshold_rrf,
+                    },
+                )
+                _write_langfuse_scores(lf, result)
+                return result
+            finally:
+                config.streaming_enabled = orig_streaming
 
         result = await _run(langfuse_trace_id=trace_id)
 
@@ -445,8 +451,10 @@ async def run_collection_validation(
         result = await run_single_query(q, services, run_meta, phase="cache_hit")
         results.append(result)
 
-    # Phase 4: Streaming TTFT (first 5 cold queries, deterministic)
-    streaming_queries = cold_queries[:5]
+    # Phase 4: Streaming TTFT (first N cold queries, deterministic)
+    # Note: semantic cache may return cached_response here, bypassing LLM streaming.
+    # This is acceptable for MVP — TTFT=None for those queries, excluded from aggregates.
+    streaming_queries = cold_queries[:STREAMING_QUERY_COUNT]
     logger.info("Phase 4: Streaming TTFT (%d queries)", len(streaming_queries))
     for q in streaming_queries:
         fake_msg = FakeMessage()
