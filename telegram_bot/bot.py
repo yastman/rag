@@ -287,6 +287,13 @@ class PropertyBot:
         """Handle /clear command - clear conversation history."""
         assert message.from_user is not None
         user_id = message.from_user.id
+
+        if self._checkpointer is not None:
+            try:
+                await self._checkpointer.adelete_thread(str(user_id))
+            except Exception:
+                logger.warning("Failed to clear checkpointer thread %s", user_id, exc_info=True)
+
         await self._cache.clear_conversation(user_id)
         await message.answer("✅ История диалога очищена.")
 
