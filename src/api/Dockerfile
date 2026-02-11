@@ -3,10 +3,10 @@ FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim AS builder
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --extra voice --no-install-project
 
 COPY . .
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --extra voice
 
 
 FROM python:3.12-slim-bookworm AS runtime
