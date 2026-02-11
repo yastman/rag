@@ -536,9 +536,9 @@ def evaluate_go_no_go(
         "passed": cache_p50 < 1500,
     }
 
-    # 5. TTFT p50 (generate node start) < 2s
+    # 5. Generate node p50 < 2s (full generation latency, non-streaming mode)
     generate_p50 = cold.get("node_p50", {}).get("generate", 99999)
-    criteria["ttft_p50_lt_2s"] = {
+    criteria["generate_p50_lt_2s"] = {
         "target": "< 2000 ms",
         "actual": f"{generate_p50:.0f} ms",
         "passed": generate_p50 < 2000,
@@ -810,6 +810,11 @@ def generate_report(
         lines.append("")
         passed = sum(1 for c in go_no_go.values() if c["passed"])
         lines.append(f"**Score: {passed}/{len(go_no_go)} criteria passed**")
+        lines.append("")
+        lines.append(
+            "_Note: `generate_p50_lt_2s` measures full generation latency in "
+            "non-streaming validation mode; true TTFT requires a streaming phase._"
+        )
     else:
         lines.append("<!-- Go/No-Go data not available — run with --report -->")
     lines.append("")
