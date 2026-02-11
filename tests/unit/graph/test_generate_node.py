@@ -64,6 +64,40 @@ class _MockAsyncStream:
         return chunk
 
 
+class _MockStreamChunkWithUsage:
+    """Final mock streaming chunk that includes token usage."""
+
+    def __init__(self, completion_tokens: int, prompt_tokens: int = 100):
+        self.choices = []  # no content in usage-only chunk
+        self.model = None
+        usage = MagicMock()
+        usage.completion_tokens = completion_tokens
+        usage.prompt_tokens = prompt_tokens
+        usage.total_tokens = prompt_tokens + completion_tokens
+        self.usage = usage
+
+
+class _MockAsyncStreamWithUsage:
+    """Async iterator that yields content chunks then a usage-only chunk."""
+
+    def __init__(self, texts: list[str], completion_tokens: int):
+        from typing import Any
+
+        self._chunks: list[Any] = [_MockStreamChunk(t) for t in texts]
+        self._chunks.append(_MockStreamChunkWithUsage(completion_tokens))
+        self._index = 0
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._index >= len(self._chunks):
+            raise StopAsyncIteration
+        chunk = self._chunks[self._index]
+        self._index += 1
+        return chunk
+
+
 class _MockFailingStream:
     """Async iterator that yields some chunks then raises RuntimeError."""
 
@@ -741,3 +775,227 @@ class TestGenerateNodeProviderMetadata:
         assert final_output["token_usage"]["prompt_tokens"] == 123
         assert final_output["token_usage"]["completion_tokens"] == 45
         assert final_output["token_usage"]["total_tokens"] == 168
+
+
+class TestGenerateNodeLatencyBreakdown:
+    """Test decode_ms, tps, queue_ms, and flag computation (#147)."""
+
+    @pytest.mark.asyncio
+    async def test_streaming_computes_decode_ms(self) -> None:
+        """Streaming path: decode_ms = response_duration_ms - ttft_ms."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        chunks = ["Квартира ", "в Несебре ", "стоит 65000€."]
+        mock_client = _make_streaming_client(chunks)
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["llm_decode_ms"] is not None
+        assert result["llm_decode_ms"] >= 0
+        assert result["streaming_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_streaming_with_usage_computes_tps(self) -> None:
+        """Streaming with token usage: tps = completion_tokens / (decode_s)."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        stream = _MockAsyncStreamWithUsage(
+            texts=["Квартира ", "стоит ", "65000€."],
+            completion_tokens=42,
+        )
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=stream)
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["llm_tps"] is not None
+        assert result["llm_tps"] > 0
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_decode_and_tps_are_none(self) -> None:
+        """Non-streaming: decode_ms and tps are None."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, _mock_client = _make_mock_config("Ответ.", streaming_enabled=False)
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state)
+
+        assert result["llm_decode_ms"] is None
+        assert result["llm_tps"] is None
+        assert result["streaming_enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_streaming_without_usage_tps_is_none(self) -> None:
+        """Streaming without token usage: tps is None."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        chunks = ["Hello ", "world."]
+        mock_client = _make_streaming_client(chunks)
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["llm_decode_ms"] is not None
+        assert result["llm_tps"] is None
+
+    @pytest.mark.asyncio
+    async def test_stream_recovery_sets_flags(self) -> None:
+        """Streaming fails before content → non-streaming saves → recovery flags set."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Fallback answer."
+        mock_response = MagicMock(choices=[mock_choice])
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[Exception("stream error"), mock_response],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=AsyncMock())
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["llm_stream_recovery"] is True
+        assert result["llm_timeout"] is False
+        assert result["streaming_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_hard_fail_sets_timeout(self) -> None:
+        """Complete LLM failure: llm_timeout=True, fallback_used."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("LLM unavailable"),
+        )
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state)
+
+        assert result["llm_timeout"] is True
+        assert result["llm_stream_recovery"] is False
+        assert result["llm_decode_ms"] is None
+        assert result["llm_tps"] is None
+
+    @pytest.mark.asyncio
+    async def test_partial_stream_recovery_sets_flags(self) -> None:
+        """StreamingPartialDeliveryError → non-streaming fallback: recovery=True."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Fallback complete answer."
+        mock_fallback_response = MagicMock(choices=[mock_choice])
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _MockFailingStream(["partial "]),
+                mock_fallback_response,
+            ],
+        )
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["llm_stream_recovery"] is True
+        assert result["llm_timeout"] is False
