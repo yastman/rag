@@ -5,7 +5,6 @@ Features: RRF fusion, freshness boosting, MMR diversity.
 """
 
 import logging
-from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -386,22 +385,25 @@ class QdrantService:
         freshness_field: str = "created_at",
         freshness_scale_days: int = 7,
     ) -> list[dict]:
-        """Search with score boosting using Qdrant Query API.
+        """Search with server-side score boosting using FormulaQuery.
 
-        Uses exp_decay formula for freshness boosting.
+        Uses FormulaQuery with exp_decay for freshness boosting (Qdrant 1.14+).
+        Formula: $score + 0.1 * exp_decay(metadata.{field}, scale=N days)
+        Note: payload field used in formula benefits from a payload index.
 
         Args:
             dense_vector: Query embedding
             filters: Optional metadata filters
             top_k: Number of results
             freshness_boost: Enable freshness boosting
-            freshness_field: Payload field for datetime (e.g., "created_at")
+            freshness_field: Payload field for datetime
             freshness_scale_days: Decay scale in days
 
         Returns:
             List of results with boosted scores
         """
-        # Base search without boosting
+        await self.ensure_collection()
+
         if not freshness_boost:
             result = await self._client.query_points(
                 collection_name=self._collection_name,
@@ -413,57 +415,44 @@ class QdrantService:
             )
             return self._format_results(result.points)
 
-        # Search with score boosting via Query API
-        # Note: Qdrant Query API with formulas requires Qdrant 1.10+
-        # For older versions, we do post-processing boosting
+        formula_query = models.FormulaQuery(
+            formula=models.SumExpression(
+                sum=[
+                    "$score",
+                    models.MultExpression(
+                        mult=[
+                            0.1,
+                            models.ExpDecayExpression(
+                                exp_decay=models.DecayParamsExpression(
+                                    x=models.DatetimeKeyExpression(
+                                        datetime_key=f"metadata.{freshness_field}"
+                                    ),
+                                    scale=float(freshness_scale_days),
+                                )
+                            ),
+                        ]
+                    ),
+                ]
+            ),
+        )
+
         try:
             result = await self._client.query_points(
                 collection_name=self._collection_name,
-                query=dense_vector,
-                using=self._dense_vector_name,
+                prefetch=models.Prefetch(
+                    query=dense_vector,
+                    using=self._dense_vector_name,
+                    limit=top_k,
+                ),
+                query=formula_query,
                 query_filter=self._build_filter(filters),
-                limit=top_k * 2,  # Overfetch for boosting
+                limit=top_k,
                 with_payload=True,
             )
-
-            # Post-process with freshness boosting
-            points = result.points
-            now = datetime.now(UTC)
-            scale_seconds = freshness_scale_days * 86400
-
-            boosted_results = []
-            for point in points:
-                base_score = point.score
-
-                # Get datetime from payload
-                payload = point.payload or {}
-                created_at = payload.get("metadata", {}).get(freshness_field)
-                if created_at:
-                    try:
-                        if isinstance(created_at, str):
-                            dt = datetime.fromisoformat(created_at)
-                        else:
-                            dt = created_at
-
-                        # Calculate exp_decay boost
-                        age_seconds = (now - dt).total_seconds()
-                        decay = np.exp(-age_seconds / scale_seconds)
-                        boosted_score = base_score + 0.1 * decay  # Small boost
-                    except (ValueError, TypeError):
-                        boosted_score = base_score
-                else:
-                    boosted_score = base_score
-
-                boosted_results.append((point, boosted_score))
-
-            # Sort by boosted score and take top_k
-            boosted_results.sort(key=lambda x: x[1], reverse=True)
-            top_points = [p for p, _ in boosted_results[:top_k]]
-
-            return self._format_results(top_points)
+            return self._format_results(result.points)
 
         except Exception as e:
-            logger.warning(f"Score boosting failed, falling back: {e}")
+            logger.warning(f"FormulaQuery score boosting failed, falling back: {e}")
             result = await self._client.query_points(
                 collection_name=self._collection_name,
                 query=dense_vector,
