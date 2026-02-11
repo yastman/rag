@@ -6,6 +6,7 @@ Builds the full StateGraph with all nodes and conditional edges.
 from __future__ import annotations
 
 import functools
+import time
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -110,6 +111,36 @@ def build_graph(
         _make_respond_node(message),
     )
 
+    # Conversation memory: SDK summarization (langmem) — only when checkpointer is active
+    if checkpointer is not None:
+        from langchain_core.messages.utils import count_tokens_approximately
+        from langmem.short_term import SummarizationNode
+
+        from telegram_bot.graph.config import GraphConfig
+        from telegram_bot.observability import observe
+
+        config = GraphConfig.from_env()
+        summarize_model = _create_summarize_model(config)
+        summarize = SummarizationNode(
+            model=summarize_model,
+            max_tokens=512,
+            max_tokens_before_summary=1024,
+            max_summary_tokens=256,
+            token_counter=count_tokens_approximately,
+            input_messages_key="messages",
+            output_messages_key="messages",
+        )
+
+        @observe(name="node-summarize", capture_input=False, capture_output=False)
+        async def summarize_wrapper(state: dict[str, Any]) -> dict[str, Any]:
+            t0 = time.perf_counter()
+            result = await summarize.ainvoke(state)
+            elapsed = time.perf_counter() - t0
+            result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
+            return result
+
+        workflow.add_node("summarize", summarize_wrapper)
+
     # Edges
     workflow.add_conditional_edges(
         START,
@@ -155,7 +186,12 @@ def build_graph(
     workflow.add_edge("rewrite", "retrieve")
     workflow.add_edge("generate", "cache_store")
     workflow.add_edge("cache_store", "respond")
-    workflow.add_edge("respond", END)
+
+    if checkpointer is not None:
+        workflow.add_edge("respond", "summarize")
+        workflow.add_edge("summarize", END)
+    else:
+        workflow.add_edge("respond", END)
 
     return workflow.compile(checkpointer=checkpointer)
 
@@ -177,6 +213,27 @@ async def retrieve_node_wrapper(
         embeddings=embeddings,
         sparse_embeddings=sparse_embeddings,
         qdrant=qdrant,
+    )
+
+
+def _create_summarize_model(config: Any) -> Any:
+    """Create a LangChain ChatOpenAI for SummarizationNode via LiteLLM proxy."""
+    from langchain_openai import ChatOpenAI
+    from pydantic import SecretStr
+
+    from telegram_bot.observability import LANGFUSE_ENABLED
+
+    callbacks: list[Any] = []
+    if LANGFUSE_ENABLED:
+        from langfuse.langchain import CallbackHandler
+
+        callbacks.append(CallbackHandler())
+
+    return ChatOpenAI(
+        model=config.llm_model,
+        api_key=SecretStr(config.llm_api_key or "no-key"),
+        base_url=config.llm_base_url,
+        callbacks=callbacks,
     )
 
 

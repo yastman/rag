@@ -78,3 +78,30 @@ class TestRespondNode:
 
         message.answer.assert_not_called()
         assert "respond" in result["latency_stages"]
+
+
+class TestRespondNodeSavesAssistantMessage:
+    async def test_returns_assistant_message_in_messages(self):
+        """respond_node adds assistant response to messages for checkpointer."""
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Ответ бота."
+        state["response_sent"] = True
+
+        result = await respond_node(state)
+
+        assert "messages" in result
+        msg = result["messages"][0]
+        assert msg["role"] == "assistant"
+        assert msg["content"] == "Ответ бота."
+
+    async def test_assistant_message_with_default_response(self):
+        """respond_node adds default message when response is empty."""
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = ""
+
+        result = await respond_node(state)
+
+        assert "messages" in result
+        msg = result["messages"][0]
+        assert msg["role"] == "assistant"
+        assert "Извините" in msg["content"]

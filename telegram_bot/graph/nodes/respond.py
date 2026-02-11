@@ -55,6 +55,7 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
         )
         return {
             "latency_stages": {**state.get("latency_stages", {}), "respond": elapsed},
+            "messages": [{"role": "assistant", "content": response}],
         }
 
     delivered = False
@@ -87,4 +88,5 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
     )
     return {
         "latency_stages": {**state.get("latency_stages", {}), "respond": elapsed},
+        "messages": [{"role": "assistant", "content": response}],
     }
