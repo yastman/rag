@@ -1,10 +1,10 @@
 # Payload Bloat + TTFT Rename Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Reduce Langfuse node payload bloat by 80%+ and rename TTFT criterion to honest semantics.
 
-**Architecture:** Disable auto-capture on 4 heavy LangGraph nodes (`@observe(capture_input=False, capture_output=False)`), replace with curated metadata via `get_client().update_current_span()`. Rename `ttft_p50_lt_2s` → `generate_p50_lt_2s` in validation Go/No-Go.
+**Architecture:** Disable auto-capture on 4 heavy LangGraph nodes (`@observe(capture_input=False, capture_output=False)`), replace with curated metadata via `get_client().update_current_span()` (no full state, documents, or embeddings in spans). Rename `ttft_p50_lt_2s` → `generate_p50_lt_2s` in validation Go/No-Go and add a report footnote clarifying this is full generation latency in non-streaming mode.
 
 **Tech Stack:** Python 3.12, Langfuse SDK v3 (`@observe`, `get_client`), pytest, hashlib
 
@@ -196,6 +196,8 @@ class TestCuratedSpanPayloads:
         input_payload = payloads[0]
         assert "query_preview" in input_payload
         assert len(input_payload["query_preview"]) <= 120
+        assert "query_hash" in input_payload
+        assert len(input_payload["query_hash"]) == 8
 
     @pytest.mark.asyncio
     async def test_generate_node_curated_payload(self):
@@ -329,11 +331,19 @@ from telegram_bot.observability import observe
 from telegram_bot.observability import get_client, observe
 ```
 
-**Step 3: Add curated input span after query extraction (after line 54)**
+**Step 3: Harden query extraction from `messages` + add curated input span (after line 54)**
 
-Insert after the `query` extraction block (after line 54):
+Replace direct `state["messages"][-1]` indexing with a safe extraction, then add span input metadata:
 
 ```python
+    messages = state.get("messages") or []
+    last_msg = messages[-1] if messages else {}
+    query = (
+        last_msg.content
+        if hasattr(last_msg, "content")
+        else (last_msg.get("content", "") if isinstance(last_msg, dict) else "")
+    )
+
     # Curated span metadata (replaces auto-captured full state)
     lf = get_client()
     lf.update_current_span(input={
@@ -412,26 +422,37 @@ Insert after `ttft_ms = 0.0` (line 248):
     lf = get_client()
     lf.update_current_span(input={
         "query_preview": query[:120],
+        "query_len": len(query),
+        "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
         "context_docs_count": len(documents),
         "streaming_enabled": bool(message is not None and config.streaming_enabled),
     })
 ```
 
-Note: `get_client` is already imported in generate.py (line 20).
+Note: `get_client` is already imported in generate.py (line 20). Add `import hashlib` if missing.
 
 **Step 3: Add curated output span before the final return (before `return` around line 333)**
 
 Insert before the final `return {` block:
 
 ```python
-    lf.update_current_span(output={
+    span_output = {
         "response_length": len(answer),
         "llm_provider_model": actual_model,
         "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
         "llm_response_duration_ms": round(elapsed * 1000, 1),
         "fallback_used": actual_model == "fallback",
         "response_sent": response_sent,
-    })
+    }
+    if "response" in locals():
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            span_output["token_usage"] = {
+                "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                "completion_tokens": getattr(usage, "completion_tokens", None),
+                "total_tokens": getattr(usage, "total_tokens", None),
+            }
+    lf.update_current_span(output=span_output)
 ```
 
 **Step 4: Run tests**
@@ -475,14 +496,24 @@ from telegram_bot.observability import get_client, observe
 @observe(name="node-cache-check", capture_input=False, capture_output=False)
 ```
 
-**Step 3: Add curated input span in cache_check_node (after line 42)**
+**Step 3: Harden query extraction from `messages` + add curated input span in cache_check_node (after line 42)**
 
 Insert after `query_type = state.get("query_type", "GENERAL")`:
 
 ```python
+    messages = state.get("messages") or []
+    last_msg = messages[-1] if messages else {}
+    query = (
+        last_msg.content
+        if hasattr(last_msg, "content")
+        else (last_msg.get("content", "") if isinstance(last_msg, dict) else "")
+    )
+
     lf = get_client()
     lf.update_current_span(input={
         "query_preview": query[:120],
+        "query_len": len(query),
+        "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
         "query_type": query_type,
     })
 ```
@@ -531,6 +562,8 @@ Insert after `user_id = state.get("user_id", 0)`:
     lf = get_client()
     lf.update_current_span(input={
         "query_preview": query[:120],
+        "query_len": len(query),
+        "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
         "response_length": len(response),
         "search_results_count": state.get("search_results_count", 0),
     })
@@ -543,13 +576,17 @@ The current code has two paths: (1) `if response and embedding:` stores data, (2
 After the `if response and embedding:` block, before `return {"response": response}`:
 
 ```python
+    latency = time.perf_counter() - start
     stored = bool(response and embedding)
     lf.update_current_span(output={
         "stored": stored,
         "stored_semantic": stored,
         "stored_conversation": stored,
+        "duration_ms": round(latency * 1000, 1),
     })
 ```
+
+Note: initialize `start = time.perf_counter()` near node start to keep duration semantics consistent.
 
 **Step 9: Run tests**
 
@@ -570,7 +607,7 @@ git commit -m "fix(observability): disable auto-capture on cache nodes, add cura
 **Files:**
 - Modify: `scripts/validate_traces.py:539-545`
 
-**Step 1: Rename the criterion key and comment**
+**Step 1: Rename the criterion key and comment (no `note` field inside criteria dict)**
 
 Change lines 539-545 from:
 
@@ -596,12 +633,26 @@ To:
     }
 ```
 
-**Step 2: Run tests**
+**Step 2: Add report footnote clarifying metric semantics**
+
+In `generate_report()` after the Go/No-Go criteria table, append:
+
+```python
+        lines.append(
+            "_Note: `generate_p50_lt_2s` measures full generation latency in "
+            "non-streaming validation mode; true TTFT requires a streaming phase._"
+        )
+        lines.append("")
+```
+
+This keeps the renderer stable and avoids changing criteria object shape.
+
+**Step 3: Run tests**
 
 Run: `uv run pytest tests/unit/test_validate_aggregates.py -v`
 Expected: All PASS (including the new `test_uses_generate_p50_key_not_ttft`)
 
-**Step 3: Commit**
+**Step 4: Commit**
 
 ```bash
 git add scripts/validate_traces.py
@@ -652,7 +703,7 @@ git commit -m "style: format after payload bloat fix #143"
 
 **Files:** None (GitHub only)
 
-**Step 1: Create follow-up issue linked to #143**
+**Step 1: Create follow-up issue linked as child/follow-up of #143**
 
 Run:
 
@@ -673,7 +724,7 @@ Follow-up to #143. The `generate_p50_lt_2s` criterion measures full generation l
 
 ## Parent Issue
 
-Linked to #143 (payload bloat + TTFT rename).
+Parent: #143 (payload bloat + TTFT rename).
 EOF
 )" \
   --label "next"
