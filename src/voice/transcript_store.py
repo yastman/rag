@@ -39,8 +39,9 @@ class TranscriptStore:
         phone: str,
         lead_data: dict | None = None,
         callback_chat_id: int | None = None,
+        call_id: str | None = None,
     ) -> str:
-        call_id = str(uuid.uuid4())
+        call_id = call_id or str(uuid.uuid4())
         async with self._db.acquire() as conn:
             await conn.execute(
                 """INSERT INTO call_transcripts (id, phone, lead_data, callback_chat_id)
