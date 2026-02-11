@@ -7,17 +7,18 @@ cache_store_node: store response in semantic cache + conversation history.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from typing import Any
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
 
 
-@observe(name="node-cache-check")
+@observe(name="node-cache-check", capture_input=False, capture_output=False)
 async def cache_check_node(
     state: dict[str, Any],
     *,
@@ -34,12 +35,24 @@ async def cache_check_node(
     Returns:
         State update with cache_hit, cached_response, query_embedding
     """
+    messages = state.get("messages") or []
+    last_msg = messages[-1] if messages else {}
     query = (
-        state["messages"][-1].content
-        if hasattr(state["messages"][-1], "content")
-        else state["messages"][-1]["content"]
+        last_msg.content
+        if hasattr(last_msg, "content")
+        else (last_msg.get("content", "") if isinstance(last_msg, dict) else "")
     )
     query_type = state.get("query_type", "GENERAL")
+
+    lf = get_client()
+    lf.update_current_span(
+        input={
+            "query_preview": query[:120],
+            "query_len": len(query),
+            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
+            "query_type": query_type,
+        }
+    )
 
     start = time.perf_counter()
 
@@ -70,6 +83,14 @@ async def cache_check_node(
 
     if cached:
         logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
+        lf.update_current_span(
+            output={
+                "cache_hit": True,
+                "embeddings_cache_hit": embeddings_cache_hit,
+                "hit_layer": "semantic",
+                "duration_ms": round(latency * 1000, 1),
+            }
+        )
         return {
             "cache_hit": True,
             "cached_response": cached,
@@ -80,6 +101,14 @@ async def cache_check_node(
         }
 
     logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
+    lf.update_current_span(
+        output={
+            "cache_hit": False,
+            "embeddings_cache_hit": embeddings_cache_hit,
+            "hit_layer": "none",
+            "duration_ms": round(latency * 1000, 1),
+        }
+    )
     return {
         "cache_hit": False,
         "cached_response": None,
@@ -89,7 +118,7 @@ async def cache_check_node(
     }
 
 
-@observe(name="node-cache-store")
+@observe(name="node-cache-store", capture_input=False, capture_output=False)
 async def cache_store_node(
     state: dict[str, Any],
     *,
@@ -106,15 +135,29 @@ async def cache_store_node(
     Returns:
         State update (pass-through response)
     """
+    start = time.perf_counter()
     response = state.get("response", "")
     embedding = state.get("query_embedding")
     query_type = state.get("query_type", "GENERAL")
+    messages = state.get("messages") or []
+    last_msg = messages[-1] if messages else {}
     query = (
-        state["messages"][-1].content
-        if hasattr(state["messages"][-1], "content")
-        else state["messages"][-1]["content"]
+        last_msg.content
+        if hasattr(last_msg, "content")
+        else (last_msg.get("content", "") if isinstance(last_msg, dict) else "")
     )
     user_id = state.get("user_id", 0)
+
+    lf = get_client()
+    lf.update_current_span(
+        input={
+            "query_preview": query[:120],
+            "query_len": len(query),
+            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
+            "response_length": len(response),
+            "search_results_count": state.get("search_results_count", 0),
+        }
+    )
 
     # Store in semantic cache if we have both response and embedding
     if response and embedding:
@@ -154,5 +197,16 @@ async def cache_store_node(
                     "user_id": user_id,
                 },
             )
+
+    latency = time.perf_counter() - start
+    stored = bool(response and embedding)
+    lf.update_current_span(
+        output={
+            "stored": stored,
+            "stored_semantic": stored,
+            "stored_conversation": stored,
+            "duration_ms": round(latency * 1000, 1),
+        }
+    )
 
     return {"response": response}
