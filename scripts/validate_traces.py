@@ -667,6 +667,26 @@ def evaluate_go_no_go(
         "passed": orphan_rate == 0.0,
     }
 
+    # 10. Streaming TTFT p50 < 1000ms (skipped if sample < 3)
+    streaming = aggregates.get("streaming", {})
+    ttft_p50 = streaming.get("ttft_p50")
+    ttft_n = streaming.get("ttft_sample_count", 0)
+
+    if ttft_n < 3:
+        criteria["ttft_p50_lt_1000ms"] = {
+            "target": "< 1000 ms",
+            "actual": f"N/A (n={ttft_n}, need >= 3)",
+            "passed": True,
+            "skipped": True,
+        }
+    else:
+        criteria["ttft_p50_lt_1000ms"] = {
+            "target": "< 1000 ms",
+            "actual": f"{ttft_p50:.0f} ms (n={ttft_n})",
+            "passed": ttft_p50 < 1000,
+            "skipped": False,
+        }
+
     return criteria
 
 
@@ -936,6 +956,20 @@ def generate_report(
                 lines.append(f"| {node} | {p50:.0f} | {p95:.0f} |")
             lines.append("")
 
+    # Streaming TTFT section
+    streaming_agg = aggregates.get("streaming")
+    if streaming_agg:
+        lines.append(f"## Streaming TTFT (n={streaming_agg['n']})")
+        lines.append("")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        lines.append(f"| ttft p50 | {streaming_agg['ttft_p50']:.0f} ms |")
+        lines.append(f"| ttft p95 | {streaming_agg['ttft_p95']:.0f} ms |")
+        lines.append(f"| ttft mean | {streaming_agg['ttft_mean']:.0f} ms |")
+        lines.append(f"| ttft max | {streaming_agg['ttft_max']:.0f} ms |")
+        lines.append(f"| sample count | {streaming_agg['ttft_sample_count']} |")
+        lines.append("")
+
     # All trace details
     lines.append("## Trace Details")
     lines.append("")
@@ -964,7 +998,12 @@ def generate_report(
         lines.append("| # | Criterion | Target | Actual | Status |")
         lines.append("|---|-----------|--------|--------|--------|")
         for i, (name, c) in enumerate(go_no_go.items(), 1):
-            status = "[x] PASS" if c["passed"] else "[ ] **FAIL**"
+            if c.get("skipped"):
+                status = "[-] SKIP"
+            elif c["passed"]:
+                status = "[x] PASS"
+            else:
+                status = "[ ] **FAIL**"
             lines.append(f"| {i} | {name} | {c['target']} | {c['actual']} | {status} |")
         lines.append("")
         passed = sum(1 for c in go_no_go.values() if c["passed"])
@@ -972,7 +1011,8 @@ def generate_report(
         lines.append("")
         lines.append(
             "_Note: `generate_p50_lt_2s` measures full generation latency in "
-            "non-streaming validation mode; true TTFT requires a streaming phase._"
+            "non-streaming mode. `ttft_p50_lt_1000ms` measures real first-token "
+            "latency from the streaming phase._"
         )
     else:
         lines.append("<!-- Go/No-Go data not available — run with --report -->")
