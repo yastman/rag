@@ -391,6 +391,92 @@ class TestHandleQuery:
             assert state_arg["max_rewrite_attempts"] == 3
 
 
+class TestCheckpointNamespace:
+    """Test checkpoint namespace separation for text/voice."""
+
+    @pytest.mark.asyncio
+    async def test_handle_query_passes_text_checkpoint_ns(self, mock_config):
+        """handle_query passes checkpoint_ns='tg:text:v1' in invoke_config."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={"response": "ok", "query_type": "GENERAL", "latency_stages": {}}
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = MagicMock()
+            message.text = "test"
+            message.from_user = MagicMock(id=12345)
+            message.chat = MagicMock(id=12345)
+            message.bot = MagicMock()
+            message.bot.send_chat_action = AsyncMock()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock()
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_query(message)
+
+            cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
+            assert cfg["thread_id"] == "12345"
+            assert cfg["checkpoint_ns"] == "tg:text:v1"
+
+    @pytest.mark.asyncio
+    async def test_handle_voice_passes_voice_checkpoint_ns(self, mock_config):
+        """handle_voice passes checkpoint_ns='tg:voice:v1' in invoke_config."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "response": "ok",
+                "query_type": "GENERAL",
+                "latency_stages": {},
+                "stt_text": "test",
+            }
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = MagicMock()
+            message.from_user = MagicMock(id=12345)
+            message.chat = MagicMock(id=12345)
+            message.bot = MagicMock()
+            message.bot.send_chat_action = AsyncMock()
+            message.bot.get_file = AsyncMock()
+            message.bot.download_file = AsyncMock()
+            message.voice = MagicMock()
+            message.voice.file_id = "file123"
+            message.voice.duration = 5
+            file_mock = MagicMock()
+            file_mock.file_path = "voice/file.ogg"
+            message.bot.get_file.return_value = file_mock
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock()
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
+            assert cfg["thread_id"] == "12345"
+            assert cfg["checkpoint_ns"] == "tg:voice:v1"
+
+
 class TestBotLifecycle:
     """Test bot start/stop lifecycle."""
 

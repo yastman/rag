@@ -27,6 +27,10 @@ from .services.redis_monitor import RedisHealthMonitor
 
 logger = logging.getLogger(__name__)
 
+# --- Checkpoint namespace constants (versioned for safe migration) ---
+_CHECKPOINT_NS_TEXT = "tg:text:v1"
+_CHECKPOINT_NS_VOICE = "tg:voice:v1"
+
 # --- Query type mapping for scores ---
 _QUERY_TYPE_SCORE = {
     "CHITCHAT": 0.0,
@@ -435,7 +439,12 @@ class PropertyBot:
                 checkpointer=self._checkpointer,
             )
 
-            invoke_config = {"configurable": {"thread_id": str(message.from_user.id)}}
+            invoke_config = {
+                "configurable": {
+                    "thread_id": str(message.from_user.id),
+                    "checkpoint_ns": _CHECKPOINT_NS_TEXT,
+                }
+            }
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                 result = await graph.ainvoke(state, config=invoke_config)
 
@@ -522,7 +531,12 @@ class PropertyBot:
                 stt_model=self.config.stt_model,
             )
 
-            invoke_config = {"configurable": {"thread_id": str(message.from_user.id)}}
+            invoke_config = {
+                "configurable": {
+                    "thread_id": str(message.from_user.id),
+                    "checkpoint_ns": _CHECKPOINT_NS_VOICE,
+                }
+            }
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                     result = await graph.ainvoke(state, config=invoke_config)
