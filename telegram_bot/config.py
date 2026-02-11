@@ -227,6 +227,20 @@ class BotConfig(BaseSettings):
         default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
     )
 
+    # LiveKit (voice calls)
+    livekit_url: str = Field(
+        default="", validation_alias=AliasChoices("LIVEKIT_URL", "livekit_url")
+    )
+    livekit_api_key: str = Field(
+        default="", validation_alias=AliasChoices("LIVEKIT_API_KEY", "livekit_api_key")
+    )
+    livekit_api_secret: str = Field(
+        default="", validation_alias=AliasChoices("LIVEKIT_API_SECRET", "livekit_api_secret")
+    )
+    sip_trunk_id: str = Field(
+        default="", validation_alias=AliasChoices("SIP_TRUNK_ID", "sip_trunk_id")
+    )
+
     # Voice transcription
     show_transcription: bool = Field(
         default=True,
