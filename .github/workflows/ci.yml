@@ -50,7 +50,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen --group dev
+        run: uv sync --frozen --extra dev
 
       - name: Run unit tests
         run: uv run pytest tests/unit/ -q -x -m "not legacy_api" --timeout=30
@@ -82,7 +82,7 @@ jobs:
 
       - name: Install dependencies
         if: env.LANGFUSE_AVAILABLE == 'true'
-        run: uv sync --group dev
+        run: uv sync --frozen --extra dev
 
       - name: Run baseline comparison
         if: env.LANGFUSE_AVAILABLE == 'true'
