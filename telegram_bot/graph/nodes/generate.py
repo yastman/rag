@@ -11,6 +11,7 @@ edits with accumulated chunks (throttled 300ms), finalizes with Markdown.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import logging
 import time
 from typing import Any
@@ -193,7 +194,7 @@ async def _generate_streaming(
     return accumulated, actual_model, ttft_ms
 
 
-@observe(name="node-generate")
+@observe(name="node-generate", capture_input=False, capture_output=False)
 async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[str, Any]:
     """Generate an answer from retrieved documents using LLM.
 
@@ -246,6 +247,18 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     response_sent = False
     actual_model = config.llm_model
     ttft_ms = 0.0
+
+    # Curated span metadata
+    lf = get_client()
+    lf.update_current_span(
+        input={
+            "query_preview": query[:120],
+            "query_len": len(query),
+            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
+            "context_docs_count": len(documents),
+            "streaming_enabled": bool(message is not None and config.streaming_enabled),
+        }
+    )
 
     try:
         llm = config.create_llm()
@@ -330,6 +343,25 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         ttft_ms = 0.0
 
     elapsed = time.monotonic() - t0
+
+    span_output: dict[str, Any] = {
+        "response_length": len(answer),
+        "llm_provider_model": actual_model,
+        "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
+        "llm_response_duration_ms": round(elapsed * 1000, 1),
+        "fallback_used": actual_model == "fallback",
+        "response_sent": response_sent,
+    }
+    if "response" in locals():
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            span_output["token_usage"] = {
+                "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                "completion_tokens": getattr(usage, "completion_tokens", None),
+                "total_tokens": getattr(usage, "total_tokens", None),
+            }
+    lf.update_current_span(output=span_output)
+
     return {
         "response": answer,
         "response_sent": response_sent,
