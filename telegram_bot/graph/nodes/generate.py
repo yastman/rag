@@ -17,7 +17,7 @@ from typing import Any
 
 from telegram_bot.graph.state import RAGState
 from telegram_bot.integrations.prompt_manager import get_prompt
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -279,6 +279,10 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                 response_sent = delivered
             except Exception:
                 logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
+                get_client().update_current_span(
+                    level="WARNING",
+                    status_message="Streaming failed, using non-streaming fallback",
+                )
                 # Fall back to non-streaming
                 response = await llm.chat.completions.create(
                     model=config.llm_model,
@@ -298,8 +302,12 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                 name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
             answer = response.choices[0].message.content or ""
-    except Exception:
+    except Exception as e:
         logger.exception("generate_node: LLM call failed, using fallback")
+        get_client().update_current_span(
+            level="ERROR",
+            status_message=f"LLM failed: {str(e)[:200]}",
+        )
         answer = _build_fallback_response(documents)
 
     elapsed = time.monotonic() - t0
