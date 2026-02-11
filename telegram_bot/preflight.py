@@ -230,6 +230,17 @@ async def _check_single_dep(
         if resp.status_code != 200:
             logger.error("Preflight FAIL: BGE-M3 — %s", resp.status_code)
             return False
+        # Warm encode to ensure model is loaded and warmed
+        warmup_resp = await client.post(
+            f"{config.bge_m3_url}/encode/dense",
+            json={"texts": ["preflight warmup"], "max_length": 64, "batch_size": 1},
+            timeout=120.0,
+        )
+        if warmup_resp.status_code == 200:
+            data = warmup_resp.json()
+            logger.info("Preflight BGE-M3 warmup OK (%.3fs)", data.get("processing_time", 0))
+        else:
+            logger.warning("Preflight BGE-M3 warmup failed: %s", warmup_resp.status_code)
         return True
 
     if name == "litellm":
