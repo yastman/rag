@@ -208,12 +208,12 @@ async def retrieve_node_wrapper(
 def _create_summarize_model(config: Any) -> Any:
     """Create a LangChain ChatOpenAI for SummarizationNode via LiteLLM proxy."""
     from langchain_openai import ChatOpenAI
+    from pydantic import SecretStr
 
     return ChatOpenAI(
         model=config.llm_model,
-        api_key=config.llm_api_key or "no-key",
+        api_key=SecretStr(config.llm_api_key or "no-key"),
         base_url=config.llm_base_url,
-        max_tokens=256,
     )
 
 
