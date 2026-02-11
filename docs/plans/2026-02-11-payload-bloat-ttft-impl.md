@@ -4,7 +4,7 @@
 
 **Goal:** Reduce Langfuse node payload bloat by 80%+ and rename TTFT criterion to honest semantics.
 
-**Architecture:** Disable auto-capture on 4 heavy LangGraph nodes (`@observe(capture_input=False, capture_output=False)`), replace with curated metadata via `get_client().update_current_span()` (no full state, documents, or embeddings in spans). Rename `ttft_p50_lt_2s` → `generate_p50_lt_2s` in validation Go/No-Go and add a report footnote clarifying this is full generation latency in non-streaming mode.
+**Architecture:** Disable auto-capture on 5 heavy LangGraph nodes (`@observe(capture_input=False, capture_output=False)`), replace with curated metadata via `get_client().update_current_span()` (no full state, documents, or embeddings in spans). Rename `ttft_p50_lt_2s` → `generate_p50_lt_2s` in validation Go/No-Go and add a report footnote clarifying this is full generation latency in non-streaming mode.
 
 **Tech Stack:** Python 3.12, Langfuse SDK v3 (`@observe`, `get_client`), pytest, hashlib
 
