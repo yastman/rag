@@ -64,6 +64,7 @@ class TraceResult:
     state: dict[str, Any] = field(default_factory=dict)
     scores: dict[str, float] = field(default_factory=dict)
     node_spans_ms: dict[str, float] = field(default_factory=dict)
+    node_payload_bytes: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass
@@ -102,7 +103,6 @@ def check_langfuse_config() -> None:
         # Fast auth probe: catches stale/invalid keys before long validation run.
         lf = Langfuse()
         lf.api.trace.list(limit=1)
-        lf.flush()
     except Exception as e:
         logger.error("Langfuse auth check failed: %s", e)
         sys.exit(1)
@@ -450,6 +450,25 @@ async def enrich_results_from_langfuse(
                     if not obs_name.startswith("node-"):
                         continue
                     node_name = obs_name.replace("node-", "").replace("-", "_")
+
+                    def _json_size(value: Any) -> int:
+                        if value is None:
+                            return 0
+                        try:
+                            return len(json.dumps(value, ensure_ascii=False))
+                        except Exception:
+                            return len(str(value))
+
+                    input_size = _json_size(getattr(obs, "input", None))
+                    output_size = _json_size(getattr(obs, "output", None))
+                    metadata_size = _json_size(getattr(obs, "metadata", None))
+                    r.node_payload_bytes[node_name] = {
+                        "input": input_size,
+                        "output": output_size,
+                        "metadata": metadata_size,
+                        "total": input_size + output_size + metadata_size,
+                    }
+
                     start_time = getattr(obs, "start_time", None)
                     end_time = getattr(obs, "end_time", None)
                     if start_time and end_time:
@@ -727,12 +746,56 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
     return aggregates
 
 
+def aggregate_node_payloads(results: list[TraceResult]) -> dict[str, dict[str, float]]:
+    """Aggregate per-node payload sizes from Langfuse observations (bytes)."""
+    buckets: dict[str, dict[str, list[float]]] = {}
+    for r in results:
+        if r.phase == "warmup":
+            continue
+        for node_name, payload in (r.node_payload_bytes or {}).items():
+            node = buckets.setdefault(
+                node_name,
+                {"input": [], "output": [], "metadata": [], "total": []},
+            )
+            node["input"].append(float(payload.get("input", 0)))
+            node["output"].append(float(payload.get("output", 0)))
+            node["metadata"].append(float(payload.get("metadata", 0)))
+            node["total"].append(float(payload.get("total", 0)))
+
+    summary: dict[str, dict[str, float]] = {}
+    for node_name, series in buckets.items():
+        if not series["total"]:
+            continue
+        summary[node_name] = {
+            "count": float(len(series["total"])),
+            "input_p50": float(np.percentile(series["input"], 50)),
+            "output_p50": float(np.percentile(series["output"], 50)),
+            "metadata_p50": float(np.percentile(series["metadata"], 50)),
+            "total_p50": float(np.percentile(series["total"], 50)),
+            "input_max": float(np.max(series["input"])),
+            "output_max": float(np.max(series["output"])),
+            "metadata_max": float(np.max(series["metadata"])),
+            "total_max": float(np.max(series["total"])),
+        }
+    return summary
+
+
+def format_phase_summary(phase: str, agg: dict[str, Any]) -> str:
+    """Format one-line phase summary for console logs."""
+    return (
+        f"{phase} (n={agg['n']}): p50={agg['latency_p50']:.0f}ms "
+        f"p90={agg.get('latency_p90', agg['latency_p95']):.0f}ms "
+        f"p95={agg['latency_p95']:.0f}ms mean={agg['latency_mean']:.0f}ms"
+    )
+
+
 def generate_report(
     run: ValidationRun,
     aggregates: dict[str, Any],
     output_path: Path,
     reference_metrics: dict[str, Any] | None = None,
     go_no_go: dict[str, dict[str, Any]] | None = None,
+    payload_summary: dict[str, dict[str, float]] | None = None,
 ) -> None:
     """Generate markdown validation report."""
     lines: list[str] = []
@@ -777,6 +840,7 @@ def generate_report(
         lines.append("| Metric | Value |")
         lines.append("|--------|-------|")
         lines.append(f"| latency p50 | {agg['latency_p50']:.0f} ms |")
+        lines.append(f"| latency p90 | {agg.get('latency_p90', agg['latency_p95']):.0f} ms |")
         lines.append(f"| latency p95 | {agg['latency_p95']:.0f} ms |")
         lines.append(f"| latency mean | {agg['latency_mean']:.0f} ms |")
         lines.append(f"| latency max | {agg['latency_max']:.0f} ms |")
@@ -840,6 +904,24 @@ def generate_report(
     else:
         lines.append("<!-- Go/No-Go data not available — run with --report -->")
     lines.append("")
+
+    if payload_summary:
+        lines.append("## Node Payload Sizes (Bytes, p50)")
+        lines.append("")
+        lines.append("| Node | Input p50 | Output p50 | Metadata p50 | Total p50 |")
+        lines.append("|------|-----------|------------|--------------|-----------|")
+        for node in sorted(payload_summary.keys()):
+            p = payload_summary[node]
+            lines.append(
+                f"| {node} | {p['input_p50']:.0f} | {p['output_p50']:.0f} | "
+                f"{p['metadata_p50']:.0f} | {p['total_p50']:.0f} |"
+            )
+        lines.append("")
+        lines.append(
+            "_Note: metadata is SDK-level envelope metadata. "
+            "Use input/output columns to validate curated node payloads._"
+        )
+        lines.append("")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines))
@@ -925,6 +1007,7 @@ async def run_validation(args: argparse.Namespace) -> None:
 
     # Compute aggregates
     aggregates = compute_aggregates(all_results)
+    payload_summary = aggregate_node_payloads(all_results)
 
     # Check orphan traces
     logger.info("Checking orphan traces...")
@@ -946,14 +1029,7 @@ async def run_validation(args: argparse.Namespace) -> None:
 
     # Print summary to console
     for phase, agg in aggregates.items():
-        logger.info(
-            "%s (n=%d): p50=%.0fms p95=%.0fms mean=%.0fms",
-            phase,
-            agg["n"],
-            agg["latency_p50"],
-            agg["latency_p95"],
-            agg["latency_mean"],
-        )
+        logger.info("%s", format_phase_summary(phase, agg))
 
     # Generate report
     if args.report:
@@ -966,6 +1042,7 @@ async def run_validation(args: argparse.Namespace) -> None:
             report_path,
             reference_metrics=reference_metrics,
             go_no_go=go_no_go,
+            payload_summary=payload_summary,
         )
 
     # Also dump raw JSON for programmatic use
@@ -981,6 +1058,7 @@ async def run_validation(args: argparse.Namespace) -> None:
         "relevance_threshold_rrf": run.relevance_threshold_rrf,
         "aggregates": aggregates,
         "go_no_go": go_no_go,
+        "payload_summary": payload_summary,
         "orphan_rate": orphan_rate,
         "reference_trace_id": REFERENCE_TRACE_ID,
         "reference_metrics": reference_metrics,
@@ -996,6 +1074,7 @@ async def run_validation(args: argparse.Namespace) -> None:
                 "state": r.state,
                 "scores": r.scores,
                 "node_spans_ms": r.node_spans_ms,
+                "node_payload_bytes": r.node_payload_bytes,
             }
             for r in all_results
             if r.phase != "warmup"
