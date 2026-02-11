@@ -260,6 +260,8 @@ async def run_single_query(
     services: dict[str, Any],
     run_meta: dict[str, str],
     phase: str,
+    *,
+    message: Any | None = None,
 ) -> TraceResult:
     """Execute a single query through LangGraph pipeline with Langfuse tracing."""
     from telegram_bot.bot import _write_langfuse_scores
@@ -288,6 +290,10 @@ async def run_single_query(
 
         @observe(name="validation-query")
         async def _run() -> Any:
+            # Force streaming when fake message provided
+            if message is not None:
+                config.streaming_enabled = True
+
             graph = build_graph(
                 cache=services["cache"],
                 embeddings=services["embeddings"],
@@ -295,7 +301,7 @@ async def run_single_query(
                 qdrant=services["qdrant"],
                 reranker=services["reranker"],
                 llm=services["llm"],
-                message=None,  # no Telegram message — headless mode
+                message=message,
             )
             result = await graph.ainvoke(state)
             # Compute wall-time BEFORE writing scores so latency_total_ms is correct
@@ -437,6 +443,28 @@ async def run_collection_validation(
     logger.info("Phase 3: Cache-hit run (%d queries)", len(cache_queries))
     for q in cache_queries:
         result = await run_single_query(q, services, run_meta, phase="cache_hit")
+        results.append(result)
+
+    # Phase 4: Streaming TTFT (first 5 cold queries, deterministic)
+    streaming_queries = cold_queries[:5]
+    logger.info("Phase 4: Streaming TTFT (%d queries)", len(streaming_queries))
+    for q in streaming_queries:
+        fake_msg = FakeMessage()
+        result = await run_single_query(
+            q,
+            services,
+            run_meta,
+            phase="streaming",
+            message=fake_msg,
+        )
+        if (
+            fake_msg.t_answer_called is not None
+            and fake_msg.sent is not None
+            and fake_msg.sent.t_first_edit is not None
+        ):
+            ttft = (fake_msg.sent.t_first_edit - fake_msg.t_answer_called) * 1000
+            if ttft >= 0:
+                result.state["streaming_ttft_ms"] = ttft
         results.append(result)
 
     # Cleanup
@@ -1142,12 +1170,31 @@ async def run_validation(args: argparse.Namespace) -> None:
         len(go_no_go),
     )
     for name, c in go_no_go.items():
-        status = "PASS" if c["passed"] else "FAIL"
+        if c.get("skipped"):
+            status = "SKIP"
+        elif c["passed"]:
+            status = "PASS"
+        else:
+            status = "FAIL"
         logger.info("  [%s] %s: %s (target: %s)", status, name, c["actual"], c["target"])
 
     # Print summary to console
     for phase, agg in aggregates.items():
+        if phase == "streaming":
+            continue  # handled separately below
         logger.info("%s", format_phase_summary(phase, agg))
+
+    # Streaming TTFT summary
+    streaming_agg = aggregates.get("streaming")
+    if streaming_agg:
+        logger.info(
+            "streaming TTFT (n=%d, samples=%d): p50=%.0fms p95=%.0fms mean=%.0fms",
+            streaming_agg["n"],
+            streaming_agg["ttft_sample_count"],
+            streaming_agg["ttft_p50"],
+            streaming_agg["ttft_p95"],
+            streaming_agg["ttft_mean"],
+        )
 
     # Generate report
     if args.report:
