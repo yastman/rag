@@ -194,6 +194,36 @@ class TestRetrieveNode:
         cache.store_sparse_embedding.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_handles_legacy_list_return_without_meta(self):
+        """retrieve_node should handle legacy list-only Qdrant responses."""
+        state = make_initial_state(user_id=1, session_id="s1", query="legacy")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_sparse_embedding = AsyncMock()
+        cache.store_search_results = AsyncMock()
+
+        sparse_embeddings = AsyncMock()
+        sparse_embeddings.aembed_query = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=_make_docs(2))
+
+        result = await retrieve_node(
+            state,
+            cache=cache,
+            sparse_embeddings=sparse_embeddings,
+            qdrant=qdrant,
+        )
+
+        assert len(result["documents"]) == 2
+        assert result["retrieval_backend_error"] is False
+        assert result["retrieval_error_type"] is None
+
+    @pytest.mark.asyncio
     async def test_parallel_embeddings_after_rewrite(self):
         """After rewrite (query_embedding=None), fallback parallel dense+sparse."""
         import asyncio
