@@ -48,7 +48,11 @@ async def lifespan(app: FastAPI):
         timeout=30,
     )
 
-    reranker = ColbertRerankerService(base_url=cfg.bge_m3_url)
+    reranker = None
+    if cfg.rerank_provider == "colbert":
+        reranker = ColbertRerankerService(base_url=cfg.bge_m3_url)
+    elif cfg.rerank_provider != "none":
+        logger.warning("Unknown RERANK_PROVIDER=%s, reranking disabled", cfg.rerank_provider)
     llm = cfg.create_llm()
 
     graph = build_graph(
@@ -66,6 +70,7 @@ async def lifespan(app: FastAPI):
     app.state.qdrant = qdrant
     app.state.embeddings = embeddings
     app.state.sparse_embeddings = sparse_embeddings
+    app.state.max_rewrite_attempts = cfg.max_rewrite_attempts
 
     logger.info("RAG API services initialized")
     yield
@@ -109,6 +114,7 @@ async def query(req: QueryRequest) -> QueryResponse:
         session_id=session_id,
         query=req.query,
     )
+    state["max_rewrite_attempts"] = int(getattr(app.state, "max_rewrite_attempts", 1))
 
     trace_kwargs: dict[str, Any] = {
         "session_id": session_id,
