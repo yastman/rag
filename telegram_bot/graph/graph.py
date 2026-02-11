@@ -6,6 +6,7 @@ Builds the full StateGraph with all nodes and conditional edges.
 from __future__ import annotations
 
 import functools
+import time
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -132,7 +133,11 @@ def build_graph(
 
         @observe(name="node-summarize", capture_input=False, capture_output=False)
         async def summarize_wrapper(state: dict[str, Any]) -> dict[str, Any]:
-            return await summarize.ainvoke(state)
+            t0 = time.perf_counter()
+            result = await summarize.ainvoke(state)
+            elapsed = time.perf_counter() - t0
+            result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
+            return result
 
         workflow.add_node("summarize", summarize_wrapper)
 
