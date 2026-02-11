@@ -784,11 +784,12 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
 
     # Streaming TTFT aggregation (separate from cold/cache_hit latency stats)
     streaming_results = [r for r in results if r.phase == "streaming"]
-    ttft_values = [
-        r.state["streaming_ttft_ms"]
-        for r in streaming_results
-        if r.state.get("streaming_ttft_ms") is not None
-    ]
+    ttft_values: list[float] = []
+    for r in streaming_results:
+        ttft = r.state.get("streaming_ttft_ms")
+        if isinstance(ttft, bool) or not isinstance(ttft, int | float):
+            continue
+        ttft_values.append(float(ttft))
     if ttft_values:
         aggregates["streaming"] = {
             "n": len(streaming_results),
