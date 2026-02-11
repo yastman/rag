@@ -7,6 +7,7 @@ import contextlib
 import json
 import logging
 import os
+import time
 
 import httpx
 from dotenv import load_dotenv
@@ -14,11 +15,27 @@ from livekit import agents
 from livekit.agents import Agent, AgentServer, AgentSession, RunContext, cli, function_tool
 from livekit.plugins import elevenlabs, openai, silero
 
+from src.voice.schemas import CallStatus
+from src.voice.transcript_store import TranscriptStore
+
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
 RAG_API_URL = os.getenv("RAG_API_URL", "http://rag-api:8080")
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("VOICE_DATABASE_URL", "")
+_transcript_store: TranscriptStore | None = None
+
+
+async def _get_transcript_store() -> TranscriptStore | None:
+    """Lazy-init transcript store; disabled when DATABASE_URL is missing."""
+    global _transcript_store
+    if not DATABASE_URL:
+        return None
+    if _transcript_store is None:
+        _transcript_store = TranscriptStore(database_url=DATABASE_URL)
+        await _transcript_store.initialize()
+    return _transcript_store
 
 
 def _setup_langfuse() -> None:
@@ -62,7 +79,12 @@ def _setup_langfuse() -> None:
 class VoiceBot(Agent):
     """Voice bot agent for lead validation and RAG Q&A."""
 
-    def __init__(self, call_id: str = "", lead_data: dict | None = None) -> None:
+    def __init__(
+        self,
+        call_id: str = "",
+        lead_data: dict | None = None,
+        transcript_store: TranscriptStore | None = None,
+    ) -> None:
         lead_desc = ""
         if lead_data:
             lead_desc = f"\n\nДанные заявки клиента:\n{json.dumps(lead_data, ensure_ascii=False)}"
@@ -83,6 +105,21 @@ class VoiceBot(Agent):
             ),
         )
         self._call_id = call_id
+        self._transcript_store = transcript_store
+
+    async def _append_transcript(self, role: str, text: str) -> None:
+        """Best-effort transcript persistence that never breaks the call flow."""
+        if not self._transcript_store or not self._call_id:
+            return
+        try:
+            await self._transcript_store.append_transcript(
+                call_id=self._call_id,
+                role=role,
+                text=text,
+                timestamp_ms=int(time.time() * 1000),
+            )
+        except Exception:
+            logger.warning("Failed to append transcript entry (role=%s)", role, exc_info=True)
 
     @function_tool()
     async def search_knowledge_base(self, context: RunContext, query: str) -> str:
@@ -91,6 +128,7 @@ class VoiceBot(Agent):
         Args:
             query: The search query about properties, prices, locations, etc.
         """
+        await self._append_transcript("user", query)
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
@@ -104,10 +142,14 @@ class VoiceBot(Agent):
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return str(data.get("response", "Информация не найдена."))
+                answer = str(data.get("response", "Информация не найдена."))
+                await self._append_transcript("bot", answer)
+                return answer
         except Exception:
             logger.exception("RAG API call failed")
-            return "Извините, не могу найти информацию сейчас."
+            fallback = "Извините, не могу найти информацию сейчас."
+            await self._append_transcript("bot", fallback)
+            return fallback
 
 
 server = AgentServer()
@@ -124,6 +166,23 @@ async def entrypoint(ctx: agents.JobContext):
 
     call_id = metadata.get("call_id", "")
     lead_data = metadata.get("lead_data", {})
+    if not isinstance(lead_data, dict):
+        lead_data = {}
+    phone = str(metadata.get("phone", "")).strip()
+    callback_chat_id = metadata.get("callback_chat_id")
+
+    store = await _get_transcript_store()
+    if store is not None and phone:
+        try:
+            call_id = await store.create_call(
+                phone=phone,
+                lead_data=lead_data,
+                callback_chat_id=callback_chat_id,
+                call_id=call_id or None,
+            )
+            await store.update_status(call_id, CallStatus.ANSWERED)
+        except Exception:
+            logger.exception("Failed to initialize transcript row for call_id=%s", call_id)
 
     # Create agent session with ElevenLabs STT/TTS
     session: AgentSession = AgentSession(
@@ -140,7 +199,7 @@ async def entrypoint(ctx: agents.JobContext):
         vad=silero.VAD.load(),
     )
 
-    agent = VoiceBot(call_id=call_id, lead_data=lead_data)
+    agent = VoiceBot(call_id=call_id, lead_data=lead_data, transcript_store=store)
     await session.start(room=ctx.room, agent=agent)
 
     # Start conversation with greeting
