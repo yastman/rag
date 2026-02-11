@@ -1098,7 +1098,7 @@ class TestGenerateNodeResponseStyle:
         mock_config.response_style_enabled = True
         mock_config.response_style_shadow_mode = False
         mock_config.generate_max_tokens = 40
-        # "сколько стоит" -> short/easy baseline budget=50, capped to 40
+        # "сколько стоит" -> short/easy baseline budget=100, capped to 40
         state = _make_state_with_docs(query="сколько стоит студия")
 
         with patch(
@@ -1121,9 +1121,14 @@ class TestGenerateNodeResponseStyle:
         mock_config.generate_max_tokens = 2048
         state = _make_state_with_docs(query="сколько стоит студия")
 
-        with patch(
-            "telegram_bot.graph.nodes.generate._get_config",
-            return_value=mock_config,
+        with (
+            patch(
+                "telegram_bot.graph.nodes.generate._get_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "telegram_bot.graph.nodes.generate.build_system_prompt_with_manager",
+            ) as mock_style_prompt,
         ):
             result = await generate_node(state)
 
@@ -1133,3 +1138,32 @@ class TestGenerateNodeResponseStyle:
         # But legacy max_tokens is used
         call_kwargs = mock_client.chat.completions.create.call_args
         assert call_kwargs.kwargs.get("max_tokens") == 2048
+        # No style prompt manager call in shadow mode (avoid unnecessary overhead)
+        mock_style_prompt.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_disabled_mode_keeps_legacy_prompt_without_style_lookup(self) -> None:
+        """Disabled mode should skip style prompt manager path entirely."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config("Legacy answer.")
+        mock_config.response_style_enabled = False
+        mock_config.response_style_shadow_mode = False
+        mock_config.generate_max_tokens = 2048
+        state = _make_state_with_docs(query="сколько стоит студия")
+
+        with (
+            patch(
+                "telegram_bot.graph.nodes.generate._get_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "telegram_bot.graph.nodes.generate.build_system_prompt_with_manager",
+            ) as mock_style_prompt,
+        ):
+            result = await generate_node(state)
+
+        assert result["response_policy_mode"] == "disabled"
+        call_kwargs = mock_client.chat.completions.create.call_args
+        assert call_kwargs.kwargs.get("max_tokens") == 2048
+        mock_style_prompt.assert_not_called()
