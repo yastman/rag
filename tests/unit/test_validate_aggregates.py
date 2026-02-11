@@ -13,6 +13,7 @@ from scripts.validate_traces import (
     evaluate_go_no_go,
     format_phase_summary,
     generate_report,
+    resolve_report_collections,
 )
 
 
@@ -299,3 +300,26 @@ class TestReportAndSummary:
         }
         line = format_phase_summary("cold", agg)
         assert "p90=140ms" in line
+
+
+class TestCollectionResolution:
+    """Report collections must reflect actually validated collections only."""
+
+    def test_uses_only_collections_present_in_results(self):
+        discovered = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+        results = [
+            TraceResult(
+                trace_id="t1",
+                query="q",
+                collection="gdrive_documents_bge",
+                phase="cold",
+                source="smoke",
+                difficulty="easy",
+                latency_wall_ms=1000.0,
+            )
+        ]
+        assert resolve_report_collections(discovered, results) == ["gdrive_documents_bge"]
+
+    def test_falls_back_to_discovered_if_results_empty(self):
+        discovered = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+        assert resolve_report_collections(discovered, []) == discovered
