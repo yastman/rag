@@ -122,3 +122,19 @@ class TestGraphConfig:
         assert cfg.llm_base_url == "http://litellm:4000"
         assert cfg.domain == "недвижимость"
         assert cfg.domain_language == "ru"
+
+    def test_response_style_flags_default_false(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        assert cfg.response_style_enabled is False
+        assert cfg.response_style_shadow_mode is False
+
+    def test_response_style_flags_from_env(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        env = {"RESPONSE_STYLE_ENABLED": "true", "RESPONSE_STYLE_SHADOW_MODE": "true"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.response_style_enabled is True
+        assert cfg.response_style_shadow_mode is True
