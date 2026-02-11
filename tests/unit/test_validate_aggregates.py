@@ -1,5 +1,8 @@
 """Tests for validation metrics aggregation."""
 
+import contextlib
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,6 +17,7 @@ from scripts.validate_traces import (
     format_phase_summary,
     generate_report,
     resolve_report_collections,
+    run_single_query,
 )
 
 
@@ -631,3 +635,71 @@ class TestStreamingAggregation:
         assert s["n"] == 2
         assert s["ttft_sample_count"] == 1
         assert s["ttft_p50"] == pytest.approx(450.0, abs=1)
+
+
+class TestRunSingleQuery:
+    """run_single_query should restore mutable config even on failures."""
+
+    async def test_restores_streaming_flag_on_graph_failure(self, monkeypatch: pytest.MonkeyPatch):
+        class _FakeClient:
+            def update_current_trace(self, **kwargs):
+                return None
+
+        def _fake_observe(*, name: str):
+            def _decorator(fn):
+                async def _wrapped(*args, **kwargs):
+                    kwargs.pop("langfuse_trace_id", None)
+                    return await fn(*args, **kwargs)
+
+                return _wrapped
+
+            return _decorator
+
+        class _FailingGraph:
+            async def ainvoke(self, state):
+                raise RuntimeError("graph boom")
+
+        fake_bot = types.SimpleNamespace(_write_langfuse_scores=lambda *_args, **_kwargs: None)
+        fake_graph = types.SimpleNamespace(build_graph=lambda **_kwargs: _FailingGraph())
+        fake_state = types.SimpleNamespace(
+            make_initial_state=lambda **_kwargs: {"messages": [{"role": "user", "content": "q"}]}
+        )
+        fake_observability = types.SimpleNamespace(
+            get_client=lambda: _FakeClient(),
+            observe=_fake_observe,
+            propagate_attributes=lambda **_kwargs: contextlib.nullcontext(),
+        )
+
+        monkeypatch.setitem(sys.modules, "telegram_bot.bot", fake_bot)
+        monkeypatch.setitem(sys.modules, "telegram_bot.graph.graph", fake_graph)
+        monkeypatch.setitem(sys.modules, "telegram_bot.graph.state", fake_state)
+        monkeypatch.setitem(sys.modules, "telegram_bot.observability", fake_observability)
+
+        config = types.SimpleNamespace(
+            streaming_enabled=False,
+            max_rewrite_attempts=1,
+            skip_rerank_threshold=0.012,
+            relevance_threshold_rrf=0.005,
+        )
+        services = {
+            "cache": object(),
+            "embeddings": object(),
+            "sparse_embeddings": object(),
+            "qdrant": object(),
+            "reranker": None,
+            "llm": None,
+            "config": config,
+        }
+        query = types.SimpleNamespace(text="q", source="test", difficulty="easy")
+        run_meta = {"run_id": "run-1", "git_sha": "abc123", "collection": "test-col"}
+
+        with pytest.raises(RuntimeError, match="graph boom"):
+            await run_single_query(
+                query,
+                services,
+                run_meta,
+                phase="streaming",
+                message=object(),
+            )
+
+        assert config.streaming_enabled is False
