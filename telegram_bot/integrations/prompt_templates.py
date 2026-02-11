@@ -9,12 +9,9 @@ Issue: #129
 
 from __future__ import annotations
 
-from typing import Literal
-
 from telegram_bot.integrations.prompt_manager import get_prompt
+from telegram_bot.services.response_style_detector import ResponseStyle
 
-
-ResponseStyle = Literal["short", "balanced", "detailed"]
 
 CONTRACT_PROMPTS: dict[ResponseStyle, str] = {
     "short": (
