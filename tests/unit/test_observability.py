@@ -62,3 +62,19 @@ class TestMaskPii:
 
         result = mask_pii("квартира 3 комнаты 50000 евро")
         assert result == "квартира 3 комнаты 50000 евро"
+
+
+class TestTracedPipeline:
+    """Tests for traced_pipeline context manager."""
+
+    def test_traced_pipeline_is_context_manager(self):
+        from telegram_bot.observability import traced_pipeline
+
+        with traced_pipeline(session_id="test-123", user_id="user-1"):
+            pass  # should not raise
+
+    def test_traced_pipeline_accepts_tags(self):
+        from telegram_bot.observability import traced_pipeline
+
+        with traced_pipeline(session_id="s", user_id="u", tags=["a", "b"]):
+            pass
