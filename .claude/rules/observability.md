@@ -118,6 +118,32 @@ Usage:
 | rewrite_node | `node-rewrite` |
 | respond_node | `node-respond` |
 
+### Error Span Tracking (#103 P1.2)
+
+4 nodes call `get_client().update_current_span(level=..., status_message=...)` on failure:
+
+| Node | Level | Trigger | Fallback |
+|------|-------|---------|----------|
+| generate_node | ERROR | LLM call failed | Document summary fallback |
+| generate_node | WARNING | Streaming failed | Non-streaming fallback |
+| rewrite_node | ERROR | LLM rewrite failed | Keep original query |
+| rerank_node | ERROR | ColBERT failed | Score-sort fallback |
+| respond_node | ERROR | Telegram send failed | (logged, no retry) |
+
+**Langfuse UI:** Filter spans by `level=ERROR` to find degraded queries.
+
+**Pattern:**
+```python
+from telegram_bot.observability import get_client
+except Exception as e:
+    get_client().update_current_span(
+        level="ERROR",
+        status_message=f"Description: {str(e)[:200]}",
+    )
+```
+
+**Graceful degradation:** `_NullLangfuseClient.update_current_span()` is a no-op when Langfuse disabled.
+
 ### Cache (9 methods)
 
 | Method | Span Name |
@@ -165,7 +191,7 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 
 ## Langfuse Scores (All Exit Paths)
 
-12 scores written via `_write_langfuse_scores(lf, result)` in `bot.py` after `graph.ainvoke()`:
+14 scores written via `_write_langfuse_scores(lf, result)` in `bot.py` after `graph.ainvoke()`:
 
 **Latency convention:** `latency_total_ms` is **wall-time** measured via `time.perf_counter` in `handle_query` (pipeline_wall_ms), NOT sum of stages. All `latency_stages` values are in **seconds** (float) for per-stage breakdown only.
 
@@ -183,6 +209,8 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 | `llm_used` | 0.0/1.0 | LLM generation was invoked |
 | `confidence_score` | 0.0-1.0 | Grade confidence (real value from state) |
 | `hyde_used` | 0.0 | Not yet tracked in LangGraph state |
+| `llm_ttft_ms` | float | Time to first token (ms), streaming only |
+| `llm_response_duration_ms` | float | Full LLM response wall-time (ms) |
 
 **Implementation:** `get_client().score_current_trace(name=..., value=...)` (Langfuse SDK v3)
 

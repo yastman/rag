@@ -500,6 +500,28 @@ class TestWriteLangfuseScores:
         assert calls["search_cache_hit"] == 0.0
         assert calls["confidence_score"] == 0.016
 
+    def test_write_langfuse_scores_includes_ttft(self):
+        """llm_ttft_ms and llm_response_duration_ms are written as scores."""
+        from telegram_bot.bot import _write_langfuse_scores
+
+        mock_lf = MagicMock()
+        result = {
+            "query_type": "GENERAL",
+            "cache_hit": False,
+            "search_results_count": 5,
+            "rerank_applied": False,
+            "latency_stages": {"generate": 2.5},
+            "pipeline_wall_ms": 3000.0,
+            "llm_ttft_ms": 450.0,
+            "llm_response_duration_ms": 2500.0,
+        }
+        _write_langfuse_scores(mock_lf, result)
+        calls = {
+            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
+        }
+        assert calls["llm_ttft_ms"] == 450.0
+        assert calls["llm_response_duration_ms"] == 2500.0
+
 
 class TestMakeSessionId:
     """Test make_session_id utility function."""

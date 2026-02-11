@@ -38,6 +38,9 @@ class RAGState(TypedDict):
     score_improved: bool
     retrieval_backend_error: bool
     retrieval_error_type: str | None
+    llm_provider_model: str
+    llm_ttft_ms: float
+    llm_response_duration_ms: float
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -68,4 +71,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "score_improved": True,
         "retrieval_backend_error": False,
         "retrieval_error_type": None,
+        "llm_provider_model": "",
+        "llm_ttft_ms": 0.0,
+        "llm_response_duration_ms": 0.0,
     }

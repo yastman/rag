@@ -12,11 +12,13 @@ from telegram_bot.graph.state import make_initial_state
 def _make_mock_config(
     llm_answer: str = "Ответ.",
     streaming_enabled: bool = True,
+    response_model: str = "cerebras/gpt-oss-120b",
 ) -> tuple[MagicMock, MagicMock]:
     """Create mock GraphConfig + AsyncOpenAI client for generate_node tests."""
     mock_choice = MagicMock()
     mock_choice.message.content = llm_answer
     mock_response = MagicMock(choices=[mock_choice])
+    mock_response.model = response_model
 
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
@@ -35,12 +37,13 @@ def _make_mock_config(
 class _MockStreamChunk:
     """Mock OpenAI streaming chunk with delta content."""
 
-    def __init__(self, content: str | None = None):
+    def __init__(self, content: str | None = None, model: str | None = None):
         delta = MagicMock()
         delta.content = content
         choice = MagicMock()
         choice.delta = delta
         self.choices = [choice] if content is not None else []
+        self.model = model
 
 
 class _MockAsyncStream:
@@ -570,3 +573,120 @@ class TestGenerateNodeStreaming:
 
         assert result["response"] == "Final fallback answer."
         assert result["response_sent"] is False
+
+
+class TestGenerateNodeProviderMetadata:
+    """Test provider metadata and TTFT tracking in generate_node."""
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_captures_provider_model(self) -> None:
+        """Non-streaming path captures response.model into llm_provider_model."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, _mock_client = _make_mock_config(
+            "Ответ.",
+            response_model="cerebras/gpt-oss-120b",
+        )
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state)
+
+        assert result["llm_provider_model"] == "cerebras/gpt-oss-120b"
+        assert result["llm_response_duration_ms"] > 0
+        assert result["llm_ttft_ms"] == 0.0  # non-streaming has no TTFT
+
+    @pytest.mark.asyncio
+    async def test_streaming_captures_ttft(self) -> None:
+        """Streaming path measures TTFT > 0 on first content chunk."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        chunks = ["Квартира ", "стоит ", "65000€."]
+        mock_client = _make_streaming_client(chunks)
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["llm_ttft_ms"] >= 0.0  # should be > 0 in real scenario
+        assert result["llm_response_duration_ms"] > 0
+
+    @pytest.mark.asyncio
+    async def test_streaming_captures_model_from_chunk(self) -> None:
+        """Streaming path extracts model from chunk.model attribute."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        # Build chunks with model info
+        chunk1 = _MockStreamChunk("Hello ", model="groq/llama-3.1-70b")
+        chunk2 = _MockStreamChunk("world.", model="groq/llama-3.1-70b")
+        stream = _MockAsyncStream.__new__(_MockAsyncStream)
+        stream._chunks = [chunk1, chunk2]
+        stream._index = 0
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=stream)
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["llm_provider_model"] == "groq/llama-3.1-70b"
+
+    @pytest.mark.asyncio
+    async def test_fallback_sets_fallback_model(self) -> None:
+        """When LLM fails completely, llm_provider_model = 'fallback'."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=Exception("LLM unavailable"),
+        )
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state)
+
+        assert result["llm_provider_model"] == "fallback"
+        assert result["llm_ttft_ms"] == 0.0
+        assert result["llm_response_duration_ms"] > 0

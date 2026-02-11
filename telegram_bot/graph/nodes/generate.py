@@ -115,7 +115,7 @@ async def _generate_streaming(
     config: Any,
     llm_messages: list[dict[str, str]],
     message: Any,
-) -> str:
+) -> tuple[str, str, float]:
     """Stream LLM response directly to Telegram via message editing.
 
     Sends a placeholder message, then edits it with accumulated text as chunks
@@ -129,7 +129,7 @@ async def _generate_streaming(
         message: aiogram Message object for Telegram delivery.
 
     Returns:
-        Complete response text.
+        Tuple of (response_text, actual_model, ttft_ms).
 
     Raises:
         Exception: On any streaming failure (caller handles fallback).
@@ -138,6 +138,8 @@ async def _generate_streaming(
 
     accumulated = ""
     last_edit = 0.0
+    ttft_ms = 0.0
+    actual_model = config.llm_model
 
     stream = await llm.chat.completions.create(
         model=config.llm_model,
@@ -148,18 +150,23 @@ async def _generate_streaming(
         name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
     )
 
+    t_stream_start = time.monotonic()
     try:
         async for chunk in stream:
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
             if delta and delta.content:
+                if ttft_ms == 0.0:
+                    ttft_ms = (time.monotonic() - t_stream_start) * 1000
                 accumulated += delta.content
                 now = time.monotonic()
                 if now - last_edit >= _STREAM_EDIT_INTERVAL:
                     with contextlib.suppress(Exception):
                         await sent_msg.edit_text(accumulated)
                     last_edit = now
+            if hasattr(chunk, "model") and chunk.model:
+                actual_model = chunk.model
     except Exception:
         if accumulated:
             raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
@@ -183,7 +190,7 @@ async def _generate_streaming(
         except Exception:
             logger.warning("Failed to finalize streaming message")
 
-    return accumulated
+    return accumulated, actual_model, ttft_ms
 
 
 @observe(name="node-generate")
@@ -237,6 +244,8 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     llm_messages.append({"role": "user", "content": user_content})
 
     response_sent = False
+    actual_model = config.llm_model
+    ttft_ms = 0.0
 
     try:
         llm = config.create_llm()
@@ -244,7 +253,12 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         # Streaming path: deliver directly to Telegram
         if message is not None and config.streaming_enabled:
             try:
-                answer = await _generate_streaming(llm, config, llm_messages, message)
+                answer, actual_model, ttft_ms = await _generate_streaming(
+                    llm,
+                    config,
+                    llm_messages,
+                    message,
+                )
                 response_sent = True
             except StreamingPartialDeliveryError as e:
                 logger.warning(
@@ -261,6 +275,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     name="generate-answer",  # type: ignore[call-overload]
                 )
                 answer = response.choices[0].message.content or ""
+                actual_model = getattr(response, "model", config.llm_model) or config.llm_model
                 # Edit existing message with fallback answer
                 delivered = False
                 try:
@@ -292,6 +307,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     name="generate-answer",  # type: ignore[call-overload]
                 )
                 answer = response.choices[0].message.content or ""
+                actual_model = getattr(response, "model", config.llm_model) or config.llm_model
         else:
             # Non-streaming path (original)
             response = await llm.chat.completions.create(
@@ -302,6 +318,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                 name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
             answer = response.choices[0].message.content or ""
+            actual_model = getattr(response, "model", config.llm_model) or config.llm_model
     except Exception as e:
         logger.exception("generate_node: LLM call failed, using fallback")
         get_client().update_current_span(
@@ -309,10 +326,15 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
             status_message=f"LLM failed: {str(e)[:200]}",
         )
         answer = _build_fallback_response(documents)
+        actual_model = "fallback"
+        ttft_ms = 0.0
 
     elapsed = time.monotonic() - t0
     return {
         "response": answer,
         "response_sent": response_sent,
+        "llm_provider_model": actual_model,
+        "llm_ttft_ms": ttft_ms,
+        "llm_response_duration_ms": elapsed * 1000,
         "latency_stages": {**state.get("latency_stages", {}), "generate": elapsed},
     }
