@@ -11,6 +11,7 @@ import pytest
 
 from telegram_bot.graph.graph import build_graph
 from telegram_bot.graph.state import make_initial_state
+from telegram_bot.observability import traced_pipeline
 
 
 @pytest.mark.smoke
@@ -119,11 +120,12 @@ async def test_full_graph_classify_to_respond():
     mock_gc.llm_temperature = 0.7
     mock_gc.llm_max_tokens = 4096
 
-    with patch(
-        "telegram_bot.graph.nodes.generate._get_config",
-        return_value=mock_gc,
-    ):
-        result = await graph.ainvoke(state)
+    with traced_pipeline(session_id="smoke-test-20260209", user_id="smoke"):
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_gc,
+        ):
+            result = await graph.ainvoke(state)
 
     # Graph should produce a response
     assert "response" in result
