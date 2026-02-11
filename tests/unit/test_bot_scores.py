@@ -88,6 +88,13 @@ FULL_PIPELINE_RESULT = {
     "llm_timeout": False,
     "llm_stream_recovery": False,
     "streaming_enabled": True,
+    # Response length control (#129)
+    "response_style": "balanced",
+    "response_difficulty": "medium",
+    "response_style_reasoning": "length_heuristic",
+    "answer_words": 12,
+    "answer_chars": 65,
+    "answer_to_question_ratio": 2.4,
 }
 
 # Cache hit result (short-circuit)
@@ -192,9 +199,16 @@ class TestScoreWriting:
             "llm_decode_ms",
             "llm_tps",
             "llm_queue_unavailable",
+            # Response length control (#129)
+            "answer_words",
+            "answer_chars",
+            "answer_to_question_ratio",
+            "response_style_applied",
+            # Voice transcription (#151)
+            "input_type",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.score_current_trace.call_count == 20
+        assert mock_lf.score_current_trace.call_count == 25
 
     @pytest.mark.asyncio
     async def test_score_values_full_pipeline(self, mock_config):

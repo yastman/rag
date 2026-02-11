@@ -472,7 +472,7 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.81.3-stable
     container_name: dev-litellm
-    profiles: ["bot", "full"]
+    profiles: ["bot", "voice", "full"]
     ports:
       - "127.0.0.1:4000:4000"
     volumes:
@@ -618,6 +618,131 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # =============================================================================
+  # VOICE (LiveKit Agents + SIP)
+  # =============================================================================
+
+  rag-api:
+    build:
+      context: .
+      dockerfile: src/api/Dockerfile
+    container_name: dev-rag-api
+    profiles: ["voice", "full"]
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      REDIS_URL: redis://redis:6379
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
+      BGE_M3_URL: http://bge-m3:8000
+      LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      LLM_BASE_URL: http://litellm:4000
+      LLM_MODEL: gpt-4o-mini
+      RERANK_PROVIDER: colbert
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: http://langfuse:3000
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      bge-m3:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  livekit-server:
+    image: livekit/livekit-server:v1.8
+    container_name: dev-livekit
+    profiles: ["voice", "full"]
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - ./docker/livekit/livekit.yaml:/etc/livekit.yaml:ro
+    command: --config /etc/livekit.yaml --dev
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7880 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  livekit-sip:
+    image: livekit/sip:latest
+    container_name: dev-livekit-sip
+    profiles: ["voice", "full"]
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "5060:5060/udp"
+      - "5061:5061/tcp"
+      - "10000-10100:10000-10100/udp"
+    environment:
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret
+      LIVEKIT_WS_URL: ws://livekit-server:7880
+      SIP_PORT: "5060"
+      RTP_PORT_LOW: "10000"
+      RTP_PORT_HIGH: "10100"
+    depends_on:
+      livekit-server:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  voice-agent:
+    build:
+      context: .
+      dockerfile: src/voice/Dockerfile
+    container_name: dev-voice-agent
+    profiles: ["voice", "full"]
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      LIVEKIT_URL: ws://livekit-server:7880
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret
+      ELEVEN_API_KEY: ${ELEVENLABS_API_KEY:-}
+      RAG_API_URL: http://rag-api:8080
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: http://langfuse:3000
+    depends_on:
+      livekit-server:
+        condition: service_healthy
+      rag-api:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     deploy:
       resources:
         limits:
