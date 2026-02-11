@@ -150,3 +150,35 @@ class TestRouteGrade:
             "rewrite_effective": True,
         }
         assert route_grade(state) == "rewrite"
+
+    def test_score_not_improved_stops_rewrite(self):
+        """If score didn't improve, stop rewriting even if count < max."""
+        state = {
+            "documents_relevant": False,
+            "rewrite_count": 1,
+            "max_rewrite_attempts": 3,
+            "rewrite_effective": True,
+            "score_improved": False,
+        }
+        assert route_grade(state) == "generate"
+
+    def test_score_improved_allows_rewrite(self):
+        """If score improved and conditions met, allow rewrite."""
+        state = {
+            "documents_relevant": False,
+            "rewrite_count": 1,
+            "max_rewrite_attempts": 3,
+            "rewrite_effective": True,
+            "score_improved": True,
+        }
+        assert route_grade(state) == "rewrite"
+
+    def test_score_improved_default_true_allows_rewrite(self):
+        """Missing score_improved defaults to True (backward compat)."""
+        state = {
+            "documents_relevant": False,
+            "rewrite_count": 0,
+            "max_rewrite_attempts": 1,
+            "rewrite_effective": True,
+        }
+        assert route_grade(state) == "rewrite"
