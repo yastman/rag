@@ -52,7 +52,7 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
 
     scores = {
         "query_type": _QUERY_TYPE_SCORE.get(result.get("query_type", ""), 1.0),
-        "latency_total_ms": total_ms,
+        "latency_total_ms": result.get("user_perceived_wall_ms", total_ms),
         "semantic_cache_hit": 1.0 if result.get("cache_hit") else 0.0,
         "embeddings_cache_hit": 1.0 if result.get("embeddings_cache_hit") else 0.0,
         "search_cache_hit": 1.0 if result.get("search_cache_hit") else 0.0,
@@ -137,6 +137,11 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
     voice_dur = result.get("voice_duration_s")
     if voice_dur is not None:
         lf.score_current_trace(name="voice_duration_s", value=float(voice_dur))
+
+    # --- Conversation memory summarization (#154) ---
+    summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
+    if summarize_ms > 0:
+        lf.score_current_trace(name="summarize_ms", value=summarize_ms)
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -429,6 +434,9 @@ class PropertyBot:
 
             # Wall-time for accurate latency_total_ms
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
+            # User-perceived latency excludes post-respond summarization
+            summarize_s = result.get("latency_stages", {}).get("summarize", 0)
+            result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
 
             # Update trace with input/output and metadata
             lf = get_client()
@@ -524,6 +532,9 @@ class PropertyBot:
                 return
 
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
+            # User-perceived latency excludes post-respond summarization
+            summarize_s = result.get("latency_stages", {}).get("summarize", 0)
+            result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
 
             lf = get_client()
             lf.update_current_trace(
