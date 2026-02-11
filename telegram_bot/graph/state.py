@@ -42,6 +42,13 @@ class RAGState(TypedDict):
     llm_provider_model: str
     llm_ttft_ms: float
     llm_response_duration_ms: float
+    # Latency breakdown (#147)
+    llm_decode_ms: float | None
+    llm_tps: float | None
+    llm_queue_ms: float | None
+    llm_timeout: bool
+    llm_stream_recovery: bool
+    streaming_enabled: bool
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -76,4 +83,11 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "llm_provider_model": "",
         "llm_ttft_ms": 0.0,
         "llm_response_duration_ms": 0.0,
+        # Latency breakdown (#147)
+        "llm_decode_ms": None,
+        "llm_tps": None,
+        "llm_queue_ms": None,
+        "llm_timeout": False,
+        "llm_stream_recovery": False,
+        "streaming_enabled": False,
     }
