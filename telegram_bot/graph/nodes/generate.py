@@ -18,7 +18,12 @@ from typing import Any
 
 from telegram_bot.graph.state import RAGState
 from telegram_bot.integrations.prompt_manager import get_prompt
+from telegram_bot.integrations.prompt_templates import (
+    build_system_prompt_with_manager,
+    get_token_limit,
+)
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.response_style_detector import ResponseStyleDetector
 
 
 logger = logging.getLogger(__name__)
@@ -36,6 +41,7 @@ class StreamingPartialDeliveryError(Exception):
 _MAX_CONTEXT_DOCS = 5
 _STREAM_EDIT_INTERVAL = 0.3  # 300ms throttle for Telegram edit_text
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
+_detector = ResponseStyleDetector()
 
 
 def _get_config() -> Any:
@@ -116,6 +122,7 @@ async def _generate_streaming(
     config: Any,
     llm_messages: list[dict[str, str]],
     message: Any,
+    max_tokens: int = 0,
 ) -> tuple[str, str, float, int | None]:
     """Stream LLM response directly to Telegram via message editing.
 
@@ -143,11 +150,12 @@ async def _generate_streaming(
     actual_model = config.llm_model
     completion_tokens: int | None = None
 
+    effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
     stream = await llm.chat.completions.create(
         model=config.llm_model,
         messages=llm_messages,
         temperature=config.llm_temperature,
-        max_tokens=config.generate_max_tokens,
+        max_tokens=effective_max_tokens,
         stream=True,
         name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
     )
@@ -225,7 +233,37 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
 
     config = _get_config()
     context = _format_context(documents)
-    system_prompt = _build_system_prompt(config.domain)
+
+    # Extract current query (needed for style detection before prompt building)
+    last_msg = messages[-1] if messages else None
+    query = ""
+    if last_msg:
+        query = (
+            last_msg.get("content", "")
+            if isinstance(last_msg, dict)
+            else getattr(last_msg, "content", "")
+        )
+
+    # Detect response style (C+ scoring, no LLM call, ~0ms) (#129)
+    # Rollout-safe: disabled → legacy, shadow → compute metrics but legacy prompt/tokens
+    style_info = _detector.detect(query)
+    style_enabled = bool(getattr(config, "response_style_enabled", False))
+    shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
+
+    legacy_system_prompt = _build_system_prompt(config.domain)
+    legacy_max_tokens = int(config.generate_max_tokens)
+
+    style_system_prompt = build_system_prompt_with_manager(
+        style=style_info.style,
+        difficulty=style_info.difficulty,
+        domain=config.domain,
+    )
+    style_budget = get_token_limit(style_info.style, style_info.difficulty)
+    effective_style_budget = min(style_budget, legacy_max_tokens)
+
+    use_style = style_enabled and not shadow_mode
+    system_prompt = style_system_prompt if use_style else legacy_system_prompt
+    max_tokens = effective_style_budget if use_style else legacy_max_tokens
 
     # Build OpenAI-format messages
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
@@ -238,16 +276,6 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
             llm_messages.append({"role": "user", "content": str(content)})
         elif role in ("assistant", "ai"):
             llm_messages.append({"role": "assistant", "content": str(content)})
-
-    # Add current query with context
-    last_msg = messages[-1] if messages else None
-    query = ""
-    if last_msg:
-        query = (
-            last_msg.get("content", "")
-            if isinstance(last_msg, dict)
-            else getattr(last_msg, "content", "")
-        )
 
     user_content = (
         f"Контекст:\n{context}\n\nВопрос: {query}\n\nОтветь на вопрос на основе контекста выше."
@@ -285,6 +313,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     config,
                     llm_messages,
                     message,
+                    max_tokens,
                 )
                 response_sent = True
             except StreamingPartialDeliveryError as e:
@@ -298,7 +327,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     model=config.llm_model,
                     messages=llm_messages,
                     temperature=config.llm_temperature,
-                    max_tokens=config.generate_max_tokens,
+                    max_tokens=max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]
                 )
                 answer = response_obj.choices[0].message.content or ""
@@ -333,7 +362,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     model=config.llm_model,
                     messages=llm_messages,
                     temperature=config.llm_temperature,
-                    max_tokens=config.generate_max_tokens,
+                    max_tokens=max_tokens,
                     name="generate-answer",  # type: ignore[call-overload]
                 )
                 answer = response_obj.choices[0].message.content or ""
@@ -345,7 +374,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                 model=config.llm_model,
                 messages=llm_messages,
                 temperature=config.llm_temperature,
-                max_tokens=config.generate_max_tokens,
+                max_tokens=max_tokens,
                 name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
             answer = response_obj.choices[0].message.content or ""
@@ -396,6 +425,13 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         if completion_tokens is not None and llm_decode_ms > 0:
             llm_tps = completion_tokens / (llm_decode_ms / 1000)
 
+    # Response length metrics (#129)
+    answer_words = len(answer.split())
+    answer_chars = len(answer)
+    question_words = style_info.word_count
+    ratio = answer_words / max(question_words, 1)
+    response_policy_mode = "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
+
     return {
         "response": answer,
         "response_sent": response_sent,
@@ -410,4 +446,12 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         "llm_timeout": hard_timeout,
         "llm_stream_recovery": stream_recovery,
         "streaming_enabled": streaming_was_enabled,
+        # Response length control (#129)
+        "response_style": style_info.style,
+        "response_difficulty": style_info.difficulty,
+        "response_style_reasoning": style_info.reasoning,
+        "answer_words": answer_words,
+        "answer_chars": answer_chars,
+        "answer_to_question_ratio": ratio,
+        "response_policy_mode": response_policy_mode,
     }
