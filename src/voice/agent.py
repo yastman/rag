@@ -7,7 +7,6 @@ import contextlib
 import json
 import logging
 import os
-import time
 
 import httpx
 from dotenv import load_dotenv
@@ -15,17 +14,11 @@ from livekit import agents
 from livekit.agents import Agent, AgentServer, AgentSession, RunContext, cli, function_tool
 from livekit.plugins import elevenlabs, openai, silero
 
-from src.voice.transcript_store import TranscriptStore
-
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
 RAG_API_URL = os.getenv("RAG_API_URL", "http://rag-api:8080")
-DATABASE_URL = os.getenv("DATABASE_URL", "")
-
-# Global transcript store
-_transcript_store: TranscriptStore | None = None
 
 
 def _setup_langfuse() -> None:
@@ -90,8 +83,6 @@ class VoiceBot(Agent):
             ),
         )
         self._call_id = call_id
-        self._turn_count = 0
-        self._call_start = time.perf_counter()
 
     @function_tool()
     async def search_knowledge_base(self, context: RunContext, query: str) -> str:
@@ -113,7 +104,7 @@ class VoiceBot(Agent):
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                return data.get("response", "Информация не найдена.")
+                return str(data.get("response", "Информация не найдена."))
         except Exception:
             logger.exception("RAG API call failed")
             return "Извините, не могу найти информацию сейчас."
@@ -125,13 +116,6 @@ server = AgentServer()
 @server.rtc_session(agent_name="voice-bot")
 async def entrypoint(ctx: agents.JobContext):
     """Entry point for voice bot agent."""
-    global _transcript_store
-
-    # Initialize transcript store once
-    if _transcript_store is None and DATABASE_URL:
-        _transcript_store = TranscriptStore(database_url=DATABASE_URL)
-        await _transcript_store.initialize()
-
     # Parse call metadata
     metadata: dict = {}
     if ctx.job.metadata:
@@ -142,8 +126,8 @@ async def entrypoint(ctx: agents.JobContext):
     lead_data = metadata.get("lead_data", {})
 
     # Create agent session with ElevenLabs STT/TTS
-    session = AgentSession(
-        stt=elevenlabs.STT(model="scribe_v2_realtime"),
+    session: AgentSession = AgentSession(
+        stt=elevenlabs.STT(model_id="scribe_v2_realtime"),
         llm=openai.LLM(
             model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
             base_url=os.getenv("LLM_BASE_URL", "http://litellm:4000"),

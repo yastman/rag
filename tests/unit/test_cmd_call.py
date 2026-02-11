@@ -72,3 +72,12 @@ def test_call_requires_livekit_config(bot_config, message):
     asyncio.run(bot.cmd_call(message))
     message.answer.assert_called_once()
     assert "Voice service" in message.answer.call_args[0][0]
+
+
+def test_call_rejects_invalid_phone(bot_config, message):
+    """Invalid phone number should be rejected."""
+    bot = _make_bot(bot_config)
+    message.text = "/call not-a-phone"
+    asyncio.run(bot.cmd_call(message))
+    message.answer.assert_called_once()
+    assert "формат" in message.answer.call_args[0][0].lower()
