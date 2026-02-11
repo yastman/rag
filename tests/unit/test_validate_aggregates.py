@@ -111,3 +111,20 @@ class TestEvaluateGoNoGo:
         )
         assert criteria["cold_over_10s_lt_15pct"]["actual"] == "0.0% (0/0)"
         assert criteria["orphan_traces_zero"]["passed"] is True
+
+    def test_uses_generate_p50_key_not_ttft(self):
+        """Go/No-Go must use 'generate_p50_lt_2s', not 'ttft_p50_lt_2s'."""
+        aggregates = {
+            "cold": {
+                "latency_p50": 3000,
+                "latency_p95": 5000,
+                "node_p50": {"generate": 1500},
+            },
+            "cache_hit": {"latency_p50": 500},
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        assert "generate_p50_lt_2s" in criteria, "Criterion must be named 'generate_p50_lt_2s'"
+        assert "ttft_p50_lt_2s" not in criteria, "Old 'ttft_p50_lt_2s' key must not exist"
+        assert criteria["generate_p50_lt_2s"]["passed"] is True  # 1500 < 2000
