@@ -73,9 +73,22 @@ docs = [
     "mkdocstrings[python]>=0.25.0",  # Auto API docs
 ]
 
+# Voice bot (LiveKit Agents + RAG API)
+voice = [
+    "livekit-agents[silero,turn-detector]~=1.3",
+    "livekit-plugins-elevenlabs~=1.0",
+    "livekit-plugins-openai~=1.0",
+    "livekit~=1.0",
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-http",
+]
+
 # All optional dependencies
 all = [
-    "contextual-rag[dev,docs]",
+    "contextual-rag[dev,docs,voice]",
 ]
 
 # =============================================================================
