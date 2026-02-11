@@ -520,6 +520,7 @@ def evaluate_go_no_go(
         over_10s = sum(1 for r in cold_results if r.latency_wall_ms > 10000)
         pct_over_10s = over_10s / len(cold_results)
     else:
+        over_10s = 0
         pct_over_10s = 0.0
     criteria["cold_over_10s_lt_15pct"] = {
         "target": "< 15%",
