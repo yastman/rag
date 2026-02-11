@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     USE_FP16: bool = True  # FP16 для экономии памяти (2-3GB вместо 4-6GB)
 
     # Performance Settings
-    MAX_LENGTH: int = 2048  # Optimized for typical chunk size (was 8192)
+    MAX_LENGTH: int = 2048  # For documents (typical chunk size)
+    QUERY_MAX_LENGTH: int = 256  # For short queries (10-50 tokens)
     BATCH_SIZE: int = 12
     NUM_THREADS: int = int(os.getenv("OMP_NUM_THREADS", "4"))
 
