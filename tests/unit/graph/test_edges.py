@@ -2,8 +2,24 @@
 
 from __future__ import annotations
 
-from telegram_bot.graph.edges import route_by_query_type, route_cache, route_grade
+from telegram_bot.graph.edges import route_by_query_type, route_cache, route_grade, route_start
 from telegram_bot.graph.state import make_initial_state
+
+
+class TestRouteStart:
+    def test_voice_audio_present_routes_to_transcribe(self):
+        state = make_initial_state(user_id=1, session_id="s", query="")
+        state["voice_audio"] = b"fake-ogg"
+        assert route_start(state) == "transcribe"
+
+    def test_voice_audio_none_routes_to_classify(self):
+        state = make_initial_state(user_id=1, session_id="s", query="hello")
+        state["voice_audio"] = None
+        assert route_start(state) == "classify"
+
+    def test_voice_audio_absent_routes_to_classify(self):
+        state = {"query": "hello"}  # no voice_audio key at all
+        assert route_start(state) == "classify"
 
 
 def test_initial_state_has_score_improved():
