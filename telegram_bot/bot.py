@@ -319,7 +319,7 @@ class PropertyBot:
                 },
             )
 
-            # Write all 14 Langfuse scores (guaranteed on all exit paths)
+            # Write Langfuse scores (14 original + latency breakdown #147)
             _write_langfuse_scores(lf, result)
 
     async def start(self):
