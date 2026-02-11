@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from telegram_bot.integrations.prompt_templates import (
     CONTRACT_PROMPTS,
     build_system_prompt,
+    build_system_prompt_with_manager,
     get_token_limit,
     get_word_limit,
 )
@@ -14,7 +17,7 @@ class TestTokenLimits:
     """LASER-D inspired token budgets."""
 
     def test_short_easy_is_most_aggressive(self) -> None:
-        assert get_token_limit("short", "easy") == 50
+        assert get_token_limit("short", "easy") == 100
 
     def test_detailed_hard_is_most_generous(self) -> None:
         assert get_token_limit("detailed", "hard") == 350
@@ -27,7 +30,7 @@ class TestTokenLimits:
 
     def test_word_limit_approximation(self) -> None:
         wl = get_word_limit("short", "easy")
-        assert 30 <= wl <= 50  # 50 tokens / 1.3 ~ 38
+        assert 70 <= wl <= 90  # 100 tokens / 1.3 ~ 76
 
 
 class TestContractPrompts:
@@ -56,8 +59,8 @@ class TestBuildSystemPrompt:
 
     def test_short_prompt_has_word_limit(self) -> None:
         prompt = build_system_prompt("short", "easy", "недвижимость")
-        # word_limit for short/easy = 50/1.3 ~ 38
-        assert "38" in prompt
+        # word_limit for short/easy = 100/1.3 ~ 76
+        assert "76" in prompt
 
     def test_balanced_prompt_renders(self) -> None:
         prompt = build_system_prompt("balanced", "medium", "недвижимость")
@@ -66,3 +69,36 @@ class TestBuildSystemPrompt:
     def test_detailed_prompt_renders(self) -> None:
         prompt = build_system_prompt("detailed", "hard", "недвижимость")
         assert "недвижимость" in prompt
+
+
+class TestBuildSystemPromptWithManager:
+    """build_system_prompt_with_manager keeps prompt-manager integration."""
+
+    def test_routes_through_prompt_manager(self) -> None:
+        with patch(
+            "telegram_bot.integrations.prompt_templates.get_prompt",
+            return_value="managed prompt",
+        ) as mock_get_prompt:
+            prompt = build_system_prompt_with_manager("short", "easy", "недвижимость")
+
+        assert prompt == "managed prompt"
+        mock_get_prompt.assert_called_once()
+        kwargs = mock_get_prompt.call_args.kwargs
+        assert kwargs["fallback"] != ""
+        assert kwargs["variables"] == {"domain": "недвижимость"}
+        assert mock_get_prompt.call_args.args[0] == "generate_short"
+
+    def test_fallback_renders_word_limit_and_preserves_domain_variable(self) -> None:
+        with patch(
+            "telegram_bot.integrations.prompt_templates.get_prompt",
+            return_value="ignored",
+        ) as mock_get_prompt:
+            build_system_prompt_with_manager("short", "easy", "недвижимость")
+
+        fallback = mock_get_prompt.call_args.kwargs["fallback"]
+        # 100 / 1.3 ~= 76 -> hard number should be embedded in fallback
+        assert "{word_limit}" not in fallback
+        assert "76" in fallback
+        # Domain should be deferred for prompt_manager variable substitution
+        assert "по {domain}" not in fallback
+        assert "{{domain}}" in fallback
