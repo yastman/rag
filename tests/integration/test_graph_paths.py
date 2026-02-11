@@ -18,6 +18,7 @@ import pytest
 
 from telegram_bot.graph.graph import build_graph
 from telegram_bot.graph.state import make_initial_state
+from telegram_bot.observability import traced_pipeline
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +135,7 @@ def _make_mock_graph_config(llm_mock: MagicMock) -> MagicMock:
     gc.rewrite_max_tokens = 64
     gc.skip_rerank_threshold = 0.95
     gc.relevance_threshold_rrf = 0.005
+    gc.score_improvement_delta = 0.001
     gc.streaming_enabled = False
     gc.create_llm.return_value = llm_mock
     return gc
@@ -173,8 +175,9 @@ async def test_path_chitchat_early_exit():
 
     state = make_initial_state(user_id=1, session_id="test-path1", query="Привет!")
 
-    with _patch_graph_configs(mock_gc):
-        result = await graph.ainvoke(state)
+    with traced_pipeline(session_id="test-chitchat", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
 
     # State assertions
     assert result["query_type"] == "CHITCHAT"
@@ -224,8 +227,9 @@ async def test_path_cache_hit():
         user_id=2, session_id="test-path2", query="уютная квартира с видом на море"
     )
 
-    with _patch_graph_configs(mock_gc):
-        result = await graph.ainvoke(state)
+    with traced_pipeline(session_id="test-cache-hit", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
 
     # State assertions
     assert result["cache_hit"] is True
@@ -269,8 +273,9 @@ async def test_path_happy_retrieve_rerank_generate():
         user_id=3, session_id="test-path3", query="уютная квартира с видом на море"
     )
 
-    with _patch_graph_configs(mock_gc):
-        result = await graph.ainvoke(state)
+    with traced_pipeline(session_id="test-happy-path", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
 
     # State assertions
     assert result["cache_hit"] is False
@@ -346,8 +351,9 @@ async def test_path_rewrite_loop_then_success():
         user_id=4, session_id="test-path4", query="уютная квартира с видом на море"
     )
 
-    with _patch_graph_configs(mock_gc):
-        result = await graph.ainvoke(state)
+    with traced_pipeline(session_id="test-rewrite-loop", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
 
     # State assertions
     assert result["rewrite_count"] == 1
@@ -395,8 +401,9 @@ async def test_path_rewrite_exhausted_fallback():
     )
     state["rewrite_count"] = 2
 
-    with _patch_graph_configs(mock_gc):
-        result = await graph.ainvoke(state)
+    with traced_pipeline(session_id="test-rewrite-exhausted", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
 
     # State assertions
     assert result["rewrite_count"] == 2  # not incremented — rewrite node not entered
@@ -445,8 +452,9 @@ async def test_path_rewrite_ineffective_fallback():
     state["rewrite_count"] = 1
     state["rewrite_effective"] = False
 
-    with _patch_graph_configs(mock_gc):
-        result = await graph.ainvoke(state)
+    with traced_pipeline(session_id="test-rewrite-ineffective", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
 
     # State assertions
     assert result["rewrite_count"] == 1  # rewrite node not entered
