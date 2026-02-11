@@ -2,8 +2,10 @@
 
 import hashlib
 import io
+import json
 import logging
 import time
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -233,6 +235,7 @@ class PropertyBot:
         self.dp.message(Command("clear"))(self.cmd_clear)
         self.dp.message(Command("stats"))(self.cmd_stats)
         self.dp.message(Command("metrics"))(self.cmd_metrics)
+        self.dp.message(Command("call"))(self.cmd_call)
         self.dp.message(F.voice)(self.handle_voice)
         self.dp.message(F.text)(self.handle_query)
 
@@ -297,6 +300,84 @@ class PropertyBot:
         metrics = PipelineMetrics.get()
         text = f"```\n{metrics.format_text()}\n```"
         await message.answer(text, parse_mode="Markdown")
+
+    async def cmd_call(self, message: Message):
+        """Handle /call command — trigger outbound voice call.
+
+        Usage: /call +380501234567 [lead description]
+        Admin-only command.
+        """
+        assert message.from_user is not None
+        if not self._is_admin(message.from_user.id):
+            await message.answer("Только администраторы могут инициировать звонки.")
+            return
+
+        if not self.config.livekit_url or not self.config.sip_trunk_id:
+            await message.answer("Voice service не настроен (LIVEKIT_URL, SIP_TRUNK_ID).")
+            return
+
+        text = (message.text or "").strip()
+        parts = text.split(maxsplit=2)  # /call +380... description
+        if len(parts) < 2:
+            await message.answer("Использование: /call +380501234567 [описание заявки]")
+            return
+
+        phone = parts[1]
+        lead_desc = parts[2] if len(parts) > 2 else ""
+
+        try:
+            from livekit import api
+
+            lk = api.LiveKitAPI(
+                url=self.config.livekit_url,
+                api_key=self.config.livekit_api_key,
+                api_secret=self.config.livekit_api_secret,
+            )
+
+            room_name = f"voice-call-{uuid.uuid4().hex[:8]}"
+            call_id = str(uuid.uuid4())
+
+            # 1. Dispatch voice agent to room
+            await lk.agent_dispatch.create_dispatch(
+                api.CreateAgentDispatchRequest(
+                    agent_name="voice-bot",
+                    room=room_name,
+                    metadata=json.dumps(
+                        {
+                            "call_id": call_id,
+                            "phone": phone,
+                            "lead_data": {
+                                "description": lead_desc,
+                                "triggered_by": message.from_user.id,
+                            },
+                            "callback_chat_id": message.chat.id,
+                        }
+                    ),
+                )
+            )
+
+            # 2. Create SIP participant (dials the phone)
+            await lk.sip.create_sip_participant(
+                api.CreateSIPParticipantRequest(
+                    room_name=room_name,
+                    sip_trunk_id=self.config.sip_trunk_id,
+                    sip_call_to=phone,
+                    participant_identity=f"phone-{phone}",
+                    participant_name="Phone User",
+                    krisp_enabled=True,
+                    wait_until_answered=True,
+                )
+            )
+
+            await lk.aclose()
+            await message.answer(
+                f"Звонок инициирован!\nID: `{call_id}`\nТелефон: {phone}\nRoom: {room_name}",
+                parse_mode="Markdown",
+            )
+
+        except Exception as e:
+            logger.exception("Failed to initiate call")
+            await message.answer(f"Ошибка инициации звонка: {e}")
 
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message):
