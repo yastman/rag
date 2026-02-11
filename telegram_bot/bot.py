@@ -568,7 +568,11 @@ class PropertyBot:
         from .integrations.memory import create_fallback_checkpointer, create_redis_checkpointer
 
         try:
-            self._checkpointer = create_redis_checkpointer(self.config.redis_url)
+            self._checkpointer = create_redis_checkpointer(
+                self.config.redis_url,
+                ttl_minutes=7 * 24 * 60,  # 7 days; SDK uses minutes
+                refresh_on_read=True,  # idle-based retention
+            )
             await self._checkpointer.asetup()
             logger.info("Conversation memory checkpointer ready (Redis)")
         except Exception:
