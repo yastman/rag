@@ -10,7 +10,7 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
-from telegram_bot.graph.edges import route_by_query_type, route_cache, route_grade
+from telegram_bot.graph.edges import route_by_query_type, route_cache, route_grade, route_start
 from telegram_bot.graph.state import RAGState
 
 
@@ -25,6 +25,9 @@ def build_graph(
     message: Any | None = None,
     checkpointer: Any | None = None,
     event_stream: Any | None = None,
+    show_transcription: bool = True,
+    voice_language: str = "ru",
+    stt_model: str = "whisper",
 ) -> Any:
     """Build and compile the RAG StateGraph.
 
@@ -46,11 +49,23 @@ def build_graph(
     from telegram_bot.graph.nodes.grade import grade_node
     from telegram_bot.graph.nodes.rerank import rerank_node
     from telegram_bot.graph.nodes.rewrite import rewrite_node
+    from telegram_bot.graph.nodes.transcribe import make_transcribe_node
 
     workflow = StateGraph(RAGState)
 
     # Add nodes — wrap those that need injected deps via functools.partial
     workflow.add_node("classify", classify_node)  # type: ignore[type-var]
+
+    workflow.add_node(
+        "transcribe",
+        make_transcribe_node(
+            llm=llm,
+            voice_language=voice_language,
+            stt_model=stt_model,
+            show_transcription=show_transcription,
+            message=message,
+        ),
+    )
 
     workflow.add_node(
         "cache_check",
@@ -96,7 +111,15 @@ def build_graph(
     )
 
     # Edges
-    workflow.add_edge(START, "classify")
+    workflow.add_conditional_edges(
+        START,
+        route_start,
+        {
+            "transcribe": "transcribe",
+            "classify": "classify",
+        },
+    )
+    workflow.add_edge("transcribe", "classify")
 
     workflow.add_conditional_edges(
         "classify",
