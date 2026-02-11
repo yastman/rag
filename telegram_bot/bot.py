@@ -1,6 +1,7 @@
 """Main Telegram bot logic — LangGraph pipeline."""
 
 import hashlib
+import io
 import logging
 import time
 from datetime import UTC, datetime
@@ -37,7 +38,7 @@ _QUERY_TYPE_SCORE = {
 
 
 def _write_langfuse_scores(lf: Any, result: dict) -> None:
-    """Write Langfuse scores (14 original + up to 10 latency breakdown) from graph result state.
+    """Write Langfuse scores (14 + latency breakdown + 4 response length) from graph result state.
 
     Args:
         lf: Langfuse client (from get_client(), may be _NullLangfuseClient).
@@ -102,6 +103,23 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
         lf.score_current_trace(name="llm_queue_ms", value=float(queue_ms))
     else:
         lf.score_current_trace(name="llm_queue_unavailable", value=1, data_type="BOOLEAN")
+
+    # --- Response length control (#129) ---
+    if "answer_words" in result:
+        lf.score_current_trace(name="answer_words", value=float(result["answer_words"]))
+    if "answer_chars" in result:
+        lf.score_current_trace(name="answer_chars", value=float(result["answer_chars"]))
+    if "answer_to_question_ratio" in result:
+        lf.score_current_trace(
+            name="answer_to_question_ratio",
+            value=float(result["answer_to_question_ratio"]),
+        )
+    if "response_style" in result:
+        style_map = {"short": 0, "balanced": 1, "detailed": 2}
+        lf.score_current_trace(
+            name="response_style_applied",
+            value=float(style_map.get(result["response_style"], 1)),
+        )
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -202,6 +220,7 @@ class PropertyBot:
         self.dp.message(Command("clear"))(self.cmd_clear)
         self.dp.message(Command("stats"))(self.cmd_stats)
         self.dp.message(Command("metrics"))(self.cmd_metrics)
+        self.dp.message(F.voice)(self.handle_voice)
         self.dp.message(F.text)(self.handle_query)
 
     async def cmd_start(self, message: Message):
@@ -316,10 +335,96 @@ class PropertyBot:
                     "rerank_applied": result.get("rerank_applied", False),
                     "llm_provider_model": result.get("llm_provider_model", ""),
                     "llm_ttft_ms": result.get("llm_ttft_ms", 0.0),
+                    # Response length control (#129)
+                    "response_style": result.get("response_style"),
+                    "response_difficulty": result.get("response_difficulty"),
+                    "response_style_reasoning": result.get("response_style_reasoning"),
+                    "response_policy_mode": result.get("response_policy_mode"),
+                    "answer_words": result.get("answer_words"),
+                    "answer_to_question_ratio": result.get("answer_to_question_ratio"),
                 },
             )
 
-            # Write Langfuse scores (14 original + latency breakdown #147)
+            # Write Langfuse scores (14 + latency + response length #129)
+            _write_langfuse_scores(lf, result)
+
+    @observe(name="telegram-rag-voice")
+    async def handle_voice(self, message: Message):
+        """Handle voice message via Whisper STT + LangGraph RAG pipeline."""
+        pipeline_start = time.perf_counter()
+        assert message.bot is not None
+        assert message.from_user is not None
+        assert message.voice is not None
+        bot = message.bot
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+        # Download voice file into memory
+        voice = message.voice
+        file = await bot.get_file(voice.file_id)
+        assert file.file_path is not None
+        buf = io.BytesIO()
+        await bot.download_file(file.file_path, destination=buf)
+        voice_bytes = buf.getvalue()
+
+        state = make_initial_state(
+            user_id=message.from_user.id,
+            session_id=make_session_id("chat", message.chat.id),
+            query="",  # will be set by transcribe_node
+        )
+        state["voice_audio"] = voice_bytes
+        state["voice_duration_s"] = float(voice.duration)
+        state["input_type"] = "voice"
+        state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
+
+        with propagate_attributes(
+            session_id=state["session_id"],
+            user_id=str(state["user_id"]),
+            tags=["telegram", "rag", "voice"],
+        ):
+            graph = build_graph(
+                cache=self._cache,
+                embeddings=self._embeddings,
+                sparse_embeddings=self._sparse,
+                qdrant=self._qdrant,
+                reranker=self._reranker,
+                llm=self._llm,
+                message=message,
+                show_transcription=self._graph_config.show_transcription,
+                voice_language=self._graph_config.voice_language,
+                stt_model=self._graph_config.stt_model,
+            )
+
+            try:
+                async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                    result = await graph.ainvoke(state)
+            except ValueError as e:
+                if "Empty transcription" in str(e):
+                    await message.answer("Голосовое сообщение не содержит речи.")
+                    return
+                raise
+            except Exception:
+                await message.answer(
+                    "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
+                )
+                raise
+
+            result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
+
+            lf = get_client()
+            lf.update_current_trace(
+                input={
+                    "voice_duration_s": voice.duration,
+                    "stt_text": result.get("stt_text", ""),
+                },
+                output={"response": result.get("response", "")},
+                metadata={
+                    "input_type": "voice",
+                    "query_type": result.get("query_type", ""),
+                    "cache_hit": result.get("cache_hit", False),
+                    "stt_duration_ms": result.get("stt_duration_ms", 0.0),
+                },
+            )
+
             _write_langfuse_scores(lf, result)
 
     async def start(self):
