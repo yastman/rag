@@ -199,6 +199,17 @@ def get_git_sha() -> str:
     return result.stdout.strip()
 
 
+def _get_cache_version() -> str:
+    """Resolve exact-cache key version from cache integration module."""
+    try:
+        from telegram_bot.integrations.cache import CACHE_VERSION
+
+        return str(CACHE_VERSION)
+    except Exception as e:
+        logger.warning("Failed to resolve CACHE_VERSION, fallback to v3: %s", e)
+        return "v3"
+
+
 async def check_collection_available(qdrant_url: str, collection_name: str) -> bool:
     """Check if Qdrant collection exists."""
     from qdrant_client import AsyncQdrantClient
@@ -403,12 +414,13 @@ async def _flush_redis_caches(cache: Any) -> None:
         return
 
     deleted = 0
+    cache_version = _get_cache_version()
     patterns = [
-        "embeddings:v3:*",
-        "sparse:v3:*",
-        "analysis:v3:*",
-        "search:v3:*",
-        "rerank:v3:*",
+        f"embeddings:{cache_version}:*",
+        f"sparse:{cache_version}:*",
+        f"analysis:{cache_version}:*",
+        f"search:{cache_version}:*",
+        f"rerank:{cache_version}:*",
         "conversation:*",
     ]
     for pattern in patterns:
