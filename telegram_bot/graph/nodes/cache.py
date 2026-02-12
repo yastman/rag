@@ -83,7 +83,7 @@ async def cache_check_node(
             query=query,
             vector=embedding,
             query_type=query_type,
-            user_id=state.get("user_id", 0),
+            user_id=state.get("user_id"),
         )
 
     latency = time.perf_counter() - start
@@ -152,7 +152,7 @@ async def cache_store_node(
         if hasattr(last_msg, "content")
         else (last_msg.get("content", "") if isinstance(last_msg, dict) else "")
     )
-    user_id = state.get("user_id", 0)
+    user_id = state.get("user_id")
 
     lf = get_client()
     lf.update_current_span(
@@ -179,17 +179,8 @@ async def cache_store_node(
             )
             stored_semantic = True
 
-        # Store conversation messages (single pipeline round-trip)
-        await cache.store_conversation_batch(
-            user_id=user_id,
-            messages=[("user", query), ("assistant", response)],
-        )
-
-        logger.info(
-            "cache_store: stored=%s conversation (type=%s)",
-            "semantic+" if stored_semantic else "",
-            query_type,
-        )
+        if stored_semantic:
+            logger.info("cache_store: stored=semantic (type=%s)", query_type)
 
         # Log pipeline result event (fire-and-forget, never blocks main flow)
         if event_stream is not None:
@@ -214,12 +205,10 @@ async def cache_store_node(
             )
 
     latency = time.perf_counter() - start
-    stored_conversation = bool(response and embedding)
     lf.update_current_span(
         output={
-            "stored": stored_semantic or stored_conversation,
+            "stored": stored_semantic,
             "stored_semantic": stored_semantic,
-            "stored_conversation": stored_conversation,
             "duration_ms": round(latency * 1000, 1),
         }
     )

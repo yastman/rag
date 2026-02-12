@@ -219,7 +219,8 @@ class TestCacheStoreNode:
         assert call_kwargs["user_id"] == 99
 
     @pytest.mark.asyncio
-    async def test_stores_conversation_messages(self):
+    async def test_does_not_call_store_conversation_batch(self):
+        """Legacy Redis LIST conversation store removed from active graph path (#163)."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
@@ -231,11 +232,8 @@ class TestCacheStoreNode:
 
         await cache_store_node(state, cache=cache)
 
-        # Should store both user query and assistant response in one batch
-        cache.store_conversation_batch.assert_awaited_once_with(
-            user_id=1,
-            messages=[("user", "test query"), ("assistant", "answer")],
-        )
+        # Memory is now owned by checkpointer — no legacy LIST writes
+        cache.store_conversation_batch.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_skips_store_if_no_response(self):
