@@ -209,7 +209,7 @@ async def test_path_chitchat_early_exit():
 
 @pytest.mark.integration
 async def test_path_cache_hit():
-    """Cached response skips retrieve/grade/rerank/generate."""
+    """Cached response skips retrieve/grade/rerank/generate (allowlisted FAQ query)."""
     cached_text = "Вот кэшированный ответ про квартиры."
     mocks = _make_graph_mocks(
         cache_embedding=[0.1] * 1024,  # embedding found in cache
@@ -306,7 +306,7 @@ async def test_path_general_bypasses_semantic_cache():
 
 @pytest.mark.integration
 async def test_path_happy_retrieve_rerank_generate():
-    """Full RAG path: cache miss, relevant docs, rerank, generate."""
+    """Full RAG path: cache miss, relevant docs, rerank, generate (ENTITY query)."""
     mocks = _make_graph_mocks(llm_response="Найдено 2 варианта квартир.")
     mock_gc = _make_mock_graph_config(mocks["llm"])
 
