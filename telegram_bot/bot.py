@@ -163,7 +163,7 @@ def make_session_id(session_type: str, identifier: int | str) -> str:
     return f"{session_type}-{id_hash}-{date_str}"
 
 
-def _build_trace_metadata(result: dict) -> dict[str, Any]:
+def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     """Build shared metadata dict for Langfuse trace (text + voice handlers)."""
     return {
         "input_type": result.get("input_type", "text"),
