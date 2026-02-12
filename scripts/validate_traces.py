@@ -205,8 +205,9 @@ def detect_runner_mode(collection: str) -> str:
         'langgraph_bge' for BGE-M3 collections (gdrive_documents_bge).
         'voyage_compatible' for Voyage-embedded collections (contextual_bulgaria_voyage).
     """
-    voyage_collections = {"contextual_bulgaria_voyage", "gdrive_documents_scalar"}
-    if collection in voyage_collections:
+    base_collection = collection.removesuffix("_binary").removesuffix("_scalar")
+    voyage_collections = {"contextual_bulgaria_voyage", "gdrive_documents"}
+    if base_collection in voyage_collections:
         return "voyage_compatible"
     return "langgraph_bge"
 
@@ -222,6 +223,17 @@ def get_git_sha() -> str:
     return result.stdout.strip()
 
 
+def _get_cache_version() -> str:
+    """Resolve exact-cache version from cache integration (single source of truth)."""
+    try:
+        from telegram_bot.integrations.cache import CACHE_VERSION
+
+        return str(CACHE_VERSION)
+    except Exception as e:
+        logger.warning("Failed to resolve CACHE_VERSION, fallback to v3: %s", e)
+        return "v3"
+
+
 def check_voyage_available() -> bool:
     """Check if Voyage API key is available."""
     key = os.getenv("VOYAGE_API_KEY", "")
@@ -230,7 +242,7 @@ def check_voyage_available() -> bool:
     return bool(key)
 
 
-async def discover_collections(qdrant_url: str) -> list[str]:
+async def discover_collections(qdrant_url: str, quantization_mode: str = "off") -> list[str]:
     """Discover available collections for validation via Qdrant API.
 
     Queries Qdrant for all collections, matches against known base names
@@ -248,18 +260,22 @@ async def discover_collections(qdrant_url: str) -> list[str]:
     finally:
         await client.close()
 
+    mode = quantization_mode.lower()
+    if mode == "scalar":
+        preferred_suffixes = ["_scalar", "", "_binary"]
+    elif mode == "binary":
+        preferred_suffixes = ["_binary", "", "_scalar"]
+    else:
+        preferred_suffixes = ["", "_scalar", "_binary"]
+
     available: list[str] = []
     for base_name in COLLECTION_BASE_NAMES:
-        # Prefer exact match
         matched = None
-        for suffix in QUANTIZATION_SUFFIXES:
+        for suffix in preferred_suffixes:
             candidate = f"{base_name}{suffix}"
             if candidate in all_names:
-                if suffix == "":
-                    matched = candidate
-                    break  # exact match wins
-                if matched is None:
-                    matched = candidate  # keep first suffix match
+                matched = candidate
+                break
 
         if matched is None:
             logger.warning("Collection %s (any suffix) not found in Qdrant", base_name)
@@ -275,7 +291,12 @@ async def discover_collections(qdrant_url: str) -> list[str]:
 
         available.append(matched)
 
-    logger.info("Discovered collections: %s (from %d total in Qdrant)", available, len(all_names))
+    logger.info(
+        "Discovered collections: %s (from %d total in Qdrant, mode=%s)",
+        available,
+        len(all_names),
+        mode,
+    )
     return available
 
 
@@ -450,12 +471,13 @@ async def _flush_redis_caches(cache: Any) -> str:
         return "SKIPPED"
 
     deleted = 0
+    cache_version = _get_cache_version()
     patterns = [
-        "embeddings:v3:*",
-        "sparse:v3:*",
-        "analysis:v3:*",
-        "search:v3:*",
-        "rerank:v3:*",
+        f"embeddings:{cache_version}:*",
+        f"sparse:{cache_version}:*",
+        f"analysis:{cache_version}:*",
+        f"search:{cache_version}:*",
+        f"rerank:{cache_version}:*",
         "conversation:*",
     ]
     for pattern in patterns:
@@ -606,7 +628,7 @@ async def enrich_results_from_langfuse(
     lf = Langfuse()
     enriched = 0
     for r in results:
-        if r.phase == "warmup":
+        if r.phase == "warmup" or r.state.get("cold_skipped"):
             continue
         try:
             trace = lf.api.trace.get(r.trace_id)
@@ -671,7 +693,7 @@ def check_orphan_traces(results: list[TraceResult]) -> float:
     total = 0
     orphans = 0
     for r in results:
-        if r.phase == "warmup":
+        if r.phase == "warmup" or r.state.get("cold_skipped"):
             continue
         total += 1
         try:
@@ -830,7 +852,14 @@ def evaluate_go_no_go(
     cold_skipped = all(r.state.get("cold_skipped") for r in cold_results) if cold_results else False
     if cold_skipped:
         skip_reason = cold_results[0].state.get("skip_reason", "unknown")
-        for key in ["cold_p50_lt_5s", "cold_p90_lt_8s", "cold_over_10s_lt_15pct"]:
+        for key in [
+            "cold_p50_lt_5s",
+            "cold_p90_lt_8s",
+            "cold_over_10s_lt_15pct",
+            "generate_p50_lt_2s",
+            "multi_rewrite_le_10pct",
+            "rewrite_tokens_p50_le_96",
+        ]:
             original = criteria[key]
             criteria[key] = {
                 "target": original["target"],
@@ -1242,7 +1271,10 @@ async def run_validation(args: argparse.Namespace) -> None:
             logger.error("Collection %s not found, aborting", args.collection)
             sys.exit(1)
     else:
-        collections = await discover_collections(qdrant_url)
+        collections = await discover_collections(
+            qdrant_url,
+            quantization_mode=os.getenv("QDRANT_QUANTIZATION_MODE", "off"),
+        )
 
     if not collections:
         logger.error("No collections available for validation, aborting")

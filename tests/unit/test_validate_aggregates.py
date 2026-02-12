@@ -14,7 +14,9 @@ from scripts.validate_traces import (
     _flush_redis_caches,
     aggregate_node_payloads,
     check_langfuse_config,
+    check_orphan_traces,
     compute_aggregates,
+    detect_runner_mode,
     discover_collections,
     evaluate_go_no_go,
     format_phase_summary,
@@ -286,6 +288,8 @@ class TestEvaluateGoNoGo:
         assert criteria["cold_p50_lt_5s"].get("dep_unavailable") is True
         assert criteria["cold_p50_lt_5s"]["passed"] is True  # not a failure
         assert "SKIPPED" in criteria["cold_p50_lt_5s"]["actual"]
+        assert criteria["generate_p50_lt_2s"].get("dep_unavailable") is True
+        assert criteria["generate_p50_lt_2s"]["passed"] is True
 
     def test_mixed_cold_results_not_marked_unavailable(self):
         """If some cold results ran normally, criteria are NOT marked dep_unavailable."""
@@ -433,6 +437,37 @@ class TestRedisFlush:
 
         result = await _flush_redis_caches(mock_cache)
         assert result == "SKIPPED"
+
+    async def test_uses_current_cache_version_for_flush_patterns(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Flush patterns must be derived from active cache version."""
+        seen_matches: list[str] = []
+
+        async def fake_scan_iter(match=None, count=100):
+            if match is not None:
+                seen_matches.append(match)
+            if False:
+                yield None
+
+        mock_redis = AsyncMock()
+        mock_redis.scan_iter = fake_scan_iter
+        mock_redis.delete = AsyncMock()
+
+        mock_cache = MagicMock()
+        mock_cache.redis = mock_redis
+        mock_cache.semantic_cache = None
+
+        monkeypatch.setattr("scripts.validate_traces._get_cache_version", lambda: "v9")
+
+        result = await _flush_redis_caches(mock_cache)
+
+        assert result == "OK"
+        assert any(m == "embeddings:v9:*" for m in seen_matches)
+        assert any(m == "sparse:v9:*" for m in seen_matches)
+        assert any(m == "analysis:v9:*" for m in seen_matches)
+        assert any(m == "search:v9:*" for m in seen_matches)
+        assert any(m == "rerank:v9:*" for m in seen_matches)
 
 
 class TestAggregateNodePayloads:
@@ -714,6 +749,55 @@ class TestCollectionDiscovery:
 
         assert "gdrive_documents_bge" in result
         assert "contextual_bulgaria_voyage" not in result
+
+    async def test_prefers_mode_suffix_when_quantization_enabled(self):
+        """Quantization mode must influence discovered collection choice."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge"),
+                SimpleNamespace(name="gdrive_documents_bge_scalar"),
+                SimpleNamespace(name="gdrive_documents_bge_binary"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
+            result = await discover_collections(
+                "http://localhost:6333",
+                quantization_mode="binary",
+            )
+
+        assert "gdrive_documents_bge_binary" in result
+        assert "gdrive_documents_bge" not in result
+
+
+class TestRunnerModeDetection:
+    """Runner-mode detection should treat suffixed names the same as base names."""
+
+    def test_voyage_suffix_collection_uses_voyage_runner(self):
+        mode = detect_runner_mode("contextual_bulgaria_voyage_binary")
+        assert mode == "voyage_compatible"
+
+
+class TestLangfuseLookupSkipsSynthetic:
+    """Synthetic skipped traces must not trigger Langfuse lookups."""
+
+    def test_orphan_check_skips_cold_skipped_synthetic_traces(self):
+        skipped = _make_result(phase="cold", latency=0)
+        skipped.state["cold_skipped"] = True
+        skipped.trace_id = "skipped"
+        normal = _make_result(phase="cold", latency=100)
+        normal.trace_id = "real-trace"
+
+        mock_lf = MagicMock()
+        mock_lf.api.trace.get.return_value = SimpleNamespace(session_id="session-1")
+
+        with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
+            rate = check_orphan_traces([skipped, normal])
+
+        assert rate == 0.0
+        mock_lf.api.trace.get.assert_called_once_with("real-trace")
 
 
 class TestFakeMessage:
