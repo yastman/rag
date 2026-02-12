@@ -75,6 +75,7 @@ def _create_semantic_cache(
             filterable_fields=[
                 {"name": "query_type", "type": "tag"},
                 {"name": "language", "type": "tag"},
+                {"name": "user_id", "type": "tag"},
             ],
         )
         logger.info("SemanticCache initialized (threshold=%.2f, ttl=%ds)", distance_threshold, ttl)
@@ -187,6 +188,7 @@ class CacheLayerManager:
         vector: list[float],
         query_type: str,
         language: str = "ru",
+        user_id: int | None = None,
         cache_timeout: float = 0.3,
     ) -> str | None:
         """Check semantic cache with query-type-specific threshold.
@@ -196,6 +198,7 @@ class CacheLayerManager:
             vector: Pre-computed dense embedding (BGE-M3 1024-dim)
             query_type: Query type for threshold selection
             language: Language filter
+            user_id: User ID for per-user isolation (Tag filter)
             cache_timeout: Max wait time in seconds (default 0.3s)
 
         Returns:
@@ -210,6 +213,8 @@ class CacheLayerManager:
             from redisvl.query.filter import Tag
 
             filter_expr = Tag("language") == language
+            if user_id is not None:
+                filter_expr = filter_expr & (Tag("user_id") == str(user_id))
             start = time.time()
 
             try:
@@ -259,18 +264,22 @@ class CacheLayerManager:
         vector: list[float],
         query_type: str,
         language: str = "ru",
+        user_id: int | None = None,
     ) -> None:
         """Store query-response pair in semantic cache."""
         if not self.semantic_cache:
             return
 
         ttl = self.cache_ttl.get(query_type, 3600)
+        filters: dict[str, str] = {"query_type": query_type, "language": language}
+        if user_id is not None:
+            filters["user_id"] = str(user_id)
         try:
             await self.semantic_cache.astore(
                 prompt=query,
                 response=response,
                 vector=vector,
-                filters={"query_type": query_type, "language": language},
+                filters=filters,
                 ttl=ttl,
             )
             logger.debug("Stored semantic: %s... (type=%s, ttl=%ds)", query[:50], query_type, ttl)
