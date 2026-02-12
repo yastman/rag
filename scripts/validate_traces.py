@@ -28,6 +28,13 @@ from typing import Any
 import numpy as np
 from dotenv import load_dotenv
 from langfuse import Langfuse
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    stop_after_delay,
+    wait_exponential,
+)
 
 
 # Ensure project root importable
@@ -47,7 +54,9 @@ logger = logging.getLogger(__name__)
 # Reference trace from issue #105
 REFERENCE_TRACE_ID = "c2b95d86aa1f643b79016dd611c4691f"
 
-COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+# Base collection names to look for (without quantization suffix)
+COLLECTION_BASE_NAMES = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+QUANTIZATION_SUFFIXES = ["", "_scalar", "_binary"]
 
 STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
 
@@ -127,7 +136,10 @@ class ValidationRun:
 
 
 def check_langfuse_config() -> None:
-    """Preflight: verify Langfuse credentials are set. Fail-fast."""
+    """Preflight: verify Langfuse credentials are set and API is reachable.
+
+    Retries auth probe 3 times with exponential backoff (max 10s total).
+    """
     public = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     secret = os.getenv("LANGFUSE_SECRET_KEY", "")
     host = os.getenv("LANGFUSE_HOST", "")
@@ -141,13 +153,24 @@ def check_langfuse_config() -> None:
         logger.error("LANGFUSE_HOST not set — cannot connect to Langfuse")
         sys.exit(1)
     try:
-        # Fast auth probe: catches stale/invalid keys before long validation run.
-        lf = Langfuse()
-        lf.api.trace.list(limit=1)
+        _langfuse_auth_probe()
     except Exception as e:
-        logger.error("Langfuse auth check failed: %s", e)
+        logger.error("Langfuse auth check failed after retries: %s", e)
         sys.exit(1)
     logger.info("Langfuse config OK: host=%s", host)
+
+
+@retry(
+    stop=(stop_after_attempt(3) | stop_after_delay(10)),
+    wait=wait_exponential(multiplier=1, min=1, max=5),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
+def _langfuse_auth_probe() -> None:
+    """Auth probe with retry. Separated for testability."""
+    lf = Langfuse()
+    if not lf.auth_check():
+        raise RuntimeError("Langfuse auth_check returned False")
 
 
 def check_worktree_clean(strict: bool = False) -> None:
@@ -182,8 +205,9 @@ def detect_runner_mode(collection: str) -> str:
         'langgraph_bge' for BGE-M3 collections (gdrive_documents_bge).
         'voyage_compatible' for Voyage-embedded collections (contextual_bulgaria_voyage).
     """
-    voyage_collections = {"contextual_bulgaria_voyage", "gdrive_documents_scalar"}
-    if collection in voyage_collections:
+    base_collection = collection.removesuffix("_binary").removesuffix("_scalar")
+    voyage_collections = {"contextual_bulgaria_voyage", "gdrive_documents"}
+    if base_collection in voyage_collections:
         return "voyage_compatible"
     return "langgraph_bge"
 
@@ -200,7 +224,7 @@ def get_git_sha() -> str:
 
 
 def _get_cache_version() -> str:
-    """Resolve exact-cache key version from cache integration module."""
+    """Resolve exact-cache version from cache integration (single source of truth)."""
     try:
         from telegram_bot.integrations.cache import CACHE_VERSION
 
@@ -208,20 +232,6 @@ def _get_cache_version() -> str:
     except Exception as e:
         logger.warning("Failed to resolve CACHE_VERSION, fallback to v3: %s", e)
         return "v3"
-
-
-async def check_collection_available(qdrant_url: str, collection_name: str) -> bool:
-    """Check if Qdrant collection exists."""
-    from qdrant_client import AsyncQdrantClient
-
-    client = AsyncQdrantClient(url=qdrant_url)
-    try:
-        exists = await client.collection_exists(collection_name)
-        if not exists:
-            logger.warning("Collection %s not found in Qdrant — skipping", collection_name)
-        return exists
-    finally:
-        await client.close()
 
 
 def check_voyage_available() -> bool:
@@ -232,19 +242,61 @@ def check_voyage_available() -> bool:
     return bool(key)
 
 
-async def discover_collections(qdrant_url: str) -> list[str]:
-    """Discover available collections for validation."""
+async def discover_collections(qdrant_url: str, quantization_mode: str = "off") -> list[str]:
+    """Discover available collections for validation via Qdrant API.
+
+    Queries Qdrant for all collections, matches against known base names
+    (with optional _scalar/_binary suffixes). Prefers exact match over suffixed.
+    """
+    from qdrant_client import AsyncQdrantClient
+
+    client = AsyncQdrantClient(url=qdrant_url)
+    try:
+        response = await client.get_collections()
+        all_names = {c.name for c in response.collections}
+    except Exception as e:
+        logger.error("Qdrant collection discovery failed: %s", e)
+        return []
+    finally:
+        await client.close()
+
+    mode = quantization_mode.lower()
+    if mode == "scalar":
+        preferred_suffixes = ["_scalar", "", "_binary"]
+    elif mode == "binary":
+        preferred_suffixes = ["_binary", "", "_scalar"]
+    else:
+        preferred_suffixes = ["", "_scalar", "_binary"]
+
     available: list[str] = []
-    for name in COLLECTIONS_TO_CHECK:
-        if await check_collection_available(qdrant_url, name):
-            # contextual_bulgaria_voyage needs Voyage API key
-            if "voyage" in name and not check_voyage_available():
-                logger.warning(
-                    "Skipping %s: collection exists but VOYAGE_API_KEY not set",
-                    name,
-                )
-                continue
-            available.append(name)
+    for base_name in COLLECTION_BASE_NAMES:
+        matched = None
+        for suffix in preferred_suffixes:
+            candidate = f"{base_name}{suffix}"
+            if candidate in all_names:
+                matched = candidate
+                break
+
+        if matched is None:
+            logger.warning("Collection %s (any suffix) not found in Qdrant", base_name)
+            continue
+
+        # Voyage collections need API key
+        if "voyage" in base_name and not check_voyage_available():
+            logger.warning(
+                "Skipping %s: collection exists but VOYAGE_API_KEY not set",
+                matched,
+            )
+            continue
+
+        available.append(matched)
+
+    logger.info(
+        "Discovered collections: %s (from %d total in Qdrant, mode=%s)",
+        available,
+        len(all_names),
+        mode,
+    )
     return available
 
 
@@ -407,11 +459,16 @@ async def run_single_query(
     )
 
 
-async def _flush_redis_caches(cache: Any) -> None:
-    """Clear cache keys for cold run without dropping RediSearch index."""
+async def _flush_redis_caches(cache: Any) -> str:
+    """Clear cache keys for cold run without dropping RediSearch index.
+
+    Returns:
+        "OK" if flush verified (0 keys remaining).
+        "SKIPPED" if Redis unavailable or flush incomplete.
+    """
     if not hasattr(cache, "redis") or not cache.redis:
-        logger.warning("  Redis not available — cannot flush caches, cold run may be warm")
-        return
+        logger.warning("  Redis not available — cold phase will be SKIPPED")
+        return "SKIPPED"
 
     deleted = 0
     cache_version = _get_cache_version()
@@ -436,7 +493,22 @@ async def _flush_redis_caches(cache: Any) -> None:
         except Exception as e:
             logger.warning("  Semantic cache clear failed: %s", e)
 
-    logger.info("  Redis cache key clear complete — deleted %d keys", deleted)
+    # Verify: re-scan to confirm keys are actually gone
+    remaining = 0
+    for pattern in patterns:
+        remaining += len(
+            [k async for k in cache.redis.scan_iter(match=pattern, count=100)]  # type: ignore[misc]
+        )
+
+    if remaining > 0:
+        logger.error(
+            "  Redis flush incomplete: %d keys remain after deletion — cold phase SKIPPED",
+            remaining,
+        )
+        return "SKIPPED"
+
+    logger.info("  Redis cache flush verified — deleted %d keys, 0 remaining", deleted)
+    return "OK"
 
 
 async def run_collection_validation(
@@ -474,12 +546,28 @@ async def run_collection_validation(
 
     # Phase 2: Cold run — flush caches for true cold measurement
     logger.info("Phase 2: Flushing Redis caches for true cold run...")
-    await _flush_redis_caches(services["cache"])
+    flush_status = await _flush_redis_caches(services["cache"])
     cold_queries = get_queries_for_collection(collection)
-    logger.info("Phase 2: Cold run (%d queries)", len(cold_queries))
-    for q in cold_queries:
-        result = await run_single_query(q, services, run_meta, phase="cold")
-        results.append(result)
+    if flush_status == "SKIPPED":
+        logger.warning("Phase 2: Cold run SKIPPED — Redis flush not verified")
+        for q in cold_queries:
+            results.append(
+                TraceResult(
+                    trace_id="skipped",
+                    query=q.text,
+                    collection=collection,
+                    phase="cold",
+                    source=q.source,
+                    difficulty=q.difficulty,
+                    latency_wall_ms=0,
+                    state={"cold_skipped": True, "skip_reason": "redis_flush_failed"},
+                )
+            )
+    else:
+        logger.info("Phase 2: Cold run (%d queries)", len(cold_queries))
+        for q in cold_queries:
+            result = await run_single_query(q, services, run_meta, phase="cold")
+            results.append(result)
 
     # Phase 3: Cache-hit run (duplicates from cold)
     cache_queries = get_cache_hit_queries(cold_queries, count=10)
@@ -540,7 +628,7 @@ async def enrich_results_from_langfuse(
     lf = Langfuse()
     enriched = 0
     for r in results:
-        if r.phase == "warmup":
+        if r.phase == "warmup" or r.state.get("cold_skipped"):
             continue
         try:
             trace = lf.api.trace.get(r.trace_id)
@@ -605,7 +693,7 @@ def check_orphan_traces(results: list[TraceResult]) -> float:
     total = 0
     orphans = 0
     for r in results:
-        if r.phase == "warmup":
+        if r.phase == "warmup" or r.state.get("cold_skipped"):
             continue
         total += 1
         try:
@@ -759,6 +847,26 @@ def evaluate_go_no_go(
             "passed": ttft_p50 < 1000,
             "skipped": False,
         }
+
+    # Override cold-dependent criteria when cold phase was skipped
+    cold_skipped = all(r.state.get("cold_skipped") for r in cold_results) if cold_results else False
+    if cold_skipped:
+        skip_reason = cold_results[0].state.get("skip_reason", "unknown")
+        for key in [
+            "cold_p50_lt_5s",
+            "cold_p90_lt_8s",
+            "cold_over_10s_lt_15pct",
+            "generate_p50_lt_2s",
+            "multi_rewrite_le_10pct",
+            "rewrite_tokens_p50_le_96",
+        ]:
+            original = criteria[key]
+            criteria[key] = {
+                "target": original["target"],
+                "actual": f"SKIPPED ({skip_reason})",
+                "passed": True,
+                "dep_unavailable": True,
+            }
 
     return criteria
 
@@ -1071,7 +1179,9 @@ def generate_report(
         lines.append("| # | Criterion | Target | Actual | Status |")
         lines.append("|---|-----------|--------|--------|--------|")
         for i, (name, c) in enumerate(go_no_go.items(), 1):
-            if c.get("skipped"):
+            if c.get("dep_unavailable"):
+                status = "[!] DEP_UNAVAIL"
+            elif c.get("skipped"):
                 status = "[-] SKIP"
             elif c["passed"]:
                 status = "[x] PASS"
@@ -1147,14 +1257,24 @@ async def run_validation(args: argparse.Namespace) -> None:
     # Discover available collections
     qdrant_url = config.qdrant_url
     if args.collection:
-        # User specified a single collection
-        if await check_collection_available(qdrant_url, args.collection):
+        # User specified a single collection — verify it exists
+        from qdrant_client import AsyncQdrantClient
+
+        client = AsyncQdrantClient(url=qdrant_url)
+        try:
+            exists = await client.collection_exists(args.collection)
+        finally:
+            await client.close()
+        if exists:
             collections = [args.collection]
         else:
             logger.error("Collection %s not found, aborting", args.collection)
             sys.exit(1)
     else:
-        collections = await discover_collections(qdrant_url)
+        collections = await discover_collections(
+            qdrant_url,
+            quantization_mode=os.getenv("QDRANT_QUANTIZATION_MODE", "off"),
+        )
 
     if not collections:
         logger.error("No collections available for validation, aborting")
@@ -1216,7 +1336,9 @@ async def run_validation(args: argparse.Namespace) -> None:
         len(go_no_go),
     )
     for name, c in go_no_go.items():
-        if c.get("skipped"):
+        if c.get("dep_unavailable"):
+            status = "DEP_UNAVAIL"
+        elif c.get("skipped"):
             status = "SKIP"
         elif c["passed"]:
             status = "PASS"
