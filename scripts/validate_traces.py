@@ -643,6 +643,9 @@ def evaluate_go_no_go(
 
     criteria: dict[str, dict[str, Any]] = {}
 
+    cold_stddev = cold.get("latency_stddev", 0)
+    cache_stddev = cache.get("latency_stddev", 0)
+
     # 1. Cold p50
     cold_p50 = cold.get("latency_p50", 99999)
     cold_p50_limit = t.get("cold_p50_ms", 5000)
@@ -650,6 +653,7 @@ def evaluate_go_no_go(
         "target": f"< {cold_p50_limit} ms",
         "actual": f"{cold_p50:.0f} ms",
         "passed": cold_p50 < cold_p50_limit,
+        "stddev": f"\u00b1{cold_stddev:.0f} ms" if cold_stddev else "\u2014",
     }
 
     # 2. Cold p90 (fallback to p95 for backward compatibility)
@@ -659,6 +663,7 @@ def evaluate_go_no_go(
         "target": f"< {cold_p90_limit} ms",
         "actual": f"{cold_p90:.0f} ms",
         "passed": cold_p90 < cold_p90_limit,
+        "stddev": f"\u00b1{cold_stddev:.0f} ms" if cold_stddev else "\u2014",
     }
 
     # 3. Cold queries > 10s
@@ -673,6 +678,7 @@ def evaluate_go_no_go(
         "target": f"< {cold_over_10s_limit:.0%}",
         "actual": f"{pct_over_10s:.1%} ({over_10s}/{len(cold_results)})",
         "passed": pct_over_10s < cold_over_10s_limit,
+        "stddev": "\u2014",
     }
 
     # 4. Cache-hit p50
@@ -682,6 +688,7 @@ def evaluate_go_no_go(
         "target": f"< {cache_p50_limit} ms",
         "actual": f"{cache_p50:.0f} ms",
         "passed": cache_p50 < cache_p50_limit,
+        "stddev": f"\u00b1{cache_stddev:.0f} ms" if cache_stddev else "\u2014",
     }
 
     # 5. Generate node p50 (full generation latency, non-streaming mode)
@@ -691,6 +698,7 @@ def evaluate_go_no_go(
         "target": f"< {generate_p50_limit} ms",
         "actual": f"{generate_p50:.0f} ms",
         "passed": generate_p50 < generate_p50_limit,
+        "stddev": "\u2014",
     }
 
     # 6. Rewrite calls >= 2
@@ -704,6 +712,7 @@ def evaluate_go_no_go(
         "target": f"<= {multi_rewrite_limit:.0%}",
         "actual": f"{multi_rewrite_pct:.1%}",
         "passed": multi_rewrite_pct <= multi_rewrite_limit,
+        "stddev": "\u2014",
     }
 
     # 7. Rewrite completion_tokens p50 (from Langfuse scores if available)
@@ -717,6 +726,7 @@ def evaluate_go_no_go(
         "target": f"<= {rewrite_tokens_limit} tokens",
         "actual": f"{tokens_p50:.0f} tokens" if rewrite_tokens else "N/A (no rewrites)",
         "passed": tokens_p50 <= rewrite_tokens_limit,
+        "stddev": "\u2014",
     }
 
     # 8. ERROR observations = 0 new (from scores + observation levels)
@@ -734,6 +744,7 @@ def evaluate_go_no_go(
         "target": "0",
         "actual": f"{error_count} (scores={score_error_count}, observations={observation_error_count})",
         "passed": error_count == 0,
+        "stddev": "\u2014",
     }
 
     # 9. Orphan traces = 0%
@@ -741,6 +752,7 @@ def evaluate_go_no_go(
         "target": "0%",
         "actual": f"{orphan_rate:.1%}",
         "passed": orphan_rate == 0.0,
+        "stddev": "\u2014",
     }
 
     # 10. Streaming TTFT p50 (skipped if sample < min)
@@ -756,6 +768,7 @@ def evaluate_go_no_go(
             "actual": f"N/A (n={ttft_n}, need >= {ttft_min_sample})",
             "passed": True,
             "skipped": True,
+            "stddev": "\u2014",
         }
     else:
         criteria["ttft_p50_lt_1000ms"] = {
@@ -763,6 +776,7 @@ def evaluate_go_no_go(
             "actual": f"{ttft_p50:.0f} ms (n={ttft_n})",
             "passed": ttft_p50 < ttft_p50_limit,
             "skipped": False,
+            "stddev": "\u2014",
         }
 
     return criteria
@@ -790,6 +804,7 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
             "latency_p95": float(np.percentile(latencies, 95)),
             "latency_mean": float(np.mean(latencies)),
             "latency_max": float(np.max(latencies)),
+            "latency_stddev": float(np.std(latencies)) if len(latencies) > 1 else 0.0,
         }
 
         # Rates from Langfuse score fields (fallback to local state if score missing)
@@ -978,6 +993,8 @@ def generate_report(
         lines.append(f"| latency p95 | {agg['latency_p95']:.0f} ms |")
         lines.append(f"| latency mean | {agg['latency_mean']:.0f} ms |")
         lines.append(f"| latency max | {agg['latency_max']:.0f} ms |")
+        if "latency_stddev" in agg:
+            lines.append(f"| latency stddev | {agg['latency_stddev']:.0f} ms |")
         lines.append(f"| semantic_cache_hit rate | {agg['semantic_cache_hit_rate']:.0%} |")
         lines.append(f"| search_cache_hit rate | {agg['search_cache_hit_rate']:.0%} |")
         lines.append(f"| rerank_applied rate | {agg['rerank_applied_rate']:.0%} |")
@@ -1036,11 +1053,12 @@ def generate_report(
         verdict = "GO — all criteria passed" if all_passed else "NO-GO — see failures below"
         lines.append(f"**Verdict: {verdict}**")
         lines.append("")
-        lines.append("| # | Criterion | Target | Actual | Status |")
-        lines.append("|---|-----------|--------|--------|--------|")
+        lines.append("| # | Criterion | Target | Actual | Stddev | Status |")
+        lines.append("|---|-----------|--------|--------|--------|--------|")
         for i, (name, c) in enumerate(go_no_go.items(), 1):
             status = _format_go_no_go_status(c)
-            lines.append(f"| {i} | {name} | {c['target']} | {c['actual']} | {status} |")
+            stddev = c.get("stddev", "\u2014")
+            lines.append(f"| {i} | {name} | {c['target']} | {c['actual']} | {stddev} | {status} |")
         lines.append("")
         passed = sum(1 for c in go_no_go.values() if c["passed"])
         lines.append(f"**Score: {passed}/{len(go_no_go)} criteria passed**")

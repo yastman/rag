@@ -412,7 +412,7 @@ class TestReportAndSummary:
         assert "p90=140ms" in line
 
     def test_go_no_go_renders_skip_status(self, tmp_path):
-        """Skipped criteria render as '[-] SKIP', not '[x] PASS'."""
+        """Skipped criteria render as '[-] SKIPPED (...)', not '[x] PASS'."""
         run = ValidationRun(
             run_id="run-1",
             git_sha="abc123",
@@ -722,6 +722,27 @@ class TestStreamingAggregation:
         assert s["n"] == 2
         assert s["ttft_sample_count"] == 1
         assert s["ttft_p50"] == pytest.approx(450.0, abs=1)
+
+
+class TestAggregatesStddev:
+    """Issue #168: aggregates must include latency_stddev."""
+
+    def test_aggregates_include_stddev(self):
+        results = [
+            _make_result(phase="cold", latency=2000),
+            _make_result(phase="cold", latency=3000),
+            _make_result(phase="cold", latency=4000),
+        ]
+        agg = compute_aggregates(results)
+        cold = agg["cold"]
+        assert "latency_stddev" in cold
+        # stddev of [2000, 3000, 4000] ≈ 816.5
+        assert 800 < cold["latency_stddev"] < 850
+
+    def test_stddev_zero_for_single_result(self):
+        results = [_make_result(phase="cold", latency=5000)]
+        agg = compute_aggregates(results)
+        assert agg["cold"]["latency_stddev"] == 0.0
 
 
 class TestRunSingleQuery:
