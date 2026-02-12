@@ -67,7 +67,12 @@ def _make_voice_message(user_id=123456789, chat_id=987654321):
     message.bot = MagicMock()
     message.bot.send_chat_action = AsyncMock()
     message.bot.get_file = AsyncMock()
-    message.bot.download_file = AsyncMock()
+
+    # download_file writes bytes into the destination buffer (like real aiogram)
+    async def _fake_download(file_path, destination):
+        destination.write(b"fake-ogg-audio-data")
+
+    message.bot.download_file = AsyncMock(side_effect=_fake_download)
     message.voice = MagicMock()
     message.voice.file_id = "file123"
     message.voice.duration = 5
