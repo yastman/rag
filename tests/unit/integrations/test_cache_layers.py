@@ -200,6 +200,50 @@ class TestSemanticCache:
         result = await mgr.check_semantic(query="test", vector=[0.1] * 1024, query_type="GENERAL")
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_semantic_check_filters_by_user_id(self):
+        """check_semantic with user_id builds combined Tag filter (user_id + language)."""
+        _ensure_redisvl_filter_mock()
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(
+            return_value=[{"response": "user-specific answer", "vector_distance": 0.05}]
+        )
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        result = await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            user_id=42,
+        )
+        assert result == "user-specific answer"
+
+        # Verify acheck was called with a filter_expression
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None
+
+    @pytest.mark.asyncio
+    async def test_semantic_store_includes_user_id_in_filters(self):
+        """store_semantic with user_id passes it in filters dict."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            user_id=42,
+        )
+
+        call_kwargs = mgr.semantic_cache.astore.call_args[1]
+        assert call_kwargs["filters"]["user_id"] == "42"
+        assert call_kwargs["filters"]["query_type"] == "FAQ"
+        assert call_kwargs["filters"]["language"] == "ru"
+
 
 class TestExactCaches:
     """Test exact key-value caches (embeddings, sparse, analysis, search, rerank)."""
