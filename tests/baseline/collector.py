@@ -2,12 +2,48 @@
 
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 import httpx
 import redis
 from langfuse import Langfuse
+
+
+@dataclass
+class SessionMetrics:
+    """Metrics computed from per-trace observation data."""
+
+    trace_count: int = 0
+    llm_calls: int = 0
+
+    # Latency (ms) — computed from GENERATION observations
+    llm_latency_p50_ms: float = 0.0
+    llm_latency_p95_ms: float = 0.0
+
+    # Cost
+    total_cost_usd: float = 0.0
+    llm_tokens_input: int = 0
+    llm_tokens_output: int = 0
+
+    # Cache
+    cache_hit_rate: float = 0.0
+    cache_hits: int = 0
+    cache_misses: int = 0
+
+
+def _percentile(sorted_values: list[float], pct: int) -> float:
+    """Compute percentile from pre-sorted values (linear interpolation)."""
+    if not sorted_values:
+        return 0.0
+    n = len(sorted_values)
+    k = (pct / 100) * (n - 1)
+    f = int(k)
+    c = f + 1
+    if c >= n:
+        return sorted_values[-1]
+    return sorted_values[f] + (k - f) * (sorted_values[c] - sorted_values[f])
 
 
 class LangfuseMetricsCollector:
@@ -201,6 +237,122 @@ class LangfuseMetricsCollector:
             "total": total,
             "hit_rate": hit_rate,
         }
+
+    # ========== Per-Trace Session Metrics ==========
+
+    def _fetch_all_traces(
+        self,
+        *,
+        session_id: str | None = None,
+        tags: list[str] | None = None,
+        limit: int = 50,
+    ) -> list:
+        """Fetch all traces matching filters, handling pagination."""
+        all_traces: list = []
+        page = 1
+        while True:
+            result = self.client.api.trace.list(
+                session_id=session_id,
+                tags=tags,
+                limit=limit,
+                page=page,
+            )
+            all_traces.extend(result.data)
+            if not result.meta or not result.meta.next_page:
+                break
+            page = result.meta.next_page
+        return all_traces
+
+    def collect_session_metrics(
+        self,
+        *,
+        session_id: str | None = None,
+        tag: str | None = None,
+    ) -> SessionMetrics:
+        """Fetch traces + observations for a session/tag, compute metrics locally.
+
+        Args:
+            session_id: Filter by Langfuse session_id (for current CI run).
+            tag: Filter by Langfuse tag (for baseline).
+
+        Returns:
+            SessionMetrics with aggregated observation-level data.
+
+        Raises:
+            ValueError: If neither session_id nor tag is provided.
+        """
+        if not session_id and not tag:
+            msg = "At least one of session_id or tag must be provided"
+            raise ValueError(msg)
+
+        traces = self._fetch_all_traces(
+            session_id=session_id,
+            tags=[tag] if tag else None,
+        )
+
+        if not traces:
+            return SessionMetrics()
+
+        latencies_ms: list[float] = []
+        total_cost = 0.0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        llm_calls = 0
+        cache_hits = 0
+        cache_misses = 0
+
+        for trace in traces:
+            # Cache from trace metadata
+            cache_hit = (trace.metadata or {}).get("cache_hit")
+            if cache_hit is True:
+                cache_hits += 1
+            elif cache_hit is False:
+                cache_misses += 1
+
+            # Fetch GENERATION observations for this trace
+            obs_result = self.client.api.observations.list(
+                trace_id=trace.id,
+                type="GENERATION",
+            )
+            for obs in obs_result.data:
+                llm_calls += 1
+
+                # Latency (skip if timestamps missing)
+                if obs.start_time and obs.end_time:
+                    delta = (obs.end_time - obs.start_time).total_seconds() * 1000
+                    latencies_ms.append(delta)
+
+                # Cost (None → 0)
+                total_cost += obs.calculated_total_cost or 0.0
+
+                # Tokens (None usage → 0)
+                if obs.usage:
+                    total_input_tokens += obs.usage.input or 0
+                    total_output_tokens += obs.usage.output or 0
+
+        # Compute percentiles
+        p50 = 0.0
+        p95 = 0.0
+        if latencies_ms:
+            sorted_lat = sorted(latencies_ms)
+            p50 = _percentile(sorted_lat, 50)
+            p95 = _percentile(sorted_lat, 95)
+
+        cache_total = cache_hits + cache_misses
+        cache_rate = cache_hits / cache_total if cache_total > 0 else 0.0
+
+        return SessionMetrics(
+            trace_count=len(traces),
+            llm_calls=llm_calls,
+            llm_latency_p50_ms=p50,
+            llm_latency_p95_ms=p95,
+            total_cost_usd=total_cost,
+            llm_tokens_input=total_input_tokens,
+            llm_tokens_output=total_output_tokens,
+            cache_hit_rate=cache_rate,
+            cache_hits=cache_hits,
+            cache_misses=cache_misses,
+        )
 
     # ========== Infrastructure Metrics ==========
 
