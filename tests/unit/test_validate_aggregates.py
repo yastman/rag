@@ -473,6 +473,31 @@ class TestReportAndSummary:
         assert "| sample count | 5 |" in text
 
 
+class TestReportNoReferenceTrace:
+    """Issue #168: reference trace c2b95d86 removed from report."""
+
+    def test_report_no_reference_trace_section(self, tmp_path):
+        """Report should not contain Reference Trace Comparison section."""
+        run = ValidationRun(
+            run_id="test-123",
+            git_sha="abc",
+            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+            collections=["test"],
+            skip_rerank_threshold=0.012,
+            relevance_threshold_rrf=0.005,
+            results=[],
+        )
+        output = tmp_path / "report.md"
+        generate_report(
+            run=run,
+            aggregates={},
+            output_path=output,
+        )
+        content = output.read_text()
+        assert "c2b95d86" not in content
+        assert "Reference Trace Comparison" not in content
+
+
 class TestCollectionResolution:
     """Report collections must reflect actually validated collections only."""
 

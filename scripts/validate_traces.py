@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import yaml
 from dotenv import load_dotenv
 from langfuse import Langfuse
 
@@ -44,12 +45,24 @@ from scripts.validate_queries import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-# Reference trace from issue #105
-REFERENCE_TRACE_ID = "c2b95d86aa1f643b79016dd611c4691f"
-
 COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
 
 STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
+
+GO_NO_GO_THRESHOLDS_PATH = (
+    Path(__file__).resolve().parent.parent / "tests" / "baseline" / "thresholds.yaml"
+)
+
+
+def _load_go_no_go_thresholds(
+    custom: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Load Go/No-Go thresholds from YAML, with optional overrides."""
+    with open(GO_NO_GO_THRESHOLDS_PATH) as f:
+        defaults = yaml.safe_load(f).get("go_no_go", {})
+    if custom:
+        defaults.update(custom)
+    return defaults
 
 
 class FakeSentMessage:
@@ -614,44 +627,42 @@ def evaluate_go_no_go(
     aggregates: dict[str, Any],
     results: list[TraceResult],
     orphan_rate: float = 0.0,
+    thresholds: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Evaluate Go/No-Go criteria for Gate 1.
 
     Returns dict of criterion_name -> {target, actual, passed}.
-    Criteria from issue #101 + roadmap Gate 1:
-      1. cold_p50 < 5000ms
-      2. cold_p90 < 8000ms
-      3. cold queries > 10s < 15%
-      4. cache_hit p50 < 1500ms
-      5. p50 TTFT (generate node) < 2000ms
-      6. rewrite calls >= 2 <= 10%
-      7. rewrite completion_tokens p50 <= 96
-      8. ERROR observations = 0 new
-      9. orphan traces = 0%
+    Thresholds loaded from tests/baseline/thresholds.yaml go_no_go section,
+    with optional overrides via thresholds param.
     """
+    t = _load_go_no_go_thresholds(thresholds)
+
     cold = aggregates.get("cold", {})
     cache = aggregates.get("cache_hit", {})
     cold_results = [r for r in results if r.phase == "cold"]
 
     criteria: dict[str, dict[str, Any]] = {}
 
-    # 1. Cold p50 < 5s
+    # 1. Cold p50
     cold_p50 = cold.get("latency_p50", 99999)
+    cold_p50_limit = t.get("cold_p50_ms", 5000)
     criteria["cold_p50_lt_5s"] = {
-        "target": "< 5000 ms",
+        "target": f"< {cold_p50_limit} ms",
         "actual": f"{cold_p50:.0f} ms",
-        "passed": cold_p50 < 5000,
+        "passed": cold_p50 < cold_p50_limit,
     }
 
-    # 2. Cold p90 < 8s (fallback to p95 for backward compatibility)
+    # 2. Cold p90 (fallback to p95 for backward compatibility)
     cold_p90 = cold.get("latency_p90", cold.get("latency_p95", 99999))
+    cold_p90_limit = t.get("cold_p90_ms", 8000)
     criteria["cold_p90_lt_8s"] = {
-        "target": "< 8000 ms",
+        "target": f"< {cold_p90_limit} ms",
         "actual": f"{cold_p90:.0f} ms",
-        "passed": cold_p90 < 8000,
+        "passed": cold_p90 < cold_p90_limit,
     }
 
-    # 3. Cold queries > 10s < 15%
+    # 3. Cold queries > 10s
+    cold_over_10s_limit = t.get("cold_over_10s_pct", 0.15)
     if cold_results:
         over_10s = sum(1 for r in cold_results if r.latency_wall_ms > 10000)
         pct_over_10s = over_10s / len(cold_results)
@@ -659,49 +670,53 @@ def evaluate_go_no_go(
         over_10s = 0
         pct_over_10s = 0.0
     criteria["cold_over_10s_lt_15pct"] = {
-        "target": "< 15%",
+        "target": f"< {cold_over_10s_limit:.0%}",
         "actual": f"{pct_over_10s:.1%} ({over_10s}/{len(cold_results)})",
-        "passed": pct_over_10s < 0.15,
+        "passed": pct_over_10s < cold_over_10s_limit,
     }
 
-    # 4. Cache-hit p50 < 1.5s
+    # 4. Cache-hit p50
     cache_p50 = cache.get("latency_p50", 99999)
+    cache_p50_limit = t.get("cache_hit_p50_ms", 1500)
     criteria["cache_hit_p50_lt_1500ms"] = {
-        "target": "< 1500 ms",
+        "target": f"< {cache_p50_limit} ms",
         "actual": f"{cache_p50:.0f} ms",
-        "passed": cache_p50 < 1500,
+        "passed": cache_p50 < cache_p50_limit,
     }
 
-    # 5. Generate node p50 < 2s (full generation latency, non-streaming mode)
+    # 5. Generate node p50 (full generation latency, non-streaming mode)
     generate_p50 = cold.get("node_p50", {}).get("generate", 99999)
+    generate_p50_limit = t.get("generate_p50_ms", 2000)
     criteria["generate_p50_lt_2s"] = {
-        "target": "< 2000 ms",
+        "target": f"< {generate_p50_limit} ms",
         "actual": f"{generate_p50:.0f} ms",
-        "passed": generate_p50 < 2000,
+        "passed": generate_p50 < generate_p50_limit,
     }
 
-    # 6. Rewrite calls >= 2 <= 10%
+    # 6. Rewrite calls >= 2
+    multi_rewrite_limit = t.get("multi_rewrite_pct", 0.10)
     if cold_results:
         multi_rewrite = sum(1 for r in cold_results if (r.state.get("rewrite_count", 0) or 0) >= 2)
         multi_rewrite_pct = multi_rewrite / len(cold_results)
     else:
         multi_rewrite_pct = 0.0
     criteria["multi_rewrite_le_10pct"] = {
-        "target": "<= 10%",
+        "target": f"<= {multi_rewrite_limit:.0%}",
         "actual": f"{multi_rewrite_pct:.1%}",
-        "passed": multi_rewrite_pct <= 0.10,
+        "passed": multi_rewrite_pct <= multi_rewrite_limit,
     }
 
-    # 7. Rewrite completion_tokens p50 <= 96 (from Langfuse scores if available)
+    # 7. Rewrite completion_tokens p50 (from Langfuse scores if available)
+    rewrite_tokens_limit = t.get("rewrite_tokens_p50", 96)
     rewrite_tokens: list[float] = []
     for r in cold_results:
         if "rewrite_completion_tokens" in r.scores:
             rewrite_tokens.append(r.scores["rewrite_completion_tokens"])
     tokens_p50 = float(np.percentile(rewrite_tokens, 50)) if rewrite_tokens else 0.0
     criteria["rewrite_tokens_p50_le_96"] = {
-        "target": "<= 96 tokens",
+        "target": f"<= {rewrite_tokens_limit} tokens",
         "actual": f"{tokens_p50:.0f} tokens" if rewrite_tokens else "N/A (no rewrites)",
-        "passed": tokens_p50 <= 96,
+        "passed": tokens_p50 <= rewrite_tokens_limit,
     }
 
     # 8. ERROR observations = 0 new (from scores + observation levels)
@@ -728,51 +743,29 @@ def evaluate_go_no_go(
         "passed": orphan_rate == 0.0,
     }
 
-    # 10. Streaming TTFT p50 < 1000ms (skipped if sample < 3)
+    # 10. Streaming TTFT p50 (skipped if sample < min)
+    ttft_min_sample = t.get("ttft_min_sample", 3)
+    ttft_p50_limit = t.get("ttft_p50_ms", 1000)
     streaming = aggregates.get("streaming", {})
     ttft_p50 = streaming.get("ttft_p50")
     ttft_n = streaming.get("ttft_sample_count", 0)
 
-    if ttft_n < 3:
+    if ttft_n < ttft_min_sample:
         criteria["ttft_p50_lt_1000ms"] = {
-            "target": "< 1000 ms",
-            "actual": f"N/A (n={ttft_n}, need >= 3)",
+            "target": f"< {ttft_p50_limit} ms",
+            "actual": f"N/A (n={ttft_n}, need >= {ttft_min_sample})",
             "passed": True,
             "skipped": True,
         }
     else:
         criteria["ttft_p50_lt_1000ms"] = {
-            "target": "< 1000 ms",
+            "target": f"< {ttft_p50_limit} ms",
             "actual": f"{ttft_p50:.0f} ms (n={ttft_n})",
-            "passed": ttft_p50 < 1000,
+            "passed": ttft_p50 < ttft_p50_limit,
             "skipped": False,
         }
 
     return criteria
-
-
-async def fetch_reference_trace_metrics(
-    reference_trace_id: str,
-) -> dict[str, Any] | None:
-    """Fetch metrics from reference trace for comparison.
-
-    Returns dict with latency_total_ms, rerank_applied, results_count etc.
-    """
-    try:
-        lf = Langfuse()
-        trace = lf.api.trace.get(reference_trace_id)
-        metrics: dict[str, Any] = {}
-        if hasattr(trace, "scores") and trace.scores:
-            for score in trace.scores:
-                name = getattr(score, "name", "")
-                value = getattr(score, "value", 0)
-                if name:
-                    metrics[name] = float(value)
-        lf.flush()
-        return metrics if metrics else None
-    except Exception as e:
-        logger.warning("Failed to fetch reference trace %s: %s", reference_trace_id, e)
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -947,7 +940,6 @@ def generate_report(
     run: ValidationRun,
     aggregates: dict[str, Any],
     output_path: Path,
-    reference_metrics: dict[str, Any] | None = None,
     go_no_go: dict[str, dict[str, Any]] | None = None,
     payload_summary: dict[str, dict[str, float]] | None = None,
 ) -> None:
@@ -960,28 +952,7 @@ def generate_report(
     lines.append(f"**Date:** {run.started_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     lines.append(f"**Collections:** {', '.join(run.collections)}")
     lines.append(f"**skip_rerank_threshold:** {run.skip_rerank_threshold}")
-    lines.append(f"**Reference trace:** `{REFERENCE_TRACE_ID}`")
     lines.append("")
-
-    if reference_metrics:
-        lines.append("## Reference Trace Comparison")
-        lines.append("")
-        lines.append("| Metric | Reference c2b95d86 | Cold p50 | Cold p95 | Cache p50 |")
-        lines.append("|--------|--------------------|----------|----------|-----------|")
-        lines.append(
-            "| latency_total_ms | "
-            f"{reference_metrics.get('latency_total_ms', 0):.0f} | "
-            f"{aggregates.get('cold', {}).get('latency_p50', 0):.0f} | "
-            f"{aggregates.get('cold', {}).get('latency_p95', 0):.0f} | "
-            f"{aggregates.get('cache_hit', {}).get('latency_p50', 0):.0f} |"
-        )
-        lines.append(
-            "| rerank_applied | "
-            f"{reference_metrics.get('rerank_applied', 0):.0f} | "
-            f"{aggregates.get('cold', {}).get('rerank_applied_rate', 0):.0%} | - | "
-            f"{aggregates.get('cache_hit', {}).get('rerank_applied_rate', 0):.0%} |"
-        )
-        lines.append("")
 
     # Summary table per phase
     for phase_name, phase_label in [("cold", "Cold Run"), ("cache_hit", "Cache-Hit Run")]:
@@ -1183,7 +1154,6 @@ async def run_validation(args: argparse.Namespace) -> None:
     # Enrich results from Langfuse API (scores + node spans) before aggregates
     all_results = await enrich_results_from_langfuse(run_id, all_results)
     run.results = all_results
-    reference_metrics = await fetch_reference_trace_metrics(REFERENCE_TRACE_ID)
 
     # Compute aggregates
     aggregates = compute_aggregates(all_results)
@@ -1239,7 +1209,6 @@ async def run_validation(args: argparse.Namespace) -> None:
             run,
             aggregates,
             report_path,
-            reference_metrics=reference_metrics,
             go_no_go=go_no_go,
             payload_summary=payload_summary,
         )
@@ -1262,8 +1231,6 @@ async def run_validation(args: argparse.Namespace) -> None:
         "go_no_go": go_no_go,
         "payload_summary": payload_summary,
         "orphan_rate": orphan_rate,
-        "reference_trace_id": REFERENCE_TRACE_ID,
-        "reference_metrics": reference_metrics,
         "traces": [
             {
                 "trace_id": r.trace_id,
