@@ -73,9 +73,9 @@ All traces use unified format: `{type}-{hash}-{YYYYMMDD}`
 | LLM p95 latency | +20% | Alert if latency increases |
 | Total cost | +10% | Alert if cost increases |
 | Cache hit rate | -10% | Alert if cache effectiveness drops |
-| LLM calls | +5% | Alert if call count increases |
+| LLM calls | +15% | Alert if call count increases (widened from 5% per #168) |
 
-Config: `tests/baseline/thresholds.yaml`
+Config: `tests/baseline/thresholds.yaml` (includes `go_no_go` section for validate_traces.py)
 
 ## Instrumented Services (35 traced operations)
 
@@ -277,7 +277,9 @@ LANGFUSE_HOST: http://langfuse:3000
 
 ## Trace Validation (#110, #143)
 
-`scripts/validate_traces.py` uses `@observe`, `propagate_attributes`, `update_current_trace` for headless LangGraph runs. After flush, `enrich_results_from_langfuse()` fetches scores + node spans by trace_id via Langfuse API. Reference trace `c2b95d86` — anomalous (5213s), not reproducible.
+`scripts/validate_traces.py` uses `@observe`, `propagate_attributes`, `update_current_trace` for headless LangGraph runs. After flush, `enrich_results_from_langfuse()` fetches scores + node spans by trace_id via Langfuse API.
+
+Go/No-Go thresholds are config-driven via `tests/baseline/thresholds.yaml` `go_no_go` section (#168).
 
 Go/No-Go criterion `generate_p50_lt_2s` (renamed from `ttft_p50_lt_2s` in #143) measures full generation latency in non-streaming validation mode. True TTFT requires a streaming phase (see #144).
 
