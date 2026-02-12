@@ -4,6 +4,7 @@ import sys
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 
@@ -262,3 +263,66 @@ class TestCacheableQueryTypes:
         assert "GENERAL" not in CACHEABLE_QUERY_TYPES
         assert "CHITCHAT" not in CACHEABLE_QUERY_TYPES
         assert "OFF_TOPIC" not in CACHEABLE_QUERY_TYPES
+
+
+class TestCacheCheckEmbeddingError:
+    """Test cache_check_node graceful fallback on embedding failure."""
+
+    @pytest.mark.asyncio
+    async def test_embedding_error_sets_error_state(self):
+        """When embedding fails, sets embedding_error and user-friendly response."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=None)  # cache miss
+
+        embeddings = MagicMock()
+        embeddings.aembed_hybrid = AsyncMock(
+            side_effect=httpx.RemoteProtocolError("Server disconnected")
+        )
+
+        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        assert result["embedding_error"] is True
+        assert result["embedding_error_type"] == "RemoteProtocolError"
+        assert result["cache_hit"] is False
+        assert "недоступен" in result["response"]
+        assert result["query_embedding"] is None
+
+    @pytest.mark.asyncio
+    async def test_embedding_error_on_read_timeout(self):
+        """ReadTimeout also triggers graceful fallback."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=None)
+
+        embeddings = MagicMock()
+        embeddings.aembed_hybrid = AsyncMock(side_effect=httpx.ReadTimeout("Read timed out"))
+
+        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        assert result["embedding_error"] is True
+        assert result["cache_hit"] is False
+
+    @pytest.mark.asyncio
+    async def test_cached_embedding_skips_bge_call(self):
+        """When embedding cache hits, no BGE-M3 call — no error possible."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
+        cache.check_semantic = AsyncMock(return_value=None)
+
+        embeddings = MagicMock()
+        # aembed_hybrid should NOT be called
+        embeddings.aembed_hybrid = AsyncMock(side_effect=Exception("should not be called"))
+
+        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        assert result["embedding_error"] is False
+        assert result["cache_hit"] is False
+        embeddings.aembed_hybrid.assert_not_awaited()
