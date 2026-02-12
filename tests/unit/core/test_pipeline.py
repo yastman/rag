@@ -8,6 +8,13 @@ import pytest
 from src.core.pipeline import RAGPipeline, RAGResult
 
 
+@pytest.fixture(autouse=True)
+def _stable_api_env(monkeypatch):
+    """Keep Settings() construction deterministic in CI without real secrets."""
+    monkeypatch.setenv("API_PROVIDER", "claude")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
+
+
 class TestRAGResult:
     """Tests for RAGResult dataclass."""
 
