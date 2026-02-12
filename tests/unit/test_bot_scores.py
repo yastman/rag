@@ -121,6 +121,11 @@ FULL_PIPELINE_RESULT = {
     "answer_chars": 65,
     "answer_to_question_ratio": 2.4,
     "response_policy_mode": "enforced",
+    # Conversation memory (#154)
+    "messages": [
+        {"role": "user", "content": "query"},
+        {"role": "assistant", "content": "response"},
+    ],
 }
 
 # Cache hit result (short-circuit)
@@ -143,6 +148,7 @@ CACHE_HIT_RESULT = {
     "llm_timeout": False,
     "llm_stream_recovery": False,
     "streaming_enabled": False,
+    "messages": [{"role": "user", "content": "query"}],
 }
 
 # Chitchat result (no RAG at all)
@@ -159,6 +165,7 @@ CHITCHAT_RESULT = {
     "llm_timeout": False,
     "llm_stream_recovery": False,
     "streaming_enabled": False,
+    "messages": [],
 }
 
 
@@ -232,9 +239,13 @@ class TestScoreWriting:
             "response_style_applied",
             # Voice transcription (#151)
             "input_type",
+            # Conversation memory (#159)
+            "memory_messages_count",
+            "summarization_triggered",
+            "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.score_current_trace.call_count == 25
+        assert mock_lf.score_current_trace.call_count == 28
 
     @pytest.mark.asyncio
     async def test_score_values_full_pipeline(self, mock_config):
@@ -547,6 +558,41 @@ class TestVoiceTraceMetadata:
         }
         assert expected_keys.issubset(set(metadata.keys()))
 
+    @pytest.mark.asyncio
+    async def test_trace_metadata_contains_memory_and_overhead(self, mock_config):
+        """Trace metadata should include memory_messages_count and overhead proxy."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        result = {
+            **FULL_PIPELINE_RESULT,
+            "messages": [{"role": "user"}, {"role": "assistant"}],
+            "checkpointer_overhead_proxy_ms": 39.0,
+        }
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        assert metadata["memory_messages_count"] == 2
+        assert metadata["checkpointer_overhead_proxy_ms"] is not None
+
 
 VOICE_PIPELINE_RESULT = {
     **FULL_PIPELINE_RESULT,
@@ -633,3 +679,159 @@ class TestVoiceScores:
         # Voice-only scores NOT written for text input
         assert "stt_duration_ms" not in score_names
         assert "voice_duration_s" not in score_names
+
+
+class TestMemoryScores:
+    """Test conversation memory Langfuse scores (#159)."""
+
+    async def _run_handle_query(self, mock_config, graph_result, mock_lf_client):
+        """Helper: same as TestScoreWriting._run_handle_query."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=graph_result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        return mock_lf_client
+
+    @pytest.mark.asyncio
+    async def test_memory_messages_count_written(self, mock_config):
+        """memory_messages_count = len(result['messages'])."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        result = {
+            **FULL_PIPELINE_RESULT,
+            "messages": [{"role": "user"}, {"role": "assistant"}, {"role": "user"}],
+        }
+        await self._run_handle_query(mock_config, result, mock_lf)
+
+        scores = {
+            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
+        }
+        assert scores["memory_messages_count"] == 3.0
+
+    @pytest.mark.asyncio
+    async def test_summarization_triggered_true(self, mock_config):
+        """summarization_triggered=1 when summarize_ms > 0."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        result = {
+            **FULL_PIPELINE_RESULT,
+            "latency_stages": {**FULL_PIPELINE_RESULT["latency_stages"], "summarize": 0.250},
+        }
+        await self._run_handle_query(mock_config, result, mock_lf)
+
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        assert scores["summarization_triggered"]["value"] == 1
+        assert scores["summarization_triggered"]["data_type"] == "BOOLEAN"
+        assert scores["summarize_ms"]["value"] == pytest.approx(250.0, abs=1)
+
+    @pytest.mark.asyncio
+    async def test_summarization_triggered_false(self, mock_config):
+        """summarization_triggered=0 when no summarize stage."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        await self._run_handle_query(mock_config, CACHE_HIT_RESULT, mock_lf)
+
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        assert scores["summarization_triggered"]["value"] == 0
+        assert scores["summarization_triggered"]["data_type"] == "BOOLEAN"
+
+    @pytest.mark.asyncio
+    async def test_memory_messages_count_zero_when_no_messages(self, mock_config):
+        """memory_messages_count=0 when messages key absent."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        result = {**CHITCHAT_RESULT}
+        result.pop("messages", None)  # no messages key
+
+        await self._run_handle_query(mock_config, result, mock_lf)
+
+        scores = {
+            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
+        }
+        assert scores["memory_messages_count"] == 0.0
+
+
+def test_compute_checkpointer_overhead_proxy_ms():
+    """Unit test for _compute_checkpointer_overhead_proxy_ms helper."""
+    from telegram_bot.bot import _compute_checkpointer_overhead_proxy_ms
+
+    result = {"latency_stages": {"classify": 0.001, "generate": 0.100}}
+    # stages = 101ms, ainvoke wall = 140ms -> proxy overhead = 39ms
+    assert _compute_checkpointer_overhead_proxy_ms(result, 140.0) == pytest.approx(39.0, abs=0.1)
+    # clamp at zero
+    assert _compute_checkpointer_overhead_proxy_ms(result, 50.0) == 0.0
+
+
+class TestCheckpointerOverheadScore:
+    """Test checkpointer_overhead_proxy_ms score (#159)."""
+
+    async def _run_handle_query(self, mock_config, graph_result, mock_lf_client):
+        """Helper: run handle_query with mocked graph and Langfuse client."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=graph_result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        return mock_lf_client
+
+    @pytest.mark.asyncio
+    async def test_checkpointer_overhead_proxy_score_written(self, mock_config):
+        """checkpointer_overhead_proxy_ms computed from ainvoke wall-time minus stages."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        # FULL_PIPELINE_RESULT stages sum to 862ms (0.862s)
+        # Simulate ainvoke taking 0.901s (901ms) → overhead proxy = 39ms
+        perf_values = iter(
+            [
+                0.0,  # pipeline_start
+                1.0,  # invoke_start
+                1.901,  # after ainvoke → ainvoke_wall_ms = 901ms
+                2.0,  # pipeline_wall_ms
+            ]
+        )
+        with patch("telegram_bot.bot.time.perf_counter", side_effect=perf_values):
+            await self._run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+
+        scores = {
+            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
+        }
+        assert scores["checkpointer_overhead_proxy_ms"] == pytest.approx(39.0, abs=0.1)
