@@ -29,3 +29,11 @@ def test_has_query_errors_false_on_clean_data():
         "llm_decode_ms": {"value_p95": 800.0, "count_count": 10.0},
     }
     assert module.has_query_errors(metrics) is False
+
+
+def test_check_alerts_ignores_non_numeric_metric_values():
+    module = _load_script_module()
+    metrics = {
+        "llm_ttft_ms": {"value_p95": "n/a"},
+    }
+    assert module.check_alerts(metrics) == []
