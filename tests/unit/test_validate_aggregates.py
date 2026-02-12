@@ -3,6 +3,7 @@
 import contextlib
 import sys
 import types
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,6 +15,7 @@ from scripts.validate_traces import (
     aggregate_node_payloads,
     check_langfuse_config,
     compute_aggregates,
+    discover_collections,
     evaluate_go_no_go,
     format_phase_summary,
     generate_report,
@@ -587,6 +589,95 @@ class TestCollectionResolution:
     def test_falls_back_to_discovered_if_results_empty(self):
         discovered = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
         assert resolve_report_collections(discovered, []) == discovered
+
+
+class TestCollectionDiscovery:
+    """Collection discovery should use Qdrant API, not hardcoded list."""
+
+    async def test_discovers_exact_match(self):
+        """Finds collection by exact name from Qdrant API."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge"),
+                SimpleNamespace(name="some_other_collection"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
+            result = await discover_collections("http://localhost:6333")
+
+        assert "gdrive_documents_bge" in result
+
+    async def test_discovers_collection_with_quantization_suffix(self):
+        """Finds base collection even when stored with _scalar or _binary suffix."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge_scalar"),
+                SimpleNamespace(name="contextual_bulgaria_voyage_binary"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with (
+            patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
+            patch("scripts.validate_traces.check_voyage_available", return_value=True),
+        ):
+            result = await discover_collections("http://localhost:6333")
+
+        assert "gdrive_documents_bge_scalar" in result
+        assert "contextual_bulgaria_voyage_binary" in result
+
+    async def test_prefers_exact_match_over_suffixed(self):
+        """If both base and suffixed exist, prefer exact match."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge"),
+                SimpleNamespace(name="gdrive_documents_bge_scalar"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
+            result = await discover_collections("http://localhost:6333")
+
+        # Exact match preferred — only one entry per base name
+        assert result.count("gdrive_documents_bge") == 1
+        assert "gdrive_documents_bge_scalar" not in result
+
+    async def test_returns_empty_when_qdrant_unavailable(self):
+        """Qdrant connection failure returns empty list, not crash."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.side_effect = ConnectionError("refused")
+        mock_client.close = AsyncMock()
+
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
+            result = await discover_collections("http://localhost:6333")
+
+        assert result == []
+
+    async def test_skips_voyage_collection_without_api_key(self):
+        """Voyage collections discovered but skipped if VOYAGE_API_KEY missing."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge"),
+                SimpleNamespace(name="contextual_bulgaria_voyage"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with (
+            patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
+            patch("scripts.validate_traces.check_voyage_available", return_value=False),
+        ):
+            result = await discover_collections("http://localhost:6333")
+
+        assert "gdrive_documents_bge" in result
+        assert "contextual_bulgaria_voyage" not in result
 
 
 class TestFakeMessage:

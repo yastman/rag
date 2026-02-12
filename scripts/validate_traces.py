@@ -54,7 +54,9 @@ logger = logging.getLogger(__name__)
 # Reference trace from issue #105
 REFERENCE_TRACE_ID = "c2b95d86aa1f643b79016dd611c4691f"
 
-COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+# Base collection names to look for (without quantization suffix)
+COLLECTION_BASE_NAMES = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+QUANTIZATION_SUFFIXES = ["", "_scalar", "_binary"]
 
 STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
 
@@ -220,20 +222,6 @@ def get_git_sha() -> str:
     return result.stdout.strip()
 
 
-async def check_collection_available(qdrant_url: str, collection_name: str) -> bool:
-    """Check if Qdrant collection exists."""
-    from qdrant_client import AsyncQdrantClient
-
-    client = AsyncQdrantClient(url=qdrant_url)
-    try:
-        exists = await client.collection_exists(collection_name)
-        if not exists:
-            logger.warning("Collection %s not found in Qdrant — skipping", collection_name)
-        return exists
-    finally:
-        await client.close()
-
-
 def check_voyage_available() -> bool:
     """Check if Voyage API key is available."""
     key = os.getenv("VOYAGE_API_KEY", "")
@@ -243,18 +231,51 @@ def check_voyage_available() -> bool:
 
 
 async def discover_collections(qdrant_url: str) -> list[str]:
-    """Discover available collections for validation."""
+    """Discover available collections for validation via Qdrant API.
+
+    Queries Qdrant for all collections, matches against known base names
+    (with optional _scalar/_binary suffixes). Prefers exact match over suffixed.
+    """
+    from qdrant_client import AsyncQdrantClient
+
+    client = AsyncQdrantClient(url=qdrant_url)
+    try:
+        response = await client.get_collections()
+        all_names = {c.name for c in response.collections}
+    except Exception as e:
+        logger.error("Qdrant collection discovery failed: %s", e)
+        return []
+    finally:
+        await client.close()
+
     available: list[str] = []
-    for name in COLLECTIONS_TO_CHECK:
-        if await check_collection_available(qdrant_url, name):
-            # contextual_bulgaria_voyage needs Voyage API key
-            if "voyage" in name and not check_voyage_available():
-                logger.warning(
-                    "Skipping %s: collection exists but VOYAGE_API_KEY not set",
-                    name,
-                )
-                continue
-            available.append(name)
+    for base_name in COLLECTION_BASE_NAMES:
+        # Prefer exact match
+        matched = None
+        for suffix in QUANTIZATION_SUFFIXES:
+            candidate = f"{base_name}{suffix}"
+            if candidate in all_names:
+                if suffix == "":
+                    matched = candidate
+                    break  # exact match wins
+                if matched is None:
+                    matched = candidate  # keep first suffix match
+
+        if matched is None:
+            logger.warning("Collection %s (any suffix) not found in Qdrant", base_name)
+            continue
+
+        # Voyage collections need API key
+        if "voyage" in base_name and not check_voyage_available():
+            logger.warning(
+                "Skipping %s: collection exists but VOYAGE_API_KEY not set",
+                matched,
+            )
+            continue
+
+        available.append(matched)
+
+    logger.info("Discovered collections: %s (from %d total in Qdrant)", available, len(all_names))
     return available
 
 
@@ -1192,8 +1213,15 @@ async def run_validation(args: argparse.Namespace) -> None:
     # Discover available collections
     qdrant_url = config.qdrant_url
     if args.collection:
-        # User specified a single collection
-        if await check_collection_available(qdrant_url, args.collection):
+        # User specified a single collection — verify it exists
+        from qdrant_client import AsyncQdrantClient
+
+        client = AsyncQdrantClient(url=qdrant_url)
+        try:
+            exists = await client.collection_exists(args.collection)
+        finally:
+            await client.close()
+        if exists:
             collections = [args.collection]
         else:
             logger.error("Collection %s not found, aborting", args.collection)
