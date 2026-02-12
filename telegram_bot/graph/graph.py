@@ -6,6 +6,7 @@ Builds the full StateGraph with all nodes and conditional edges.
 from __future__ import annotations
 
 import functools
+import logging
 import time
 from typing import Any
 
@@ -13,6 +14,9 @@ from langgraph.graph import END, START, StateGraph
 
 from telegram_bot.graph.edges import route_by_query_type, route_cache, route_grade, route_start
 from telegram_bot.graph.state import RAGState
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_graph(
@@ -134,7 +138,13 @@ def build_graph(
         @observe(name="node-summarize", capture_input=False, capture_output=False)
         async def summarize_wrapper(state: dict[str, Any]) -> dict[str, Any]:
             t0 = time.perf_counter()
-            result = await summarize.ainvoke(state)
+            try:
+                result = await summarize.ainvoke(state)
+            except Exception:
+                logger.warning(
+                    "Summarization failed; preserving response without summary", exc_info=True
+                )
+                result = {**state, "summarize_failed": True}
             elapsed = time.perf_counter() - t0
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
             return result
