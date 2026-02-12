@@ -91,7 +91,6 @@ class TestCacheStoreNodeEventStream:
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation_batch = AsyncMock()
 
         event_stream = AsyncMock()
         event_stream.log_event = AsyncMock(return_value="entry-id")
@@ -114,13 +113,12 @@ class TestCacheStoreNodeEventStream:
         from telegram_bot.graph.state import make_initial_state
 
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
-        state["query_type"] = "GENERAL"
+        state["query_type"] = "FAQ"  # Must be cacheable type (FAQ/ENTITY/STRUCTURED)
         state["query_embedding"] = [0.1] * 1024
         state["response"] = "answer"
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation_batch = AsyncMock()
 
         result = await cache_store_node(state, cache=cache)
 
@@ -159,7 +157,6 @@ class TestCacheStoreNodeEventStream:
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation_batch = AsyncMock()
         event_stream = AsyncMock()
         event_stream.log_event = AsyncMock(return_value="entry-id")
 
