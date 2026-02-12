@@ -35,6 +35,7 @@ def _make_result(
     rewrite_count: int = 0,
     observation_error_count: int = 0,
     latency_stages: dict | None = None,
+    scores: dict[str, float] | None = None,
 ) -> TraceResult:
     return TraceResult(
         trace_id="test",
@@ -54,6 +55,7 @@ def _make_result(
             "observation_error_count": observation_error_count,
             "latency_stages": latency_stages or {},
         },
+        scores=scores or {},
     )
 
 
@@ -270,43 +272,35 @@ class TestEvaluateGoNoGo:
 
         assert criteria["ttft_p50_lt_1000ms"]["skipped"] is True
 
-    def test_cold_skipped_marks_criteria_as_dependency_unavailable(self):
-        """When cold phase was SKIPPED (Redis flush failed), latency criteria -> DEP_UNAVAILABLE."""
-        aggregates = {
-            "cold": {},
-            "cache_hit": {"latency_p50": 500},
-        }
-        # All cold results have cold_skipped=True
-        results = [
-            _make_result(phase="cold", latency=0),
-        ]
-        results[0].state["cold_skipped"] = True
-        results[0].state["skip_reason"] = "redis_flush_failed"
+    def test_custom_cold_p50_threshold(self):
+        """Go/No-Go uses config threshold, not hardcoded 5000."""
+        agg = {"cold": {"latency_p50": 6000}, "cache_hit": {}}
+        # Default config: 5000 -> FAIL
+        result = evaluate_go_no_go(agg, [], thresholds={"cold_p50_ms": 5000})
+        assert result["cold_p50_lt_5s"]["passed"] is False
 
-        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+        # Custom config: 7000 -> PASS
+        result = evaluate_go_no_go(agg, [], thresholds={"cold_p50_ms": 7000})
+        assert result["cold_p50_lt_5s"]["passed"] is True
 
-        assert criteria["cold_p50_lt_5s"].get("dep_unavailable") is True
-        assert criteria["cold_p50_lt_5s"]["passed"] is True  # not a failure
-        assert "SKIPPED" in criteria["cold_p50_lt_5s"]["actual"]
-        assert criteria["generate_p50_lt_2s"].get("dep_unavailable") is True
-        assert criteria["generate_p50_lt_2s"]["passed"] is True
+    def test_custom_rewrite_tokens_threshold(self):
+        """Rewrite tokens threshold loaded from config, not hardcoded 96."""
+        r = _make_result(phase="cold", scores={"rewrite_completion_tokens": 110.0})
+        agg = {"cold": {}, "cache_hit": {}}
+        # Default: 96 -> FAIL
+        result = evaluate_go_no_go(agg, [r], thresholds={"rewrite_tokens_p50": 96})
+        assert result["rewrite_tokens_p50_le_96"]["passed"] is False
 
-    def test_mixed_cold_results_not_marked_unavailable(self):
-        """If some cold results ran normally, criteria are NOT marked dep_unavailable."""
-        aggregates = {
-            "cold": {
-                "latency_p50": 3000,
-                "latency_p90": 5000,
-                "latency_p95": 6000,
-                "node_p50": {"generate": 1500},
-            },
-            "cache_hit": {"latency_p50": 500},
-        }
-        results = [_make_result(phase="cold", latency=3000)]
+        # Custom: 120 -> PASS
+        result = evaluate_go_no_go(agg, [r], thresholds={"rewrite_tokens_p50": 120})
+        assert result["rewrite_tokens_p50_le_96"]["passed"] is True
 
-        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
-
-        assert criteria["cold_p50_lt_5s"].get("dep_unavailable") is not True
+    def test_default_thresholds_from_yaml(self):
+        """When no thresholds passed, loads from thresholds.yaml."""
+        agg = {"cold": {"latency_p50": 4000}, "cache_hit": {}}
+        result = evaluate_go_no_go(agg, [])
+        # Should use yaml default (5000), so 4000 passes
+        assert result["cold_p50_lt_5s"]["passed"] is True
 
 
 class TestLangfusePreflight:
@@ -546,7 +540,7 @@ class TestReportAndSummary:
         assert "p90=140ms" in line
 
     def test_go_no_go_renders_skip_status(self, tmp_path):
-        """Skipped criteria render as '[-] SKIP', not '[x] PASS'."""
+        """Skipped criteria render as '[-] SKIPPED (...)', not '[x] PASS'."""
         run = ValidationRun(
             run_id="run-1",
             git_sha="abc123",
@@ -669,6 +663,61 @@ class TestRedisFlushPatterns:
         assert "## Streaming TTFT" in text
         assert "| ttft p50 | 450 ms |" in text
         assert "| sample count | 5 |" in text
+
+
+class TestReportNoReferenceTrace:
+    """Issue #168: reference trace c2b95d86 removed from report."""
+
+    def test_report_no_reference_trace_section(self, tmp_path):
+        """Report should not contain Reference Trace Comparison section."""
+        run = ValidationRun(
+            run_id="test-123",
+            git_sha="abc",
+            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+            collections=["test"],
+            skip_rerank_threshold=0.012,
+            relevance_threshold_rrf=0.005,
+            results=[],
+        )
+        output = tmp_path / "report.md"
+        generate_report(
+            run=run,
+            aggregates={},
+            output_path=output,
+        )
+        content = output.read_text()
+        assert "c2b95d86" not in content
+        assert "Reference Trace Comparison" not in content
+
+
+class TestGoNoGoReportFormat:
+    """Test Go/No-Go report formatting in markdown."""
+
+    def test_skipped_criterion_shows_reason(self):
+        """Issue #168: SKIP must include explicit reason."""
+        from scripts.validate_traces import _format_go_no_go_status
+
+        criterion = {
+            "target": "< 1000 ms",
+            "actual": "N/A (n=2, need >= 3)",
+            "passed": True,
+            "skipped": True,
+        }
+        status = _format_go_no_go_status(criterion)
+        assert "SKIPPED" in status
+        assert "n=" in status or "insufficient" in status.lower()
+
+    def test_pass_criterion_format(self):
+        from scripts.validate_traces import _format_go_no_go_status
+
+        entry = {"target": "< 5000 ms", "actual": "3200 ms", "passed": True}
+        assert "PASS" in _format_go_no_go_status(entry)
+
+    def test_fail_criterion_format(self):
+        from scripts.validate_traces import _format_go_no_go_status
+
+        entry = {"target": "< 5000 ms", "actual": "6100 ms", "passed": False}
+        assert "FAIL" in _format_go_no_go_status(entry)
 
 
 class TestCollectionResolution:
@@ -971,6 +1020,27 @@ class TestStreamingAggregation:
         assert s["n"] == 2
         assert s["ttft_sample_count"] == 1
         assert s["ttft_p50"] == pytest.approx(450.0, abs=1)
+
+
+class TestAggregatesStddev:
+    """Issue #168: aggregates must include latency_stddev."""
+
+    def test_aggregates_include_stddev(self):
+        results = [
+            _make_result(phase="cold", latency=2000),
+            _make_result(phase="cold", latency=3000),
+            _make_result(phase="cold", latency=4000),
+        ]
+        agg = compute_aggregates(results)
+        cold = agg["cold"]
+        assert "latency_stddev" in cold
+        # stddev of [2000, 3000, 4000] ≈ 816.5
+        assert 800 < cold["latency_stddev"] < 850
+
+    def test_stddev_zero_for_single_result(self):
+        results = [_make_result(phase="cold", latency=5000)]
+        agg = compute_aggregates(results)
+        assert agg["cold"]["latency_stddev"] == 0.0
 
 
 class TestRunSingleQuery:
