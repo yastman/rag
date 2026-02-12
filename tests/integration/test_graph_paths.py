@@ -203,7 +203,7 @@ async def test_path_chitchat_early_exit():
 
 
 # ---------------------------------------------------------------------------
-# Path 2: classify(GENERAL) → cache_check(HIT) → respond → END
+# Path 2: classify(FAQ) → cache_check(HIT) → respond → END
 # ---------------------------------------------------------------------------
 
 
@@ -228,7 +228,7 @@ async def test_path_cache_hit():
             message=mocks["message"],
         )
 
-    # FAQ query — allowlisted for semantic cache (#163)
+    # FAQ query (allowlisted for semantic cache) — triggers cache_check_node
     state = make_initial_state(
         user_id=2, session_id="test-path2", query="как купить квартиру в Болгарии"
     )
@@ -254,6 +254,51 @@ async def test_path_cache_hit():
 
 
 # ---------------------------------------------------------------------------
+# Path 2b: classify(GENERAL) → cache_check(MISS, allowlist bypass) → retrieve
+#          Semantic cache skipped for non-allowlisted types (#163)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_general_bypasses_semantic_cache():
+    """GENERAL query type bypasses semantic cache check and store (#163)."""
+    mocks = _make_graph_mocks(
+        cache_semantic="should not be used",  # would be a hit if checked
+        llm_response="Ответ на общий вопрос.",
+    )
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    # GENERAL query — not in CACHEABLE_QUERY_TYPES
+    state = make_initial_state(
+        user_id=10, session_id="test-general-bypass", query="уютная квартира с видом на море"
+    )
+
+    with traced_pipeline(session_id="test-general-bypass", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
+
+    assert result["query_type"] == "GENERAL"
+    assert result["cache_hit"] is False
+    # Semantic cache NOT checked (allowlist guard)
+    mocks["cache"].check_semantic.assert_not_awaited()
+    # Semantic cache NOT stored after generate
+    mocks["cache"].store_semantic.assert_not_awaited()
+    # Legacy conversation batch NOT stored (#163)
+    mocks["cache"].store_conversation_batch.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # Path 3: classify → cache_check(MISS) → retrieve → grade(relevant)
 #        → rerank → generate → cache_store → respond → END
 # ---------------------------------------------------------------------------
@@ -276,7 +321,7 @@ async def test_path_happy_retrieve_rerank_generate():
             message=mocks["message"],
         )
 
-    # ENTITY query — allowlisted for semantic cache (#163)
+    # ENTITY query (allowlisted for semantic cache)
     state = make_initial_state(
         user_id=3, session_id="test-path3", query="квартира в Несебре у моря"
     )
@@ -299,7 +344,7 @@ async def test_path_happy_retrieve_rerank_generate():
     mocks["reranker"].rerank.assert_awaited_once()
     mocks["llm"].chat.completions.create.assert_awaited_once()  # generate only
 
-    # Semantic cache stored (allowlisted ENTITY); no legacy LIST conversation store
+    # Cache stored (semantic only — no legacy store_conversation_batch)
     mocks["cache"].store_semantic.assert_awaited_once()
     mocks["cache"].store_conversation_batch.assert_not_awaited()
 
