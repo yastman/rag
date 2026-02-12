@@ -150,6 +150,31 @@ def check_langfuse_config() -> None:
     logger.info("Langfuse config OK: host=%s", host)
 
 
+def check_worktree_clean(strict: bool = False) -> None:
+    """Preflight: warn or fail if git worktree has uncommitted changes.
+
+    Args:
+        strict: If True, exit on dirty worktree. If False, log warning only.
+    """
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=normal"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    is_dirty = result.returncode != 0 or bool(result.stdout.strip())
+    if is_dirty:
+        msg = (
+            "Dirty worktree detected — uncommitted changes may cause "
+            "false positives in validation results"
+        )
+        if strict:
+            logger.error(msg)
+            sys.exit(1)
+        else:
+            logger.warning(msg)
+
+
 def detect_runner_mode(collection: str) -> str:
     """Detect runner mode based on collection embedding requirements.
 
@@ -172,29 +197,6 @@ def get_git_sha() -> str:
         check=True,
     )
     return result.stdout.strip()
-
-
-def check_worktree_clean(strict: bool = False) -> None:
-    """Check git worktree for uncommitted changes.
-
-    Args:
-        strict: If True, exit when worktree is dirty. If False, warn only.
-    """
-    result = subprocess.run(
-        ["git", "diff", "--quiet"],
-        check=False,
-    )
-    if result.returncode == 0:
-        return
-
-    message = (
-        "Detected dirty worktree (uncommitted changes). "
-        "Validation/baseline results may not be reproducible."
-    )
-    if strict:
-        logger.error("%s", message)
-        sys.exit(1)
-    logger.warning("%s", message)
 
 
 async def check_collection_available(qdrant_url: str, collection_name: str) -> bool:
@@ -1114,6 +1116,7 @@ async def run_validation(args: argparse.Namespace) -> None:
 
     config = GraphConfig.from_env()
     check_langfuse_config()  # fail fast if host/keys are missing
+    check_worktree_clean(strict=args.strict_worktree)
 
     run = ValidationRun(
         run_id=run_id,
@@ -1297,6 +1300,12 @@ def main() -> None:
         "--report",
         action="store_true",
         help="Generate markdown report",
+    )
+    parser.add_argument(
+        "--strict-worktree",
+        action="store_true",
+        default=False,
+        help="Fail if git worktree is dirty (default: warn only)",
     )
     args = parser.parse_args()
     asyncio.run(run_validation(args))
