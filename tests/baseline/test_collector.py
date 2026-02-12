@@ -105,9 +105,13 @@ class TestCollectSessionMetrics:
         )
         obs_page1 = MagicMock()
         obs_page1.data = [obs1]
+        obs_page1.meta = MagicMock()
+        obs_page1.meta.next_page = None
         obs_page2 = MagicMock()
         obs_page2.data = [obs2]
-        mock_client.api.observations.list.side_effect = [obs_page1, obs_page2]
+        obs_page2.meta = MagicMock()
+        obs_page2.meta.next_page = None
+        mock_client.api.observations.get_many.side_effect = [obs_page1, obs_page2]
 
         result = collector.collect_session_metrics(session_id="ci-abc-job-1")
 
@@ -141,7 +145,9 @@ class TestCollectSessionMetrics:
         obs.end_time = None
         obs_page = MagicMock()
         obs_page.data = [obs]
-        mock_client.api.observations.list.return_value = obs_page
+        obs_page.meta = MagicMock()
+        obs_page.meta.next_page = None
+        mock_client.api.observations.get_many.return_value = obs_page
 
         result = collector.collect_session_metrics(session_id="s1")
 
@@ -169,7 +175,9 @@ class TestCollectSessionMetrics:
         obs.usage = None
         obs_page = MagicMock()
         obs_page.data = [obs]
-        mock_client.api.observations.list.return_value = obs_page
+        obs_page.meta = MagicMock()
+        obs_page.meta.next_page = None
+        mock_client.api.observations.get_many.return_value = obs_page
 
         result = collector.collect_session_metrics(session_id="s1")
 
@@ -220,3 +228,34 @@ class TestCollectSessionMetrics:
 
         with pytest.raises(ValueError, match="session_id or tag"):
             collector.collect_session_metrics()
+
+    @patch("tests.baseline.collector.Langfuse")
+    def test_paginates_observations(self, mock_langfuse_cls):
+        """Should fetch all observation pages for a trace."""
+        collector, mock_client = self._make_collector(mock_langfuse_cls)
+
+        trace = self._make_trace("t1", "s1", metadata={"cache_hit": True})
+        traces_page = MagicMock()
+        traces_page.data = [trace]
+        traces_page.meta = MagicMock()
+        traces_page.meta.next_page = None
+        mock_client.api.trace.list.return_value = traces_page
+
+        obs_page1 = MagicMock()
+        obs_page1.data = [self._make_observation(cost=0.01, input_tokens=10, output_tokens=5)]
+        obs_page1.meta = MagicMock()
+        obs_page1.meta.next_page = 2
+
+        obs_page2 = MagicMock()
+        obs_page2.data = [self._make_observation(cost=0.02, input_tokens=20, output_tokens=10)]
+        obs_page2.meta = MagicMock()
+        obs_page2.meta.next_page = None
+
+        mock_client.api.observations.get_many.side_effect = [obs_page1, obs_page2]
+
+        result = collector.collect_session_metrics(session_id="s1")
+
+        assert result.llm_calls == 2
+        assert result.total_cost_usd == pytest.approx(0.03)
+        assert result.llm_tokens_input == 30
+        assert mock_client.api.observations.get_many.call_count == 2

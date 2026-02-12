@@ -50,7 +50,7 @@ class LangfuseMetricsCollector:
 
     Uses per-trace observation data via:
     - api.trace.list(session_id=..., tags=...)
-    - api.observations.list(trace_id=..., type="GENERATION")
+    - api.observations.get_many(trace_id=..., type="GENERATION")
     """
 
     def __init__(
@@ -149,12 +149,7 @@ class LangfuseMetricsCollector:
             elif cache_hit is False:
                 cache_misses += 1
 
-            # Fetch GENERATION observations for this trace
-            obs_result = self.client.api.observations.list(
-                trace_id=trace.id,
-                type="GENERATION",
-            )
-            for obs in obs_result.data:
+            for obs in self._fetch_all_observations(trace_id=trace.id):
                 llm_calls += 1
 
                 # Latency (skip if timestamps missing)
@@ -193,6 +188,60 @@ class LangfuseMetricsCollector:
             cache_hits=cache_hits,
             cache_misses=cache_misses,
         )
+
+    def _fetch_all_observations(self, *, trace_id: str, limit: int = 50) -> list:
+        """Fetch all GENERATION observations for a trace, handling pagination."""
+        observations: list = []
+        page = 1
+        while True:
+            result = self.client.api.observations.get_many(
+                trace_id=trace_id,
+                type="GENERATION",
+                page=page,
+                limit=limit,
+            )
+            observations.extend(result.data)
+            if not result.meta or not result.meta.next_page:
+                break
+            page = result.meta.next_page
+        return observations
+
+    def _update_trace_tags(self, *, trace_id: str, tags: list[str]) -> None:
+        """Update trace tags via available SDK/public API surface.
+
+        SDK v3.12 does not expose `api.trace.update`, so we fall back to a direct PATCH
+        through the generated API client's authenticated HTTP transport.
+        """
+        trace_api = self.client.api.trace
+        if hasattr(trace_api, "update"):
+            trace_api.update(trace_id=trace_id, tags=tags)
+            return
+
+        response = trace_api._client_wrapper.httpx_client.request(  # type: ignore[attr-defined]
+            f"api/public/traces/{trace_id}",
+            method="PATCH",
+            json={"tags": tags},
+        )
+        if not 200 <= response.status_code < 300:
+            msg = f"Failed to update trace tags for {trace_id}: {response.status_code}"
+            raise RuntimeError(msg)
+
+    def tag_session_traces(self, *, session_id: str, tag: str) -> int:
+        """Apply a tag to all traces in a session.
+
+        Returns:
+            Number of traces that were updated with the tag.
+        """
+        traces = self._fetch_all_traces(session_id=session_id)
+        tagged = 0
+        for trace in traces:
+            existing_tags = list(trace.tags or [])
+            if tag in existing_tags:
+                continue
+            existing_tags.append(tag)
+            self._update_trace_tags(trace_id=trace.id, tags=existing_tags)
+            tagged += 1
+        return tagged
 
     # ========== Infrastructure Metrics ==========
 
