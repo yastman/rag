@@ -37,6 +37,34 @@ class TestBaselineSnapshot:
 class TestBaselineManager:
     """Test BaselineManager functionality."""
 
+    def test_create_snapshot_uses_collect_session_metrics(self):
+        """Should build snapshot from new collector API without aggregate endpoints."""
+        collector = Mock()
+        collector.collect_session_metrics.return_value = Mock(
+            llm_latency_p50_ms=120.0,
+            llm_latency_p95_ms=300.0,
+            total_cost_usd=0.12,
+            llm_tokens_input=1000,
+            llm_tokens_output=200,
+            llm_calls=7,
+            cache_hit_rate=0.5,
+            cache_hits=3,
+            cache_misses=3,
+        )
+        manager = BaselineManager(collector=collector)
+
+        snapshot = manager.create_snapshot(
+            tag="main-latest",
+            session_id="ci-abc-1",
+            from_ts=datetime(2026, 2, 1),
+            to_ts=datetime(2026, 2, 2),
+        )
+
+        collector.collect_session_metrics.assert_called_once_with(session_id="ci-abc-1")
+        assert snapshot.llm_latency_p95_ms == 300.0
+        assert snapshot.total_cost_usd == 0.12
+        assert snapshot.llm_calls == 7
+
     def test_compare_passes_within_thresholds(self):
         """Should pass when metrics within thresholds."""
         collector = Mock()

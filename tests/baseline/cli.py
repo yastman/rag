@@ -123,15 +123,15 @@ def compare(baseline_tag: str, current_session: str, thresholds: str, output: st
 
     if current_metrics.trace_count == 0:
         result = {
-            "status": "skipped",
+            "status": "failed",
             "reason": f"No traces found for session '{current_session}'",
             "baseline_tag": baseline_tag,
             "current_session": current_session,
         }
         Path(output).parent.mkdir(parents=True, exist_ok=True)
         Path(output).write_text(json.dumps(result, indent=2))
-        click.secho(f"SKIP — no traces for session '{current_session}'", fg="yellow")
-        sys.exit(0)
+        click.secho(f"FAILED — no traces for session '{current_session}'", fg="red")
+        sys.exit(1)
 
     # Build snapshots from session metrics
     now = datetime.now(UTC)
@@ -198,23 +198,20 @@ def compare(baseline_tag: str, current_session: str, thresholds: str, output: st
 def set_baseline(tag: str, session_id: str):
     """Tag traces from a session as the new baseline."""
     collector = get_collector()
-    traces = collector._fetch_all_traces(session_id=session_id)
-
-    if not traces:
-        click.secho(f"No traces found for session '{session_id}'", fg="red")
+    try:
+        tagged = collector.tag_session_traces(session_id=session_id, tag=tag)
+    except Exception as exc:
+        click.secho(f"Failed to set baseline tag: {exc}", fg="red")
         sys.exit(1)
 
-    click.echo(f"Tagging {len(traces)} traces with '{tag}'...")
-    for trace in traces:
-        existing_tags = list(trace.tags or [])
-        if tag not in existing_tags:
-            existing_tags.append(tag)
-            collector.client.api.trace.update(
-                trace_id=trace.id,
-                tags=existing_tags,
-            )
+    if tagged == 0:
+        click.secho(
+            f"No traces updated for session '{session_id}' (already tagged or session empty).",
+            fg="yellow",
+        )
+        return
 
-    click.secho(f"Baseline set: {len(traces)} traces tagged '{tag}'", fg="green")
+    click.secho(f"Baseline set: {tagged} traces tagged '{tag}'", fg="green")
 
 
 @cli.command()
