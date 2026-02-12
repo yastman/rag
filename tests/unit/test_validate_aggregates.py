@@ -3,6 +3,7 @@
 import contextlib
 import sys
 import types
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,7 +14,10 @@ from scripts.validate_traces import (
     _flush_redis_caches,
     aggregate_node_payloads,
     check_langfuse_config,
+    check_orphan_traces,
     compute_aggregates,
+    detect_runner_mode,
+    discover_collections,
     evaluate_go_no_go,
     format_phase_summary,
     generate_report,
@@ -266,6 +270,44 @@ class TestEvaluateGoNoGo:
 
         assert criteria["ttft_p50_lt_1000ms"]["skipped"] is True
 
+    def test_cold_skipped_marks_criteria_as_dependency_unavailable(self):
+        """When cold phase was SKIPPED (Redis flush failed), latency criteria -> DEP_UNAVAILABLE."""
+        aggregates = {
+            "cold": {},
+            "cache_hit": {"latency_p50": 500},
+        }
+        # All cold results have cold_skipped=True
+        results = [
+            _make_result(phase="cold", latency=0),
+        ]
+        results[0].state["cold_skipped"] = True
+        results[0].state["skip_reason"] = "redis_flush_failed"
+
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        assert criteria["cold_p50_lt_5s"].get("dep_unavailable") is True
+        assert criteria["cold_p50_lt_5s"]["passed"] is True  # not a failure
+        assert "SKIPPED" in criteria["cold_p50_lt_5s"]["actual"]
+        assert criteria["generate_p50_lt_2s"].get("dep_unavailable") is True
+        assert criteria["generate_p50_lt_2s"]["passed"] is True
+
+    def test_mixed_cold_results_not_marked_unavailable(self):
+        """If some cold results ran normally, criteria are NOT marked dep_unavailable."""
+        aggregates = {
+            "cold": {
+                "latency_p50": 3000,
+                "latency_p90": 5000,
+                "latency_p95": 6000,
+                "node_p50": {"generate": 1500},
+            },
+            "cache_hit": {"latency_p50": 500},
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        assert criteria["cold_p50_lt_5s"].get("dep_unavailable") is not True
+
 
 class TestLangfusePreflight:
     """Langfuse preflight should fail fast on incomplete/invalid credentials."""
@@ -284,7 +326,7 @@ class TestLangfusePreflight:
         monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
 
         mock_lf = MagicMock()
-        mock_lf.api.trace.list.side_effect = RuntimeError("Invalid credentials")
+        mock_lf.auth_check.side_effect = RuntimeError("Invalid credentials")
 
         with (
             patch("scripts.validate_traces.Langfuse", return_value=mock_lf),
@@ -298,11 +340,134 @@ class TestLangfusePreflight:
         monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
 
         mock_lf = MagicMock()
+        mock_lf.auth_check.return_value = True
         with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
             check_langfuse_config()
 
-        mock_lf.api.trace.list.assert_called_once_with(limit=1)
+        mock_lf.auth_check.assert_called()
         mock_lf.flush.assert_not_called()
+
+    def test_retries_on_transient_failure_then_succeeds(self, monkeypatch: pytest.MonkeyPatch):
+        """Auth probe retries up to 3 times on transient errors."""
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+        monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
+
+        mock_lf = MagicMock()
+        # Fail twice, succeed on third call
+        mock_lf.auth_check.side_effect = [
+            ConnectionError("timeout"),
+            ConnectionError("timeout"),
+            True,  # success
+        ]
+
+        with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
+            check_langfuse_config()  # should not raise
+
+        assert mock_lf.auth_check.call_count == 3
+
+    def test_gives_up_after_3_retries(self, monkeypatch: pytest.MonkeyPatch):
+        """Auth probe exits after exhausting 3 retry attempts."""
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+        monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
+
+        mock_lf = MagicMock()
+        mock_lf.auth_check.side_effect = ConnectionError("timeout")
+
+        with (
+            patch("scripts.validate_traces.Langfuse", return_value=mock_lf),
+            pytest.raises(SystemExit),
+        ):
+            check_langfuse_config()
+
+        assert mock_lf.auth_check.call_count == 3
+
+
+class TestRedisFlush:
+    """Redis cache flush must verify completeness or return SKIPPED."""
+
+    async def test_returns_ok_when_all_keys_deleted(self):
+        """Flush succeeds: all patterns cleared, verify returns OK."""
+        mock_redis = AsyncMock()
+        deleted = False
+
+        async def fake_scan_iter(match=None, count=100):
+            # Before delete: yield keys; after delete: empty
+            if not deleted:
+                yield f"key:{match}"
+
+        async def fake_delete(*keys):
+            nonlocal deleted
+            deleted = True
+
+        mock_redis.scan_iter = fake_scan_iter
+        mock_redis.delete = fake_delete
+
+        mock_cache = MagicMock()
+        mock_cache.redis = mock_redis
+        mock_cache.semantic_cache = None
+
+        result = await _flush_redis_caches(mock_cache)
+        assert result == "OK"
+
+    async def test_returns_skipped_when_redis_unavailable(self):
+        """No redis connection -> SKIPPED, not silent warm run."""
+        mock_cache = MagicMock()
+        mock_cache.redis = None
+
+        result = await _flush_redis_caches(mock_cache)
+        assert result == "SKIPPED"
+
+    async def test_returns_skipped_when_keys_remain_after_flush(self):
+        """Flush runs but keys remain -> SKIPPED."""
+        mock_redis = AsyncMock()
+
+        # scan_iter always returns keys (can't delete)
+        async def fake_scan_iter(match=None, count=100):
+            for k in [b"remaining:1"]:
+                yield k
+
+        mock_redis.scan_iter = fake_scan_iter
+        mock_redis.delete = AsyncMock()
+
+        mock_cache = MagicMock()
+        mock_cache.redis = mock_redis
+        mock_cache.semantic_cache = None
+
+        result = await _flush_redis_caches(mock_cache)
+        assert result == "SKIPPED"
+
+    async def test_uses_current_cache_version_for_flush_patterns(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Flush patterns must be derived from active cache version."""
+        seen_matches: list[str] = []
+
+        async def fake_scan_iter(match=None, count=100):
+            if match is not None:
+                seen_matches.append(match)
+            if False:
+                yield None
+
+        mock_redis = AsyncMock()
+        mock_redis.scan_iter = fake_scan_iter
+        mock_redis.delete = AsyncMock()
+
+        mock_cache = MagicMock()
+        mock_cache.redis = mock_redis
+        mock_cache.semantic_cache = None
+
+        monkeypatch.setattr("scripts.validate_traces._get_cache_version", lambda: "v9")
+
+        result = await _flush_redis_caches(mock_cache)
+
+        assert result == "OK"
+        assert any(m == "embeddings:v9:*" for m in seen_matches)
+        assert any(m == "sparse:v9:*" for m in seen_matches)
+        assert any(m == "analysis:v9:*" for m in seen_matches)
+        assert any(m == "search:v9:*" for m in seen_matches)
+        assert any(m == "rerank:v9:*" for m in seen_matches)
 
 
 class TestAggregateNodePayloads:
@@ -527,6 +692,144 @@ class TestCollectionResolution:
     def test_falls_back_to_discovered_if_results_empty(self):
         discovered = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
         assert resolve_report_collections(discovered, []) == discovered
+
+
+class TestCollectionDiscovery:
+    """Collection discovery should use Qdrant API, not hardcoded list."""
+
+    async def test_discovers_exact_match(self):
+        """Finds collection by exact name from Qdrant API."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge"),
+                SimpleNamespace(name="some_other_collection"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
+            result = await discover_collections("http://localhost:6333")
+
+        assert "gdrive_documents_bge" in result
+
+    async def test_discovers_collection_with_quantization_suffix(self):
+        """Finds base collection even when stored with _scalar or _binary suffix."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge_scalar"),
+                SimpleNamespace(name="contextual_bulgaria_voyage_binary"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with (
+            patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
+            patch("scripts.validate_traces.check_voyage_available", return_value=True),
+        ):
+            result = await discover_collections("http://localhost:6333")
+
+        assert "gdrive_documents_bge_scalar" in result
+        assert "contextual_bulgaria_voyage_binary" in result
+
+    async def test_prefers_exact_match_over_suffixed(self):
+        """If both base and suffixed exist, prefer exact match."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge"),
+                SimpleNamespace(name="gdrive_documents_bge_scalar"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
+            result = await discover_collections("http://localhost:6333")
+
+        # Exact match preferred — only one entry per base name
+        assert result.count("gdrive_documents_bge") == 1
+        assert "gdrive_documents_bge_scalar" not in result
+
+    async def test_returns_empty_when_qdrant_unavailable(self):
+        """Qdrant connection failure returns empty list, not crash."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.side_effect = ConnectionError("refused")
+        mock_client.close = AsyncMock()
+
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
+            result = await discover_collections("http://localhost:6333")
+
+        assert result == []
+
+    async def test_skips_voyage_collection_without_api_key(self):
+        """Voyage collections discovered but skipped if VOYAGE_API_KEY missing."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge"),
+                SimpleNamespace(name="contextual_bulgaria_voyage"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with (
+            patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
+            patch("scripts.validate_traces.check_voyage_available", return_value=False),
+        ):
+            result = await discover_collections("http://localhost:6333")
+
+        assert "gdrive_documents_bge" in result
+        assert "contextual_bulgaria_voyage" not in result
+
+    async def test_prefers_mode_suffix_when_quantization_enabled(self):
+        """Quantization mode must influence discovered collection choice."""
+        mock_client = AsyncMock()
+        mock_client.get_collections.return_value = SimpleNamespace(
+            collections=[
+                SimpleNamespace(name="gdrive_documents_bge"),
+                SimpleNamespace(name="gdrive_documents_bge_scalar"),
+                SimpleNamespace(name="gdrive_documents_bge_binary"),
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
+            result = await discover_collections(
+                "http://localhost:6333",
+                quantization_mode="binary",
+            )
+
+        assert "gdrive_documents_bge_binary" in result
+        assert "gdrive_documents_bge" not in result
+
+
+class TestRunnerModeDetection:
+    """Runner-mode detection should treat suffixed names the same as base names."""
+
+    def test_voyage_suffix_collection_uses_voyage_runner(self):
+        mode = detect_runner_mode("contextual_bulgaria_voyage_binary")
+        assert mode == "voyage_compatible"
+
+
+class TestLangfuseLookupSkipsSynthetic:
+    """Synthetic skipped traces must not trigger Langfuse lookups."""
+
+    def test_orphan_check_skips_cold_skipped_synthetic_traces(self):
+        skipped = _make_result(phase="cold", latency=0)
+        skipped.state["cold_skipped"] = True
+        skipped.trace_id = "skipped"
+        normal = _make_result(phase="cold", latency=100)
+        normal.trace_id = "real-trace"
+
+        mock_lf = MagicMock()
+        mock_lf.api.trace.get.return_value = SimpleNamespace(session_id="session-1")
+
+        with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
+            rate = check_orphan_traces([skipped, normal])
+
+        assert rate == 0.0
+        mock_lf.api.trace.get.assert_called_once_with("real-trace")
 
 
 class TestFakeMessage:
