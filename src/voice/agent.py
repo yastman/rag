@@ -12,7 +12,15 @@ import time
 import httpx
 from dotenv import load_dotenv
 from livekit import agents
-from livekit.agents import Agent, AgentServer, AgentSession, RunContext, cli, function_tool
+from livekit.agents import (
+    Agent,
+    AgentServer,
+    AgentSession,
+    JobProcess,
+    RunContext,
+    cli,
+    function_tool,
+)
 from livekit.plugins import elevenlabs, openai, silero
 
 from src.voice.schemas import CallStatus
@@ -152,7 +160,21 @@ class VoiceBot(Agent):
             return fallback
 
 
-server = AgentServer()
+def _prewarm_process(proc: JobProcess) -> None:
+    """Pre-load Silero VAD during process init, before the ping timer starts.
+
+    Heavy model loading on first job blocks the event loop and prevents pong
+    responses, triggering 'process is unresponsive' kills (#218).
+    """
+    proc.userdata["vad"] = silero.VAD.load()
+
+
+server = AgentServer(
+    initialize_process_timeout=30.0,  # VAD model cold-load can exceed 10s default
+    shutdown_process_timeout=30.0,  # graceful cleanup during network disruptions
+    num_idle_processes=2,  # prod default=8 is excessive for single voice bot
+    setup_fnc=_prewarm_process,
+)
 
 
 @server.rtc_session(agent_name="voice-bot")
@@ -196,7 +218,7 @@ async def entrypoint(ctx: agents.JobContext):
             voice_id=os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
             model="eleven_turbo_v2_5",
         ),
-        vad=silero.VAD.load(),
+        vad=ctx.proc.userdata.get("vad") or silero.VAD.load(),
     )
 
     agent = VoiceBot(call_id=call_id, lead_data=lead_data, transcript_store=store)
