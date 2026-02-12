@@ -178,7 +178,17 @@ def check_alerts(metrics: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
             if actual is None:
                 continue
 
-            actual_float = float(actual)
+            try:
+                actual_float = float(actual)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Skipping non-numeric metric value for %s (%s): %r",
+                    score_name,
+                    agg_key,
+                    actual,
+                )
+                continue
+
             is_below = rule.get("below", False)
 
             if is_below:
