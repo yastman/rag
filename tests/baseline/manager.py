@@ -75,6 +75,9 @@ class BaselineManager:
     ) -> BaselineSnapshot:
         """Create baseline snapshot from Langfuse data.
 
+        .. deprecated:: 2.0
+            Use collector.collect_session_metrics() + cli._metrics_to_snapshot() instead.
+
         Args:
             tag: Human-readable tag (e.g., "smoke-v1.0.0")
             session_id: Langfuse session ID
@@ -84,6 +87,14 @@ class BaselineManager:
         Returns:
             BaselineSnapshot with aggregated metrics
         """
+        import warnings
+
+        warnings.warn(
+            "create_snapshot is deprecated. Use collect_session_metrics() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         # Get daily metrics for cost/tokens
         daily = self.collector.get_daily_metrics(from_ts, to_ts)
 
