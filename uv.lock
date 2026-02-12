@@ -762,7 +762,6 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "bandit" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "livekit" },
@@ -772,38 +771,9 @@ all = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
-    { name = "mypy" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
-    { name = "pre-commit" },
-    { name = "pylint" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pytest-httpx" },
-    { name = "pytest-timeout" },
-    { name = "pytest-xdist" },
-    { name = "ruff" },
-    { name = "telethon" },
     { name = "uvicorn" },
-    { name = "vulture" },
-]
-dev = [
-    { name = "bandit" },
-    { name = "mypy" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc" },
-    { name = "pre-commit" },
-    { name = "pylint" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pytest-httpx" },
-    { name = "pytest-timeout" },
-    { name = "pytest-xdist" },
-    { name = "ruff" },
-    { name = "telethon" },
-    { name = "vulture" },
 ]
 docs = [
     { name = "mkdocs" },
@@ -822,15 +792,32 @@ voice = [
     { name = "uvicorn" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "bandit" },
+    { name = "mypy" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc" },
+    { name = "pre-commit" },
+    { name = "pylint" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-httpx" },
+    { name = "pytest-timeout" },
+    { name = "pytest-xdist" },
+    { name = "ruff" },
+    { name = "telethon" },
+    { name = "vulture" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "aiogram", specifier = ">=3.22.0" },
     { name = "aiohttp" },
     { name = "anthropic" },
     { name = "asyncpg", specifier = ">=0.31.0" },
-    { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.9" },
     { name = "cocoindex", specifier = ">=0.3.28" },
-    { name = "contextual-rag", extras = ["dev", "docs", "voice"], marker = "extra == 'all'" },
+    { name = "contextual-rag", extras = ["docs", "voice"], marker = "extra == 'all'" },
     { name = "datasets", specifier = ">=3.0.0" },
     { name = "docling", specifier = ">=2.70.0" },
     { name = "docling-core", specifier = ">=2.61.0" },
@@ -853,32 +840,20 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.25.0" },
     { name = "mlflow", specifier = ">=3.9.0" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11.0" },
     { name = "numpy" },
     { name = "openai" },
-    { name = "opentelemetry-exporter-otlp-proto-grpc", marker = "extra == 'dev'", specifier = ">=1.39.0" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'voice'", specifier = ">=1.39.0" },
     { name = "opentelemetry-sdk", marker = "extra == 'voice'", specifier = ">=1.39.0" },
     { name = "pandas", specifier = ">=2.0.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8.0" },
-    { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.2.0" },
     { name = "pymupdf", specifier = ">=1.26.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.2.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
-    { name = "pytest-httpx", marker = "extra == 'dev'", specifier = ">=0.35.0" },
-    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.4.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8.0" },
     { name = "python-dotenv" },
     { name = "qdrant-client", specifier = ">=1.16.2" },
     { name = "ragas", specifier = ">=0.4.3" },
     { name = "redis", specifier = ">=7.1.0" },
     { name = "redisvl", specifier = ">=0.13.2" },
     { name = "requests" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6.0" },
     { name = "scipy" },
     { name = "sentence-transformers" },
-    { name = "telethon", marker = "extra == 'dev'", specifier = ">=1.42.0" },
     { name = "tenacity", specifier = ">=8.2.0" },
     { name = "torch", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", specifier = ">=0.15.0", index = "https://download.pytorch.org/whl/cpu" },
@@ -886,9 +861,26 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'voice'", specifier = ">=0.30.0" },
     { name = "uvloop", specifier = ">=0.21.0" },
     { name = "voyageai", specifier = ">=0.3.0" },
-    { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.11" },
 ]
-provides-extras = ["dev", "docs", "voice", "all"]
+provides-extras = ["docs", "voice", "all"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "bandit", specifier = ">=1.7.9" },
+    { name = "mypy", specifier = ">=1.11.0" },
+    { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.39.0" },
+    { name = "pre-commit", specifier = ">=3.8.0" },
+    { name = "pylint", specifier = ">=3.2.0" },
+    { name = "pytest", specifier = ">=8.3.0" },
+    { name = "pytest-asyncio", specifier = ">=1.2.0" },
+    { name = "pytest-cov", specifier = ">=5.0.0" },
+    { name = "pytest-httpx", specifier = ">=0.35.0" },
+    { name = "pytest-timeout", specifier = ">=2.4.0" },
+    { name = "pytest-xdist", specifier = ">=3.8.0" },
+    { name = "ruff", specifier = ">=0.6.0" },
+    { name = "telethon", specifier = ">=1.42.0" },
+    { name = "vulture", specifier = ">=2.11" },
+]
 
 [[package]]
 name = "contourpy"
