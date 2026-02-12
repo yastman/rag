@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Thresholds
 HIT_RATE_WARNING_THRESHOLD = 0.50  # Warn if hit rate < 50%
 MEMORY_WARNING_THRESHOLD = 0.80  # Warn if memory usage > 80%
+CHECKPOINT_GROWTH_WARN_DELTA = 1  # Warn on any growth; tune later if noisy
 CHECK_INTERVAL_SECONDS = 300  # 5 minutes
 
 
@@ -40,6 +41,7 @@ class RedisHealthMonitor:
         self._task: asyncio.Task | None = None
         self._redis: aioredis.Redis | None = None
         self._prev_evicted_keys: int | None = None
+        self._prev_checkpoint_count: int | None = None
 
     async def start(self):
         """Start the periodic health check loop as a background task."""
@@ -144,6 +146,40 @@ class RedisHealthMonitor:
                     used_memory_human,
                     maxmemory_human,
                 )
+
+        # --- Checkpoint key metrics (#159) ---
+        dbsize = await self._redis.dbsize()
+        cursor: int = 0
+        checkpoint_count = 0
+        while True:
+            cursor, keys = await self._redis.scan(
+                cursor=cursor,
+                match="checkpoint:*",
+                count=1000,
+            )
+            checkpoint_count += len(keys)
+            if cursor == 0:
+                break
+
+        prev_checkpoint_count = self._prev_checkpoint_count
+        self._prev_checkpoint_count = checkpoint_count
+
+        logger.info(
+            "Redis health: dbsize=%d checkpoint_keys=%d",
+            dbsize,
+            checkpoint_count,
+        )
+
+        if (
+            prev_checkpoint_count is not None
+            and checkpoint_count - prev_checkpoint_count >= CHECKPOINT_GROWTH_WARN_DELTA
+        ):
+            logger.warning(
+                "Redis health: checkpoint key growth detected prev=%d current=%d delta=%d",
+                prev_checkpoint_count,
+                checkpoint_count,
+                checkpoint_count - prev_checkpoint_count,
+            )
 
         # --- INFO log every cycle ---
         logger.info(
