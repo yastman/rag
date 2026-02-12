@@ -558,6 +558,41 @@ class TestVoiceTraceMetadata:
         }
         assert expected_keys.issubset(set(metadata.keys()))
 
+    @pytest.mark.asyncio
+    async def test_trace_metadata_contains_memory_and_overhead(self, mock_config):
+        """Trace metadata should include memory_messages_count and overhead proxy."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        result = {
+            **FULL_PIPELINE_RESULT,
+            "messages": [{"role": "user"}, {"role": "assistant"}],
+            "checkpointer_overhead_proxy_ms": 39.0,
+        }
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        assert metadata["memory_messages_count"] == 2
+        assert metadata["checkpointer_overhead_proxy_ms"] is not None
+
 
 VOICE_PIPELINE_RESULT = {
     **FULL_PIPELINE_RESULT,
