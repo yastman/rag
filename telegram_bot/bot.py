@@ -294,11 +294,13 @@ class PropertyBot:
         self._cache = CacheLayerManager(redis_url=config.redis_url)
         self._hybrid = BGEM3HybridEmbeddings(
             base_url=config.bge_m3_url,
+            timeout=self._graph_config.bge_m3_timeout,
         )
         # Use hybrid as primary embeddings provider
         self._embeddings = self._hybrid
         self._sparse = BGEM3SparseEmbeddings(
             base_url=config.bge_m3_url,
+            timeout=self._graph_config.bge_m3_timeout,
         )
         self._qdrant = QdrantService(
             url=config.qdrant_url,
