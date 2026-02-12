@@ -29,7 +29,11 @@ def _ensure_redisvl_mock():
 
 _ensure_redisvl_mock()
 
-from telegram_bot.graph.nodes.cache import cache_check_node, cache_store_node
+from telegram_bot.graph.nodes.cache import (
+    CACHEABLE_QUERY_TYPES,
+    cache_check_node,
+    cache_store_node,
+)
 from telegram_bot.graph.state import make_initial_state
 
 
@@ -164,6 +168,7 @@ class TestCacheStoreNode:
 
     @pytest.mark.asyncio
     async def test_stores_response_in_semantic_cache(self):
+        """FAQ (allowlisted) stores to semantic cache with user_id."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
@@ -171,7 +176,6 @@ class TestCacheStoreNode:
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation_batch = AsyncMock()
 
         result = await cache_store_node(state, cache=cache)
 
@@ -194,7 +198,6 @@ class TestCacheStoreNode:
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation_batch = AsyncMock()
 
         result = await cache_store_node(state, cache=cache)
 
@@ -211,7 +214,6 @@ class TestCacheStoreNode:
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation_batch = AsyncMock()
 
         await cache_store_node(state, cache=cache)
 
@@ -263,3 +265,17 @@ class TestCacheStoreNode:
         await cache_store_node(state, cache=cache)
 
         cache.store_semantic.assert_not_awaited()
+
+
+class TestCacheableQueryTypes:
+    """Test CACHEABLE_QUERY_TYPES constant."""
+
+    def test_allowlist_contains_expected_types(self):
+        assert "FAQ" in CACHEABLE_QUERY_TYPES
+        assert "ENTITY" in CACHEABLE_QUERY_TYPES
+        assert "STRUCTURED" in CACHEABLE_QUERY_TYPES
+
+    def test_allowlist_excludes_general(self):
+        assert "GENERAL" not in CACHEABLE_QUERY_TYPES
+        assert "CHITCHAT" not in CACHEABLE_QUERY_TYPES
+        assert "OFF_TOPIC" not in CACHEABLE_QUERY_TYPES
