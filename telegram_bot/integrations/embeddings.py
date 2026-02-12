@@ -12,11 +12,34 @@ from typing import Any
 
 import httpx
 from langchain_core.embeddings import Embeddings
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
+
+# Transient transport errors worth retrying
+_RETRYABLE_ERRORS = (
+    httpx.RemoteProtocolError,
+    httpx.ConnectError,
+    httpx.ReadTimeout,
+    httpx.ConnectTimeout,
+)
+
+_embed_retry = retry(
+    retry=retry_if_exception_type(_RETRYABLE_ERRORS),
+    wait=wait_exponential_jitter(initial=0.5, max=4, jitter=1),
+    stop=stop_after_attempt(3),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
 
 
 class BGEM3Embeddings(Embeddings):
@@ -120,23 +143,30 @@ class BGEM3HybridEmbeddings(Embeddings):
     def __init__(
         self,
         base_url: str = "http://bge-m3:8000",
-        timeout: float = 120.0,
+        timeout: float | httpx.Timeout | None = None,
         max_length: int = 512,
     ) -> None:
         self.base_url = base_url.rstrip("/")
-        self.timeout = timeout
         self.max_length = max_length
+        if timeout is None:
+            self._timeout = httpx.Timeout(connect=5.0, read=30.0, write=5.0, pool=5.0)
+        elif isinstance(timeout, (int, float)):
+            self._timeout = httpx.Timeout(timeout)
+        else:
+            self._timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
-                timeout=self.timeout,
+                timeout=self._timeout,
+                transport=httpx.AsyncHTTPTransport(retries=1),
                 limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
             )
         return self._client
 
     @observe(name="bge-m3-hybrid-embed")
+    @_embed_retry
     async def aembed_hybrid(self, text: str) -> tuple[list[float], dict[str, Any]]:
         """Embed text via /encode/hybrid, returning (dense, sparse)."""
         client = self._get_client()
@@ -151,6 +181,7 @@ class BGEM3HybridEmbeddings(Embeddings):
         return dense, sparse
 
     @observe(name="bge-m3-hybrid-embed-batch")
+    @_embed_retry
     async def aembed_hybrid_batch(
         self, texts: list[str]
     ) -> tuple[list[list[float]], list[dict[str, Any]]]:
