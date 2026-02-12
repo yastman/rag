@@ -3,7 +3,7 @@
 
 # ====== BUILD STAGE ======
 # Pin base images — checked 2026-02-09
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.14-slim-bookworm@sha256:f0540d0436a220db0a576ccfe75631ab072391e43a24b88972ef9833f699095f AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.10@sha256:94a23af2d50e97b87b522d3cea24aaf8a1faedec1344c952767434f69585cbf9 /uv /usr/local/bin/uv
 
@@ -27,7 +27,7 @@ RUN mkdir -p /app/.cache/fastembed && \
     python -c "from fastembed import SparseTextEmbedding; SparseTextEmbedding('Qdrant/bm42-all-minilm-l6-v2-attentions')"
 
 # ====== RUNTIME STAGE ======
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm@sha256:f0540d0436a220db0a576ccfe75631ab072391e43a24b88972ef9833f699095f AS runtime
 
 RUN groupadd -g 1001 appgroup && \
     useradd -u 1001 -g appgroup -m -d /app -s /bin/false appuser
