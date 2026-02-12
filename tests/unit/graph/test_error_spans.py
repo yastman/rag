@@ -85,15 +85,16 @@ class TestRewriteNodeErrorSpan:
 
         mock_lf = MagicMock()
         state = _make_state()
+        node_fn = getattr(rewrite_node, "__wrapped__", rewrite_node)
 
         with (
             patch(
                 "telegram_bot.graph.config.GraphConfig.from_env",
                 return_value=mock_config,
             ),
-            patch("telegram_bot.graph.nodes.rewrite.get_client", return_value=mock_lf),
+            patch.dict(node_fn.__globals__, {"get_client": lambda: mock_lf}),
         ):
-            result = await rewrite_node(state, llm=mock_llm)
+            result = await node_fn(state, llm=mock_llm)
 
         mock_lf.update_current_span.assert_called_once()
         call_kwargs = mock_lf.update_current_span.call_args.kwargs
@@ -116,9 +117,10 @@ class TestRerankNodeErrorSpan:
 
         mock_lf = MagicMock()
         state = _make_state()
+        node_fn = getattr(rerank_node, "__wrapped__", rerank_node)
 
-        with patch("telegram_bot.graph.nodes.rerank.get_client", return_value=mock_lf):
-            result = await rerank_node(state, reranker=mock_reranker)
+        with patch.dict(node_fn.__globals__, {"get_client": lambda: mock_lf}):
+            result = await node_fn(state, reranker=mock_reranker)
 
         mock_lf.update_current_span.assert_called_once()
         call_kwargs = mock_lf.update_current_span.call_args.kwargs
@@ -144,9 +146,10 @@ class TestRespondNodeErrorSpan:
         state["response"] = "Ответ пользователю"
         state["message"] = mock_message
         state["response_sent"] = False
+        node_fn = getattr(respond_node, "__wrapped__", respond_node)
 
-        with patch("telegram_bot.graph.nodes.respond.get_client", return_value=mock_lf):
-            result = await respond_node(state)
+        with patch.dict(node_fn.__globals__, {"get_client": lambda: mock_lf}):
+            result = await node_fn(state)
 
         error_calls = [
             c.kwargs
