@@ -63,18 +63,49 @@ async def cache_check_node(
     # Step 1: Get or compute dense embedding (prefer hybrid for efficiency)
     embedding = await cache.get_embedding(query)
     embeddings_cache_hit = embedding is not None
+    embedding_error = False
+    embedding_error_type: str | None = None
+
     if embedding is None:
-        _has_hybrid = callable(
-            getattr(embeddings, "aembed_hybrid", None)
-        ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
-        if _has_hybrid:
-            # Hybrid: get both dense + sparse in one call, cache both
-            embedding, sparse = await embeddings.aembed_hybrid(query)
-            await cache.store_embedding(query, embedding)
-            await cache.store_sparse_embedding(query, sparse)
-        else:
-            embedding = await embeddings.aembed_query(query)
-            await cache.store_embedding(query, embedding)
+        try:
+            _has_hybrid = callable(
+                getattr(embeddings, "aembed_hybrid", None)
+            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
+            if _has_hybrid:
+                # Hybrid: get both dense + sparse in one call, cache both
+                embedding, sparse = await embeddings.aembed_hybrid(query)
+                await cache.store_embedding(query, embedding)
+                await cache.store_sparse_embedding(query, sparse)
+            else:
+                embedding = await embeddings.aembed_query(query)
+                await cache.store_embedding(query, embedding)
+        except Exception as exc:
+            embedding_error = True
+            embedding_error_type = type(exc).__name__
+            logger.error("Embedding failed after retries: %s: %s", embedding_error_type, exc)
+            latency = time.perf_counter() - start
+            lf.update_current_span(
+                level="ERROR",
+                output={
+                    "embedding_error": True,
+                    "embedding_error_type": embedding_error_type,
+                    "error_message": str(exc)[:200],
+                    "duration_ms": round(latency * 1000, 1),
+                },
+            )
+            return {
+                "cache_hit": False,
+                "cached_response": None,
+                "query_embedding": None,
+                "embeddings_cache_hit": False,
+                "embedding_error": True,
+                "embedding_error_type": embedding_error_type,
+                "response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
+                "latency_stages": {
+                    **state.get("latency_stages", {}),
+                    "cache_check": latency,
+                },
+            }
 
     # Step 2: Check semantic cache with query-type threshold (allowlisted types only)
     cached = None
@@ -104,6 +135,8 @@ async def cache_check_node(
             "query_embedding": embedding,
             "response": cached,
             "embeddings_cache_hit": embeddings_cache_hit,
+            "embedding_error": False,
+            "embedding_error_type": None,
             "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
         }
 
@@ -121,6 +154,8 @@ async def cache_check_node(
         "cached_response": None,
         "query_embedding": embedding,
         "embeddings_cache_hit": embeddings_cache_hit,
+        "embedding_error": embedding_error,
+        "embedding_error_type": embedding_error_type,
         "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
     }
 
