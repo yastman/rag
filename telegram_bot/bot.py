@@ -44,6 +44,17 @@ _QUERY_TYPE_SCORE = {
 }
 
 
+def _compute_checkpointer_overhead_proxy_ms(
+    result: dict[str, Any], ainvoke_wall_ms: float
+) -> float:
+    """Compute proxy for checkpointer overhead: ainvoke wall-time minus sum of stage latencies.
+
+    Returns max(0, delta) to clamp negative values from timing jitter.
+    """
+    stages_ms = sum(float(v) * 1000 for v in result.get("latency_stages", {}).values())
+    return max(0.0, ainvoke_wall_ms - stages_ms)
+
+
 def _write_langfuse_scores(lf: Any, result: dict) -> None:
     """Write Langfuse scores (14 + latency breakdown + 4 response length) from graph result state.
 
@@ -142,10 +153,26 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
     if voice_dur is not None:
         lf.score_current_trace(name="voice_duration_s", value=float(voice_dur))
 
-    # --- Conversation memory summarization (#154) ---
+    # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:
         lf.score_current_trace(name="summarize_ms", value=summarize_ms)
+
+    # Memory scores (#159)
+    messages = result.get("messages", [])
+    lf.score_current_trace(name="memory_messages_count", value=float(len(messages)))
+    lf.score_current_trace(
+        name="summarization_triggered",
+        value=1 if summarize_ms > 0 else 0,
+        data_type="BOOLEAN",
+    )
+
+    # Checkpointer overhead proxy (#159)
+    if "checkpointer_overhead_proxy_ms" in result:
+        lf.score_current_trace(
+            name="checkpointer_overhead_proxy_ms",
+            value=float(result["checkpointer_overhead_proxy_ms"]),
+        )
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -182,6 +209,9 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "answer_to_question_ratio": result.get("answer_to_question_ratio"),
         # Voice transcription (#151)
         "stt_duration_ms": result.get("stt_duration_ms"),
+        # Conversation memory (#159)
+        "memory_messages_count": len(result.get("messages", [])),
+        "checkpointer_overhead_proxy_ms": result.get("checkpointer_overhead_proxy_ms"),
     }
 
 
@@ -476,7 +506,12 @@ class PropertyBot:
                 }
             }
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                invoke_start = time.perf_counter()
                 result = await graph.ainvoke(state, config=invoke_config)
+                ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
+                result["checkpointer_overhead_proxy_ms"] = _compute_checkpointer_overhead_proxy_ms(
+                    result, ainvoke_wall_ms
+                )
 
             # Wall-time for accurate latency_total_ms
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
@@ -555,7 +590,12 @@ class PropertyBot:
             }
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                    invoke_start = time.perf_counter()
                     result = await graph.ainvoke(state, config=invoke_config)
+                    ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
+                    result["checkpointer_overhead_proxy_ms"] = (
+                        _compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
+                    )
             except ValueError as e:
                 if "Empty transcription" in str(e):
                     await message.answer("Голосовое сообщение не содержит речи.")
