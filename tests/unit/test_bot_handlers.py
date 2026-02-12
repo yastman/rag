@@ -930,6 +930,30 @@ class TestWriteLangfuseScores:
         assert calls["llm_ttft_ms"] == 450.0
         assert calls["llm_response_duration_ms"] == 2500.0
 
+    def test_writes_embedding_error_score(self):
+        """_write_langfuse_scores writes bge_embed_error when embedding failed."""
+        from telegram_bot.bot import _write_langfuse_scores
+
+        mock_lf = MagicMock()
+        result = {
+            "query_type": "FAQ",
+            "cache_hit": True,
+            "embedding_error": True,
+            "embedding_error_type": "RemoteProtocolError",
+            "latency_stages": {"cache_check": 5.123},
+            "pipeline_wall_ms": 5200.0,
+            "user_perceived_wall_ms": 5200.0,
+        }
+        _write_langfuse_scores(mock_lf, result)
+
+        calls = {
+            c.kwargs["name"]: c.kwargs.get("value")
+            for c in mock_lf.score_current_trace.call_args_list
+            if "name" in c.kwargs
+        }
+        assert calls["bge_embed_error"] == 1
+        assert "bge_embed_latency_ms" in calls
+
 
 class TestMakeSessionId:
     """Test make_session_id utility function."""
