@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.integrations.cache import CacheLayerManager
+from telegram_bot.integrations.cache import CACHE_VERSION, CacheLayerManager
 
 
 def _ensure_redisvl_filter_mock():
@@ -58,6 +58,10 @@ class TestCacheLayerManagerInit:
         )
         assert mgr.cache_thresholds["FAQ"] == 0.15
         assert mgr.cache_thresholds["GENERAL"] == 0.10
+
+    def test_cache_version_bumped_for_user_id_schema(self):
+        """Schema changed with user_id tag filter, so index version must be bumped."""
+        assert CACHE_VERSION == "v4"
 
 
 class TestCacheLayerManagerInitialize:
@@ -191,6 +195,45 @@ class TestSemanticCache:
             query_type="GENERAL",
         )
         mgr.semantic_cache.astore.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_semantic_check_filters_by_user_id(self):
+        """check_semantic with user_id builds combined Tag filter (user_id + language)."""
+        _ensure_redisvl_filter_mock()
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(return_value=[])
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        await mgr.check_semantic(
+            query="test query",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            user_id=42,
+        )
+
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        # filter_expression should be present (combined Tag filter)
+        assert "filter_expression" in call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_semantic_store_includes_user_id_in_filters(self):
+        """store_semantic with user_id passes user_id string in filters dict."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        await mgr.store_semantic(
+            query="test query",
+            response="test response",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            user_id=42,
+        )
+
+        call_kwargs = mgr.semantic_cache.astore.call_args[1]
+        assert call_kwargs["filters"]["user_id"] == "42"
 
     @pytest.mark.asyncio
     async def test_semantic_check_disabled_returns_none(self):
