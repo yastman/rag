@@ -97,6 +97,18 @@ LATENCY_SCORES = [
 ]
 
 
+def _safe_float(val: Any) -> Any:
+    """Convert to float if numeric, otherwise return as-is."""
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        try:
+            return float(val)
+        except ValueError:
+            return val
+    return val
+
+
 def _build_query(
     score_name: str,
     from_ts: str,
@@ -105,7 +117,7 @@ def _build_query(
 ) -> str:
     """Build Metrics API JSON query for a single score."""
     if aggregations is None:
-        aggregations = ["p50", "p95", "avg", "count", "max"]
+        aggregations = ["p50", "p95", "avg", "max"]
 
     metrics = [{"measure": "value", "aggregation": agg} for agg in aggregations]
     metrics.append({"measure": "count", "aggregation": "count"})
@@ -141,13 +153,9 @@ def query_score_metrics(
             if hasattr(row, "__dict__"):
                 for key, val in row.__dict__.items():
                     if val is not None:
-                        parsed[key] = float(val) if isinstance(val, (int, float, str)) else val
+                        parsed[key] = _safe_float(val)
             elif isinstance(row, dict):
-                parsed = {
-                    k: float(v) if isinstance(v, (int, float, str)) else v
-                    for k, v in row.items()
-                    if v is not None
-                }
+                parsed = {k: _safe_float(v) for k, v in row.items() if v is not None}
             return parsed
         return {}
     except Exception as e:
