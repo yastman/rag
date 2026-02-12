@@ -202,6 +202,13 @@ def check_alerts(metrics: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     return fired
 
 
+def has_query_errors(metrics: dict[str, dict[str, Any]]) -> bool:
+    """Return True when any score query failed."""
+    return any(
+        isinstance(score_data, dict) and "error" in score_data for score_data in metrics.values()
+    )
+
+
 def format_report(
     metrics: dict[str, dict[str, Any]],
     alerts: list[dict[str, Any]],
@@ -267,7 +274,7 @@ def main() -> None:
     parser.add_argument(
         "--check-alerts",
         action="store_true",
-        help="Check alert thresholds and exit with code 1 if any fire",
+        help="Check alert thresholds/query errors and exit with code 1 on failure",
     )
     args = parser.parse_args()
 
@@ -301,12 +308,17 @@ def main() -> None:
     else:
         print(format_report(metrics, alerts, from_ts, to_ts))
 
-    if args.check_alerts and alerts:
-        critical = [a for a in alerts if a["severity"] == "CRITICAL"]
-        if critical:
-            logger.error("%d CRITICAL alert(s) fired", len(critical))
+    if args.check_alerts:
+        if has_query_errors(metrics):
+            logger.error("One or more Metrics API queries failed")
             sys.exit(1)
-        logger.warning("%d WARNING alert(s) fired", len(alerts))
+
+        if alerts:
+            critical = [a for a in alerts if a["severity"] == "CRITICAL"]
+            if critical:
+                logger.error("%d CRITICAL alert(s) fired", len(critical))
+                sys.exit(1)
+            logger.warning("%d WARNING alert(s) fired", len(alerts))
 
     lf.flush()
 
