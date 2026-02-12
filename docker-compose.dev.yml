@@ -707,11 +707,23 @@ services:
       LIVEKIT_API_KEY: devkey
       LIVEKIT_API_SECRET: secret
       LIVEKIT_WS_URL: ws://livekit-server:7880
+      SIP_CONFIG_BODY: |
+        api_key: devkey
+        api_secret: secret
+        ws_url: ws://livekit-server:7880
+        redis:
+          address: redis:6379
+        sip_port: 5060
+        rtp_port: 10000-10100
+        use_external_ip: false
+        log_level: info
       SIP_PORT: "5060"
       RTP_PORT_LOW: "10000"
       RTP_PORT_HIGH: "10100"
     depends_on:
       livekit-server:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     deploy:
       resources:
