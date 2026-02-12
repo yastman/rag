@@ -16,6 +16,9 @@ class UnifiedConfig:
             os.getenv("GDRIVE_SYNC_DIR", os.path.expanduser("~/drive-sync"))
         )
     )
+    manifest_dir: Path | None = field(
+        default_factory=lambda: Path(v) if (v := os.getenv("MANIFEST_DIR")) else None
+    )
 
     # Database
     database_url: str = field(
@@ -66,3 +69,10 @@ class UnifiedConfig:
     supported_extensions: frozenset[str] = frozenset(
         {".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".md", ".txt", ".html", ".htm", ".csv"}
     )
+
+    def effective_manifest_dir(self) -> Path:
+        """Return writable directory for manifest storage.
+
+        Uses MANIFEST_DIR if set, otherwise falls back to sync_dir.
+        """
+        return self.manifest_dir if self.manifest_dir is not None else self.sync_dir
