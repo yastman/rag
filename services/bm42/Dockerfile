@@ -1,4 +1,4 @@
-***REMOVED*** syntax=docker/dockerfile:1.4
+***REMOVED*** syntax=docker/dockerfile:1.4@sha256:9ba7531bd80fb0a858632727cf7a112fbfd19b17e94c4e84ced81e24ef1a0dbc
 ***REMOVED*** BM42 Sparse Embedding Service - Optimized with uv
 
 ***REMOVED*** ====== BUILD STAGE ======
