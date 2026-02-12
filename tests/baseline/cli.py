@@ -7,6 +7,8 @@ from pathlib import Path
 
 import click
 
+from scripts.validate_traces import check_worktree_clean
+
 from .collector import LangfuseMetricsCollector
 from .manager import BaselineManager
 
@@ -36,6 +38,7 @@ def cli():
 @click.option("--hours", default=24, help="Hours to look back for metrics")
 def compare(baseline: str, current: str, thresholds: str, hours: int):
     """Compare current run against baseline."""
+    check_worktree_clean(strict=False)
     collector = get_collector()
     manager = BaselineManager(
         collector=collector,
