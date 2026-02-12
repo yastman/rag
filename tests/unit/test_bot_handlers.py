@@ -636,11 +636,12 @@ class TestHandleVoiceExceptionHandling:
                 "AsyncPregelLoop.__aexit__ failed: psycopg.OperationalError: connection lost"
             )
         )
+        mock_lf = MagicMock()
 
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
@@ -658,6 +659,9 @@ class TestHandleVoiceExceptionHandling:
                 "Не удалось распознать" in str(call) for call in message.answer.call_args_list
             )
             assert not error_sent
+            # #205: even on cleanup failure, trace metadata and scores must be persisted.
+            mock_lf.update_current_trace.assert_called_once()
+            mock_write_scores.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_scores_written_even_if_trace_update_fails(self, mock_config):
