@@ -659,3 +659,33 @@ class TestConversationMemory:
         assert "Банско" in all_text or "Цены" in all_text, (
             f"Expected first query in message history, got: {all_text[:200]}"
         )
+
+    @pytest.mark.integration
+    async def test_summarize_failure_does_not_fail_pipeline(self):
+        """Summarize errors should not fail pipeline after response node."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        checkpointer = MemorySaver()
+        mocks = _make_graph_mocks(llm_response="Найдено 2 варианта.")
+        mock_gc = _make_mock_graph_config(mocks["llm"])
+        summarize_node = MagicMock()
+        summarize_node.ainvoke = AsyncMock(side_effect=RuntimeError("summary unavailable"))
+
+        # Build without message mock — avoids MagicMock serialization in state
+        graph_kwargs = {k: v for k, v in mocks.items() if k != "message"}
+
+        with (
+            patch("langmem.short_term.SummarizationNode", return_value=summarize_node),
+            _patch_graph_configs(mock_gc),
+        ):
+            graph = build_graph(**graph_kwargs, checkpointer=checkpointer)
+
+        config = {"configurable": {"thread_id": "test-user-summary"}}
+        state = make_initial_state(user_id=1, session_id="s", query="Цены в Банско?")
+
+        with traced_pipeline(session_id="test-memory-summarize-fallback", user_id="integration"):
+            with _patch_graph_configs(mock_gc):
+                result = await graph.ainvoke(state, config=config)
+
+        assert result["response"]
+        assert "summarize" in result.get("latency_stages", {})

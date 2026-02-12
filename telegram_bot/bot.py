@@ -313,15 +313,23 @@ class PropertyBot:
         """Handle /clear command - clear conversation history."""
         assert message.from_user is not None
         user_id = message.from_user.id
+        checkpointer_cleared = True
 
         if self._checkpointer is not None:
             try:
                 await self._checkpointer.adelete_thread(str(user_id))
             except Exception:
                 logger.warning("Failed to clear checkpointer thread %s", user_id, exc_info=True)
+                checkpointer_cleared = False
 
         await self._cache.clear_conversation(user_id)
-        await message.answer("✅ История диалога очищена.")
+        if checkpointer_cleared:
+            await message.answer("✅ История диалога очищена.")
+        else:
+            await message.answer(
+                "⚠️ История очищена частично: локальный контекст сброшен, "
+                "но долговременная память временно недоступна."
+            )
 
     async def cmd_stats(self, message: Message):
         """Handle /stats command - show cache statistics."""
@@ -625,4 +633,12 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
+        if self._checkpointer is not None:
+            try:
+                if hasattr(self._checkpointer, "__aexit__"):
+                    await self._checkpointer.__aexit__(None, None, None)
+            except Exception:
+                logger.warning("Failed to close checkpointer cleanly", exc_info=True)
+            finally:
+                self._checkpointer = None
         await self.bot.session.close()
