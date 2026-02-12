@@ -42,7 +42,7 @@ install-dev: ***REMOVED******REMOVED*** Install development dependencies (linter
 
 install-all: ***REMOVED******REMOVED*** Install all dependencies (prod + dev + docs)
 	@echo "$(BLUE)Installing all dependencies...$(NC)"
-	uv sync --all-extras
+	uv sync --all-extras --all-groups
 	@echo "$(GREEN)✓ All dependencies installed$(NC)"
 
 ***REMOVED*** =============================================================================
