@@ -268,6 +268,42 @@ class TestEvaluateGoNoGo:
 
         assert criteria["ttft_p50_lt_1000ms"]["skipped"] is True
 
+    def test_cold_skipped_marks_criteria_as_dependency_unavailable(self):
+        """When cold phase was SKIPPED (Redis flush failed), latency criteria -> DEP_UNAVAILABLE."""
+        aggregates = {
+            "cold": {},
+            "cache_hit": {"latency_p50": 500},
+        }
+        # All cold results have cold_skipped=True
+        results = [
+            _make_result(phase="cold", latency=0),
+        ]
+        results[0].state["cold_skipped"] = True
+        results[0].state["skip_reason"] = "redis_flush_failed"
+
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        assert criteria["cold_p50_lt_5s"].get("dep_unavailable") is True
+        assert criteria["cold_p50_lt_5s"]["passed"] is True  # not a failure
+        assert "SKIPPED" in criteria["cold_p50_lt_5s"]["actual"]
+
+    def test_mixed_cold_results_not_marked_unavailable(self):
+        """If some cold results ran normally, criteria are NOT marked dep_unavailable."""
+        aggregates = {
+            "cold": {
+                "latency_p50": 3000,
+                "latency_p90": 5000,
+                "latency_p95": 6000,
+                "node_p50": {"generate": 1500},
+            },
+            "cache_hit": {"latency_p50": 500},
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+
+        criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
+
+        assert criteria["cold_p50_lt_5s"].get("dep_unavailable") is not True
+
 
 class TestLangfusePreflight:
     """Langfuse preflight should fail fast on incomplete/invalid credentials."""

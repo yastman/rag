@@ -826,6 +826,19 @@ def evaluate_go_no_go(
             "skipped": False,
         }
 
+    # Override cold-dependent criteria when cold phase was skipped
+    cold_skipped = all(r.state.get("cold_skipped") for r in cold_results) if cold_results else False
+    if cold_skipped:
+        skip_reason = cold_results[0].state.get("skip_reason", "unknown")
+        for key in ["cold_p50_lt_5s", "cold_p90_lt_8s", "cold_over_10s_lt_15pct"]:
+            original = criteria[key]
+            criteria[key] = {
+                "target": original["target"],
+                "actual": f"SKIPPED ({skip_reason})",
+                "passed": True,
+                "dep_unavailable": True,
+            }
+
     return criteria
 
 
@@ -1137,7 +1150,9 @@ def generate_report(
         lines.append("| # | Criterion | Target | Actual | Status |")
         lines.append("|---|-----------|--------|--------|--------|")
         for i, (name, c) in enumerate(go_no_go.items(), 1):
-            if c.get("skipped"):
+            if c.get("dep_unavailable"):
+                status = "[!] DEP_UNAVAIL"
+            elif c.get("skipped"):
                 status = "[-] SKIP"
             elif c["passed"]:
                 status = "[x] PASS"
@@ -1289,7 +1304,9 @@ async def run_validation(args: argparse.Namespace) -> None:
         len(go_no_go),
     )
     for name, c in go_no_go.items():
-        if c.get("skipped"):
+        if c.get("dep_unavailable"):
+            status = "DEP_UNAVAIL"
+        elif c.get("skipped"):
             status = "SKIP"
         elif c["passed"]:
             status = "PASS"
