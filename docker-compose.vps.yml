@@ -270,8 +270,10 @@ services:
       - BGE_M3_URL=http://bge-m3:8000
       - BGE_M3_TIMEOUT=600
       - BGE_M3_CONCURRENCY=1
+      - MANIFEST_DIR=/data/manifest
     volumes:
       - ${GDRIVE_SYNC_DIR:-~/drive-sync}:/data/drive-sync:ro
+      - ingestion-manifest:/data/manifest
     depends_on:
       postgres:
         condition: service_healthy
@@ -292,3 +294,4 @@ volumes:
   qdrant_data:
   hf_cache:
   docling_cache:
+  ingestion-manifest:
