@@ -62,8 +62,6 @@ async def test_full_graph_classify_to_respond():
     mock_cache.store_search_results = AsyncMock()
     mock_cache.get_sparse_embedding = AsyncMock(return_value=None)
     mock_cache.store_sparse_embedding = AsyncMock()
-    mock_cache.store_conversation = AsyncMock()
-    mock_cache.store_conversation_batch = AsyncMock()
 
     # Embeddings
     mock_embeddings = MagicMock()
