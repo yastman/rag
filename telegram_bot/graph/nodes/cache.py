@@ -83,7 +83,7 @@ async def cache_check_node(
             query=query,
             vector=embedding,
             query_type=query_type,
-            user_id=state.get("user_id", 0),
+            user_id=state.get("user_id"),
         )
 
     latency = time.perf_counter() - start
@@ -155,7 +155,7 @@ async def cache_store_node(
         if hasattr(last_msg, "content")
         else (last_msg.get("content", "") if isinstance(last_msg, dict) else "")
     )
-    user_id = state.get("user_id", 0)
+    user_id = state.get("user_id")
 
     lf = get_client()
     lf.update_current_span(
