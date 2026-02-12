@@ -242,9 +242,10 @@ class TestScoreWriting:
             # Conversation memory (#159)
             "memory_messages_count",
             "summarization_triggered",
+            "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.score_current_trace.call_count == 27
+        assert mock_lf.score_current_trace.call_count == 28
 
     @pytest.mark.asyncio
     async def test_score_values_full_pipeline(self, mock_config):
@@ -736,3 +737,66 @@ class TestMemoryScores:
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
         }
         assert scores["memory_messages_count"] == 0.0
+
+
+def test_compute_checkpointer_overhead_proxy_ms():
+    """Unit test for _compute_checkpointer_overhead_proxy_ms helper."""
+    from telegram_bot.bot import _compute_checkpointer_overhead_proxy_ms
+
+    result = {"latency_stages": {"classify": 0.001, "generate": 0.100}}
+    # stages = 101ms, ainvoke wall = 140ms -> proxy overhead = 39ms
+    assert _compute_checkpointer_overhead_proxy_ms(result, 140.0) == pytest.approx(39.0, abs=0.1)
+    # clamp at zero
+    assert _compute_checkpointer_overhead_proxy_ms(result, 50.0) == 0.0
+
+
+class TestCheckpointerOverheadScore:
+    """Test checkpointer_overhead_proxy_ms score (#159)."""
+
+    async def _run_handle_query(self, mock_config, graph_result, mock_lf_client):
+        """Helper: run handle_query with mocked graph and Langfuse client."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=graph_result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        return mock_lf_client
+
+    @pytest.mark.asyncio
+    async def test_checkpointer_overhead_proxy_score_written(self, mock_config):
+        """checkpointer_overhead_proxy_ms computed from ainvoke wall-time minus stages."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        # FULL_PIPELINE_RESULT stages sum to 862ms (0.862s)
+        # Simulate ainvoke taking 0.901s (901ms) → overhead proxy = 39ms
+        perf_values = iter(
+            [
+                0.0,  # pipeline_start
+                1.0,  # invoke_start
+                1.901,  # after ainvoke → ainvoke_wall_ms = 901ms
+                2.0,  # pipeline_wall_ms
+            ]
+        )
+        with patch("telegram_bot.bot.time.perf_counter", side_effect=perf_values):
+            await self._run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+
+        scores = {
+            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
+        }
+        assert scores["checkpointer_overhead_proxy_ms"] == pytest.approx(39.0, abs=0.1)
