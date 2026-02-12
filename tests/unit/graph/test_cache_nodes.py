@@ -103,6 +103,23 @@ class TestCacheCheckNode:
         embeddings.aembed_query.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_check_passes_user_id_to_cache(self):
+        """cache_check_node passes state['user_id'] to check_semantic."""
+        state = make_initial_state(user_id=99, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.2] * 1024)
+        cache.check_semantic = AsyncMock(return_value=None)
+
+        embeddings = AsyncMock()
+
+        await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        call_kwargs = cache.check_semantic.call_args[1]
+        assert call_kwargs["user_id"] == 99
+
+    @pytest.mark.asyncio
     async def test_stores_new_embedding_in_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="new query")
         state["query_type"] = "FAQ"
@@ -163,6 +180,7 @@ class TestCacheStoreNode:
             response="generated answer",
             vector=[0.1] * 1024,
             query_type="FAQ",
+            user_id=1,
         )
         assert result["response"] == "generated answer"
 
@@ -182,6 +200,23 @@ class TestCacheStoreNode:
 
         cache.store_semantic.assert_not_awaited()
         assert result["response"] == "generated answer"
+
+    @pytest.mark.asyncio
+    async def test_store_passes_user_id_to_cache(self):
+        """cache_store_node passes state['user_id'] to store_semantic."""
+        state = make_initial_state(user_id=99, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+        cache.store_conversation_batch = AsyncMock()
+
+        await cache_store_node(state, cache=cache)
+
+        call_kwargs = cache.store_semantic.call_args[1]
+        assert call_kwargs["user_id"] == 99
 
     @pytest.mark.asyncio
     async def test_stores_conversation_messages(self):
