@@ -174,6 +174,29 @@ def get_git_sha() -> str:
     return result.stdout.strip()
 
 
+def check_worktree_clean(strict: bool = False) -> None:
+    """Check git worktree for uncommitted changes.
+
+    Args:
+        strict: If True, exit when worktree is dirty. If False, warn only.
+    """
+    result = subprocess.run(
+        ["git", "diff", "--quiet"],
+        check=False,
+    )
+    if result.returncode == 0:
+        return
+
+    message = (
+        "Detected dirty worktree (uncommitted changes). "
+        "Validation/baseline results may not be reproducible."
+    )
+    if strict:
+        logger.error("%s", message)
+        sys.exit(1)
+    logger.warning("%s", message)
+
+
 async def check_collection_available(qdrant_url: str, collection_name: str) -> bool:
     """Check if Qdrant collection exists."""
     from qdrant_client import AsyncQdrantClient
