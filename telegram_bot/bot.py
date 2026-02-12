@@ -153,6 +153,19 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
     if voice_dur is not None:
         lf.score_current_trace(name="voice_duration_s", value=float(voice_dur))
 
+    # --- Embedding resilience (#210) ---
+    lf.score_current_trace(
+        name="bge_embed_error",
+        value=1 if result.get("embedding_error") else 0,
+        data_type="BOOLEAN",
+    )
+    cache_check_s = result.get("latency_stages", {}).get("cache_check")
+    if cache_check_s is not None:
+        lf.score_current_trace(
+            name="bge_embed_latency_ms",
+            value=round(cache_check_s * 1000, 1),
+        )
+
     # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:
