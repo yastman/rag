@@ -157,10 +157,13 @@ def check_worktree_clean(strict: bool = False) -> None:
         strict: If True, exit on dirty worktree. If False, log warning only.
     """
     result = subprocess.run(
-        ["git", "diff", "--quiet", "HEAD"],
+        ["git", "status", "--porcelain", "--untracked-files=normal"],
         capture_output=True,
+        text=True,
+        check=False,
     )
-    if result.returncode != 0:
+    is_dirty = result.returncode != 0 or bool(result.stdout.strip())
+    if is_dirty:
         msg = (
             "Dirty worktree detected — uncommitted changes may cause "
             "false positives in validation results"
