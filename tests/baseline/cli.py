@@ -1,16 +1,15 @@
 """CLI for baseline operations."""
 
+import json
 import os
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import click
 
-from scripts.validate_traces import check_worktree_clean
-
 from .collector import LangfuseMetricsCollector
-from .manager import BaselineManager
+from .manager import BaselineManager, BaselineSnapshot
 
 
 def get_collector() -> LangfuseMetricsCollector:
@@ -22,59 +21,35 @@ def get_collector() -> LangfuseMetricsCollector:
     )
 
 
-@click.group()
-def cli():
-    """Baseline management CLI."""
-
-
-@cli.command()
-@click.option("--baseline", required=True, help="Baseline session tag")
-@click.option("--current", required=True, help="Current session tag")
-@click.option(
-    "--thresholds",
-    default="tests/baseline/thresholds.yaml",
-    help="Path to thresholds file",
-)
-@click.option("--hours", default=24, help="Hours to look back for metrics")
-def compare(baseline: str, current: str, thresholds: str, hours: int):
-    """Compare current run against baseline."""
-    check_worktree_clean(strict=False)
-    collector = get_collector()
-    manager = BaselineManager(
-        collector=collector,
-        thresholds_path=Path(thresholds),
+def _metrics_to_snapshot(
+    metrics,
+    *,
+    tag: str,
+    session_id: str,
+    ts,
+) -> BaselineSnapshot:
+    """Convert SessionMetrics to BaselineSnapshot without mixing tag/session semantics."""
+    return BaselineSnapshot(
+        timestamp=ts,
+        tag=tag,
+        session_id=session_id,
+        llm_latency_p50_ms=metrics.llm_latency_p50_ms,
+        llm_latency_p95_ms=metrics.llm_latency_p95_ms,
+        full_rag_latency_p95_ms=metrics.llm_latency_p95_ms * 1.5,
+        total_cost_usd=metrics.total_cost_usd,
+        llm_tokens_input=metrics.llm_tokens_input,
+        llm_tokens_output=metrics.llm_tokens_output,
+        llm_calls=metrics.llm_calls,
+        voyage_embed_calls=0,
+        voyage_rerank_calls=0,
+        cache_hit_rate=metrics.cache_hit_rate,
+        cache_hits=metrics.cache_hits,
+        cache_misses=metrics.cache_misses,
     )
 
-    # Time range
-    now = datetime.now(UTC)
-    from_ts = now - timedelta(hours=hours)
 
-    click.echo(f"Fetching baseline metrics: {baseline}")
-    baseline_snapshot = manager.create_snapshot(
-        tag=baseline,
-        session_id=baseline,
-        from_ts=from_ts,
-        to_ts=now,
-    )
-
-    click.echo(f"Fetching current metrics: {current}")
-    current_snapshot = manager.create_snapshot(
-        tag=current,
-        session_id=current,
-        from_ts=from_ts,
-        to_ts=now,
-    )
-
-    click.echo("\nComparing metrics...")
-    passed, regressions = manager.compare(current_snapshot, baseline_snapshot)
-
-    click.echo("\n" + "=" * 60)
-    click.echo("BASELINE COMPARISON RESULTS")
-    click.echo("=" * 60)
-
-    # Print metrics table
-    click.echo(f"\n{'Metric':<30} {'Baseline':<15} {'Current':<15} {'Change':<10}")
-    click.echo("-" * 70)
+def _print_comparison_table(baseline, current):
+    """Print metrics comparison table."""
 
     def fmt_change(curr, base):
         if base == 0:
@@ -83,51 +58,160 @@ def compare(baseline: str, current: str, thresholds: str, hours: int):
         sign = "+" if pct >= 0 else ""
         return f"{sign}{pct:.1f}%"
 
-    click.echo(
-        f"{'LLM p95 latency (ms)':<30} "
-        f"{baseline_snapshot.llm_latency_p95_ms:<15.0f} "
-        f"{current_snapshot.llm_latency_p95_ms:<15.0f} "
-        f"{fmt_change(current_snapshot.llm_latency_p95_ms, baseline_snapshot.llm_latency_p95_ms):<10}"
+    click.echo(f"\n{'Metric':<30} {'Baseline':<15} {'Current':<15} {'Change':<10}")
+    click.echo("-" * 70)
+    for label, b_val, c_val, fmt in [
+        ("LLM p95 latency (ms)", baseline.llm_latency_p95_ms, current.llm_latency_p95_ms, ".0f"),
+        ("Total cost (USD)", baseline.total_cost_usd, current.total_cost_usd, ".4f"),
+        ("Cache hit rate", baseline.cache_hit_rate, current.cache_hit_rate, ".1%"),
+        ("LLM calls", baseline.llm_calls, current.llm_calls, ""),
+    ]:
+        b_str = f"{b_val:{fmt}}" if fmt else str(b_val)
+        c_str = f"{c_val:{fmt}}" if fmt else str(c_val)
+        click.echo(f"{label:<30} {b_str:<15} {c_str:<15} {fmt_change(c_val, b_val):<10}")
+
+
+@click.group()
+def cli():
+    """Baseline management CLI."""
+
+
+@cli.command()
+@click.option(
+    "--baseline-tag", required=True, help="Langfuse tag for baseline traces (e.g. main-latest)"
+)
+@click.option("--current-session", required=True, help="Langfuse session_id for current CI run")
+@click.option(
+    "--thresholds",
+    default="tests/baseline/thresholds.yaml",
+    help="Path to thresholds file",
+)
+@click.option(
+    "--output",
+    required=True,
+    help="Path to write JSON report artifact (always written)",
+)
+def compare(baseline_tag: str, current_session: str, thresholds: str, output: str):
+    """Compare current run against baseline using per-trace metrics."""
+    collector = get_collector()
+    manager = BaselineManager(
+        collector=collector,
+        thresholds_path=Path(thresholds),
     )
-    click.echo(
-        f"{'Total cost (USD)':<30} "
-        f"{baseline_snapshot.total_cost_usd:<15.4f} "
-        f"{current_snapshot.total_cost_usd:<15.4f} "
-        f"{fmt_change(current_snapshot.total_cost_usd, baseline_snapshot.total_cost_usd):<10}"
+
+    # Fetch baseline metrics by tag
+    click.echo(f"Fetching baseline metrics (tag={baseline_tag})...")
+    baseline_metrics = collector.collect_session_metrics(tag=baseline_tag)
+
+    if baseline_metrics.trace_count == 0:
+        result = {
+            "status": "skipped",
+            "reason": f"No baseline traces tagged '{baseline_tag}' found",
+            "recommendation": "Run smoke tests on main branch first to establish baseline",
+            "baseline_tag": baseline_tag,
+            "current_session": current_session,
+        }
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(json.dumps(result, indent=2))
+        click.secho(f"SKIP — no baseline tagged '{baseline_tag}' found", fg="yellow")
+        click.echo("Run smoke tests on main branch first to establish baseline.")
+        sys.exit(0)
+
+    # Fetch current metrics by session
+    click.echo(f"Fetching current metrics (session={current_session})...")
+    current_metrics = collector.collect_session_metrics(session_id=current_session)
+
+    if current_metrics.trace_count == 0:
+        result = {
+            "status": "failed",
+            "reason": f"No traces found for session '{current_session}'",
+            "baseline_tag": baseline_tag,
+            "current_session": current_session,
+        }
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(json.dumps(result, indent=2))
+        click.secho(f"FAILED — no traces for session '{current_session}'", fg="red")
+        sys.exit(1)
+
+    # Build snapshots from session metrics
+    now = datetime.now(UTC)
+    baseline_snapshot = _metrics_to_snapshot(
+        baseline_metrics,
+        tag=baseline_tag,
+        session_id=f"baseline:{baseline_tag}",
+        ts=now,
     )
-    click.echo(
-        f"{'Cache hit rate':<30} "
-        f"{baseline_snapshot.cache_hit_rate:<15.1%} "
-        f"{current_snapshot.cache_hit_rate:<15.1%} "
-        f"{fmt_change(current_snapshot.cache_hit_rate, baseline_snapshot.cache_hit_rate):<10}"
+    current_snapshot = _metrics_to_snapshot(
+        current_metrics,
+        tag=current_session,
+        session_id=current_session,
+        ts=now,
     )
-    click.echo(
-        f"{'LLM calls':<30} "
-        f"{baseline_snapshot.llm_calls:<15} "
-        f"{current_snapshot.llm_calls:<15} "
-        f"{fmt_change(current_snapshot.llm_calls, baseline_snapshot.llm_calls):<10}"
-    )
+
+    # Compare
+    click.echo("\nComparing metrics...")
+    passed, regressions = manager.compare(current_snapshot, baseline_snapshot)
+
+    # Print table
+    _print_comparison_table(baseline_snapshot, current_snapshot)
+
+    # Write JSON report
+    report = {
+        "status": "passed" if passed else "failed",
+        "baseline_tag": baseline_tag,
+        "current_session": current_session,
+        "baseline_traces": baseline_metrics.trace_count,
+        "current_traces": current_metrics.trace_count,
+        "regressions": regressions,
+        "metrics": {
+            "baseline": {
+                "llm_latency_p95_ms": baseline_snapshot.llm_latency_p95_ms,
+                "total_cost_usd": baseline_snapshot.total_cost_usd,
+                "cache_hit_rate": baseline_snapshot.cache_hit_rate,
+                "llm_calls": baseline_snapshot.llm_calls,
+            },
+            "current": {
+                "llm_latency_p95_ms": current_snapshot.llm_latency_p95_ms,
+                "total_cost_usd": current_snapshot.total_cost_usd,
+                "cache_hit_rate": current_snapshot.cache_hit_rate,
+                "llm_calls": current_snapshot.llm_calls,
+            },
+        },
+    }
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
+    Path(output).write_text(json.dumps(report, indent=2))
 
     click.echo("\n" + "=" * 60)
-
     if passed:
-        click.secho("PASSED - No regressions detected", fg="green", bold=True)
+        click.secho("PASSED — No regressions detected", fg="green", bold=True)
         sys.exit(0)
     else:
-        click.secho("FAILED - Regressions detected:", fg="red", bold=True)
+        click.secho("FAILED — Regressions detected:", fg="red", bold=True)
         for regression in regressions:
             click.echo(f"  - {regression}")
         sys.exit(1)
 
 
 @cli.command("set-baseline")
-@click.option("--tag", required=True, help="Tag to set as baseline")
-def set_baseline(tag: str):
-    """Set a run as the new baseline."""
-    # For now, just record to a file
-    baseline_file = Path("tests/baseline/.current_baseline")
-    baseline_file.write_text(tag)
-    click.echo(f"Baseline set to: {tag}")
+@click.option("--tag", required=True, help="Tag to apply as baseline marker")
+@click.option("--session-id", required=True, help="Session ID whose traces to tag")
+def set_baseline(tag: str, session_id: str):
+    """Tag traces from a session as the new baseline."""
+    collector = get_collector()
+    try:
+        tagged = collector.tag_session_traces(session_id=session_id, tag=tag)
+    except Exception as exc:
+        click.secho(f"Failed to set baseline tag: {exc}", fg="red")
+        sys.exit(1)
+
+    if tagged == 0:
+        click.secho(
+            f"No traces updated for session '{session_id}' (already tagged or session empty).",
+            fg="yellow",
+        )
+        return
+
+    click.secho(f"Baseline set: {tagged} traces tagged '{tag}'", fg="green")
 
 
 @cli.command()
@@ -142,12 +226,10 @@ def set_baseline(tag: str):
 @click.option("--output", default="reports/baseline.html", help="Output file path")
 def report(baseline: str | None, current: str | None, thresholds: str, hours: int, output: str):
     """Generate HTML baseline report."""
+    from datetime import timedelta
+
     baseline = baseline or os.getenv("BASELINE_TAG")
     current = current or os.getenv("CURRENT_TAG")
-
-    baseline_file = Path("tests/baseline/.current_baseline")
-    if baseline is None and baseline_file.exists():
-        baseline = baseline_file.read_text().strip()
 
     if not baseline or not current:
         click.secho(

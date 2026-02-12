@@ -1,7 +1,7 @@
 """Collect metrics from Langfuse v3 API, Qdrant, and Redis."""
 
-import json
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -10,14 +10,47 @@ import redis
 from langfuse import Langfuse
 
 
+@dataclass
+class SessionMetrics:
+    """Metrics computed from per-trace observation data."""
+
+    trace_count: int = 0
+    llm_calls: int = 0
+
+    # Latency (ms) — computed from GENERATION observations
+    llm_latency_p50_ms: float = 0.0
+    llm_latency_p95_ms: float = 0.0
+
+    # Cost
+    total_cost_usd: float = 0.0
+    llm_tokens_input: int = 0
+    llm_tokens_output: int = 0
+
+    # Cache
+    cache_hit_rate: float = 0.0
+    cache_hits: int = 0
+    cache_misses: int = 0
+
+
+def _percentile(sorted_values: list[float], pct: int) -> float:
+    """Compute percentile from pre-sorted values (linear interpolation)."""
+    if not sorted_values:
+        return 0.0
+    n = len(sorted_values)
+    k = (pct / 100) * (n - 1)
+    f = int(k)
+    c = f + 1
+    if c >= n:
+        return sorted_values[-1]
+    return sorted_values[f] + (k - f) * (sorted_values[c] - sorted_values[f])
+
+
 class LangfuseMetricsCollector:
     """Collect metrics from Langfuse v3 API.
 
-    Uses Langfuse API endpoints:
-    - GET /api/public/metrics/daily - aggregated daily usage and cost
-    - GET /api/public/metrics (v2) - custom queries with dimensions
-
-    Reference: https://langfuse.com/docs/metrics/features/metrics-api
+    Uses per-trace observation data via:
+    - api.trace.list(session_id=..., tags=...)
+    - api.observations.get_many(trace_id=..., type="GENERATION")
     """
 
     def __init__(
@@ -45,162 +78,170 @@ class LangfuseMetricsCollector:
         self.redis_url = redis_url
         self.qdrant_url = qdrant_url
 
-    def get_daily_metrics(
+    # ========== Per-Trace Session Metrics ==========
+
+    def _fetch_all_traces(
         self,
-        from_ts: datetime,
-        to_ts: datetime,
-        trace_name: str | None = None,
-        limit: int = 30,
-    ) -> dict[str, Any]:
-        """Get aggregated daily usage and cost metrics.
-
-        Args:
-            from_ts: Start timestamp
-            to_ts: End timestamp
-            trace_name: Optional filter by trace name
-            limit: Max results (default 30)
-
-        Returns:
-            Dict with 'data' array containing daily metrics:
-            - date, countTraces, countObservations, totalCost
-            - usage: [{model, inputUsage, outputUsage, totalCost}]
-        """
-        kwargs = {
-            "from_timestamp": from_ts.isoformat() + "Z",
-            "to_timestamp": to_ts.isoformat() + "Z",
-            "limit": limit,
-        }
-        if trace_name:
-            kwargs["trace_name"] = trace_name
-
-        return self.client.api.metrics_daily.get(**kwargs)
-
-    def get_latency_metrics(
-        self,
-        from_ts: datetime,
-        to_ts: datetime,
-        trace_name: str | None = None,
-    ) -> dict[str, Any]:
-        """Get latency percentiles via v2 metrics API.
-
-        Args:
-            from_ts: Start timestamp
-            to_ts: End timestamp
-            trace_name: Optional filter by trace name
-
-        Returns:
-            Dict with latency p50, p95, cost, and count by model
-        """
-        filters = []
-        if trace_name:
-            filters.append(
-                {
-                    "field": "traceName",
-                    "operator": "=",
-                    "value": trace_name,
-                }
-            )
-
-        query = {
-            "view": "observations",
-            "metrics": [
-                {"measure": "latency", "aggregation": "p50"},
-                {"measure": "latency", "aggregation": "p95"},
-                {"measure": "totalCost", "aggregation": "sum"},
-                {"measure": "count", "aggregation": "count"},
-            ],
-            "dimensions": [{"field": "providedModelName"}],
-            "filters": filters,
-            "fromTimestamp": from_ts.isoformat() + "Z",
-            "toTimestamp": to_ts.isoformat() + "Z",
-        }
-
-        return self.client.api.metrics_v_2.get(query=json.dumps(query))
-
-    def get_trace_count(
-        self,
-        from_ts: datetime,
-        to_ts: datetime,
-        trace_name: str,
-    ) -> int:
-        """Count traces for a specific operation.
-
-        Args:
-            from_ts: Start timestamp
-            to_ts: End timestamp
-            trace_name: Name of trace to count
-
-        Returns:
-            Number of traces matching the name
-        """
-        query = {
-            "view": "traces",
-            "metrics": [{"measure": "count", "aggregation": "count"}],
-            "dimensions": [{"field": "name"}],
-            "filters": [{"field": "name", "operator": "=", "value": trace_name}],
-            "fromTimestamp": from_ts.isoformat() + "Z",
-            "toTimestamp": to_ts.isoformat() + "Z",
-        }
-
-        result = self.client.api.metrics.metrics(query=json.dumps(query))
-
-        if result.data:
-            return int(result.data[0].get("count_count", 0))
-        return 0
-
-    def get_cache_metrics(
-        self,
-        from_ts: datetime,
-        to_ts: datetime,
+        *,
         session_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Get cache hit/miss metrics from trace metadata.
+        tags: list[str] | None = None,
+        limit: int = 50,
+    ) -> list:
+        """Fetch all traces matching filters, handling pagination."""
+        all_traces: list = []
+        page = 1
+        while True:
+            result = self.client.api.trace.list(
+                session_id=session_id,
+                tags=tags,
+                limit=limit,
+                page=page,
+            )
+            all_traces.extend(result.data)
+            if not result.meta or not result.meta.next_page:
+                break
+            page = result.meta.next_page
+        return all_traces
 
-        Traces should have metadata.cache_hit = true/false
+    def collect_session_metrics(
+        self,
+        *,
+        session_id: str | None = None,
+        tag: str | None = None,
+    ) -> SessionMetrics:
+        """Fetch traces + observations for a session/tag, compute metrics locally.
 
         Args:
-            from_ts: Start timestamp
-            to_ts: End timestamp
-            session_id: Optional session filter
+            session_id: Filter by Langfuse session_id (for current CI run).
+            tag: Filter by Langfuse tag (for baseline).
 
         Returns:
-            Dict with hits, misses, hit_rate
+            SessionMetrics with aggregated observation-level data.
+
+        Raises:
+            ValueError: If neither session_id nor tag is provided.
         """
-        # Query for cache hits
-        hits_query = {
-            "view": "traces",
-            "metrics": [{"measure": "count", "aggregation": "count"}],
-            "dimensions": [],
-            "filters": [{"field": "metadata.cache_hit", "operator": "=", "value": "true"}],
-            "fromTimestamp": from_ts.isoformat() + "Z",
-            "toTimestamp": to_ts.isoformat() + "Z",
-        }
+        if not session_id and not tag:
+            msg = "At least one of session_id or tag must be provided"
+            raise ValueError(msg)
 
-        # Query for cache misses
-        misses_query = {
-            "view": "traces",
-            "metrics": [{"measure": "count", "aggregation": "count"}],
-            "dimensions": [],
-            "filters": [{"field": "metadata.cache_hit", "operator": "=", "value": "false"}],
-            "fromTimestamp": from_ts.isoformat() + "Z",
-            "toTimestamp": to_ts.isoformat() + "Z",
-        }
+        traces = self._fetch_all_traces(
+            session_id=session_id,
+            tags=[tag] if tag else None,
+        )
 
-        hits_result = self.client.api.metrics.metrics(query=json.dumps(hits_query))
-        misses_result = self.client.api.metrics.metrics(query=json.dumps(misses_query))
+        if not traces:
+            return SessionMetrics()
 
-        hits = int(hits_result.data[0].get("count_count", 0)) if hits_result.data else 0
-        misses = int(misses_result.data[0].get("count_count", 0)) if misses_result.data else 0
+        latencies_ms: list[float] = []
+        total_cost = 0.0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        llm_calls = 0
+        cache_hits = 0
+        cache_misses = 0
 
-        total = hits + misses
-        hit_rate = hits / total if total > 0 else 0.0
+        for trace in traces:
+            # Cache from trace metadata
+            cache_hit = (trace.metadata or {}).get("cache_hit")
+            if cache_hit is True:
+                cache_hits += 1
+            elif cache_hit is False:
+                cache_misses += 1
 
-        return {
-            "hits": hits,
-            "misses": misses,
-            "total": total,
-            "hit_rate": hit_rate,
-        }
+            for obs in self._fetch_all_observations(trace_id=trace.id):
+                llm_calls += 1
+
+                # Latency (skip if timestamps missing)
+                if obs.start_time and obs.end_time:
+                    delta = (obs.end_time - obs.start_time).total_seconds() * 1000
+                    latencies_ms.append(delta)
+
+                # Cost (None → 0)
+                total_cost += obs.calculated_total_cost or 0.0
+
+                # Tokens (None usage → 0)
+                if obs.usage:
+                    total_input_tokens += obs.usage.input or 0
+                    total_output_tokens += obs.usage.output or 0
+
+        # Compute percentiles
+        p50 = 0.0
+        p95 = 0.0
+        if latencies_ms:
+            sorted_lat = sorted(latencies_ms)
+            p50 = _percentile(sorted_lat, 50)
+            p95 = _percentile(sorted_lat, 95)
+
+        cache_total = cache_hits + cache_misses
+        cache_rate = cache_hits / cache_total if cache_total > 0 else 0.0
+
+        return SessionMetrics(
+            trace_count=len(traces),
+            llm_calls=llm_calls,
+            llm_latency_p50_ms=p50,
+            llm_latency_p95_ms=p95,
+            total_cost_usd=total_cost,
+            llm_tokens_input=total_input_tokens,
+            llm_tokens_output=total_output_tokens,
+            cache_hit_rate=cache_rate,
+            cache_hits=cache_hits,
+            cache_misses=cache_misses,
+        )
+
+    def _fetch_all_observations(self, *, trace_id: str, limit: int = 50) -> list:
+        """Fetch all GENERATION observations for a trace, handling pagination."""
+        observations: list = []
+        page = 1
+        while True:
+            result = self.client.api.observations.get_many(
+                trace_id=trace_id,
+                type="GENERATION",
+                page=page,
+                limit=limit,
+            )
+            observations.extend(result.data)
+            if not result.meta or not result.meta.next_page:
+                break
+            page = result.meta.next_page
+        return observations
+
+    def _update_trace_tags(self, *, trace_id: str, tags: list[str]) -> None:
+        """Update trace tags via available SDK/public API surface.
+
+        SDK v3.12 does not expose `api.trace.update`, so we fall back to a direct PATCH
+        through the generated API client's authenticated HTTP transport.
+        """
+        trace_api = self.client.api.trace
+        if hasattr(trace_api, "update"):
+            trace_api.update(trace_id=trace_id, tags=tags)
+            return
+
+        response = trace_api._client_wrapper.httpx_client.request(  # type: ignore[attr-defined]
+            f"api/public/traces/{trace_id}",
+            method="PATCH",
+            json={"tags": tags},
+        )
+        if not 200 <= response.status_code < 300:
+            msg = f"Failed to update trace tags for {trace_id}: {response.status_code}"
+            raise RuntimeError(msg)
+
+    def tag_session_traces(self, *, session_id: str, tag: str) -> int:
+        """Apply a tag to all traces in a session.
+
+        Returns:
+            Number of traces that were updated with the tag.
+        """
+        traces = self._fetch_all_traces(session_id=session_id)
+        tagged = 0
+        for trace in traces:
+            existing_tags = list(trace.tags or [])
+            if tag in existing_tags:
+                continue
+            existing_tags.append(tag)
+            self._update_trace_tags(trace_id=trace.id, tags=existing_tags)
+            tagged += 1
+        return tagged
 
     # ========== Infrastructure Metrics ==========
 

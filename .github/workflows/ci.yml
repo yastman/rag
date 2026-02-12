@@ -91,16 +91,19 @@ jobs:
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
         run: |
-          # Get current session tag from commit
-          CURRENT_TAG="ci-${{ github.sha }}-$(date +%Y%m%d)"
+          SHORT_SHA="${GITHUB_SHA::8}"
+          CURRENT_SESSION="ci-${SHORT_SHA}-${GITHUB_JOB}-${GITHUB_RUN_ATTEMPT}"
 
-          # Compare against main-latest baseline
           uv run python3 -m tests.baseline.cli compare \
-            --baseline="main-latest" \
-            --current="${CURRENT_TAG}" \
+            --baseline-tag="main-latest" \
+            --current-session="${CURRENT_SESSION}" \
             --thresholds=tests/baseline/thresholds.yaml \
-            --hours=168
+            --output="reports/baseline-${CURRENT_SESSION}.json"
 
-      - name: Skip - Langfuse not configured
-        if: env.LANGFUSE_AVAILABLE != 'true'
-        run: echo "Skipping baseline comparison - LANGFUSE_SECRET_KEY not configured"
+      - name: Upload baseline report
+        if: always() && env.LANGFUSE_AVAILABLE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-report
+          path: reports/baseline-*.json
+          retention-days: 30
