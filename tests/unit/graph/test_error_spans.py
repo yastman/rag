@@ -6,6 +6,7 @@ get_client().update_current_span(level="ERROR", ...) on failure paths.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -34,17 +35,23 @@ class TestGenerateNodeErrorSpan:
     async def test_llm_error_sets_error_span(self) -> None:
         from telegram_bot.graph.nodes.generate import generate_node
 
-        mock_config = MagicMock()
-        mock_config.domain = "недвижимость"
-        mock_config.llm_model = "gpt-4o-mini"
-        mock_config.llm_temperature = 0.7
-        mock_config.generate_max_tokens = 2048
-        mock_config.streaming_enabled = False
-        mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
-            side_effect=RuntimeError("LLM unavailable"),
+        mock_client = SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(
+                    create=AsyncMock(side_effect=RuntimeError("LLM unavailable"))
+                )
+            )
         )
-        mock_config.create_llm.return_value = mock_client
+        mock_config = SimpleNamespace(
+            domain="недвижимость",
+            llm_model="gpt-4o-mini",
+            llm_temperature=0.7,
+            generate_max_tokens=2048,
+            streaming_enabled=False,
+            response_style_enabled=False,
+            response_style_shadow_mode=False,
+            create_llm=lambda: mock_client,
+        )
 
         mock_lf = MagicMock()
         state = _make_state()
@@ -52,6 +59,8 @@ class TestGenerateNodeErrorSpan:
         with (
             patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
             patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+            patch("telegram_bot.graph.nodes.generate.get_prompt", return_value="system"),
+            patch("telegram_bot.observability.get_client", return_value=mock_lf),
         ):
             result = await generate_node(state)
 

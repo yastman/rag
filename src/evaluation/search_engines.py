@@ -5,6 +5,7 @@ Search engines for evaluation:
 2. HybridSearchEngine - Dense + Sparse + ColBERT with RRF
 """
 
+import os
 import sys
 from abc import ABC, abstractmethod
 
@@ -16,10 +17,14 @@ sys.path.append("/home/admin/contextual_rag")
 from src.config import HSNWParameters, RetrievalStages, Settings, ThresholdValues
 
 
-# Load settings
-_settings = Settings()
-QDRANT_URL = _settings.qdrant_url
-QDRANT_API_KEY = _settings.qdrant_api_key or ""
+# Load Qdrant config without failing module import in test environments.
+try:
+    _settings = Settings()
+    QDRANT_URL = _settings.qdrant_url
+    QDRANT_API_KEY = _settings.qdrant_api_key or ""
+except ValueError:
+    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
 # Load constants
 HNSW_EF_HIGH_PRECISION = HSNWParameters.EF_HIGH_PRECISION
