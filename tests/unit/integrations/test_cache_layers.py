@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.integrations.cache import CacheLayerManager
+from telegram_bot.integrations.cache import CACHE_VERSION, CacheLayerManager
 
 
 def _ensure_redisvl_filter_mock():
@@ -58,6 +58,10 @@ class TestCacheLayerManagerInit:
         )
         assert mgr.cache_thresholds["FAQ"] == 0.15
         assert mgr.cache_thresholds["GENERAL"] == 0.10
+
+    def test_cache_version_bumped_for_user_id_schema(self):
+        """Schema changed with user_id tag filter, so index version must be bumped."""
+        assert CACHE_VERSION == "v4"
 
 
 class TestCacheLayerManagerInitialize:

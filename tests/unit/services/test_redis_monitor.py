@@ -98,3 +98,37 @@ async def test_check_health_no_warning_when_count_stable():
     # No growth warning — count stayed at 5
     for call in mock_logger.warning.call_args_list:
         assert "checkpoint key growth" not in str(call)
+
+
+@pytest.mark.asyncio
+async def test_check_health_checkpoint_scan_failure_is_non_fatal():
+    """Checkpoint SCAN failure should not abort the whole health cycle."""
+    monitor = RedisHealthMonitor("redis://localhost:6379")
+    mock_redis = AsyncMock()
+    mock_redis.info = AsyncMock(
+        side_effect=[
+            {
+                "used_memory": 1,
+                "maxmemory": 10,
+                "used_memory_human": "1B",
+                "maxmemory_human": "10B",
+            },
+            {"evicted_keys": 0, "keyspace_hits": 1, "keyspace_misses": 1},
+        ]
+    )
+    mock_redis.dbsize = AsyncMock(side_effect=RuntimeError("no acl"))
+    monitor._redis = mock_redis
+
+    with patch("telegram_bot.services.redis_monitor.logger") as mock_logger:
+        await monitor._check_health()
+
+    # Core INFO health log still emitted despite checkpoint metrics failure.
+    mock_logger.info.assert_any_call(
+        "Redis health: memory=%s/%s (%.1f%%), hit_rate=%.1f%%, evicted_keys=%d (new=%d)",
+        "1B",
+        "10B",
+        10.0,
+        50.0,
+        0,
+        0,
+    )
