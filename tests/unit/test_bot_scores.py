@@ -57,6 +57,26 @@ def _make_message(text="квартиры до 100000 евро", user_id=12345678
     return message
 
 
+def _make_voice_message(user_id=123456789, chat_id=987654321):
+    """Create mock Telegram voice message."""
+    message = MagicMock()
+    message.from_user = MagicMock()
+    message.from_user.id = user_id
+    message.chat = MagicMock()
+    message.chat.id = chat_id
+    message.bot = MagicMock()
+    message.bot.send_chat_action = AsyncMock()
+    message.bot.get_file = AsyncMock()
+    message.bot.download_file = AsyncMock()
+    message.voice = MagicMock()
+    message.voice.file_id = "file123"
+    message.voice.duration = 5
+    file_mock = MagicMock()
+    file_mock.file_path = "voice/file.ogg"
+    message.bot.get_file.return_value = file_mock
+    return message
+
+
 # Typical graph result for a full RAG pipeline (cache miss, search, rerank, generate)
 FULL_PIPELINE_RESULT = {
     "response": "Вот квартиры до 100000 евро...",
@@ -454,3 +474,157 @@ class TestLatencyBreakdownScores:
 
         assert score_map["llm_timeout"]["value"] == 1
         assert score_map["llm_timeout"]["data_type"] == "BOOLEAN"
+
+
+class TestVoiceTraceMetadata:
+    """Test that handle_voice writes same metadata keys as handle_query."""
+
+    async def _run_handle_voice(self, mock_config, graph_result, mock_lf_client):
+        """Helper: run handle_voice with mocked graph and Langfuse client."""
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=graph_result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            message = _make_voice_message()
+            await bot.handle_voice(message)
+
+        return mock_lf_client
+
+    @pytest.mark.asyncio
+    async def test_voice_trace_metadata_has_same_keys_as_text(self, mock_config):
+        """handle_voice metadata should contain all keys from handle_query."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        voice_result = {
+            **FULL_PIPELINE_RESULT,
+            "stt_text": "тест запрос",
+            "stt_duration_ms": 250.0,
+            "voice_duration_s": 5.0,
+            "input_type": "voice",
+        }
+        await self._run_handle_voice(mock_config, voice_result, mock_lf)
+
+        call_kwargs = mock_lf.update_current_trace.call_args.kwargs
+        metadata = call_kwargs["metadata"]
+
+        # All keys from handle_query must be present
+        expected_keys = {
+            "query_type",
+            "cache_hit",
+            "search_results_count",
+            "rerank_applied",
+            "llm_provider_model",
+            "llm_ttft_ms",
+            "response_style",
+            "response_difficulty",
+            "response_style_reasoning",
+            "response_policy_mode",
+            "answer_words",
+            "answer_to_question_ratio",
+            # Voice-specific
+            "input_type",
+            "stt_duration_ms",
+        }
+        assert expected_keys.issubset(set(metadata.keys()))
+
+
+VOICE_PIPELINE_RESULT = {
+    **FULL_PIPELINE_RESULT,
+    "stt_text": "тест голосовой запрос",
+    "stt_duration_ms": 250.0,
+    "voice_duration_s": 5.0,
+    "input_type": "voice",
+}
+
+
+class TestVoiceScores:
+    """Test voice-specific Langfuse scores (#158)."""
+
+    @pytest.mark.asyncio
+    async def test_voice_scores_written(self, mock_config):
+        """Voice result should emit stt_duration_ms and voice_duration_s scores."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=VOICE_PIPELINE_RESULT)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        score_calls = mock_lf.score_current_trace.call_args_list
+        score_map = {c.kwargs["name"]: c.kwargs for c in score_calls}
+
+        # Voice-specific scores must be present
+        assert "stt_duration_ms" in score_map
+        assert score_map["stt_duration_ms"]["value"] == 250.0
+
+        assert "voice_duration_s" in score_map
+        assert score_map["voice_duration_s"]["value"] == 5.0
+
+        assert "input_type" in score_map
+        assert score_map["input_type"]["value"] == "voice"
+        assert score_map["input_type"]["data_type"] == "CATEGORICAL"
+
+    @pytest.mark.asyncio
+    async def test_text_scores_omit_voice_metrics(self, mock_config):
+        """Text result should NOT emit stt_duration_ms or voice_duration_s scores."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=FULL_PIPELINE_RESULT)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
+
+        # input_type always written (as "text")
+        assert "input_type" in score_names
+        # Voice-only scores NOT written for text input
+        assert "stt_duration_ms" not in score_names
+        assert "voice_duration_s" not in score_names

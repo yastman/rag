@@ -120,7 +120,7 @@ Usage:
 
 ### Payload Bloat Prevention (#143)
 
-5 heavy nodes use `@observe(capture_input=False, capture_output=False)` to disable auto-capture of full LangGraph state (documents, embeddings, messages). Instead, they log curated metadata via `get_client().update_current_span(input={...}, output={...})`.
+6 heavy nodes use `@observe(capture_input=False, capture_output=False)` to disable auto-capture of full LangGraph state (documents, embeddings, messages, audio bytes). Instead, they log curated metadata via `get_client().update_current_span(input={...}, output={...})`.
 
 | Heavy Node | Curated Input | Curated Output |
 |------------|---------------|----------------|
@@ -129,6 +129,7 @@ Usage:
 | cache_check_node | query_preview, query_hash, query_type | cache_hit, embeddings_cache_hit, hit_layer, duration_ms |
 | cache_store_node | query_preview, query_hash, response_length | stored, stored_semantic, stored_conversation, duration_ms |
 | respond_node | response_length, response_sent, has_message | respond_skipped, respond_delivered, used_markdown, duration_ms |
+| transcribe_node | audio_size_bytes, voice_language, stt_model, voice_duration_s | stt_duration_ms, text_length, text_preview |
 
 Light nodes (classify, grade, rerank, rewrite) keep default auto-capture — their state is small.
 
@@ -142,7 +143,7 @@ async def retrieve_node(state, ...):
     lf.update_current_span(output={"results_count": len(results), ...})
 ```
 
-**Forbidden keys** in curated spans: `documents`, `query_embedding`, `sparse_embedding`, `state`, `messages`.
+**Forbidden keys** in curated spans: `documents`, `query_embedding`, `sparse_embedding`, `state`, `messages`, `voice_audio`.
 
 ### Error Span Tracking (#103 P1.2)
 
