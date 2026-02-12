@@ -12,6 +12,9 @@ from pytest_httpx import HTTPXMock
 from telegram_bot.services.llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
 
 
+pytestmark = pytest.mark.httpx_mock(can_send_already_matched_responses=True)
+
+
 class TestLLMTimeout:
     """Tests for LLM timeout handling."""
 
@@ -19,42 +22,40 @@ class TestLLMTimeout:
         """Verify fallback answer returned on LLM timeout."""
         httpx_mock.add_exception(httpx.TimeoutException("LLM request timed out"))
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            chunks = [
-                {
-                    "text": "Beach apartment",
-                    "metadata": {"title": "Sea View", "price": 50000, "city": "Nesebar"},
-                    "score": 0.9,
-                }
-            ]
+        chunks = [
+            {
+                "text": "Beach apartment",
+                "metadata": {"title": "Sea View", "price": 50000, "city": "Nesebar"},
+                "score": 0.9,
+            }
+        ]
 
-            result = await service.generate_answer("What apartments?", chunks)
+        result = await service.generate_answer("What apartments?", chunks)
 
-            assert "временно недоступен" in result
-            assert "Sea View" in result
+        assert "временно недоступен" in result
+        assert "Sea View" in result
 
     async def test_llm_timeout_with_confidence_returns_low_confidence(self, httpx_mock: HTTPXMock):
         """Verify low confidence returned on LLM timeout with confidence mode."""
         httpx_mock.add_exception(httpx.TimeoutException("LLM request timed out"))
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            chunks = [
-                {
-                    "text": "Beach apartment",
-                    "metadata": {"title": "Sea View", "price": 50000},
-                    "score": 0.9,
-                }
-            ]
+        chunks = [
+            {
+                "text": "Beach apartment",
+                "metadata": {"title": "Sea View", "price": 50000},
+                "score": 0.9,
+            }
+        ]
 
-            result = await service.generate_answer("What apartments?", chunks, with_confidence=True)
+        result = await service.generate_answer("What apartments?", chunks, with_confidence=True)
 
-            assert isinstance(result, ConfidenceResult)
-            assert result.confidence == 0.0
-            assert result.is_low_confidence is True
+        assert isinstance(result, ConfidenceResult)
+        assert result.confidence == 0.0
+        assert result.is_low_confidence is True
 
 
 class TestLLMHTTPErrors:
@@ -65,20 +66,19 @@ class TestLLMHTTPErrors:
         """Verify fallback on various server errors."""
         httpx_mock.add_response(status_code=status_code)
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            chunks = [
-                {
-                    "text": "Apartment details",
-                    "metadata": {"title": "Downtown Flat", "price": 40000},
-                    "score": 0.85,
-                }
-            ]
+        chunks = [
+            {
+                "text": "Apartment details",
+                "metadata": {"title": "Downtown Flat", "price": 40000},
+                "score": 0.85,
+            }
+        ]
 
-            result = await service.generate_answer("Find apartments", chunks)
+        result = await service.generate_answer("Find apartments", chunks)
 
-            assert "временно недоступен" in result
+        assert "временно недоступен" in result
 
     async def test_llm_rate_limit_error_fallback(self, httpx_mock: HTTPXMock):
         """Verify graceful handling of rate limit errors."""
@@ -87,12 +87,11 @@ class TestLLMHTTPErrors:
             json={"error": {"message": "Rate limit exceeded"}},
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            result = await service.generate_answer("Query", [])
+        result = await service.generate_answer("Query", [])
 
-            assert "временно недоступен" in result
+        assert "временно недоступен" in result
 
     async def test_llm_auth_error_fallback(self, httpx_mock: HTTPXMock):
         """Verify graceful handling of authentication errors."""
@@ -101,12 +100,11 @@ class TestLLMHTTPErrors:
             json={"error": {"message": "Invalid API key"}},
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="invalid-key", client=client)
+        service = LLMService(api_key="invalid-key")
 
-            result = await service.generate_answer("Query", [])
+        result = await service.generate_answer("Query", [])
 
-            assert "временно недоступен" in result
+        assert "временно недоступен" in result
 
 
 class TestLLMResponseParsing:
@@ -116,19 +114,18 @@ class TestLLMResponseParsing:
         """Verify handling of malformed JSON in LLM response."""
         httpx_mock.add_response(json={"choices": [{"message": {"content": "not json response"}}]})
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            result = await service.generate_answer(
-                "Query",
-                [{"text": "context", "metadata": {}, "score": 0.9}],
-                with_confidence=True,
-            )
+        result = await service.generate_answer(
+            "Query",
+            [{"text": "context", "metadata": {}, "score": 0.9}],
+            with_confidence=True,
+        )
 
-            # Should return result with default confidence (parsing failed)
-            assert isinstance(result, ConfidenceResult)
-            assert result.answer == "not json response"
-            assert result.confidence == 0.5  # Default on parse failure
+        # Should return result with default confidence (parsing failed)
+        assert isinstance(result, ConfidenceResult)
+        assert result.answer == "not json response"
+        assert result.confidence == 0.5  # Default on parse failure
 
     async def test_missing_confidence_field_handled(self, httpx_mock: HTTPXMock):
         """Verify handling when confidence field is missing."""
@@ -140,17 +137,16 @@ class TestLLMResponseParsing:
             }
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            result = await service.generate_answer(
-                "Query",
-                [{"text": "context", "metadata": {}, "score": 0.9}],
-                with_confidence=True,
-            )
+        result = await service.generate_answer(
+            "Query",
+            [{"text": "context", "metadata": {}, "score": 0.9}],
+            with_confidence=True,
+        )
 
-            assert isinstance(result, ConfidenceResult)
-            assert result.confidence == 0.5  # Default when missing
+        assert isinstance(result, ConfidenceResult)
+        assert result.confidence == 0.5  # Default when missing
 
     async def test_invalid_confidence_value_clamped(self, httpx_mock: HTTPXMock):
         """Verify invalid confidence values are clamped to valid range."""
@@ -162,16 +158,15 @@ class TestLLMResponseParsing:
             }
         )
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            result = await service.generate_answer(
-                "Query",
-                [{"text": "context", "metadata": {}, "score": 0.9}],
-                with_confidence=True,
-            )
+        result = await service.generate_answer(
+            "Query",
+            [{"text": "context", "metadata": {}, "score": 0.9}],
+            with_confidence=True,
+        )
 
-            assert result.confidence == 1.0  # Clamped to max
+        assert result.confidence == 1.0  # Clamped to max
 
 
 class TestLLMFallbackChain:
@@ -181,34 +176,32 @@ class TestLLMFallbackChain:
         """Verify appropriate fallback when context is empty and LLM fails."""
         httpx_mock.add_exception(httpx.ConnectError("Connection refused"))
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            result = await service.generate_answer("Query", [])
+        result = await service.generate_answer("Query", [])
 
-            assert "сервис временно недоступен" in result.lower()
-            assert "повторить запрос" in result.lower()
+        assert "сервис временно недоступен" in result.lower()
+        assert "повторить запрос" in result.lower()
 
     async def test_fallback_includes_search_results(self, httpx_mock: HTTPXMock):
         """Verify fallback includes available search results."""
         httpx_mock.add_exception(Exception("LLM unavailable"))
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            chunks = [
-                {"text": "Apt 1", "metadata": {"title": "First", "price": 30000}, "score": 0.9},
-                {"text": "Apt 2", "metadata": {"title": "Second", "price": 40000}, "score": 0.8},
-                {"text": "Apt 3", "metadata": {"title": "Third", "price": 50000}, "score": 0.7},
-            ]
+        chunks = [
+            {"text": "Apt 1", "metadata": {"title": "First", "price": 30000}, "score": 0.9},
+            {"text": "Apt 2", "metadata": {"title": "Second", "price": 40000}, "score": 0.8},
+            {"text": "Apt 3", "metadata": {"title": "Third", "price": 50000}, "score": 0.7},
+        ]
 
-            result = await service.generate_answer("Query", chunks)
+        result = await service.generate_answer("Query", chunks)
 
-            # Should show first 3 results
-            assert "First" in result
-            assert "Second" in result
-            assert "Third" in result
-            assert "30,000€" in result or "30000€" in result
+        # Should show first 3 results
+        assert "First" in result
+        assert "Second" in result
+        assert "Third" in result
+        assert "30,000€" in result or "30000€" in result
 
 
 class TestLLMStreamingFallback:
@@ -218,31 +211,29 @@ class TestLLMStreamingFallback:
         """Verify streaming yields fallback on timeout."""
         httpx_mock.add_exception(httpx.TimeoutException("Stream timeout"))
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            chunks = [{"text": "Data", "metadata": {"title": "Test"}, "score": 0.9}]
+        chunks = [{"text": "Data", "metadata": {"title": "Test"}, "score": 0.9}]
 
-            collected = []
-            async for chunk in service.stream_answer("Query", chunks):
-                collected.append(chunk)
+        collected = []
+        async for chunk in service.stream_answer("Query", chunks):
+            collected.append(chunk)
 
-            full_response = "".join(collected)
-            assert "временно недоступен" in full_response
+        full_response = "".join(collected)
+        assert "временно недоступен" in full_response
 
     async def test_streaming_http_error_yields_fallback(self, httpx_mock: HTTPXMock):
         """Verify streaming yields fallback on HTTP error."""
         httpx_mock.add_response(status_code=500)
 
-        async with httpx.AsyncClient() as client:
-            service = LLMService(api_key="test-key", client=client)
+        service = LLMService(api_key="test-key")
 
-            collected = []
-            async for chunk in service.stream_answer("Query", []):
-                collected.append(chunk)
+        collected = []
+        async for chunk in service.stream_answer("Query", []):
+            collected.append(chunk)
 
-            full_response = "".join(collected)
-            assert "временно недоступен" in full_response
+        full_response = "".join(collected)
+        assert "временно недоступен" in full_response
 
 
 class TestLowConfidenceFallback:
