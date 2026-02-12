@@ -35,12 +35,11 @@ class TestGenerateNodeErrorSpan:
     async def test_llm_error_sets_error_span(self) -> None:
         from telegram_bot.graph.nodes.generate import generate_node
 
+        async def _raise_unavailable(*args, **kwargs):
+            raise RuntimeError("LLM unavailable")
+
         mock_client = SimpleNamespace(
-            chat=SimpleNamespace(
-                completions=SimpleNamespace(
-                    create=AsyncMock(side_effect=RuntimeError("LLM unavailable"))
-                )
-            )
+            chat=SimpleNamespace(completions=SimpleNamespace(create=_raise_unavailable))
         )
         mock_config = SimpleNamespace(
             domain="недвижимость",
@@ -56,13 +55,14 @@ class TestGenerateNodeErrorSpan:
         mock_lf = MagicMock()
         state = _make_state()
 
+        node_fn = getattr(generate_node, "__wrapped__", generate_node)
+
         with (
             patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
-            patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
             patch("telegram_bot.graph.nodes.generate.get_prompt", return_value="system"),
-            patch("telegram_bot.observability.get_client", return_value=mock_lf),
+            patch.dict(node_fn.__globals__, {"get_client": lambda: mock_lf}),
         ):
-            result = await generate_node(state)
+            result = await node_fn(state)
 
         error_calls = [
             c.kwargs
