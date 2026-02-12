@@ -4,7 +4,7 @@ import pytest
 
 
 try:
-    import redisvl  # noqa: F401
+    from redisvl.utils.vectorize import BaseVectorizer  # noqa: F401
 except (ImportError, ModuleNotFoundError, ValueError):
     pytest.skip("redisvl not installed", allow_module_level=True)
 
