@@ -4,9 +4,9 @@ import pytest
 
 
 try:
-    import redisvl  # noqa: F401
-except (ImportError, ModuleNotFoundError, ValueError):
-    pytest.skip("redisvl not installed", allow_module_level=True)
+    from redisvl.utils.vectorize import BaseVectorizer  # noqa: F401
+except (ImportError, ModuleNotFoundError, ValueError, AttributeError):
+    pytest.skip("redisvl.utils.vectorize not available", allow_module_level=True)
 
 from unittest.mock import AsyncMock, MagicMock
 

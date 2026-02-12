@@ -8,7 +8,7 @@ from __future__ import annotations
 import functools
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
 
@@ -147,9 +147,9 @@ def build_graph(
                 result = {**state, "summarize_failed": True}
             elapsed = time.perf_counter() - t0
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
-            return result
+            return cast(dict[str, Any], result)
 
-        workflow.add_node("summarize", summarize_wrapper)
+        workflow.add_node("summarize", summarize_wrapper)  # type: ignore[type-var]
 
     # Edges
     workflow.add_conditional_edges(
