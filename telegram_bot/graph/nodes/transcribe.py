@@ -13,7 +13,7 @@ import logging
 import time
 from typing import Any
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -37,13 +37,25 @@ def make_transcribe_node(
         message: aiogram Message for sending preview.
     """
 
-    @observe(name="transcribe")
+    @observe(name="transcribe", capture_input=False, capture_output=False)
     async def transcribe_node(state: dict[str, Any]) -> dict[str, Any]:
         start = time.perf_counter()
 
         voice_audio = state["voice_audio"]
         if voice_audio is None:
             raise ValueError("voice_audio is None — transcribe_node requires audio data")
+
+        # Curated span input (no raw bytes!)
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "audio_size_bytes": len(voice_audio),
+                "voice_language": voice_language,
+                "stt_model": stt_model,
+                "voice_duration_s": state.get("voice_duration_s"),
+            }
+        )
+
         buf = io.BytesIO(voice_audio)
         buf.name = "voice.ogg"
 
@@ -64,6 +76,15 @@ def make_transcribe_node(
             stt_duration_ms,
             len(text),
             voice_language,
+        )
+
+        # Curated span output
+        lf.update_current_span(
+            output={
+                "stt_duration_ms": round(stt_duration_ms, 1),
+                "text_length": len(text),
+                "text_preview": text[:120],
+            }
         )
 
         # Send transcription preview (optional)
