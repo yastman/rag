@@ -68,6 +68,37 @@ class TestCompareBootstrap:
             assert report["status"] == "skipped"
             assert "reason" in report
 
+    @patch("tests.baseline.cli.get_collector")
+    @patch("tests.baseline.cli.BaselineManager")
+    def test_missing_current_session_is_failure(self, mock_manager_cls, mock_get_collector):
+        """Should fail when current session has no traces (not skip)."""
+        mock_collector = MagicMock()
+        mock_get_collector.return_value = mock_collector
+
+        baseline_metrics = MagicMock(trace_count=3)
+        current_metrics = MagicMock(trace_count=0)
+        mock_collector.collect_session_metrics.side_effect = [baseline_metrics, current_metrics]
+
+        mock_manager = MagicMock()
+        mock_manager_cls.return_value = mock_manager
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(
+                cli,
+                [
+                    "compare",
+                    "--baseline-tag=main-latest",
+                    "--current-session=ci-abc-job-1",
+                    "--output=report.json",
+                ],
+            )
+
+            assert result.exit_code == 1
+            report = json.loads(Path("report.json").read_text())
+            assert report["status"] == "failed"
+            assert "No traces found" in report["reason"]
+
 
 class TestCompareNewFlags:
     """Tests for new CLI flags."""
@@ -193,6 +224,25 @@ class TestSetBaselineNew:
         runner = CliRunner()
         result = runner.invoke(set_baseline, ["--tag=main-latest"])
         assert result.exit_code != 0
+
+    @patch("tests.baseline.cli.get_collector")
+    def test_set_baseline_tags_traces_via_collector(self, mock_get_collector):
+        """set-baseline should delegate tagging to collector helper."""
+        mock_collector = MagicMock()
+        mock_collector.tag_session_traces.return_value = 4
+        mock_get_collector.return_value = mock_collector
+
+        runner = CliRunner()
+        result = runner.invoke(
+            set_baseline,
+            ["--tag=main-latest", "--session-id=ci-abc-job-1"],
+        )
+
+        assert result.exit_code == 0
+        mock_collector.tag_session_traces.assert_called_once_with(
+            session_id="ci-abc-job-1",
+            tag="main-latest",
+        )
 
 
 class TestCLIHelp:
