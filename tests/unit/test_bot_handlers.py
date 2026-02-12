@@ -187,6 +187,27 @@ class TestCommandHandlers:
         message.answer.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_cmd_clear_reports_partial_failure_on_checkpointer_error(self, mock_config):
+        """Test /clear reports partial failure when checkpointer deletion fails."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        bot._checkpointer = AsyncMock()
+        bot._checkpointer.adelete_thread = AsyncMock(side_effect=RuntimeError("redis down"))
+
+        message = MagicMock()
+        message.from_user = MagicMock(id=12345)
+        message.answer = AsyncMock()
+
+        await bot.cmd_clear(message)
+
+        bot._cache.clear_conversation.assert_awaited_once_with(12345)
+        bot._checkpointer.adelete_thread.assert_awaited_once_with("12345")
+        message.answer.assert_awaited_once()
+        answer_text = message.answer.await_args.args[0]
+        assert "частично" in answer_text.lower()
+
+    @pytest.mark.asyncio
     async def test_cmd_stats(self, mock_config):
         """Test /stats command handler."""
         bot, _ = _create_bot(mock_config)
@@ -539,6 +560,32 @@ class TestBotLifecycle:
         bot._qdrant.close.assert_called_once()
         bot._embeddings.aclose.assert_awaited_once()
         bot._sparse.aclose.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_closes_checkpointer_context(self, mock_config):
+        """stop() should close async checkpointer context when available."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.close = AsyncMock()
+        bot._qdrant = MagicMock()
+        bot._qdrant.close = AsyncMock()
+        bot._embeddings = MagicMock()
+        bot._embeddings.aclose = AsyncMock()
+        bot._sparse = MagicMock()
+        bot._sparse.aclose = AsyncMock()
+        bot._reranker = None
+        bot.bot = MagicMock()
+        bot.bot.session = MagicMock()
+        bot.bot.session.close = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.stop = AsyncMock()
+        bot._checkpointer = MagicMock()
+        bot._checkpointer.__aexit__ = AsyncMock()
+        checkpointer = bot._checkpointer
+
+        await bot.stop()
+
+        checkpointer.__aexit__.assert_awaited_once_with(None, None, None)
 
 
 class TestSetupMiddlewares:
