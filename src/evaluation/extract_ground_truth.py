@@ -5,6 +5,8 @@ Creates a mapping: article_number -> [chunk_ids]
 """
 
 import json
+import os
+import sys
 from collections import defaultdict
 from functools import lru_cache
 
@@ -13,17 +15,14 @@ import requests  # type: ignore[import-untyped]
 from src.config import Settings
 
 
-@lru_cache(maxsize=1)
-def _get_settings() -> Settings:
-    return Settings()
-
-
-def _qdrant_url() -> str:
-    return _get_settings().qdrant_url or "http://localhost:6333"
-
-
-def _qdrant_api_key() -> str:
-    return _get_settings().qdrant_api_key or ""
+# Load Qdrant config without failing module import in test environments.
+try:
+    _settings = Settings()
+    QDRANT_URL = _settings.qdrant_url
+    QDRANT_API_KEY = _settings.qdrant_api_key or ""
+except ValueError:
+    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
 
 def extract_articles(collection_name: str) -> dict[str, list[str]]:

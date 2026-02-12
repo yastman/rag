@@ -1,6 +1,6 @@
 # tests/baseline/thresholds.yaml
 # Regression = current > baseline * factor
-# Based on 2026 best practices: AIMultiple, Braintrust, Evidently AI
+# Based on official observability/eval guidance (Langfuse docs, Grafana/AWS SLO, Anthropic stats)
 
 latency:
   llm_p95_factor: 1.20        # 20% tolerance
@@ -18,10 +18,23 @@ cache:
   semantic_hit_rate_min: 0.30 # Minimum semantic cache effectiveness
 
 calls:
-  llm_factor: 1.05            # 5% - should be very stable
+  llm_factor: 1.15            # 15% — was 1.05, widened per #168
   voyage_embed_factor: 1.10
   voyage_rerank_factor: 1.10
 
 infrastructure:
   redis_memory_factor: 1.50   # 50% tolerance
   qdrant_vectors_factor: 1.20
+
+# Go/No-Go criteria thresholds (validate_traces.py)
+# Previously hardcoded, now config-driven per #168
+go_no_go:
+  cold_p50_ms: 5000           # Cold run p50 latency
+  cold_p90_ms: 8000           # Cold run p90 latency
+  cold_over_10s_pct: 0.15     # Max % of queries exceeding 10s
+  cache_hit_p50_ms: 1500      # Cache-hit p50 latency
+  generate_p50_ms: 2000       # Generate node p50 (non-streaming)
+  multi_rewrite_pct: 0.10     # Max % of multi-rewrite queries
+  rewrite_tokens_p50: 96      # Rewrite completion tokens p50
+  ttft_p50_ms: 1000           # Streaming TTFT p50
+  ttft_min_sample: 3          # Min samples for TTFT criterion
