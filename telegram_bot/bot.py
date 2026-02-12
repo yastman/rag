@@ -209,6 +209,9 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "answer_to_question_ratio": result.get("answer_to_question_ratio"),
         # Voice transcription (#151)
         "stt_duration_ms": result.get("stt_duration_ms"),
+        # Conversation memory (#159)
+        "memory_messages_count": len(result.get("messages", [])),
+        "checkpointer_overhead_proxy_ms": result.get("checkpointer_overhead_proxy_ms"),
     }
 
 
