@@ -30,6 +30,7 @@ def _make_result(
     rewrite_count: int = 0,
     observation_error_count: int = 0,
     latency_stages: dict | None = None,
+    scores: dict[str, float] | None = None,
 ) -> TraceResult:
     return TraceResult(
         trace_id="test",
@@ -49,6 +50,7 @@ def _make_result(
             "observation_error_count": observation_error_count,
             "latency_stages": latency_stages or {},
         },
+        scores=scores or {},
     )
 
 
@@ -264,6 +266,36 @@ class TestEvaluateGoNoGo:
         criteria = evaluate_go_no_go(aggregates, results, orphan_rate=0.0)
 
         assert criteria["ttft_p50_lt_1000ms"]["skipped"] is True
+
+    def test_custom_cold_p50_threshold(self):
+        """Go/No-Go uses config threshold, not hardcoded 5000."""
+        agg = {"cold": {"latency_p50": 6000}, "cache_hit": {}}
+        # Default config: 5000 -> FAIL
+        result = evaluate_go_no_go(agg, [], thresholds={"cold_p50_ms": 5000})
+        assert result["cold_p50_lt_5s"]["passed"] is False
+
+        # Custom config: 7000 -> PASS
+        result = evaluate_go_no_go(agg, [], thresholds={"cold_p50_ms": 7000})
+        assert result["cold_p50_lt_5s"]["passed"] is True
+
+    def test_custom_rewrite_tokens_threshold(self):
+        """Rewrite tokens threshold loaded from config, not hardcoded 96."""
+        r = _make_result(phase="cold", scores={"rewrite_completion_tokens": 110.0})
+        agg = {"cold": {}, "cache_hit": {}}
+        # Default: 96 -> FAIL
+        result = evaluate_go_no_go(agg, [r], thresholds={"rewrite_tokens_p50": 96})
+        assert result["rewrite_tokens_p50_le_96"]["passed"] is False
+
+        # Custom: 120 -> PASS
+        result = evaluate_go_no_go(agg, [r], thresholds={"rewrite_tokens_p50": 120})
+        assert result["rewrite_tokens_p50_le_96"]["passed"] is True
+
+    def test_default_thresholds_from_yaml(self):
+        """When no thresholds passed, loads from thresholds.yaml."""
+        agg = {"cold": {"latency_p50": 4000}, "cache_hit": {}}
+        result = evaluate_go_no_go(agg, [])
+        # Should use yaml default (5000), so 4000 passes
+        assert result["cold_p50_lt_5s"]["passed"] is True
 
 
 class TestLangfusePreflight:
@@ -496,6 +528,36 @@ class TestReportNoReferenceTrace:
         content = output.read_text()
         assert "c2b95d86" not in content
         assert "Reference Trace Comparison" not in content
+
+
+class TestGoNoGoReportFormat:
+    """Test Go/No-Go report formatting in markdown."""
+
+    def test_skipped_criterion_shows_reason(self):
+        """Issue #168: SKIP must include explicit reason."""
+        from scripts.validate_traces import _format_go_no_go_status
+
+        criterion = {
+            "target": "< 1000 ms",
+            "actual": "N/A (n=2, need >= 3)",
+            "passed": True,
+            "skipped": True,
+        }
+        status = _format_go_no_go_status(criterion)
+        assert "SKIPPED" in status
+        assert "n=" in status or "insufficient" in status.lower()
+
+    def test_pass_criterion_format(self):
+        from scripts.validate_traces import _format_go_no_go_status
+
+        entry = {"target": "< 5000 ms", "actual": "3200 ms", "passed": True}
+        assert "PASS" in _format_go_no_go_status(entry)
+
+    def test_fail_criterion_format(self):
+        from scripts.validate_traces import _format_go_no_go_status
+
+        entry = {"target": "< 5000 ms", "actual": "6100 ms", "passed": False}
+        assert "FAIL" in _format_go_no_go_status(entry)
 
 
 class TestCollectionResolution:
