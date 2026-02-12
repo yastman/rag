@@ -588,6 +588,7 @@ class PropertyBot:
                     "checkpoint_ns": _CHECKPOINT_NS_VOICE,
                 }
             }
+            result: dict[str, Any] | None = None
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                     invoke_start = time.perf_counter()
@@ -602,11 +603,19 @@ class PropertyBot:
                     return
                 raise
             except Exception:
-                logger.exception("Voice pipeline failed")
-                await message.answer(
-                    "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
+                if result is None:
+                    # Pipeline never returned — genuine failure
+                    logger.exception("Voice pipeline failed (no result)")
+                    await message.answer(
+                        "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
+                    )
+                    return
+                # Pipeline succeeded but post-invoke cleanup failed (#201)
+                # Answer already delivered via streaming/respond — don't confuse user
+                logger.warning(
+                    "Post-pipeline error in voice handler (answer already delivered)",
+                    exc_info=True,
                 )
-                return
 
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
             # User-perceived latency excludes post-respond summarization
