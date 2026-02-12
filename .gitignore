@@ -194,3 +194,6 @@ k8s/secrets/
 
 # Validation reports (generated, not committed)
 docs/reports/
+
+# Baseline (legacy file-based approach)
+tests/baseline/.current_baseline
