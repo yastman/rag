@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 
-from tests.baseline.cli import cli, compare
+from tests.baseline.cli import cli, compare, set_baseline
 
 
 class TestCompareBootstrap:
@@ -169,6 +169,30 @@ class TestCompareNewFlags:
             report = json.loads(Path("report.json").read_text())
             assert report["status"] == "failed"
             assert len(report["regressions"]) == 1
+
+
+class TestSetBaselineNew:
+    """Tests for tag-based set-baseline command."""
+
+    def test_set_baseline_help_shows_new_flags(self):
+        """set-baseline should show --session-id and --tag flags."""
+        runner = CliRunner()
+        result = runner.invoke(set_baseline, ["--help"])
+        assert result.exit_code == 0
+        assert "--session-id" in result.output
+        assert "--tag" in result.output
+
+    def test_set_baseline_requires_tag(self):
+        """set-baseline command should require --tag."""
+        runner = CliRunner()
+        result = runner.invoke(set_baseline, ["--session-id=abc"])
+        assert result.exit_code != 0
+
+    def test_set_baseline_requires_session_id(self):
+        """set-baseline command should require --session-id."""
+        runner = CliRunner()
+        result = runner.invoke(set_baseline, ["--tag=main-latest"])
+        assert result.exit_code != 0
 
 
 class TestCLIHelp:
