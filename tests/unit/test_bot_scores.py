@@ -541,3 +541,90 @@ class TestVoiceTraceMetadata:
             "stt_duration_ms",
         }
         assert expected_keys.issubset(set(metadata.keys()))
+
+
+VOICE_PIPELINE_RESULT = {
+    **FULL_PIPELINE_RESULT,
+    "stt_text": "тест голосовой запрос",
+    "stt_duration_ms": 250.0,
+    "voice_duration_s": 5.0,
+    "input_type": "voice",
+}
+
+
+class TestVoiceScores:
+    """Test voice-specific Langfuse scores (#158)."""
+
+    @pytest.mark.asyncio
+    async def test_voice_scores_written(self, mock_config):
+        """Voice result should emit stt_duration_ms and voice_duration_s scores."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=VOICE_PIPELINE_RESULT)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        score_calls = mock_lf.score_current_trace.call_args_list
+        score_map = {c.kwargs["name"]: c.kwargs for c in score_calls}
+
+        # Voice-specific scores must be present
+        assert "stt_duration_ms" in score_map
+        assert score_map["stt_duration_ms"]["value"] == 250.0
+
+        assert "voice_duration_s" in score_map
+        assert score_map["voice_duration_s"]["value"] == 5.0
+
+        assert "input_type" in score_map
+        assert score_map["input_type"]["value"] == "voice"
+        assert score_map["input_type"]["data_type"] == "CATEGORICAL"
+
+    @pytest.mark.asyncio
+    async def test_text_scores_omit_voice_metrics(self, mock_config):
+        """Text result should NOT emit stt_duration_ms or voice_duration_s scores."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        bot = _create_bot(mock_config)
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=FULL_PIPELINE_RESULT)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
+
+        # input_type always written (as "text")
+        assert "input_type" in score_names
+        # Voice-only scores NOT written for text input
+        assert "stt_duration_ms" not in score_names
+        assert "voice_duration_s" not in score_names
