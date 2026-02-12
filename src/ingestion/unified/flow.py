@@ -121,8 +121,10 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
     if config is None:
         config = UnifiedConfig()
 
-    # Initialise the manifest in the sync directory.
-    _manifest = GDriveManifest(config.sync_dir)
+    # Initialise the manifest in a writable directory (MANIFEST_DIR or sync_dir fallback).
+    manifest_dir = config.effective_manifest_dir()
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    _manifest = GDriveManifest(manifest_dir)
 
     # Init CocoIndex with explicit database settings (do not rely on env vars).
     cocoindex.init(
