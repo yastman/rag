@@ -197,36 +197,47 @@ class TestSemanticCache:
         mgr.semantic_cache.astore.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_semantic_check_disabled_returns_none(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = None
+
+        result = await mgr.check_semantic(query="test", vector=[0.1] * 1024, query_type="GENERAL")
+        assert result is None
+
+    @pytest.mark.asyncio
     async def test_semantic_check_filters_by_user_id(self):
         """check_semantic with user_id builds combined Tag filter (user_id + language)."""
         _ensure_redisvl_filter_mock()
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
-        mgr.semantic_cache.acheck = AsyncMock(return_value=[])
+        mgr.semantic_cache.acheck = AsyncMock(
+            return_value=[{"response": "user-specific answer", "vector_distance": 0.05}]
+        )
         mgr.cache_thresholds = {"FAQ": 0.12}
 
-        await mgr.check_semantic(
-            query="test query",
+        result = await mgr.check_semantic(
+            query="test",
             vector=[0.1] * 1024,
             query_type="FAQ",
             user_id=42,
         )
+        assert result == "user-specific answer"
 
+        # Verify acheck was called with a filter_expression
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
-        # filter_expression should be present (combined Tag filter)
-        assert "filter_expression" in call_kwargs
+        assert call_kwargs.get("filter_expression") is not None
 
     @pytest.mark.asyncio
     async def test_semantic_store_includes_user_id_in_filters(self):
-        """store_semantic with user_id passes user_id string in filters dict."""
+        """store_semantic with user_id passes it in filters dict."""
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
         mgr.semantic_cache.astore = AsyncMock()
         mgr.cache_ttl = {"FAQ": 86400}
 
         await mgr.store_semantic(
-            query="test query",
-            response="test response",
+            query="test",
+            response="answer",
             vector=[0.1] * 1024,
             query_type="FAQ",
             user_id=42,
@@ -234,14 +245,8 @@ class TestSemanticCache:
 
         call_kwargs = mgr.semantic_cache.astore.call_args[1]
         assert call_kwargs["filters"]["user_id"] == "42"
-
-    @pytest.mark.asyncio
-    async def test_semantic_check_disabled_returns_none(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        mgr.semantic_cache = None
-
-        result = await mgr.check_semantic(query="test", vector=[0.1] * 1024, query_type="GENERAL")
-        assert result is None
+        assert call_kwargs["filters"]["query_type"] == "FAQ"
+        assert call_kwargs["filters"]["language"] == "ru"
 
 
 class TestExactCaches:
@@ -303,92 +308,6 @@ def _make_pipeline_mock():
     pipe.__aenter__ = AsyncMock(return_value=pipe)
     pipe.__aexit__ = AsyncMock(return_value=False)
     return pipe
-
-
-class TestConversationHistory:
-    """Test conversation history (Redis LIST)."""
-
-    @pytest.mark.asyncio
-    async def test_store_conversation(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        pipe = _make_pipeline_mock()
-        mgr.redis = AsyncMock()
-        mgr.redis.pipeline = MagicMock(return_value=pipe)
-
-        await mgr.store_conversation(user_id=123, role="user", content="hello")
-
-        pipe.lpush.assert_called_once()
-        pipe.ltrim.assert_called_once()
-        pipe.expire.assert_called_once()
-        pipe.execute.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_store_conversation_batch(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        pipe = _make_pipeline_mock()
-        mgr.redis = AsyncMock()
-        mgr.redis.pipeline = MagicMock(return_value=pipe)
-
-        await mgr.store_conversation_batch(
-            user_id=123,
-            messages=[("user", "hello"), ("assistant", "hi")],
-        )
-
-        # 2 lpush calls (one per message), 1 ltrim, 1 expire
-        assert pipe.lpush.call_count == 2
-        pipe.ltrim.assert_called_once()
-        pipe.expire.assert_called_once()
-        pipe.execute.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_store_conversation_batch_empty(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        mgr.redis = AsyncMock()
-        mgr.redis.pipeline = MagicMock()
-
-        await mgr.store_conversation_batch(user_id=123, messages=[])
-
-        mgr.redis.pipeline.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_store_conversation_batch_disabled(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        mgr.redis = None
-
-        # Should not raise
-        await mgr.store_conversation_batch(user_id=123, messages=[("user", "hi")])
-
-    @pytest.mark.asyncio
-    async def test_get_conversation(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        mgr.redis = AsyncMock()
-        msgs = [
-            json.dumps({"role": "user", "content": "hello"}),
-            json.dumps({"role": "assistant", "content": "hi"}),
-        ]
-        mgr.redis.lrange = AsyncMock(return_value=msgs)
-
-        result = await mgr.get_conversation(user_id=123, last_n=5)
-        assert len(result) == 2
-        assert result[0]["role"] == "user"
-
-    @pytest.mark.asyncio
-    async def test_get_conversation_empty(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        mgr.redis = AsyncMock()
-        mgr.redis.lrange = AsyncMock(return_value=[])
-
-        result = await mgr.get_conversation(user_id=123)
-        assert result == []
-
-    @pytest.mark.asyncio
-    async def test_conversation_disabled(self):
-        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        mgr.redis = None
-
-        await mgr.store_conversation(user_id=123, role="user", content="hi")
-        result = await mgr.get_conversation(user_id=123)
-        assert result == []
 
 
 class TestMetrics:

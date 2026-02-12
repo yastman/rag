@@ -67,7 +67,6 @@ def _make_graph_mocks(
     cache.store_search_results = AsyncMock()
     cache.get_sparse_embedding = AsyncMock(return_value=cache_sparse)
     cache.store_sparse_embedding = AsyncMock()
-    cache.store_conversation_batch = AsyncMock()
 
     # -- Embeddings (dense) --
     embeddings = MagicMock()
@@ -209,7 +208,7 @@ async def test_path_chitchat_early_exit():
 
 @pytest.mark.integration
 async def test_path_cache_hit():
-    """Cached response skips retrieve/grade/rerank/generate."""
+    """Cached response skips retrieve/grade/rerank/generate (allowlisted FAQ query)."""
     cached_text = "Вот кэшированный ответ про квартиры."
     mocks = _make_graph_mocks(
         cache_embedding=[0.1] * 1024,  # embedding found in cache
@@ -294,8 +293,6 @@ async def test_path_general_bypasses_semantic_cache():
     mocks["cache"].check_semantic.assert_not_awaited()
     # Semantic cache NOT stored after generate
     mocks["cache"].store_semantic.assert_not_awaited()
-    # Legacy conversation batch NOT stored (#163)
-    mocks["cache"].store_conversation_batch.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +303,7 @@ async def test_path_general_bypasses_semantic_cache():
 
 @pytest.mark.integration
 async def test_path_happy_retrieve_rerank_generate():
-    """Full RAG path: cache miss, relevant docs, rerank, generate."""
+    """Full RAG path: cache miss, relevant docs, rerank, generate (ENTITY query)."""
     mocks = _make_graph_mocks(llm_response="Найдено 2 варианта квартир.")
     mock_gc = _make_mock_graph_config(mocks["llm"])
 
@@ -344,9 +341,8 @@ async def test_path_happy_retrieve_rerank_generate():
     mocks["reranker"].rerank.assert_awaited_once()
     mocks["llm"].chat.completions.create.assert_awaited_once()  # generate only
 
-    # Cache stored (semantic only — no legacy store_conversation_batch)
+    # Cache stored (semantic only — memory owned by checkpointer)
     mocks["cache"].store_semantic.assert_awaited_once()
-    mocks["cache"].store_conversation_batch.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
