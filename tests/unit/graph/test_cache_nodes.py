@@ -48,7 +48,7 @@ class TestCacheCheckNode:
     @pytest.mark.asyncio
     async def test_miss_path_computes_embedding(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
-        state["query_type"] = "GENERAL"
+        state["query_type"] = "FAQ"
 
         cache = AsyncMock()
         cache.check_semantic = AsyncMock(return_value=None)
@@ -64,6 +64,24 @@ class TestCacheCheckNode:
         assert result["cached_response"] is None
         assert result["query_embedding"] == [0.1] * 1024
         embeddings.aembed_query.assert_awaited_once_with("test query")
+
+    @pytest.mark.asyncio
+    async def test_general_skips_semantic_check(self):
+        """GENERAL query type should NOT call check_semantic (allowlist guard)."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+
+        cache = AsyncMock()
+        cache.check_semantic = AsyncMock(return_value="should not be used")
+        cache.get_embedding = AsyncMock(return_value=None)
+
+        embeddings = AsyncMock(spec=["aembed_query"])
+        embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1024)
+
+        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        assert result["cache_hit"] is False
+        cache.check_semantic.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_hit_path_returns_cached(self):
@@ -87,7 +105,7 @@ class TestCacheCheckNode:
     @pytest.mark.asyncio
     async def test_stores_new_embedding_in_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="new query")
-        state["query_type"] = "GENERAL"
+        state["query_type"] = "FAQ"
 
         cache = AsyncMock()
         cache.get_embedding = AsyncMock(return_value=None)
@@ -106,7 +124,7 @@ class TestCacheCheckNode:
     async def test_hybrid_stores_both_embeddings(self):
         """When hybrid embeddings available, cache both dense and sparse."""
         state = make_initial_state(user_id=1, session_id="s1", query="hybrid query")
-        state["query_type"] = "GENERAL"
+        state["query_type"] = "ENTITY"
 
         cache = AsyncMock()
         cache.get_embedding = AsyncMock(return_value=None)
@@ -130,7 +148,7 @@ class TestCacheStoreNode:
     @pytest.mark.asyncio
     async def test_stores_response_in_semantic_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
-        state["query_type"] = "GENERAL"
+        state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
         state["response"] = "generated answer"
 
@@ -144,14 +162,31 @@ class TestCacheStoreNode:
             query="test query",
             response="generated answer",
             vector=[0.1] * 1024,
-            query_type="GENERAL",
+            query_type="FAQ",
         )
+        assert result["response"] == "generated answer"
+
+    @pytest.mark.asyncio
+    async def test_general_skips_semantic_store(self):
+        """GENERAL query type should NOT call store_semantic (allowlist guard)."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+        cache.store_conversation_batch = AsyncMock()
+
+        result = await cache_store_node(state, cache=cache)
+
+        cache.store_semantic.assert_not_awaited()
         assert result["response"] == "generated answer"
 
     @pytest.mark.asyncio
     async def test_stores_conversation_messages(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
-        state["query_type"] = "GENERAL"
+        state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
         state["response"] = "answer"
 
