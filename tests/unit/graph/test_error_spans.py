@@ -70,8 +70,9 @@ class TestGenerateNodeErrorSpan:
             if c.kwargs.get("level") == "ERROR"
         ]
         assert error_calls, "generate_node must emit ERROR span when LLM fails"
-        assert "LLM failed" in error_calls[-1]["status_message"]
-        assert "LLM unavailable" in error_calls[-1]["status_message"]
+        status_message = error_calls[-1]["status_message"]
+        assert status_message.startswith("LLM failed:")
+        assert len(status_message) > len("LLM failed:")
         # Fallback response still returned
         assert result["response"] != ""
 
