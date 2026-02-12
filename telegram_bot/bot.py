@@ -622,17 +622,19 @@ class PropertyBot:
             summarize_s = result.get("latency_stages", {}).get("summarize", 0)
             result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
 
-            lf = get_client()
-            lf.update_current_trace(
-                input={
-                    "voice_duration_s": voice.duration,
-                    "stt_text": result.get("stt_text", ""),
-                },
-                output={"response": result.get("response", "")},
-                metadata=_build_trace_metadata(result),
-            )
-
-            _write_langfuse_scores(lf, result)
+            try:
+                lf = get_client()
+                lf.update_current_trace(
+                    input={
+                        "voice_duration_s": voice.duration,
+                        "stt_text": result.get("stt_text", ""),
+                    },
+                    output={"response": result.get("response", "")},
+                    metadata=_build_trace_metadata(result),
+                )
+                _write_langfuse_scores(lf, result)
+            except Exception:
+                logger.warning("Failed to write Langfuse scores for voice trace", exc_info=True)
 
     async def start(self):
         """Start bot polling."""
