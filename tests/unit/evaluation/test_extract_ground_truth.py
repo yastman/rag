@@ -8,8 +8,8 @@ class TestExtractArticles:
     """Tests for extract_articles function."""
 
     @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_API_KEY", "test_key")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_URL", "http://localhost:6333")
+    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "test_key")
+    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
     def test_extract_articles_scrolls_collection(self, mock_requests):
         """Test extract_articles scrolls through Qdrant collection."""
         # First response with points
@@ -42,8 +42,8 @@ class TestExtractArticles:
         assert call_args[1]["headers"]["api-key"] == "test_key"
 
     @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_API_KEY", "")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_URL", "http://localhost:6333")
+    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
+    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
     def test_extract_articles_groups_by_article_number(self, mock_requests):
         """Test extract_articles groups chunks by article number."""
         response = MagicMock()
@@ -79,8 +79,8 @@ class TestExtractArticles:
         assert len(result["122"]) == 1
 
     @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_API_KEY", "")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_URL", "http://localhost:6333")
+    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
+    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
     def test_extract_articles_handles_pagination(self, mock_requests):
         """Test extract_articles handles multiple pages."""
         # First page
@@ -118,8 +118,8 @@ class TestExtractArticles:
         assert "2" in result
 
     @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_API_KEY", "")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_URL", "http://localhost:6333")
+    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
+    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
     def test_extract_articles_skips_points_without_article(self, mock_requests):
         """Test extract_articles skips points without article_number."""
         response = MagicMock()
@@ -143,8 +143,8 @@ class TestExtractArticles:
         assert len(result) == 1  # Only one article extracted
 
     @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_API_KEY", "")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_URL", "http://localhost:6333")
+    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
+    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
     def test_extract_articles_uses_point_id_as_fallback(self, mock_requests):
         """Test extract_articles uses point ID when chunk_id missing."""
         response = MagicMock()
@@ -166,8 +166,8 @@ class TestExtractArticles:
         assert result["121"][0]["chunk_id"] == "point-123"
 
     @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_API_KEY", "")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_URL", "http://localhost:6333")
+    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
+    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
     def test_extract_articles_stores_text_preview(self, mock_requests):
         """Test extract_articles stores truncated text preview."""
         long_text = "A" * 200  # Longer than 100 chars
@@ -194,8 +194,8 @@ class TestExtractArticles:
         assert len(result["121"][0]["text_preview"]) == 100
 
     @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_API_KEY", "")
-    @patch("src.evaluation.extract_ground_truth.QDRANT_URL", "http://localhost:6333")
+    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
+    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
     def test_extract_articles_empty_collection(self, mock_requests):
         """Test extract_articles handles empty collection."""
         response = MagicMock()
