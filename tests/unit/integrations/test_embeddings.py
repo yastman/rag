@@ -5,9 +5,14 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import httpx
+import pytest
 from langchain_core.embeddings import Embeddings
 
-from telegram_bot.integrations.embeddings import BGEM3Embeddings, BGEM3SparseEmbeddings
+from telegram_bot.integrations.embeddings import (
+    BGEM3Embeddings,
+    BGEM3HybridEmbeddings,
+    BGEM3SparseEmbeddings,
+)
 
 
 class TestBGEM3Embeddings:
@@ -142,8 +147,6 @@ class TestBGEM3HybridEmbeddings:
             request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
         )
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
-            from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
-
             emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
             dense, sparse = await emb.aembed_hybrid("test query")
         assert dense == [0.1, 0.2, 0.3]
@@ -162,8 +165,6 @@ class TestBGEM3HybridEmbeddings:
         with patch(
             "httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response
         ) as mock_post:
-            from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
-
             emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
             await emb.aembed_hybrid("test")
             mock_post.assert_called_once()
@@ -182,8 +183,6 @@ class TestBGEM3HybridEmbeddings:
             request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
         )
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
-            from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
-
             emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
             await emb.aembed_hybrid("test1")
             await emb.aembed_hybrid("test2")
@@ -202,8 +201,115 @@ class TestBGEM3HybridEmbeddings:
             request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
         )
         with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_response):
-            from telegram_bot.integrations.embeddings import BGEM3HybridEmbeddings
-
             emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
             result = await emb.aembed_query("test")
         assert result == [0.1, 0.2]
+
+
+class TestBGEM3HybridRetry:
+    """Tests for retry behavior on transient errors."""
+
+    async def test_retries_on_remote_protocol_error(self):
+        """Retries on RemoteProtocolError and succeeds on second attempt."""
+        hybrid_ok = {
+            "dense_vecs": [[0.1, 0.2]],
+            "lexical_weights": [{"1": 0.5}],
+        }
+        ok_response = httpx.Response(
+            200,
+            json=hybrid_ok,
+            request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
+        )
+        call_count = 0
+
+        async def mock_post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise httpx.RemoteProtocolError("Server disconnected without sending a response")
+            return ok_response
+
+        with patch("httpx.AsyncClient.post", side_effect=mock_post):
+            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            dense, _sparse = await emb.aembed_hybrid("test")
+
+        assert dense == [0.1, 0.2]
+        assert call_count == 2  # 1 fail + 1 success
+
+    async def test_raises_after_max_retries(self):
+        """Raises original exception after all retries exhausted."""
+
+        async def always_fail(*args, **kwargs):
+            raise httpx.RemoteProtocolError("Server disconnected without sending a response")
+
+        with patch("httpx.AsyncClient.post", side_effect=always_fail):
+            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            with pytest.raises(httpx.RemoteProtocolError):
+                await emb.aembed_hybrid("test")
+
+    async def test_no_retry_on_http_status_error(self):
+        """Does NOT retry on HTTP 500 (status error = not transient transport)."""
+        call_count = 0
+
+        async def mock_post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            response = httpx.Response(
+                500,
+                request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
+            )
+            response.raise_for_status()
+
+        with patch("httpx.AsyncClient.post", side_effect=mock_post):
+            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            with pytest.raises(httpx.HTTPStatusError):
+                await emb.aembed_hybrid("test")
+
+        assert call_count == 1  # No retries
+
+    async def test_retries_on_connect_timeout(self):
+        """Retries on ConnectTimeout."""
+        hybrid_ok = {
+            "dense_vecs": [[0.1]],
+            "lexical_weights": [{"1": 0.5}],
+        }
+        ok_response = httpx.Response(
+            200,
+            json=hybrid_ok,
+            request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
+        )
+        call_count = 0
+
+        async def mock_post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise httpx.ConnectTimeout("Connection timed out")
+            return ok_response
+
+        with patch("httpx.AsyncClient.post", side_effect=mock_post):
+            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+            _dense, _sparse = await emb.aembed_hybrid("test")
+
+        assert call_count == 2
+
+
+class TestBGEM3HybridTimeout:
+    """Tests for granular timeout configuration."""
+
+    async def test_uses_granular_timeout(self):
+        """Client uses httpx.Timeout with separate connect/read values."""
+        emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+        client = emb._get_client()
+        timeout = client.timeout
+        assert timeout.connect == 5.0
+        assert timeout.read == 30.0
+        assert timeout.write == 5.0
+        assert timeout.pool == 5.0
+
+    async def test_custom_timeout_override(self):
+        """Custom timeout parameter is respected (backward compat)."""
+        emb = BGEM3HybridEmbeddings(base_url="http://fake:8000", timeout=60.0)
+        client = emb._get_client()
+        # When float is passed, all components use that value
+        assert client.timeout.read == 60.0

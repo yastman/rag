@@ -8,12 +8,11 @@ Search engines for evaluation:
 import os
 import sys
 from abc import ABC, abstractmethod
+from functools import lru_cache
 
 import numpy as np
 import requests  # type: ignore[import-untyped]
 
-
-sys.path.append("/home/admin/contextual_rag")
 from src.config import HSNWParameters, RetrievalStages, Settings, ThresholdValues
 
 
@@ -54,8 +53,8 @@ class SearchEngine(ABC):
 
     def __init__(self, collection_name: str):
         self.collection_name = collection_name
-        self.qdrant_url = QDRANT_URL
-        self.headers = {"api-key": QDRANT_API_KEY}
+        self.qdrant_url = _qdrant_url()
+        self.headers = {"api-key": _qdrant_api_key()}
 
     @abstractmethod
     def search(self, query: str, top_k: int = 10) -> list[dict]:

@@ -136,7 +136,7 @@ def build_graph(
         )
 
         @observe(name="node-summarize", capture_input=False, capture_output=False)
-        async def summarize_wrapper(state: dict[str, Any]) -> dict[str, Any]:
+        async def summarize_wrapper(state: RAGState) -> RAGState:
             t0 = time.perf_counter()
             try:
                 result = cast(dict[str, Any], await summarize.ainvoke(state))
@@ -144,10 +144,10 @@ def build_graph(
                 logger.warning(
                     "Summarization failed; preserving response without summary", exc_info=True
                 )
-                result = {**state, "summarize_failed": True}
+                result = state.copy()
             elapsed = time.perf_counter() - t0
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
-            return result
+            return cast(dict[str, Any], result)
 
         workflow.add_node("summarize", summarize_wrapper)  # type: ignore[type-var]
 
@@ -227,23 +227,18 @@ async def retrieve_node_wrapper(
 
 
 def _create_summarize_model(config: Any) -> Any:
-    """Create a LangChain ChatOpenAI for SummarizationNode via LiteLLM proxy."""
+    """Create a LangChain ChatOpenAI for SummarizationNode via LiteLLM proxy.
+
+    Tracing is handled by @observe on pipeline nodes and LiteLLM proxy logging.
+    CallbackHandler removed: broken context propagation in async LangGraph (#157).
+    """
     from langchain_openai import ChatOpenAI
     from pydantic import SecretStr
-
-    from telegram_bot.observability import LANGFUSE_ENABLED
-
-    callbacks: list[Any] = []
-    if LANGFUSE_ENABLED:
-        from langfuse.langchain import CallbackHandler
-
-        callbacks.append(CallbackHandler())
 
     return ChatOpenAI(
         model=config.llm_model,
         api_key=SecretStr(config.llm_api_key or "no-key"),
         base_url=config.llm_base_url,
-        callbacks=callbacks,
     )
 
 

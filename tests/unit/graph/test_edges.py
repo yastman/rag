@@ -71,6 +71,12 @@ class TestRouteCache:
         state["cache_hit"] = False
         assert route_cache(state) == "retrieve"
 
+    def test_embedding_error_routes_to_respond(self):
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["embedding_error"] = True
+        state["cache_hit"] = False
+        assert route_cache(state) == "respond"
+
 
 class TestRouteGrade:
     def test_relevant_routes_to_rerank(self):

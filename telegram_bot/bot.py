@@ -153,6 +153,19 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
     if voice_dur is not None:
         lf.score_current_trace(name="voice_duration_s", value=float(voice_dur))
 
+    # --- Embedding resilience (#210) ---
+    lf.score_current_trace(
+        name="bge_embed_error",
+        value=1 if result.get("embedding_error") else 0,
+        data_type="BOOLEAN",
+    )
+    cache_check_s = result.get("latency_stages", {}).get("cache_check")
+    if cache_check_s is not None:
+        lf.score_current_trace(
+            name="bge_embed_latency_ms",
+            value=round(cache_check_s * 1000, 1),
+        )
+
     # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:
@@ -212,7 +225,45 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         # Conversation memory (#159)
         "memory_messages_count": len(result.get("messages", [])),
         "checkpointer_overhead_proxy_ms": result.get("checkpointer_overhead_proxy_ms"),
+        # Voice post-pipeline cleanup diagnostics (#205)
+        "pipeline_cleanup_error": result.get("pipeline_cleanup_error", False),
+        "pipeline_cleanup_error_type": result.get("pipeline_cleanup_error_type"),
     }
+
+
+def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
+    """Best-effort detection for cleanup failures after graph nodes completed.
+
+    LangGraph checkpointer/storage errors may surface during Pregel loop __aexit__
+    after node execution and even after a response was already delivered.
+    """
+    message = str(exc).lower()
+    cleanup_markers = (
+        "asyncpregelloop.__aexit__",
+        "pregelloop.__aexit__",
+        "checkpointer",
+        "pregel",
+    )
+    storage_markers = (
+        "operationalerror",
+        "redis.connectionerror",
+        "consuming input failed",
+        "connection lost",
+        "connection closed",
+    )
+
+    if any(m in message for m in cleanup_markers) and any(m in message for m in storage_markers):
+        return True
+
+    tb = exc.__traceback__
+    while tb is not None:
+        filename = tb.tb_frame.f_code.co_filename.lower()
+        func = tb.tb_frame.f_code.co_name
+        if "langgraph" in filename and func == "__aexit__":
+            return True
+        tb = tb.tb_next
+
+    return False
 
 
 class PropertyBot:
@@ -588,6 +639,7 @@ class PropertyBot:
                     "checkpoint_ns": _CHECKPOINT_NS_VOICE,
                 }
             }
+            result: dict[str, Any] | None = None
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                     invoke_start = time.perf_counter()
@@ -601,12 +653,41 @@ class PropertyBot:
                     await message.answer("Голосовое сообщение не содержит речи.")
                     return
                 raise
-            except Exception:
-                logger.exception("Voice pipeline failed")
-                await message.answer(
-                    "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
-                )
-                return
+            except Exception as e:
+                if result is None:
+                    # Checkpointer/storage cleanup can fail after nodes complete.
+                    # In that case avoid sending a false "recognition failed" message.
+                    if _is_post_pipeline_cleanup_error(e):
+                        logger.warning(
+                            "Voice pipeline cleanup failed after execution (no extra user error)",
+                            exc_info=True,
+                        )
+                        # Preserve observability even without returned graph state.
+                        result = {
+                            "response": state.get("response", ""),
+                            "stt_text": state.get("stt_text", ""),
+                            "stt_duration_ms": state.get("stt_duration_ms"),
+                            "input_type": "voice",
+                            "voice_duration_s": float(voice.duration),
+                            "latency_stages": state.get("latency_stages", {}),
+                            "messages": state.get("messages", []),
+                            "pipeline_cleanup_error": True,
+                            "pipeline_cleanup_error_type": type(e).__name__,
+                        }
+                    # Pipeline never returned — genuine failure
+                    else:
+                        logger.exception("Voice pipeline failed (no result)")
+                        await message.answer(
+                            "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
+                        )
+                        return
+                # Pipeline succeeded but post-invoke cleanup failed (#201)
+                # Answer already delivered via streaming/respond — don't confuse user
+                else:
+                    logger.warning(
+                        "Post-pipeline error in voice handler (answer already delivered)",
+                        exc_info=True,
+                    )
 
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
             # User-perceived latency excludes post-respond summarization
@@ -614,16 +695,21 @@ class PropertyBot:
             result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
 
             lf = get_client()
-            lf.update_current_trace(
-                input={
-                    "voice_duration_s": voice.duration,
-                    "stt_text": result.get("stt_text", ""),
-                },
-                output={"response": result.get("response", "")},
-                metadata=_build_trace_metadata(result),
-            )
-
-            _write_langfuse_scores(lf, result)
+            try:
+                lf.update_current_trace(
+                    input={
+                        "voice_duration_s": voice.duration,
+                        "stt_text": result.get("stt_text", ""),
+                    },
+                    output={"response": result.get("response", "")},
+                    metadata=_build_trace_metadata(result),
+                )
+            except Exception:
+                logger.warning("Failed to update Langfuse voice trace metadata", exc_info=True)
+            try:
+                _write_langfuse_scores(lf, result)
+            except Exception:
+                logger.warning("Failed to write Langfuse voice scores", exc_info=True)
 
     async def start(self):
         """Start bot polling."""
