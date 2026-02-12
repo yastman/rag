@@ -15,7 +15,7 @@ services:
   # =============================================================================
 
   postgres:
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg17@sha256:1a20228d87a48db9587caebaecfdff065268ebe248dafa5f8b447ce3dc96e594
     container_name: dev-postgres
     restart: unless-stopped
     logging: *default-logging
@@ -36,7 +36,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:8.4.0
+    image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
     container_name: dev-redis
     restart: unless-stopped
     logging: *default-logging
@@ -57,7 +57,7 @@ services:
       retries: 3
 
   qdrant:
-    image: qdrant/qdrant:v1.16
+    image: qdrant/qdrant:v1.16@sha256:0425e3e03e7fd9b3dc95c4214546afe19de2eb2e28ca621441a56663ac6e1f46
     container_name: dev-qdrant
     restart: unless-stopped
     logging: *default-logging
@@ -192,7 +192,7 @@ services:
 
   # ClickHouse for Langfuse v3 analytics
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+    image: clickhouse/clickhouse-server:24.8@sha256:1ffa82edee000a42c09313bd9f1293d94c570aee74babc1b3ca9983a35fa597b
     container_name: dev-clickhouse
     profiles: ["ml", "full"]
     restart: unless-stopped
@@ -239,7 +239,7 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
-    image: redis:8.4.0
+    image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
     container_name: dev-redis-langfuse
     profiles: ["ml", "full"]
     restart: unless-stopped
@@ -670,7 +670,7 @@ services:
           memory: 512M
 
   livekit-server:
-    image: livekit/livekit-server:v1.8
+    image: livekit/livekit-server:v1.8@sha256:621fd87bd64a0c83e1f2418ee0323eb920d00acdd73e5f79b303c64f6cc532af
     container_name: dev-livekit
     profiles: ["voice", "full"]
     restart: unless-stopped
@@ -694,7 +694,7 @@ services:
           memory: 256M
 
   livekit-sip:
-    image: livekit/sip:latest
+    image: livekit/sip:latest@sha256:96ef59d461e692c43c77bfe2caa8b469e662e2cc1158082e3af5434184225897
     container_name: dev-livekit-sip
     profiles: ["voice", "full"]
     restart: unless-stopped
