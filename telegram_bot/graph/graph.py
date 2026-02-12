@@ -8,7 +8,7 @@ from __future__ import annotations
 import functools
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
 
@@ -139,7 +139,7 @@ def build_graph(
         async def summarize_wrapper(state: dict[str, Any]) -> dict[str, Any]:
             t0 = time.perf_counter()
             try:
-                result = await summarize.ainvoke(state)
+                result = cast(dict[str, Any], await summarize.ainvoke(state))
             except Exception:
                 logger.warning(
                     "Summarization failed; preserving response without summary", exc_info=True
@@ -149,7 +149,7 @@ def build_graph(
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
             return result
 
-        workflow.add_node("summarize", summarize_wrapper)
+        workflow.add_node("summarize", summarize_wrapper)  # type: ignore[type-var]
 
     # Edges
     workflow.add_conditional_edges(
