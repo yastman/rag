@@ -498,6 +498,232 @@ class TestCheckpointNamespace:
             assert cfg["checkpoint_ns"] == "tg:voice:v1"
 
 
+class TestHandleVoiceExceptionHandling:
+    """Test handle_voice exception handling — #201."""
+
+    def _make_voice_message(self):
+        """Create a mock voice message."""
+        message = MagicMock()
+        message.from_user = MagicMock(id=12345)
+        message.chat = MagicMock(id=12345)
+        message.bot = MagicMock()
+        message.bot.send_chat_action = AsyncMock()
+        message.bot.get_file = AsyncMock()
+        message.bot.download_file = AsyncMock()
+        message.answer = AsyncMock()
+        message.voice = MagicMock()
+        message.voice.file_id = "file123"
+        message.voice.duration = 5
+        file_mock = MagicMock()
+        file_mock.file_path = "voice/file.ogg"
+        message.bot.get_file.return_value = file_mock
+        return message
+
+    @pytest.mark.asyncio
+    async def test_post_pipeline_error_still_writes_scores(self, mock_config):
+        """When ainvoke succeeds but ChatActionSender __aexit__ throws,
+        scores and trace output should still be written (#201)."""
+        bot, _ = _create_bot(mock_config)
+
+        pipeline_result = {
+            "response": "ok",
+            "query_type": "FAQ",
+            "latency_stages": {},
+            "stt_text": "test query",
+        }
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=pipeline_result)
+        mock_lf = MagicMock()
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = self._make_voice_message()
+
+            # ChatActionSender __aexit__ throws (e.g. Telegram API error)
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock(side_effect=RuntimeError("telegram API error"))
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            # Scores and trace output MUST be written despite the post-pipeline error
+            mock_lf.update_current_trace.assert_called_once()
+            mock_write_scores.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_post_pipeline_error_does_not_send_false_error(self, mock_config):
+        """When pipeline succeeds but post-invoke fails, user should NOT
+        receive 'Не удалось распознать' error message (#201)."""
+        bot, _ = _create_bot(mock_config)
+
+        pipeline_result = {
+            "response": "answer delivered via streaming",
+            "query_type": "FAQ",
+            "latency_stages": {},
+            "stt_text": "test query",
+        }
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=pipeline_result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = self._make_voice_message()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock(side_effect=RuntimeError("cleanup error"))
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            # No error message sent — answer was already delivered
+            for call in message.answer.call_args_list:
+                assert "Не удалось распознать" not in str(call)
+
+    @pytest.mark.asyncio
+    async def test_genuine_pipeline_failure_sends_error(self, mock_config):
+        """When ainvoke itself throws (pipeline failed), user should get error message."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(side_effect=RuntimeError("LLM timeout"))
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = self._make_voice_message()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock(return_value=False)
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            # Error message should be sent
+            message.answer.assert_called()
+            error_sent = any(
+                "Не удалось распознать" in str(call) for call in message.answer.call_args_list
+            )
+            assert error_sent, "Error message should be sent on genuine pipeline failure"
+
+            # Scores should NOT be written (no result)
+            mock_write_scores.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_error_with_no_result_does_not_send_false_error(self, mock_config):
+        """Cleanup failures from AsyncPregelLoop.__aexit__ should not send extra user error."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            side_effect=RuntimeError(
+                "AsyncPregelLoop.__aexit__ failed: psycopg.OperationalError: connection lost"
+            )
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = self._make_voice_message()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock(return_value=False)
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            # No extra "recognition failed" message: response may already be delivered.
+            error_sent = any(
+                "Не удалось распознать" in str(call) for call in message.answer.call_args_list
+            )
+            assert not error_sent
+
+    @pytest.mark.asyncio
+    async def test_scores_written_even_if_trace_update_fails(self, mock_config):
+        """Trace update failure should not prevent score writes (#202 review)."""
+        bot, _ = _create_bot(mock_config)
+
+        pipeline_result = {
+            "response": "ok",
+            "query_type": "FAQ",
+            "latency_stages": {},
+            "stt_text": "test query",
+        }
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=pipeline_result)
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace.side_effect = RuntimeError("trace write failed")
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = self._make_voice_message()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock(return_value=False)
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            mock_write_scores.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_empty_transcription_returns_speech_error(self, mock_config):
+        """Empty transcription ValueError should show 'не содержит речи' message."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            side_effect=ValueError("Empty transcription from Whisper API")
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = self._make_voice_message()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock(return_value=False)
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            message.answer.assert_called()
+            speech_error = any(
+                "не содержит речи" in str(call) for call in message.answer.call_args_list
+            )
+            assert speech_error
+
+
 class TestBotLifecycle:
     """Test bot start/stop lifecycle."""
 
