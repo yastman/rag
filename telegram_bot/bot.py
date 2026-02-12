@@ -163,6 +163,28 @@ def make_session_id(session_type: str, identifier: int | str) -> str:
     return f"{session_type}-{id_hash}-{date_str}"
 
 
+def _build_trace_metadata(result: dict) -> dict[str, Any]:
+    """Build shared metadata dict for Langfuse trace (text + voice handlers)."""
+    return {
+        "input_type": result.get("input_type", "text"),
+        "query_type": result.get("query_type", ""),
+        "cache_hit": result.get("cache_hit", False),
+        "search_results_count": result.get("search_results_count", 0),
+        "rerank_applied": result.get("rerank_applied", False),
+        "llm_provider_model": result.get("llm_provider_model", ""),
+        "llm_ttft_ms": result.get("llm_ttft_ms", 0.0),
+        # Response length control (#129)
+        "response_style": result.get("response_style"),
+        "response_difficulty": result.get("response_difficulty"),
+        "response_style_reasoning": result.get("response_style_reasoning"),
+        "response_policy_mode": result.get("response_policy_mode"),
+        "answer_words": result.get("answer_words"),
+        "answer_to_question_ratio": result.get("answer_to_question_ratio"),
+        # Voice transcription (#151)
+        "stt_duration_ms": result.get("stt_duration_ms"),
+    }
+
+
 class PropertyBot:
     """Telegram bot for domain-specific search (configurable via BOT_DOMAIN)."""
 
@@ -459,21 +481,7 @@ class PropertyBot:
             lf.update_current_trace(
                 input={"query": message.text},
                 output={"response": result.get("response", "")},
-                metadata={
-                    "query_type": result.get("query_type", ""),
-                    "cache_hit": result.get("cache_hit", False),
-                    "search_results_count": result.get("search_results_count", 0),
-                    "rerank_applied": result.get("rerank_applied", False),
-                    "llm_provider_model": result.get("llm_provider_model", ""),
-                    "llm_ttft_ms": result.get("llm_ttft_ms", 0.0),
-                    # Response length control (#129)
-                    "response_style": result.get("response_style"),
-                    "response_difficulty": result.get("response_difficulty"),
-                    "response_style_reasoning": result.get("response_style_reasoning"),
-                    "response_policy_mode": result.get("response_policy_mode"),
-                    "answer_words": result.get("answer_words"),
-                    "answer_to_question_ratio": result.get("answer_to_question_ratio"),
-                },
+                metadata=_build_trace_metadata(result),
             )
 
             # Write Langfuse scores (14 + latency + response length #129)
@@ -564,12 +572,7 @@ class PropertyBot:
                     "stt_text": result.get("stt_text", ""),
                 },
                 output={"response": result.get("response", "")},
-                metadata={
-                    "input_type": "voice",
-                    "query_type": result.get("query_type", ""),
-                    "cache_hit": result.get("cache_hit", False),
-                    "stt_duration_ms": result.get("stt_duration_ms", 0.0),
-                },
+                metadata=_build_trace_metadata(result),
             )
 
             _write_langfuse_scores(lf, result)
