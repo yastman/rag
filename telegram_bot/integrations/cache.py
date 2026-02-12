@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-CACHE_VERSION = "v3"
+CACHE_VERSION = "v4"
 
 # Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {
