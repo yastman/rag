@@ -148,37 +148,44 @@ class RedisHealthMonitor:
                 )
 
         # --- Checkpoint key metrics (#159) ---
-        dbsize = await self._redis.dbsize()
-        cursor: int = 0
-        checkpoint_count = 0
-        while True:
-            cursor, keys = await self._redis.scan(
-                cursor=cursor,
-                match="checkpoint:*",
-                count=1000,
-            )
-            checkpoint_count += len(keys)
-            if cursor == 0:
-                break
+        try:
+            dbsize = await self._redis.dbsize()
+            cursor: int = 0
+            checkpoint_count = 0
+            while True:
+                cursor, keys = await self._redis.scan(
+                    cursor=cursor,
+                    match="checkpoint:*",
+                    count=1000,
+                )
+                checkpoint_count += len(keys)
+                if cursor == 0:
+                    break
 
-        prev_checkpoint_count = self._prev_checkpoint_count
-        self._prev_checkpoint_count = checkpoint_count
+            prev_checkpoint_count = self._prev_checkpoint_count
+            self._prev_checkpoint_count = checkpoint_count
 
-        logger.info(
-            "Redis health: dbsize=%d checkpoint_keys=%d",
-            dbsize,
-            checkpoint_count,
-        )
-
-        if (
-            prev_checkpoint_count is not None
-            and checkpoint_count - prev_checkpoint_count >= CHECKPOINT_GROWTH_WARN_DELTA
-        ):
-            logger.warning(
-                "Redis health: checkpoint key growth detected prev=%d current=%d delta=%d",
-                prev_checkpoint_count,
+            logger.info(
+                "Redis health: dbsize=%d checkpoint_keys=%d",
+                dbsize,
                 checkpoint_count,
-                checkpoint_count - prev_checkpoint_count,
+            )
+
+            if (
+                prev_checkpoint_count is not None
+                and checkpoint_count - prev_checkpoint_count >= CHECKPOINT_GROWTH_WARN_DELTA
+            ):
+                logger.warning(
+                    "Redis health: checkpoint key growth detected prev=%d current=%d delta=%d",
+                    prev_checkpoint_count,
+                    checkpoint_count,
+                    checkpoint_count - prev_checkpoint_count,
+                )
+        except Exception as e:
+            logger.warning(
+                "Redis health: checkpoint metrics skipped due to %s: %s",
+                type(e).__name__,
+                e,
             )
 
         # --- INFO log every cycle ---
