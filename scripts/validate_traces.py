@@ -417,11 +417,16 @@ async def run_single_query(
     )
 
 
-async def _flush_redis_caches(cache: Any) -> None:
-    """Clear cache keys for cold run without dropping RediSearch index."""
+async def _flush_redis_caches(cache: Any) -> str:
+    """Clear cache keys for cold run without dropping RediSearch index.
+
+    Returns:
+        "OK" if flush verified (0 keys remaining).
+        "SKIPPED" if Redis unavailable or flush incomplete.
+    """
     if not hasattr(cache, "redis") or not cache.redis:
-        logger.warning("  Redis not available — cannot flush caches, cold run may be warm")
-        return
+        logger.warning("  Redis not available — cold phase will be SKIPPED")
+        return "SKIPPED"
 
     deleted = 0
     patterns = [
@@ -445,7 +450,22 @@ async def _flush_redis_caches(cache: Any) -> None:
         except Exception as e:
             logger.warning("  Semantic cache clear failed: %s", e)
 
-    logger.info("  Redis cache key clear complete — deleted %d keys", deleted)
+    # Verify: re-scan to confirm keys are actually gone
+    remaining = 0
+    for pattern in patterns:
+        remaining += len(
+            [k async for k in cache.redis.scan_iter(match=pattern, count=100)]  # type: ignore[misc]
+        )
+
+    if remaining > 0:
+        logger.error(
+            "  Redis flush incomplete: %d keys remain after deletion — cold phase SKIPPED",
+            remaining,
+        )
+        return "SKIPPED"
+
+    logger.info("  Redis cache flush verified — deleted %d keys, 0 remaining", deleted)
+    return "OK"
 
 
 async def run_collection_validation(
@@ -483,12 +503,28 @@ async def run_collection_validation(
 
     # Phase 2: Cold run — flush caches for true cold measurement
     logger.info("Phase 2: Flushing Redis caches for true cold run...")
-    await _flush_redis_caches(services["cache"])
+    flush_status = await _flush_redis_caches(services["cache"])
     cold_queries = get_queries_for_collection(collection)
-    logger.info("Phase 2: Cold run (%d queries)", len(cold_queries))
-    for q in cold_queries:
-        result = await run_single_query(q, services, run_meta, phase="cold")
-        results.append(result)
+    if flush_status == "SKIPPED":
+        logger.warning("Phase 2: Cold run SKIPPED — Redis flush not verified")
+        for q in cold_queries:
+            results.append(
+                TraceResult(
+                    trace_id="skipped",
+                    query=q.text,
+                    collection=collection,
+                    phase="cold",
+                    source=q.source,
+                    difficulty=q.difficulty,
+                    latency_wall_ms=0,
+                    state={"cold_skipped": True, "skip_reason": "redis_flush_failed"},
+                )
+            )
+    else:
+        logger.info("Phase 2: Cold run (%d queries)", len(cold_queries))
+        for q in cold_queries:
+            result = await run_single_query(q, services, run_meta, phase="cold")
+            results.append(result)
 
     # Phase 3: Cache-hit run (duplicates from cold)
     cache_queries = get_cache_hit_queries(cold_queries, count=10)

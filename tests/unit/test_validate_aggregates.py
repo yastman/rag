@@ -3,13 +3,14 @@
 import contextlib
 import sys
 import types
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from scripts.validate_traces import (
     TraceResult,
     ValidationRun,
+    _flush_redis_caches,
     aggregate_node_payloads,
     check_langfuse_config,
     compute_aggregates,
@@ -339,6 +340,61 @@ class TestLangfusePreflight:
             check_langfuse_config()
 
         assert mock_lf.auth_check.call_count == 3
+
+
+class TestRedisFlush:
+    """Redis cache flush must verify completeness or return SKIPPED."""
+
+    async def test_returns_ok_when_all_keys_deleted(self):
+        """Flush succeeds: all patterns cleared, verify returns OK."""
+        mock_redis = AsyncMock()
+        deleted = False
+
+        async def fake_scan_iter(match=None, count=100):
+            # Before delete: yield keys; after delete: empty
+            if not deleted:
+                yield f"key:{match}"
+
+        async def fake_delete(*keys):
+            nonlocal deleted
+            deleted = True
+
+        mock_redis.scan_iter = fake_scan_iter
+        mock_redis.delete = fake_delete
+
+        mock_cache = MagicMock()
+        mock_cache.redis = mock_redis
+        mock_cache.semantic_cache = None
+
+        result = await _flush_redis_caches(mock_cache)
+        assert result == "OK"
+
+    async def test_returns_skipped_when_redis_unavailable(self):
+        """No redis connection -> SKIPPED, not silent warm run."""
+        mock_cache = MagicMock()
+        mock_cache.redis = None
+
+        result = await _flush_redis_caches(mock_cache)
+        assert result == "SKIPPED"
+
+    async def test_returns_skipped_when_keys_remain_after_flush(self):
+        """Flush runs but keys remain -> SKIPPED."""
+        mock_redis = AsyncMock()
+
+        # scan_iter always returns keys (can't delete)
+        async def fake_scan_iter(match=None, count=100):
+            for k in [b"remaining:1"]:
+                yield k
+
+        mock_redis.scan_iter = fake_scan_iter
+        mock_redis.delete = AsyncMock()
+
+        mock_cache = MagicMock()
+        mock_cache.redis = mock_redis
+        mock_cache.semantic_cache = None
+
+        result = await _flush_redis_caches(mock_cache)
+        assert result == "SKIPPED"
 
 
 class TestAggregateNodePayloads:
