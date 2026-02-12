@@ -1,5 +1,6 @@
 """Tests for RAG pipeline."""
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -61,7 +62,8 @@ class TestRAGPipelineInit:
         mock_transformer.return_value = MagicMock()
         mock_search_engine.return_value = MagicMock()
 
-        pipeline = RAGPipeline()
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            pipeline = RAGPipeline()
 
         mock_transformer.assert_called_once()
         mock_search_engine.assert_called_once()
@@ -130,29 +132,30 @@ class TestRAGPipelineSearch:
     @pytest.fixture
     def mock_pipeline(self):
         """Create pipeline with mocked dependencies."""
-        with patch("src.core.pipeline.get_sentence_transformer") as mock_trans:
-            with patch("src.core.pipeline.create_search_engine") as mock_engine:
-                with patch("src.core.pipeline.ClaudeContextualizer"):
-                    with patch("src.core.pipeline.DocumentIndexer"):
-                        with patch("src.core.pipeline.DocumentChunker"):
-                            with patch("src.core.pipeline.UniversalDocumentParser"):
-                                mock_trans.return_value = MagicMock()
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            with patch("src.core.pipeline.get_sentence_transformer") as mock_trans:
+                with patch("src.core.pipeline.create_search_engine") as mock_engine:
+                    with patch("src.core.pipeline.ClaudeContextualizer"):
+                        with patch("src.core.pipeline.DocumentIndexer"):
+                            with patch("src.core.pipeline.DocumentChunker"):
+                                with patch("src.core.pipeline.UniversalDocumentParser"):
+                                    mock_trans.return_value = MagicMock()
 
-                                # Mock search engine
-                                mock_se = MagicMock()
-                                mock_se.search.return_value = [
-                                    MagicMock(
-                                        article_number="121",
-                                        text="Test document",
-                                        score=0.95,
-                                        metadata={"source": "test"},
-                                    )
-                                ]
-                                mock_se.get_name.return_value = "mock_engine"
-                                mock_engine.return_value = mock_se
+                                    # Mock search engine
+                                    mock_se = MagicMock()
+                                    mock_se.search.return_value = [
+                                        MagicMock(
+                                            article_number="121",
+                                            text="Test document",
+                                            score=0.95,
+                                            metadata={"source": "test"},
+                                        )
+                                    ]
+                                    mock_se.get_name.return_value = "mock_engine"
+                                    mock_engine.return_value = mock_se
 
-                                pipeline = RAGPipeline()
-                                yield pipeline
+                                    pipeline = RAGPipeline()
+                                    yield pipeline
 
     @pytest.mark.asyncio
     async def test_search_returns_rag_result(self, mock_pipeline):
@@ -206,18 +209,19 @@ class TestRAGPipelineStats:
 
     @pytest.fixture
     def mock_pipeline(self):
-        with patch("src.core.pipeline.get_sentence_transformer"):
-            with patch("src.core.pipeline.create_search_engine") as mock_engine:
-                with patch("src.core.pipeline.ClaudeContextualizer"):
-                    with patch("src.core.pipeline.DocumentIndexer"):
-                        with patch("src.core.pipeline.DocumentChunker"):
-                            with patch("src.core.pipeline.UniversalDocumentParser"):
-                                mock_se = MagicMock()
-                                mock_se.get_name.return_value = "test_engine"
-                                mock_engine.return_value = mock_se
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            with patch("src.core.pipeline.get_sentence_transformer"):
+                with patch("src.core.pipeline.create_search_engine") as mock_engine:
+                    with patch("src.core.pipeline.ClaudeContextualizer"):
+                        with patch("src.core.pipeline.DocumentIndexer"):
+                            with patch("src.core.pipeline.DocumentChunker"):
+                                with patch("src.core.pipeline.UniversalDocumentParser"):
+                                    mock_se = MagicMock()
+                                    mock_se.get_name.return_value = "test_engine"
+                                    mock_engine.return_value = mock_se
 
-                                pipeline = RAGPipeline()
-                                yield pipeline
+                                    pipeline = RAGPipeline()
+                                    yield pipeline
 
     def test_get_stats_returns_dict(self, mock_pipeline):
         """Test get_stats returns dictionary with expected keys."""
@@ -272,18 +276,19 @@ class TestRAGPipelineIndex:
 
     @pytest.fixture
     def mock_pipeline(self):
-        with patch("src.core.pipeline.get_sentence_transformer"):
-            with patch("src.core.pipeline.create_search_engine"):
-                with patch("src.core.pipeline.ClaudeContextualizer"):
-                    with patch("src.core.pipeline.DocumentIndexer") as mock_idx:
-                        with patch("src.core.pipeline.DocumentChunker") as mock_chk:
-                            with patch("src.core.pipeline.UniversalDocumentParser") as mock_psr:
-                                pipeline = RAGPipeline()
-                                # Set mock instances
-                                pipeline.indexer = mock_idx.return_value
-                                pipeline.chunker = mock_chk.return_value
-                                pipeline.parser = mock_psr.return_value
-                                yield pipeline
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            with patch("src.core.pipeline.get_sentence_transformer"):
+                with patch("src.core.pipeline.create_search_engine"):
+                    with patch("src.core.pipeline.ClaudeContextualizer"):
+                        with patch("src.core.pipeline.DocumentIndexer") as mock_idx:
+                            with patch("src.core.pipeline.DocumentChunker") as mock_chk:
+                                with patch("src.core.pipeline.UniversalDocumentParser") as mock_psr:
+                                    pipeline = RAGPipeline()
+                                    # Set mock instances
+                                    pipeline.indexer = mock_idx.return_value
+                                    pipeline.chunker = mock_chk.return_value
+                                    pipeline.parser = mock_psr.return_value
+                                    yield pipeline
 
     @pytest.mark.asyncio
     async def test_index_documents_success(self, mock_pipeline):
@@ -339,14 +344,15 @@ class TestRAGPipelineEvaluate:
 
     @pytest.fixture
     def mock_pipeline(self):
-        with patch("src.core.pipeline.get_sentence_transformer"):
-            with patch("src.core.pipeline.create_search_engine"):
-                with patch("src.core.pipeline.ClaudeContextualizer"):
-                    with patch("src.core.pipeline.DocumentIndexer"):
-                        with patch("src.core.pipeline.DocumentChunker"):
-                            with patch("src.core.pipeline.UniversalDocumentParser"):
-                                pipeline = RAGPipeline()
-                                yield pipeline
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key-for-ci"}):
+            with patch("src.core.pipeline.get_sentence_transformer"):
+                with patch("src.core.pipeline.create_search_engine"):
+                    with patch("src.core.pipeline.ClaudeContextualizer"):
+                        with patch("src.core.pipeline.DocumentIndexer"):
+                            with patch("src.core.pipeline.DocumentChunker"):
+                                with patch("src.core.pipeline.UniversalDocumentParser"):
+                                    pipeline = RAGPipeline()
+                                    yield pipeline
 
     @pytest.mark.asyncio
     async def test_evaluate_returns_metrics(self, mock_pipeline):

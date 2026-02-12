@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from typing import cast
 
 from livekit import api
 from livekit.protocol.sip import CreateSIPOutboundTrunkRequest, SIPOutboundTrunkInfo
@@ -31,9 +32,7 @@ async def setup_lifecell_trunk() -> str:
     )
 
     result = await lk.sip.create_sip_outbound_trunk(CreateSIPOutboundTrunkRequest(trunk=trunk))
-    trunk_id = result.sip_trunk_id
-    if not isinstance(trunk_id, str) or not trunk_id:
-        raise RuntimeError("LiveKit SIP trunk creation returned invalid trunk id")
+    trunk_id = cast(str, result.sip_trunk_id)
     print(f"Created lifecell trunk: {trunk_id}")
 
     await lk.aclose()
