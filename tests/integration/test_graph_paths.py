@@ -209,7 +209,7 @@ async def test_path_chitchat_early_exit():
 
 @pytest.mark.integration
 async def test_path_cache_hit():
-    """Cached response skips retrieve/grade/rerank/generate."""
+    """Cached response skips retrieve/grade/rerank/generate (allowlisted FAQ query)."""
     cached_text = "Вот кэшированный ответ про квартиры."
     mocks = _make_graph_mocks(
         cache_embedding=[0.1] * 1024,  # embedding found in cache
@@ -228,9 +228,9 @@ async def test_path_cache_hit():
             message=mocks["message"],
         )
 
-    # Use a query that classifies as GENERAL (goes to cache_check)
+    # FAQ query — allowlisted for semantic cache (#163)
     state = make_initial_state(
-        user_id=2, session_id="test-path2", query="уютная квартира с видом на море"
+        user_id=2, session_id="test-path2", query="как купить квартиру в Болгарии"
     )
 
     with traced_pipeline(session_id="test-cache-hit", user_id="integration"):
@@ -238,6 +238,7 @@ async def test_path_cache_hit():
             result = await graph.ainvoke(state)
 
     # State assertions
+    assert result["query_type"] == "FAQ"
     assert result["cache_hit"] is True
     assert result["cached_response"] == cached_text
     assert result["response"] == cached_text
@@ -260,7 +261,7 @@ async def test_path_cache_hit():
 
 @pytest.mark.integration
 async def test_path_happy_retrieve_rerank_generate():
-    """Full RAG path: cache miss, relevant docs, rerank, generate."""
+    """Full RAG path: cache miss, relevant docs, rerank, generate (ENTITY query)."""
     mocks = _make_graph_mocks(llm_response="Найдено 2 варианта квартир.")
     mock_gc = _make_mock_graph_config(mocks["llm"])
 
@@ -275,8 +276,9 @@ async def test_path_happy_retrieve_rerank_generate():
             message=mocks["message"],
         )
 
+    # ENTITY query — allowlisted for semantic cache (#163)
     state = make_initial_state(
-        user_id=3, session_id="test-path3", query="уютная квартира с видом на море"
+        user_id=3, session_id="test-path3", query="квартира в Несебре у моря"
     )
 
     with traced_pipeline(session_id="test-happy-path", user_id="integration"):
@@ -284,6 +286,7 @@ async def test_path_happy_retrieve_rerank_generate():
             result = await graph.ainvoke(state)
 
     # State assertions
+    assert result["query_type"] == "ENTITY"
     assert result["cache_hit"] is False
     assert result["documents_relevant"] is True
     assert result["rerank_applied"] is True
@@ -296,9 +299,9 @@ async def test_path_happy_retrieve_rerank_generate():
     mocks["reranker"].rerank.assert_awaited_once()
     mocks["llm"].chat.completions.create.assert_awaited_once()  # generate only
 
-    # Cache stored
+    # Semantic cache stored (allowlisted ENTITY); no legacy LIST conversation store
     mocks["cache"].store_semantic.assert_awaited_once()
-    mocks["cache"].store_conversation_batch.assert_awaited_once()
+    mocks["cache"].store_conversation_batch.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
