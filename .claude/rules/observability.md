@@ -11,8 +11,9 @@ Langfuse v3 — single source of truth for LLM metrics, cost tracking, and regre
 ```bash
 make baseline-smoke                          # Smoke tests with Langfuse tracing
 make baseline-load                           # Load tests with Langfuse tracing
-make baseline-compare BASELINE_TAG=smoke-abc-20260128 CURRENT_TAG=smoke-def-20260128
-make baseline-set TAG=smoke-abc-20260128     # Set current as new baseline
+make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=ci-abc-job-1
+make baseline-set TAG=main-latest SESSION_ID=smoke-abc-20260128
+make baseline-check                          # Smoke + compare against main-latest
 ```
 
 ## Langfuse UI Workflow
@@ -30,7 +31,7 @@ make baseline-set TAG=smoke-abc-20260128     # Set current as new baseline
 
 1. **Run smoke tests:** `make baseline-smoke` (generates session like `smoke-abc123-20260202`)
 2. **View in UI:** Sessions → filter by `smoke-*` → compare latency/cost columns
-3. **Automated compare:** `make baseline-compare BASELINE_TAG=smoke-old CURRENT_TAG=smoke-new`
+3. **Automated compare:** `make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=smoke-new`
 
 ### Finding Cache Problems
 
@@ -280,14 +281,20 @@ LANGFUSE_HOST: http://langfuse:3000
 
 Go/No-Go criterion `generate_p50_lt_2s` (renamed from `ttft_p50_lt_2s` in #143) measures full generation latency in non-streaming validation mode. True TTFT requires a streaming phase (see #144).
 
-## Baseline Module
+## Baseline Module (#167)
+
+Per-trace computation with session isolation. No aggregate API calls — fetches traces by `session_id` / `tag`, computes metrics from observation-level data.
 
 ```
 tests/baseline/
-├── collector.py       # LangfuseMetricsCollector (API + Qdrant + Redis)
-├── manager.py         # BaselineManager + BaselineSnapshot
-├── cli.py             # CLI: compare, set-baseline, report
+├── collector.py       # LangfuseMetricsCollector + SessionMetrics (per-trace computation)
+├── manager.py         # BaselineManager + BaselineSnapshot (compare logic)
+├── cli.py             # CLI: compare (--baseline-tag, --current-session, --output), set-baseline
 ├── thresholds.yaml    # Regression detection thresholds
 ├── conftest.py        # Fixtures
-└── test_*.py          # Tests (16 passing)
+└── test_*.py          # Tests (25 passing)
 ```
+
+**Session isolation:** CI uses `ci-{sha[:8]}-{job}-{run_attempt}` session IDs. Baseline identified by `main-latest` Langfuse tag. Bootstrap: exit 0 + JSON artifact when no baseline exists.
+
+**CLI flags:** `--baseline-tag` (Langfuse tag), `--current-session` (session_id), `--output` (JSON artifact, required). Old `--hours`/`--baseline`/`--current` removed.
