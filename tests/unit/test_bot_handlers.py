@@ -626,6 +626,74 @@ class TestHandleVoiceExceptionHandling:
             mock_write_scores.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_cleanup_error_with_no_result_does_not_send_false_error(self, mock_config):
+        """Cleanup failures from AsyncPregelLoop.__aexit__ should not send extra user error."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            side_effect=RuntimeError(
+                "AsyncPregelLoop.__aexit__ failed: psycopg.OperationalError: connection lost"
+            )
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = self._make_voice_message()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock(return_value=False)
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            # No extra "recognition failed" message: response may already be delivered.
+            error_sent = any(
+                "Не удалось распознать" in str(call) for call in message.answer.call_args_list
+            )
+            assert not error_sent
+
+    @pytest.mark.asyncio
+    async def test_scores_written_even_if_trace_update_fails(self, mock_config):
+        """Trace update failure should not prevent score writes (#202 review)."""
+        bot, _ = _create_bot(mock_config)
+
+        pipeline_result = {
+            "response": "ok",
+            "query_type": "FAQ",
+            "latency_stages": {},
+            "stt_text": "test query",
+        }
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=pipeline_result)
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace.side_effect = RuntimeError("trace write failed")
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = self._make_voice_message()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock(return_value=False)
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+            mock_write_scores.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_empty_transcription_returns_speech_error(self, mock_config):
         """Empty transcription ValueError should show 'не содержит речи' message."""
         bot, _ = _create_bot(mock_config)
