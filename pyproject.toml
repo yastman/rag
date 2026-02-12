@@ -51,24 +51,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-***REMOVED*** Development tools (linters, formatters, type checkers)
-dev = [
-    "ruff>=0.6.0",           ***REMOVED*** Fast linter + formatter
-    "mypy>=1.11.0",          ***REMOVED*** Type checking
-    "pylint>=3.2.0",         ***REMOVED*** Comprehensive linting
-    "bandit>=1.7.9",         ***REMOVED*** Security linting
-    "vulture>=2.11",         ***REMOVED*** Dead code detection
-    "pytest>=8.3.0",         ***REMOVED*** Testing framework
-    "pytest-cov>=5.0.0",     ***REMOVED*** Coverage plugin
-    "pytest-asyncio>=1.2.0", ***REMOVED*** Async testing
-    "pytest-httpx>=0.35.0",  ***REMOVED*** HTTPX mocking (2026 best practice)
-    "pytest-timeout>=2.4.0", ***REMOVED*** Per-test timeout
-    "pytest-xdist>=3.8.0",   ***REMOVED*** Parallel test execution
-    "opentelemetry-exporter-otlp-proto-grpc>=1.39.0",  ***REMOVED*** OTLP exporter for OTEL tests
-    "pre-commit>=3.8.0",     ***REMOVED*** Git hooks
-    "telethon>=1.42.0",      ***REMOVED*** E2E Telegram tests
-]
-
 ***REMOVED*** Documentation tools
 docs = [
     "mkdocs>=1.6.0",         ***REMOVED*** Documentation generator
@@ -91,7 +73,29 @@ voice = [
 
 ***REMOVED*** All optional dependencies
 all = [
-    "contextual-rag[dev,docs,voice]",
+    "contextual-rag[docs,voice]",
+]
+
+***REMOVED*** =============================================================================
+***REMOVED*** DEPENDENCY GROUPS (PEP 735) — dev tools installed by default with `uv sync`
+***REMOVED*** =============================================================================
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6.0",
+    "mypy>=1.11.0",
+    "pylint>=3.2.0",
+    "bandit>=1.7.9",
+    "vulture>=2.11",
+    "pytest>=8.3.0",
+    "pytest-cov>=5.0.0",
+    "pytest-asyncio>=1.2.0",
+    "pytest-httpx>=0.35.0",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.8.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.39.0",
+    "pre-commit>=3.8.0",
+    "telethon>=1.42.0",
 ]
 
 ***REMOVED*** =============================================================================
