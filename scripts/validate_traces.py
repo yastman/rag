@@ -28,6 +28,13 @@ from typing import Any
 import numpy as np
 from dotenv import load_dotenv
 from langfuse import Langfuse
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    stop_after_delay,
+    wait_exponential,
+)
 
 
 # Ensure project root importable
@@ -127,7 +134,10 @@ class ValidationRun:
 
 
 def check_langfuse_config() -> None:
-    """Preflight: verify Langfuse credentials are set. Fail-fast."""
+    """Preflight: verify Langfuse credentials are set and API is reachable.
+
+    Retries auth probe 3 times with exponential backoff (max 10s total).
+    """
     public = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     secret = os.getenv("LANGFUSE_SECRET_KEY", "")
     host = os.getenv("LANGFUSE_HOST", "")
@@ -141,13 +151,24 @@ def check_langfuse_config() -> None:
         logger.error("LANGFUSE_HOST not set — cannot connect to Langfuse")
         sys.exit(1)
     try:
-        # Fast auth probe: catches stale/invalid keys before long validation run.
-        lf = Langfuse()
-        lf.api.trace.list(limit=1)
+        _langfuse_auth_probe()
     except Exception as e:
-        logger.error("Langfuse auth check failed: %s", e)
+        logger.error("Langfuse auth check failed after retries: %s", e)
         sys.exit(1)
     logger.info("Langfuse config OK: host=%s", host)
+
+
+@retry(
+    stop=(stop_after_attempt(3) | stop_after_delay(10)),
+    wait=wait_exponential(multiplier=1, min=1, max=5),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
+def _langfuse_auth_probe() -> None:
+    """Auth probe with retry. Separated for testability."""
+    lf = Langfuse()
+    if not lf.auth_check():
+        raise RuntimeError("Langfuse auth_check returned False")
 
 
 def check_worktree_clean(strict: bool = False) -> None:

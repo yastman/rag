@@ -283,7 +283,7 @@ class TestLangfusePreflight:
         monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
 
         mock_lf = MagicMock()
-        mock_lf.api.trace.list.side_effect = RuntimeError("Invalid credentials")
+        mock_lf.auth_check.side_effect = RuntimeError("Invalid credentials")
 
         with (
             patch("scripts.validate_traces.Langfuse", return_value=mock_lf),
@@ -297,11 +297,48 @@ class TestLangfusePreflight:
         monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
 
         mock_lf = MagicMock()
+        mock_lf.auth_check.return_value = True
         with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
             check_langfuse_config()
 
-        mock_lf.api.trace.list.assert_called_once_with(limit=1)
+        mock_lf.auth_check.assert_called()
         mock_lf.flush.assert_not_called()
+
+    def test_retries_on_transient_failure_then_succeeds(self, monkeypatch: pytest.MonkeyPatch):
+        """Auth probe retries up to 3 times on transient errors."""
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+        monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
+
+        mock_lf = MagicMock()
+        # Fail twice, succeed on third call
+        mock_lf.auth_check.side_effect = [
+            ConnectionError("timeout"),
+            ConnectionError("timeout"),
+            True,  # success
+        ]
+
+        with patch("scripts.validate_traces.Langfuse", return_value=mock_lf):
+            check_langfuse_config()  # should not raise
+
+        assert mock_lf.auth_check.call_count == 3
+
+    def test_gives_up_after_3_retries(self, monkeypatch: pytest.MonkeyPatch):
+        """Auth probe exits after exhausting 3 retry attempts."""
+        monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+        monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+        monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
+
+        mock_lf = MagicMock()
+        mock_lf.auth_check.side_effect = ConnectionError("timeout")
+
+        with (
+            patch("scripts.validate_traces.Langfuse", return_value=mock_lf),
+            pytest.raises(SystemExit),
+        ):
+            check_langfuse_config()
+
+        assert mock_lf.auth_check.call_count == 3
 
 
 class TestAggregateNodePayloads:
