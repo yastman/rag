@@ -3,13 +3,14 @@
 import contextlib
 import sys
 import types
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from scripts.validate_traces import (
     TraceResult,
     ValidationRun,
+    _flush_redis_caches,
     aggregate_node_payloads,
     check_langfuse_config,
     compute_aggregates,
@@ -427,6 +428,38 @@ class TestReportAndSummary:
 
         assert "[-] SKIP" in text
         assert "[x] PASS" in text
+
+
+class TestRedisFlushPatterns:
+    """Redis flush should use active cache version for exact-cache prefixes."""
+
+    @pytest.mark.asyncio
+    async def test_flush_uses_cache_version_prefix(self, monkeypatch: pytest.MonkeyPatch):
+        seen_matches: list[str] = []
+
+        async def fake_scan_iter(match=None, count=100):
+            if match is not None:
+                seen_matches.append(match)
+            if False:
+                yield None
+
+        mock_redis = AsyncMock()
+        mock_redis.scan_iter = fake_scan_iter
+        mock_redis.delete = AsyncMock()
+
+        mock_cache = MagicMock()
+        mock_cache.redis = mock_redis
+        mock_cache.semantic_cache = None
+
+        monkeypatch.setattr("scripts.validate_traces._get_cache_version", lambda: "v9")
+
+        await _flush_redis_caches(mock_cache)
+
+        assert "embeddings:v9:*" in seen_matches
+        assert "sparse:v9:*" in seen_matches
+        assert "analysis:v9:*" in seen_matches
+        assert "search:v9:*" in seen_matches
+        assert "rerank:v9:*" in seen_matches
 
     def test_report_includes_streaming_ttft_section(self, tmp_path):
         """Report includes Streaming TTFT section when streaming aggregates exist."""
