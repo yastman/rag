@@ -67,7 +67,6 @@ def _make_graph_mocks(
     cache.store_search_results = AsyncMock()
     cache.get_sparse_embedding = AsyncMock(return_value=cache_sparse)
     cache.store_sparse_embedding = AsyncMock()
-    cache.store_conversation_batch = AsyncMock()
 
     ***REMOVED*** -- Embeddings (dense) --
     embeddings = MagicMock()
@@ -294,8 +293,6 @@ async def test_path_general_bypasses_semantic_cache():
     mocks["cache"].check_semantic.assert_not_awaited()
     ***REMOVED*** Semantic cache NOT stored after generate
     mocks["cache"].store_semantic.assert_not_awaited()
-    ***REMOVED*** Legacy conversation batch NOT stored (***REMOVED***163)
-    mocks["cache"].store_conversation_batch.assert_not_awaited()
 
 
 ***REMOVED*** ---------------------------------------------------------------------------
@@ -344,9 +341,8 @@ async def test_path_happy_retrieve_rerank_generate():
     mocks["reranker"].rerank.assert_awaited_once()
     mocks["llm"].chat.completions.create.assert_awaited_once()  ***REMOVED*** generate only
 
-    ***REMOVED*** Cache stored (semantic only — no legacy store_conversation_batch)
+    ***REMOVED*** Cache stored (semantic only — memory owned by checkpointer)
     mocks["cache"].store_semantic.assert_awaited_once()
-    mocks["cache"].store_conversation_batch.assert_not_awaited()
 
 
 ***REMOVED*** ---------------------------------------------------------------------------
