@@ -1,7 +1,7 @@
 """Cache check and store nodes for RAG LangGraph pipeline.
 
 cache_check_node: compute embedding, check semantic cache, return cache_hit.
-cache_store_node: store response in semantic cache + conversation history.
+cache_store_node: store response in semantic cache (allowlisted types only).
 """
 
 from __future__ import annotations
@@ -132,7 +132,10 @@ async def cache_store_node(
     cache: Any,
     event_stream: Any | None = None,
 ) -> dict[str, Any]:
-    """Store response in semantic cache and conversation history.
+    """Store response in semantic cache (allowlisted types only).
+
+    Conversation memory is owned by the LangGraph checkpointer — no legacy
+    Redis LIST writes here.
 
     Args:
         state: RAGState dict (must have response, query_embedding, query_type)
