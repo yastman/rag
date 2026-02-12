@@ -44,6 +44,17 @@ _QUERY_TYPE_SCORE = {
 }
 
 
+def _compute_checkpointer_overhead_proxy_ms(
+    result: dict[str, Any], ainvoke_wall_ms: float
+) -> float:
+    """Compute proxy for checkpointer overhead: ainvoke wall-time minus sum of stage latencies.
+
+    Returns max(0, delta) to clamp negative values from timing jitter.
+    """
+    stages_ms = sum(float(v) * 1000 for v in result.get("latency_stages", {}).values())
+    return max(0.0, ainvoke_wall_ms - stages_ms)
+
+
 def _write_langfuse_scores(lf: Any, result: dict) -> None:
     """Write Langfuse scores (14 + latency breakdown + 4 response length) from graph result state.
 
@@ -155,6 +166,13 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
         value=1 if summarize_ms > 0 else 0,
         data_type="BOOLEAN",
     )
+
+    # Checkpointer overhead proxy (#159)
+    if "checkpointer_overhead_proxy_ms" in result:
+        lf.score_current_trace(
+            name="checkpointer_overhead_proxy_ms",
+            value=float(result["checkpointer_overhead_proxy_ms"]),
+        )
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -485,7 +503,12 @@ class PropertyBot:
                 }
             }
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                invoke_start = time.perf_counter()
                 result = await graph.ainvoke(state, config=invoke_config)
+                ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
+                result["checkpointer_overhead_proxy_ms"] = _compute_checkpointer_overhead_proxy_ms(
+                    result, ainvoke_wall_ms
+                )
 
             # Wall-time for accurate latency_total_ms
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
@@ -564,7 +587,12 @@ class PropertyBot:
             }
             try:
                 async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                    invoke_start = time.perf_counter()
                     result = await graph.ainvoke(state, config=invoke_config)
+                    ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
+                    result["checkpointer_overhead_proxy_ms"] = (
+                        _compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
+                    )
             except ValueError as e:
                 if "Empty transcription" in str(e):
                     await message.answer("Голосовое сообщение не содержит речи.")
