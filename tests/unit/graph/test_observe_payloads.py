@@ -244,7 +244,6 @@ class TestCuratedSpanPayloads:
 
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
-        cache.store_conversation_batch = AsyncMock()
 
         mock_lf = MagicMock()
         with patch("telegram_bot.graph.nodes.cache.get_client", return_value=mock_lf):

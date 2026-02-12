@@ -221,23 +221,6 @@ class TestCacheStoreNode:
         assert call_kwargs["user_id"] == 99
 
     @pytest.mark.asyncio
-    async def test_does_not_call_store_conversation_batch(self):
-        """Legacy Redis LIST conversation store removed from active graph path (#163)."""
-        state = make_initial_state(user_id=1, session_id="s1", query="test query")
-        state["query_type"] = "FAQ"
-        state["query_embedding"] = [0.1] * 1024
-        state["response"] = "answer"
-
-        cache = AsyncMock()
-        cache.store_semantic = AsyncMock()
-        cache.store_conversation_batch = AsyncMock()
-
-        await cache_store_node(state, cache=cache)
-
-        # Memory is now owned by checkpointer — no legacy LIST writes
-        cache.store_conversation_batch.assert_not_awaited()
-
-    @pytest.mark.asyncio
     async def test_skips_store_if_no_response(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "GENERAL"
