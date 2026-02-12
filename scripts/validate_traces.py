@@ -936,6 +936,15 @@ def resolve_report_collections(
     return validated or discovered_collections
 
 
+def _format_go_no_go_status(criterion: dict[str, Any]) -> str:
+    """Format a single Go/No-Go criterion status for the report."""
+    if criterion.get("skipped"):
+        return f"[-] SKIPPED ({criterion['actual']})"
+    if criterion["passed"]:
+        return "[x] PASS"
+    return "[ ] **FAIL**"
+
+
 def generate_report(
     run: ValidationRun,
     aggregates: dict[str, Any],
@@ -1030,12 +1039,7 @@ def generate_report(
         lines.append("| # | Criterion | Target | Actual | Status |")
         lines.append("|---|-----------|--------|--------|--------|")
         for i, (name, c) in enumerate(go_no_go.items(), 1):
-            if c.get("skipped"):
-                status = "[-] SKIP"
-            elif c["passed"]:
-                status = "[x] PASS"
-            else:
-                status = "[ ] **FAIL**"
+            status = _format_go_no_go_status(c)
             lines.append(f"| {i} | {name} | {c['target']} | {c['actual']} | {status} |")
         lines.append("")
         passed = sum(1 for c in go_no_go.values() if c["passed"])
