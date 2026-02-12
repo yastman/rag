@@ -34,7 +34,9 @@ def route_by_query_type(
 def route_cache(
     state: dict[str, Any],
 ) -> Literal["respond", "retrieve"]:
-    """Route after cache check: hit → respond, miss → retrieve."""
+    """Route after cache check: embedding error/hit → respond, miss → retrieve."""
+    if state.get("embedding_error", False):
+        return "respond"
     if state.get("cache_hit", False):
         return "respond"
     return "retrieve"
