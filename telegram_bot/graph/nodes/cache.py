@@ -17,6 +17,10 @@ from telegram_bot.observability import get_client, observe
 
 logger = logging.getLogger(__name__)
 
+# Only these query types use semantic cache (check + store).
+# Context-sensitive types like GENERAL bypass semantic cache entirely.
+CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED"})
+
 
 @observe(name="node-cache-check", capture_input=False, capture_output=False)
 async def cache_check_node(
@@ -72,12 +76,14 @@ async def cache_check_node(
             embedding = await embeddings.aembed_query(query)
             await cache.store_embedding(query, embedding)
 
-    # Step 2: Check semantic cache with query-type threshold
-    cached = await cache.check_semantic(
-        query=query,
-        vector=embedding,
-        query_type=query_type,
-    )
+    # Step 2: Check semantic cache with query-type threshold (allowlisted types only)
+    cached = None
+    if query_type in CACHEABLE_QUERY_TYPES:
+        cached = await cache.check_semantic(
+            query=query,
+            vector=embedding,
+            query_type=query_type,
+        )
 
     latency = time.perf_counter() - start
 
@@ -159,14 +165,17 @@ async def cache_store_node(
     )
     start = time.perf_counter()
 
-    # Store in semantic cache if we have both response and embedding
+    # Store in semantic cache if we have both response and embedding (allowlisted types only)
+    stored_semantic = False
     if response and embedding:
-        await cache.store_semantic(
-            query=query,
-            response=response,
-            vector=embedding,
-            query_type=query_type,
-        )
+        if query_type in CACHEABLE_QUERY_TYPES:
+            await cache.store_semantic(
+                query=query,
+                response=response,
+                vector=embedding,
+                query_type=query_type,
+            )
+            stored_semantic = True
 
         # Store conversation messages (single pipeline round-trip)
         await cache.store_conversation_batch(
@@ -174,7 +183,11 @@ async def cache_store_node(
             messages=[("user", query), ("assistant", response)],
         )
 
-        logger.info("cache_store: stored response + conversation (type=%s)", query_type)
+        logger.info(
+            "cache_store: stored=%s conversation (type=%s)",
+            "semantic+" if stored_semantic else "",
+            query_type,
+        )
 
         # Log pipeline result event (fire-and-forget, never blocks main flow)
         if event_stream is not None:
@@ -199,12 +212,12 @@ async def cache_store_node(
             )
 
     latency = time.perf_counter() - start
-    stored = bool(response and embedding)
+    stored_conversation = bool(response and embedding)
     lf.update_current_span(
         output={
-            "stored": stored,
-            "stored_semantic": stored,
-            "stored_conversation": stored,
+            "stored": stored_semantic or stored_conversation,
+            "stored_semantic": stored_semantic,
+            "stored_conversation": stored_conversation,
             "duration_ms": round(latency * 1000, 1),
         }
     )
