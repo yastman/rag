@@ -201,6 +201,29 @@ groups:
           summary: "Embedding service errors"
           description: "Errors detected in embedding services"
 
+      # BGE-M3 embedding retries and failures (from bot logs, #210)
+      - alert: BGEEmbedRetryFromBot
+        expr: |
+          count_over_time({container="dev-bot"} |= "Retrying telegram_bot.integrations.embeddings" [5m]) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: bge-m3
+        annotations:
+          summary: "BGE-M3 embedding retries detected in bot"
+          description: "Bot is retrying BGE-M3 embedding calls — service may be degraded"
+
+      - alert: BGEEmbedErrorFromBot
+        expr: |
+          count_over_time({container="dev-bot"} |= "Embedding failed after retries" [5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: bge-m3
+        annotations:
+          summary: "BGE-M3 embedding failures in bot"
+          description: "Bot embedding calls failing after all retries exhausted"
+
       # =============================================================================
       # DATABASE
       # =============================================================================
