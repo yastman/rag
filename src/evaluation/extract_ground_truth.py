@@ -19,7 +19,7 @@ def _get_settings() -> Settings:
 
 
 def _qdrant_url() -> str:
-    return _get_settings().qdrant_url
+    return _get_settings().qdrant_url or "http://localhost:6333"
 
 
 def _qdrant_api_key() -> str:
