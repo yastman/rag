@@ -5,7 +5,7 @@
 # Pin base images — checked 2026-02-09
 FROM python:3.12-slim-bookworm AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.10@sha256:94a23af2d50e97b87b522d3cea24aaf8a1faedec1344c952767434f69585cbf9 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
