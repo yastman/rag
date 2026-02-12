@@ -142,10 +142,19 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
     if voice_dur is not None:
         lf.score_current_trace(name="voice_duration_s", value=float(voice_dur))
 
-    # --- Conversation memory summarization (#154) ---
+    # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:
         lf.score_current_trace(name="summarize_ms", value=summarize_ms)
+
+    # Memory scores (#159)
+    messages = result.get("messages", [])
+    lf.score_current_trace(name="memory_messages_count", value=float(len(messages)))
+    lf.score_current_trace(
+        name="summarization_triggered",
+        value=1 if summarize_ms > 0 else 0,
+        data_type="BOOLEAN",
+    )
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
