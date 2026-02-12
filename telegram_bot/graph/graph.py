@@ -147,7 +147,7 @@ def build_graph(
                 result = state.copy()
             elapsed = time.perf_counter() - t0
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
-            return result
+            return cast(dict[str, Any], result)
 
         workflow.add_node("summarize", summarize_wrapper)  # type: ignore[type-var]
 
