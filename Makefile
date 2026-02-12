@@ -506,25 +506,29 @@ baseline-load: ## Run load tests with Langfuse tracing
 	@echo ""
 	@echo "$(GREEN)Results tagged as: $(LOAD_SESSION)$(NC)"
 
-baseline-compare: ## Compare current run against baseline (usage: make baseline-compare BASELINE_TAG=... CURRENT_TAG=...)
+baseline-compare: ## Compare current run against baseline (usage: make baseline-compare BASELINE_TAG=... CURRENT_SESSION=...)
 ifndef BASELINE_TAG
-	$(error BASELINE_TAG is required. Usage: make baseline-compare BASELINE_TAG=smoke-abc1234-20260128 CURRENT_TAG=...)
+	$(error BASELINE_TAG is required. Usage: make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=ci-abc-job-1)
 endif
-ifndef CURRENT_TAG
-	$(error CURRENT_TAG is required. Usage: make baseline-compare BASELINE_TAG=... CURRENT_TAG=...)
+ifndef CURRENT_SESSION
+	$(error CURRENT_SESSION is required.)
 endif
-	@echo "$(BLUE)Comparing $(CURRENT_TAG) against baseline $(BASELINE_TAG)...$(NC)"
+	@echo "$(BLUE)Comparing baseline...$(NC)"
 	uv run python -m tests.baseline.cli compare \
-		--baseline="$(BASELINE_TAG)" \
-		--current="$(CURRENT_TAG)" \
-		--thresholds=tests/baseline/thresholds.yaml
+		--baseline-tag="$(BASELINE_TAG)" \
+		--current-session="$(CURRENT_SESSION)" \
+		--thresholds=tests/baseline/thresholds.yaml \
+		--output="reports/baseline-$(CURRENT_SESSION).json"
 
-baseline-set: ## Set a run as the new baseline (usage: make baseline-set TAG=...)
+baseline-set: ## Tag traces as baseline (usage: make baseline-set TAG=... SESSION_ID=...)
 ifndef TAG
-	$(error TAG is required. Usage: make baseline-set TAG=smoke-abc1234-20260128)
+	$(error TAG is required. Usage: make baseline-set TAG=main-latest SESSION_ID=smoke-abc-20260128)
+endif
+ifndef SESSION_ID
+	$(error SESSION_ID is required.)
 endif
 	@echo "$(BLUE)Setting $(TAG) as baseline...$(NC)"
-	uv run python -m tests.baseline.cli set-baseline --tag="$(TAG)"
+	uv run python -m tests.baseline.cli set-baseline --tag="$(TAG)" --session-id="$(SESSION_ID)"
 
 baseline-report: ## Generate HTML baseline report
 ifndef BASELINE_TAG
@@ -543,7 +547,7 @@ endif
 
 baseline-check: baseline-smoke ## Quick baseline check (smoke + compare with main)
 	@echo "$(BLUE)Comparing with main baseline...$(NC)"
-	make baseline-compare BASELINE_TAG=main-latest CURRENT_TAG=$(BASELINE_SESSION)
+	make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=$(BASELINE_SESSION)
 
 # =============================================================================
 # RAG EVALUATION (RAGAS + DeepEval)
