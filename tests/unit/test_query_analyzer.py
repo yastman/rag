@@ -57,8 +57,6 @@ class TestQueryAnalyzerAnalyze:
         )
         analyzer.client = AsyncMock()
         return analyzer
-
-    @pytest.mark.asyncio
     async def test_analyze_extracts_price_filter(self, analyzer):
         response_content = json.dumps(
             {"filters": {"price": {"lt": 100000}}, "semantic_query": "квартира недорого"}
@@ -71,8 +69,6 @@ class TestQueryAnalyzerAnalyze:
 
         assert result["filters"]["price"] == {"lt": 100000}
         assert result["semantic_query"] == "квартира недорого"
-
-    @pytest.mark.asyncio
     async def test_analyze_extracts_city_filter(self, analyzer):
         response_content = json.dumps({"filters": {"city": "Несебр"}, "semantic_query": "квартиры"})
         analyzer.client.chat.completions.create = AsyncMock(
@@ -82,8 +78,6 @@ class TestQueryAnalyzerAnalyze:
         result = await analyzer.analyze("квартиры в Несебр")
 
         assert result["filters"]["city"] == "Несебр"
-
-    @pytest.mark.asyncio
     async def test_analyze_extracts_multiple_filters(self, analyzer):
         response_content = json.dumps(
             {
@@ -104,8 +98,6 @@ class TestQueryAnalyzerAnalyze:
         assert result["filters"]["price"] == {"lt": 80000}
         assert result["filters"]["rooms"] == 2
         assert result["filters"]["city"] == "Солнечный берег"
-
-    @pytest.mark.asyncio
     async def test_analyze_no_filters(self, analyzer):
         response_content = json.dumps(
             {"filters": {}, "semantic_query": "красивая квартира с видом"}
@@ -118,8 +110,6 @@ class TestQueryAnalyzerAnalyze:
 
         assert result["filters"] == {}
         assert result["semantic_query"] == "красивая квартира с видом"
-
-    @pytest.mark.asyncio
     async def test_analyze_json_parse_error_fallback(self, analyzer):
         analyzer.client.chat.completions.create = AsyncMock(
             return_value=_mock_completion("invalid json {")
@@ -129,8 +119,6 @@ class TestQueryAnalyzerAnalyze:
 
         assert result["filters"] == {}
         assert result["semantic_query"] == "test query"
-
-    @pytest.mark.asyncio
     async def test_analyze_api_error_fallback(self, analyzer):
         analyzer.client.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
 
@@ -138,8 +126,6 @@ class TestQueryAnalyzerAnalyze:
 
         assert result["filters"] == {}
         assert result["semantic_query"] == "test query"
-
-    @pytest.mark.asyncio
     async def test_analyze_uses_correct_api_format(self, analyzer):
         response_content = json.dumps({"filters": {}, "semantic_query": "test"})
         analyzer.client.chat.completions.create = AsyncMock(
@@ -155,8 +141,6 @@ class TestQueryAnalyzerAnalyze:
 
 class TestQueryAnalyzerClose:
     """Test close method."""
-
-    @pytest.mark.asyncio
     async def test_close_closes_client(self):
         analyzer = QueryAnalyzer(
             api_key="test-key",
