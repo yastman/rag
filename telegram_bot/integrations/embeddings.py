@@ -161,7 +161,6 @@ class BGEM3HybridEmbeddings(Embeddings):
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 timeout=self._timeout,
-                transport=httpx.AsyncHTTPTransport(),
                 limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
             )
         return self._client
