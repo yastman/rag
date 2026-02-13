@@ -83,8 +83,6 @@ class TestEvaluatePipeline:
                             from src.evaluation.ragas_evaluation import RAGASEvaluator
 
                             yield RAGASEvaluator()
-
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_loads_test_set(self, evaluator):
         """Test evaluate_pipeline loads golden test set."""
         mock_pipeline = AsyncMock()
@@ -106,8 +104,6 @@ class TestEvaluatePipeline:
                     await evaluator.evaluate_pipeline(mock_pipeline, "test_set.json")
 
                     mock_dataset.from_list.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_calls_rag_pipeline(self, evaluator):
         """Test evaluate_pipeline queries RAG pipeline for each test query."""
         mock_pipeline = AsyncMock()
@@ -139,8 +135,6 @@ class TestEvaluatePipeline:
                     assert mock_pipeline.query.call_count == 2
                     mock_pipeline.query.assert_any_call("query 1", top_k=10)
                     mock_pipeline.query.assert_any_call("query 2", top_k=10)
-
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_handles_query_errors(self, evaluator, capsys):
         """Test evaluate_pipeline handles query failures gracefully."""
         mock_pipeline = AsyncMock()
@@ -171,8 +165,6 @@ class TestEvaluatePipeline:
 
                     captured = capsys.readouterr()
                     assert "Failed query" in captured.out
-
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_returns_metrics(self, evaluator):
         """Test evaluate_pipeline returns RAGAS metrics."""
         mock_pipeline = AsyncMock()
@@ -199,8 +191,6 @@ class TestEvaluatePipeline:
                     assert result["answer_relevancy"] == 0.88
                     assert "eval_duration_seconds" in result
                     assert "queries_evaluated" in result
-
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_logs_to_mlflow(self, evaluator):
         """Test evaluate_pipeline logs metrics to MLflow."""
         mock_pipeline = AsyncMock()
@@ -223,8 +213,6 @@ class TestEvaluatePipeline:
 
                     evaluator.mlflow_logger.log_metrics.assert_called_once()
                     evaluator.mlflow_logger.log_dict_artifact.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_prints_acceptance_passed(self, evaluator, capsys):
         """Test acceptance criteria passed message."""
         mock_pipeline = AsyncMock()
@@ -248,8 +236,6 @@ class TestEvaluatePipeline:
 
                     captured = capsys.readouterr()
                     assert "PASSED" in captured.out
-
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_prints_acceptance_failed(self, evaluator, capsys):
         """Test acceptance criteria failed message."""
         mock_pipeline = AsyncMock()
@@ -273,8 +259,6 @@ class TestEvaluatePipeline:
 
                     captured = capsys.readouterr()
                     assert "FAILED" in captured.out
-
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_limits_queries_to_50(self, evaluator):
         """Test evaluate_pipeline limits queries to first 50."""
         mock_pipeline = AsyncMock()

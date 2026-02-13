@@ -64,8 +64,6 @@ class TestRunABTest:
             mock_logger.start_run.return_value.__exit__ = MagicMock(return_value=False)
             mock_logger_class.return_value = mock_logger
             yield RAGExperimentRunner(experiment_name="test")
-
-    @pytest.mark.asyncio
     async def test_run_ab_test_calls_both_variants(self, runner):
         """Test run_ab_test runs both variants."""
         test_queries = [{"query": "test", "expected_article": 1}]
@@ -85,8 +83,6 @@ class TestRunABTest:
             )
 
             assert mock_run.call_count == 2
-
-    @pytest.mark.asyncio
     async def test_run_ab_test_returns_comparison(self, runner):
         """Test run_ab_test returns comparison results."""
         test_queries = [{"query": "test"}]
@@ -109,8 +105,6 @@ class TestRunABTest:
             assert "variant_a" in result
             assert "variant_b" in result
             assert "delta" in result
-
-    @pytest.mark.asyncio
     async def test_run_ab_test_custom_variant_names(self, runner):
         """Test run_ab_test uses custom variant names."""
         test_queries = [{"query": "test"}]
@@ -135,8 +129,6 @@ class TestRunABTest:
             calls = mock_run.call_args_list
             assert calls[0][1]["variant_name"] == "With Context"
             assert calls[1][1]["variant_name"] == "No Context"
-
-    @pytest.mark.asyncio
     async def test_run_ab_test_prints_results(self, runner, capsys):
         """Test run_ab_test prints test results."""
         test_queries = [{"query": "test"}]
@@ -174,8 +166,6 @@ class TestRunVariant:
             mock_logger.start_run.return_value.__exit__ = MagicMock(return_value=False)
             mock_logger_class.return_value = mock_logger
             yield RAGExperimentRunner(experiment_name="test")
-
-    @pytest.mark.asyncio
     async def test_run_variant_starts_mlflow_run(self, runner):
         """Test _run_variant starts MLflow run with correct tags."""
         with patch.object(runner, "_simulate_evaluation", new_callable=AsyncMock) as mock_eval:
@@ -194,8 +184,6 @@ class TestRunVariant:
             assert call_kwargs["tags"]["test"] == "test1"
             assert call_kwargs["tags"]["variant"] == "A"
             assert call_kwargs["tags"]["test_type"] == "ab_test"
-
-    @pytest.mark.asyncio
     async def test_run_variant_logs_config(self, runner):
         """Test _run_variant logs variant config."""
         with patch.object(runner, "_simulate_evaluation", new_callable=AsyncMock) as mock_eval:
@@ -211,8 +199,6 @@ class TestRunVariant:
             runner.logger.log_config.assert_called_once_with(
                 {"chunk_size": 400}, prefix="variant_A."
             )
-
-    @pytest.mark.asyncio
     async def test_run_variant_logs_metrics(self, runner):
         """Test _run_variant logs evaluation metrics."""
         with patch.object(runner, "_simulate_evaluation", new_callable=AsyncMock) as mock_eval:
@@ -227,8 +213,6 @@ class TestRunVariant:
             )
 
             runner.logger.log_metrics.assert_called_once_with(metrics)
-
-    @pytest.mark.asyncio
     async def test_run_variant_returns_metrics(self, runner):
         """Test _run_variant returns evaluation metrics."""
         with patch.object(runner, "_simulate_evaluation", new_callable=AsyncMock) as mock_eval:
@@ -256,8 +240,6 @@ class TestSimulateEvaluation:
             mock_logger.tracking_uri = "http://localhost:5000"
             mock_logger_class.return_value = mock_logger
             yield RAGExperimentRunner(experiment_name="test")
-
-    @pytest.mark.asyncio
     async def test_simulate_evaluation_returns_metrics(self, runner):
         """Test _simulate_evaluation returns all expected metrics."""
         result = await runner._simulate_evaluation({}, [{"query": "test"}])
@@ -274,8 +256,6 @@ class TestSimulateEvaluation:
         ]
         for key in expected_keys:
             assert key in result
-
-    @pytest.mark.asyncio
     async def test_simulate_evaluation_contextualization_boost(self, runner):
         """Test contextualization improves recall and adds latency."""
         config_without = {"enable_contextualization": False}
@@ -286,8 +266,6 @@ class TestSimulateEvaluation:
 
         assert result_with["recall_at_1"] > result_without["recall_at_1"]
         assert result_with["latency_p95_ms"] > result_without["latency_p95_ms"]
-
-    @pytest.mark.asyncio
     async def test_simulate_evaluation_small_chunks_penalty(self, runner):
         """Test small chunks reduce recall."""
         config_small = {"chunk_size": 400}
