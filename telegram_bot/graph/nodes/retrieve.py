@@ -18,6 +18,27 @@ from telegram_bot.observability import get_client, observe
 
 logger = logging.getLogger(__name__)
 
+_MAX_CONTEXT_SNIPPET = 500  # chars per doc for judge evaluation
+
+
+def _build_retrieved_context(
+    results: list[dict[str, Any]],
+    limit: int = 5,
+) -> list[dict[str, str | float]]:
+    """Build curated context snippets for LLM-as-a-Judge evaluation."""
+    ctx: list[dict[str, str | float]] = []
+    for doc in results[:limit]:
+        if not isinstance(doc, dict):
+            continue
+        text = doc.get("text", "")
+        ctx.append(
+            {
+                "content": text[:_MAX_CONTEXT_SNIPPET],
+                "score": doc.get("score", 0),
+            }
+        )
+    return ctx
+
 
 @observe(name="node-retrieve", capture_input=False, capture_output=False)
 async def retrieve_node(
@@ -127,6 +148,7 @@ async def retrieve_node(
             # Clear stale backend-error markers from previous turns/branches.
             "retrieval_backend_error": False,
             "retrieval_error_type": None,
+            "retrieved_context": _build_retrieved_context(cached_results),
         }
 
     # Step 2: Get sparse embedding (cached or compute)
@@ -178,6 +200,7 @@ async def retrieve_node(
         "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
         "retrieval_backend_error": search_meta.get("backend_error", False),
         "retrieval_error_type": search_meta.get("error_type"),
+        "retrieved_context": _build_retrieved_context(results),
     }
     # Persist re-computed embedding for downstream nodes (grade, cache_store)
     if state.get("query_embedding") is None and dense_vector:
