@@ -31,6 +31,34 @@ def test_voice_bot_has_function_tool():
     assert callable(agent.search_knowledge_base)
 
 
+def test_server_has_tuned_worker_settings():
+    """AgentServer uses increased timeouts and reduced idle procs (#218)."""
+    from src.voice.agent import server
+
+    assert server._initialize_process_timeout == 30.0
+    assert server._shutdown_process_timeout == 30.0
+    assert server._num_idle_processes == 2
+
+
+def test_server_has_prewarm_setup_fnc():
+    """AgentServer setup_fnc pre-loads VAD to avoid event loop blocking (#218)."""
+    from src.voice.agent import _prewarm_process, server
+
+    assert server.setup_fnc is _prewarm_process
+
+
+def test_prewarm_stores_vad_in_userdata():
+    """_prewarm_process stores VAD model in proc.userdata for reuse (#218)."""
+    from src.voice.agent import _prewarm_process
+
+    proc = MagicMock()
+    proc.userdata = {}
+    with patch("src.voice.agent.silero.VAD.load", return_value="fake-vad") as mock_load:
+        _prewarm_process(proc)
+        mock_load.assert_called_once()
+    assert proc.userdata["vad"] == "fake-vad"
+
+
 @pytest.mark.asyncio
 async def test_search_tool_appends_transcript_entries_with_store():
     from src.voice.agent import VoiceBot
