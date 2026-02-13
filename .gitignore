@@ -197,3 +197,9 @@ docs/reports/
 
 # Baseline (legacy file-based approach)
 tests/baseline/.current_baseline
+
+# Claude worker prompts (session-specific, not reusable)
+.claude/prompts/
+
+# Disabled workflows (temporary backups)
+.github/workflows.disabled/
