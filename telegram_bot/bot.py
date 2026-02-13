@@ -439,9 +439,10 @@ class PropertyBot:
         lines = ["📊 Статистика кеша:\n"]
         for tier, data in stats.items():
             hit_rate = data.get("hit_rate", 0)
-            lines.append(
-                f"• {tier}: {hit_rate:.0f}% ({data.get('hits', 0)}/{data.get('total', 0)})"
-            )
+            hits = data.get("hits", 0)
+            misses = data.get("misses", 0)
+            total = hits + misses
+            lines.append(f"• {tier}: {hit_rate:.0f}% ({hits}/{total})")
         await message.answer("\n".join(lines))
 
     def _is_admin(self, user_id: int) -> bool:
