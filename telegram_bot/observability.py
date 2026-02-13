@@ -74,6 +74,12 @@ class _NullLangfuseClient:
     def score_current_trace(self, **kwargs: Any) -> None:
         pass
 
+    def create_score(self, **kwargs: Any) -> None:
+        pass
+
+    def get_current_trace_id(self) -> str:
+        return ""
+
     def flush(self) -> None:
         pass
 
