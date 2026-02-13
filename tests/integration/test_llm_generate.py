@@ -3,9 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-
-@pytest.mark.asyncio
 async def test_llm_service_has_generate_method():
     """LLMService should have generate() method."""
     from telegram_bot.services.llm import LLMService
@@ -13,9 +10,6 @@ async def test_llm_service_has_generate_method():
     service = LLMService(api_key="test-key", base_url="https://api.test.com")
     assert hasattr(service, "generate"), "LLMService missing generate() method"
     await service.close()
-
-
-@pytest.mark.asyncio
 async def test_generate_returns_text():
     """generate() should return text from LLM."""
     from telegram_bot.services.llm import LLMService
@@ -35,9 +29,6 @@ async def test_generate_returns_text():
         mock_post.assert_called_once()
 
     await service.close()
-
-
-@pytest.mark.asyncio
 async def test_generate_uses_low_temperature():
     """generate() should use low temperature for structured output."""
     from telegram_bot.services.llm import LLMService
@@ -158,8 +149,6 @@ class TestLLMServiceFallback:
 
 class TestLLMServiceGenerateAnswer:
     """Tests for generate_answer method."""
-
-    @pytest.mark.asyncio
     async def test_generate_answer_success(self):
         """generate_answer returns LLM response."""
         from telegram_bot.services.llm import LLMService
@@ -180,8 +169,6 @@ class TestLLMServiceGenerateAnswer:
             assert result == "Generated answer"
 
         await service.close()
-
-    @pytest.mark.asyncio
     async def test_generate_answer_uses_system_prompt(self):
         """generate_answer includes system prompt in messages."""
         from telegram_bot.services.llm import LLMService
@@ -205,8 +192,6 @@ class TestLLMServiceGenerateAnswer:
             assert messages[0]["content"] == "Custom system prompt"
 
         await service.close()
-
-    @pytest.mark.asyncio
     async def test_generate_answer_fallback_on_timeout(self):
         """generate_answer returns fallback on timeout."""
         import httpx
@@ -225,8 +210,6 @@ class TestLLMServiceGenerateAnswer:
             assert "Fallback Item" in result
 
         await service.close()
-
-    @pytest.mark.asyncio
     async def test_generate_answer_fallback_on_http_error(self):
         """generate_answer returns fallback on HTTP error."""
         import httpx

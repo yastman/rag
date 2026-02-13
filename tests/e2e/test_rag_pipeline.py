@@ -147,8 +147,6 @@ class TestRAGPipelineContextualizer:
 
 class TestRAGPipelineSearch:
     """Test RAG pipeline search functionality."""
-
-    @pytest.mark.asyncio
     @patch("src.core.pipeline.get_sentence_transformer")
     @patch("src.core.pipeline.create_search_engine")
     @patch("src.core.pipeline.ClaudeContextualizer")
@@ -190,8 +188,6 @@ class TestRAGPipelineSearch:
         assert len(result.results) == 1
         assert result.results[0]["article_number"] == "121"
         assert result.execution_time > 0
-
-    @pytest.mark.asyncio
     @patch("src.core.pipeline.get_sentence_transformer")
     @patch("src.core.pipeline.create_search_engine")
     @patch("src.core.pipeline.ClaudeContextualizer")
@@ -228,8 +224,6 @@ class TestRAGPipelineSearch:
 
 class TestRAGPipelineEvaluate:
     """Test RAG pipeline evaluate method."""
-
-    @pytest.mark.asyncio
     @patch("src.core.pipeline.get_sentence_transformer")
     @patch("src.core.pipeline.create_search_engine")
     @patch("src.core.pipeline.ClaudeContextualizer")
@@ -270,8 +264,6 @@ class TestRAGPipelineEvaluate:
         assert result["total_queries"] == 3
         assert "average_latency" in result
         assert len(result["results"]) == 3
-
-    @pytest.mark.asyncio
     @patch("src.core.pipeline.get_sentence_transformer")
     @patch("src.core.pipeline.create_search_engine")
     @patch("src.core.pipeline.ClaudeContextualizer")

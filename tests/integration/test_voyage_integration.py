@@ -140,8 +140,6 @@ class TestVoyagePipelineIntegration:
             assert result["is_exact"] is False, f"Failed for: {query}"
             assert result["rrf_weights"]["dense"] == 0.6, f"Failed for: {query}"
             assert result["cache_threshold"] == 0.10, f"Failed for: {query}"
-
-    @pytest.mark.asyncio
     async def test_async_pipeline(self):
         """Test async methods work correctly."""
         from telegram_bot.services.voyage_client import VoyageClient
