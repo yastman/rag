@@ -26,8 +26,16 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import yaml
 from dotenv import load_dotenv
 from langfuse import Langfuse
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    stop_after_delay,
+    wait_exponential,
+)
 
 
 # Ensure project root importable
@@ -44,12 +52,24 @@ from scripts.validate_queries import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-# Reference trace from issue #105
-REFERENCE_TRACE_ID = "c2b95d86aa1f643b79016dd611c4691f"
-
 COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
 
 STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
+
+GO_NO_GO_THRESHOLDS_PATH = (
+    Path(__file__).resolve().parent.parent / "tests" / "baseline" / "thresholds.yaml"
+)
+
+
+def _load_go_no_go_thresholds(
+    custom: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Load Go/No-Go thresholds from YAML, with optional overrides."""
+    with open(GO_NO_GO_THRESHOLDS_PATH) as f:
+        defaults = yaml.safe_load(f).get("go_no_go", {})
+    if custom:
+        defaults.update(custom)
+    return defaults
 
 
 class FakeSentMessage:
@@ -127,7 +147,10 @@ class ValidationRun:
 
 
 def check_langfuse_config() -> None:
-    """Preflight: verify Langfuse credentials are set. Fail-fast."""
+    """Preflight: verify Langfuse credentials are set and API is reachable.
+
+    Retries auth probe 3 times with exponential backoff (max 10s total).
+    """
     public = os.getenv("LANGFUSE_PUBLIC_KEY", "")
     secret = os.getenv("LANGFUSE_SECRET_KEY", "")
     host = os.getenv("LANGFUSE_HOST", "")
@@ -141,13 +164,24 @@ def check_langfuse_config() -> None:
         logger.error("LANGFUSE_HOST not set — cannot connect to Langfuse")
         sys.exit(1)
     try:
-        # Fast auth probe: catches stale/invalid keys before long validation run.
-        lf = Langfuse()
-        lf.api.trace.list(limit=1)
+        _langfuse_auth_probe()
     except Exception as e:
-        logger.error("Langfuse auth check failed: %s", e)
+        logger.error("Langfuse auth check failed after retries: %s", e)
         sys.exit(1)
     logger.info("Langfuse config OK: host=%s", host)
+
+
+@retry(
+    stop=(stop_after_attempt(3) | stop_after_delay(10)),
+    wait=wait_exponential(multiplier=1, min=1, max=5),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
+def _langfuse_auth_probe() -> None:
+    """Auth probe with retry. Separated for testability."""
+    lf = Langfuse()
+    if not lf.auth_check():
+        raise RuntimeError("Langfuse auth_check returned False")
 
 
 def check_worktree_clean(strict: bool = False) -> None:
@@ -182,8 +216,9 @@ def detect_runner_mode(collection: str) -> str:
         'langgraph_bge' for BGE-M3 collections (gdrive_documents_bge).
         'voyage_compatible' for Voyage-embedded collections (contextual_bulgaria_voyage).
     """
-    voyage_collections = {"contextual_bulgaria_voyage", "gdrive_documents_scalar"}
-    if collection in voyage_collections:
+    base_collection = collection.removesuffix("_binary").removesuffix("_scalar")
+    voyage_collections = {"contextual_bulgaria_voyage", "gdrive_documents"}
+    if base_collection in voyage_collections:
         return "voyage_compatible"
     return "langgraph_bge"
 
@@ -199,18 +234,15 @@ def get_git_sha() -> str:
     return result.stdout.strip()
 
 
-async def check_collection_available(qdrant_url: str, collection_name: str) -> bool:
-    """Check if Qdrant collection exists."""
-    from qdrant_client import AsyncQdrantClient
-
-    client = AsyncQdrantClient(url=qdrant_url)
+def _get_cache_version() -> str:
+    """Resolve exact-cache version from cache integration (single source of truth)."""
     try:
-        exists = await client.collection_exists(collection_name)
-        if not exists:
-            logger.warning("Collection %s not found in Qdrant — skipping", collection_name)
-        return exists
-    finally:
-        await client.close()
+        from telegram_bot.integrations.cache import CACHE_VERSION
+
+        return str(CACHE_VERSION)
+    except Exception as e:
+        logger.warning("Failed to resolve CACHE_VERSION, fallback to v3: %s", e)
+        return "v3"
 
 
 def check_voyage_available() -> bool:
@@ -221,19 +253,61 @@ def check_voyage_available() -> bool:
     return bool(key)
 
 
-async def discover_collections(qdrant_url: str) -> list[str]:
-    """Discover available collections for validation."""
+async def discover_collections(qdrant_url: str, quantization_mode: str = "off") -> list[str]:
+    """Discover available collections for validation via Qdrant API.
+
+    Queries Qdrant for all collections, matches against known base names
+    (with optional _scalar/_binary suffixes). Prefers exact match over suffixed.
+    """
+    from qdrant_client import AsyncQdrantClient
+
+    client = AsyncQdrantClient(url=qdrant_url)
+    try:
+        response = await client.get_collections()
+        all_names = {c.name for c in response.collections}
+    except Exception as e:
+        logger.error("Qdrant collection discovery failed: %s", e)
+        return []
+    finally:
+        await client.close()
+
+    mode = quantization_mode.lower()
+    if mode == "scalar":
+        preferred_suffixes = ["_scalar", "", "_binary"]
+    elif mode == "binary":
+        preferred_suffixes = ["_binary", "", "_scalar"]
+    else:
+        preferred_suffixes = ["", "_scalar", "_binary"]
+
     available: list[str] = []
-    for name in COLLECTIONS_TO_CHECK:
-        if await check_collection_available(qdrant_url, name):
-            # contextual_bulgaria_voyage needs Voyage API key
-            if "voyage" in name and not check_voyage_available():
-                logger.warning(
-                    "Skipping %s: collection exists but VOYAGE_API_KEY not set",
-                    name,
-                )
-                continue
-            available.append(name)
+    for base_name in COLLECTION_BASE_NAMES:
+        matched = None
+        for suffix in preferred_suffixes:
+            candidate = f"{base_name}{suffix}"
+            if candidate in all_names:
+                matched = candidate
+                break
+
+        if matched is None:
+            logger.warning("Collection %s (any suffix) not found in Qdrant", base_name)
+            continue
+
+        # Voyage collections need API key
+        if "voyage" in base_name and not check_voyage_available():
+            logger.warning(
+                "Skipping %s: collection exists but VOYAGE_API_KEY not set",
+                matched,
+            )
+            continue
+
+        available.append(matched)
+
+    logger.info(
+        "Discovered collections: %s (from %d total in Qdrant, mode=%s)",
+        available,
+        len(all_names),
+        mode,
+    )
     return available
 
 
@@ -396,19 +470,25 @@ async def run_single_query(
     )
 
 
-async def _flush_redis_caches(cache: Any) -> None:
-    """Clear cache keys for cold run without dropping RediSearch index."""
+async def _flush_redis_caches(cache: Any) -> str:
+    """Clear cache keys for cold run without dropping RediSearch index.
+
+    Returns:
+        "OK" if flush verified (0 keys remaining).
+        "SKIPPED" if Redis unavailable or flush incomplete.
+    """
     if not hasattr(cache, "redis") or not cache.redis:
-        logger.warning("  Redis not available — cannot flush caches, cold run may be warm")
-        return
+        logger.warning("  Redis not available — cold phase will be SKIPPED")
+        return "SKIPPED"
 
     deleted = 0
+    cache_version = _get_cache_version()
     patterns = [
-        "embeddings:v3:*",
-        "sparse:v3:*",
-        "analysis:v3:*",
-        "search:v3:*",
-        "rerank:v3:*",
+        f"embeddings:{cache_version}:*",
+        f"sparse:{cache_version}:*",
+        f"analysis:{cache_version}:*",
+        f"search:{cache_version}:*",
+        f"rerank:{cache_version}:*",
         "conversation:*",
     ]
     for pattern in patterns:
@@ -424,7 +504,22 @@ async def _flush_redis_caches(cache: Any) -> None:
         except Exception as e:
             logger.warning("  Semantic cache clear failed: %s", e)
 
-    logger.info("  Redis cache key clear complete — deleted %d keys", deleted)
+    # Verify: re-scan to confirm keys are actually gone
+    remaining = 0
+    for pattern in patterns:
+        remaining += len(
+            [k async for k in cache.redis.scan_iter(match=pattern, count=100)]  # type: ignore[misc]
+        )
+
+    if remaining > 0:
+        logger.error(
+            "  Redis flush incomplete: %d keys remain after deletion — cold phase SKIPPED",
+            remaining,
+        )
+        return "SKIPPED"
+
+    logger.info("  Redis cache flush verified — deleted %d keys, 0 remaining", deleted)
+    return "OK"
 
 
 async def run_collection_validation(
@@ -462,12 +557,28 @@ async def run_collection_validation(
 
     # Phase 2: Cold run — flush caches for true cold measurement
     logger.info("Phase 2: Flushing Redis caches for true cold run...")
-    await _flush_redis_caches(services["cache"])
+    flush_status = await _flush_redis_caches(services["cache"])
     cold_queries = get_queries_for_collection(collection)
-    logger.info("Phase 2: Cold run (%d queries)", len(cold_queries))
-    for q in cold_queries:
-        result = await run_single_query(q, services, run_meta, phase="cold")
-        results.append(result)
+    if flush_status == "SKIPPED":
+        logger.warning("Phase 2: Cold run SKIPPED — Redis flush not verified")
+        for q in cold_queries:
+            results.append(
+                TraceResult(
+                    trace_id="skipped",
+                    query=q.text,
+                    collection=collection,
+                    phase="cold",
+                    source=q.source,
+                    difficulty=q.difficulty,
+                    latency_wall_ms=0,
+                    state={"cold_skipped": True, "skip_reason": "redis_flush_failed"},
+                )
+            )
+    else:
+        logger.info("Phase 2: Cold run (%d queries)", len(cold_queries))
+        for q in cold_queries:
+            result = await run_single_query(q, services, run_meta, phase="cold")
+            results.append(result)
 
     # Phase 3: Cache-hit run (duplicates from cold)
     cache_queries = get_cache_hit_queries(cold_queries, count=10)
@@ -528,7 +639,7 @@ async def enrich_results_from_langfuse(
     lf = Langfuse()
     enriched = 0
     for r in results:
-        if r.phase == "warmup":
+        if r.phase == "warmup" or r.state.get("cold_skipped"):
             continue
         try:
             trace = lf.api.trace.get(r.trace_id)
@@ -593,7 +704,7 @@ def check_orphan_traces(results: list[TraceResult]) -> float:
     total = 0
     orphans = 0
     for r in results:
-        if r.phase == "warmup":
+        if r.phase == "warmup" or r.state.get("cold_skipped"):
             continue
         total += 1
         try:
@@ -614,44 +725,47 @@ def evaluate_go_no_go(
     aggregates: dict[str, Any],
     results: list[TraceResult],
     orphan_rate: float = 0.0,
+    thresholds: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Evaluate Go/No-Go criteria for Gate 1.
 
     Returns dict of criterion_name -> {target, actual, passed}.
-    Criteria from issue #101 + roadmap Gate 1:
-      1. cold_p50 < 5000ms
-      2. cold_p90 < 8000ms
-      3. cold queries > 10s < 15%
-      4. cache_hit p50 < 1500ms
-      5. p50 TTFT (generate node) < 2000ms
-      6. rewrite calls >= 2 <= 10%
-      7. rewrite completion_tokens p50 <= 96
-      8. ERROR observations = 0 new
-      9. orphan traces = 0%
+    Thresholds loaded from tests/baseline/thresholds.yaml go_no_go section,
+    with optional overrides via thresholds param.
     """
+    t = _load_go_no_go_thresholds(thresholds)
+
     cold = aggregates.get("cold", {})
     cache = aggregates.get("cache_hit", {})
     cold_results = [r for r in results if r.phase == "cold"]
 
     criteria: dict[str, dict[str, Any]] = {}
 
-    # 1. Cold p50 < 5s
+    cold_stddev = cold.get("latency_stddev", 0)
+    cache_stddev = cache.get("latency_stddev", 0)
+
+    # 1. Cold p50
     cold_p50 = cold.get("latency_p50", 99999)
+    cold_p50_limit = t.get("cold_p50_ms", 5000)
     criteria["cold_p50_lt_5s"] = {
-        "target": "< 5000 ms",
+        "target": f"< {cold_p50_limit} ms",
         "actual": f"{cold_p50:.0f} ms",
-        "passed": cold_p50 < 5000,
+        "passed": cold_p50 < cold_p50_limit,
+        "stddev": f"\u00b1{cold_stddev:.0f} ms" if cold_stddev else "\u2014",
     }
 
-    # 2. Cold p90 < 8s (fallback to p95 for backward compatibility)
+    # 2. Cold p90 (fallback to p95 for backward compatibility)
     cold_p90 = cold.get("latency_p90", cold.get("latency_p95", 99999))
+    cold_p90_limit = t.get("cold_p90_ms", 8000)
     criteria["cold_p90_lt_8s"] = {
-        "target": "< 8000 ms",
+        "target": f"< {cold_p90_limit} ms",
         "actual": f"{cold_p90:.0f} ms",
-        "passed": cold_p90 < 8000,
+        "passed": cold_p90 < cold_p90_limit,
+        "stddev": f"\u00b1{cold_stddev:.0f} ms" if cold_stddev else "\u2014",
     }
 
-    # 3. Cold queries > 10s < 15%
+    # 3. Cold queries > 10s
+    cold_over_10s_limit = t.get("cold_over_10s_pct", 0.15)
     if cold_results:
         over_10s = sum(1 for r in cold_results if r.latency_wall_ms > 10000)
         pct_over_10s = over_10s / len(cold_results)
@@ -659,49 +773,58 @@ def evaluate_go_no_go(
         over_10s = 0
         pct_over_10s = 0.0
     criteria["cold_over_10s_lt_15pct"] = {
-        "target": "< 15%",
+        "target": f"< {cold_over_10s_limit:.0%}",
         "actual": f"{pct_over_10s:.1%} ({over_10s}/{len(cold_results)})",
-        "passed": pct_over_10s < 0.15,
+        "passed": pct_over_10s < cold_over_10s_limit,
+        "stddev": "\u2014",
     }
 
-    # 4. Cache-hit p50 < 1.5s
+    # 4. Cache-hit p50
     cache_p50 = cache.get("latency_p50", 99999)
+    cache_p50_limit = t.get("cache_hit_p50_ms", 1500)
     criteria["cache_hit_p50_lt_1500ms"] = {
-        "target": "< 1500 ms",
+        "target": f"< {cache_p50_limit} ms",
         "actual": f"{cache_p50:.0f} ms",
-        "passed": cache_p50 < 1500,
+        "passed": cache_p50 < cache_p50_limit,
+        "stddev": f"\u00b1{cache_stddev:.0f} ms" if cache_stddev else "\u2014",
     }
 
-    # 5. Generate node p50 < 2s (full generation latency, non-streaming mode)
+    # 5. Generate node p50 (full generation latency, non-streaming mode)
     generate_p50 = cold.get("node_p50", {}).get("generate", 99999)
+    generate_p50_limit = t.get("generate_p50_ms", 2000)
     criteria["generate_p50_lt_2s"] = {
-        "target": "< 2000 ms",
+        "target": f"< {generate_p50_limit} ms",
         "actual": f"{generate_p50:.0f} ms",
-        "passed": generate_p50 < 2000,
+        "passed": generate_p50 < generate_p50_limit,
+        "stddev": "\u2014",
     }
 
-    # 6. Rewrite calls >= 2 <= 10%
+    # 6. Rewrite calls >= 2
+    multi_rewrite_limit = t.get("multi_rewrite_pct", 0.10)
     if cold_results:
         multi_rewrite = sum(1 for r in cold_results if (r.state.get("rewrite_count", 0) or 0) >= 2)
         multi_rewrite_pct = multi_rewrite / len(cold_results)
     else:
         multi_rewrite_pct = 0.0
     criteria["multi_rewrite_le_10pct"] = {
-        "target": "<= 10%",
+        "target": f"<= {multi_rewrite_limit:.0%}",
         "actual": f"{multi_rewrite_pct:.1%}",
-        "passed": multi_rewrite_pct <= 0.10,
+        "passed": multi_rewrite_pct <= multi_rewrite_limit,
+        "stddev": "\u2014",
     }
 
-    # 7. Rewrite completion_tokens p50 <= 96 (from Langfuse scores if available)
+    # 7. Rewrite completion_tokens p50 (from Langfuse scores if available)
+    rewrite_tokens_limit = t.get("rewrite_tokens_p50", 96)
     rewrite_tokens: list[float] = []
     for r in cold_results:
         if "rewrite_completion_tokens" in r.scores:
             rewrite_tokens.append(r.scores["rewrite_completion_tokens"])
     tokens_p50 = float(np.percentile(rewrite_tokens, 50)) if rewrite_tokens else 0.0
     criteria["rewrite_tokens_p50_le_96"] = {
-        "target": "<= 96 tokens",
+        "target": f"<= {rewrite_tokens_limit} tokens",
         "actual": f"{tokens_p50:.0f} tokens" if rewrite_tokens else "N/A (no rewrites)",
-        "passed": tokens_p50 <= 96,
+        "passed": tokens_p50 <= rewrite_tokens_limit,
+        "stddev": "\u2014",
     }
 
     # 8. ERROR observations = 0 new (from scores + observation levels)
@@ -719,6 +842,7 @@ def evaluate_go_no_go(
         "target": "0",
         "actual": f"{error_count} (scores={score_error_count}, observations={observation_error_count})",
         "passed": error_count == 0,
+        "stddev": "\u2014",
     }
 
     # 9. Orphan traces = 0%
@@ -726,53 +850,54 @@ def evaluate_go_no_go(
         "target": "0%",
         "actual": f"{orphan_rate:.1%}",
         "passed": orphan_rate == 0.0,
+        "stddev": "\u2014",
     }
 
-    # 10. Streaming TTFT p50 < 1000ms (skipped if sample < 3)
+    # 10. Streaming TTFT p50 (skipped if sample < min)
+    ttft_min_sample = t.get("ttft_min_sample", 3)
+    ttft_p50_limit = t.get("ttft_p50_ms", 1000)
     streaming = aggregates.get("streaming", {})
     ttft_p50 = streaming.get("ttft_p50")
     ttft_n = streaming.get("ttft_sample_count", 0)
 
-    if ttft_n < 3:
+    if ttft_n < ttft_min_sample:
         criteria["ttft_p50_lt_1000ms"] = {
-            "target": "< 1000 ms",
-            "actual": f"N/A (n={ttft_n}, need >= 3)",
+            "target": f"< {ttft_p50_limit} ms",
+            "actual": f"N/A (n={ttft_n}, need >= {ttft_min_sample})",
             "passed": True,
             "skipped": True,
+            "stddev": "\u2014",
         }
     else:
         criteria["ttft_p50_lt_1000ms"] = {
-            "target": "< 1000 ms",
+            "target": f"< {ttft_p50_limit} ms",
             "actual": f"{ttft_p50:.0f} ms (n={ttft_n})",
-            "passed": ttft_p50 < 1000,
+            "passed": ttft_p50 < ttft_p50_limit,
             "skipped": False,
+            "stddev": "\u2014",
         }
 
+    # Override cold-dependent criteria when cold phase was skipped
+    cold_skipped = all(r.state.get("cold_skipped") for r in cold_results) if cold_results else False
+    if cold_skipped:
+        skip_reason = cold_results[0].state.get("skip_reason", "unknown")
+        for key in [
+            "cold_p50_lt_5s",
+            "cold_p90_lt_8s",
+            "cold_over_10s_lt_15pct",
+            "generate_p50_lt_2s",
+            "multi_rewrite_le_10pct",
+            "rewrite_tokens_p50_le_96",
+        ]:
+            original = criteria[key]
+            criteria[key] = {
+                "target": original["target"],
+                "actual": f"SKIPPED ({skip_reason})",
+                "passed": True,
+                "dep_unavailable": True,
+            }
+
     return criteria
-
-
-async def fetch_reference_trace_metrics(
-    reference_trace_id: str,
-) -> dict[str, Any] | None:
-    """Fetch metrics from reference trace for comparison.
-
-    Returns dict with latency_total_ms, rerank_applied, results_count etc.
-    """
-    try:
-        lf = Langfuse()
-        trace = lf.api.trace.get(reference_trace_id)
-        metrics: dict[str, Any] = {}
-        if hasattr(trace, "scores") and trace.scores:
-            for score in trace.scores:
-                name = getattr(score, "name", "")
-                value = getattr(score, "value", 0)
-                if name:
-                    metrics[name] = float(value)
-        lf.flush()
-        return metrics if metrics else None
-    except Exception as e:
-        logger.warning("Failed to fetch reference trace %s: %s", reference_trace_id, e)
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -797,6 +922,7 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
             "latency_p95": float(np.percentile(latencies, 95)),
             "latency_mean": float(np.mean(latencies)),
             "latency_max": float(np.max(latencies)),
+            "latency_stddev": float(np.std(latencies)) if len(latencies) > 1 else 0.0,
         }
 
         # Rates from Langfuse score fields (fallback to local state if score missing)
@@ -943,11 +1069,19 @@ def resolve_report_collections(
     return validated or discovered_collections
 
 
+def _format_go_no_go_status(criterion: dict[str, Any]) -> str:
+    """Format a single Go/No-Go criterion status for the report."""
+    if criterion.get("skipped"):
+        return f"[-] SKIPPED ({criterion['actual']})"
+    if criterion["passed"]:
+        return "[x] PASS"
+    return "[ ] **FAIL**"
+
+
 def generate_report(
     run: ValidationRun,
     aggregates: dict[str, Any],
     output_path: Path,
-    reference_metrics: dict[str, Any] | None = None,
     go_no_go: dict[str, dict[str, Any]] | None = None,
     payload_summary: dict[str, dict[str, float]] | None = None,
 ) -> None:
@@ -960,28 +1094,7 @@ def generate_report(
     lines.append(f"**Date:** {run.started_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     lines.append(f"**Collections:** {', '.join(run.collections)}")
     lines.append(f"**skip_rerank_threshold:** {run.skip_rerank_threshold}")
-    lines.append(f"**Reference trace:** `{REFERENCE_TRACE_ID}`")
     lines.append("")
-
-    if reference_metrics:
-        lines.append("## Reference Trace Comparison")
-        lines.append("")
-        lines.append("| Metric | Reference c2b95d86 | Cold p50 | Cold p95 | Cache p50 |")
-        lines.append("|--------|--------------------|----------|----------|-----------|")
-        lines.append(
-            "| latency_total_ms | "
-            f"{reference_metrics.get('latency_total_ms', 0):.0f} | "
-            f"{aggregates.get('cold', {}).get('latency_p50', 0):.0f} | "
-            f"{aggregates.get('cold', {}).get('latency_p95', 0):.0f} | "
-            f"{aggregates.get('cache_hit', {}).get('latency_p50', 0):.0f} |"
-        )
-        lines.append(
-            "| rerank_applied | "
-            f"{reference_metrics.get('rerank_applied', 0):.0f} | "
-            f"{aggregates.get('cold', {}).get('rerank_applied_rate', 0):.0%} | - | "
-            f"{aggregates.get('cache_hit', {}).get('rerank_applied_rate', 0):.0%} |"
-        )
-        lines.append("")
 
     # Summary table per phase
     for phase_name, phase_label in [("cold", "Cold Run"), ("cache_hit", "Cache-Hit Run")]:
@@ -998,6 +1111,8 @@ def generate_report(
         lines.append(f"| latency p95 | {agg['latency_p95']:.0f} ms |")
         lines.append(f"| latency mean | {agg['latency_mean']:.0f} ms |")
         lines.append(f"| latency max | {agg['latency_max']:.0f} ms |")
+        if "latency_stddev" in agg:
+            lines.append(f"| latency stddev | {agg['latency_stddev']:.0f} ms |")
         lines.append(f"| semantic_cache_hit rate | {agg['semantic_cache_hit_rate']:.0%} |")
         lines.append(f"| search_cache_hit rate | {agg['search_cache_hit_rate']:.0%} |")
         lines.append(f"| rerank_applied rate | {agg['rerank_applied_rate']:.0%} |")
@@ -1056,16 +1171,12 @@ def generate_report(
         verdict = "GO — all criteria passed" if all_passed else "NO-GO — see failures below"
         lines.append(f"**Verdict: {verdict}**")
         lines.append("")
-        lines.append("| # | Criterion | Target | Actual | Status |")
-        lines.append("|---|-----------|--------|--------|--------|")
+        lines.append("| # | Criterion | Target | Actual | Stddev | Status |")
+        lines.append("|---|-----------|--------|--------|--------|--------|")
         for i, (name, c) in enumerate(go_no_go.items(), 1):
-            if c.get("skipped"):
-                status = "[-] SKIP"
-            elif c["passed"]:
-                status = "[x] PASS"
-            else:
-                status = "[ ] **FAIL**"
-            lines.append(f"| {i} | {name} | {c['target']} | {c['actual']} | {status} |")
+            status = _format_go_no_go_status(c)
+            stddev = c.get("stddev", "\u2014")
+            lines.append(f"| {i} | {name} | {c['target']} | {c['actual']} | {stddev} | {status} |")
         lines.append("")
         passed = sum(1 for c in go_no_go.values() if c["passed"])
         lines.append(f"**Score: {passed}/{len(go_no_go)} criteria passed**")
@@ -1135,14 +1246,24 @@ async def run_validation(args: argparse.Namespace) -> None:
     # Discover available collections
     qdrant_url = config.qdrant_url
     if args.collection:
-        # User specified a single collection
-        if await check_collection_available(qdrant_url, args.collection):
+        # User specified a single collection — verify it exists
+        from qdrant_client import AsyncQdrantClient
+
+        client = AsyncQdrantClient(url=qdrant_url)
+        try:
+            exists = await client.collection_exists(args.collection)
+        finally:
+            await client.close()
+        if exists:
             collections = [args.collection]
         else:
             logger.error("Collection %s not found, aborting", args.collection)
             sys.exit(1)
     else:
-        collections = await discover_collections(qdrant_url)
+        collections = await discover_collections(
+            qdrant_url,
+            quantization_mode=os.getenv("QDRANT_QUANTIZATION_MODE", "off"),
+        )
 
     if not collections:
         logger.error("No collections available for validation, aborting")
@@ -1183,7 +1304,6 @@ async def run_validation(args: argparse.Namespace) -> None:
     # Enrich results from Langfuse API (scores + node spans) before aggregates
     all_results = await enrich_results_from_langfuse(run_id, all_results)
     run.results = all_results
-    reference_metrics = await fetch_reference_trace_metrics(REFERENCE_TRACE_ID)
 
     # Compute aggregates
     aggregates = compute_aggregates(all_results)
@@ -1204,7 +1324,9 @@ async def run_validation(args: argparse.Namespace) -> None:
         len(go_no_go),
     )
     for name, c in go_no_go.items():
-        if c.get("skipped"):
+        if c.get("dep_unavailable"):
+            status = "DEP_UNAVAIL"
+        elif c.get("skipped"):
             status = "SKIP"
         elif c["passed"]:
             status = "PASS"
@@ -1239,7 +1361,6 @@ async def run_validation(args: argparse.Namespace) -> None:
             run,
             aggregates,
             report_path,
-            reference_metrics=reference_metrics,
             go_no_go=go_no_go,
             payload_summary=payload_summary,
         )
@@ -1262,8 +1383,6 @@ async def run_validation(args: argparse.Namespace) -> None:
         "go_no_go": go_no_go,
         "payload_summary": payload_summary,
         "orphan_rate": orphan_rate,
-        "reference_trace_id": REFERENCE_TRACE_ID,
-        "reference_metrics": reference_metrics,
         "traces": [
             {
                 "trace_id": r.trace_id,

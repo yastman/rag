@@ -5,20 +5,24 @@ Creates a mapping: article_number -> [chunk_ids]
 """
 
 import json
+import os
 import sys
 from collections import defaultdict
+from functools import lru_cache
 
 import requests  # type: ignore[import-untyped]
 
-
-sys.path.append("/home/admin/contextual_rag")
 from src.config import Settings
 
 
-# Load settings
-_settings = Settings()
-QDRANT_URL = _settings.qdrant_url
-QDRANT_API_KEY = _settings.qdrant_api_key or ""
+# Load Qdrant config without failing module import in test environments.
+try:
+    _settings = Settings()
+    QDRANT_URL = _settings.qdrant_url
+    QDRANT_API_KEY = _settings.qdrant_api_key or ""
+except ValueError:
+    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
 
 def extract_articles(collection_name: str) -> dict[str, list[str]]:
@@ -47,9 +51,9 @@ def extract_articles(collection_name: str) -> dict[str, list[str]]:
             payload["offset"] = offset
 
         response = requests.post(
-            f"{QDRANT_URL}/collections/{collection_name}/points/scroll",
+            f"{_qdrant_url()}/collections/{collection_name}/points/scroll",
             json=payload,
-            headers={"api-key": QDRANT_API_KEY},
+            headers={"api-key": _qdrant_api_key()},
         )
         response.raise_for_status()
 
