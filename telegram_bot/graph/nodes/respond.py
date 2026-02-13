@@ -25,6 +25,18 @@ def _build_reply_markup(trace_id: str) -> Any:
     return build_feedback_keyboard(trace_id)
 
 
+def _extract_sent_message_ref(state: dict[str, Any]) -> tuple[int, int] | None:
+    """Read serialized streamed-message reference from state."""
+    sent_message = state.get("sent_message")
+    if not isinstance(sent_message, dict):
+        return None
+    chat_id = sent_message.get("chat_id")
+    message_id = sent_message.get("message_id")
+    if isinstance(chat_id, int) and isinstance(message_id, int):
+        return chat_id, message_id
+    return None
+
+
 @observe(name="node-respond", capture_input=False, capture_output=False)
 async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
     """LangGraph node: send response to the user.
@@ -59,10 +71,16 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
 
     # Streaming path: response already delivered, just attach feedback buttons
     if response_sent:
-        sent_msg = state.get("sent_message")
-        if sent_msg is not None and reply_markup is not None:
+        sent_ref = _extract_sent_message_ref(state)
+        bot = getattr(message, "bot", None)
+        if sent_ref is not None and reply_markup is not None and bot is not None:
+            chat_id, message_id = sent_ref
             try:
-                await sent_msg.edit_reply_markup(reply_markup=reply_markup)
+                await bot.edit_message_reply_markup(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=reply_markup,
+                )
             except Exception:
                 logger.debug("Failed to attach feedback buttons to streamed message")
 

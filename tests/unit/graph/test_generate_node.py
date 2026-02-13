@@ -468,6 +468,44 @@ class TestGenerateNodeStreaming:
         assert create_kwargs["stream"] is True
 
     @pytest.mark.asyncio
+    async def test_streaming_returns_serializable_sent_message_ref(self) -> None:
+        """Streaming path stores serializable message reference for checkpointer safety."""
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        chunks = ["Ответ ", "готов."]
+        mock_client = _make_streaming_client(chunks)
+
+        mock_config = MagicMock()
+        mock_config.domain = "недвижимость"
+        mock_config.llm_model = "gpt-4o-mini"
+        mock_config.llm_temperature = 0.7
+        mock_config.generate_max_tokens = 2048
+        mock_config.streaming_enabled = True
+        mock_config.create_llm.return_value = mock_client
+
+        sent_msg = AsyncMock()
+        sent_msg.edit_text = AsyncMock()
+        sent_msg.message_id = 77
+        sent_msg.chat = MagicMock(id=12345)
+        message = AsyncMock()
+        message.answer = AsyncMock(return_value=sent_msg)
+
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            result = await generate_node(state, message=message)
+
+        assert result["response_sent"] is True
+        assert result["sent_message"] == {"chat_id": 12345, "message_id": 77}
+        # Regression guard: this value is persisted by checkpointer and must be msgpack-safe.
+        JsonPlusSerializer().dumps_typed(result["sent_message"])
+
+    @pytest.mark.asyncio
     async def test_streaming_fallback_on_stream_error(self) -> None:
         """When streaming fails, falls back to non-streaming LLM call."""
         from telegram_bot.graph.nodes.generate import generate_node

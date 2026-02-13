@@ -139,15 +139,15 @@ class TestRespondNodeFeedbackButtons:
     async def test_streaming_adds_reply_markup_via_edit(self):
         """When response_sent=True, respond_node edits markup on streamed message."""
         message = AsyncMock()
-        sent_msg = AsyncMock()
+        message.bot = AsyncMock()
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["response"] = "Streamed answer"
         state["message"] = message
         state["response_sent"] = True
         state["trace_id"] = "trace123"
-        state["sent_message"] = sent_msg
+        state["sent_message"] = {"chat_id": 12345, "message_id": 77}
 
         await respond_node(state)
 
         message.answer.assert_not_called()
-        sent_msg.edit_reply_markup.assert_awaited_once()
+        message.bot.edit_message_reply_markup.assert_awaited_once()
