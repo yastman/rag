@@ -134,8 +134,8 @@ def validate_latest_trace(
     # This enables branch-aware validation without flakiness from cache hits.
     required_scores: set[str] = set(SCORE_NAMES)
 
-    # Base span contract (real names from this repository)
-    required_spans: set[str] = {"telegram-message", "query-router"}
+    # Base span contract (current LangGraph node names as of 2026-02-13)
+    required_spans: set[str] = {"node-classify"}
 
     if not _langfuse_is_configured():
         return TraceValidationResult(
@@ -175,33 +175,24 @@ def validate_latest_trace(
     llm_used = _as_bool(scores.get("llm_used"))
     results_count = _as_float(scores.get("results_count"))
     no_results = _as_bool(scores.get("no_results"))
-    embeddings_hit = _as_bool(scores.get("embeddings_cache_hit"))
-    search_hit = _as_bool(scores.get("search_cache_hit"))
     rerank_applied = _as_bool(scores.get("rerank_applied"))
-    rerank_hit = _as_bool(scores.get("rerank_cache_hit"))
 
     # If query_type missing, infer CHITCHAT from scenario hint.
     is_chitchat = (query_type == 0.0) if query_type is not None else bool(should_skip_rag)
 
     if not is_chitchat:
-        required_spans |= {"cache-semantic-check"}
+        required_spans |= {"node-cache-check"}
 
     if not is_chitchat and semantic_hit is False:
-        required_spans |= {"cache-search-check"}
-
-        if embeddings_hit is False:
-            required_spans |= {"voyage-embed-query"}
-
-        if search_hit is False:
-            required_spans |= {"qdrant-hybrid-search-rrf"}
+        # Retrieval path: cache miss → retrieve → grade
+        required_spans |= {"node-retrieve", "node-grade"}
 
         if rerank_applied is True:
-            required_spans |= {"cache-rerank-check"}
-            if rerank_hit is False:
-                required_spans |= {"voyage-rerank"}
+            required_spans |= {"node-rerank"}
 
         if (llm_used is True) and (no_results is False) and ((results_count or 0) > 0):
-            required_spans |= {"cache-semantic-store"}
+            # Generation path: generate → cache-store → respond
+            required_spans |= {"node-generate", "node-cache-store", "node-respond"}
 
     missing_spans = set(required_spans - span_names)
     missing_scores = set(required_scores - score_names)
