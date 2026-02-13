@@ -67,6 +67,9 @@ class RAGState(TypedDict):
     input_type: str  # "text" or "voice"
     # LLM-as-a-Judge evaluation context
     retrieved_context: list[dict[str, Any]]
+    # User feedback (#229)
+    trace_id: str
+    sent_message: dict[str, int] | None  # {"chat_id": int, "message_id": int}
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -126,4 +129,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "input_type": "text",
         # LLM-as-a-Judge evaluation context
         "retrieved_context": [],
+        # User feedback (#229)
+        "trace_id": "",
+        "sent_message": None,
     }
