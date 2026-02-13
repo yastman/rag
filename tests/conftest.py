@@ -129,9 +129,9 @@ def mock_httpx_response():
 # =============================================================================
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_context_chunks():
-    """Sample context chunks for LLM tests."""
+    """Sample context chunks for LLM tests (read-only, session-scoped)."""
     return [
         {
             "text": "Квартира в Солнечном берегу, 2 комнаты, 65 м².",
@@ -182,9 +182,9 @@ def openai_api_key():
     return os.getenv("OPENAI_API_KEY", "")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_texts():
-    """Sample texts for embedding tests."""
+    """Sample texts for embedding tests (read-only, session-scoped)."""
     return [
         "Кримінальний кодекс України визначає злочини та покарання.",
         "Стаття 115 передбачає відповідальність за умисне вбивство.",
@@ -192,7 +192,7 @@ def sample_texts():
     ]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_query():
-    """Sample query for search tests."""
+    """Sample query for search tests (read-only, session-scoped)."""
     return "Яке покарання за крадіжку?"
