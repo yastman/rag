@@ -89,6 +89,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 | `/clear` | cmd_clear | Clear conversation history |
 | `/stats` | cmd_stats | Cache tier hit rates |
 | `/metrics` | cmd_metrics | Pipeline p50/p95 timing |
+| (callback) | handle_feedback | Like/dislike feedback (#229) |
 
 ## Configuration (BotConfig)
 
