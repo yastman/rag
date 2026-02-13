@@ -47,7 +47,7 @@ class TestAcornModeEnum:
 
     def test_acorn_mode_is_string_enum(self):
         """Test that AcornMode values can be used as strings."""
-        assert str(AcornMode.OFF) == "AcornMode.OFF"
+        assert str(AcornMode.OFF) == "off"
         assert AcornMode.ON.value == "on"
 
 
