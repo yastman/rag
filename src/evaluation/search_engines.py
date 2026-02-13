@@ -6,9 +6,7 @@ Search engines for evaluation:
 """
 
 import os
-import sys
 from abc import ABC, abstractmethod
-from functools import lru_cache
 
 import numpy as np
 import requests  # type: ignore[import-untyped]
@@ -24,6 +22,17 @@ try:
 except ValueError:
     QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
     QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
+
+
+def _qdrant_url() -> str:
+    """Return Qdrant base URL from resolved settings/environment."""
+    return QDRANT_URL or "http://localhost:6333"
+
+
+def _qdrant_api_key() -> str:
+    """Return Qdrant API key from resolved settings/environment."""
+    return QDRANT_API_KEY or ""
+
 
 # Load constants
 HNSW_EF_HIGH_PRECISION = HSNWParameters.EF_HIGH_PRECISION
