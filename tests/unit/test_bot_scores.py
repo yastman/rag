@@ -239,13 +239,16 @@ class TestScoreWriting:
             "response_style_applied",
             # Voice transcription (#151)
             "input_type",
+            # Embedding resilience (#210)
+            "bge_embed_error",
+            "bge_embed_latency_ms",
             # Conversation memory (#159)
             "memory_messages_count",
             "summarization_triggered",
             "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.score_current_trace.call_count == 28
+        assert mock_lf.score_current_trace.call_count == 30
 
     @pytest.mark.asyncio
     async def test_score_values_full_pipeline(self, mock_config):
@@ -555,6 +558,9 @@ class TestVoiceTraceMetadata:
             # Voice-specific
             "input_type",
             "stt_duration_ms",
+            # Embedding resilience (#210)
+            "embedding_error",
+            "embedding_error_type",
         }
         assert expected_keys.issubset(set(metadata.keys()))
 
