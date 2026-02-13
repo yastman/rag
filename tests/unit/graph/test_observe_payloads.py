@@ -57,34 +57,24 @@ class TestHeavyNodesDisableAutoCapture:
         for mod, original in original_modules.items():
             sys.modules[mod] = original  # type: ignore[assignment]
 
-    def test_retrieve_node_disables_auto_capture(self):
-        kwargs = self.observe_calls.get("node-retrieve", {})
-        assert kwargs.get("capture_input") is False, "node-retrieve must set capture_input=False"
-        assert kwargs.get("capture_output") is False, "node-retrieve must set capture_output=False"
-
-    def test_generate_node_disables_auto_capture(self):
-        kwargs = self.observe_calls.get("node-generate", {})
-        assert kwargs.get("capture_input") is False, "node-generate must set capture_input=False"
-        assert kwargs.get("capture_output") is False, "node-generate must set capture_output=False"
-
-    def test_cache_check_node_disables_auto_capture(self):
-        kwargs = self.observe_calls.get("node-cache-check", {})
-        assert kwargs.get("capture_input") is False, "node-cache-check must set capture_input=False"
-        assert kwargs.get("capture_output") is False, (
-            "node-cache-check must set capture_output=False"
+    @pytest.mark.parametrize(
+        "node_name",
+        [
+            "node-retrieve",
+            "node-generate",
+            "node-cache-check",
+            "node-cache-store",
+            "node-respond",
+        ],
+    )
+    def test_node_disables_auto_capture(self, node_name):
+        kwargs = self.observe_calls.get(node_name, {})
+        assert kwargs.get("capture_input") is False, (
+            f"{node_name} must set capture_input=False"
         )
-
-    def test_cache_store_node_disables_auto_capture(self):
-        kwargs = self.observe_calls.get("node-cache-store", {})
-        assert kwargs.get("capture_input") is False, "node-cache-store must set capture_input=False"
         assert kwargs.get("capture_output") is False, (
-            "node-cache-store must set capture_output=False"
+            f"{node_name} must set capture_output=False"
         )
-
-    def test_respond_node_disables_auto_capture(self):
-        kwargs = self.observe_calls.get("node-respond", {})
-        assert kwargs.get("capture_input") is False, "node-respond must set capture_input=False"
-        assert kwargs.get("capture_output") is False, "node-respond must set capture_output=False"
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +89,7 @@ def _extract_span_payloads(mock_lf_client: MagicMock) -> list[dict]:
     """Collect all input/output dicts from update_current_span calls."""
     payloads: list[dict] = []
     for c in mock_lf_client.update_current_span.call_args_list:
-        kwargs = c.kwargs if c.kwargs else {}
+        kwargs = c.kwargs or {}
         if "input" in kwargs and isinstance(kwargs["input"], dict):
             payloads.append(kwargs["input"])
         if "output" in kwargs and isinstance(kwargs["output"], dict):
