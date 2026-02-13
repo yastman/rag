@@ -4,7 +4,7 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 
 # Docker & Infrastructure
 
-## Full Stack (16 containers)
+## Full Stack (14 containers)
 
 | Container | Port | Purpose |
 |-----------|------|---------|
@@ -22,19 +22,19 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 | dev-user-base | 8003 | Russian embeddings (deepvk/USER2-base) |
 | dev-bge-m3 | 8000 | BGE-M3 dense+sparse embeddings |
 | dev-docling | 5001 | Document parsing (PDF/DOCX/CSV) |
-| dev-lightrag | 9621 | LightRAG graph-based retrieval |
 
 ## Docker Profiles (Fast Startup)
 
 | Command | Services | Use Case |
 |---------|----------|----------|
-| `make docker-core-up` | postgres, qdrant, redis, docling, bm42 | Daily ingestion dev |
+| `make docker-core-up` | postgres, qdrant, redis, docling | Daily ingestion dev |
 | `make docker-bot-up` | core + litellm, bot | Bot development |
 | `make docker-obs-up` | core + loki, promtail, alertmanager | Debug logging |
 | `make docker-ml-up` | core + langfuse stack, mlflow | ML experiments |
-| `make docker-ai-up` | core + bge-m3, user-base, lightrag | Heavy AI models |
+| `make docker-ai-up` | core + bge-m3, user-base | Heavy AI models |
+| `make docker-eval-up` | core + mlflow | Evaluation (RAGAS, A/B tests) |
 | `make docker-ingest-up` | core + ingestion | Ingestion container |
-| `make docker-full-up` | everything (16+ services) | Full stack |
+| `make docker-full-up` | everything (14+ services) | Full stack |
 
 ### Combining Profiles
 
