@@ -12,7 +12,7 @@ from typing import Any
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import BotCommand, Message
 from aiogram.utils.chat_action import ChatActionSender
 
 from .config import BotConfig
@@ -21,6 +21,7 @@ from .graph.graph import build_graph
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import get_client, observe, propagate_attributes
+from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 
@@ -351,6 +352,9 @@ class PropertyBot:
         # Conversation memory checkpointer (initialized in start())
         self._checkpointer: Any = None
 
+        # History service (initialized in start())
+        self._history_service: HistoryService | None = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -374,6 +378,7 @@ class PropertyBot:
         self.dp.message(Command("stats"))(self.cmd_stats)
         self.dp.message(Command("metrics"))(self.cmd_metrics)
         self.dp.message(Command("call"))(self.cmd_call)
+        self.dp.message(Command("history"))(self.cmd_history)
         self.dp.message(F.voice)(self.handle_voice)
         self.dp.message(F.text)(self.handle_query)
 
@@ -539,6 +544,45 @@ class PropertyBot:
             logger.exception("Failed to initiate call to %s", phone)
             await message.answer("Ошибка инициации звонка. Попробуйте позже.")
 
+    async def cmd_history(self, message: Message):
+        """Handle /history command — semantic search in conversation history."""
+        assert message.from_user is not None
+        text = (message.text or "").strip()
+        parts = text.split(maxsplit=1)
+
+        if len(parts) < 2:
+            await message.answer(
+                "Использование: /history <запрос>\nПример: /history цены на квартиры"
+            )
+            return
+
+        if self._history_service is None:
+            await message.answer("История диалогов временно недоступна.")
+            return
+
+        query = parts[1]
+        results = await self._history_service.search_user_history(
+            user_id=message.from_user.id,
+            query=query,
+            limit=5,
+        )
+
+        if not results:
+            await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
+            return
+
+        lines = [f"📋 Найдено {len(results)} записей:\n"]
+        for i, r in enumerate(results, 1):
+            ts = r.get("timestamp", "")[:16].replace("T", " ")
+            lines.append(f"{i}. [{ts}]")
+            lines.append(f"   В: {r['query']}")
+            resp_preview = r["response"][:150]
+            if len(r["response"]) > 150:
+                resp_preview += "..."
+            lines.append(f"   О: {resp_preview}\n")
+
+        await message.answer("\n".join(lines))
+
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message):
         """Handle user query via LangGraph RAG pipeline."""
@@ -602,6 +646,28 @@ class PropertyBot:
 
             # Write Langfuse scores (14 + latency + response length #129)
             _write_langfuse_scores(lf, result)
+
+            # Persist Q&A to history (fail-soft)
+            if self._history_service and result.get("response"):
+                try:
+                    saved = await self._history_service.save_turn(
+                        user_id=message.from_user.id,
+                        session_id=state["session_id"],
+                        query=message.text or "",
+                        response=result["response"],
+                        input_type="text",
+                        query_embedding=result.get("query_embedding"),
+                    )
+                    lf.score_current_trace(
+                        name="history_save_success",
+                        value=1 if saved else 0,
+                        data_type="BOOLEAN",
+                    )
+                    lf.score_current_trace(
+                        name="history_backend", value="qdrant", data_type="CATEGORICAL"
+                    )
+                except Exception:
+                    logger.warning("Failed to save history turn", exc_info=True)
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
@@ -749,6 +815,29 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to write Langfuse voice scores", exc_info=True)
 
+            # Persist Q&A to history (fail-soft)
+            if self._history_service and result.get("response"):
+                try:
+                    query_text = result.get("stt_text") or state.get("query", "")
+                    saved = await self._history_service.save_turn(
+                        user_id=message.from_user.id,
+                        session_id=state["session_id"],
+                        query=query_text,
+                        response=result["response"],
+                        input_type=result.get("input_type", "voice"),
+                        query_embedding=result.get("query_embedding"),
+                    )
+                    lf.score_current_trace(
+                        name="history_save_success",
+                        value=1 if saved else 0,
+                        data_type="BOOLEAN",
+                    )
+                    lf.score_current_trace(
+                        name="history_backend", value="qdrant", data_type="CATEGORICAL"
+                    )
+                except Exception:
+                    logger.warning("Failed to save voice history turn", exc_info=True)
+
     async def start(self):
         """Start bot polling."""
         logger.info("Starting bot...")
@@ -775,6 +864,19 @@ class PropertyBot:
             logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
             self._checkpointer = create_fallback_checkpointer()
 
+        # Initialize history service (Qdrant-backed Q&A history)
+        try:
+            self._history_service = HistoryService(
+                client=self._qdrant.client,
+                embeddings=self._embeddings,
+                collection_name=self.config.qdrant_history_collection,
+            )
+            await self._history_service.ensure_collection()
+            logger.info("History service ready (%s)", self.config.qdrant_history_collection)
+        except Exception:
+            logger.warning("History service init failed, /history disabled", exc_info=True)
+            self._history_service = None
+
         # Preflight dependency checks
         from .preflight import check_dependencies
 
@@ -782,6 +884,18 @@ class PropertyBot:
 
         # Start Redis health monitor (background task, every 5 min)
         await self._redis_monitor.start()
+
+        # Register bot commands in Telegram menu
+        await self.bot.set_my_commands(
+            [
+                BotCommand(command="start", description="Начать работу с ботом"),
+                BotCommand(command="help", description="Помощь и примеры запросов"),
+                BotCommand(command="clear", description="Очистить историю диалога"),
+                BotCommand(command="history", description="Поиск по истории диалогов"),
+                BotCommand(command="stats", description="Статистика кеша"),
+                BotCommand(command="metrics", description="Метрики пайплайна (p50/p95)"),
+            ]
+        )
 
         await self.dp.start_polling(self.bot)
 
