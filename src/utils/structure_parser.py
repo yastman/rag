@@ -58,12 +58,12 @@ ROMAN_NUMERALS = {
 
 def roman_to_int(roman: str) -> int:
     """Convert Roman numeral to integer."""
-    return ROMAN_NUMERALS.get(roman.upper(), None)  ***REMOVED*** type: ignore
+    return ROMAN_NUMERALS.get(roman.upper())  ***REMOVED*** type: ignore
 
 
 def ukrainian_number_to_int(word: str) -> int:
     """Convert Ukrainian number word to integer."""
-    return UKRAINIAN_NUMBERS.get(word.lower(), None)  ***REMOVED*** type: ignore
+    return UKRAINIAN_NUMBERS.get(word.lower())  ***REMOVED*** type: ignore
 
 
 def parse_legal_structure(chunk_text: str) -> dict:
