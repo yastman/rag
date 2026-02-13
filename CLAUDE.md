@@ -183,7 +183,7 @@ See `.claude/rules/` for domain-specific documentation:
 |------|-------|-----------|
 | `features/search-retrieval.md` | RRF, gRPC, batch, group_by, quantization | `src/retrieval/**` |
 | `features/query-processing.md` | HyDE, preprocessing, routing | `**/query*.py` |
-| `features/evaluation.md` | RAGAS, metrics, A/B tests | `src/evaluation/**` |
+| `features/evaluation.md` | RAGAS, LLM-as-a-Judge, metrics, A/B tests | `src/evaluation/**, telegram_bot/evaluation/**` |
 | `features/caching.md` | 6-tier cache, Redis pipelines, TTL | `**/cache*.py` |
 | `features/embeddings.md` | BGE-M3 (/encode/hybrid, dense, sparse), Voyage | `**/embed*.py` |
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
