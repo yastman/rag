@@ -882,10 +882,9 @@ class PropertyBot:
         # Update keyboard to confirmation
         liked = value > 0
         try:
-            if callback.message is not None:
-                await callback.message.edit_reply_markup(
-                    reply_markup=build_feedback_confirmation(liked=liked)
-                )
+            msg = callback.message
+            if msg is not None and hasattr(msg, "edit_reply_markup"):
+                await msg.edit_reply_markup(reply_markup=build_feedback_confirmation(liked=liked))
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
 
