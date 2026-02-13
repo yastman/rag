@@ -8,10 +8,21 @@ Requires:
 
 import contextlib
 import os
+import socket
 import tempfile
 from pathlib import Path
 
 import pytest
+
+
+def _port_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(2.0)
+        try:
+            s.connect((host, port))
+            return True
+        except (OSError, TimeoutError):
+            return False
 
 
 # Skip if services not available
@@ -20,6 +31,10 @@ pytestmark = [
     pytest.mark.skipif(
         not os.getenv("VOYAGE_API_KEY"),
         reason="VOYAGE_API_KEY not set",
+    ),
+    pytest.mark.skipif(
+        not _port_open("localhost", 5001),
+        reason="docling-serve not running on localhost:5001",
     ),
 ]
 
