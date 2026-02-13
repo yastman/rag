@@ -107,8 +107,6 @@ async def services(load_config):
 
 class TestLoadConversations:
     """Load tests for parallel chat conversations."""
-
-    @pytest.mark.asyncio
     async def test_parallel_chats(self, load_config, services, request):
         """Run parallel chats and verify p95 thresholds."""
         metrics = LoadMetrics()
