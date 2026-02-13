@@ -1,10 +1,10 @@
 ---
-paths: "src/evaluation/**, tests/baseline/**"
+paths: "src/evaluation/**, telegram_bot/evaluation/**, tests/baseline/**, scripts/evaluate_judge.py"
 ---
 
 # Evaluation & Experiments
 
-Search metrics, RAGAS, MLflow, and A/B testing.
+Search metrics, RAGAS, MLflow, A/B testing, and LLM-as-a-Judge.
 
 ## Purpose
 
@@ -27,7 +27,11 @@ Queries + Ground Truth → SearchEvaluator → Metrics
 | `src/evaluation/mlflow_integration.py` | - | MLflow setup |
 | `src/evaluation/run_ab_test.py` | - | A/B test runner |
 | `tests/baseline/collector.py` | - | LangfuseMetricsCollector |
-| `tests/baseline/thresholds.yaml` | - | Regression thresholds |
+| `tests/baseline/thresholds.yaml` | - | Regression thresholds (incl. judge quality) |
+| `telegram_bot/evaluation/judges.py` | - | LLM-as-a-Judge evaluators (RAG Triad) |
+| `telegram_bot/evaluation/prompts.py` | - | Judge prompts (faithfulness, relevance, context) |
+| `telegram_bot/evaluation/runner.py` | - | Batch runner + online sampling |
+| `scripts/evaluate_judge.py` | - | CLI entry point for batch judge |
 
 ## Metrics
 
@@ -151,10 +155,51 @@ uv run python scripts/validate_traces.py --collection gdrive_documents_bge --rep
 
 **Baseline (2026-02-10):** cold p50=2480ms, p95=5585ms. generate node = 97% of latency.
 
+## LLM-as-a-Judge (#230)
+
+Automated quality scoring via RAG Triad: faithfulness, answer relevance, context relevance.
+
+**Judge model:** GLM-4.7 via LiteLLM (Cerebras free tier), `temperature=0`, JSON mode.
+
+| Metric | Score Name | Threshold | What it measures |
+|--------|-----------|-----------|------------------|
+| Faithfulness | `judge_faithfulness` | ≥0.75 | Answer grounded in context, no hallucinations |
+| Answer Relevance | `judge_answer_relevance` | ≥0.70 | Answer useful and relevant to question |
+| Context Relevance | `judge_context_relevance` | ≥0.65 | Retrieved docs relevant to question |
+
+### Modes
+
+| Mode | Command | Description |
+|------|---------|-------------|
+| Batch | `make eval-judge` | 24h traces, all without judge scores |
+| Sample | `make eval-judge-sample` | 48h traces, 50% sample |
+| Online | `JUDGE_SAMPLE_RATE=0.2` | Fire-and-forget on live queries |
+
+### Data flow
+
+```
+Langfuse traces → fetch (API) → extract query/answer/context
+  → 3 judge LLM calls (parallel) → write scores back to Langfuse
+```
+
+Context extracted from `node-retrieve` span output field `retrieved_context` (curated: top-5 docs, 500 chars each).
+
+### Online sampling config
+
+| Env Var | Default | Description |
+|---------|---------|-------------|
+| `JUDGE_SAMPLE_RATE` | `0.0` | Fraction of queries (0.0=off, 0.2=20%) |
+| `JUDGE_MODEL` | `gpt-4o-mini-cerebras-glm` | Judge LLM model |
+
+Online judge is semaphore-bounded (max 2 concurrent) with 25s timeout. Errors logged, never affect user response.
+
 ## Testing
 
 ```bash
 pytest tests/unit/test_evaluator.py -v
+pytest tests/unit/evaluation/test_judges.py -v     # Judge parser + LLM mock
+pytest tests/unit/evaluation/test_runner.py -v      # Trace extraction
+pytest tests/unit/evaluation/test_online_sampling.py -v
 pytest tests/baseline/ -v
 make baseline-smoke
 ```
