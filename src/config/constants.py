@@ -1,10 +1,10 @@
 """Constants for Contextual RAG Pipeline."""
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-class QuantizationMode(str, Enum):
+class QuantizationMode(StrEnum):
     """Qdrant vector quantization modes.
 
     Controls which collection suffix to use:
@@ -18,7 +18,7 @@ class QuantizationMode(str, Enum):
     BINARY = "binary"
 
 
-class SearchEngine(str, Enum):
+class SearchEngine(StrEnum):
     """Available search engine implementations."""
 
     BASELINE = "baseline"  # Dense vectors only
@@ -27,7 +27,7 @@ class SearchEngine(str, Enum):
     DBSF_COLBERT = "dbsf_colbert"  # Density-Based Semantic Fusion + ColBERT
 
 
-class SmallToBigMode(str, Enum):
+class SmallToBigMode(StrEnum):
     """Small-to-big context expansion mode."""
 
     OFF = "off"  # No expansion
@@ -35,7 +35,7 @@ class SmallToBigMode(str, Enum):
     AUTO = "auto"  # Expand only for complex queries
 
 
-class AcornMode(str, Enum):
+class AcornMode(StrEnum):
     """ACORN search mode for filtered queries.
 
     ACORN (Agnostic Contiguous Optimized Retrieval Network) improves
@@ -55,7 +55,7 @@ class AcornMode(str, Enum):
     AUTO = "auto"  # Use ACORN only with low selectivity filters
 
 
-class APIProvider(str, Enum):
+class APIProvider(StrEnum):
     """Available LLM API providers."""
 
     CLAUDE = "claude"  # Anthropic Claude (recommended)
@@ -65,7 +65,7 @@ class APIProvider(str, Enum):
     Z_AI = "zai"  # Z.AI GLM (legacy, not recommended)
 
 
-class ModelName(str, Enum):
+class ModelName(StrEnum):
     """LLM model names by provider."""
 
     # Anthropic Claude

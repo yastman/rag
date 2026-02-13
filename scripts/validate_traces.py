@@ -53,6 +53,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+# Base names used by discovery helper (kept as explicit alias for tests/backward compatibility).
+COLLECTION_BASE_NAMES = COLLECTIONS_TO_CHECK
 
 STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
 
