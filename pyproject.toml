@@ -4,7 +4,6 @@ version = "2.14.0"
 description = "Contextual RAG Pipeline with DBSF + ColBERT hybrid search"
 requires-python = ">=3.11"
 dependencies = [
-    "pymupdf>=1.26.0",        ***REMOVED*** PyMuPDF 1.26+ uses 'import pymupdf' (NOT fitz)
     "anthropic",
     "openai",
     "groq",
@@ -16,10 +15,6 @@ dependencies = [
     "scipy",
     "sentence-transformers",  ***REMOVED*** BGE-M3 embeddings
     "qdrant-client>=1.16.2",  ***REMOVED*** Vector database client (v1.15+ for BM42 support)
-    "fastembed>=0.7.4",       ***REMOVED*** FastEmbed for BM42 sparse embeddings
-    ***REMOVED*** Document Processing (2025-10-30)
-    "docling>=2.70.0",        ***REMOVED*** Advanced document chunking & structure detection
-    "docling-core>=2.61.0",   ***REMOVED*** Core types for Docling
     "transformers>=4.30.0",   ***REMOVED*** For HuggingFace tokenizers in HybridChunker
     "langfuse>=3.0.0",        ***REMOVED*** LLM observability & tracing
     ***REMOVED*** Voyage AI Integration (2026-01-21)
@@ -31,8 +26,6 @@ dependencies = [
     ***REMOVED*** PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
     "torch>=2.0.0",
     "torchvision>=0.15.0",  ***REMOVED*** Must be direct dep for [tool.uv.sources] to apply CPU index
-    ***REMOVED*** CocoIndex Document Ingestion (2026-02-02)
-    "cocoindex>=0.3.28",                  ***REMOVED*** Data transformation framework for AI
     "asyncpg>=0.31.0",
     ***REMOVED*** Performance (2026-02-06)
     "uvloop>=0.21.0",                     ***REMOVED*** 2-4x faster asyncio event loop
@@ -66,6 +59,15 @@ voice = [
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
 ]
 
+***REMOVED*** Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
+ingest = [
+    "pymupdf>=1.26.0",
+    "docling>=2.70.0",
+    "docling-core>=2.61.0",
+    "cocoindex>=0.3.28",
+    "fastembed>=0.7.4",
+]
+
 ***REMOVED*** Evaluation tools (RAGAS, MLflow, dataset generation)
 eval = [
     "mlflow>=3.9.0",
@@ -76,7 +78,7 @@ eval = [
 
 ***REMOVED*** All optional dependencies
 all = [
-    "contextual-rag[docs,voice,eval]",
+    "contextual-rag[docs,voice,eval,ingest]",
 ]
 
 ***REMOVED*** =============================================================================
