@@ -791,6 +791,96 @@ def test_compute_checkpointer_overhead_proxy_ms():
     assert _compute_checkpointer_overhead_proxy_ms(result, 50.0) == 0.0
 
 
+class TestHistoryScores:
+    """Test history-related Langfuse scores (#239)."""
+
+    async def _run_handle_query(self, mock_config, graph_result, mock_lf_client):
+        """Helper: run handle_query with mocked graph and Langfuse client."""
+        bot = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.save_turn = AsyncMock(return_value=True)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=graph_result)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        return mock_lf_client, bot
+
+    @pytest.mark.asyncio
+    async def test_history_save_success_score(self, mock_config):
+        """history_save_success=1 when save_turn returns True."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        mock_lf, _bot = await self._run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        assert "history_save_success" in scores
+        assert scores["history_save_success"]["value"] == 1
+        assert scores["history_save_success"]["data_type"] == "BOOLEAN"
+
+    @pytest.mark.asyncio
+    async def test_history_save_failure_score(self, mock_config):
+        """history_save_success=0 when save_turn returns False."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        bot = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.save_turn = AsyncMock(return_value=False)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=FULL_PIPELINE_RESULT)
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cm = AsyncMock()
+            mock_cm.__aenter__ = AsyncMock()
+            mock_cm.__aexit__ = AsyncMock()
+            mock_cas.typing.return_value = mock_cm
+            mock_prop.return_value.__enter__ = MagicMock()
+            mock_prop.return_value.__exit__ = MagicMock()
+
+            await bot.handle_query(_make_message())
+
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        assert scores["history_save_success"]["value"] == 0
+
+    @pytest.mark.asyncio
+    async def test_history_backend_score(self, mock_config):
+        """history_backend=qdrant CATEGORICAL score when service available."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        mock_lf, _ = await self._run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        assert "history_backend" in scores
+        assert scores["history_backend"]["value"] == "qdrant"
+        assert scores["history_backend"]["data_type"] == "CATEGORICAL"
+
+
 class TestCheckpointerOverheadScore:
     """Test checkpointer_overhead_proxy_ms score (#159)."""
 

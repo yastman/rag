@@ -431,6 +431,270 @@ class TestHandleQuery:
             assert state_arg["max_rewrite_attempts"] == 3
 
 
+class TestHistorySaveOnResponse:
+    """Test Q&A history persistence after successful responses."""
+
+    @pytest.mark.asyncio
+    async def test_handle_query_saves_history(self, mock_config):
+        """handle_query stores history record when response exists."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.save_turn = AsyncMock(return_value=True)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "response": "Вот квартиры...",
+                "query_type": "GENERAL",
+                "latency_stages": {},
+                "query_embedding": [0.1] * 1024,
+            }
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = MagicMock()
+            message.text = "квартиры в Несебр"
+            message.from_user = MagicMock(id=12345)
+            message.chat = MagicMock(id=12345)
+            message.bot = MagicMock()
+            message.bot.send_chat_action = AsyncMock()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock()
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_query(message)
+
+        bot._history_service.save_turn.assert_awaited_once()
+        call_kwargs = bot._history_service.save_turn.call_args.kwargs
+        assert call_kwargs["user_id"] == 12345
+        assert call_kwargs["query"] == "квартиры в Несебр"
+        assert call_kwargs["response"] == "Вот квартиры..."
+        assert call_kwargs["input_type"] == "text"
+        assert call_kwargs["query_embedding"] == [0.1] * 1024
+
+    @pytest.mark.asyncio
+    async def test_handle_voice_saves_history(self, mock_config):
+        """handle_voice stores history with resolved textual query."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.save_turn = AsyncMock(return_value=True)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={
+                "response": "Ответ на голос",
+                "query_type": "FAQ",
+                "latency_stages": {},
+                "stt_text": "распознанный текст",
+                "query_embedding": [0.2] * 1024,
+                "input_type": "voice",
+            }
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = MagicMock()
+            message.from_user = MagicMock(id=12345)
+            message.chat = MagicMock(id=12345)
+            message.bot = MagicMock()
+            message.bot.send_chat_action = AsyncMock()
+            message.bot.get_file = AsyncMock()
+            message.bot.download_file = AsyncMock()
+            message.voice = MagicMock()
+            message.voice.file_id = "file123"
+            message.voice.duration = 5
+            file_mock = MagicMock()
+            file_mock.file_path = "voice/file.ogg"
+            message.bot.get_file.return_value = file_mock
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock()
+                mock_cas.typing.return_value = mock_cm
+
+                await bot.handle_voice(message)
+
+        bot._history_service.save_turn.assert_awaited_once()
+        call_kwargs = bot._history_service.save_turn.call_args.kwargs
+        assert call_kwargs["input_type"] == "voice"
+        assert call_kwargs["query"] == "распознанный текст"
+
+    @pytest.mark.asyncio
+    async def test_handle_query_skips_history_when_no_service(self, mock_config):
+        """handle_query skips history save when service is None."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = None
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={"response": "ok", "query_type": "GENERAL", "latency_stages": {}}
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = MagicMock()
+            message.text = "test"
+            message.from_user = MagicMock(id=12345)
+            message.chat = MagicMock(id=12345)
+            message.bot = MagicMock()
+            message.bot.send_chat_action = AsyncMock()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock()
+                mock_cas.typing.return_value = mock_cm
+
+                # Should not raise
+                await bot.handle_query(message)
+
+    @pytest.mark.asyncio
+    async def test_handle_query_history_save_failure_does_not_break_response(self, mock_config):
+        """History save failure should not break user response flow."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.save_turn = AsyncMock(side_effect=RuntimeError("save failed"))
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(
+            return_value={"response": "ok", "query_type": "GENERAL", "latency_stages": {}}
+        )
+
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = MagicMock()
+            message.text = "test"
+            message.from_user = MagicMock(id=12345)
+            message.chat = MagicMock(id=12345)
+            message.bot = MagicMock()
+            message.bot.send_chat_action = AsyncMock()
+
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cm = AsyncMock()
+                mock_cm.__aenter__ = AsyncMock()
+                mock_cm.__aexit__ = AsyncMock()
+                mock_cas.typing.return_value = mock_cm
+
+                # Should not raise despite save failure
+                await bot.handle_query(message)
+
+
+class TestCmdHistory:
+    """Test /history command handler."""
+
+    @pytest.mark.asyncio
+    async def test_history_no_args_shows_usage(self, mock_config):
+        """/history without argument shows usage message."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+
+        message = MagicMock()
+        message.text = "/history"
+        message.from_user = MagicMock(id=12345)
+        message.answer = AsyncMock()
+
+        await bot.cmd_history(message)
+
+        message.answer.assert_called_once()
+        assert (
+            "использование" in message.answer.call_args[0][0].lower()
+            or "/history" in message.answer.call_args[0][0]
+        )
+
+    @pytest.mark.asyncio
+    async def test_history_search_returns_results(self, mock_config):
+        """/history цены performs search and returns formatted results."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(
+            return_value=[
+                {
+                    "query": "цены на квартиры",
+                    "response": "Квартиры от 50к евро",
+                    "timestamp": "2026-02-13T10:00:00",
+                    "score": 0.95,
+                },
+            ]
+        )
+
+        message = MagicMock()
+        message.text = "/history цены"
+        message.from_user = MagicMock(id=12345)
+        message.answer = AsyncMock()
+
+        await bot.cmd_history(message)
+
+        bot._history_service.search_user_history.assert_awaited_once_with(
+            user_id=12345, query="цены", limit=5
+        )
+        message.answer.assert_called_once()
+        answer_text = message.answer.call_args[0][0]
+        assert "цены на квартиры" in answer_text
+        assert "Квартиры от 50к евро" in answer_text
+
+    @pytest.mark.asyncio
+    async def test_history_empty_results(self, mock_config):
+        """/history with no matches returns informative message."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(return_value=[])
+
+        message = MagicMock()
+        message.text = "/history несуществующее"
+        message.from_user = MagicMock(id=12345)
+        message.answer = AsyncMock()
+
+        await bot.cmd_history(message)
+
+        message.answer.assert_called_once()
+        assert (
+            "не найден" in message.answer.call_args[0][0].lower()
+            or "нет" in message.answer.call_args[0][0].lower()
+        )
+
+    @pytest.mark.asyncio
+    async def test_history_unavailable_fallback(self, mock_config):
+        """/history when service is None returns graceful message."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = None
+
+        message = MagicMock()
+        message.text = "/history цены"
+        message.from_user = MagicMock(id=12345)
+        message.answer = AsyncMock()
+
+        await bot.cmd_history(message)
+
+        message.answer.assert_called_once()
+        assert "недоступн" in message.answer.call_args[0][0].lower()
+
+    def test_history_command_registered(self, mock_config):
+        """Verify /history handler is registered."""
+        bot, _ = _create_bot(mock_config)
+        assert hasattr(bot, "cmd_history")
+
+
 class TestCheckpointNamespace:
     """Test checkpoint namespace separation for text/voice."""
 
@@ -760,6 +1024,8 @@ class TestBotLifecycle:
         bot.dp.start_polling = AsyncMock()
         bot._redis_monitor = MagicMock()
         bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
 
         with patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock):
             await bot.start()
@@ -778,6 +1044,8 @@ class TestBotLifecycle:
         bot.dp.start_polling = AsyncMock()
         bot._redis_monitor = MagicMock()
         bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
 
         with patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock):
             await bot.start()
@@ -835,6 +1103,92 @@ class TestBotLifecycle:
         await bot.stop()
 
         checkpointer.__aexit__.assert_awaited_once_with(None, None, None)
+
+
+class TestHistoryServiceLifecycle:
+    """Test history service initialization in bot lifecycle."""
+
+    @pytest.mark.asyncio
+    async def test_start_initializes_history_service(self, mock_config):
+        """start() should create and ensure history collection."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+
+        mock_checkpointer = AsyncMock()
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch(
+                "telegram_bot.integrations.memory.create_redis_checkpointer",
+                return_value=mock_checkpointer,
+            ),
+            patch("telegram_bot.bot.HistoryService") as mock_history_cls,
+        ):
+            mock_svc = AsyncMock()
+            mock_history_cls.return_value = mock_svc
+            await bot.start()
+
+        assert bot._history_service is not None
+        mock_svc.ensure_collection.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_start_history_failure_does_not_crash(self, mock_config):
+        """start() should not crash if history service init fails."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+
+        mock_checkpointer = AsyncMock()
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch(
+                "telegram_bot.integrations.memory.create_redis_checkpointer",
+                return_value=mock_checkpointer,
+            ),
+            patch("telegram_bot.bot.HistoryService") as mock_history_cls,
+        ):
+            mock_svc = AsyncMock()
+            mock_svc.ensure_collection = AsyncMock(side_effect=RuntimeError("qdrant down"))
+            mock_history_cls.return_value = mock_svc
+            # Should not raise
+            await bot.start()
+
+        assert bot._history_service is None
+
+    @pytest.mark.asyncio
+    async def test_stop_safe_without_history_service(self, mock_config):
+        """stop() should work fine when history_service is None."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.close = AsyncMock()
+        bot._qdrant = MagicMock()
+        bot._qdrant.close = AsyncMock()
+        bot._embeddings = MagicMock()
+        bot._embeddings.aclose = AsyncMock()
+        bot._sparse = MagicMock()
+        bot._sparse.aclose = AsyncMock()
+        bot._reranker = None
+        bot.bot = MagicMock()
+        bot.bot.session = MagicMock()
+        bot.bot.session.close = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.stop = AsyncMock()
+        bot._history_service = None
+
+        # Should not raise
+        await bot.stop()
 
 
 class TestSetupMiddlewares:
