@@ -1,7 +1,6 @@
 """Unit test specific fixtures for isolation."""
 
 import contextlib
-import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,21 +8,13 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def isolate_otel_langfuse(monkeypatch):
-    """Block OTEL/Langfuse network calls and clear module cache in unit tests.
+    """Block OTEL/Langfuse network calls in unit tests.
 
-    This fixture runs automatically before each unit test to prevent:
-    - OTEL exporters from attempting network connections
-    - Langfuse from initializing real clients
-    - Test hangs due to blocking network I/O
-    - Module state pollution from mocks in other tests
+    Uses env vars + targeted patches only.  Does NOT manipulate sys.modules
+    because deleting/replacing modules breaks import references in other
+    tests running in the same xdist worker process.
     """
-    # Clear potentially polluted modules
-    prefixes = ("opentelemetry", "langfuse", "telegram_bot.services.observability")
-    for key in list(sys.modules.keys()):
-        if key.startswith(prefixes):
-            sys.modules.pop(key, None)
-
-    # Reset prompt_manager singleton so it picks up mocked Langfuse
+    # Reset prompt_manager singleton so it uses fresh env vars each test
     from telegram_bot.integrations.prompt_manager import _reset_client
 
     _reset_client()
@@ -42,18 +33,14 @@ def isolate_otel_langfuse(monkeypatch):
     # Create no-op mocks
     mock_noop = MagicMock()
 
-    # Mock langfuse module with __version__ attribute (for pollution test)
-    mock_langfuse_module = MagicMock()
-    mock_langfuse_module.__version__ = "0.0.0-test"
-    if "langfuse" not in sys.modules or not hasattr(sys.modules["langfuse"], "__file__"):
-        sys.modules["langfuse"] = mock_langfuse_module
-
-    # Patch at entry points to prevent any network initialization
+    # Patch at entry points to prevent any network initialization.
+    # Do NOT patch "langfuse.Langfuse" — the patch() call itself imports
+    # langfuse and can corrupt module state on stop().  Instead, patch the
+    # higher-level wrappers that our code actually calls.
     patches = [
         # OTEL entry point - make setup_opentelemetry a no-op
         patch("src.observability.otel_setup.setup_opentelemetry", mock_noop),
-        # Langfuse entry point - return mock client
-        patch("langfuse.Langfuse", mock_noop),
+        # Langfuse — patch our wrapper, not the SDK class directly
         patch("telegram_bot.services.observability.get_client", lambda: mock_noop),
         # Fallback: patch low-level OTEL exporters in case setup_opentelemetry is called
         patch(
