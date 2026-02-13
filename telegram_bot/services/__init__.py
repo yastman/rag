@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from .bge_m3_dense import BgeM3DenseService
     from .colbert_reranker import ColbertRerankerService
     from .embeddings import EmbeddingService
+    from .history_service import HistoryService
     from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
     from .metrics import PipelineMetrics
     from .qdrant import QdrantService
@@ -30,6 +31,7 @@ __all__ = [
     "ConfidenceResult",
     "EmbeddingService",
     "ExpandedChunk",
+    "HistoryService",
     "HyDEGenerator",
     "LLMService",
     "PipelineMetrics",
@@ -49,6 +51,7 @@ _IMPORT_MAP = {
     "ConfidenceResult": ".llm",
     "EmbeddingService": ".embeddings",
     "ExpandedChunk": ".small_to_big",
+    "HistoryService": ".history_service",
     "HyDEGenerator": ".query_preprocessor",
     "LLMService": ".llm",
     "LOW_CONFIDENCE_THRESHOLD": ".llm",
