@@ -152,7 +152,7 @@ async def _generate_streaming(
     llm_messages: list[dict[str, str]],
     message: Any,
     max_tokens: int = 0,
-) -> tuple[str, str, float, int | None]:
+) -> tuple[str, str, float, int | None, Any]:
     """Stream LLM response directly to Telegram via message editing.
 
     Sends a placeholder message, then edits it with accumulated text as chunks
@@ -166,7 +166,7 @@ async def _generate_streaming(
         message: aiogram Message object for Telegram delivery.
 
     Returns:
-        Tuple of (response_text, actual_model, ttft_ms, completion_tokens).
+        Tuple of (response_text, actual_model, ttft_ms, completion_tokens, sent_msg).
 
     Raises:
         Exception: On any streaming failure (caller handles fallback).
@@ -233,7 +233,7 @@ async def _generate_streaming(
         except Exception:
             logger.warning("Failed to finalize streaming message")
 
-    return accumulated, actual_model, ttft_ms, completion_tokens
+    return accumulated, actual_model, ttft_ms, completion_tokens, sent_msg
 
 
 def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float | None:
@@ -322,6 +322,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     completion_tokens: int | None = None
     stream_recovery = False
     hard_timeout = False
+    sent_msg: Any = None
 
     # Curated span metadata
     lf = get_client()
@@ -341,7 +342,13 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         # Streaming path: deliver directly to Telegram
         if message is not None and config.streaming_enabled:
             try:
-                answer, actual_model, ttft_ms, completion_tokens = await _generate_streaming(
+                (
+                    answer,
+                    actual_model,
+                    ttft_ms,
+                    completion_tokens,
+                    sent_msg,
+                ) = await _generate_streaming(
                     llm,
                     config,
                     llm_messages,
@@ -356,6 +363,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
                     len(e.partial_text),
                     exc_info=True,
                 )
+                sent_msg = e.sent_msg
                 response_obj = await llm.chat.completions.create(
                     model=config.llm_model,
                     messages=llm_messages,
@@ -468,6 +476,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     return {
         "response": answer,
         "response_sent": response_sent,
+        "sent_message": sent_msg if response_sent else None,
         "llm_provider_model": actual_model,
         "llm_ttft_ms": ttft_ms,
         "llm_response_duration_ms": elapsed * 1000,

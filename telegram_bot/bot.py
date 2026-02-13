@@ -600,6 +600,10 @@ class PropertyBot:
         )
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
 
+        # Inject Langfuse trace_id for feedback buttons (#229)
+        lf_pre = get_client()
+        state["trace_id"] = lf_pre.get_current_trace_id() or ""
+
         with propagate_attributes(
             session_id=state["session_id"],
             user_id=str(state["user_id"]),
@@ -701,6 +705,10 @@ class PropertyBot:
         state["voice_duration_s"] = float(voice.duration)
         state["input_type"] = "voice"
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
+
+        # Inject Langfuse trace_id for feedback buttons (#229)
+        lf_pre = get_client()
+        state["trace_id"] = lf_pre.get_current_trace_id() or ""
 
         with propagate_attributes(
             session_id=state["session_id"],
