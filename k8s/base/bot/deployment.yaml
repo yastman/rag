@@ -83,13 +83,13 @@ spec:
               value: "true"
             - name: USER_BASE_URL
               value: http://user-base:8000
-            - name: REDIS_URL
-              value: redis://:$(REDIS_PASSWORD)@redis:6379
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: api-keys
                   key: REDIS_PASSWORD
+            - name: REDIS_URL
+              value: redis://:$(REDIS_PASSWORD)@redis:6379
             - name: QDRANT_URL
               value: http://qdrant:6333
             - name: QDRANT_COLLECTION
