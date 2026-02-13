@@ -328,7 +328,7 @@ services:
       context: ./docker/mlflow
       dockerfile: Dockerfile
     container_name: dev-mlflow
-    profiles: ["ml", "full"]
+    profiles: ["eval", "ml", "full"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:5000:5000"
