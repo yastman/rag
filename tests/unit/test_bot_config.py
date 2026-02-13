@@ -124,6 +124,27 @@ class TestBotConfigQuantization:
                 config = config_module.BotConfig()
                 assert config.qdrant_use_quantization is False, f"Expected False for '{val}'"
 
+    def test_history_collection_default(self):
+        """Test default value for qdrant_history_collection."""
+        env = {k: v for k, v in os.environ.items() if k != "QDRANT_HISTORY_COLLECTION"}
+        with patch.dict(os.environ, env, clear=True):
+            import telegram_bot.config as config_module
+
+            importlib.reload(config_module)
+            config = config_module.BotConfig()
+            assert config.qdrant_history_collection == "conversation_history"
+
+    def test_history_collection_from_env(self):
+        """Test reading QDRANT_HISTORY_COLLECTION from env."""
+        test_env = os.environ.copy()
+        test_env["QDRANT_HISTORY_COLLECTION"] = "my_history"
+        with patch.dict(os.environ, test_env, clear=True):
+            import telegram_bot.config as config_module
+
+            importlib.reload(config_module)
+            config = config_module.BotConfig()
+            assert config.qdrant_history_collection == "my_history"
+
     def test_quantization_mixed_settings(self):
         """Test mixed enabled/disabled quantization settings."""
         test_env = os.environ.copy()
