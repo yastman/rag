@@ -221,7 +221,7 @@ services:
       USE_LOCAL_EMBEDDINGS: "true"
       USER_BASE_URL: http://user-base:8000
       # Services
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
       # LLM
