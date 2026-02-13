@@ -13,7 +13,7 @@ uv run pytest tests/unit/ -n auto  # Parallel (4x faster, ~5 min)
 uv run pytest tests/integration/test_graph_paths.py -v  # Graph path tests (~5s, no Docker)
 make docker-up             # Start core services (5 containers, ~17s)
 make docker-bot-up         # Core + bot/litellm
-make docker-full-up        # All services (19 containers)
+make docker-full-up        # All services (17 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
 make validate-traces-fast  # Trace validation (cold+cache, Langfuse report)
 make monitoring-up         # Start alerting stack
@@ -60,7 +60,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 **Observability:** Langfuse v3 — 35 observations/trace, 14 scores (parity: Telegram + FastAPI /query), curated spans on 5 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
 
-**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
+**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `eval` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
 
 ## Code Style
 
