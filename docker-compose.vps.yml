@@ -39,11 +39,18 @@ services:
     container_name: vps-redis
     restart: unless-stopped
     logging: *default-logging
-    command: redis-server --maxmemory 256mb --maxmemory-policy volatile-lfu --maxmemory-samples 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lfu
+      --maxmemory-samples 10
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 3
