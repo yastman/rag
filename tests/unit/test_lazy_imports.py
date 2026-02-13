@@ -5,16 +5,19 @@ from __future__ import annotations
 import importlib
 import sys
 
+import pytest
 
-def _clear_modules(prefixes: tuple[str, ...]) -> None:
+
+def _clear_modules_safe(monkeypatch: pytest.MonkeyPatch, prefixes: tuple[str, ...]) -> None:
+    """Remove modules matching prefixes using monkeypatch (auto-restored on teardown)."""
     for key in list(sys.modules.keys()):
         if key.startswith(prefixes):
-            sys.modules.pop(key, None)
+            monkeypatch.delitem(sys.modules, key)
 
 
-def test_src_import_is_lazy() -> None:
+def test_src_import_is_lazy(monkeypatch: pytest.MonkeyPatch) -> None:
     """Importing src should not eagerly import heavy subpackages."""
-    _clear_modules(("src",))
+    _clear_modules_safe(monkeypatch, ("src",))
 
     import src
 
@@ -24,9 +27,9 @@ def test_src_import_is_lazy() -> None:
     assert "src.ingestion" not in sys.modules
 
 
-def test_unified_config_import_is_lazy() -> None:
+def test_unified_config_import_is_lazy(monkeypatch: pytest.MonkeyPatch) -> None:
     """Importing unified config should not pull writer dependencies."""
-    _clear_modules(("src",))
+    _clear_modules_safe(monkeypatch, ("src",))
 
     module = importlib.import_module("src.ingestion.unified.config")
     cfg = module.UnifiedConfig()
