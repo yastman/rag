@@ -318,3 +318,79 @@ class TestRetrieveNode:
         cache.store_sparse_embedding.assert_awaited_once()
         # sparse_embeddings should NOT be called — hybrid provided both
         sparse_embeddings.aembed_query.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_outputs_retrieved_context_for_judge(self):
+        """retrieve_node should include curated context snippets for LLM judge."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+
+        mock_docs = [
+            {
+                "id": "1",
+                "text": "Document one content about property",
+                "score": 0.9,
+                "metadata": {"title": "Apt 1"},
+            },
+            {
+                "id": "2",
+                "text": "Document two content about real estate",
+                "score": 0.7,
+                "metadata": {"title": "Apt 2"},
+            },
+        ]
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_sparse_embedding = AsyncMock()
+        cache.store_search_results = AsyncMock()
+
+        sparse_embeddings = AsyncMock()
+        sparse_embeddings.aembed_query = AsyncMock(
+            return_value={"indices": [1, 2], "values": [0.5, 0.3]}
+        )
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(mock_docs, _OK_META))
+
+        result = await retrieve_node(
+            state,
+            cache=cache,
+            sparse_embeddings=sparse_embeddings,
+            qdrant=qdrant,
+        )
+
+        # Verify result includes retrieved_context for judge evaluation
+        assert "retrieved_context" in result
+        assert len(result["retrieved_context"]) == 2
+        assert result["retrieved_context"][0]["score"] == 0.9
+        assert "Document one content" in result["retrieved_context"][0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_includes_retrieved_context(self):
+        """Cache hit path should also include retrieved_context."""
+        state = make_initial_state(user_id=1, session_id="s1", query="cached query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.2] * 1024
+
+        cached_docs = [
+            {"id": "1", "text": "Cached doc content", "score": 0.85, "metadata": {}},
+        ]
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=cached_docs)
+        qdrant = AsyncMock()
+        sparse_embeddings = AsyncMock()
+
+        result = await retrieve_node(
+            state,
+            cache=cache,
+            sparse_embeddings=sparse_embeddings,
+            qdrant=qdrant,
+        )
+
+        assert "retrieved_context" in result
+        assert len(result["retrieved_context"]) == 1
+        assert result["retrieved_context"][0]["score"] == 0.85
