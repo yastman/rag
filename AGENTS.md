@@ -9,9 +9,10 @@
 ## Workflow
 - Read `README.md` and `CLAUDE.md` before non-trivial edits.
 - For behavior changes, add or update tests in the nearest `tests/` scope.
+- Run tests only in parallel mode (`pytest -n auto --dist=worksteal`) unless explicitly requested otherwise.
 - Before completion, run at least:
   - `make check`
-  - `make test-unit`
+  - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 - For infra or integration changes, also run targeted commands from `docs/agent-rules/testing-and-validation.md`.
 
 ## Safety

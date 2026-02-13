@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+pytest.importorskip("livekit")
+
+
 def test_voice_bot_init():
     from src.voice.agent import VoiceBot
 

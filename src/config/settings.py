@@ -77,10 +77,13 @@ class Settings:
 
         # === API CONFIGURATION ===
         default_provider = DEFAULTS["api_provider"]
-        self.api_provider = APIProvider(
-            api_provider or os.getenv("API_PROVIDER") or default_provider.value
+        default_provider_value = (
+            default_provider.value
             if isinstance(default_provider, APIProvider)
-            else default_provider
+            else str(default_provider)
+        )
+        self.api_provider = APIProvider(
+            api_provider or os.getenv("API_PROVIDER") or default_provider_value
         )
         self.anthropic_api_key = anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
         self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -114,10 +117,13 @@ class Settings:
 
         # === SEARCH CONFIGURATION ===
         default_engine = DEFAULTS["search_engine"]
-        self.search_engine = SearchEngine(
-            search_engine or os.getenv("SEARCH_ENGINE") or default_engine.value
+        default_engine_value = (
+            default_engine.value
             if isinstance(default_engine, SearchEngine)
-            else default_engine
+            else str(default_engine)
+        )
+        self.search_engine = SearchEngine(
+            search_engine or os.getenv("SEARCH_ENGINE") or default_engine_value
         )
         self.score_threshold = score_threshold or 0.3
         self.top_k = top_k or 10
