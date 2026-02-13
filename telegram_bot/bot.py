@@ -222,6 +222,9 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "answer_to_question_ratio": result.get("answer_to_question_ratio"),
         # Voice transcription (#151)
         "stt_duration_ms": result.get("stt_duration_ms"),
+        # Embedding resilience (#210)
+        "embedding_error": result.get("embedding_error", False),
+        "embedding_error_type": result.get("embedding_error_type"),
         # Conversation memory (#159)
         "memory_messages_count": len(result.get("messages", [])),
         "checkpointer_overhead_proxy_ms": result.get("checkpointer_overhead_proxy_ms"),
@@ -229,6 +232,22 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         "pipeline_cleanup_error": result.get("pipeline_cleanup_error", False),
         "pipeline_cleanup_error_type": result.get("pipeline_cleanup_error_type"),
     }
+
+
+def _write_voice_error_scores(
+    lf: Any,
+    *,
+    voice_duration_s: float | None = None,
+    error_reason: str = "pipeline_error",
+) -> None:
+    """Write minimal Langfuse scores for voice traces that exit early (error paths).
+
+    Ensures all voice traces have at least input_type and error context for dashboards.
+    """
+    lf.score_current_trace(name="input_type", value="voice", data_type="CATEGORICAL")
+    lf.score_current_trace(name="voice_error_reason", value=error_reason, data_type="CATEGORICAL")
+    if voice_duration_s is not None:
+        lf.score_current_trace(name="voice_duration_s", value=float(voice_duration_s))
 
 
 def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
@@ -297,11 +316,13 @@ class PropertyBot:
         self._cache = CacheLayerManager(redis_url=config.redis_url)
         self._hybrid = BGEM3HybridEmbeddings(
             base_url=config.bge_m3_url,
+            timeout=self._graph_config.bge_m3_timeout,
         )
         # Use hybrid as primary embeddings provider
         self._embeddings = self._hybrid
         self._sparse = BGEM3SparseEmbeddings(
             base_url=config.bge_m3_url,
+            timeout=self._graph_config.bge_m3_timeout,
         )
         self._qdrant = QdrantService(
             url=config.qdrant_url,
@@ -651,6 +672,14 @@ class PropertyBot:
             except ValueError as e:
                 if "Empty transcription" in str(e):
                     await message.answer("Голосовое сообщение не содержит речи.")
+                    try:
+                        _write_voice_error_scores(
+                            get_client(),
+                            voice_duration_s=voice.duration,
+                            error_reason="empty_transcription",
+                        )
+                    except Exception:
+                        logger.debug("Failed to write voice error scores", exc_info=True)
                     return
                 raise
             except Exception as e:
@@ -680,6 +709,14 @@ class PropertyBot:
                         await message.answer(
                             "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
                         )
+                        try:
+                            _write_voice_error_scores(
+                                get_client(),
+                                voice_duration_s=voice.duration,
+                                error_reason="pipeline_failure",
+                            )
+                        except Exception:
+                            logger.debug("Failed to write voice error scores", exc_info=True)
                         return
                 # Pipeline succeeded but post-invoke cleanup failed (#201)
                 # Answer already delivered via streaming/respond — don't confuse user
