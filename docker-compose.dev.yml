@@ -42,8 +42,11 @@ services:
     logging: *default-logging
     ports:
       - "127.0.0.1:6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev_redis_pass}
     command: >
       redis-server
+      --requirepass ${REDIS_PASSWORD:-dev_redis_pass}
       --maxmemory 512mb
       --maxmemory-policy volatile-lfu
       --maxmemory-samples 10
@@ -51,7 +54,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-dev_redis_pass}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -539,7 +542,7 @@ services:
       USE_LOCAL_EMBEDDINGS: "true"
       USER_BASE_URL: http://user-base:8000
       # Services
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD:-dev_redis_pass}@redis:6379
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
       # LLM (via LiteLLM Proxy)
@@ -640,7 +643,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     environment:
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD:-dev_redis_pass}@redis:6379
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
       BGE_M3_URL: http://bge-m3:8000
