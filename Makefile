@@ -576,6 +576,18 @@ eval-rag-full: ## Full RAG evaluation with all metrics
 	uv run python -m src.evaluation.ragas_evaluation
 	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
 
+.PHONY: eval-judge eval-judge-sample
+
+eval-judge: ## LLM-as-a-Judge: batch evaluation (24h traces)
+	@echo "$(BLUE)Running LLM-as-a-Judge evaluation...$(NC)"
+	uv run python scripts/evaluate_judge.py --hours 24 --tag rag
+	@echo "$(GREEN)✓ Judge evaluation complete$(NC)"
+
+eval-judge-sample: ## LLM-as-a-Judge: 50% sample of 48h traces
+	@echo "$(BLUE)Running LLM-as-a-Judge sample evaluation...$(NC)"
+	uv run python scripts/evaluate_judge.py --hours 48 --tag rag --sample-rate 0.5
+	@echo "$(GREEN)✓ Judge sample evaluation complete$(NC)"
+
 # =============================================================================
 # MONITORING & ALERTING
 # =============================================================================
