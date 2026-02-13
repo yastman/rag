@@ -76,21 +76,15 @@ class TestPreflightRedis:
         client = redis.from_url(redis_url, decode_responses=True)
         yield client
         await client.close()
-
-    @pytest.mark.asyncio
     async def test_redis_connection(self, redis_client):
         """Redis should be reachable."""
         pong = await redis_client.ping()
         assert pong is True
-
-    @pytest.mark.asyncio
     async def test_redis_maxmemory_set(self, redis_client):
         """maxmemory should be configured (not 0)."""
         config = await redis_client.config_get("maxmemory")
         maxmem = int(config.get("maxmemory", 0))
         assert maxmem > 0, "maxmemory not configured (unlimited)"
-
-    @pytest.mark.asyncio
     async def test_redis_lfu_eviction_policy(self, redis_client):
         """Eviction policy should use LFU variant."""
         config = await redis_client.config_get("maxmemory-policy")
@@ -98,8 +92,6 @@ class TestPreflightRedis:
         assert policy in ("allkeys-lfu", "volatile-lfu"), (
             f"Expected LFU eviction policy, got: {policy}"
         )
-
-    @pytest.mark.asyncio
     async def test_redis_semantic_cache_index_exists(self, redis_client):
         """Semantic cache RediSearch index should exist.
 
@@ -128,8 +120,6 @@ class TestPreflightRedis:
                 pytest.fail(f"REQUIRE_REDIS_FT_INDEX=1 but RediSearch not available: {e}")
             else:
                 pytest.skip(f"RediSearch not available: {e}")
-
-    @pytest.mark.asyncio
     async def test_redis_query_engine_available(self, redis_client):
         """Query Engine (FT.*) should be available."""
         try:
@@ -137,8 +127,6 @@ class TestPreflightRedis:
             assert isinstance(result, list)
         except Exception as e:
             pytest.fail(f"Query Engine not available: {e}")
-
-    @pytest.mark.asyncio
     async def test_redis_json_available(self, redis_client):
         """JSON commands should be available.
 
@@ -159,8 +147,6 @@ class TestPreflightRedis:
 
 class TestPreflightReport:
     """Generate preflight report."""
-
-    @pytest.mark.asyncio
     async def test_generate_preflight_report(self, qdrant_url, redis_url, collection_name):
         """Generate reports/preflight.json with all config values."""
         report = {

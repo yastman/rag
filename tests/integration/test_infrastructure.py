@@ -100,8 +100,6 @@ class TestRedisInfrastructure:
         client = redis.from_url(url, decode_responses=True, socket_timeout=5.0)
         yield client
         await client.aclose()
-
-    @pytest.mark.asyncio
     async def test_query_engine_available(self, redis_client):
         """FT.* commands are available (Query Engine)."""
         try:
@@ -109,8 +107,6 @@ class TestRedisInfrastructure:
             assert isinstance(result, list)  # Empty list is OK
         except Exception as e:
             pytest.fail(f"Query Engine not available: {e}")
-
-    @pytest.mark.asyncio
     async def test_vector_search_available(self, redis_client):
         """Vector search (FT.CREATE with VECTOR) works."""
         index_name = "test:infra:vec_idx"
@@ -146,8 +142,6 @@ class TestRedisInfrastructure:
         finally:
             with contextlib.suppress(Exception):
                 await redis_client.execute_command("FT.DROPINDEX", index_name)
-
-    @pytest.mark.asyncio
     async def test_json_commands_available(self, redis_client):
         """JSON.* commands are available.
 
@@ -170,8 +164,6 @@ class TestRedisInfrastructure:
         finally:
             with contextlib.suppress(Exception):
                 await redis_client.delete(test_key)
-
-    @pytest.mark.asyncio
     async def test_set_get_operations(self, redis_client):
         """Basic set/get operations work."""
         test_key = "test:infrastructure:key"
@@ -186,8 +178,6 @@ class TestRedisInfrastructure:
 
 class TestMLflowInfrastructure:
     """MLflow tracking server tests."""
-
-    @pytest.mark.asyncio
     async def test_experiments_list(self):
         """Can list experiments."""
         url = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
@@ -204,8 +194,6 @@ class TestMLflowInfrastructure:
 
 class TestLangfuseInfrastructure:
     """Langfuse tracing tests."""
-
-    @pytest.mark.asyncio
     async def test_api_accessible(self):
         """Langfuse API is accessible."""
         url = os.getenv("LANGFUSE_HOST", "http://localhost:3001")

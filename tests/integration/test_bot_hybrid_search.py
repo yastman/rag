@@ -55,8 +55,6 @@ class TestBotHybridSearch:
 
 class TestBotGetSparseVector:
     """Test sparse vector generation via HTTP."""
-
-    @pytest.mark.asyncio
     async def test_get_sparse_vector_calls_http_service(self):
         """_get_sparse_vector should call BGE-M3 HTTP service."""
         with (
@@ -91,8 +89,6 @@ class TestBotGetSparseVector:
 
             assert result["indices"] == [1, 5, 10]
             assert result["values"] == [0.5, 0.3, 0.2]
-
-    @pytest.mark.asyncio
     async def test_get_sparse_vector_handles_error_gracefully(self):
         """_get_sparse_vector should return empty vector on error."""
         with (
