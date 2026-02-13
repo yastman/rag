@@ -12,7 +12,6 @@ dependencies = [
     "numpy",
     "aiohttp",
     "requests",
-    "pandas>=2.0.0",
     "FlagEmbedding",
     "scipy",
     "sentence-transformers",  # BGE-M3 embeddings
@@ -22,11 +21,7 @@ dependencies = [
     "docling>=2.70.0",        # Advanced document chunking & structure detection
     "docling-core>=2.61.0",   # Core types for Docling
     "transformers>=4.30.0",   # For HuggingFace tokenizers in HybridChunker
-    # ML Platform & Evaluation (2025-10-23)
-    "mlflow>=3.9.0",         # Experiment tracking
-    "ragas>=0.4.3",           # RAG evaluation framework
     "langfuse>=3.0.0",        # LLM observability & tracing
-    "datasets>=3.0.0",        # For RAGAS evaluation datasets
     # Voyage AI Integration (2026-01-21)
     "voyageai>=0.3.0",        # Voyage AI embeddings and reranking
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
@@ -71,9 +66,17 @@ voice = [
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
 ]
 
+# Evaluation tools (RAGAS, MLflow, dataset generation)
+eval = [
+    "mlflow>=3.9.0",
+    "ragas>=0.4.3",
+    "datasets>=3.0.0",
+    "pandas>=2.0.0",
+]
+
 # All optional dependencies
 all = [
-    "contextual-rag[docs,voice]",
+    "contextual-rag[docs,voice,eval]",
 ]
 
 # =============================================================================
