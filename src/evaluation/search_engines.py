@@ -5,21 +5,25 @@ Search engines for evaluation:
 2. HybridSearchEngine - Dense + Sparse + ColBERT with RRF
 """
 
+import os
 import sys
 from abc import ABC, abstractmethod
+from functools import lru_cache
 
 import numpy as np
 import requests  # type: ignore[import-untyped]
 
-
-sys.path.append("/home/admin/contextual_rag")
 from src.config import HSNWParameters, RetrievalStages, Settings, ThresholdValues
 
 
-# Load settings
-_settings = Settings()
-QDRANT_URL = _settings.qdrant_url
-QDRANT_API_KEY = _settings.qdrant_api_key or ""
+# Load Qdrant config without failing module import in test environments.
+try:
+    _settings = Settings()
+    QDRANT_URL = _settings.qdrant_url
+    QDRANT_API_KEY = _settings.qdrant_api_key or ""
+except ValueError:
+    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+    QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
 # Load constants
 HNSW_EF_HIGH_PRECISION = HSNWParameters.EF_HIGH_PRECISION
@@ -49,8 +53,8 @@ class SearchEngine(ABC):
 
     def __init__(self, collection_name: str):
         self.collection_name = collection_name
-        self.qdrant_url = QDRANT_URL
-        self.headers = {"api-key": QDRANT_API_KEY}
+        self.qdrant_url = _qdrant_url()
+        self.headers = {"api-key": _qdrant_api_key()}
 
     @abstractmethod
     def search(self, query: str, top_k: int = 10) -> list[dict]:
