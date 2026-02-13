@@ -32,6 +32,9 @@ class TestSmokeServices:
     async def test_redis_health(self):
         """Redis responds to PING."""
         url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        password = os.getenv("REDIS_PASSWORD", "")
+        if password and "@" not in url:
+            url = url.replace("redis://", f"redis://:{password}@", 1)
         client = redis.from_url(url, socket_timeout=5.0)
         try:
             result = await client.ping()
@@ -61,6 +64,9 @@ class TestSmokeServices:
             response = await client.get(f"{url}/api/public/health")
             assert response.status_code == 200
 
+    @pytest.mark.skipif(
+        not _is_port_open("localhost", 5001), reason="Docling not running (port 5001)"
+    )
     @pytest.mark.asyncio
     async def test_docling_health(self):
         """Docling responds to health check."""

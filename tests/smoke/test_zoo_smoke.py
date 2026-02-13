@@ -28,6 +28,9 @@ class TestZooHealth:
     def litellm_url(self):
         return os.getenv("LLM_BASE_URL", "http://localhost:4000")
 
+    @pytest.mark.skipif(
+        not _is_port_open("localhost", 8003), reason="user-base not running (port 8003)"
+    )
     @pytest.mark.asyncio
     async def test_user_base_health(self, user_base_url):
         """user-base /health returns status=healthy."""
@@ -39,6 +42,9 @@ class TestZooHealth:
                 f"Expected status 'ok' or 'healthy', got: {data.get('status')}"
             )
 
+    @pytest.mark.skipif(
+        not _is_port_open("localhost", 8003), reason="user-base not running (port 8003)"
+    )
     @pytest.mark.asyncio
     async def test_user_base_embed_returns_768_dim(self, user_base_url):
         """user-base /embed returns 768-dimensional vector."""
@@ -142,6 +148,9 @@ class TestZooCache:
         from telegram_bot.integrations.cache import CacheLayerManager
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        password = os.getenv("REDIS_PASSWORD", "")
+        if password and "@" not in redis_url:
+            redis_url = redis_url.replace("redis://", f"redis://:{password}@", 1)
         service = CacheLayerManager(redis_url=redis_url)
         await service.initialize()
         yield service
@@ -173,6 +182,9 @@ class TestZooEndToEnd:
         from telegram_bot.integrations.cache import CacheLayerManager
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        password = os.getenv("REDIS_PASSWORD", "")
+        if password and "@" not in redis_url:
+            redis_url = redis_url.replace("redis://", f"redis://:{password}@", 1)
         service = CacheLayerManager(redis_url=redis_url)
         await service.initialize()
         yield service
