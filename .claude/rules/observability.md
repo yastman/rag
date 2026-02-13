@@ -129,7 +129,7 @@ Usage:
 | generate_node | query_preview, query_hash, context_docs_count, streaming_enabled | response_length, llm_provider_model, llm_ttft_ms, token_usage, duration_ms |
 | cache_check_node | query_preview, query_hash, query_type | cache_hit, embeddings_cache_hit, hit_layer, duration_ms |
 | cache_store_node | query_preview, query_hash, response_length | stored, stored_semantic, stored_conversation, duration_ms |
-| respond_node | response_length, response_sent, has_message | respond_skipped, respond_delivered, used_markdown, duration_ms |
+| respond_node | response_length, response_sent, has_message, has_trace_id | respond_skipped, respond_delivered, used_markdown, feedback_buttons, duration_ms |
 | transcribe_node | audio_size_bytes, voice_language, stt_model, voice_duration_s | stt_duration_ms, text_length, text_preview |
 
 Light nodes (classify, grade, rerank, rewrite) keep default auto-capture — their state is small.
@@ -239,8 +239,9 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 | `hyde_used` | 0.0 | Not yet tracked in LangGraph state |
 | `llm_ttft_ms` | float | Time to first token (ms), streaming only |
 | `llm_response_duration_ms` | float | Full LLM response wall-time (ms) |
+| `user_feedback` | 0.0/1.0 | User like/dislike via inline button (#229) |
 
-**Implementation:** `get_client().score_current_trace(name=..., value=...)` (Langfuse SDK v3)
+**Implementation:** `get_client().score_current_trace(name=..., value=...)` (Langfuse SDK v3), `user_feedback` via `create_score(trace_id=...)` in callback handler
 
 ## Langfuse Prompt Management
 
