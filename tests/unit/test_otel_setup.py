@@ -90,9 +90,6 @@ def test_setup_opentelemetry():
         # Check instrumentation
         mock_aiohttp.return_value.instrument.assert_called_once()
         mock_redis.return_value.instrument.assert_called_once()
-
-
-@pytest.mark.asyncio
 async def test_traced_pipeline_query():
     # Import INSIDE test to get fresh module after fixture clears cache
     from src.observability.otel_setup import TracedRAGPipeline

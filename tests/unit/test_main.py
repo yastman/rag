@@ -34,8 +34,6 @@ class TestMainFunction:
         _clear()
         yield
         _clear()
-
-    @pytest.mark.asyncio
     async def test_main_success_flow(self):
         """Test successful bot startup and shutdown."""
         mock_property_bot_instance = AsyncMock()
@@ -73,8 +71,6 @@ class TestMainFunction:
             mock_property_bot_instance.start.assert_awaited_once()
             mock_property_bot_instance.stop.assert_awaited_once()
             mock_property_bot.assert_called_once_with(mock_config_instance)
-
-    @pytest.mark.asyncio
     async def test_main_no_telegram_token_exits_early(self):
         """Test main exits early when no telegram token."""
         mock_property_bot = MagicMock()
@@ -109,8 +105,6 @@ class TestMainFunction:
 
             # Bot should not be created when token is missing
             mock_property_bot.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_main_retries_on_temporary_startup_error(self):
         """Temporary network errors should trigger retry with sleep."""
         mock_property_bot_instance = AsyncMock()
@@ -149,8 +143,6 @@ class TestMainFunction:
             assert mock_property_bot_instance.start.await_count == 2
             mock_sleep.assert_awaited_once()
             mock_property_bot_instance.stop.assert_awaited_once()
-
-    @pytest.mark.asyncio
     async def test_main_propagates_non_retryable_startup_error(self):
         """Unexpected startup errors should not be retried indefinitely."""
         mock_property_bot_instance = AsyncMock()
