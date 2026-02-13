@@ -36,6 +36,10 @@ class BotConfig(BaseSettings):
         default="contextual_bulgaria_voyage4",
         validation_alias=AliasChoices("qdrant_collection", "QDRANT_COLLECTION"),
     )
+    qdrant_history_collection: str = Field(
+        default="conversation_history",
+        validation_alias=AliasChoices("qdrant_history_collection", "QDRANT_HISTORY_COLLECTION"),
+    )
 
     # LLM (OpenAI compatible API)
     llm_api_key: str = Field(
