@@ -329,7 +329,7 @@ docker-ml-up: ## Start core + ML platform (langfuse, mlflow, clickhouse, minio)
 	$(COMPOSE_CMD) --profile ml up -d
 	@echo "$(GREEN)✓ ML platform started$(NC)"
 
-docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base, lightrag)
+docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base)
 	@echo "$(BLUE)Starting AI services...$(NC)"
 	$(COMPOSE_CMD) --profile ai up -d
 	@echo "$(GREEN)✓ AI services started$(NC)"
