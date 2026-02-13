@@ -17,7 +17,9 @@ class TestRespondNode:
 
         result = await respond_node(state)
 
-        message.answer.assert_awaited_once_with("**Bold** answer", parse_mode="Markdown")
+        message.answer.assert_awaited_once_with(
+            "**Bold** answer", parse_mode="Markdown", reply_markup=None
+        )
         assert "respond" in result["latency_stages"]
 
     async def test_fallback_to_plain_text(self):
@@ -32,7 +34,7 @@ class TestRespondNode:
 
         assert message.answer.await_count == 2
         # Second call should be plain text (no parse_mode)
-        message.answer.assert_awaited_with("bad *markdown")
+        message.answer.assert_awaited_with("bad *markdown", reply_markup=None)
         assert "respond" in result["latency_stages"]
 
     async def test_empty_response_gets_default(self):
@@ -105,3 +107,47 @@ class TestRespondNodeSavesAssistantMessage:
         msg = result["messages"][0]
         assert msg["role"] == "assistant"
         assert "Извините" in msg["content"]
+
+
+class TestRespondNodeFeedbackButtons:
+    async def test_sends_with_feedback_keyboard(self):
+        """respond_node attaches feedback buttons when trace_id present."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Answer text"
+        state["message"] = message
+        state["trace_id"] = "abc123def456"
+
+        await respond_node(state)
+
+        call_kwargs = message.answer.call_args
+        assert call_kwargs.kwargs.get("reply_markup") is not None
+
+    async def test_no_buttons_when_trace_id_empty(self):
+        """respond_node sends without buttons when trace_id is empty."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Answer text"
+        state["message"] = message
+        # trace_id is "" by default
+
+        await respond_node(state)
+
+        call_kwargs = message.answer.call_args
+        assert call_kwargs.kwargs.get("reply_markup") is None
+
+    async def test_streaming_adds_reply_markup_via_edit(self):
+        """When response_sent=True, respond_node edits markup on streamed message."""
+        message = AsyncMock()
+        message.bot = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Streamed answer"
+        state["message"] = message
+        state["response_sent"] = True
+        state["trace_id"] = "trace123"
+        state["sent_message"] = {"chat_id": 12345, "message_id": 77}
+
+        await respond_node(state)
+
+        message.answer.assert_not_called()
+        message.bot.edit_message_reply_markup.assert_awaited_once()
