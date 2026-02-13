@@ -103,6 +103,7 @@ async def health() -> dict[str, str]:
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
+    from telegram_bot.bot import _write_langfuse_scores
     from telegram_bot.graph.state import make_initial_state
     from telegram_bot.observability import get_client, propagate_attributes
 
@@ -135,6 +136,8 @@ async def query(req: QueryRequest) -> QueryResponse:
                 "query_type": result.get("query_type", ""),
             },
         )
+        # Write Langfuse scores for observability parity with bot
+        _write_langfuse_scores(lf, result)
 
     elapsed_ms = (time.perf_counter() - start) * 1000
 
