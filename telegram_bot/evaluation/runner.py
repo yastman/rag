@@ -235,3 +235,29 @@ async def run_batch(
     }
     logger.info("Batch complete: %s", summary)
     return summary
+
+
+async def run_online_judge(
+    *,
+    langfuse: Any,
+    trace_id: str,
+    query: str,
+    answer: str,
+    context: str,
+    model: str = DEFAULT_MODEL,
+    llm_base_url: str = DEFAULT_LITELLM_URL,
+) -> None:
+    """Run judge evaluation inline (for online sampling).
+
+    Fire-and-forget: errors are logged, not raised.
+    Bounded by semaphore + timeout to avoid event-loop overload.
+    """
+    try:
+        async with ONLINE_JUDGE_SEMAPHORE:
+            from openai import AsyncOpenAI
+
+            client = AsyncOpenAI(api_key="not-needed", base_url=llm_base_url)
+            data = TraceData(trace_id=trace_id, query=query, answer=answer, context=context)
+            await asyncio.wait_for(evaluate_trace(langfuse, client, model, data), timeout=25)
+    except Exception:
+        logger.warning("Online judge failed for trace %s", trace_id, exc_info=True)
