@@ -15,11 +15,11 @@ make docker-up             # Start core services (5 containers, ~17s)
 make docker-bot-up         # Core + bot/litellm
 make docker-full-up        # All services (17 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
+make eval-judge            # LLM-as-a-Judge batch (24h traces, RAG Triad)
+make eval-judge-sample     # LLM-as-a-Judge 50% sample (48h)
 make validate-traces-fast  # Trace validation (cold+cache, Langfuse report)
 make monitoring-up         # Start alerting stack
-make ingest-unified        # Run unified ingestion (CocoIndex v3.2.1)
-make ingest-unified-watch  # Continuous mode with FlowLiveUpdater
-make ingest-unified-status # Show ingestion stats from Postgres
+make ingest-unified        # Unified ingestion (CocoIndex v3.2.1); also: -watch, -status
 # VPS CLI: python -m src.ingestion.unified.cli preflight|bootstrap|run|status|reprocess
 ```
 
@@ -54,11 +54,12 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 | `src/voice/` | Voice Bot (LiveKit Agent + ElevenLabs + SIP trunk + transcripts) |
 | `src/retrieval/search_engines.py` | 4 search variants (evaluation) |
 | `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
+| `telegram_bot/evaluation/` | LLM-as-a-Judge (RAG Triad: faithfulness, relevance, context) |
 | `scripts/validate_*.py` | Trace validation runner + query goldset |
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
-**Observability:** Langfuse v3 — 35 observations/trace, 14 scores (parity: Telegram + FastAPI /query), curated spans on 5 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
+**Observability:** Langfuse v3 — 35 observations/trace, 14 scores + 3 judge scores (parity: Telegram + FastAPI /query), curated spans on 5 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `eval` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
 
