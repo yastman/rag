@@ -65,6 +65,9 @@ class RAGState(TypedDict):
     stt_text: str | None
     stt_duration_ms: float | None
     input_type: str  # "text" or "voice"
+    # User feedback (#229)
+    trace_id: str
+    sent_message: Any | None  # Streamed message ref for feedback buttons
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -122,4 +125,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "stt_text": None,
         "stt_duration_ms": None,
         "input_type": "text",
+        # User feedback (#229)
+        "trace_id": "",
+        "sent_message": None,
     }
