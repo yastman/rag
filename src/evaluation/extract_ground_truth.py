@@ -6,9 +6,7 @@ Creates a mapping: article_number -> [chunk_ids]
 
 import json
 import os
-import sys
 from collections import defaultdict
-from functools import lru_cache
 
 import requests  # type: ignore[import-untyped]
 
@@ -23,6 +21,16 @@ try:
 except ValueError:
     QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
     QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
+
+
+def _qdrant_url() -> str:
+    """Return Qdrant base URL from resolved settings/environment."""
+    return QDRANT_URL or "http://localhost:6333"
+
+
+def _qdrant_api_key() -> str:
+    """Return Qdrant API key from resolved settings/environment."""
+    return QDRANT_API_KEY or ""
 
 
 def extract_articles(collection_name: str) -> dict[str, list[str]]:
