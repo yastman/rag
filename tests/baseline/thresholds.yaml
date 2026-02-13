@@ -38,3 +38,9 @@ go_no_go:
   rewrite_tokens_p50: 96      # Rewrite completion tokens p50
   ttft_p50_ms: 1000           # Streaming TTFT p50
   ttft_min_sample: 3          # Min samples for TTFT criterion
+
+# LLM-as-a-Judge quality thresholds
+judge:
+  faithfulness_mean_gte: 0.75
+  answer_relevance_mean_gte: 0.70
+  context_relevance_mean_gte: 0.65
