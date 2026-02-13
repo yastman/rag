@@ -13,45 +13,35 @@ from telegram_bot.graph.state import make_initial_state
 
 
 class TestGradeNode:
-    async def test_relevant_documents(self):
-        """Documents with top score > 0.3 are relevant."""
+    @pytest.mark.parametrize(
+        ("documents", "expected_relevant"),
+        [
+            pytest.param(
+                [{"text": "doc1", "score": 0.5}, {"text": "doc2", "score": 0.2}],
+                True,
+                id="high_scores_relevant",
+            ),
+            pytest.param(
+                [{"text": "doc1", "score": 0.003}, {"text": "doc2", "score": 0.001}],
+                False,
+                id="low_scores_not_relevant",
+            ),
+            pytest.param([], False, id="empty_not_relevant"),
+            pytest.param(
+                [{"text": "doc1", "score": 0.005}],
+                False,
+                id="threshold_boundary_not_relevant",
+            ),
+        ],
+    )
+    async def test_grade_relevance(self, documents, expected_relevant):
         from telegram_bot.graph.nodes.grade import grade_node
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = [
-            {"text": "doc1", "score": 0.5},
-            {"text": "doc2", "score": 0.2},
-        ]
+        state["documents"] = documents
         result = await grade_node(state)
-        assert result["documents_relevant"] is True
+        assert result["documents_relevant"] is expected_relevant
         assert "grade" in result["latency_stages"]
-    async def test_not_relevant_documents(self):
-        """Documents with top score <= 0.005 are not relevant."""
-        from telegram_bot.graph.nodes.grade import grade_node
-
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = [
-            {"text": "doc1", "score": 0.003},
-            {"text": "doc2", "score": 0.001},
-        ]
-        result = await grade_node(state)
-        assert result["documents_relevant"] is False
-    async def test_empty_documents(self):
-        """No documents → not relevant."""
-        from telegram_bot.graph.nodes.grade import grade_node
-
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = []
-        result = await grade_node(state)
-        assert result["documents_relevant"] is False
-    async def test_threshold_boundary(self):
-        """Score exactly at threshold (0.005) is NOT relevant (strictly >)."""
-        from telegram_bot.graph.nodes.grade import grade_node
-
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = [{"text": "doc1", "score": 0.005}]
-        result = await grade_node(state)
-        assert result["documents_relevant"] is False
 
 
 class TestGradeNodeRRFScores:
