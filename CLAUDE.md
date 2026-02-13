@@ -58,7 +58,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
-**Observability:** Langfuse v3 — 35 observations/trace, 14 scores, curated spans on 5 heavy nodes (no auto-capture), error spans on 4 nodes, traced_pipeline for orphan prevention → see `.claude/rules/observability.md`
+**Observability:** Langfuse v3 — 35 observations/trace, 14 scores (parity: Telegram + FastAPI /query), curated spans on 5 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
 
@@ -92,7 +92,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 
 1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 2. Copy `.env.example` → `.env`
-3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` (Whisper STT), `LANGFUSE_*` | Voice: `ELEVENLABS_API_KEY`, `LIVEKIT_*`, `LIFECELL_SIP_*`
+3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` (Whisper STT), `LANGFUSE_*`, `REDIS_PASSWORD` | Voice: `ELEVENLABS_API_KEY`, `LIVEKIT_*`, `LIFECELL_SIP_*`
 4. `uv sync && make docker-up`
 
 ## Key Docs
@@ -147,7 +147,7 @@ make k3s-status                     # Check pods
 
 | Error | Fix |
 |-------|-----|
-| Redis connection refused | `docker compose up -d redis` (hardened: ExponentialBackoff retry, health_check_interval=30) |
+| Redis connection refused | `docker compose up -d redis` (requires `REDIS_PASSWORD`, ExponentialBackoff retry) |
 | Qdrant timeout | `QDRANT_TIMEOUT=30` (explicit timeout + FormulaQuery for score boosting) |
 | Voyage 429 | Use CacheLayerManager |
 | Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
