@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class CallStatus(str, Enum):
+class CallStatus(StrEnum):
     INITIATED = "initiated"
     RINGING = "ringing"
     ANSWERED = "answered"

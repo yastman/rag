@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-from typing import cast
 
 from livekit import api
 from livekit.protocol.sip import CreateSIPOutboundTrunkRequest, SIPOutboundTrunkInfo
