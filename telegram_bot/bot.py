@@ -228,6 +228,9 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
         # Conversation memory (#159)
         "memory_messages_count": len(result.get("messages", [])),
         "checkpointer_overhead_proxy_ms": result.get("checkpointer_overhead_proxy_ms"),
+        # Voice post-pipeline cleanup diagnostics (#205)
+        "pipeline_cleanup_error": result.get("pipeline_cleanup_error", False),
+        "pipeline_cleanup_error_type": result.get("pipeline_cleanup_error_type"),
     }
 
 
@@ -688,35 +691,40 @@ class PropertyBot:
                             "Voice pipeline cleanup failed after execution (no extra user error)",
                             exc_info=True,
                         )
+                        # Preserve observability even without returned graph state.
+                        result = {
+                            "response": state.get("response", ""),
+                            "stt_text": state.get("stt_text", ""),
+                            "stt_duration_ms": state.get("stt_duration_ms"),
+                            "input_type": "voice",
+                            "voice_duration_s": float(voice.duration),
+                            "latency_stages": state.get("latency_stages", {}),
+                            "messages": state.get("messages", []),
+                            "pipeline_cleanup_error": True,
+                            "pipeline_cleanup_error_type": type(e).__name__,
+                        }
+                    # Pipeline never returned — genuine failure
+                    else:
+                        logger.exception("Voice pipeline failed (no result)")
+                        await message.answer(
+                            "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
+                        )
                         try:
                             _write_voice_error_scores(
                                 get_client(),
                                 voice_duration_s=voice.duration,
-                                error_reason="cleanup_error",
+                                error_reason="pipeline_failure",
                             )
                         except Exception:
                             logger.debug("Failed to write voice error scores", exc_info=True)
                         return
-                    # Pipeline never returned — genuine failure
-                    logger.exception("Voice pipeline failed (no result)")
-                    await message.answer(
-                        "Не удалось распознать голосовое сообщение. Попробуйте отправить текстом."
-                    )
-                    try:
-                        _write_voice_error_scores(
-                            get_client(),
-                            voice_duration_s=voice.duration,
-                            error_reason="pipeline_failure",
-                        )
-                    except Exception:
-                        logger.debug("Failed to write voice error scores", exc_info=True)
-                    return
                 # Pipeline succeeded but post-invoke cleanup failed (#201)
                 # Answer already delivered via streaming/respond — don't confuse user
-                logger.warning(
-                    "Post-pipeline error in voice handler (answer already delivered)",
-                    exc_info=True,
-                )
+                else:
+                    logger.warning(
+                        "Post-pipeline error in voice handler (answer already delivered)",
+                        exc_info=True,
+                    )
 
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
             # User-perceived latency excludes post-respond summarization
