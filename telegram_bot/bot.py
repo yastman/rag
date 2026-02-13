@@ -12,7 +12,7 @@ from typing import Any
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import BotCommand, Message
+from aiogram.types import BotCommand, CallbackQuery, Message
 from aiogram.utils.chat_action import ChatActionSender
 
 from .config import BotConfig
@@ -381,6 +381,7 @@ class PropertyBot:
         self.dp.message(Command("history"))(self.cmd_history)
         self.dp.message(F.voice)(self.handle_voice)
         self.dp.message(F.text)(self.handle_query)
+        self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
 
     async def cmd_start(self, message: Message):
         """Handle /start command."""
@@ -845,6 +846,50 @@ class PropertyBot:
                     )
                 except Exception:
                     logger.warning("Failed to save voice history turn", exc_info=True)
+
+    async def handle_feedback(self, callback: CallbackQuery):
+        """Handle feedback button callback (#229)."""
+        from .feedback import build_feedback_confirmation, parse_feedback_callback
+
+        data = callback.data or ""
+
+        # Acknowledge "done" button silently
+        if data == "fb:done":
+            await callback.answer()
+            return
+
+        parsed = parse_feedback_callback(data)
+        if parsed is None:
+            await callback.answer()
+            return
+
+        value, trace_id = parsed
+        user_id = callback.from_user.id if callback.from_user else 0
+
+        # Write score to Langfuse
+        try:
+            lf = get_client()
+            lf.create_score(
+                trace_id=trace_id,
+                name="user_feedback",
+                value=value,
+                data_type="NUMERIC",
+                comment=f"user_id:{user_id}",
+            )
+        except Exception:
+            logger.debug("Failed to write feedback score to Langfuse", exc_info=True)
+
+        # Update keyboard to confirmation
+        liked = value > 0
+        try:
+            if callback.message is not None:
+                await callback.message.edit_reply_markup(
+                    reply_markup=build_feedback_confirmation(liked=liked)
+                )
+        except Exception:
+            logger.debug("Failed to update feedback keyboard", exc_info=True)
+
+        await callback.answer("Спасибо за отзыв!")
 
     async def start(self):
         """Start bot polling."""
