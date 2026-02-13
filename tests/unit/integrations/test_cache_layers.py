@@ -11,8 +11,9 @@ import pytest
 from telegram_bot.integrations.cache import CACHE_VERSION, CacheLayerManager
 
 
-def _ensure_redisvl_filter_mock():
-    """Ensure redisvl.query.filter.Tag is importable (mock if needed)."""
+@pytest.fixture
+def _ensure_redisvl_filter_mock(monkeypatch):
+    """Ensure redisvl.query.filter.Tag is importable (mock if needed) — fixture-scoped."""
     try:
         import redisvl.query.filter  # noqa: F401
 
@@ -33,9 +34,9 @@ def _ensure_redisvl_filter_mock():
             return MagicMock()
 
     filter_mod.Tag = MockTag  # type: ignore[attr-defined]
-    sys.modules.setdefault("redisvl", redisvl_mod)
-    sys.modules.setdefault("redisvl.query", query_mod)
-    sys.modules["redisvl.query.filter"] = filter_mod
+    monkeypatch.setitem(sys.modules, "redisvl", redisvl_mod)
+    monkeypatch.setitem(sys.modules, "redisvl.query", query_mod)
+    monkeypatch.setitem(sys.modules, "redisvl.query.filter", filter_mod)
 
 
 class TestCacheLayerManagerInit:
@@ -131,8 +132,7 @@ class TestSemanticCache:
     """Test semantic cache check/store."""
 
     @pytest.mark.asyncio
-    async def test_semantic_miss_returns_none(self):
-        _ensure_redisvl_filter_mock()
+    async def test_semantic_miss_returns_none(self, _ensure_redisvl_filter_mock):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
         mgr.semantic_cache.acheck = AsyncMock(return_value=[])
@@ -146,8 +146,7 @@ class TestSemanticCache:
         assert mgr._metrics["semantic"]["misses"] == 1
 
     @pytest.mark.asyncio
-    async def test_semantic_hit_returns_response(self):
-        _ensure_redisvl_filter_mock()
+    async def test_semantic_hit_returns_response(self, _ensure_redisvl_filter_mock):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
         mgr.semantic_cache.acheck = AsyncMock(
@@ -165,8 +164,7 @@ class TestSemanticCache:
         assert mgr._metrics["semantic"]["hits"] == 1
 
     @pytest.mark.asyncio
-    async def test_semantic_timeout_returns_none(self):
-        _ensure_redisvl_filter_mock()
+    async def test_semantic_timeout_returns_none(self, _ensure_redisvl_filter_mock):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
 
@@ -211,9 +209,8 @@ class TestSemanticCache:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_semantic_check_filters_by_user_id(self):
+    async def test_semantic_check_filters_by_user_id(self, _ensure_redisvl_filter_mock):
         """check_semantic with user_id builds combined Tag filter (user_id + language)."""
-        _ensure_redisvl_filter_mock()
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
         mgr.semantic_cache.acheck = AsyncMock(

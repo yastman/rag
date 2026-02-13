@@ -42,6 +42,12 @@ def isolate_otel_langfuse(monkeypatch):
     # Create no-op mocks
     mock_noop = MagicMock()
 
+    # Mock langfuse module with __version__ attribute (for pollution test)
+    mock_langfuse_module = MagicMock()
+    mock_langfuse_module.__version__ = "0.0.0-test"
+    if "langfuse" not in sys.modules or not hasattr(sys.modules["langfuse"], "__file__"):
+        sys.modules["langfuse"] = mock_langfuse_module
+
     # Patch at entry points to prevent any network initialization
     patches = [
         # OTEL entry point - make setup_opentelemetry a no-op

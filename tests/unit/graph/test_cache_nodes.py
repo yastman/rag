@@ -8,8 +8,9 @@ import httpx
 import pytest
 
 
-def _ensure_redisvl_mock():
-    """Ensure redisvl modules are importable (mock if needed)."""
+@pytest.fixture(autouse=True)
+def _ensure_redisvl_mock(monkeypatch):
+    """Ensure redisvl modules are importable (mock if needed) — fixture-scoped."""
     try:
         import redisvl.query.filter  # noqa: F401
 
@@ -29,12 +30,10 @@ def _ensure_redisvl_mock():
             return MagicMock()
 
     filter_mod.Tag = MockTag  # type: ignore[attr-defined]
-    sys.modules.setdefault("redisvl", redisvl_mod)
-    sys.modules.setdefault("redisvl.query", query_mod)
-    sys.modules["redisvl.query.filter"] = filter_mod
+    monkeypatch.setitem(sys.modules, "redisvl", redisvl_mod)
+    monkeypatch.setitem(sys.modules, "redisvl.query", query_mod)
+    monkeypatch.setitem(sys.modules, "redisvl.query.filter", filter_mod)
 
-
-_ensure_redisvl_mock()
 
 from telegram_bot.graph.nodes.cache import (
     CACHEABLE_QUERY_TYPES,
