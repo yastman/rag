@@ -9,7 +9,7 @@ COPY . .
 RUN uv sync --frozen --no-dev --extra voice
 
 
-FROM python:3.14-slim-bookworm@sha256:f0540d0436a220db0a576ccfe75631ab072391e43a24b88972ef9833f699095f AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 WORKDIR /app
 
