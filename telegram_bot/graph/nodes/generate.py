@@ -49,6 +49,16 @@ _HISTORY_INSTRUCTION = (
 )
 
 
+def _extract_sent_message_ref(sent_msg: Any) -> dict[str, int] | None:
+    """Build serializable Telegram message reference for checkpointer state."""
+    chat = getattr(sent_msg, "chat", None)
+    chat_id = getattr(chat, "id", None)
+    message_id = getattr(sent_msg, "message_id", None)
+    if isinstance(chat_id, int) and isinstance(message_id, int):
+        return {"chat_id": chat_id, "message_id": message_id}
+    return None
+
+
 def _get_config() -> Any:
     """Get GraphConfig from environment."""
     from telegram_bot.graph.config import GraphConfig
@@ -473,10 +483,14 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     ratio = answer_words / max(question_words, 1)
     response_policy_mode = "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
 
+    sent_message_ref = (
+        _extract_sent_message_ref(sent_msg) if response_sent and sent_msg is not None else None
+    )
+
     return {
         "response": answer,
         "response_sent": response_sent,
-        "sent_message": sent_msg if response_sent else None,
+        "sent_message": sent_message_ref,
         "llm_provider_model": actual_model,
         "llm_ttft_ms": ttft_ms,
         "llm_response_duration_ms": elapsed * 1000,
