@@ -59,6 +59,54 @@ def _make_result(
     )
 
 
+def _make_validation_run(**overrides: object) -> ValidationRun:
+    """Create a minimal ValidationRun for report tests."""
+    import datetime
+
+    defaults = {
+        "run_id": "run-1",
+        "git_sha": "abc123",
+        "started_at": datetime.datetime.now(datetime.UTC),
+        "collections": ["c1"],
+        "skip_rerank_threshold": 0.012,
+        "relevance_threshold_rrf": 0.005,
+        "results": [],
+    }
+    defaults.update(overrides)
+    return ValidationRun(**defaults)
+
+
+def _make_cold_aggregates(**overrides: object) -> dict:
+    """Create standard cold aggregates dict for report tests."""
+    defaults = {
+        "n": 1,
+        "latency_p50": 100.0,
+        "latency_p90": 130.0,
+        "latency_p95": 150.0,
+        "latency_mean": 110.0,
+        "latency_max": 160.0,
+        "semantic_cache_hit_rate": 0.0,
+        "search_cache_hit_rate": 0.0,
+        "rerank_applied_rate": 0.0,
+        "rewrite_rate": 0.0,
+        "results_count_mean": 20.0,
+        "node_p50": {},
+        "node_p95": {},
+    }
+    defaults.update(overrides)
+    return defaults
+
+
+def _make_mock_qdrant_client(collection_names: list[str]) -> AsyncMock:
+    """Create mock Qdrant client with given collection names."""
+    mock_client = AsyncMock()
+    mock_client.get_collections.return_value = SimpleNamespace(
+        collections=[SimpleNamespace(name=n) for n in collection_names]
+    )
+    mock_client.close = AsyncMock()
+    return mock_client
+
+
 class TestComputeAggregates:
     """Test metrics aggregation."""
 
@@ -497,32 +545,8 @@ class TestReportAndSummary:
     """Report and console summary formatting should expose p90 explicitly."""
 
     def test_generate_report_includes_latency_p90_row(self, tmp_path):
-        run = ValidationRun(
-            run_id="run-1",
-            git_sha="abc123",
-            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
-            collections=["c1"],
-            skip_rerank_threshold=0.012,
-            relevance_threshold_rrf=0.005,
-            results=[],
-        )
-        aggregates = {
-            "cold": {
-                "n": 1,
-                "latency_p50": 100.0,
-                "latency_p90": 130.0,
-                "latency_p95": 150.0,
-                "latency_mean": 110.0,
-                "latency_max": 160.0,
-                "semantic_cache_hit_rate": 0.0,
-                "search_cache_hit_rate": 0.0,
-                "rerank_applied_rate": 0.0,
-                "rewrite_rate": 0.0,
-                "results_count_mean": 20.0,
-                "node_p50": {},
-                "node_p95": {},
-            }
-        }
+        run = _make_validation_run()
+        aggregates = {"cold": _make_cold_aggregates()}
         out = tmp_path / "report.md"
         generate_report(run, aggregates, out)
         text = out.read_text(encoding="utf-8")
@@ -541,32 +565,8 @@ class TestReportAndSummary:
 
     def test_go_no_go_renders_skip_status(self, tmp_path):
         """Skipped criteria render as '[-] SKIPPED (...)', not '[x] PASS'."""
-        run = ValidationRun(
-            run_id="run-1",
-            git_sha="abc123",
-            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
-            collections=["c1"],
-            skip_rerank_threshold=0.012,
-            relevance_threshold_rrf=0.005,
-            results=[],
-        )
-        aggregates = {
-            "cold": {
-                "n": 1,
-                "latency_p50": 100.0,
-                "latency_p90": 130.0,
-                "latency_p95": 150.0,
-                "latency_mean": 110.0,
-                "latency_max": 160.0,
-                "semantic_cache_hit_rate": 0.0,
-                "search_cache_hit_rate": 0.0,
-                "rerank_applied_rate": 0.0,
-                "rewrite_rate": 0.0,
-                "results_count_mean": 20.0,
-                "node_p50": {},
-                "node_p95": {},
-            }
-        }
+        run = _make_validation_run()
+        aggregates = {"cold": _make_cold_aggregates()}
         go_no_go = {
             "cold_p50_lt_5s": {
                 "target": "< 5000 ms",
@@ -591,60 +591,15 @@ class TestReportAndSummary:
 
 class TestRedisFlushPatterns:
     """Redis flush should use active cache version for exact-cache prefixes."""
-    async def test_flush_uses_cache_version_prefix(self, monkeypatch: pytest.MonkeyPatch):
-        seen_matches: list[str] = []
 
-        async def fake_scan_iter(match=None, count=100):
-            if match is not None:
-                seen_matches.append(match)
-            if False:
-                yield None
-
-        mock_redis = AsyncMock()
-        mock_redis.scan_iter = fake_scan_iter
-        mock_redis.delete = AsyncMock()
-
-        mock_cache = MagicMock()
-        mock_cache.redis = mock_redis
-        mock_cache.semantic_cache = None
-
-        monkeypatch.setattr("scripts.validate_traces._get_cache_version", lambda: "v9")
-
-        await _flush_redis_caches(mock_cache)
-
-        assert "embeddings:v9:*" in seen_matches
-        assert "sparse:v9:*" in seen_matches
-        assert "analysis:v9:*" in seen_matches
-        assert "search:v9:*" in seen_matches
-        assert "rerank:v9:*" in seen_matches
+    # NOTE: test_flush_uses_cache_version_prefix was removed as duplicate of
+    # TestRedisFlush.test_uses_current_cache_version_for_flush_patterns
 
     def test_report_includes_streaming_ttft_section(self, tmp_path):
         """Report includes Streaming TTFT section when streaming aggregates exist."""
-        run = ValidationRun(
-            run_id="run-1",
-            git_sha="abc123",
-            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
-            collections=["c1"],
-            skip_rerank_threshold=0.012,
-            relevance_threshold_rrf=0.005,
-            results=[],
-        )
+        run = _make_validation_run()
         aggregates = {
-            "cold": {
-                "n": 1,
-                "latency_p50": 100.0,
-                "latency_p90": 130.0,
-                "latency_p95": 150.0,
-                "latency_mean": 110.0,
-                "latency_max": 160.0,
-                "semantic_cache_hit_rate": 0.0,
-                "search_cache_hit_rate": 0.0,
-                "rerank_applied_rate": 0.0,
-                "rewrite_rate": 0.0,
-                "results_count_mean": 20.0,
-                "node_p50": {},
-                "node_p95": {},
-            },
+            "cold": _make_cold_aggregates(),
             "streaming": {
                 "n": 5,
                 "ttft_sample_count": 5,
@@ -668,15 +623,7 @@ class TestReportNoReferenceTrace:
 
     def test_report_no_reference_trace_section(self, tmp_path):
         """Report should not contain Reference Trace Comparison section."""
-        run = ValidationRun(
-            run_id="test-123",
-            git_sha="abc",
-            started_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
-            collections=["test"],
-            skip_rerank_threshold=0.012,
-            relevance_threshold_rrf=0.005,
-            results=[],
-        )
+        run = _make_validation_run(run_id="test-123", git_sha="abc", collections=["test"])
         output = tmp_path / "report.md"
         generate_report(
             run=run,
@@ -691,31 +638,31 @@ class TestReportNoReferenceTrace:
 class TestGoNoGoReportFormat:
     """Test Go/No-Go report formatting in markdown."""
 
-    def test_skipped_criterion_shows_reason(self):
-        """Issue #168: SKIP must include explicit reason."""
+    @pytest.mark.parametrize(
+        ("criterion", "expected_text"),
+        [
+            pytest.param(
+                {"target": "< 1000 ms", "actual": "N/A (n=2, need >= 3)",
+                 "passed": True, "skipped": True},
+                "SKIPPED",
+                id="skipped",
+            ),
+            pytest.param(
+                {"target": "< 5000 ms", "actual": "3200 ms", "passed": True},
+                "PASS",
+                id="pass",
+            ),
+            pytest.param(
+                {"target": "< 5000 ms", "actual": "6100 ms", "passed": False},
+                "FAIL",
+                id="fail",
+            ),
+        ],
+    )
+    def test_criterion_format(self, criterion: dict, expected_text: str):
         from scripts.validate_traces import _format_go_no_go_status
 
-        criterion = {
-            "target": "< 1000 ms",
-            "actual": "N/A (n=2, need >= 3)",
-            "passed": True,
-            "skipped": True,
-        }
-        status = _format_go_no_go_status(criterion)
-        assert "SKIPPED" in status
-        assert "n=" in status or "insufficient" in status.lower()
-
-    def test_pass_criterion_format(self):
-        from scripts.validate_traces import _format_go_no_go_status
-
-        entry = {"target": "< 5000 ms", "actual": "3200 ms", "passed": True}
-        assert "PASS" in _format_go_no_go_status(entry)
-
-    def test_fail_criterion_format(self):
-        from scripts.validate_traces import _format_go_no_go_status
-
-        entry = {"target": "< 5000 ms", "actual": "6100 ms", "passed": False}
-        assert "FAIL" in _format_go_no_go_status(entry)
+        assert expected_text in _format_go_no_go_status(criterion)
 
 
 class TestCollectionResolution:
@@ -746,15 +693,9 @@ class TestCollectionDiscovery:
 
     async def test_discovers_exact_match(self):
         """Finds collection by exact name from Qdrant API."""
-        mock_client = AsyncMock()
-        mock_client.get_collections.return_value = SimpleNamespace(
-            collections=[
-                SimpleNamespace(name="gdrive_documents_bge"),
-                SimpleNamespace(name="some_other_collection"),
-            ]
+        mock_client = _make_mock_qdrant_client(
+            ["gdrive_documents_bge", "some_other_collection"]
         )
-        mock_client.close = AsyncMock()
-
         with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections("http://localhost:6333")
 
@@ -762,15 +703,9 @@ class TestCollectionDiscovery:
 
     async def test_discovers_collection_with_quantization_suffix(self):
         """Finds base collection even when stored with _scalar or _binary suffix."""
-        mock_client = AsyncMock()
-        mock_client.get_collections.return_value = SimpleNamespace(
-            collections=[
-                SimpleNamespace(name="gdrive_documents_bge_scalar"),
-                SimpleNamespace(name="contextual_bulgaria_voyage_binary"),
-            ]
+        mock_client = _make_mock_qdrant_client(
+            ["gdrive_documents_bge_scalar", "contextual_bulgaria_voyage_binary"]
         )
-        mock_client.close = AsyncMock()
-
         with (
             patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
             patch("scripts.validate_traces.check_voyage_available", return_value=True),
@@ -782,15 +717,9 @@ class TestCollectionDiscovery:
 
     async def test_prefers_exact_match_over_suffixed(self):
         """If both base and suffixed exist, prefer exact match."""
-        mock_client = AsyncMock()
-        mock_client.get_collections.return_value = SimpleNamespace(
-            collections=[
-                SimpleNamespace(name="gdrive_documents_bge"),
-                SimpleNamespace(name="gdrive_documents_bge_scalar"),
-            ]
+        mock_client = _make_mock_qdrant_client(
+            ["gdrive_documents_bge", "gdrive_documents_bge_scalar"]
         )
-        mock_client.close = AsyncMock()
-
         with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections("http://localhost:6333")
 
@@ -800,9 +729,8 @@ class TestCollectionDiscovery:
 
     async def test_returns_empty_when_qdrant_unavailable(self):
         """Qdrant connection failure returns empty list, not crash."""
-        mock_client = AsyncMock()
+        mock_client = _make_mock_qdrant_client([])
         mock_client.get_collections.side_effect = ConnectionError("refused")
-        mock_client.close = AsyncMock()
 
         with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections("http://localhost:6333")
@@ -811,15 +739,9 @@ class TestCollectionDiscovery:
 
     async def test_skips_voyage_collection_without_api_key(self):
         """Voyage collections discovered but skipped if VOYAGE_API_KEY missing."""
-        mock_client = AsyncMock()
-        mock_client.get_collections.return_value = SimpleNamespace(
-            collections=[
-                SimpleNamespace(name="gdrive_documents_bge"),
-                SimpleNamespace(name="contextual_bulgaria_voyage"),
-            ]
+        mock_client = _make_mock_qdrant_client(
+            ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
         )
-        mock_client.close = AsyncMock()
-
         with (
             patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
             patch("scripts.validate_traces.check_voyage_available", return_value=False),
@@ -831,16 +753,11 @@ class TestCollectionDiscovery:
 
     async def test_prefers_mode_suffix_when_quantization_enabled(self):
         """Quantization mode must influence discovered collection choice."""
-        mock_client = AsyncMock()
-        mock_client.get_collections.return_value = SimpleNamespace(
-            collections=[
-                SimpleNamespace(name="gdrive_documents_bge"),
-                SimpleNamespace(name="gdrive_documents_bge_scalar"),
-                SimpleNamespace(name="gdrive_documents_bge_binary"),
-            ]
-        )
-        mock_client.close = AsyncMock()
-
+        mock_client = _make_mock_qdrant_client([
+            "gdrive_documents_bge",
+            "gdrive_documents_bge_scalar",
+            "gdrive_documents_bge_binary",
+        ])
         with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections(
                 "http://localhost:6333",
