@@ -219,7 +219,7 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 
 ## Langfuse Scores (All Exit Paths)
 
-14 scores written via `_write_langfuse_scores(lf, result)` in `bot.py` after `graph.ainvoke()`:
+14 scores written via `_write_langfuse_scores(lf, result)` + 3 judge scores (async) in `bot.py` after `graph.ainvoke()`:
 
 **Latency convention:** `latency_total_ms` is **wall-time** measured via `time.perf_counter` in `handle_query` (pipeline_wall_ms), NOT sum of stages. All `latency_stages` values are in **seconds** (float) for per-stage breakdown only.
 
@@ -239,6 +239,19 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 | `hyde_used` | 0.0 | Not yet tracked in LangGraph state |
 | `llm_ttft_ms` | float | Time to first token (ms), streaming only |
 | `llm_response_duration_ms` | float | Full LLM response wall-time (ms) |
+
+### LLM-as-a-Judge Scores (async, online sampling)
+
+Written by `run_online_judge()` via `asyncio.create_task()` — fire-and-forget, never blocks response.
+
+| Score | Values | Purpose |
+|-------|--------|---------|
+| `judge_faithfulness` | 0.0–1.0 | Answer grounded in context (no hallucinations) |
+| `judge_answer_relevance` | 0.0–1.0 | Answer useful for the question |
+| `judge_context_relevance` | 0.0–1.0 | Retrieved docs relevant to question |
+| `judge_*_error` | CATEGORICAL | Written on judge failure (instead of 0.0) |
+
+Controlled by `JUDGE_SAMPLE_RATE` (default 0.0 = off). Batch mode: `make eval-judge`.
 
 **Implementation:** `get_client().score_current_trace(name=..., value=...)` (Langfuse SDK v3)
 
