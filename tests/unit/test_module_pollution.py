@@ -36,8 +36,8 @@ def test_langfuse_not_globally_mocked():
     """Langfuse mock must be fixture-scoped, not global."""
     if "langfuse" in sys.modules:
         module = sys.modules["langfuse"]
-        # Real langfuse has __version__ attribute
-        if not hasattr(module, "__version__"):
+        # Real langfuse has __file__ attribute; MagicMock does not
+        if not hasattr(module, "__file__"):
             pytest.fail(
                 "Global langfuse mock detected. Use @pytest.fixture(autouse=True) "
                 "with monkeypatch.setitem(sys.modules, ...) instead."
