@@ -210,6 +210,7 @@ ignore = [
     "PERF401", # manual-list-comprehension (readability over micro-optimization)
     "RUF012",  # mutable-class-default (dataclasses handle this correctly)
     "ASYNC230",# blocking-open-call (some files are small, async not always needed)
+    "ASYNC240",# blocking-path-call (local filesystem ops are fast, async overhead not worth it)
 ]
 
 # Allow auto-fix for all enabled rules

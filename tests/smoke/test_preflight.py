@@ -24,7 +24,11 @@ def qdrant_url():
 
 @pytest.fixture(scope="module")
 def redis_url():
-    return os.getenv("REDIS_URL", "redis://localhost:6379")
+    url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    password = os.getenv("REDIS_PASSWORD", "")
+    if password and "@" not in url:
+        url = url.replace("redis://", f"redis://:{password}@", 1)
+    return url
 
 
 @pytest.fixture(scope="module")
