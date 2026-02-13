@@ -67,7 +67,7 @@ class RAGState(TypedDict):
     input_type: str  # "text" or "voice"
     # User feedback (#229)
     trace_id: str
-    sent_message: Any | None  # Streamed message ref for feedback buttons
+    sent_message: dict[str, int] | None  # {"chat_id": int, "message_id": int}
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
