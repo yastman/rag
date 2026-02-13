@@ -65,6 +65,8 @@ class RAGState(TypedDict):
     stt_text: str | None
     stt_duration_ms: float | None
     input_type: str  ***REMOVED*** "text" or "voice"
+    ***REMOVED*** LLM-as-a-Judge evaluation context
+    retrieved_context: list[dict[str, Any]]
     ***REMOVED*** User feedback (***REMOVED***229)
     trace_id: str
     sent_message: dict[str, int] | None  ***REMOVED*** {"chat_id": int, "message_id": int}
@@ -125,6 +127,8 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "stt_text": None,
         "stt_duration_ms": None,
         "input_type": "text",
+        ***REMOVED*** LLM-as-a-Judge evaluation context
+        "retrieved_context": [],
         ***REMOVED*** User feedback (***REMOVED***229)
         "trace_id": "",
         "sent_message": None,
