@@ -21,15 +21,18 @@ services:
     container_name: rag-redis-local
     ports:
       - "6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev_redis_pass}
     command: >
       redis-server
+      --requirepass ${REDIS_PASSWORD:-dev_redis_pass}
       --maxmemory 256mb
       --maxmemory-policy allkeys-lfu
       --appendonly yes
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-dev_redis_pass}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
