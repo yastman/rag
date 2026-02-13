@@ -125,3 +125,6 @@ class TestHandleQueryObservability:
         assert metadata["rerank_applied"] is True
         assert metadata["llm_provider_model"] == "cerebras/gpt-oss-120b"
         assert metadata["llm_ttft_ms"] == 450.0
+        # Embedding resilience (#210)
+        assert metadata["embedding_error"] is False
+        assert metadata["embedding_error_type"] is None
