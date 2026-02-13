@@ -210,8 +210,6 @@ CHITCHAT_RESULT = {
 
 class TestScoreWriting:
     """Test that Langfuse scores are written after graph.ainvoke."""
-
-    @pytest.mark.asyncio
     async def test_scores_written_full_pipeline(self, mock_config):
         """All scores should be written after a full pipeline run."""
         mock_lf = MagicMock()
@@ -264,8 +262,6 @@ class TestScoreWriting:
         ]
         assert sorted(score_names) == sorted(expected_names)
         assert mock_lf.score_current_trace.call_count == 30
-
-    @pytest.mark.asyncio
     async def test_score_values_full_pipeline(self, mock_config):
         """Score values should match the graph result state."""
         mock_lf = MagicMock()
@@ -300,8 +296,6 @@ class TestScoreWriting:
         assert scores["answer_chars"] == 65.0
         assert scores["answer_to_question_ratio"] == 2.4
         assert scores["response_style_applied"] == 1.0  # balanced
-
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("result_fixture", "expected_scores"),
         [
@@ -338,8 +332,6 @@ class TestScoreWriting:
         }
         for name, expected_value in expected_scores.items():
             assert scores[name] == expected_value, f"{name}: {scores[name]} != {expected_value}"
-
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("result_override", "test_id"),
         [
@@ -360,8 +352,6 @@ class TestScoreWriting:
 
         score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
         assert "response_style_applied" not in score_names
-
-    @pytest.mark.asyncio
     async def test_scores_written_even_on_null_client(self, mock_config):
         """When Langfuse disabled, _NullLangfuseClient.score_current_trace is called (no-op)."""
         from telegram_bot.observability import _NullLangfuseClient
@@ -373,8 +363,6 @@ class TestScoreWriting:
 
 class TestLatencyBreakdownScores:
     """Test latency breakdown score writing (#147)."""
-
-    @pytest.mark.asyncio
     async def test_streaming_path_writes_numeric_and_boolean_scores(self, mock_config):
         """Streaming: writes llm_decode_ms, llm_tps as NUMERIC; boolean flags."""
         mock_lf = MagicMock()
@@ -403,8 +391,6 @@ class TestLatencyBreakdownScores:
         assert score_map["llm_queue_unavailable"]["data_type"] == "BOOLEAN"
         # No llm_decode_unavailable (decode_ms was written)
         assert "llm_decode_unavailable" not in score_map
-
-    @pytest.mark.asyncio
     async def test_non_streaming_writes_unavailable_flags(self, mock_config):
         """Non-streaming: writes *_unavailable BOOLEAN flags, skips NUMERIC decode/tps."""
         mock_lf = MagicMock()
@@ -430,8 +416,6 @@ class TestLatencyBreakdownScores:
         # streaming_enabled = False
         assert score_map["streaming_enabled"]["value"] == 0
         assert score_map["streaming_enabled"]["data_type"] == "BOOLEAN"
-
-    @pytest.mark.asyncio
     async def test_hard_fail_writes_timeout_true(self, mock_config):
         """Hard LLM failure: llm_timeout=1 BOOLEAN."""
         mock_lf = MagicMock()
@@ -481,8 +465,6 @@ async def _run_handle_voice(mock_config, graph_result, mock_lf_client):
 
 class TestVoiceTraceMetadata:
     """Test that handle_voice writes same metadata keys as handle_query."""
-
-    @pytest.mark.asyncio
     async def test_voice_trace_metadata_has_same_keys_as_text(self, mock_config):
         """handle_voice metadata should contain all keys from handle_query."""
         mock_lf = MagicMock()
@@ -523,8 +505,6 @@ class TestVoiceTraceMetadata:
             "embedding_error_type",
         }
         assert expected_keys.issubset(set(metadata.keys()))
-
-    @pytest.mark.asyncio
     async def test_trace_metadata_contains_memory_and_overhead(self, mock_config):
         """Trace metadata should include memory_messages_count and overhead proxy."""
         mock_lf = MagicMock()
@@ -554,8 +534,6 @@ VOICE_PIPELINE_RESULT = {
 
 class TestVoiceScores:
     """Test voice-specific Langfuse scores (#158)."""
-
-    @pytest.mark.asyncio
     async def test_voice_scores_written(self, mock_config):
         """Voice result should emit stt_duration_ms and voice_duration_s scores."""
         mock_lf = MagicMock()
@@ -577,8 +555,6 @@ class TestVoiceScores:
         assert "input_type" in score_map
         assert score_map["input_type"]["value"] == "voice"
         assert score_map["input_type"]["data_type"] == "CATEGORICAL"
-
-    @pytest.mark.asyncio
     async def test_text_scores_omit_voice_metrics(self, mock_config):
         """Text result should NOT emit stt_duration_ms or voice_duration_s scores."""
         mock_lf = MagicMock()
@@ -598,8 +574,6 @@ class TestVoiceScores:
 
 class TestMemoryScores:
     """Test conversation memory Langfuse scores (#159)."""
-
-    @pytest.mark.asyncio
     async def test_memory_messages_count_written(self, mock_config):
         """memory_messages_count = len(result['messages'])."""
         mock_lf = MagicMock()
@@ -616,8 +590,6 @@ class TestMemoryScores:
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
         }
         assert scores["memory_messages_count"] == 3.0
-
-    @pytest.mark.asyncio
     async def test_summarization_triggered_true(self, mock_config):
         """summarization_triggered=1 when summarize_ms > 0."""
         mock_lf = MagicMock()
@@ -634,8 +606,6 @@ class TestMemoryScores:
         assert scores["summarization_triggered"]["value"] == 1
         assert scores["summarization_triggered"]["data_type"] == "BOOLEAN"
         assert scores["summarize_ms"]["value"] == pytest.approx(250.0, abs=1)
-
-    @pytest.mark.asyncio
     async def test_summarization_triggered_false(self, mock_config):
         """summarization_triggered=0 when no summarize stage."""
         mock_lf = MagicMock()
@@ -647,8 +617,6 @@ class TestMemoryScores:
         scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
         assert scores["summarization_triggered"]["value"] == 0
         assert scores["summarization_triggered"]["data_type"] == "BOOLEAN"
-
-    @pytest.mark.asyncio
     async def test_memory_messages_count_zero_when_no_messages(self, mock_config):
         """memory_messages_count=0 when messages key absent."""
         mock_lf = MagicMock()
@@ -679,8 +647,6 @@ def test_compute_checkpointer_overhead_proxy_ms():
 
 class TestHistoryScores:
     """Test history-related Langfuse scores (#239)."""
-
-    @pytest.mark.asyncio
     async def test_history_save_success_score(self, mock_config):
         """history_save_success=1 when save_turn returns True."""
         mock_lf = MagicMock()
@@ -697,8 +663,6 @@ class TestHistoryScores:
         assert "history_save_success" in scores
         assert scores["history_save_success"]["value"] == 1
         assert scores["history_save_success"]["data_type"] == "BOOLEAN"
-
-    @pytest.mark.asyncio
     async def test_history_save_failure_score(self, mock_config):
         """history_save_success=0 when save_turn returns False."""
         mock_lf = MagicMock()
@@ -726,8 +690,6 @@ class TestHistoryScores:
 
         scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
         assert scores["history_save_success"]["value"] == 0
-
-    @pytest.mark.asyncio
     async def test_history_backend_score(self, mock_config):
         """history_backend=qdrant CATEGORICAL score when service available."""
         mock_lf = MagicMock()
@@ -748,8 +710,6 @@ class TestHistoryScores:
 
 class TestCheckpointerOverheadScore:
     """Test checkpointer_overhead_proxy_ms score (#159)."""
-
-    @pytest.mark.asyncio
     async def test_checkpointer_overhead_proxy_score_written(self, mock_config):
         """checkpointer_overhead_proxy_ms computed from ainvoke wall-time minus stages."""
         mock_lf = MagicMock()

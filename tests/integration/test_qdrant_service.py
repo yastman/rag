@@ -103,8 +103,6 @@ class TestQdrantServiceInit:
 
 class TestHybridSearchRRFQuantization:
     """Tests for quantization parameters in hybrid_search_rrf."""
-
-    @pytest.mark.asyncio
     async def test_search_with_quantization_enabled(self):
         """Test quantization params are passed when enabled (default)."""
         from telegram_bot.services.qdrant import QdrantService
@@ -135,8 +133,6 @@ class TestHybridSearchRRFQuantization:
             assert quant_params.ignore is False  # Use quantization
             assert quant_params.rescore is True
             assert quant_params.oversampling == 2.0
-
-    @pytest.mark.asyncio
     async def test_search_with_quantization_disabled_at_init(self):
         """Test no quantization params when disabled at service init."""
         from telegram_bot.services.qdrant import QdrantService
@@ -160,8 +156,6 @@ class TestHybridSearchRRFQuantization:
             call_kwargs = mock_client.query_points.call_args[1]
             # Should not have search_params when quantization disabled
             assert call_kwargs["search_params"] is None
-
-    @pytest.mark.asyncio
     async def test_search_with_quantization_ignore_true(self):
         """Test A/B testing: quantization_ignore=True skips quantization."""
         from telegram_bot.services.qdrant import QdrantService
@@ -190,8 +184,6 @@ class TestHybridSearchRRFQuantization:
             # Should have search_params with ignore=True
             assert call_kwargs["search_params"] is not None
             assert call_kwargs["search_params"].quantization.ignore is True
-
-    @pytest.mark.asyncio
     async def test_search_with_quantization_ignore_false(self):
         """Test A/B testing: quantization_ignore=False forces quantization."""
         from telegram_bot.services.qdrant import QdrantService
@@ -220,8 +212,6 @@ class TestHybridSearchRRFQuantization:
             # Should have search_params with quantization enabled
             assert call_kwargs["search_params"] is not None
             assert call_kwargs["search_params"].quantization.ignore is False
-
-    @pytest.mark.asyncio
     async def test_search_with_quantization_ignore_none_uses_default(self):
         """Test quantization_ignore=None uses service default."""
         from telegram_bot.services.qdrant import QdrantService
@@ -257,8 +247,6 @@ class TestHybridSearchRRFQuantization:
 
 class TestBinaryQuantization:
     """Tests for binary quantization management methods."""
-
-    @pytest.mark.asyncio
     async def test_enable_binary_quantization_success(self):
         """Test enable_binary_quantization returns True on success."""
         from telegram_bot.services.qdrant import QdrantService
@@ -280,8 +268,6 @@ class TestBinaryQuantization:
             call_kwargs = mock_client.update_collection.call_args[1]
             assert call_kwargs["collection_name"] == "test_collection"
             assert call_kwargs["quantization_config"] is not None
-
-    @pytest.mark.asyncio
     async def test_enable_binary_quantization_custom_collection(self):
         """Test enable_binary_quantization works with custom collection name."""
         from telegram_bot.services.qdrant import QdrantService
@@ -301,8 +287,6 @@ class TestBinaryQuantization:
             assert result is True
             call_kwargs = mock_client.update_collection.call_args[1]
             assert call_kwargs["collection_name"] == "custom_collection"
-
-    @pytest.mark.asyncio
     async def test_enable_binary_quantization_always_ram_false(self):
         """Test enable_binary_quantization with always_ram=False."""
         from qdrant_client import models
@@ -326,8 +310,6 @@ class TestBinaryQuantization:
             # Verify BinaryQuantization config
             quant_config = call_kwargs["quantization_config"]
             assert isinstance(quant_config, models.BinaryQuantization)
-
-    @pytest.mark.asyncio
     async def test_enable_binary_quantization_failure(self):
         """Test enable_binary_quantization returns False on failure."""
         from telegram_bot.services.qdrant import QdrantService
@@ -345,8 +327,6 @@ class TestBinaryQuantization:
             result = await service.enable_binary_quantization()
 
             assert result is False
-
-    @pytest.mark.asyncio
     async def test_get_collection_info_success(self):
         """Test get_collection_info returns correct dict."""
         from telegram_bot.services.qdrant import QdrantService
@@ -374,8 +354,6 @@ class TestBinaryQuantization:
             assert result["vectors_count"] == 1000
             assert result["status"] == "green"
             assert result["quantization"] is not None
-
-    @pytest.mark.asyncio
     async def test_get_collection_info_custom_collection(self):
         """Test get_collection_info with custom collection name."""
         from telegram_bot.services.qdrant import QdrantService
@@ -400,8 +378,6 @@ class TestBinaryQuantization:
             assert result["name"] == "other_collection"
             assert result["quantization"] is None
             mock_client.get_collection.assert_called_once_with(collection_name="other_collection")
-
-    @pytest.mark.asyncio
     async def test_get_collection_info_failure(self):
         """Test get_collection_info returns empty dict on failure."""
         from telegram_bot.services.qdrant import QdrantService
@@ -445,8 +421,6 @@ class TestQdrantServiceUnit:
                 api_key="test-key",
             )
             assert service._collection_name == "test_collection"
-
-    @pytest.mark.asyncio
     async def test_hybrid_search_rrf_builds_prefetch(self):
         """Test hybrid_search_rrf builds correct prefetch queries."""
         from telegram_bot.services.qdrant import QdrantService
@@ -477,8 +451,6 @@ class TestQdrantServiceUnit:
             # Should have prefetch for dense and sparse
             assert "prefetch" in call_kwargs
             assert len(call_kwargs["prefetch"]) == 2
-
-    @pytest.mark.asyncio
     async def test_hybrid_search_rrf_without_sparse(self):
         """Test hybrid_search_rrf works with only dense vector."""
         from telegram_bot.services.qdrant import QdrantService
@@ -502,8 +474,6 @@ class TestQdrantServiceUnit:
             call_kwargs = mock_client.query_points.call_args[1]
             # Should have only dense prefetch
             assert len(call_kwargs["prefetch"]) == 1
-
-    @pytest.mark.asyncio
     async def test_search_with_score_boosting(self):
         """Test search_with_score_boosting uses Query API formula."""
         from telegram_bot.services.qdrant import QdrantService
@@ -527,8 +497,6 @@ class TestQdrantServiceUnit:
             )
 
             mock_client.query_points.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_search_returns_formatted_results(self):
         """Test search returns properly formatted results."""
         from telegram_bot.services.qdrant import QdrantService
