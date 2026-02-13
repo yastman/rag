@@ -41,6 +41,7 @@ class StreamingPartialDeliveryError(Exception):
 _MAX_CONTEXT_DOCS = 5
 _STREAM_EDIT_INTERVAL = 0.3  # 300ms throttle for Telegram edit_text
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
+_MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
 
 
@@ -54,6 +55,8 @@ def _get_config() -> Any:
 _GENERATE_FALLBACK = (
     "Ты — ассистент по {{domain}}.\n\n"
     "Отвечай на вопросы пользователя на основе предоставленного контекста.\n"
+    "Учитывай историю диалога. Если пользователь ссылается на предыдущие "
+    "сообщения — отвечай из контекста разговора, а не из документов.\n"
     "Если информации недостаточно, честно скажи об этом.\n"
     "Всегда указывай цены в евро и расстояния в метрах.\n"
     "Будь вежливым и полезным.\n\n"
@@ -115,6 +118,15 @@ def _build_fallback_response(documents: list[dict[str, Any]]) -> str:
 
     fallback += "Пожалуйста, попробуйте повторить запрос позже для получения детального ответа."
     return fallback
+
+
+def _select_recent_history(
+    messages: list[Any], max_messages: int = _MAX_HISTORY_MESSAGES
+) -> list[Any]:
+    """Return only recent conversation history messages for LLM context."""
+    if not messages:
+        return []
+    return messages[-max_messages:]
 
 
 async def _generate_streaming(
@@ -229,7 +241,8 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     t0 = time.monotonic()
 
     documents = state.get("documents", [])
-    messages = state.get("messages", [])
+    raw_messages = state.get("messages", [])
+    messages = _select_recent_history(raw_messages)
 
     config = _get_config()
     context = _format_context(documents)
