@@ -295,6 +295,18 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
     )
 
+    # LLM-as-a-Judge online sampling
+    judge_sample_rate: float = Field(
+        default=0.0,
+        validation_alias=AliasChoices("JUDGE_SAMPLE_RATE", "judge_sample_rate"),
+        description="Fraction of queries to evaluate with LLM-as-a-Judge (0.0 = off, 0.2 = 20%)",
+    )
+    judge_model: str = Field(
+        default="gpt-4o-mini-cerebras-glm",
+        validation_alias=AliasChoices("JUDGE_MODEL", "judge_model"),
+        description="LLM model for judge evaluation",
+    )
+
     def get_collection_name(self) -> str:
         """Get collection name based on quantization mode.
 
