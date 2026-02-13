@@ -27,12 +27,20 @@ spec:
               drop: ["ALL"]
           args:
             - redis-server
+            - --requirepass
+            - $(REDIS_PASSWORD)
             - --maxmemory
             - 256mb
             - --maxmemory-policy
             - volatile-lfu
             - --maxmemory-samples
             - "10"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: REDIS_PASSWORD
           ports:
             - containerPort: 6379
           volumeMounts:
@@ -46,13 +54,13 @@ spec:
               memory: 300Mi
           livenessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["redis-cli", "ping"]
+              command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep -q PONG"]
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
