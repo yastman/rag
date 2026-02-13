@@ -4,7 +4,6 @@ version = "2.14.0"
 description = "Contextual RAG Pipeline with DBSF + ColBERT hybrid search"
 requires-python = ">=3.11"
 dependencies = [
-    "pymupdf>=1.26.0",        # PyMuPDF 1.26+ uses 'import pymupdf' (NOT fitz)
     "anthropic",
     "openai",
     "groq",
@@ -16,10 +15,6 @@ dependencies = [
     "scipy",
     "sentence-transformers",  # BGE-M3 embeddings
     "qdrant-client>=1.16.2",  # Vector database client (v1.15+ for BM42 support)
-    "fastembed>=0.7.4",       # FastEmbed for BM42 sparse embeddings
-    # Document Processing (2025-10-30)
-    "docling>=2.70.0",        # Advanced document chunking & structure detection
-    "docling-core>=2.61.0",   # Core types for Docling
     "transformers>=4.30.0",   # For HuggingFace tokenizers in HybridChunker
     "langfuse>=3.0.0",        # LLM observability & tracing
     # Voyage AI Integration (2026-01-21)
@@ -31,8 +26,6 @@ dependencies = [
     # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
     "torch>=2.0.0",
     "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
-    # CocoIndex Document Ingestion (2026-02-02)
-    "cocoindex>=0.3.28",                  # Data transformation framework for AI
     "asyncpg>=0.31.0",
     # Performance (2026-02-06)
     "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
@@ -66,6 +59,15 @@ voice = [
     "opentelemetry-exporter-otlp-proto-http>=1.39.0",
 ]
 
+# Ingestion pipeline (Docling, CocoIndex, PyMuPDF)
+ingest = [
+    "pymupdf>=1.26.0",
+    "docling>=2.70.0",
+    "docling-core>=2.61.0",
+    "cocoindex>=0.3.28",
+    "fastembed>=0.7.4",
+]
+
 # Evaluation tools (RAGAS, MLflow, dataset generation)
 eval = [
     "mlflow>=3.9.0",
@@ -76,7 +78,7 @@ eval = [
 
 # All optional dependencies
 all = [
-    "contextual-rag[docs,voice,eval]",
+    "contextual-rag[docs,voice,eval,ingest]",
 ]
 
 # =============================================================================
