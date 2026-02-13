@@ -1,9 +1,9 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
 # Root Dockerfile — uv sync pattern (mirrors telegram_bot/Dockerfile)
 
 # ====== BUILD STAGE ======
 # Base images pinned — checked 2026-02-09
-FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58 AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # ====== RUNTIME STAGE ======
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm@sha256:f0540d0436a220db0a576ccfe75631ab072391e43a24b88972ef9833f699095f AS runtime
 
 WORKDIR /app
 
