@@ -29,17 +29,6 @@ def mock_config():
     )
 
 
-# Patches needed for PropertyBot.__init__
-BOT_INIT_PATCHES = [
-    "telegram_bot.bot.Bot",
-    "telegram_bot.integrations.cache.CacheLayerManager",
-    "telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings",
-    "telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings",
-    "telegram_bot.services.qdrant.QdrantService",
-    "telegram_bot.graph.config.GraphConfig.create_llm",
-]
-
-
 def _create_bot(mock_config):
     """Create PropertyBot with all deps mocked. Returns (bot, patches_dict)."""
     patches = {}
@@ -61,6 +50,29 @@ def _create_bot(mock_config):
         }
         bot = PropertyBot(mock_config)
     return bot, patches
+
+
+def _make_text_message(text="test", user_id=12345, chat_id=12345):
+    """Create a mock text message with typing action support."""
+    message = MagicMock()
+    message.text = text
+    message.from_user = MagicMock(id=user_id)
+    message.chat = MagicMock(id=chat_id)
+    message.bot = MagicMock()
+    message.bot.send_chat_action = AsyncMock()
+    message.answer = AsyncMock()
+    return message
+
+
+def _make_typing_cm():
+    """Create a mock ChatActionSender.typing() context manager.
+
+    __aexit__ returns False by default so exceptions propagate normally.
+    """
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__ = AsyncMock()
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    return mock_cm
 
 
 class TestPropertyBotInit:
@@ -104,35 +116,24 @@ class TestCommandHandlers:
     """Test command handlers."""
 
     @pytest.mark.asyncio
-    async def test_cmd_start(self, mock_config):
-        """Test /start command handler."""
+    @pytest.mark.parametrize(
+        ("handler_name", "expected_fragments"),
+        [
+            ("cmd_start", ["Привет", "недвижимость"]),
+            ("cmd_help", ["Примеры запросов", "/clear", "/stats"]),
+        ],
+    )
+    async def test_simple_commands(self, mock_config, handler_name, expected_fragments):
+        """Test /start and /help produce expected response text."""
         bot, _ = _create_bot(mock_config)
+        message = _make_text_message()
 
-        message = MagicMock()
-        message.answer = AsyncMock()
-
-        await bot.cmd_start(message)
+        await getattr(bot, handler_name)(message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
-        assert "Привет" in call_args
-        assert "недвижимость" in call_args
-
-    @pytest.mark.asyncio
-    async def test_cmd_help(self, mock_config):
-        """Test /help command handler."""
-        bot, _ = _create_bot(mock_config)
-
-        message = MagicMock()
-        message.answer = AsyncMock()
-
-        await bot.cmd_help(message)
-
-        message.answer.assert_called_once()
-        call_args = message.answer.call_args[0][0]
-        assert "Примеры запросов" in call_args
-        assert "/clear" in call_args
-        assert "/stats" in call_args
+        for fragment in expected_fragments:
+            assert fragment in call_args
 
     @pytest.mark.asyncio
     async def test_cmd_clear(self, mock_config):
@@ -140,11 +141,7 @@ class TestCommandHandlers:
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
-
-        message = MagicMock()
-        message.from_user = MagicMock()
-        message.from_user.id = 12345
-        message.answer = AsyncMock()
+        message = _make_text_message()
 
         await bot.cmd_clear(message)
 
@@ -159,10 +156,7 @@ class TestCommandHandlers:
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         bot._checkpointer = AsyncMock()
-
-        message = MagicMock()
-        message.from_user = MagicMock(id=12345)
-        message.answer = AsyncMock()
+        message = _make_text_message()
 
         await bot.cmd_clear(message)
 
@@ -176,10 +170,7 @@ class TestCommandHandlers:
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         bot._checkpointer = None
-
-        message = MagicMock()
-        message.from_user = MagicMock(id=12345)
-        message.answer = AsyncMock()
+        message = _make_text_message()
 
         await bot.cmd_clear(message)
 
@@ -194,10 +185,7 @@ class TestCommandHandlers:
         bot._cache.clear_conversation = AsyncMock()
         bot._checkpointer = AsyncMock()
         bot._checkpointer.adelete_thread = AsyncMock(side_effect=RuntimeError("redis down"))
-
-        message = MagicMock()
-        message.from_user = MagicMock(id=12345)
-        message.answer = AsyncMock()
+        message = _make_text_message()
 
         await bot.cmd_clear(message)
 
@@ -216,9 +204,7 @@ class TestCommandHandlers:
             "semantic": {"hit_rate": 80.0, "hits": 40, "total": 50},
             "embeddings": {"hit_rate": 70.0, "hits": 35, "total": 50},
         }
-
-        message = MagicMock()
-        message.answer = AsyncMock()
+        message = _make_text_message()
 
         await bot.cmd_stats(message)
 
@@ -235,9 +221,7 @@ class TestCommandHandlers:
         bot._cache.get_metrics.return_value = {
             "semantic": {"hit_rate": 75.0, "hits": 30, "misses": 10},
         }
-
-        message = MagicMock()
-        message.answer = AsyncMock()
+        message = _make_text_message()
 
         await bot.cmd_stats(message)
 
@@ -250,9 +234,7 @@ class TestCommandHandlers:
     async def test_cmd_metrics(self, mock_config):
         """Test /metrics command handler."""
         bot, _ = _create_bot(mock_config)
-
-        message = MagicMock()
-        message.answer = AsyncMock()
+        message = _make_text_message()
 
         with patch("telegram_bot.bot.PipelineMetrics") as mock_pm:
             mock_metrics = MagicMock()
@@ -278,22 +260,9 @@ class TestHandleQuery:
         mock_graph.ainvoke = AsyncMock(return_value={"response": "ok", "query_type": "GENERAL"})
 
         with patch("telegram_bot.bot.build_graph", return_value=mock_graph):
-            message = MagicMock()
-            message.text = "квартиры в Несебр"
-            message.from_user = MagicMock()
-            message.from_user.id = 12345
-            message.chat = MagicMock()
-            message.chat.id = 12345
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
-            # Mock ChatActionSender.typing context manager
+            message = _make_text_message("квартиры в Несебр")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
             mock_graph.ainvoke.assert_called_once()
@@ -307,21 +276,9 @@ class TestHandleQuery:
         mock_graph.ainvoke = AsyncMock(return_value={"response": "ok"})
 
         with patch("telegram_bot.bot.build_graph", return_value=mock_graph):
-            message = MagicMock()
-            message.text = "test"
-            message.from_user = MagicMock()
-            message.from_user.id = 12345
-            message.chat = MagicMock()
-            message.chat.id = 12345
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
+            message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
             message.bot.send_chat_action.assert_called_once_with(chat_id=12345, action="typing")
@@ -343,21 +300,9 @@ class TestHandleQuery:
             patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
             patch("telegram_bot.bot.propagate_attributes"),
         ):
-            message = MagicMock()
-            message.text = "test"
-            message.from_user = MagicMock()
-            message.from_user.id = 12345
-            message.chat = MagicMock()
-            message.chat.id = 12345
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
+            message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
             mock_lf.update_current_trace.assert_called_once()
@@ -379,21 +324,9 @@ class TestHandleQuery:
             patch("telegram_bot.bot._write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
-            message = MagicMock()
-            message.text = "квартиры"
-            message.from_user = MagicMock()
-            message.from_user.id = 12345
-            message.chat = MagicMock()
-            message.chat.id = 12345
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
+            message = _make_text_message("квартиры")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
             state_arg = mock_graph.ainvoke.call_args[0][0]
@@ -410,21 +343,9 @@ class TestHandleQuery:
         mock_graph.ainvoke = AsyncMock(return_value={"response": "ok", "query_type": "GENERAL"})
 
         with patch("telegram_bot.bot.build_graph", return_value=mock_graph):
-            message = MagicMock()
-            message.text = "квартиры"
-            message.from_user = MagicMock()
-            message.from_user.id = 12345
-            message.chat = MagicMock()
-            message.chat.id = 12345
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
+            message = _make_text_message("квартиры")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
             state_arg = mock_graph.ainvoke.call_args[0][0]
@@ -457,19 +378,9 @@ class TestHistorySaveOnResponse:
             patch("telegram_bot.bot._write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
-            message = MagicMock()
-            message.text = "квартиры в Несебр"
-            message.from_user = MagicMock(id=12345)
-            message.chat = MagicMock(id=12345)
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
+            message = _make_text_message("квартиры в Несебр")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
         bot._history_service.save_turn.assert_awaited_once()
@@ -520,11 +431,7 @@ class TestHistorySaveOnResponse:
             message.bot.get_file.return_value = file_mock
 
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_voice(message)
 
         bot._history_service.save_turn.assert_awaited_once()
@@ -549,19 +456,9 @@ class TestHistorySaveOnResponse:
             patch("telegram_bot.bot._write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
-            message = MagicMock()
-            message.text = "test"
-            message.from_user = MagicMock(id=12345)
-            message.chat = MagicMock(id=12345)
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
+            message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 # Should not raise
                 await bot.handle_query(message)
 
@@ -583,19 +480,9 @@ class TestHistorySaveOnResponse:
             patch("telegram_bot.bot._write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
-            message = MagicMock()
-            message.text = "test"
-            message.from_user = MagicMock(id=12345)
-            message.chat = MagicMock(id=12345)
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
+            message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 # Should not raise despite save failure
                 await bot.handle_query(message)
 
@@ -608,11 +495,7 @@ class TestCmdHistory:
         """/history without argument shows usage message."""
         bot, _ = _create_bot(mock_config)
         bot._history_service = AsyncMock()
-
-        message = MagicMock()
-        message.text = "/history"
-        message.from_user = MagicMock(id=12345)
-        message.answer = AsyncMock()
+        message = _make_text_message("/history")
 
         await bot.cmd_history(message)
 
@@ -637,11 +520,7 @@ class TestCmdHistory:
                 },
             ]
         )
-
-        message = MagicMock()
-        message.text = "/history цены"
-        message.from_user = MagicMock(id=12345)
-        message.answer = AsyncMock()
+        message = _make_text_message("/history цены")
 
         await bot.cmd_history(message)
 
@@ -659,11 +538,7 @@ class TestCmdHistory:
         bot, _ = _create_bot(mock_config)
         bot._history_service = AsyncMock()
         bot._history_service.search_user_history = AsyncMock(return_value=[])
-
-        message = MagicMock()
-        message.text = "/history несуществующее"
-        message.from_user = MagicMock(id=12345)
-        message.answer = AsyncMock()
+        message = _make_text_message("/history несуществующее")
 
         await bot.cmd_history(message)
 
@@ -678,11 +553,7 @@ class TestCmdHistory:
         """/history when service is None returns graceful message."""
         bot, _ = _create_bot(mock_config)
         bot._history_service = None
-
-        message = MagicMock()
-        message.text = "/history цены"
-        message.from_user = MagicMock(id=12345)
-        message.answer = AsyncMock()
+        message = _make_text_message("/history цены")
 
         await bot.cmd_history(message)
 
@@ -714,19 +585,9 @@ class TestCheckpointNamespace:
             patch("telegram_bot.bot._write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
-            message = MagicMock()
-            message.text = "test"
-            message.from_user = MagicMock(id=12345)
-            message.chat = MagicMock(id=12345)
-            message.bot = MagicMock()
-            message.bot.send_chat_action = AsyncMock()
-
+            message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
             cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
@@ -769,11 +630,7 @@ class TestCheckpointNamespace:
             message.bot.get_file.return_value = file_mock
 
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock()
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_voice(message)
 
             cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
@@ -825,17 +682,12 @@ class TestHandleVoiceExceptionHandling:
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
-
-            # ChatActionSender __aexit__ throws (e.g. Telegram API error)
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
+                mock_cm = _make_typing_cm()
                 mock_cm.__aexit__ = AsyncMock(side_effect=RuntimeError("telegram API error"))
                 mock_cas.typing.return_value = mock_cm
-
                 await bot.handle_voice(message)
 
-            # Scores and trace output MUST be written despite the post-pipeline error
             mock_lf.update_current_trace.assert_called_once()
             mock_write_scores.assert_called_once()
 
@@ -861,16 +713,12 @@ class TestHandleVoiceExceptionHandling:
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
-
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
+                mock_cm = _make_typing_cm()
                 mock_cm.__aexit__ = AsyncMock(side_effect=RuntimeError("cleanup error"))
                 mock_cas.typing.return_value = mock_cm
-
                 await bot.handle_voice(message)
 
-            # No error message sent — answer was already delivered
             for call in message.answer.call_args_list:
                 assert "Не удалось распознать" not in str(call)
 
@@ -889,23 +737,15 @@ class TestHandleVoiceExceptionHandling:
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
-
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock(return_value=False)
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_voice(message)
 
-            # Error message should be sent
             message.answer.assert_called()
             error_sent = any(
                 "Не удалось распознать" in str(call) for call in message.answer.call_args_list
             )
             assert error_sent, "Error message should be sent on genuine pipeline failure"
-
-            # Scores should NOT be written (no result)
             mock_write_scores.assert_not_called()
 
     @pytest.mark.asyncio
@@ -928,21 +768,14 @@ class TestHandleVoiceExceptionHandling:
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
-
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock(return_value=False)
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_voice(message)
 
-            # No extra "recognition failed" message: response may already be delivered.
             error_sent = any(
                 "Не удалось распознать" in str(call) for call in message.answer.call_args_list
             )
             assert not error_sent
-            # #205: even on cleanup failure, trace metadata and scores must be persisted.
             mock_lf.update_current_trace.assert_called_once()
             mock_write_scores.assert_called_once()
 
@@ -969,13 +802,8 @@ class TestHandleVoiceExceptionHandling:
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
-
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock(return_value=False)
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_voice(message)
 
             mock_write_scores.assert_called_once()
@@ -995,13 +823,8 @@ class TestHandleVoiceExceptionHandling:
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
-
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cm = AsyncMock()
-                mock_cm.__aenter__ = AsyncMock()
-                mock_cm.__aexit__ = AsyncMock(return_value=False)
-                mock_cas.typing.return_value = mock_cm
-
+                mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_voice(message)
 
             message.answer.assert_called()
@@ -1215,15 +1038,14 @@ class TestSetupMiddlewares:
 class TestRegisterHandlers:
     """Test handler registration."""
 
-    def test_handlers_registered(self, mock_config):
-        """Test that handlers are registered on init."""
+    @pytest.mark.parametrize(
+        "handler_name",
+        ["cmd_start", "cmd_help", "cmd_clear", "cmd_stats", "handle_query"],
+    )
+    def test_handler_registered(self, mock_config, handler_name):
+        """Test that expected handler is registered on init."""
         bot, _ = _create_bot(mock_config)
-
-        assert hasattr(bot, "cmd_start")
-        assert hasattr(bot, "cmd_help")
-        assert hasattr(bot, "cmd_clear")
-        assert hasattr(bot, "cmd_stats")
-        assert hasattr(bot, "handle_query")
+        assert hasattr(bot, handler_name)
 
 
 class TestWriteLangfuseScores:
@@ -1336,21 +1158,25 @@ class TestMakeSessionId:
     """Test make_session_id utility function."""
 
     def test_format(self):
-        """Test session ID format."""
+        """Test session ID format: prefix-hash8-id."""
         sid = make_session_id("chat", 12345)
         assert sid.startswith("chat-")
         parts = sid.split("-")
         assert len(parts) == 3
         assert len(parts[1]) == 8  # hash
 
-    def test_deterministic(self):
+    @pytest.mark.parametrize(
+        ("prefix", "identifier"),
+        [("chat", 12345), ("voice", 99999), ("api", 1)],
+    )
+    def test_deterministic(self, prefix, identifier):
         """Same inputs produce same session ID."""
-        sid1 = make_session_id("chat", 12345)
-        sid2 = make_session_id("chat", 12345)
-        assert sid1 == sid2
+        assert make_session_id(prefix, identifier) == make_session_id(prefix, identifier)
 
-    def test_different_ids(self):
+    @pytest.mark.parametrize(
+        ("id_a", "id_b"),
+        [(12345, 67890), (1, 2)],
+    )
+    def test_different_ids(self, id_a, id_b):
         """Different identifiers produce different session IDs."""
-        sid1 = make_session_id("chat", 12345)
-        sid2 = make_session_id("chat", 67890)
-        assert sid1 != sid2
+        assert make_session_id("chat", id_a) != make_session_id("chat", id_b)
