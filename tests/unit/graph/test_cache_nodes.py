@@ -10,22 +10,28 @@ import pytest
 
 def _ensure_redisvl_mock():
     """Ensure redisvl modules are importable (mock if needed)."""
-    if "redisvl.query.filter" not in sys.modules:
-        redisvl_mod = sys.modules.get("redisvl") or ModuleType("redisvl")
-        query_mod = ModuleType("redisvl.query")
-        filter_mod = ModuleType("redisvl.query.filter")
+    try:
+        import redisvl.query.filter  # noqa: F401
 
-        class MockTag:
-            def __init__(self, name):
-                self.name = name
+        return
+    except (ImportError, ModuleNotFoundError):
+        pass
 
-            def __eq__(self, other):
-                return MagicMock()
+    redisvl_mod = sys.modules.get("redisvl") or ModuleType("redisvl")
+    query_mod = ModuleType("redisvl.query")
+    filter_mod = ModuleType("redisvl.query.filter")
 
-        filter_mod.Tag = MockTag  # type: ignore[attr-defined]
-        sys.modules.setdefault("redisvl", redisvl_mod)
-        sys.modules.setdefault("redisvl.query", query_mod)
-        sys.modules["redisvl.query.filter"] = filter_mod
+    class MockTag:
+        def __init__(self, name):
+            self.name = name
+
+        def __eq__(self, other):
+            return MagicMock()
+
+    filter_mod.Tag = MockTag  # type: ignore[attr-defined]
+    sys.modules.setdefault("redisvl", redisvl_mod)
+    sys.modules.setdefault("redisvl.query", query_mod)
+    sys.modules["redisvl.query.filter"] = filter_mod
 
 
 _ensure_redisvl_mock()
