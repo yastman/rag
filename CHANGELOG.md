@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.14.0](https://github.com/yastman/rag/compare/v2.13.0...v2.14.0) (2026-01-28)
+
+
+### Features
+
+* **cache:** optimize semantic cache for Russian language ([f6a3bd8](https://github.com/yastman/rag/commit/f6a3bd804c52330863b65905bb22f33ef86bc151))
+* **renovate:** add Renovate Bot for Docker image auto-updates ([#10](https://github.com/yastman/rag/issues/10)) ([e90cda9](https://github.com/yastman/rag/commit/e90cda95b25c98a8dacbd92c8f6568aac37d1b47))
+
+
+### Bug Fixes
+
+* **metrics:** use relative import for config_snapshot ([91e6280](https://github.com/yastman/rag/commit/91e62804ea301d3f58f208884bfd82a607f78eb5))
+* **otel:** add missing methods and fix test mocking ([13bd5da](https://github.com/yastman/rag/commit/13bd5dae780ef1752dc510016e08bb382b82d6bc))
+* **renovate:** enable default mode to create Issues and PRs ([d8cbc92](https://github.com/yastman/rag/commit/d8cbc92e6aba45cf15c8c1f70c875854ea29fe4e))
+* **renovate:** simplify config, remove problematic regex rules ([6c30d52](https://github.com/yastman/rag/commit/6c30d52b2054a6afed08d483bb29067dc84b6755))
+* **tests:** correct distance filter test expectations ([f9ab3a6](https://github.com/yastman/rag/commit/f9ab3a6d73da3a77482c7de7b8ec3395fef05feb))
+* **tests:** correct price filter test expectations ([2c9745d](https://github.com/yastman/rag/commit/2c9745d509d94be0fd4709be02145ca85456ebd5))
+* **tests:** use pytest.approx for floating-point comparison ([d5b666a](https://github.com/yastman/rag/commit/d5b666ac71777d3326b5106582f633b8339cc725))
+
+
+### Documentation
+
+* add dependency-updates skill design ([ff7bf36](https://github.com/yastman/rag/commit/ff7bf36327eb03ba15c58dada1c060bd1889d9ff))
+* add GitHub Issues task management plan ([48b0fa0](https://github.com/yastman/rag/commit/48b0fa0e9ba923b0115292eff96b114a88ceccf3))
+* add parallel workers guide and superpowers skills to CLAUDE.md ([02cc33e](https://github.com/yastman/rag/commit/02cc33ec779daaf26854be49598667d2e2f1cb49))
+* add README indexes for all modules + Docker documentation ([ecee33d](https://github.com/yastman/rag/commit/ecee33dbdfb363d15b5e68f8f885e2845808be59))
+* **claude:** add GitHub Issues task management section ([cc24186](https://github.com/yastman/rag/commit/cc24186ec41a502d06db6ec0fc7fbaea02bb8cfd))
+* **claude:** add UserBaseVectorizer documentation ([2bb930a](https://github.com/yastman/rag/commit/2bb930a530a1a8521f7e1f374870b019aa995e6e))
+* consolidate documentation structure ([0b53e6a](https://github.com/yastman/rag/commit/0b53e6a1a66f5cbb27958c53d9d8c985c08f6aaa))
+* mark Track 1 test fixes complete ([48c0f9b](https://github.com/yastman/rag/commit/48c0f9b534473702155ebd1846b469bcfa96c350))
+* **todo:** add issue references and backlog pointer ([8957c47](https://github.com/yastman/rag/commit/8957c47ba0b444fac0010684565d1bc3c430a4bd))
+* update for v2.13.0 - docs system complete, start quantization A/B ([3d97fa0](https://github.com/yastman/rag/commit/3d97fa0bf9b3515e2d8636c51fc883f0b3f279e1))
+* update PIPELINE_OVERVIEW.md to v2.13.0 ([9c3cb98](https://github.com/yastman/rag/commit/9c3cb989022c6a029d3b70a96aa269a19e02d1d4))
+
 ## [2.13.0](https://github.com/yastman/rag/compare/v2.12.0...v2.13.0) (2026-01-26)
 
 
