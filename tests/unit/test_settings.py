@@ -64,26 +64,46 @@ class TestSettingsInitialization:
 class TestAPIKeyValidation:
     """Test API key validation logic."""
 
+    @staticmethod
+    def _fresh_settings():
+        """Import Settings from current sys.modules to avoid stale references.
+
+        Other tests (test_contextualized_embeddings, test_settings_lazy) may
+        reload or replace src.config.settings in sys.modules. A module-level
+        ``from src.config.settings import Settings`` captures the OLD class
+        whose __init__.__globals__ points to the old module dict. Patching
+        ``src.config.settings.load_dotenv`` only affects the NEW module, so
+        the real load_dotenv runs, loads .env with real API keys, and the
+        test never raises.
+        """
+        import importlib
+
+        mod = importlib.import_module("src.config.settings")
+        return mod.Settings
+
     def test_claude_provider_requires_anthropic_key(self):
         """Test that Claude provider requires ANTHROPIC_API_KEY."""
+        _Settings = self._fresh_settings()
         with patch("src.config.settings.load_dotenv"):  # Don't load .env
             with patch.dict(os.environ, {}, clear=True):
                 with pytest.raises(ValueError, match="ANTHROPIC_API_KEY not set"):
-                    Settings(api_provider="claude")
+                    _Settings(api_provider="claude")
 
     def test_openai_provider_requires_openai_key(self):
         """Test that OpenAI provider requires OPENAI_API_KEY."""
+        _Settings = self._fresh_settings()
         with patch("src.config.settings.load_dotenv"):  # Don't load .env
             with patch.dict(os.environ, {}, clear=True):
                 with pytest.raises(ValueError, match="OPENAI_API_KEY not set"):
-                    Settings(api_provider="openai")
+                    _Settings(api_provider="openai")
 
     def test_groq_provider_requires_groq_key(self):
         """Test that Groq provider requires GROQ_API_KEY."""
+        _Settings = self._fresh_settings()
         with patch("src.config.settings.load_dotenv"):  # Don't load .env
             with patch.dict(os.environ, {}, clear=True):
                 with pytest.raises(ValueError, match="GROQ_API_KEY not set"):
-                    Settings(api_provider="groq")
+                    _Settings(api_provider="groq")
 
     def test_valid_api_key_does_not_raise(self):
         """Test that valid API key does not raise error."""

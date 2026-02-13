@@ -709,18 +709,13 @@ wheels = [
 
 [[package]]
 name = "contextual-rag"
-version = "2.13.0"
+version = "2.14.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aiogram" },
     { name = "aiohttp" },
     { name = "anthropic" },
     { name = "asyncpg" },
-    { name = "cocoindex" },
-    { name = "datasets" },
-    { name = "docling" },
-    { name = "docling-core" },
-    { name = "fastembed" },
     { name = "flagembedding" },
     { name = "groq" },
     { name = "langchain-core" },
@@ -729,14 +724,10 @@ dependencies = [
     { name = "langgraph-checkpoint-postgres" },
     { name = "langgraph-checkpoint-redis" },
     { name = "langmem" },
-    { name = "mlflow" },
     { name = "numpy" },
     { name = "openai" },
-    { name = "pandas" },
-    { name = "pymupdf" },
     { name = "python-dotenv" },
     { name = "qdrant-client" },
-    { name = "ragas" },
     { name = "redis" },
     { name = "redisvl" },
     { name = "requests" },
@@ -754,7 +745,12 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "cocoindex" },
+    { name = "datasets" },
+    { name = "docling" },
+    { name = "docling-core" },
     { name = "fastapi" },
+    { name = "fastembed" },
     { name = "httpx" },
     { name = "livekit" },
     { name = "livekit-agents", extra = ["silero", "turn-detector"] },
@@ -763,14 +759,31 @@ all = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
+    { name = "mlflow" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
+    { name = "pandas" },
+    { name = "pymupdf" },
+    { name = "ragas" },
     { name = "uvicorn" },
 ]
 docs = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
+]
+eval = [
+    { name = "datasets" },
+    { name = "mlflow" },
+    { name = "pandas" },
+    { name = "ragas" },
+]
+ingest = [
+    { name = "cocoindex" },
+    { name = "docling" },
+    { name = "docling-core" },
+    { name = "fastembed" },
+    { name = "pymupdf" },
 ]
 voice = [
     { name = "fastapi" },
@@ -808,13 +821,13 @@ requires-dist = [
     { name = "aiohttp" },
     { name = "anthropic" },
     { name = "asyncpg", specifier = ">=0.31.0" },
-    { name = "cocoindex", specifier = ">=0.3.28" },
-    { name = "contextual-rag", extras = ["docs", "voice"], marker = "extra == 'all'" },
-    { name = "datasets", specifier = ">=3.0.0" },
-    { name = "docling", specifier = ">=2.70.0" },
-    { name = "docling-core", specifier = ">=2.61.0" },
+    { name = "cocoindex", marker = "extra == 'ingest'", specifier = ">=0.3.28" },
+    { name = "contextual-rag", extras = ["docs", "voice", "eval", "ingest"], marker = "extra == 'all'" },
+    { name = "datasets", marker = "extra == 'eval'", specifier = ">=3.0.0" },
+    { name = "docling", marker = "extra == 'ingest'", specifier = ">=2.70.0" },
+    { name = "docling-core", marker = "extra == 'ingest'", specifier = ">=2.61.0" },
     { name = "fastapi", marker = "extra == 'voice'", specifier = ">=0.115.0" },
-    { name = "fastembed", specifier = ">=0.7.4" },
+    { name = "fastembed", marker = "extra == 'ingest'", specifier = ">=0.7.4" },
     { name = "flagembedding" },
     { name = "groq" },
     { name = "httpx", marker = "extra == 'voice'", specifier = ">=0.27.0" },
@@ -831,16 +844,16 @@ requires-dist = [
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6.0" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.25.0" },
-    { name = "mlflow", specifier = ">=3.9.0" },
+    { name = "mlflow", marker = "extra == 'eval'", specifier = ">=3.9.0" },
     { name = "numpy" },
     { name = "openai" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'voice'", specifier = ">=1.39.0" },
     { name = "opentelemetry-sdk", marker = "extra == 'voice'", specifier = ">=1.39.0" },
-    { name = "pandas", specifier = ">=2.0.0" },
-    { name = "pymupdf", specifier = ">=1.26.0" },
+    { name = "pandas", marker = "extra == 'eval'", specifier = ">=2.0.0" },
+    { name = "pymupdf", marker = "extra == 'ingest'", specifier = ">=1.26.0" },
     { name = "python-dotenv" },
     { name = "qdrant-client", specifier = ">=1.16.2" },
-    { name = "ragas", specifier = ">=0.4.3" },
+    { name = "ragas", marker = "extra == 'eval'", specifier = ">=0.4.3" },
     { name = "redis", specifier = ">=7.1.0" },
     { name = "redisvl", specifier = ">=0.13.2" },
     { name = "requests" },
@@ -854,7 +867,7 @@ requires-dist = [
     { name = "uvloop", specifier = ">=0.21.0" },
     { name = "voyageai", specifier = ">=0.3.0" },
 ]
-provides-extras = ["docs", "voice", "all"]
+provides-extras = ["docs", "voice", "ingest", "eval", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1181,6 +1194,15 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
 name = "dill"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1271,9 +1293,10 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.64.0"
+version = "2.65.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "defusedxml" },
     { name = "jsonref" },
     { name = "jsonschema" },
     { name = "latex2mathml" },
@@ -1285,9 +1308,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/23/f2/692de80893b0e0b22e4a5faa03f970b65de6d274a84d375c0ef92b54700b/docling_core-2.64.0.tar.gz", hash = "sha256:5ceb993d1ad743a882fe9bbae63a6b91ae5475e9d90cdf7451e9a1a7c2c2589f", size = 251646, upload-time = "2026-02-09T12:04:51.565Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/f0/54e61a05728f6e44f45092ab115b11b24464b64274f8a5fe8fcfe90ac70d/docling_core-2.65.1.tar.gz", hash = "sha256:3a143adb9cc613c503380eff92f5895078fc5a00fc7264f327d0d85ff60176cd", size = 253164, upload-time = "2026-02-13T12:23:06.472Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/65/9b/9f75957f7ac2e048c0cfad56631267e9d5a23b0d5708b7639598072f5253/docling_core-2.64.0-py3-none-any.whl", hash = "sha256:38dd5d8c60eba8b76a0f37c6f3510c0e53d3d53e0e2585329755b1886887b714", size = 239264, upload-time = "2026-02-09T12:04:50.256Z" },
+    { url = "https://files.pythonhosted.org/packages/54/ee/2a450f8cf9a153dd080551b1ff09d45f200d629c30917b2047ecb8e1f6b6/docling_core-2.65.1-py3-none-any.whl", hash = "sha256:fcdb30254bc5046b52b8bec5919de3b6cdbeed915399cede5351ff328cdd020d", size = 240086, upload-time = "2026-02-13T12:23:04.289Z" },
 ]
 
 [package.optional-dependencies]
@@ -4160,9 +4183,9 @@ name = "ocrmac"
 version = "1.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click" },
-    { name = "pillow" },
-    { name = "pyobjc-framework-vision" },
+    { name = "click", marker = "sys_platform == 'darwin'" },
+    { name = "pillow", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-vision", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5e/07/3e15ab404f75875c5e48c47163300eb90b7409044d8711fc3aaf52503f2e/ocrmac-1.0.1.tar.gz", hash = "sha256:507fe5e4cbd67b2d03f6729a52bbc11f9d0b58241134eb958a5daafd4b9d93d9", size = 1454317, upload-time = "2026-01-08T16:44:26.412Z" }
 wheels = [
@@ -5295,6 +5318,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8e/db/937377f4b3e0fbf6273c17436a49f7db17df1a46b1be9e26653b6fafc0e1/pymupdf-1.27.1-cp310-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:2c9d9353b840040cbc724341f4095fb7e2cc1a12a9147d0ec1a0a79f5d773147", size = 24317651, upload-time = "2026-02-11T22:33:38.967Z" },
     { url = "https://files.pythonhosted.org/packages/72/d5/c701cf2d0cdd6e5d6bca3ca9188d7f5d7ce3ae67dd1368d658cd4bae2707/pymupdf-1.27.1-cp310-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:aeaed76e72cbc061149a825ab0811c5f4752970c56591c2938c5042ec06b26e1", size = 24945742, upload-time = "2026-02-11T15:04:06.21Z" },
     { url = "https://files.pythonhosted.org/packages/2b/29/690202b38b93cf77b73a29c25a63a2b6f3fcb36b1f75006e50b8dee7c108/pymupdf-1.27.1-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:4f1837554134fb45d390a44de8844b2ca9b6c901c82ccc90b340e3b7f3b126ca", size = 25167965, upload-time = "2026-02-11T22:36:35.478Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/81/f937e6aa606fd263c3a45d0ff0f0bbdbf3fb779933091fc0f6179513cc93/pymupdf-1.27.1-cp310-abi3-win32.whl", hash = "sha256:fa33b512d82c6c4852edadf57f22d5f27d16243bb33dac0fbe4eb0f281c5b17e", size = 18006253, upload-time = "2026-02-12T13:48:07.129Z" },
     { url = "https://files.pythonhosted.org/packages/3e/99/fe4a7752990bf65277718fffbead4478de9afd1c7288d7a6d643f79a6fa7/pymupdf-1.27.1-cp310-abi3-win_amd64.whl", hash = "sha256:4b6268dff3a9d713034eba5c2ffce0da37c62443578941ac5df433adcde57b2f", size = 19236703, upload-time = "2026-02-11T15:04:19.607Z" },
 ]
 
@@ -5317,7 +5341,7 @@ name = "pyobjc-framework-cocoa"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/a3/16ca9a15e77c061a9250afbae2eae26f2e1579eb8ca9462ae2d2c71e1169/pyobjc_framework_cocoa-12.1.tar.gz", hash = "sha256:5556c87db95711b985d5efdaaf01c917ddd41d148b1e52a0c66b1a2e2c5c1640", size = 2772191, upload-time = "2025-11-14T10:13:02.069Z" }
 wheels = [
@@ -5334,8 +5358,8 @@ name = "pyobjc-framework-coreml"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/30/2d/baa9ea02cbb1c200683cb7273b69b4bee5070e86f2060b77e6a27c2a9d7e/pyobjc_framework_coreml-12.1.tar.gz", hash = "sha256:0d1a4216891a18775c9e0170d908714c18e4f53f9dc79fb0f5263b2aa81609ba", size = 40465, upload-time = "2025-11-14T10:14:02.265Z" }
 wheels = [
@@ -5352,8 +5376,8 @@ name = "pyobjc-framework-quartz"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/94/18/cc59f3d4355c9456fc945eae7fe8797003c4da99212dd531ad1b0de8a0c6/pyobjc_framework_quartz-12.1.tar.gz", hash = "sha256:27f782f3513ac88ec9b6c82d9767eef95a5cf4175ce88a1e5a65875fee799608", size = 3159099, upload-time = "2025-11-14T10:21:24.31Z" }
 wheels = [
@@ -5370,10 +5394,10 @@ name = "pyobjc-framework-vision"
 version = "12.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coreml" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-coreml", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c2/5a/08bb3e278f870443d226c141af14205ff41c0274da1e053b72b11dfc9fb2/pyobjc_framework_vision-12.1.tar.gz", hash = "sha256:a30959100e85dcede3a786c544e621ad6eb65ff6abf85721f805822b8c5fe9b0", size = 59538, upload-time = "2025-11-14T10:23:21.979Z" }
 wheels = [

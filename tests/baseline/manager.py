@@ -172,3 +172,46 @@ class BaselineManager:
             )
 
         return len(regressions) == 0, regressions
+
+    def compare_judge(
+        self,
+        current_judge: dict[str, float] | None,
+        baseline_judge: dict[str, float] | None,
+    ) -> tuple[bool, list[str]]:
+        """Compare LLM-as-a-Judge metrics against thresholds.
+
+        Judge check runs only when judge data is present in BOTH current and baseline.
+        Skips without failure when judge data is absent from either side.
+
+        Args:
+            current_judge: Dict with keys like 'faithfulness_mean', 'answer_relevance_mean',
+                           'context_relevance_mean'. None if no judge data.
+            baseline_judge: Same structure for baseline. None if no judge data.
+
+        Returns:
+            Tuple of (passed, list of regression messages).
+        """
+        # Skip judge check when data is absent from either side
+        if current_judge is None or baseline_judge is None:
+            return True, []
+
+        judge_thresholds = self.thresholds.get("judge", {})
+        regressions: list[str] = []
+
+        checks = [
+            ("faithfulness_mean", "faithfulness_mean_gte", "Faithfulness"),
+            ("answer_relevance_mean", "answer_relevance_mean_gte", "Answer relevance"),
+            ("context_relevance_mean", "context_relevance_mean_gte", "Context relevance"),
+        ]
+
+        for metric_key, threshold_key, label in checks:
+            threshold = judge_thresholds.get(threshold_key)
+            if threshold is None:
+                continue
+            value = current_judge.get(metric_key)
+            if value is None:
+                continue
+            if value < threshold:
+                regressions.append(f"{label} below threshold: {value:.3f} < {threshold:.2f}")
+
+        return len(regressions) == 0, regressions

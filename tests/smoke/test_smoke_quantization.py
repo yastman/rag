@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def voyage_service():
     api_key = os.getenv("VOYAGE_API_KEY")
     if not api_key:
@@ -18,7 +18,7 @@ async def voyage_service():
     return VoyageService(api_key=api_key)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def qdrant_service():
     from telegram_bot.services.qdrant import QdrantService
 
