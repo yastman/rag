@@ -272,6 +272,31 @@ class TestGenerateNode:
         )
 
     @pytest.mark.asyncio
+    async def test_injects_history_instruction_when_managed_prompt_missing_it(self) -> None:
+        """Legacy managed prompt must still include history instruction if remote prompt lacks it."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config()
+        state = _make_state_with_docs()
+
+        with (
+            patch(
+                "telegram_bot.graph.nodes.generate._get_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "telegram_bot.graph.nodes.generate.get_prompt",
+                return_value="Ты — ассистент по недвижимости.",
+            ),
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        system_msg = messages[0]["content"]
+        assert "истори" in system_msg.lower()
+
+    @pytest.mark.asyncio
     async def test_fallback_on_error(self) -> None:
         """generate_node returns fallback response when LLM fails."""
         from telegram_bot.graph.nodes.generate import generate_node
@@ -1227,3 +1252,31 @@ class TestGenerateNodeResponseStyle:
         call_kwargs = mock_client.chat.completions.create.call_args
         assert call_kwargs.kwargs.get("max_tokens") == 2048
         mock_style_prompt.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_style_mode_injects_history_instruction_if_missing(self) -> None:
+        """Style-mode prompt must include history instruction even if style template lacks it."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config("Styled answer.")
+        mock_config.response_style_enabled = True
+        mock_config.response_style_shadow_mode = False
+        mock_config.generate_max_tokens = 2048
+        state = _make_state_with_docs(query="сколько стоит студия")
+
+        with (
+            patch(
+                "telegram_bot.graph.nodes.generate._get_config",
+                return_value=mock_config,
+            ),
+            patch(
+                "telegram_bot.graph.nodes.generate.build_system_prompt_with_manager",
+                return_value="STYLE PROMPT WITHOUT HISTORY",
+            ),
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        system_msg = messages[0]["content"]
+        assert "истори" in system_msg.lower()

@@ -43,6 +43,10 @@ _STREAM_EDIT_INTERVAL = 0.3  # 300ms throttle for Telegram edit_text
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
 _MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
+_HISTORY_INSTRUCTION = (
+    "Учитывай историю диалога. Если пользователь ссылается на предыдущие "
+    "сообщения — отвечай из контекста разговора, а не из документов."
+)
 
 
 def _get_config() -> Any:
@@ -55,8 +59,7 @@ def _get_config() -> Any:
 _GENERATE_FALLBACK = (
     "Ты — ассистент по {{domain}}.\n\n"
     "Отвечай на вопросы пользователя на основе предоставленного контекста.\n"
-    "Учитывай историю диалога. Если пользователь ссылается на предыдущие "
-    "сообщения — отвечай из контекста разговора, а не из документов.\n"
+    f"{_HISTORY_INSTRUCTION}\n"
     "Если информации недостаточно, честно скажи об этом.\n"
     "Всегда указывай цены в евро и расстояния в метрах.\n"
     "Будь вежливым и полезным.\n\n"
@@ -127,6 +130,20 @@ def _select_recent_history(
     if not messages:
         return []
     return messages[-max_messages:]
+
+
+def _ensure_history_instruction(system_prompt: str) -> str:
+    """Ensure all prompt paths include history handling instruction."""
+    lowered = system_prompt.lower()
+    if (
+        "ссылается на предыдущие" in lowered
+        or "из контекста разговора" in lowered
+        or _HISTORY_INSTRUCTION.lower() in lowered
+    ):
+        return system_prompt
+
+    separator = "\n" if system_prompt.endswith("\n") else "\n\n"
+    return f"{system_prompt}{separator}{_HISTORY_INSTRUCTION}"
 
 
 async def _generate_streaming(
@@ -278,6 +295,8 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
     else:
         system_prompt = _build_system_prompt(config.domain)
         max_tokens = legacy_max_tokens
+
+    system_prompt = _ensure_history_instruction(system_prompt)
 
     # Build OpenAI-format messages
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
