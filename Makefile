@@ -309,7 +309,7 @@ COMPOSE_CMD := docker compose --compatibility -f docker-compose.dev.yml
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
 
-docker-core-up: ## Start core services (postgres, qdrant, redis, docling, bm42)
+docker-core-up: ## Start core services (postgres, qdrant, redis, docling)
 	@echo "$(BLUE)Starting core services...$(NC)"
 	$(COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
