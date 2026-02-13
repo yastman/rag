@@ -591,8 +591,6 @@ class TestReportAndSummary:
 
 class TestRedisFlushPatterns:
     """Redis flush should use active cache version for exact-cache prefixes."""
-
-    @pytest.mark.asyncio
     async def test_flush_uses_cache_version_prefix(self, monkeypatch: pytest.MonkeyPatch):
         seen_matches: list[str] = []
 

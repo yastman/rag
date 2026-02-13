@@ -21,8 +21,6 @@ def _make_docs(n: int = 3) -> list[dict]:
 
 class TestRetrieveNode:
     """Test retrieve_node."""
-
-    @pytest.mark.asyncio
     async def test_returns_documents(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["query_type"] = "GENERAL"
@@ -54,8 +52,6 @@ class TestRetrieveNode:
         assert len(result["documents"]) == 5
         assert result["search_results_count"] == 5
         qdrant.hybrid_search_rrf.assert_awaited_once()
-
-    @pytest.mark.asyncio
     async def test_uses_cached_search(self):
         state = make_initial_state(user_id=1, session_id="s1", query="cached query")
         state["query_type"] = "FAQ"
@@ -80,8 +76,6 @@ class TestRetrieveNode:
         assert result["search_results_count"] == 3
         # Qdrant should NOT be called — we used cache
         qdrant.hybrid_search_rrf.assert_not_awaited()
-
-    @pytest.mark.asyncio
     async def test_cache_hit_clears_stale_backend_error_flags(self):
         state = make_initial_state(user_id=1, session_id="s1", query="cached query")
         state["query_type"] = "FAQ"
@@ -104,8 +98,6 @@ class TestRetrieveNode:
 
         assert result["retrieval_backend_error"] is False
         assert result["retrieval_error_type"] is None
-
-    @pytest.mark.asyncio
     async def test_handles_empty_results(self):
         state = make_initial_state(user_id=1, session_id="s1", query="obscure query")
         state["query_type"] = "GENERAL"
@@ -132,8 +124,6 @@ class TestRetrieveNode:
 
         assert result["documents"] == []
         assert result["search_results_count"] == 0
-
-    @pytest.mark.asyncio
     async def test_uses_cached_sparse_embedding(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["query_type"] = "GENERAL"
@@ -162,8 +152,6 @@ class TestRetrieveNode:
         # Qdrant should be called with cached sparse
         call_kwargs = qdrant.hybrid_search_rrf.call_args[1]
         assert call_kwargs["sparse_vector"] == cached_sparse
-
-    @pytest.mark.asyncio
     async def test_stores_results_in_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="cache me")
         state["query_type"] = "GENERAL"
@@ -192,8 +180,6 @@ class TestRetrieveNode:
 
         cache.store_search_results.assert_awaited_once()
         cache.store_sparse_embedding.assert_awaited_once()
-
-    @pytest.mark.asyncio
     async def test_handles_legacy_list_return_without_meta(self):
         """retrieve_node should handle legacy list-only Qdrant responses."""
         state = make_initial_state(user_id=1, session_id="s1", query="legacy")
@@ -222,8 +208,6 @@ class TestRetrieveNode:
         assert len(result["documents"]) == 2
         assert result["retrieval_backend_error"] is False
         assert result["retrieval_error_type"] is None
-
-    @pytest.mark.asyncio
     async def test_parallel_embeddings_after_rewrite(self):
         """After rewrite (query_embedding=None), fallback parallel dense+sparse."""
         import asyncio
@@ -279,8 +263,6 @@ class TestRetrieveNode:
         # Check parallel execution: sparse_start should appear before dense_end
         assert "sparse_start" in call_order
         assert "dense_start" in call_order
-
-    @pytest.mark.asyncio
     async def test_hybrid_embedding_after_rewrite(self):
         """After rewrite, hybrid embeddings uses single /encode/hybrid call."""
         state = make_initial_state(user_id=1, session_id="s1", query="rewritten query")
