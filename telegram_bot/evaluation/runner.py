@@ -160,7 +160,7 @@ async def run_batch(
     from openai import AsyncOpenAI
 
     langfuse = Langfuse()
-    llm_model = model or os.getenv("JUDGE_MODEL", DEFAULT_MODEL)
+    llm_model: str = model or os.getenv("JUDGE_MODEL") or DEFAULT_MODEL
     llm_url = os.getenv("LITELLM_BASE_URL", DEFAULT_LITELLM_URL)
     client = AsyncOpenAI(api_key="not-needed", base_url=llm_url)
 
