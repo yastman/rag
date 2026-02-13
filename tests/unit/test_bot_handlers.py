@@ -228,6 +228,25 @@ class TestCommandHandlers:
         assert "80" in call_args
 
     @pytest.mark.asyncio
+    async def test_cmd_stats_uses_hits_plus_misses_denominator(self, mock_config):
+        """Test /stats command uses hits + misses as denominator (not 'total')."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.get_metrics.return_value = {
+            "semantic": {"hit_rate": 75.0, "hits": 30, "misses": 10},
+        }
+
+        message = MagicMock()
+        message.answer = AsyncMock()
+
+        await bot.cmd_stats(message)
+
+        message.answer.assert_called_once()
+        call_args = message.answer.call_args[0][0]
+        # Should show "30/40" (hits/total), where total = hits + misses
+        assert "30/40" in call_args, "Expected denominator to be hits + misses = 40"
+
+    @pytest.mark.asyncio
     async def test_cmd_metrics(self, mock_config):
         """Test /metrics command handler."""
         bot, _ = _create_bot(mock_config)
