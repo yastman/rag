@@ -78,3 +78,18 @@ class TestTracedPipeline:
 
         with traced_pipeline(session_id="s", user_id="u", tags=["a", "b"]):
             pass
+
+
+class TestNullLangfuseClient:
+    def test_create_score_is_noop(self):
+        from telegram_bot.observability import _NullLangfuseClient
+
+        client = _NullLangfuseClient()
+        client.create_score(trace_id="abc123", name="user_feedback", value=1.0, data_type="NUMERIC")
+
+    def test_get_current_trace_id_returns_empty(self):
+        from telegram_bot.observability import _NullLangfuseClient
+
+        client = _NullLangfuseClient()
+        result = client.get_current_trace_id()
+        assert result == ""
