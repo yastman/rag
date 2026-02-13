@@ -15,8 +15,28 @@ from pathlib import Path
 import pytest
 
 
+def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
+    """Check if a TCP port is open."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        try:
+            s.connect((host, port))
+            return True
+        except (OSError, TimeoutError):
+            return False
+
+
 # Mark entire module as legacy (skipped in CI: -m "not legacy_api")
-pytestmark = pytest.mark.legacy_api
+# Also skip if Redis hostname (default: "redis") is not reachable
+pytestmark = [
+    pytest.mark.legacy_api,
+    pytest.mark.skipif(
+        not _check_tcp(os.getenv("REDIS_HOST", "redis"), 6379),
+        reason=f"Redis not reachable at {os.getenv('REDIS_HOST', 'redis')}:6379",
+    ),
+]
 
 # Add src to path for legacy import
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
