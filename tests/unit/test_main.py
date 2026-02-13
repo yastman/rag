@@ -15,25 +15,22 @@ class TestMainFunction:
     """Test main() function logic."""
 
     @pytest.fixture(autouse=True)
-    def cleanup_modules(self):
-        """Clear module cache before and after each test.
+    def cleanup_modules(self, monkeypatch):
+        """Clear module cache for each test using monkeypatch (auto-restored).
 
-        Clears all telegram_bot and src.observability modules to ensure
-        fresh imports and prevent state pollution between tests.
+        Uses monkeypatch.delitem so removed modules are restored on teardown,
+        preventing pollution of other test files in the same xdist worker.
         """
         prefixes = (
             "telegram_bot",
             "src.observability",
         )
 
-        def _clear():
-            for key in list(sys.modules.keys()):
-                if key.startswith(prefixes):
-                    sys.modules.pop(key, None)
+        for key in list(sys.modules.keys()):
+            if key.startswith(prefixes):
+                monkeypatch.delitem(sys.modules, key)
 
-        _clear()
         yield
-        _clear()
 
     @pytest.mark.asyncio
     async def test_main_success_flow(self):
