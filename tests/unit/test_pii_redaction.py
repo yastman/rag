@@ -1,12 +1,4 @@
-import sys
-from unittest.mock import MagicMock
-
 import pytest
-
-
-# Pre-mock langfuse to avoid external dependencies
-mock_langfuse = MagicMock()
-sys.modules["langfuse"] = mock_langfuse
 
 from src.security.pii_redaction import BudgetGuard, PIIRedactor
 
