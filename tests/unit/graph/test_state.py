@@ -79,3 +79,17 @@ class TestRAGState:
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
         assert state["grade_confidence"] == 0.0
+
+    def test_has_trace_id(self):
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=123, session_id="s-test", query="hello")
+        assert "trace_id" in state
+        assert state["trace_id"] == ""
+
+    def test_has_sent_message(self):
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=123, session_id="s-test", query="hello")
+        assert "sent_message" in state
+        assert state["sent_message"] is None
