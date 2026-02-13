@@ -114,8 +114,6 @@ class TestPropertyBotInit:
 
 class TestCommandHandlers:
     """Test command handlers."""
-
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("handler_name", "expected_fragments"),
         [
@@ -134,8 +132,6 @@ class TestCommandHandlers:
         call_args = message.answer.call_args[0][0]
         for fragment in expected_fragments:
             assert fragment in call_args
-
-    @pytest.mark.asyncio
     async def test_cmd_clear(self, mock_config):
         """Test /clear command handler."""
         bot, _ = _create_bot(mock_config)
@@ -148,8 +144,6 @@ class TestCommandHandlers:
         bot._cache.clear_conversation.assert_called_once_with(12345)
         message.answer.assert_called_once()
         assert "очищена" in message.answer.call_args[0][0].lower()
-
-    @pytest.mark.asyncio
     async def test_cmd_clear_uses_checkpointer_delete_thread(self, mock_config):
         """Test /clear calls checkpointer.adelete_thread for SDK-native cleanup."""
         bot, _ = _create_bot(mock_config)
@@ -162,8 +156,6 @@ class TestCommandHandlers:
 
         bot._checkpointer.adelete_thread.assert_awaited_once_with("12345")
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
-
-    @pytest.mark.asyncio
     async def test_cmd_clear_handles_no_checkpointer(self, mock_config):
         """Test /clear works when checkpointer is None (fallback)."""
         bot, _ = _create_bot(mock_config)
@@ -176,8 +168,6 @@ class TestCommandHandlers:
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
         message.answer.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_cmd_clear_reports_partial_failure_on_checkpointer_error(self, mock_config):
         """Test /clear reports partial failure when checkpointer deletion fails."""
         bot, _ = _create_bot(mock_config)
@@ -194,8 +184,6 @@ class TestCommandHandlers:
         message.answer.assert_awaited_once()
         answer_text = message.answer.await_args.args[0]
         assert "частично" in answer_text.lower()
-
-    @pytest.mark.asyncio
     async def test_cmd_stats(self, mock_config):
         """Test /stats command handler."""
         bot, _ = _create_bot(mock_config)
@@ -212,8 +200,6 @@ class TestCommandHandlers:
         call_args = message.answer.call_args[0][0]
         assert "Статистика" in call_args
         assert "80" in call_args
-
-    @pytest.mark.asyncio
     async def test_cmd_stats_uses_hits_plus_misses_denominator(self, mock_config):
         """Test /stats command uses hits + misses as denominator (not 'total')."""
         bot, _ = _create_bot(mock_config)
@@ -229,8 +215,6 @@ class TestCommandHandlers:
         call_args = message.answer.call_args[0][0]
         # Should show "30/40" (hits/total), where total = hits + misses
         assert "30/40" in call_args, "Expected denominator to be hits + misses = 40"
-
-    @pytest.mark.asyncio
     async def test_cmd_metrics(self, mock_config):
         """Test /metrics command handler."""
         bot, _ = _create_bot(mock_config)
@@ -250,8 +234,6 @@ class TestCommandHandlers:
 
 class TestHandleQuery:
     """Test handle_query method - LangGraph pipeline."""
-
-    @pytest.mark.asyncio
     async def test_handle_query_invokes_graph(self, mock_config):
         """Test that handle_query builds and invokes the graph."""
         bot, _ = _create_bot(mock_config)
@@ -266,8 +248,6 @@ class TestHandleQuery:
                 await bot.handle_query(message)
 
             mock_graph.ainvoke.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_handle_query_sends_typing(self, mock_config):
         """Test that typing action is sent early."""
         bot, _ = _create_bot(mock_config)
@@ -282,8 +262,6 @@ class TestHandleQuery:
                 await bot.handle_query(message)
 
             message.bot.send_chat_action.assert_called_once_with(chat_id=12345, action="typing")
-
-    @pytest.mark.asyncio
     async def test_handle_query_writes_langfuse_trace(self, mock_config):
         """Test that handle_query updates Langfuse trace and writes scores."""
         bot, _ = _create_bot(mock_config)
@@ -307,8 +285,6 @@ class TestHandleQuery:
 
             mock_lf.update_current_trace.assert_called_once()
             mock_write_scores.assert_called_once_with(mock_lf, mock_graph.ainvoke.return_value)
-
-    @pytest.mark.asyncio
     async def test_handle_query_passes_state_to_graph(self, mock_config):
         """Test that handle_query passes correct initial state to graph."""
         bot, _ = _create_bot(mock_config)
@@ -332,8 +308,6 @@ class TestHandleQuery:
             state_arg = mock_graph.ainvoke.call_args[0][0]
             assert state_arg["user_id"] == 12345
             assert "квартиры" in str(state_arg["messages"])
-
-    @pytest.mark.asyncio
     async def test_handle_query_passes_max_rewrite_attempts(self, mock_config):
         """Test that handle_query sets max_rewrite_attempts from graph config."""
         bot, _ = _create_bot(mock_config)
@@ -354,8 +328,6 @@ class TestHandleQuery:
 
 class TestHistorySaveOnResponse:
     """Test Q&A history persistence after successful responses."""
-
-    @pytest.mark.asyncio
     async def test_handle_query_saves_history(self, mock_config):
         """handle_query stores history record when response exists."""
         bot, _ = _create_bot(mock_config)
@@ -390,8 +362,6 @@ class TestHistorySaveOnResponse:
         assert call_kwargs["response"] == "Вот квартиры..."
         assert call_kwargs["input_type"] == "text"
         assert call_kwargs["query_embedding"] == [0.1] * 1024
-
-    @pytest.mark.asyncio
     async def test_handle_voice_saves_history(self, mock_config):
         """handle_voice stores history with resolved textual query."""
         bot, _ = _create_bot(mock_config)
@@ -438,8 +408,6 @@ class TestHistorySaveOnResponse:
         call_kwargs = bot._history_service.save_turn.call_args.kwargs
         assert call_kwargs["input_type"] == "voice"
         assert call_kwargs["query"] == "распознанный текст"
-
-    @pytest.mark.asyncio
     async def test_handle_query_skips_history_when_no_service(self, mock_config):
         """handle_query skips history save when service is None."""
         bot, _ = _create_bot(mock_config)
@@ -461,8 +429,6 @@ class TestHistorySaveOnResponse:
                 mock_cas.typing.return_value = _make_typing_cm()
                 # Should not raise
                 await bot.handle_query(message)
-
-    @pytest.mark.asyncio
     async def test_handle_query_history_save_failure_does_not_break_response(self, mock_config):
         """History save failure should not break user response flow."""
         bot, _ = _create_bot(mock_config)
@@ -489,8 +455,6 @@ class TestHistorySaveOnResponse:
 
 class TestCmdHistory:
     """Test /history command handler."""
-
-    @pytest.mark.asyncio
     async def test_history_no_args_shows_usage(self, mock_config):
         """/history without argument shows usage message."""
         bot, _ = _create_bot(mock_config)
@@ -504,8 +468,6 @@ class TestCmdHistory:
             "использование" in message.answer.call_args[0][0].lower()
             or "/history" in message.answer.call_args[0][0]
         )
-
-    @pytest.mark.asyncio
     async def test_history_search_returns_results(self, mock_config):
         """/history цены performs search and returns formatted results."""
         bot, _ = _create_bot(mock_config)
@@ -531,8 +493,6 @@ class TestCmdHistory:
         answer_text = message.answer.call_args[0][0]
         assert "цены на квартиры" in answer_text
         assert "Квартиры от 50к евро" in answer_text
-
-    @pytest.mark.asyncio
     async def test_history_empty_results(self, mock_config):
         """/history with no matches returns informative message."""
         bot, _ = _create_bot(mock_config)
@@ -547,8 +507,6 @@ class TestCmdHistory:
             "не найден" in message.answer.call_args[0][0].lower()
             or "нет" in message.answer.call_args[0][0].lower()
         )
-
-    @pytest.mark.asyncio
     async def test_history_unavailable_fallback(self, mock_config):
         """/history when service is None returns graceful message."""
         bot, _ = _create_bot(mock_config)
@@ -568,8 +526,6 @@ class TestCmdHistory:
 
 class TestCheckpointNamespace:
     """Test checkpoint namespace separation for text/voice."""
-
-    @pytest.mark.asyncio
     async def test_handle_query_passes_text_checkpoint_ns(self, mock_config):
         """handle_query passes checkpoint_ns='tg:text:v1' in invoke_config."""
         bot, _ = _create_bot(mock_config)
@@ -593,8 +549,6 @@ class TestCheckpointNamespace:
             cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
             assert cfg["thread_id"] == "12345"
             assert cfg["checkpoint_ns"] == "tg:text:v1"
-
-    @pytest.mark.asyncio
     async def test_handle_voice_passes_voice_checkpoint_ns(self, mock_config):
         """handle_voice passes checkpoint_ns='tg:voice:v1' in invoke_config."""
         bot, _ = _create_bot(mock_config)
@@ -658,8 +612,6 @@ class TestHandleVoiceExceptionHandling:
         file_mock.file_path = "voice/file.ogg"
         message.bot.get_file.return_value = file_mock
         return message
-
-    @pytest.mark.asyncio
     async def test_post_pipeline_error_still_writes_scores(self, mock_config):
         """When ainvoke succeeds but ChatActionSender __aexit__ throws,
         scores and trace output should still be written (#201)."""
@@ -690,8 +642,6 @@ class TestHandleVoiceExceptionHandling:
 
             mock_lf.update_current_trace.assert_called_once()
             mock_write_scores.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_post_pipeline_error_does_not_send_false_error(self, mock_config):
         """When pipeline succeeds but post-invoke fails, user should NOT
         receive 'Не удалось распознать' error message (#201)."""
@@ -721,8 +671,6 @@ class TestHandleVoiceExceptionHandling:
 
             for call in message.answer.call_args_list:
                 assert "Не удалось распознать" not in str(call)
-
-    @pytest.mark.asyncio
     async def test_genuine_pipeline_failure_sends_error(self, mock_config):
         """When ainvoke itself throws (pipeline failed), user should get error message."""
         bot, _ = _create_bot(mock_config)
@@ -747,8 +695,6 @@ class TestHandleVoiceExceptionHandling:
             )
             assert error_sent, "Error message should be sent on genuine pipeline failure"
             mock_write_scores.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_cleanup_error_with_no_result_does_not_send_false_error(self, mock_config):
         """Cleanup failures from AsyncPregelLoop.__aexit__ should not send extra user error."""
         bot, _ = _create_bot(mock_config)
@@ -778,8 +724,6 @@ class TestHandleVoiceExceptionHandling:
             assert not error_sent
             mock_lf.update_current_trace.assert_called_once()
             mock_write_scores.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_scores_written_even_if_trace_update_fails(self, mock_config):
         """Trace update failure should not prevent score writes (#202 review)."""
         bot, _ = _create_bot(mock_config)
@@ -807,8 +751,6 @@ class TestHandleVoiceExceptionHandling:
                 await bot.handle_voice(message)
 
             mock_write_scores.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_empty_transcription_returns_speech_error(self, mock_config):
         """Empty transcription ValueError should show 'не содержит речи' message."""
         bot, _ = _create_bot(mock_config)
@@ -836,8 +778,6 @@ class TestHandleVoiceExceptionHandling:
 
 class TestBotLifecycle:
     """Test bot start/stop lifecycle."""
-
-    @pytest.mark.asyncio
     async def test_start_initializes_cache(self, mock_config):
         """Test that start() initializes cache."""
         bot, _ = _create_bot(mock_config)
@@ -855,8 +795,6 @@ class TestBotLifecycle:
 
         bot._cache.initialize.assert_called_once()
         bot.dp.start_polling.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_start_skips_reinit_if_already_initialized(self, mock_config):
         """Test that start() skips cache init if already done."""
         bot, _ = _create_bot(mock_config)
@@ -874,8 +812,6 @@ class TestBotLifecycle:
             await bot.start()
 
         bot._cache.initialize.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_stop_closes_services(self, mock_config):
         """Test that stop() closes all services."""
         bot, _ = _create_bot(mock_config)
@@ -900,8 +836,6 @@ class TestBotLifecycle:
         bot._qdrant.close.assert_called_once()
         bot._embeddings.aclose.assert_awaited_once()
         bot._sparse.aclose.assert_awaited_once()
-
-    @pytest.mark.asyncio
     async def test_stop_closes_checkpointer_context(self, mock_config):
         """stop() should close async checkpointer context when available."""
         bot, _ = _create_bot(mock_config)
@@ -930,8 +864,6 @@ class TestBotLifecycle:
 
 class TestHistoryServiceLifecycle:
     """Test history service initialization in bot lifecycle."""
-
-    @pytest.mark.asyncio
     async def test_start_initializes_history_service(self, mock_config):
         """start() should create and ensure history collection."""
         bot, _ = _create_bot(mock_config)
@@ -959,8 +891,6 @@ class TestHistoryServiceLifecycle:
 
         assert bot._history_service is not None
         mock_svc.ensure_collection.assert_awaited_once()
-
-    @pytest.mark.asyncio
     async def test_start_history_failure_does_not_crash(self, mock_config):
         """start() should not crash if history service init fails."""
         bot, _ = _create_bot(mock_config)
@@ -989,8 +919,6 @@ class TestHistoryServiceLifecycle:
             await bot.start()
 
         assert bot._history_service is None
-
-    @pytest.mark.asyncio
     async def test_stop_safe_without_history_service(self, mock_config):
         """stop() should work fine when history_service is None."""
         bot, _ = _create_bot(mock_config)

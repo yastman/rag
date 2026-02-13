@@ -119,8 +119,6 @@ def _assert_no_forbidden_keys(payloads: list[dict], node_name: str) -> None:
 
 class TestCuratedSpanPayloads:
     """Verify update_current_span calls contain only curated metadata."""
-
-    @pytest.mark.asyncio
     async def test_retrieve_node_curated_payload(self):
         from telegram_bot.graph.nodes.retrieve import retrieve_node
         from telegram_bot.graph.state import make_initial_state
@@ -163,8 +161,6 @@ class TestCuratedSpanPayloads:
         assert len(input_payload["query_preview"]) <= 120
         assert "query_hash" in input_payload
         assert len(input_payload["query_hash"]) == 8
-
-    @pytest.mark.asyncio
     async def test_generate_node_curated_payload(self):
         from unittest.mock import patch as _patch
 
@@ -205,8 +201,6 @@ class TestCuratedSpanPayloads:
             "generate_node must call update_current_span for input and output"
         )
         _assert_no_forbidden_keys(payloads, "node-generate")
-
-    @pytest.mark.asyncio
     async def test_cache_check_node_curated_payload(self):
         from telegram_bot.graph.nodes.cache import cache_check_node
         from telegram_bot.graph.state import make_initial_state
@@ -230,8 +224,6 @@ class TestCuratedSpanPayloads:
             "cache_check_node must call update_current_span for input and output"
         )
         _assert_no_forbidden_keys(payloads, "node-cache-check")
-
-    @pytest.mark.asyncio
     async def test_cache_store_node_curated_payload(self):
         from telegram_bot.graph.nodes.cache import cache_store_node
         from telegram_bot.graph.state import make_initial_state
@@ -254,8 +246,6 @@ class TestCuratedSpanPayloads:
             "cache_store_node must call update_current_span for input and output"
         )
         _assert_no_forbidden_keys(payloads, "node-cache-store")
-
-    @pytest.mark.asyncio
     async def test_respond_node_curated_payload(self):
         from telegram_bot.graph.nodes.respond import respond_node
 
