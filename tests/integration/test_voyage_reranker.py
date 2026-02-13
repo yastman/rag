@@ -82,8 +82,6 @@ class TestVoyageRerankerServiceUnit:
             mock_client.rerank_sync.assert_called_with(
                 "query", ["doc"], model="rerank-2-lite", top_k=1
             )
-
-    @pytest.mark.asyncio
     async def test_async_rerank(self):
         """Test async rerank method."""
         from telegram_bot.services.voyage_reranker import VoyageRerankerService

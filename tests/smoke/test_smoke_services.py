@@ -19,16 +19,12 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
 
 class TestSmokeServices:
     """Verify all services are alive and responding."""
-
-    @pytest.mark.asyncio
     async def test_qdrant_health(self):
         """Qdrant responds to health check."""
         url = os.getenv("QDRANT_URL", "http://localhost:6333")
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{url}/healthz")
             assert response.status_code == 200
-
-    @pytest.mark.asyncio
     async def test_redis_health(self):
         """Redis responds to PING."""
         url = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -42,7 +38,6 @@ class TestSmokeServices:
     @pytest.mark.skipif(
         not _is_port_open("localhost", 5000), reason="MLflow not running (port 5000)"
     )
-    @pytest.mark.asyncio
     async def test_mlflow_health(self):
         """MLflow responds to health check."""
         url = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
@@ -53,15 +48,12 @@ class TestSmokeServices:
     @pytest.mark.skipif(
         not _is_port_open("localhost", 3001), reason="Langfuse not running (port 3001)"
     )
-    @pytest.mark.asyncio
     async def test_langfuse_health(self):
         """Langfuse responds to health check."""
         url = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{url}/api/public/health")
             assert response.status_code == 200
-
-    @pytest.mark.asyncio
     async def test_docling_health(self):
         """Docling responds to health check."""
         url = os.getenv("DOCLING_URL", "http://localhost:5001")
@@ -72,15 +64,12 @@ class TestSmokeServices:
     @pytest.mark.skipif(
         not _is_port_open("localhost", 9621), reason="LightRAG not running (port 9621)"
     )
-    @pytest.mark.asyncio
     async def test_lightrag_health(self):
         """LightRAG responds to health check."""
         url = os.getenv("LIGHTRAG_URL", "http://localhost:9621")
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{url}/health")
             assert response.status_code == 200
-
-    @pytest.mark.asyncio
     async def test_voyage_api_health(self):
         """Voyage API responds (minimal embed call)."""
         api_key = os.getenv("VOYAGE_API_KEY", "")
@@ -94,8 +83,6 @@ class TestSmokeServices:
                 json={"input": ["test"], "model": "voyage-3-lite"},
             )
             assert response.status_code == 200
-
-    @pytest.mark.asyncio
     async def test_llm_api_health(self):
         """LLM API responds (minimal completion call)."""
         api_key = os.getenv("OPENAI_API_KEY", "")
