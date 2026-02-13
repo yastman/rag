@@ -138,8 +138,9 @@ def build_graph(
         @observe(name="node-summarize", capture_input=False, capture_output=False)
         async def summarize_wrapper(state: RAGState) -> RAGState:
             t0 = time.perf_counter()
+            result: RAGState
             try:
-                result = cast(dict[str, Any], await summarize.ainvoke(state))
+                result = cast(RAGState, await summarize.ainvoke(state))
             except Exception:
                 logger.warning(
                     "Summarization failed; preserving response without summary", exc_info=True
@@ -147,7 +148,7 @@ def build_graph(
                 result = state.copy()
             elapsed = time.perf_counter() - t0
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
-            return cast(dict[str, Any], result)
+            return cast(RAGState, result)
 
         workflow.add_node("summarize", summarize_wrapper)  # type: ignore[type-var]
 

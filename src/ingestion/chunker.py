@@ -3,12 +3,12 @@
 import csv
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 
-class ChunkingStrategy(str, Enum):
+class ChunkingStrategy(StrEnum):
     """Document chunking strategies."""
 
     FIXED_SIZE = "fixed_size"  # Fixed chunk size with overlap
