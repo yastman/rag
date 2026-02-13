@@ -166,29 +166,6 @@ services:
         limits:
           memory: 4G
 
-  lightrag:
-    image: ghcr.io/hkuds/lightrag:v1.4.9.11
-    container_name: dev-lightrag
-    profiles: ["ai", "full"]
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:9621:9621"
-    environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
-      LLM_BINDING: openai
-      EMBEDDING_BINDING: openai
-      LLM_MODEL: gpt-4o-mini
-      EMBEDDING_MODEL: text-embedding-3-small
-      EMBEDDING_DIM: 1536
-    volumes:
-      - lightrag_data:/app/lightrag_data
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9621/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
   # =============================================================================
   # ML PLATFORM
   # =============================================================================
@@ -351,7 +328,7 @@ services:
       context: ./docker/mlflow
       dockerfile: Dockerfile
     container_name: dev-mlflow
-    profiles: ["ml", "full"]
+    profiles: ["eval", "ml", "full"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:5000:5000"
@@ -775,7 +752,6 @@ volumes:
   qdrant_data:
   hf_cache:
   docling_cache:
-  lightrag_data:
   mlflow_artifacts:
   clickhouse_data:
   clickhouse_logs:
