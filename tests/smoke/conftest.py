@@ -13,11 +13,24 @@ from telegram_bot.services.qdrant import QdrantService
 from telegram_bot.services.voyage import VoyageService
 
 
+def _build_redis_url() -> str:
+    """Build Redis URL with password support.
+
+    Reads REDIS_URL and REDIS_PASSWORD from env. If URL has no auth
+    but REDIS_PASSWORD is set, injects password into URL.
+    """
+    url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    password = os.getenv("REDIS_PASSWORD", "")
+    if password and "@" not in url:
+        url = url.replace("redis://", f"redis://:{password}@", 1)
+    return url
+
+
 @pytest.fixture(scope="module")
 def require_live_services():
     """Skip if live services not available. Checks BOTH Qdrant AND Redis."""
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    redis_url = _build_redis_url()
 
     # Check Qdrant
     try:
@@ -32,7 +45,7 @@ def require_live_services():
         try:
             client = redis.from_url(redis_url, socket_connect_timeout=2)
             await client.ping()
-            await client.close()
+            await client.aclose()
         except Exception:
             pytest.skip("Redis not available")
 
@@ -67,7 +80,7 @@ async def qdrant_service():
 @pytest.fixture(scope="module")
 async def cache_service():
     """CacheLayerManager for caching."""
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    redis_url = _build_redis_url()
     service = CacheLayerManager(redis_url=redis_url)
     await service.initialize()
     yield service
