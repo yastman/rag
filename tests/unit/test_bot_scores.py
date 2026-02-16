@@ -210,6 +210,7 @@ CHITCHAT_RESULT = {
 
 class TestScoreWriting:
     """Test that Langfuse scores are written after graph.ainvoke."""
+
     async def test_scores_written_full_pipeline(self, mock_config):
         """All scores should be written after a full pipeline run."""
         mock_lf = MagicMock()
@@ -262,6 +263,7 @@ class TestScoreWriting:
         ]
         assert sorted(score_names) == sorted(expected_names)
         assert mock_lf.score_current_trace.call_count == 30
+
     async def test_score_values_full_pipeline(self, mock_config):
         """Score values should match the graph result state."""
         mock_lf = MagicMock()
@@ -296,6 +298,7 @@ class TestScoreWriting:
         assert scores["answer_chars"] == 65.0
         assert scores["answer_to_question_ratio"] == 2.4
         assert scores["response_style_applied"] == 1.0  # balanced
+
     @pytest.mark.parametrize(
         ("result_fixture", "expected_scores"),
         [
@@ -332,6 +335,7 @@ class TestScoreWriting:
         }
         for name, expected_value in expected_scores.items():
             assert scores[name] == expected_value, f"{name}: {scores[name]} != {expected_value}"
+
     @pytest.mark.parametrize(
         ("result_override", "test_id"),
         [
@@ -352,6 +356,7 @@ class TestScoreWriting:
 
         score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
         assert "response_style_applied" not in score_names
+
     async def test_scores_written_even_on_null_client(self, mock_config):
         """When Langfuse disabled, _NullLangfuseClient.score_current_trace is called (no-op)."""
         from telegram_bot.observability import _NullLangfuseClient
@@ -363,6 +368,7 @@ class TestScoreWriting:
 
 class TestLatencyBreakdownScores:
     """Test latency breakdown score writing (#147)."""
+
     async def test_streaming_path_writes_numeric_and_boolean_scores(self, mock_config):
         """Streaming: writes llm_decode_ms, llm_tps as NUMERIC; boolean flags."""
         mock_lf = MagicMock()
@@ -391,6 +397,7 @@ class TestLatencyBreakdownScores:
         assert score_map["llm_queue_unavailable"]["data_type"] == "BOOLEAN"
         # No llm_decode_unavailable (decode_ms was written)
         assert "llm_decode_unavailable" not in score_map
+
     async def test_non_streaming_writes_unavailable_flags(self, mock_config):
         """Non-streaming: writes *_unavailable BOOLEAN flags, skips NUMERIC decode/tps."""
         mock_lf = MagicMock()
@@ -416,6 +423,7 @@ class TestLatencyBreakdownScores:
         # streaming_enabled = False
         assert score_map["streaming_enabled"]["value"] == 0
         assert score_map["streaming_enabled"]["data_type"] == "BOOLEAN"
+
     async def test_hard_fail_writes_timeout_true(self, mock_config):
         """Hard LLM failure: llm_timeout=1 BOOLEAN."""
         mock_lf = MagicMock()
@@ -465,6 +473,7 @@ async def _run_handle_voice(mock_config, graph_result, mock_lf_client):
 
 class TestVoiceTraceMetadata:
     """Test that handle_voice writes same metadata keys as handle_query."""
+
     async def test_voice_trace_metadata_has_same_keys_as_text(self, mock_config):
         """handle_voice metadata should contain all keys from handle_query."""
         mock_lf = MagicMock()
@@ -505,6 +514,7 @@ class TestVoiceTraceMetadata:
             "embedding_error_type",
         }
         assert expected_keys.issubset(set(metadata.keys()))
+
     async def test_trace_metadata_contains_memory_and_overhead(self, mock_config):
         """Trace metadata should include memory_messages_count and overhead proxy."""
         mock_lf = MagicMock()
@@ -534,6 +544,7 @@ VOICE_PIPELINE_RESULT = {
 
 class TestVoiceScores:
     """Test voice-specific Langfuse scores (#158)."""
+
     async def test_voice_scores_written(self, mock_config):
         """Voice result should emit stt_duration_ms and voice_duration_s scores."""
         mock_lf = MagicMock()
@@ -555,6 +566,7 @@ class TestVoiceScores:
         assert "input_type" in score_map
         assert score_map["input_type"]["value"] == "voice"
         assert score_map["input_type"]["data_type"] == "CATEGORICAL"
+
     async def test_text_scores_omit_voice_metrics(self, mock_config):
         """Text result should NOT emit stt_duration_ms or voice_duration_s scores."""
         mock_lf = MagicMock()
@@ -574,64 +586,64 @@ class TestVoiceScores:
 
 class TestMemoryScores:
     """Test conversation memory Langfuse scores (#159)."""
-    async def test_memory_messages_count_written(self, mock_config):
-        """memory_messages_count = len(result['messages'])."""
+
+    @pytest.mark.parametrize(
+        ("result_override", "expected_count"),
+        [
+            (
+                {"messages": [{"role": "user"}, {"role": "assistant"}, {"role": "user"}]},
+                3.0,
+            ),
+            (None, 0.0),  # None means pop "messages" key
+        ],
+        ids=["three_messages", "no_messages_key"],
+    )
+    async def test_memory_messages_count(self, mock_config, result_override, expected_count):
+        """memory_messages_count tracks message count (0 when absent)."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
         mock_lf.score_current_trace = MagicMock()
 
-        result = {
-            **FULL_PIPELINE_RESULT,
-            "messages": [{"role": "user"}, {"role": "assistant"}, {"role": "user"}],
-        }
-        await _run_handle_query(mock_config, result, mock_lf)
-
-        scores = {
-            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
-        }
-        assert scores["memory_messages_count"] == 3.0
-    async def test_summarization_triggered_true(self, mock_config):
-        """summarization_triggered=1 when summarize_ms > 0."""
-        mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        result = {
-            **FULL_PIPELINE_RESULT,
-            "latency_stages": {**FULL_PIPELINE_RESULT["latency_stages"], "summarize": 0.250},
-        }
-        await _run_handle_query(mock_config, result, mock_lf)
-
-        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
-        assert scores["summarization_triggered"]["value"] == 1
-        assert scores["summarization_triggered"]["data_type"] == "BOOLEAN"
-        assert scores["summarize_ms"]["value"] == pytest.approx(250.0, abs=1)
-    async def test_summarization_triggered_false(self, mock_config):
-        """summarization_triggered=0 when no summarize stage."""
-        mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        await _run_handle_query(mock_config, CACHE_HIT_RESULT, mock_lf)
-
-        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
-        assert scores["summarization_triggered"]["value"] == 0
-        assert scores["summarization_triggered"]["data_type"] == "BOOLEAN"
-    async def test_memory_messages_count_zero_when_no_messages(self, mock_config):
-        """memory_messages_count=0 when messages key absent."""
-        mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        result = {**CHITCHAT_RESULT}
-        result.pop("messages", None)  # no messages key
+        if result_override is None:
+            result = {**CHITCHAT_RESULT}
+            result.pop("messages", None)
+        else:
+            result = {**FULL_PIPELINE_RESULT, **result_override}
 
         await _run_handle_query(mock_config, result, mock_lf)
 
         scores = {
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
         }
-        assert scores["memory_messages_count"] == 0.0
+        assert scores["memory_messages_count"] == expected_count
+
+    @pytest.mark.parametrize(
+        ("has_summarize", "expected_value"),
+        [(True, 1), (False, 0)],
+        ids=["with_summarize_stage", "without_summarize_stage"],
+    )
+    async def test_summarization_triggered(self, mock_config, has_summarize, expected_value):
+        """summarization_triggered reflects presence of summarize stage."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+
+        if has_summarize:
+            result = {
+                **FULL_PIPELINE_RESULT,
+                "latency_stages": {
+                    **FULL_PIPELINE_RESULT["latency_stages"],
+                    "summarize": 0.250,
+                },
+            }
+        else:
+            result = CACHE_HIT_RESULT
+
+        await _run_handle_query(mock_config, result, mock_lf)
+
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        assert scores["summarization_triggered"]["value"] == expected_value
+        assert scores["summarization_triggered"]["data_type"] == "BOOLEAN"
 
 
 def test_compute_checkpointer_overhead_proxy_ms():
@@ -647,49 +659,28 @@ def test_compute_checkpointer_overhead_proxy_ms():
 
 class TestHistoryScores:
     """Test history-related Langfuse scores (#239)."""
-    async def test_history_save_success_score(self, mock_config):
-        """history_save_success=1 when save_turn returns True."""
+
+    @pytest.mark.parametrize(
+        ("save_result", "expected_value"),
+        [(True, 1), (False, 0)],
+        ids=["save_success", "save_failure"],
+    )
+    async def test_history_save_success_score(self, mock_config, save_result, expected_value):
+        """history_save_success reflects save_turn return value."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
         mock_lf.score_current_trace = MagicMock()
 
         history_svc = AsyncMock()
-        history_svc.save_turn = AsyncMock(return_value=True)
+        history_svc.save_turn = AsyncMock(return_value=save_result)
         mock_lf, _bot = await _run_handle_query(
             mock_config, FULL_PIPELINE_RESULT, mock_lf, history_service=history_svc
         )
 
         scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
-        assert "history_save_success" in scores
-        assert scores["history_save_success"]["value"] == 1
+        assert scores["history_save_success"]["value"] == expected_value
         assert scores["history_save_success"]["data_type"] == "BOOLEAN"
-    async def test_history_save_failure_score(self, mock_config):
-        """history_save_success=0 when save_turn returns False."""
-        mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
 
-        bot = _create_bot(mock_config)
-        bot._history_service = AsyncMock()
-        bot._history_service.save_turn = AsyncMock(return_value=False)
-
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=FULL_PIPELINE_RESULT)
-
-        with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=mock_lf),
-            patch("telegram_bot.bot.propagate_attributes") as mock_prop,
-            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
-        ):
-            mock_cas.typing.return_value = _make_typing_cm()
-            mock_prop.return_value.__enter__ = MagicMock()
-            mock_prop.return_value.__exit__ = MagicMock()
-
-            await bot.handle_query(_make_message())
-
-        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
-        assert scores["history_save_success"]["value"] == 0
     async def test_history_backend_score(self, mock_config):
         """history_backend=qdrant CATEGORICAL score when service available."""
         mock_lf = MagicMock()
@@ -710,6 +701,7 @@ class TestHistoryScores:
 
 class TestCheckpointerOverheadScore:
     """Test checkpointer_overhead_proxy_ms score (#159)."""
+
     async def test_checkpointer_overhead_proxy_score_written(self, mock_config):
         """checkpointer_overhead_proxy_ms computed from ainvoke wall-time minus stages."""
         mock_lf = MagicMock()
