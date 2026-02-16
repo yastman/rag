@@ -170,7 +170,7 @@ services:
   # =============================================================================
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.81.3-stable
+    image: ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:3d80908e35230a0dfb58051ae4e2847371b2a327b44e105e79b8c4f67a65596c
     container_name: vps-litellm
     restart: unless-stopped
     logging: *default-logging
