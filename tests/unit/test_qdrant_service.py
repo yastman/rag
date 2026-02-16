@@ -8,7 +8,7 @@ import pytest
 from telegram_bot.services.qdrant import QdrantService
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True, scope="module")
 def reset_qdrant_modules():
     """Clear qdrant module cache to ensure fresh import with mocks."""
     # Clear before test

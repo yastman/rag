@@ -12,6 +12,7 @@ from scripts.validate_traces import (
     TraceResult,
     ValidationRun,
     _flush_redis_caches,
+    _langfuse_auth_probe,
     aggregate_node_payloads,
     check_langfuse_config,
     check_orphan_traces,
@@ -354,6 +355,11 @@ class TestEvaluateGoNoGo:
 class TestLangfusePreflight:
     """Langfuse preflight should fail fast on incomplete/invalid credentials."""
 
+    @pytest.fixture(autouse=True)
+    def _disable_retry_sleep(self, monkeypatch: pytest.MonkeyPatch):
+        """Keep retry semantics but remove real backoff delays in unit tests."""
+        monkeypatch.setattr(_langfuse_auth_probe.retry, "sleep", lambda _seconds: None)
+
     def test_requires_public_key(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("LANGFUSE_SECRET_KEY", "test-secret")
         monkeypatch.setenv("LANGFUSE_HOST", "http://localhost:3001")
@@ -642,8 +648,12 @@ class TestGoNoGoReportFormat:
         ("criterion", "expected_text"),
         [
             pytest.param(
-                {"target": "< 1000 ms", "actual": "N/A (n=2, need >= 3)",
-                 "passed": True, "skipped": True},
+                {
+                    "target": "< 1000 ms",
+                    "actual": "N/A (n=2, need >= 3)",
+                    "passed": True,
+                    "skipped": True,
+                },
                 "SKIPPED",
                 id="skipped",
             ),
@@ -693,9 +703,7 @@ class TestCollectionDiscovery:
 
     async def test_discovers_exact_match(self):
         """Finds collection by exact name from Qdrant API."""
-        mock_client = _make_mock_qdrant_client(
-            ["gdrive_documents_bge", "some_other_collection"]
-        )
+        mock_client = _make_mock_qdrant_client(["gdrive_documents_bge", "some_other_collection"])
         with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections("http://localhost:6333")
 
@@ -753,11 +761,13 @@ class TestCollectionDiscovery:
 
     async def test_prefers_mode_suffix_when_quantization_enabled(self):
         """Quantization mode must influence discovered collection choice."""
-        mock_client = _make_mock_qdrant_client([
-            "gdrive_documents_bge",
-            "gdrive_documents_bge_scalar",
-            "gdrive_documents_bge_binary",
-        ])
+        mock_client = _make_mock_qdrant_client(
+            [
+                "gdrive_documents_bge",
+                "gdrive_documents_bge_scalar",
+                "gdrive_documents_bge_binary",
+            ]
+        )
         with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections(
                 "http://localhost:6333",

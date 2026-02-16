@@ -122,12 +122,12 @@ jobs:
         run: uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
 
   # ---------------------------------------------------------------------------
-  # Baseline regression — PR only, requires Langfuse secrets
+  # Baseline regression — main only (keeps PR feedback loop fast)
   # ---------------------------------------------------------------------------
   baseline-compare:
-    name: Baseline Regression Check
+    name: Baseline Regression Check (main)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.ref == 'refs/heads/main'
     needs: lint
     env:
       LANGFUSE_AVAILABLE: ${{ secrets.LANGFUSE_SECRET_KEY != '' }}

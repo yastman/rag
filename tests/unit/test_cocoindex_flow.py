@@ -90,15 +90,16 @@ class TestVoyageEmbedFunction:
         mock_service.embed_documents = AsyncMock(return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
         func._service = mock_service
 
-        with patch("asyncio.run", side_effect=lambda _coro: [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]):
-            with patch("asyncio.get_event_loop") as mock_loop:
-                mock_loop.return_value.is_running.return_value = False
-                mock_loop.return_value.run_until_complete.return_value = [
-                    [0.1, 0.2, 0.3],
-                    [0.4, 0.5, 0.6],
-                ]
+        def _run_until_complete(coro):
+            # Test double for loop.run_until_complete that avoids leaked coroutine warnings.
+            coro.close()
+            return [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
-                result = func(["text1", "text2"])
+        with patch("asyncio.get_event_loop") as mock_loop:
+            mock_loop.return_value.is_running.return_value = False
+            mock_loop.return_value.run_until_complete.side_effect = _run_until_complete
+
+            result = func(["text1", "text2"])
 
         assert len(result) == 2
         assert isinstance(result[0], np.ndarray)

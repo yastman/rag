@@ -209,6 +209,15 @@ class TestBGEM3HybridEmbeddings:
 class TestBGEM3HybridRetry:
     """Tests for retry behavior on transient errors."""
 
+    @pytest.fixture(autouse=True)
+    def _disable_retry_sleep(self, monkeypatch: pytest.MonkeyPatch):
+        """Keep retry attempts deterministic without real backoff waits."""
+
+        async def _noop_sleep(_seconds: float) -> None:
+            return None
+
+        monkeypatch.setattr(BGEM3HybridEmbeddings.aembed_hybrid.retry, "sleep", _noop_sleep)
+
     @pytest.mark.parametrize(
         "error_cls,error_msg",
         [
