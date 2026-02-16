@@ -26,7 +26,7 @@ class JSONFormatter(logging.Formatter):
             JSON-formatted log string
         """
         log_data: dict[str, Any] = {
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
