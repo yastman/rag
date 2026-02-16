@@ -146,14 +146,19 @@ test-unit: ***REMOVED******REMOVED*** Run only unit tests (fast, no external dep
 	uv run pytest tests/unit/ -v
 	@echo "$(GREEN)✓ Unit tests complete$(NC)"
 
-test-fast: ***REMOVED******REMOVED*** Run unit tests in parallel (xdist)
+test-fast: ***REMOVED******REMOVED*** Run unit tests in parallel (xdist, loadscope)
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
-	uv run pytest tests/unit/ -n auto --dist=worksteal -q
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Parallel tests complete$(NC)"
 
-test-lf: ***REMOVED******REMOVED*** Run only last failed tests
+test-all-fast: ***REMOVED******REMOVED*** Run ALL test suites in parallel (unit + integration + smoke)
+	@echo "$(BLUE)Running all tests in parallel...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto -q --timeout=30 -m "not legacy_api"
+	@echo "$(GREEN)✓ All fast tests complete$(NC)"
+
+test-lf: ***REMOVED******REMOVED*** Run only last failed tests (parallel)
 	@echo "$(BLUE)Running last failed tests...$(NC)"
-	uv run pytest tests/unit/ --lf -v
+	uv run pytest tests/unit/ --lf -n auto -q
 	@echo "$(GREEN)✓ Last failed tests complete$(NC)"
 
 test-ff: ***REMOVED******REMOVED*** Run failed first, then rest
@@ -161,19 +166,36 @@ test-ff: ***REMOVED******REMOVED*** Run failed first, then rest
 	uv run pytest tests/unit/ --ff -v
 	@echo "$(GREEN)✓ Tests complete$(NC)"
 
-test-profile: ***REMOVED******REMOVED*** Profile slowest tests
+test-profile: ***REMOVED******REMOVED*** Profile slowest tests (find bottlenecks)
 	@echo "$(BLUE)Profiling slow tests...$(NC)"
-	uv run pytest tests/unit/ --durations=20 --durations-min=0.5 -q
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ --durations=20 --durations-min=0.5 -n auto -q
 	@echo "$(GREEN)✓ Profile complete$(NC)"
 
-test-integration: ***REMOVED******REMOVED*** Run only integration tests (requires Docker/API keys)
+test-integration: ***REMOVED******REMOVED*** Run graph path integration tests (no Docker, ~5s)
 	@echo "$(BLUE)Running integration tests...$(NC)"
-	uv run pytest tests/integration/ -v
+	uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
 	@echo "$(GREEN)✓ Integration tests complete$(NC)"
+
+test-integration-full: ***REMOVED******REMOVED*** Run ALL integration tests (requires Docker)
+	@echo "$(BLUE)Running full integration tests...$(NC)"
+	uv run pytest tests/integration/ -v --timeout=60
+	@echo "$(GREEN)✓ Full integration tests complete$(NC)"
+
+test-nightly: ***REMOVED******REMOVED*** Run heavy test suites (e2e, chaos, baseline, load) — schedule overnight
+	@echo "$(BLUE)Running nightly test suite...$(NC)"
+	uv run pytest tests/chaos/ -v --timeout=60 -n auto
+	uv run pytest tests/smoke/ -v --timeout=60
+	uv run pytest tests/unit/ -n auto --timeout=30 -m "slow" -q
+	@echo "$(GREEN)✓ Nightly tests complete$(NC)"
+
+test-store-durations: ***REMOVED******REMOVED*** Update .test_durations for pytest-split CI sharding
+	@echo "$(BLUE)Generating test duration data...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ --store-durations -n auto --timeout=30 -m "not legacy_api" -q
+	@echo "$(GREEN)✓ .test_durations updated — commit this file$(NC)"
 
 test-all: ***REMOVED******REMOVED*** Run all tests with coverage threshold (CI mode)
 	@echo "$(BLUE)Running all tests with coverage...$(NC)"
-	uv run pytest tests/ -v --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/ -v -n auto --cov=src --cov=telegram_bot --cov-report=term-missing --cov-fail-under=80
 	@echo "$(GREEN)✓ All tests passed with 80%+ coverage$(NC)"
 
 ***REMOVED*** =============================================================================
