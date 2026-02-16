@@ -32,9 +32,11 @@ def mock_evaluation_imports():
     mock_search_engines = MagicMock()
 
     ***REMOVED*** Setup mock classes
-    mock_search_engines.BaselineSearchEngine = MagicMock
-    mock_search_engines.HybridSearchEngine = MagicMock
-    mock_search_engines.HybridDBSFColBERTSearchEngine = MagicMock
+    ***REMOVED*** Use instances, not the MagicMock class object, to avoid mutating
+    ***REMOVED*** unittest.mock.MagicMock global class attributes via return_value.
+    mock_search_engines.BaselineSearchEngine = MagicMock()
+    mock_search_engines.HybridSearchEngine = MagicMock()
+    mock_search_engines.HybridDBSFColBERTSearchEngine = MagicMock()
 
     ***REMOVED*** Mock MLflow logger
     mock_logger = MagicMock()
