@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint & Type Check
@@ -34,8 +38,70 @@ jobs:
       - name: Type check
         run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 
+  # ---------------------------------------------------------------------------
+  # PR Pipeline: 4 shards × xdist — fast feedback (~3-4 min)
+  # ---------------------------------------------------------------------------
   test:
-    name: Unit Tests
+    name: "Unit Tests (shard ${{ matrix.group }}/${{ strategy.job-total }})"
+    runs-on: ubuntu-latest
+    needs: [lint]
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Cache test durations
+        uses: actions/cache@v4
+        with:
+          path: .test_durations
+          key: test-durations-${{ github.sha }}
+          restore-keys: |
+            test-durations-
+
+      - name: Run unit tests (shard ${{ matrix.group }}/4)
+        run: |
+          uv run pytest tests/unit/ \
+            --splits 4 --group ${{ matrix.group }} \
+            -n auto --dist loadscope \
+            --timeout=30 \
+            -m "not legacy_api" \
+            --durations=20 --durations-min=1.0 \
+            -q
+
+      - name: Store durations (main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          uv run pytest tests/unit/ \
+            --store-durations \
+            --timeout=30 \
+            -m "not legacy_api" \
+            -q || true
+
+      - name: Upload durations
+        if: always() && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .test_durations
+          key: test-durations-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # Integration tests — no Docker, fully mocked, ~5s
+  # ---------------------------------------------------------------------------
+  integration:
+    name: Integration Tests (Graph Paths)
     runs-on: ubuntu-latest
     needs: [lint]
     steps:
@@ -52,18 +118,17 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run unit tests
-        run: uv run pytest tests/unit/ -q -x -m "not legacy_api" --timeout=30
+      - name: Run integration tests
+        run: uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
 
-  # Baseline comparison - runs when Langfuse secrets are configured
-  # Compares current smoke tests against main-latest baseline
-  # Fails if regression > thresholds defined in tests/baseline/thresholds.yaml
+  # ---------------------------------------------------------------------------
+  # Baseline regression — PR only, requires Langfuse secrets
+  # ---------------------------------------------------------------------------
   baseline-compare:
     name: Baseline Regression Check
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     needs: lint
-    # Only run if Langfuse secrets are configured
     env:
       LANGFUSE_AVAILABLE: ${{ secrets.LANGFUSE_SECRET_KEY != '' }}
     steps:
