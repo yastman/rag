@@ -7,6 +7,8 @@ Tests both approaches on the same Ukrainian legal document.
 import sys
 from pathlib import Path
 
+import pytest
+
 
 # Add paths
 sys.path.insert(0, str(Path(__file__).parent))
@@ -20,8 +22,8 @@ from transformers import AutoTokenizer
 from legacy.pymupdf_chunker import PyMuPDFChunker
 
 
-def test_pymupdf_approach():
-    """Test PyMuPDF regex-based chunking."""
+def _run_pymupdf_approach():
+    """Run PyMuPDF regex-based chunking flow."""
     print("=" * 80)
     print("🔧 APPROACH 1: PyMuPDF (Regex-based)")
     print("=" * 80)
@@ -59,8 +61,8 @@ def test_pymupdf_approach():
     return chunks
 
 
-def test_docling_approach():
-    """Test Docling HybridChunker with document structure."""
+def _run_docling_approach():
+    """Run Docling HybridChunker flow."""
     print("\n" + "=" * 80)
     print("🔧 APPROACH 2: Docling HybridChunker (Structure-aware)")
     print("=" * 80)
@@ -128,6 +130,22 @@ def test_docling_approach():
     return chunks
 
 
+def test_pymupdf_approach():
+    """Test PyMuPDF regex-based chunking."""
+    chunks = _run_pymupdf_approach()
+    if chunks is None:
+        pytest.skip("Source DOCX file not found for benchmark test")
+    assert chunks
+
+
+def test_docling_approach():
+    """Test Docling HybridChunker with document structure."""
+    chunks = _run_docling_approach()
+    if chunks is None:
+        pytest.skip("Source DOCX file not found for benchmark test")
+    assert chunks
+
+
 def compare_approaches():
     """Compare both approaches side by side."""
     print("\n\n")
@@ -135,8 +153,8 @@ def compare_approaches():
     print("║" + " " * 20 + "DOCLING vs PyMuPDF COMPARISON" + " " * 28 + "║")
     print("╚" + "═" * 78 + "╝")
 
-    pymupdf_chunks = test_pymupdf_approach()
-    docling_chunks = test_docling_approach()
+    pymupdf_chunks = _run_pymupdf_approach()
+    docling_chunks = _run_docling_approach()
 
     if pymupdf_chunks and docling_chunks:
         print("\n\n" + "=" * 80)

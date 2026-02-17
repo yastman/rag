@@ -6,8 +6,12 @@
 
 import json
 import os
+import socket
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
+
+import pytest
 
 
 # Настройки из .env
@@ -15,8 +19,8 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
 
-def test_qdrant_connection():
-    """Тест подключения к Qdrant."""
+def _run_qdrant_connection_checks() -> bool:
+    """Прогон проверок подключения к Qdrant."""
 
     print("=" * 80)
     print("ТЕСТ ПОДКЛЮЧЕНИЯ К QDRANT (базовый)")
@@ -105,8 +109,26 @@ def test_qdrant_connection():
     return True
 
 
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def test_qdrant_connection():
+    """Тест подключения к Qdrant."""
+    parsed = urlparse(QDRANT_URL)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6333
+    if not _is_port_open(host, port):
+        pytest.skip(f"Qdrant not running on {host}:{port}")
+    assert _run_qdrant_connection_checks()
+
+
 if __name__ == "__main__":
     import sys
 
-    success = test_qdrant_connection()
+    success = _run_qdrant_connection_checks()
     sys.exit(0 if success else 1)

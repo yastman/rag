@@ -3,6 +3,13 @@
 import importlib
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:This module is deprecated. Use src.ingestion.unified instead.:DeprecationWarning"
+)
+
 
 class TestDotenvLoading:
     """Test that .env variables are loaded before config initialization."""

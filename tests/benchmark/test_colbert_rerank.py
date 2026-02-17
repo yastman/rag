@@ -4,8 +4,12 @@ Test ColBERT multivector rerank in production code (Variant A - Complete).
 Verifies HybridRRFColBERTSearchEngine uses: Dense + Sparse + ColBERT rerank.
 """
 
+import socket
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
+
+import pytest
 
 
 # Add project root to path
@@ -16,8 +20,8 @@ from src.config import Settings
 from src.retrieval import HybridRRFColBERTSearchEngine
 
 
-def test_colbert_rerank():
-    """Test Variant A: Hybrid RRF + ColBERT rerank."""
+def _run_colbert_rerank() -> bool:
+    """Run Variant A benchmark flow and return success flag."""
 
     print("=" * 80)
     print("TEST: VARIANT A - HYBRID RRF + COLBERT RERANK")
@@ -100,6 +104,25 @@ def test_colbert_rerank():
     return True
 
 
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def test_colbert_rerank():
+    """Test Variant A: Hybrid RRF + ColBERT rerank."""
+    settings = Settings()
+    parsed = urlparse(settings.qdrant_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6333
+    if not _is_port_open(host, port):
+        pytest.skip(f"Qdrant not running on {host}:{port}")
+    assert _run_colbert_rerank()
+
+
 if __name__ == "__main__":
-    success = test_colbert_rerank()
+    success = _run_colbert_rerank()
     sys.exit(0 if success else 1)
