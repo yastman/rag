@@ -243,7 +243,7 @@ class SearchEvaluator:
         baseline_detailed = baseline_results.get("detailed_results", [])
         hybrid_detailed = hybrid_results.get("detailed_results", [])
 
-        if len(baseline_detailed) == len(hybrid_detailed):
+        if len(baseline_detailed) == len(hybrid_detailed) and len(baseline_detailed) > 1:
             from scipy import stats
 
             baseline_recall10 = [r.get("recall@10", 0) for r in baseline_detailed]
