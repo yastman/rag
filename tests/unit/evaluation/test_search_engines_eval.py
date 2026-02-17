@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from qdrant_client import models
 
 
 class TestConvertToPythonTypes:
@@ -77,8 +78,9 @@ class TestConvertToPythonTypes:
 class TestSearchEngineBase:
     """Tests for SearchEngine base class."""
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_search_engine_init(self, mock_settings_cls):
+    def test_search_engine_init(self, mock_settings_cls, mock_qdrant):
         """Test SearchEngine initialization."""
         from src.evaluation.search_engines import SearchEngine
 
@@ -89,8 +91,9 @@ class TestSearchEngineBase:
         # Just verify the import works
         assert SearchEngine is not None
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_extract_article_number(self, mock_settings_cls):
+    def test_extract_article_number(self, mock_settings_cls, mock_qdrant):
         """Test _extract_article_number helper."""
         from src.evaluation.search_engines import BaselineSearchEngine
 
@@ -106,8 +109,9 @@ class TestSearchEngineBase:
         result = engine._extract_article_number(payload)
         assert result == "115"
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_extract_article_number_missing(self, mock_settings_cls):
+    def test_extract_article_number_missing(self, mock_settings_cls, mock_qdrant):
         """Test _extract_article_number with missing field."""
         from src.evaluation.search_engines import BaselineSearchEngine
 
@@ -125,8 +129,9 @@ class TestSearchEngineBase:
 class TestBaselineSearchEngine:
     """Tests for BaselineSearchEngine."""
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_baseline_init(self, mock_settings_cls):
+    def test_baseline_init(self, mock_settings_cls, mock_qdrant):
         """Test BaselineSearchEngine initialization."""
         from src.evaluation.search_engines import BaselineSearchEngine
 
@@ -139,9 +144,9 @@ class TestBaselineSearchEngine:
         assert engine.collection_name == "test_collection"
         assert engine.embedding_model == mock_model
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_baseline_search_generates_embedding(self, mock_settings_cls, mock_requests):
+    def test_baseline_search_generates_embedding(self, mock_settings_cls, mock_qdrant):
         """Test that search generates dense embedding."""
         from src.evaluation.search_engines import BaselineSearchEngine
 
@@ -153,10 +158,11 @@ class TestBaselineSearchEngine:
         mock_model = MagicMock()
         mock_model.encode.return_value = {"dense_vecs": np.array([0.1, 0.2, 0.3])}
 
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": []}
-        mock_response.raise_for_status = MagicMock()
-        mock_requests.post.return_value = mock_response
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = BaselineSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
@@ -168,9 +174,9 @@ class TestBaselineSearchEngine:
             return_colbert_vecs=False,
         )
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_baseline_search_returns_results(self, mock_settings_cls, mock_requests):
+    def test_baseline_search_returns_results(self, mock_settings_cls, mock_qdrant):
         """Test that search returns formatted results."""
         from src.evaluation.search_engines import BaselineSearchEngine
 
@@ -182,21 +188,20 @@ class TestBaselineSearchEngine:
         mock_model = MagicMock()
         mock_model.encode.return_value = {"dense_vecs": np.array([0.1, 0.2, 0.3])}
 
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "result": [
-                {
-                    "id": 1,
-                    "score": 0.95,
-                    "payload": {
-                        "article_number": "115",
-                        "text": "Sample article text for testing",
-                    },
-                }
-            ]
+        # Create mock search result using SDK point format
+        mock_point = MagicMock()
+        mock_point.id = 1
+        mock_point.score = 0.95
+        mock_point.payload = {
+            "article_number": "115",
+            "text": "Sample article text for testing",
         }
-        mock_response.raise_for_status = MagicMock()
-        mock_requests.post.return_value = mock_response
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.points = [mock_point]
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = BaselineSearchEngine("test_collection", mock_model)
         results = engine.search("test query", top_k=5)
@@ -205,12 +210,42 @@ class TestBaselineSearchEngine:
         assert results[0]["article_number"] == "115"
         assert results[0]["score"] == 0.95
 
+    @patch("src.evaluation.search_engines.QdrantClient")
+    @patch("src.evaluation.search_engines.Settings")
+    def test_baseline_search_calls_client(self, mock_settings_cls, mock_qdrant):
+        """Test that baseline search calls client.query_points with correct params."""
+        from src.evaluation.search_engines import BaselineSearchEngine
+
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings_cls.return_value = mock_settings
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {"dense_vecs": np.array([0.1, 0.2, 0.3])}
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
+
+        engine = BaselineSearchEngine("test_collection", mock_model)
+        engine.search("test query", top_k=5)
+
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args[1]
+        assert call_kwargs["collection_name"] == "test_collection"
+        assert call_kwargs["limit"] == 5
+        assert call_kwargs["with_payload"] is True
+
 
 class TestHybridSearchEngine:
     """Tests for HybridSearchEngine."""
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_hybrid_init(self, mock_settings_cls):
+    def test_hybrid_init(self, mock_settings_cls, mock_qdrant):
         """Test HybridSearchEngine initialization."""
         from src.evaluation.search_engines import HybridSearchEngine
 
@@ -223,9 +258,9 @@ class TestHybridSearchEngine:
         assert engine.collection_name == "test_collection"
         assert engine.embedding_model == mock_model
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_hybrid_search_generates_all_embeddings(self, mock_settings_cls, mock_requests):
+    def test_hybrid_search_generates_all_embeddings(self, mock_settings_cls, mock_qdrant):
         """Test that hybrid search generates dense and sparse embeddings."""
         from src.evaluation.search_engines import HybridSearchEngine
 
@@ -241,11 +276,11 @@ class TestHybridSearchEngine:
             "colbert_vecs": np.array([[0.1, 0.2], [0.3, 0.4]]),
         }
 
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": {"points": []}}
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
@@ -257,10 +292,10 @@ class TestHybridSearchEngine:
             return_colbert_vecs=True,
         )
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_hybrid_search_converts_sparse_indices(self, mock_settings_cls, mock_requests):
-        """Test that hybrid search converts sparse indices to ints."""
+    def test_hybrid_search_uses_query_points(self, mock_settings_cls, mock_qdrant):
+        """Test that hybrid search uses SDK query_points."""
         from src.evaluation.search_engines import HybridSearchEngine
 
         mock_settings = MagicMock()
@@ -269,34 +304,62 @@ class TestHybridSearchEngine:
         mock_settings_cls.return_value = mock_settings
 
         mock_model = MagicMock()
-        # Dict format with string keys (as BGE-M3 returns)
         mock_model.encode.return_value = {
             "dense_vecs": np.array([0.1, 0.2]),
             "lexical_weights": {"100": 0.5, "200": 0.8},
             "colbert_vecs": np.array([[0.1, 0.2]]),
         }
 
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": {"points": []}}
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
-        # Verify the request was made with correct payload
-        call_args = mock_requests.post.call_args
-        payload = call_args[1]["json"]
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args[1]
+        assert call_kwargs["collection_name"] == "test_collection"
+        assert "prefetch" in call_kwargs
 
-        # Check that sparse indices are integers
-        prefetch = payload["prefetch"][1]  # Second prefetch is sparse
-        sparse_query = prefetch["query"]
-        assert all(isinstance(idx, int) for idx in sparse_query["indices"])
-
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_hybrid_search_handles_scipy_sparse(self, mock_settings_cls, mock_requests):
+    def test_hybrid_search_uses_rrf_fusion(self, mock_settings_cls, mock_qdrant):
+        """Test that hybrid search uses RRF fusion."""
+        from src.evaluation.search_engines import HybridSearchEngine
+
+        mock_settings = MagicMock()
+        mock_settings.qdrant_url = "http://localhost:6333"
+        mock_settings.qdrant_api_key = "test-key"
+        mock_settings_cls.return_value = mock_settings
+
+        mock_model = MagicMock()
+        mock_model.encode.return_value = {
+            "dense_vecs": np.array([0.1, 0.2]),
+            "lexical_weights": {"100": 0.5},
+            "colbert_vecs": np.array([[0.1, 0.2]]),
+        }
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
+
+        engine = HybridSearchEngine("test_collection", mock_model)
+        engine.search("test query", top_k=5)
+
+        # Verify query_points was called with FusionQuery(RRF)
+        call_kwargs = mock_client.query_points.call_args[1]
+        query = call_kwargs["query"]
+        assert isinstance(query, models.FusionQuery)
+        assert query.fusion == models.Fusion.RRF
+
+    @patch("src.evaluation.search_engines.QdrantClient")
+    @patch("src.evaluation.search_engines.Settings")
+    def test_hybrid_search_handles_scipy_sparse(self, mock_settings_cls, mock_qdrant):
         """Test that hybrid search handles scipy sparse format."""
         from src.evaluation.search_engines import HybridSearchEngine
 
@@ -317,22 +380,22 @@ class TestHybridSearchEngine:
             "colbert_vecs": np.array([[0.1, 0.2]]),
         }
 
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": {"points": []}}
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
         # Should not raise exception
-        mock_requests.post.assert_called_once()
+        mock_client.query_points.assert_called_once()
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_hybrid_search_uses_rrf_fusion(self, mock_settings_cls, mock_requests):
-        """Test that hybrid search uses RRF fusion."""
+    def test_hybrid_search_returns_results(self, mock_settings_cls, mock_qdrant):
+        """Test parsing response from query_points."""
         from src.evaluation.search_engines import HybridSearchEngine
 
         mock_settings = MagicMock()
@@ -347,26 +410,30 @@ class TestHybridSearchEngine:
             "colbert_vecs": np.array([[0.1, 0.2]]),
         }
 
+        mock_point = MagicMock()
+        mock_point.id = 1
+        mock_point.score = 0.95
+        mock_point.payload = {"article_number": "115", "text": "Test text"}
+
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": {"points": []}}
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = [mock_point]
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridSearchEngine("test_collection", mock_model)
-        engine.search("test query", top_k=5)
+        results = engine.search("test", top_k=5)
 
-        # Verify RRF fusion is used
-        call_args = mock_requests.post.call_args
-        payload = call_args[1]["json"]
-        assert payload["query"]["fusion"] == "rrf"
+        assert len(results) == 1
+        assert results[0]["article_number"] == "115"
 
 
 class TestHybridDBSFColBERTSearchEngine:
     """Tests for HybridDBSFColBERTSearchEngine."""
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_dbsf_colbert_init(self, mock_settings_cls):
+    def test_dbsf_colbert_init(self, mock_settings_cls, mock_qdrant):
         """Test HybridDBSFColBERTSearchEngine initialization."""
         from src.evaluation.search_engines import HybridDBSFColBERTSearchEngine
 
@@ -378,9 +445,9 @@ class TestHybridDBSFColBERTSearchEngine:
 
         assert engine.collection_name == "test_collection"
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_dbsf_colbert_uses_dbsf_fusion(self, mock_settings_cls, mock_requests):
+    def test_dbsf_colbert_uses_dbsf_fusion(self, mock_settings_cls, mock_qdrant):
         """Test that DBSF+ColBERT search uses DBSF fusion."""
         from src.evaluation.search_engines import HybridDBSFColBERTSearchEngine
 
@@ -396,26 +463,33 @@ class TestHybridDBSFColBERTSearchEngine:
             "colbert_vecs": np.array([[0.1, 0.2]]),
         }
 
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": {"points": []}}
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridDBSFColBERTSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
-        # Verify DBSF fusion is used in inner prefetch
-        call_args = mock_requests.post.call_args
-        payload = call_args[1]["json"]
+        # Verify query_points was called
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args[1]
 
-        # Check nested prefetch structure
-        outer_prefetch = payload["prefetch"][0]
-        assert outer_prefetch["query"]["fusion"] == "dbsf"
+        # Verify uses colbert for reranking
+        assert call_kwargs["using"] == "colbert"
 
-    @patch("src.evaluation.search_engines.requests")
+        # Verify nested prefetch with DBSF fusion
+        prefetch = call_kwargs["prefetch"]
+        assert len(prefetch) == 1
+        inner_prefetch = prefetch[0]
+        assert isinstance(inner_prefetch, models.Prefetch)
+        assert isinstance(inner_prefetch.query, models.FusionQuery)
+        assert inner_prefetch.query.fusion == models.Fusion.DBSF
+
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_dbsf_colbert_uses_colbert_for_rerank(self, mock_settings_cls, mock_requests):
+    def test_dbsf_colbert_uses_colbert_for_rerank(self, mock_settings_cls, mock_qdrant):
         """Test that DBSF+ColBERT uses ColBERT for final reranking."""
         from src.evaluation.search_engines import HybridDBSFColBERTSearchEngine
 
@@ -431,27 +505,25 @@ class TestHybridDBSFColBERTSearchEngine:
             "colbert_vecs": np.array([[0.1, 0.2]]),
         }
 
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": {"points": []}}
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridDBSFColBERTSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
-        call_args = mock_requests.post.call_args
-        payload = call_args[1]["json"]
-
-        # Final query uses ColBERT
-        assert payload["using"] == "colbert"
+        call_kwargs = mock_client.query_points.call_args[1]
+        assert call_kwargs["using"] == "colbert"
 
 
 class TestHybridRRFColBERTSearchEngine:
     """Tests for HybridRRFColBERTSearchEngine."""
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_rrf_colbert_init(self, mock_settings_cls):
+    def test_rrf_colbert_init(self, mock_settings_cls, mock_qdrant):
         """Test HybridRRFColBERTSearchEngine initialization."""
         from src.evaluation.search_engines import HybridRRFColBERTSearchEngine
 
@@ -463,9 +535,9 @@ class TestHybridRRFColBERTSearchEngine:
 
         assert engine.collection_name == "test_collection"
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_rrf_colbert_uses_rrf_fusion(self, mock_settings_cls, mock_requests):
+    def test_rrf_colbert_uses_rrf_fusion(self, mock_settings_cls, mock_qdrant):
         """Test that RRF+ColBERT search uses RRF fusion."""
         from src.evaluation.search_engines import HybridRRFColBERTSearchEngine
 
@@ -481,28 +553,32 @@ class TestHybridRRFColBERTSearchEngine:
             "colbert_vecs": np.array([[0.1, 0.2]]),
         }
 
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": {"points": []}}
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridRRFColBERTSearchEngine("test_collection", mock_model)
         engine.search("test query", top_k=5)
 
-        call_args = mock_requests.post.call_args
-        payload = call_args[1]["json"]
+        call_kwargs = mock_client.query_points.call_args[1]
 
-        # Check nested prefetch structure uses RRF
-        outer_prefetch = payload["prefetch"][0]
-        assert outer_prefetch["query"]["fusion"] == "rrf"
+        # Verify nested prefetch with RRF fusion
+        prefetch = call_kwargs["prefetch"]
+        assert len(prefetch) == 1
+        inner_prefetch = prefetch[0]
+        assert isinstance(inner_prefetch, models.Prefetch)
+        assert isinstance(inner_prefetch.query, models.FusionQuery)
+        assert inner_prefetch.query.fusion == models.Fusion.RRF
 
 
 class TestCreateSearchEngine:
     """Tests for create_search_engine factory function."""
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_create_baseline_engine(self, mock_settings_cls):
+    def test_create_baseline_engine(self, mock_settings_cls, mock_qdrant):
         """Test creating baseline engine."""
         from src.evaluation.search_engines import (
             BaselineSearchEngine,
@@ -517,8 +593,9 @@ class TestCreateSearchEngine:
 
         assert isinstance(engine, BaselineSearchEngine)
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_create_hybrid_engine(self, mock_settings_cls):
+    def test_create_hybrid_engine(self, mock_settings_cls, mock_qdrant):
         """Test creating hybrid engine."""
         from src.evaluation.search_engines import (
             HybridSearchEngine,
@@ -533,8 +610,9 @@ class TestCreateSearchEngine:
 
         assert isinstance(engine, HybridSearchEngine)
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_create_dbsf_colbert_engine(self, mock_settings_cls):
+    def test_create_dbsf_colbert_engine(self, mock_settings_cls, mock_qdrant):
         """Test creating DBSF+ColBERT engine."""
         from src.evaluation.search_engines import (
             HybridDBSFColBERTSearchEngine,
@@ -549,8 +627,9 @@ class TestCreateSearchEngine:
 
         assert isinstance(engine, HybridDBSFColBERTSearchEngine)
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_create_rrf_colbert_engine(self, mock_settings_cls):
+    def test_create_rrf_colbert_engine(self, mock_settings_cls, mock_qdrant):
         """Test creating RRF+ColBERT engine."""
         from src.evaluation.search_engines import (
             HybridRRFColBERTSearchEngine,
@@ -565,8 +644,9 @@ class TestCreateSearchEngine:
 
         assert isinstance(engine, HybridRRFColBERTSearchEngine)
 
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_create_unknown_engine_raises_error(self, mock_settings_cls):
+    def test_create_unknown_engine_raises_error(self, mock_settings_cls, mock_qdrant):
         """Test that unknown engine type raises ValueError."""
         from src.evaluation.search_engines import create_search_engine
 
@@ -582,10 +662,10 @@ class TestCreateSearchEngine:
 class TestSearchEngineResponseParsing:
     """Tests for response parsing in search engines."""
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_parse_dict_result_format(self, mock_settings_cls, mock_requests):
-        """Test parsing response with dict result format."""
+    def test_parse_query_points_response(self, mock_settings_cls, mock_qdrant):
+        """Test parsing response from query_points."""
         from src.evaluation.search_engines import HybridSearchEngine
 
         mock_settings = MagicMock()
@@ -600,21 +680,16 @@ class TestSearchEngineResponseParsing:
             "colbert_vecs": np.array([[0.1, 0.2]]),
         }
 
+        mock_point = MagicMock()
+        mock_point.id = 1
+        mock_point.score = 0.95
+        mock_point.payload = {"article_number": "115", "text": "Test text"}
+
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "result": {
-                "points": [
-                    {
-                        "id": 1,
-                        "score": 0.95,
-                        "payload": {"article_number": "115", "text": "Test text"},
-                    }
-                ]
-            }
-        }
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = [mock_point]
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridSearchEngine("test_collection", mock_model)
         results = engine.search("test", top_k=5)
@@ -622,47 +697,9 @@ class TestSearchEngineResponseParsing:
         assert len(results) == 1
         assert results[0]["article_number"] == "115"
 
-    @patch("src.evaluation.search_engines.requests")
+    @patch("src.evaluation.search_engines.QdrantClient")
     @patch("src.evaluation.search_engines.Settings")
-    def test_parse_list_result_format(self, mock_settings_cls, mock_requests):
-        """Test parsing response with list result format."""
-        from src.evaluation.search_engines import HybridSearchEngine
-
-        mock_settings = MagicMock()
-        mock_settings.qdrant_url = "http://localhost:6333"
-        mock_settings.qdrant_api_key = "test-key"
-        mock_settings_cls.return_value = mock_settings
-
-        mock_model = MagicMock()
-        mock_model.encode.return_value = {
-            "dense_vecs": np.array([0.1, 0.2]),
-            "lexical_weights": {"100": 0.5},
-            "colbert_vecs": np.array([[0.1, 0.2]]),
-        }
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "result": [
-                {
-                    "id": 1,
-                    "score": 0.95,
-                    "payload": {"article_number": "115", "text": "Test text"},
-                }
-            ]
-        }
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
-
-        engine = HybridSearchEngine("test_collection", mock_model)
-        results = engine.search("test", top_k=5)
-
-        assert len(results) == 1
-        assert results[0]["article_number"] == "115"
-
-    @patch("src.evaluation.search_engines.requests")
-    @patch("src.evaluation.search_engines.Settings")
-    def test_parse_empty_result(self, mock_settings_cls, mock_requests):
+    def test_parse_empty_result(self, mock_settings_cls, mock_qdrant):
         """Test parsing empty result."""
         from src.evaluation.search_engines import HybridSearchEngine
 
@@ -678,13 +715,42 @@ class TestSearchEngineResponseParsing:
             "colbert_vecs": np.array([[0.1, 0.2]]),
         }
 
+        mock_client = MagicMock()
         mock_response = MagicMock()
-        mock_response.json.return_value = {"result": None}
-        mock_response.raise_for_status = MagicMock()
-        mock_response.status_code = 200
-        mock_requests.post.return_value = mock_response
+        mock_response.points = []
+        mock_client.query_points.return_value = mock_response
+        mock_qdrant.return_value = mock_client
 
         engine = HybridSearchEngine("test_collection", mock_model)
         results = engine.search("test", top_k=5)
 
         assert len(results) == 0
+
+
+class TestLexicalWeightsToSparse:
+    """Tests for _lexical_weights_to_sparse helper."""
+
+    def test_dict_format(self):
+        """Test converting dict lexical weights to SparseVector."""
+        from src.evaluation.search_engines import _lexical_weights_to_sparse
+
+        weights = {"100": 0.5, "200": 0.8, "300": 0.3}
+        sparse = _lexical_weights_to_sparse(weights)
+
+        assert isinstance(sparse, models.SparseVector)
+        assert sparse.indices == [100, 200, 300]
+        assert sparse.values == [0.5, 0.8, 0.3]
+
+    def test_scipy_sparse_format(self):
+        """Test converting scipy sparse format to SparseVector."""
+        from src.evaluation.search_engines import _lexical_weights_to_sparse
+
+        mock_sparse = MagicMock()
+        mock_sparse.indices = np.array([100, 200])
+        mock_sparse.values = np.array([0.5, 0.8])
+
+        sparse = _lexical_weights_to_sparse(mock_sparse)
+
+        assert isinstance(sparse, models.SparseVector)
+        assert sparse.indices == [100, 200]
+        assert sparse.values == pytest.approx([0.5, 0.8])
