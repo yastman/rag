@@ -12,6 +12,8 @@ from typing import Any, cast
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -85,23 +87,37 @@ def create_history_search_tool(*, history_service: Any) -> Any:
         if user_id is None:
             return "Error: user context not available. Cannot search history."
 
-        results = await history_service.search_user_history(
-            user_id=user_id,
-            query=query,
-            limit=5,
-        )
+        try:
+            results = await history_service.search_user_history(
+                user_id=user_id,
+                query=query,
+                limit=5,
+            )
+        except Exception:
+            logger.exception("History search failed")
+            return "Произошла ошибка при поиске в истории. Попробуйте позже."
 
         if not results:
             return f"По запросу «{query}» ничего не найдено в истории диалогов."
 
         lines = []
-        for i, r in enumerate(results, 1):
-            ts = r.get("timestamp", "")[:16].replace("T", " ")
-            lines.append(f"{i}. [{ts}] Q: {r['query']}")
-            resp_preview = r["response"][:150]
-            if len(r["response"]) > 150:
+        item_no = 0
+        for r in results:
+            q = r.get("query")
+            resp = r.get("response")
+            if not isinstance(q, str) or not isinstance(resp, str):
+                continue
+
+            item_no += 1
+            ts = str(r.get("timestamp", ""))[:16].replace("T", " ")
+            lines.append(f"{item_no}. [{ts}] Q: {q}")
+            resp_preview = resp[:150]
+            if len(resp) > 150:
                 resp_preview += "..."
             lines.append(f"   A: {resp_preview}")
+
+        if not lines:
+            return f"По запросу «{query}» ничего не найдено в истории диалогов."
 
         return "\n".join(lines)
 
@@ -109,6 +125,7 @@ def create_history_search_tool(*, history_service: Any) -> Any:
 
 
 @tool
+@observe(name="tool-direct-response")
 async def direct_response(message: str) -> str:
     """Respond directly to the user without searching.
 
