@@ -119,6 +119,7 @@ class TestE2EPipelinePreprocessor:
 
 class TestE2EPipelineEmbedding:
     """Embedding E2E tests (requires VOYAGE_API_KEY)."""
+
     async def test_embed_query_returns_vector(self, embedder):
         """embed_query returns 1024-dim vector."""
         vector = await embedder.embed_query("тестовый запрос")
@@ -126,6 +127,7 @@ class TestE2EPipelineEmbedding:
         assert isinstance(vector, list)
         assert len(vector) == 1024
         assert all(isinstance(v, float) for v in vector)
+
     async def test_embed_documents_batches_correctly(self, embedder):
         """embed_documents handles multiple documents."""
         docs = ["документ один", "документ два", "документ три"]
@@ -137,6 +139,7 @@ class TestE2EPipelineEmbedding:
 
 class TestE2EPipelineRetrieval:
     """Retrieval E2E tests (requires Qdrant + VOYAGE_API_KEY)."""
+
     async def test_hybrid_search_returns_results(self, embedder, retriever):
         """Hybrid search returns results from Qdrant."""
         if not retriever._is_healthy:
@@ -158,6 +161,7 @@ class TestE2EPipelineRetrieval:
         assert "text" in results[0]
         assert "metadata" in results[0]
         assert "score" in results[0]
+
     async def test_translit_query_finds_results(self, embedder, retriever, preprocessor):
         """Query with Latin names works via translit."""
         if not retriever._is_healthy:
@@ -180,6 +184,7 @@ class TestE2EPipelineRetrieval:
 
 class TestE2EPipelineReranking:
     """Reranking E2E tests (requires VOYAGE_API_KEY)."""
+
     async def test_reranker_scores_documents(self, reranker):
         """Reranker assigns relevance scores."""
         query = "квартира у моря"
@@ -199,6 +204,7 @@ class TestE2EPipelineReranking:
 
 class TestE2EPipelineLLM:
     """LLM E2E tests (requires OPENAI_API_KEY)."""
+
     async def test_generate_answer_returns_text(self, llm):
         """generate_answer returns non-empty answer."""
         chunks = [
@@ -217,6 +223,7 @@ class TestE2EPipelineLLM:
 
 class TestE2EPipelineCache:
     """Cache E2E tests (requires Redis + VOYAGE_API_KEY)."""
+
     async def test_semantic_cache_store_and_retrieve(self, cache_service):
         """Semantic cache stores and retrieves answers."""
         if not cache_service.semantic_cache:
@@ -234,6 +241,7 @@ class TestE2EPipelineCache:
 
         assert cached is not None
         assert "E2E ответ" in cached
+
     async def test_cache_miss_returns_none(self, cache_service):
         """Non-existent query returns None."""
         if not cache_service.semantic_cache:
@@ -247,6 +255,7 @@ class TestE2EPipelineCache:
 
 class TestE2EFullPipeline:
     """Full pipeline E2E tests (all services)."""
+
     async def test_complete_query_to_answer_flow(
         self, preprocessor, embedder, retriever, reranker, llm
     ):
