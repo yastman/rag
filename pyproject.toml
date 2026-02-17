@@ -32,7 +32,7 @@ dependencies = [
     # Performance (2026-02-06)
     "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
     # LangGraph Pipeline (2026-02-09)
-    "langgraph>=1.0.3",                   # State graph for RAG pipeline
+    "langgraph>=1.0.3,<2.0",               # State graph for RAG pipeline
     "langchain-core>=1.2",                # Core abstractions (Embeddings, etc.)
     "langgraph-checkpoint-postgres>=2.0", # Postgres checkpointing for LangGraph
     # Conversation memory (#154)
