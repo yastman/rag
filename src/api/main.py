@@ -88,7 +88,7 @@ app = FastAPI(title="RAG API", version="0.1.0", lifespan=lifespan)
 
 
 @app.exception_handler(Exception)
-async def generic_error_handler(request: Any, exc: Exception) -> JSONResponse:
+async def generic_error_handler(_request: Any, _exc: Exception) -> JSONResponse:
     """Return structured error response for unhandled exceptions."""
     logger.exception("Unhandled error in RAG API")
     return JSONResponse(status_code=500, content={"error": "Internal server error"})
