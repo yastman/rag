@@ -228,6 +228,10 @@ services:
       LLM_API_KEY: ${LITELLM_MASTER_KEY}
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
+      # Langfuse observability
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
       # Domain configuration
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
