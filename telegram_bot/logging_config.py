@@ -3,7 +3,7 @@
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -26,7 +26,7 @@ class JSONFormatter(logging.Formatter):
             JSON-formatted log string
         """
         log_data: dict[str, Any] = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -72,7 +72,9 @@ def setup_logging(
     root_logger.setLevel(level)
 
     # Remove existing handlers
-    root_logger.handlers.clear()
+    for handler in list(root_logger.handlers):
+        handler.close()
+        root_logger.removeHandler(handler)
 
     # Create console handler
     console_handler = logging.StreamHandler(sys.stdout)
