@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from typing import Any, cast
 
 from livekit import api
 from livekit.protocol.sip import CreateSIPOutboundTrunkRequest, SIPOutboundTrunkInfo
@@ -9,7 +10,7 @@ from livekit.protocol.sip import CreateSIPOutboundTrunkRequest, SIPOutboundTrunk
 
 async def setup_lifecell_trunk() -> str:
     """Create lifecell outbound SIP trunk. Returns trunk ID."""
-    lk = api.LiveKitAPI(
+    lk = cast(Any, api).LiveKitAPI(
         url=os.getenv("LIVEKIT_URL", "http://localhost:7880"),
         api_key=os.getenv("LIVEKIT_API_KEY", "devkey"),
         api_secret=os.getenv("LIVEKIT_API_SECRET", "secret"),
