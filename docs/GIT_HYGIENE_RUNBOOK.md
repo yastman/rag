@@ -26,7 +26,7 @@ Removes local refs to branches deleted on the remote.
 git branch --merged origin/main | grep -vE '^\*|main|master|develop'
 
 # Delete merged branches (safe — only fully merged)
-git branch --merged origin/main | grep -vE '^\*|main|master|develop' | xargs git branch -d
+git branch --merged origin/main | grep -vE '^\*|main|master|develop' | xargs -r git branch -d
 ```
 
 Or use the automated script:

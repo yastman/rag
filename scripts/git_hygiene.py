@@ -21,7 +21,6 @@ import json
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 
 
 @dataclass
@@ -61,12 +60,6 @@ def _run(cmd: list[str], *, check: bool = True) -> str:
         check=check,
     )
     return result.stdout.strip()
-
-
-def _get_repo_root() -> Path:
-    """Return the root directory of the current git repo."""
-    root = _run(["git", "rev-parse", "--show-toplevel"])
-    return Path(root)
 
 
 def find_merged_branches() -> list[str]:
@@ -143,21 +136,26 @@ def find_stale_worktrees() -> list[dict[str, str]]:
 
 
 def find_transient_files() -> list[str]:
-    """Find untracked transient files (coverage, test output, logs)."""
-    repo_root = _get_repo_root()
-    patterns = ["coverage.json", "test_output*", "*.log"]
-    found: list[str] = []
-    for pattern in patterns:
-        for path in repo_root.glob(pattern):
-            if path.is_file():
-                found.append(str(path.relative_to(repo_root)))
-    # Also check common subdirectories
-    for pattern in ["test_output*"]:
-        for path in repo_root.glob(f"**/{pattern}"):
-            rel = str(path.relative_to(repo_root))
-            if path.is_file() and rel not in found and not rel.startswith("."):
-                found.append(rel)
-    return sorted(set(found))
+    """Find untracked transient files (coverage, test output, logs).
+
+    Uses ``git ls-files --others --exclude-standard`` so that tracked files
+    and files matched by ``.gitignore`` are excluded.  This also avoids
+    expensive filesystem walks through ``.venv/`` or ``node_modules/``.
+    """
+    raw = _run(
+        [
+            "git",
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "coverage.json",
+            "test_output*",
+            "*.log",
+        ],
+        check=False,
+    )
+    return sorted(raw.splitlines()) if raw else []
 
 
 def build_report() -> HygieneReport:
@@ -209,12 +207,15 @@ def print_human_report(report: HygieneReport) -> None:
     print(f"\nTotal issues: {report.total_issues}")
 
 
-def fix_merged_branches(branches: list[str], *, dry_run: bool = False) -> list[str]:
+def fix_merged_branches(
+    branches: list[str], *, dry_run: bool = False, quiet: bool = False
+) -> list[str]:
     """Delete branches merged to origin/main. Returns list of deleted branches."""
     deleted: list[str] = []
     for branch in branches:
         if dry_run:
-            print(f"  [dry-run] would delete: {branch}")
+            if not quiet:
+                print(f"  [dry-run] would delete: {branch}")
             deleted.append(branch)
         else:
             result = subprocess.run(
@@ -224,9 +225,10 @@ def fix_merged_branches(branches: list[str], *, dry_run: bool = False) -> list[s
                 check=False,
             )
             if result.returncode == 0:
-                print(f"  deleted: {branch}")
+                if not quiet:
+                    print(f"  deleted: {branch}")
                 deleted.append(branch)
-            else:
+            elif not quiet:
                 print(f"  FAILED to delete {branch}: {result.stderr.strip()}")
     return deleted
 
@@ -258,14 +260,21 @@ def main() -> None:
     report = build_report()
 
     if args.fix:
-        print("=== Git Hygiene Cleanup ===\n")
+        if not args.json:
+            print("=== Git Hygiene Cleanup ===\n")
         if report.merged_branches:
-            label = "dry-run" if args.dry_run else "cleanup"
-            print(f"Merged branches ({label}):")
-            fix_merged_branches(report.merged_branches, dry_run=args.dry_run)
-        else:
+            if not args.json:
+                label = "dry-run" if args.dry_run else "cleanup"
+                print(f"Merged branches ({label}):")
+            fix_merged_branches(
+                report.merged_branches,
+                dry_run=args.dry_run,
+                quiet=args.json,
+            )
+        elif not args.json:
             print("No merged branches to clean up.")
-        print()
+        if not args.json:
+            print()
 
     if args.json:
         print(json.dumps(report.to_dict(), indent=2))
