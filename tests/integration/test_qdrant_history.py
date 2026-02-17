@@ -4,6 +4,7 @@ Requires a running Qdrant instance (make docker-up).
 """
 
 import contextlib
+import socket
 import uuid
 from unittest.mock import AsyncMock
 
@@ -21,9 +22,19 @@ from telegram_bot.services.history_service import HistoryService
 TEST_COLLECTION = f"test_history_{uuid.uuid4().hex[:8]}"
 
 
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 @pytest.fixture
 async def qdrant_client():
     """Create async Qdrant client for testing."""
+    if not _is_port_open("localhost", 6333):
+        pytest.skip("Qdrant not running on localhost:6333")
     client = AsyncQdrantClient(url="http://localhost:6333")
     try:
         yield client
@@ -54,10 +65,6 @@ async def service(qdrant_client, mock_embeddings):
     return svc
 
 
-@pytest.mark.skipif(
-    not pytest.importorskip("qdrant_client", reason="qdrant not available"),
-    reason="Qdrant not available",
-)
 class TestQdrantHistoryIntegration:
     """Integration tests requiring live Qdrant."""
 
