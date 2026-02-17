@@ -8,6 +8,8 @@ dependencies = [
     "openai",
     "groq",
     "python-dotenv",
+    "pydantic-settings>=2.0.0",  # Required by telegram_bot/config.py (BotConfig)
+    "cachetools>=5.0.0",  # Required by telegram_bot/middlewares/throttling.py
     "numpy",
     "aiohttp",
     "requests",

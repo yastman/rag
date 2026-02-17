@@ -1,121 +1,92 @@
-"""Integration tests for bot hybrid search pipeline."""
+"""Integration-style tests for PropertyBot hybrid dependency wiring.
 
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+These tests keep real module imports and only mock external services, so they
+catch wiring regressions without mutating sys.modules.
+"""
+
+from unittest.mock import patch
 
 import pytest
 
 
-# Mock aiogram before importing bot
-mock_aiogram = MagicMock()
-mock_aiogram.Bot = MagicMock()
-mock_aiogram.Dispatcher = MagicMock()
-mock_aiogram.F = MagicMock()
-sys.modules["aiogram"] = mock_aiogram
-sys.modules["aiogram.filters"] = MagicMock()
-sys.modules["aiogram.types"] = MagicMock()
+# This suite validates real telegram_bot.bot imports; skip cleanly if optional
+# Telegram runtime dependency is not installed in the environment.
+pytest.importorskip("aiogram", reason="aiogram not installed")
+
+from telegram_bot.bot import PropertyBot
+from telegram_bot.config import BotConfig
 
 
-@pytest.fixture(autouse=True)
-def reset_bot_module():
-    """Reset bot module before each test."""
-    # Remove cached bot module to get fresh import
-    modules_to_remove = [k for k in sys.modules if k.startswith("telegram_bot.bot")]
-    for mod in modules_to_remove:
-        del sys.modules[mod]
-    yield
+def _make_config() -> BotConfig:
+    """Create deterministic config for bot initialization tests."""
+    return BotConfig(
+        telegram_token="123456:TESTTOKEN",
+        llm_api_key="test-llm-key",
+        llm_base_url="https://api.example.com/v1",
+        llm_model="test-model",
+        qdrant_url="http://localhost:6333",
+        qdrant_api_key="",
+        qdrant_collection="test_collection",
+        redis_url="redis://localhost:6379",
+        bge_m3_url="http://localhost:8000",
+        rerank_provider="none",
+        qdrant_timeout=7,
+    )
 
 
 class TestBotHybridSearch:
-    """Test bot uses QdrantService for hybrid search."""
+    """Validate bot service wiring for hybrid retrieval pipeline."""
 
     def test_bot_initializes_qdrant_service(self):
-        """Bot should initialize QdrantService instead of RetrieverService."""
+        """PropertyBot must initialize QdrantService with configured timeout."""
         with (
+            patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_middleware"),
-            patch("telegram_bot.bot.QdrantService") as mock_qdrant,
-            patch("telegram_bot.bot.VoyageService"),
-            patch("telegram_bot.bot.CacheService"),
-            patch("telegram_bot.bot.LLMService"),
-            patch("telegram_bot.bot.QueryAnalyzer"),
-            patch("telegram_bot.bot.UserContextService"),
-            patch("telegram_bot.bot.CESCPersonalizer"),
+            patch.object(PropertyBot, "_register_handlers"),
+            patch("telegram_bot.integrations.cache.CacheLayerManager"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
+            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
         ):
-            from telegram_bot.bot import PropertyBot
-            from telegram_bot.config import BotConfig
+            bot = PropertyBot(_make_config())
 
-            config = BotConfig()
-            config.telegram_token = "test:token"
-            bot = PropertyBot(config)
+        mock_qdrant.assert_called_once()
+        assert mock_qdrant.call_args.kwargs["timeout"] == 7
+        assert hasattr(bot, "_qdrant")
 
-            mock_qdrant.assert_called_once()
-            assert hasattr(bot, "qdrant_service")
-
-
-class TestBotGetSparseVector:
-    """Test sparse vector generation via HTTP."""
-
-    async def test_get_sparse_vector_calls_http_service(self):
-        """_get_sparse_vector should call BGE-M3 HTTP service."""
+    def test_bot_initializes_sparse_embeddings_with_bge_url(self):
+        """PropertyBot should wire sparse embeddings from configured BGE-M3 URL."""
         with (
+            patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_middleware"),
-            patch("telegram_bot.bot.QdrantService"),
-            patch("telegram_bot.bot.VoyageService"),
-            patch("telegram_bot.bot.CacheService"),
-            patch("telegram_bot.bot.LLMService"),
-            patch("telegram_bot.bot.QueryAnalyzer"),
-            patch("telegram_bot.bot.UserContextService"),
-            patch("telegram_bot.bot.CESCPersonalizer"),
-            patch("telegram_bot.bot.httpx.AsyncClient") as mock_client,
+            patch.object(PropertyBot, "_register_handlers"),
+            patch("telegram_bot.integrations.cache.CacheLayerManager"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
+            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
         ):
-            # Mock HTTP response
-            mock_response = MagicMock()
-            mock_response.json.return_value = {
-                "indices": [1, 5, 10],
-                "values": [0.5, 0.3, 0.2],
-            }
-            mock_response.raise_for_status = MagicMock()
-            mock_client.return_value.post = AsyncMock(return_value=mock_response)
+            PropertyBot(_make_config())
 
-            from telegram_bot.bot import PropertyBot
-            from telegram_bot.config import BotConfig
+        mock_sparse.assert_called_once_with(base_url="http://localhost:8000", timeout=120.0)
 
-            config = BotConfig()
-            config.telegram_token = "test:token"
-            bot = PropertyBot(config)
-
-            result = await bot._get_sparse_vector("test query")
-
-            assert result["indices"] == [1, 5, 10]
-            assert result["values"] == [0.5, 0.3, 0.2]
-
-    async def test_get_sparse_vector_handles_error_gracefully(self):
-        """_get_sparse_vector should return empty vector on error."""
+    def test_bot_uses_hybrid_embeddings_as_primary_provider(self):
+        """PropertyBot should expose hybrid embeddings as the primary provider."""
         with (
+            patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.bot.setup_throttling_middleware"),
             patch("telegram_bot.bot.setup_error_middleware"),
-            patch("telegram_bot.bot.QdrantService"),
-            patch("telegram_bot.bot.VoyageService"),
-            patch("telegram_bot.bot.CacheService"),
-            patch("telegram_bot.bot.LLMService"),
-            patch("telegram_bot.bot.QueryAnalyzer"),
-            patch("telegram_bot.bot.UserContextService"),
-            patch("telegram_bot.bot.CESCPersonalizer"),
-            patch("telegram_bot.bot.httpx.AsyncClient") as mock_client,
+            patch.object(PropertyBot, "_register_handlers"),
+            patch("telegram_bot.integrations.cache.CacheLayerManager"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings") as mock_hybrid,
+            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
         ):
-            # Mock HTTP error
-            mock_client.return_value.post = AsyncMock(side_effect=Exception("Connection refused"))
+            bot = PropertyBot(_make_config())
 
-            from telegram_bot.bot import PropertyBot
-            from telegram_bot.config import BotConfig
-
-            config = BotConfig()
-            config.telegram_token = "test:token"
-            bot = PropertyBot(config)
-
-            result = await bot._get_sparse_vector("test query")
-
-            # Should return empty vector, not raise
-            assert result == {"indices": [], "values": []}
+        assert bot._hybrid is mock_hybrid.return_value
+        assert bot._embeddings is bot._hybrid
