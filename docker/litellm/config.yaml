@@ -1,6 +1,6 @@
 # LiteLLM Proxy Configuration
 # Docs: https://docs.litellm.ai/docs/proxy/configs
-# Image: ghcr.io/berriai/litellm:main-v1.81.0-stable
+# Image: ghcr.io/berriai/litellm:main-v1.81.3-stable
 
 model_list:
   # Primary: gpt-oss-120b on Cerebras (3000 tok/s)
