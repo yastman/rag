@@ -547,9 +547,14 @@ class PropertyBot:
             logger.exception("Failed to initiate call to %s", phone)
             await message.answer("Ошибка инициации звонка. Попробуйте позже.")
 
+    @observe(name="telegram-history-search")
     async def cmd_history(self, message: Message):
         """Handle /history command — semantic search in conversation history."""
+        search_start = time.perf_counter()
         assert message.from_user is not None
+        user_id = message.from_user.id
+        session_id = make_session_id("history", message.chat.id)
+
         text = (message.text or "").strip()
         parts = text.split(maxsplit=1)
 
@@ -559,52 +564,90 @@ class PropertyBot:
             )
             return
 
-        if self._history_service is None:
-            await message.answer("История диалогов временно недоступна.")
-            return
-
         query = parts[1]
-        try:
-            results = await self._history_service.search_user_history(
-                user_id=message.from_user.id,
-                query=query,
-                limit=5,
+
+        with propagate_attributes(
+            session_id=session_id,
+            user_id=str(user_id),
+            tags=["telegram", "history"],
+        ):
+            lf = get_client()
+
+            if self._history_service is None:
+                lf.update_current_trace(
+                    input={"command": "/history", "query": query},
+                    output={"error": "service_unavailable"},
+                    metadata={"user_id": user_id},
+                )
+                lf.score_current_trace(name="history_search_count", value=0, data_type="NUMERIC")
+                lf.score_current_trace(name="history_search_empty", value=1.0, data_type="NUMERIC")
+                await message.answer("История диалогов временно недоступна.")
+                return
+
+            try:
+                results = await self._history_service.search_user_history(
+                    user_id=user_id,
+                    query=query,
+                    limit=5,
+                )
+            except Exception:
+                logger.exception("History search failed for user %s", user_id)
+                lf.update_current_trace(
+                    input={"command": "/history", "query": query},
+                    output={"error": "backend_exception"},
+                    metadata={"user_id": user_id},
+                )
+                lf.score_current_trace(name="history_search_count", value=0, data_type="NUMERIC")
+                lf.score_current_trace(name="history_search_empty", value=1.0, data_type="NUMERIC")
+                await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
+                return
+
+            search_ms = (time.perf_counter() - search_start) * 1000
+
+            valid = []
+            for r in results:
+                if not isinstance(r, dict):
+                    continue
+                q = r.get("query")
+                resp = r.get("response")
+                if not isinstance(q, str) or not isinstance(resp, str):
+                    continue
+                valid.append(r)
+
+            lf.update_current_trace(
+                input={"command": "/history", "query": query},
+                output={"results_count": len(results), "valid_count": len(valid)},
+                metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
             )
-        except Exception:
-            logger.exception("History search failed for user %s", message.from_user.id)
-            await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
-            return
+            lf.score_current_trace(
+                name="history_search_count", value=len(valid), data_type="NUMERIC"
+            )
+            lf.score_current_trace(
+                name="history_search_latency_ms", value=search_ms, data_type="NUMERIC"
+            )
+            lf.score_current_trace(
+                name="history_search_empty",
+                value=1.0 if not valid else 0.0,
+                data_type="NUMERIC",
+            )
+            lf.score_current_trace(name="history_backend", value="qdrant", data_type="CATEGORICAL")
 
-        if not results:
-            await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
-            return
+            if not valid:
+                await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
+                return
 
-        valid = []
-        for r in results:
-            if not isinstance(r, dict):
-                continue
-            q = r.get("query")
-            resp = r.get("response")
-            if not isinstance(q, str) or not isinstance(resp, str):
-                continue
-            valid.append(r)
+            lines = [f"📋 Найдено {len(valid)} записей:\n"]
+            for i, r in enumerate(valid, 1):
+                ts = r.get("timestamp", "")
+                ts = ts[:16].replace("T", " ") if isinstance(ts, str) else ""
+                lines.append(f"{i}. [{ts}]")
+                lines.append(f"   В: {r['query']}")
+                resp_preview = r["response"][:150]
+                if len(r["response"]) > 150:
+                    resp_preview += "..."
+                lines.append(f"   О: {resp_preview}\n")
 
-        if not valid:
-            await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
-            return
-
-        lines = [f"📋 Найдено {len(valid)} записей:\n"]
-        for i, r in enumerate(valid, 1):
-            ts = r.get("timestamp", "")
-            ts = ts[:16].replace("T", " ") if isinstance(ts, str) else ""
-            lines.append(f"{i}. [{ts}]")
-            lines.append(f"   В: {r['query']}")
-            resp_preview = r["response"][:150]
-            if len(r["response"]) > 150:
-                resp_preview += "..."
-            lines.append(f"   О: {resp_preview}\n")
-
-        await message.answer("\n".join(lines))
+            await message.answer("\n".join(lines))
 
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message):
