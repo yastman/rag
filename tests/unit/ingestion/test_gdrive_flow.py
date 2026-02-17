@@ -1,4 +1,7 @@
-"""Tests for Google Drive local watcher flow."""
+"""Tests for Google Drive local watcher flow.
+
+DEPRECATED: src.ingestion.gdrive_flow is superseded by unified pipeline.
+"""
 
 import os
 from pathlib import Path
@@ -8,7 +11,7 @@ import pytest
 
 
 pytest.importorskip("fastembed", reason="fastembed not installed (ingest extra)")
-pytestmark = pytest.mark.requires_extras
+pytestmark = [pytest.mark.legacy_api, pytest.mark.requires_extras]
 
 
 class TestGDriveFlowConfig:

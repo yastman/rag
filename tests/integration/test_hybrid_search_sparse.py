@@ -4,8 +4,12 @@ Test hybrid search with sparse vectors in production code.
 Verifies that HybridRRFSearchEngine uses both dense and sparse vectors via RRF.
 """
 
+import socket
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
+
+import pytest
 
 
 # Add project root to path
@@ -16,8 +20,8 @@ from src.config import Settings
 from src.retrieval import HybridRRFSearchEngine
 
 
-def test_hybrid_search_with_sparse():
-    """Test hybrid search using dense + sparse vectors."""
+def _run_hybrid_search_with_sparse() -> bool:
+    """Run hybrid search flow using dense + sparse vectors."""
 
     print("=" * 80)
     print("TEST: HYBRID SEARCH WITH SPARSE VECTORS")
@@ -80,6 +84,25 @@ def test_hybrid_search_with_sparse():
     return True
 
 
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def test_hybrid_search_with_sparse():
+    """Test hybrid search using dense + sparse vectors."""
+    settings = Settings()
+    parsed = urlparse(settings.qdrant_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6333
+    if not _is_port_open(host, port):
+        pytest.skip(f"Qdrant not running on {host}:{port}")
+    assert _run_hybrid_search_with_sparse()
+
+
 if __name__ == "__main__":
-    success = test_hybrid_search_with_sparse()
+    success = _run_hybrid_search_with_sparse()
     sys.exit(0 if success else 1)
