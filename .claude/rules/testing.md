@@ -84,19 +84,6 @@ uv run pytest tests/unit/test_validate_queries.py tests/unit/test_validate_aggre
 | `test_validate_queries.py` | 10 | Query sets, collection mapping, warmup/cache selection |
 | `test_validate_aggregates.py` | 8 | p50/p95, phase split, score_rate, node latencies |
 
-## CI Dependency Profile
-
-CI installs **all extras** (`uv sync --frozen --all-extras`) because unit tests import source modules that depend on optional packages:
-
-| Extra | Packages needed by tests | Source modules |
-|-------|--------------------------|----------------|
-| `voice` | fastapi, uvicorn, httpx | `src/api/main` |
-| `ingest` | pymupdf, fastembed, docling | `src/ingestion/*` |
-| `eval` | mlflow, ragas, datasets | `telegram_bot/evaluation/*` |
-| (base) | pydantic-settings, cachetools | `telegram_bot/config`, `telegram_bot/middlewares/*` |
-
-A **preflight import check** step runs before pytest to catch missing deps early.
-
 ## CI Pipeline: Sharded Unit Tests (pytest-split)
 
 CI splits unit tests into **4 parallel shards** using `pytest-split` for ~4x faster feedback.
