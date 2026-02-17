@@ -72,7 +72,9 @@ def setup_logging(
     root_logger.setLevel(level)
 
     # Remove existing handlers
-    root_logger.handlers.clear()
+    for handler in list(root_logger.handlers):
+        handler.close()
+        root_logger.removeHandler(handler)
 
     # Create console handler
     console_handler = logging.StreamHandler(sys.stdout)
