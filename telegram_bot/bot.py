@@ -22,7 +22,7 @@ from .graph.config import GraphConfig
 from .graph.graph import build_graph
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
-from .observability import get_client, observe, propagate_attributes
+from .observability import get_client, get_langfuse_client, observe, propagate_attributes
 from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
@@ -603,15 +603,15 @@ class PropertyBot:
         )
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
 
-        # Inject Langfuse trace_id for feedback buttons (#229)
-        lf_pre = get_client()
-        state["trace_id"] = lf_pre.get_current_trace_id() or ""
-
         with propagate_attributes(
             session_id=state["session_id"],
             user_id=str(state["user_id"]),
             tags=["telegram", "rag"],
         ):
+            # Inject Langfuse trace_id INSIDE propagate_attributes (#277)
+            lf_pre = get_client()
+            state["trace_id"] = lf_pre.get_current_trace_id() or ""
+
             graph = build_graph(
                 cache=self._cache,
                 embeddings=self._embeddings,
@@ -739,15 +739,15 @@ class PropertyBot:
         state["input_type"] = "voice"
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
 
-        # Inject Langfuse trace_id for feedback buttons (#229)
-        lf_pre = get_client()
-        state["trace_id"] = lf_pre.get_current_trace_id() or ""
-
         with propagate_attributes(
             session_id=state["session_id"],
             user_id=str(state["user_id"]),
             tags=["telegram", "rag", "voice"],
         ):
+            # Inject Langfuse trace_id INSIDE propagate_attributes (#277)
+            lf_pre = get_client()
+            state["trace_id"] = lf_pre.get_current_trace_id() or ""
+
             graph = build_graph(
                 cache=self._cache,
                 embeddings=self._embeddings,
@@ -898,18 +898,21 @@ class PropertyBot:
         value, trace_id = parsed
         user_id = callback.from_user.id if callback.from_user else 0
 
-        # Write score to Langfuse
+        # Write score to Langfuse (direct client, not context-dependent)
         try:
-            lf = get_client()
-            lf.create_score(
-                trace_id=trace_id,
-                name="user_feedback",
-                value=value,
-                data_type="NUMERIC",
-                comment=f"user_id:{user_id}",
-            )
+            lf_client = get_langfuse_client()
+            if lf_client is not None:
+                lf_client.create_score(
+                    trace_id=trace_id,
+                    name="user_feedback",
+                    value=value,
+                    data_type="NUMERIC",
+                    comment=f"user_id:{user_id}",
+                    score_id=f"{trace_id}-user_feedback",
+                )
+                lf_client.flush()
         except Exception:
-            logger.debug("Failed to write feedback score to Langfuse", exc_info=True)
+            logger.warning("Failed to write feedback score to Langfuse", exc_info=True)
 
         # Update keyboard to confirmation
         liked = value > 0
