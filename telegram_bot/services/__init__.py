@@ -9,9 +9,8 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from .bge_m3_dense import BgeM3DenseService
+    from .bge_m3_client import BGEM3Client, BGEM3SyncClient
     from .colbert_reranker import ColbertRerankerService
-    from .embeddings import EmbeddingService
     from .history_service import HistoryService
     from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
     from .metrics import PipelineMetrics
@@ -32,10 +31,10 @@ if TYPE_CHECKING:
 
 __all__ = [
     "LOW_CONFIDENCE_THRESHOLD",
-    "BgeM3DenseService",
+    "BGEM3Client",
+    "BGEM3SyncClient",
     "ColbertRerankerService",
     "ConfidenceResult",
-    "EmbeddingService",
     "ExpandedChunk",
     "HistoryService",
     "HyDEGenerator",
@@ -56,10 +55,10 @@ __all__ = [
 
 # Lazy import mapping
 _IMPORT_MAP = {
-    "BgeM3DenseService": ".bge_m3_dense",
+    "BGEM3Client": ".bge_m3_client",
+    "BGEM3SyncClient": ".bge_m3_client",
     "ColbertRerankerService": ".colbert_reranker",
     "ConfidenceResult": ".llm",
-    "EmbeddingService": ".embeddings",
     "ExpandedChunk": ".small_to_big",
     "HistoryService": ".history_service",
     "HyDEGenerator": ".query_preprocessor",
