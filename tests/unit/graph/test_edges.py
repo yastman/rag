@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from telegram_bot.graph.edges import route_by_query_type, route_cache, route_grade, route_start
 from telegram_bot.graph.state import make_initial_state
 
@@ -29,35 +31,21 @@ def test_initial_state_has_score_improved():
 
 
 class TestRouteByQueryType:
-    def test_chitchat_routes_to_respond(self):
-        state = make_initial_state(user_id=1, session_id="s", query="hi")
-        state["query_type"] = "CHITCHAT"
-        assert route_by_query_type(state) == "respond"
-
-    def test_off_topic_routes_to_respond(self):
-        state = make_initial_state(user_id=1, session_id="s", query="python code")
-        state["query_type"] = "OFF_TOPIC"
-        assert route_by_query_type(state) == "respond"
-
-    def test_structured_routes_to_cache_check(self):
-        state = make_initial_state(user_id=1, session_id="s", query="2 rooms 80k")
-        state["query_type"] = "STRUCTURED"
-        assert route_by_query_type(state) == "cache_check"
-
-    def test_faq_routes_to_cache_check(self):
-        state = make_initial_state(user_id=1, session_id="s", query="how to buy")
-        state["query_type"] = "FAQ"
-        assert route_by_query_type(state) == "cache_check"
-
-    def test_entity_routes_to_cache_check(self):
-        state = make_initial_state(user_id=1, session_id="s", query="Nesebar")
-        state["query_type"] = "ENTITY"
-        assert route_by_query_type(state) == "cache_check"
-
-    def test_general_routes_to_cache_check(self):
-        state = make_initial_state(user_id=1, session_id="s", query="cozy apartment")
-        state["query_type"] = "GENERAL"
-        assert route_by_query_type(state) == "cache_check"
+    @pytest.mark.parametrize(
+        ("query_type", "expected"),
+        [
+            pytest.param("CHITCHAT", "respond", id="chitchat"),
+            pytest.param("OFF_TOPIC", "respond", id="off_topic"),
+            pytest.param("STRUCTURED", "cache_check", id="structured"),
+            pytest.param("FAQ", "cache_check", id="faq"),
+            pytest.param("ENTITY", "cache_check", id="entity"),
+            pytest.param("GENERAL", "cache_check", id="general"),
+        ],
+    )
+    def test_routes_by_query_type(self, query_type, expected):
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["query_type"] = query_type
+        assert route_by_query_type(state) == expected
 
 
 class TestRouteCache:

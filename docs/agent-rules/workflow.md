@@ -1,7 +1,7 @@
 # Workflow Guide
 
 ## Default Development Loop
-1. Read current context (`README.md`, `CLAUDE.md`, nearest AGENTS file).
+1. Read current context (`README.md`, nearest `AGENTS*.md`, relevant `docs/agent-rules/*.md`).
 2. Implement focused change in smallest useful scope.
 3. Run validation commands for affected area.
 4. Update docs/tests with behavior changes.
@@ -9,7 +9,7 @@
 ## Core Commands
 - Setup: `uv sync`
 - Quick gate: `make check`
-- Unit tests: `make test-unit`
+- Unit tests: `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 - Full tests: `make test`
 
 ## Service Stack Commands
@@ -25,7 +25,7 @@
 - CLI: `python -m src.ingestion.unified.cli preflight|bootstrap|run|status|reprocess`
 
 ## Retrieval/Quality Commands
-- Graph path tests: `uv run pytest tests/integration/test_graph_paths.py -v`
+- Graph path tests: `uv run pytest tests/integration/test_graph_paths.py -n auto --dist=worksteal -q`
 - Trace validation: `make validate-traces-fast`
 - RAG eval: `make eval-rag`
 
