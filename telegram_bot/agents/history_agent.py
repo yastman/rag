@@ -13,6 +13,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from telegram_bot.agents.tools import _get_user_context
+from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ def create_history_agent(*, history_service: Any) -> Any:
     """
 
     @tool
+    @observe(name="tool-history-search")
     async def history_search(query: str, config: RunnableConfig) -> str:
         """Search conversation history for past interactions.
 
