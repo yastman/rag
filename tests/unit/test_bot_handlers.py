@@ -544,6 +544,64 @@ class TestCmdHistory:
         bot, _ = _create_bot(mock_config)
         assert hasattr(bot, "cmd_history")
 
+    async def test_history_backend_exception_returns_safe_message(self, mock_config):
+        """Backend exception is caught and user gets a safe error message."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(
+            side_effect=RuntimeError("connection lost")
+        )
+        message = _make_text_message("/history цены")
+
+        await bot.cmd_history(message)
+
+        message.answer.assert_called_once()
+        answer_text = message.answer.call_args[0][0]
+        assert "ошибка" in answer_text.lower()
+
+    async def test_history_malformed_payload_skips_bad_records(self, mock_config):
+        """Malformed results (None, str, dict without keys) are skipped; valid ones shown."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(
+            return_value=[
+                None,
+                "not a dict",
+                {"query": 123, "response": "text"},
+                {"other_key": "value"},
+                {
+                    "query": "валидный вопрос",
+                    "response": "валидный ответ",
+                    "timestamp": "2026-02-13T10:00:00",
+                },
+            ]
+        )
+        message = _make_text_message("/history тест")
+
+        await bot.cmd_history(message)
+
+        message.answer.assert_called_once()
+        answer_text = message.answer.call_args[0][0]
+        assert "валидный вопрос" in answer_text
+        assert "валидный ответ" in answer_text
+        assert "1 записей" in answer_text
+        assert "1. [" in answer_text
+
+    async def test_history_all_malformed_returns_not_found(self, mock_config):
+        """When all results are malformed, user sees 'not found' fallback."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(
+            return_value=[None, "bad", {"no_query": True}]
+        )
+        message = _make_text_message("/history тест")
+
+        await bot.cmd_history(message)
+
+        message.answer.assert_called_once()
+        answer_text = message.answer.call_args[0][0]
+        assert "не найден" in answer_text.lower() or "нет" in answer_text.lower()
+
 
 class TestCheckpointNamespace:
     """Test checkpoint namespace separation for text/voice."""
