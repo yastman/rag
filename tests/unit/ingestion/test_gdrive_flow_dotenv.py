@@ -1,7 +1,15 @@
-"""Test .env loading for gdrive_flow entrypoint."""
+"""Test .env loading for gdrive_flow entrypoint.
+
+DEPRECATED: src.ingestion.gdrive_flow is superseded by unified pipeline.
+"""
 
 import importlib
 from pathlib import Path
+
+import pytest
+
+
+pytestmark = pytest.mark.legacy_api
 
 
 class TestDotenvLoading:

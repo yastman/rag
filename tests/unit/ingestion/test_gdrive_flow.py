@@ -1,8 +1,16 @@
-"""Tests for Google Drive local watcher flow."""
+"""Tests for Google Drive local watcher flow.
+
+DEPRECATED: src.ingestion.gdrive_flow is superseded by unified pipeline.
+"""
 
 import os
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
+
+
+pytestmark = pytest.mark.legacy_api
 
 
 class TestGDriveFlowConfig:
