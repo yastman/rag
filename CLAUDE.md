@@ -21,6 +21,8 @@ make eval-judge-sample     # LLM-as-a-Judge 50% sample (48h)
 make validate-traces-fast  # Trace validation (cold+cache, Langfuse report)
 make monitoring-up         # Start alerting stack
 make ingest-unified        # Unified ingestion (CocoIndex v3.2.1); also: -watch, -status
+make repo-cleanup          # Repo hygiene: branches, worktrees, stashes (dry-run)
+make repo-cleanup-force    # Repo hygiene: interactive deletion mode
 # VPS CLI: python -m src.ingestion.unified.cli preflight|bootstrap|run|status|reprocess
 ```
 
@@ -158,6 +160,25 @@ make k3s-status                     # Check pods
 | Voyage 429 | Use CacheLayerManager |
 | Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
 | Alerts not sending | Check `TELEGRAM_ALERTING_*` env vars |
+
+## Repository Hygiene
+
+Weekly checklist (run after merging PRs):
+
+```bash
+make repo-cleanup          # Dry-run: report stale branches, worktrees, stashes
+make repo-cleanup-force    # Interactive: delete with confirmation
+make git-hygiene           # Python report: merged branches, transient files
+```
+
+| Check | Tool | Frequency |
+|-------|------|-----------|
+| Prune remote refs | `git fetch --prune` | Weekly |
+| Delete merged remote branches | `make repo-cleanup-force` (Step 2) | Weekly |
+| Delete merged local branches | `make repo-cleanup-force` (Step 3) | Weekly |
+| Remove stale worktrees | `make repo-cleanup-force` (Step 4) | After agent sessions |
+| Drop stale stashes | `make repo-cleanup-force` (Step 5) | Monthly |
+| Transient files | `make git-hygiene` | Weekly |
 
 ## Skills Workflow
 
