@@ -9,13 +9,10 @@
 # 4. Cache mounts for apt and uv
 # 5. Non-root user
 
-ARG PYTHON_VERSION=3.12
-
 # =============================================================================
 # BUILD STAGE
 # =============================================================================
-# Pin uv version — checked 2026-02-09
-FROM ghcr.io/astral-sh/uv:0.9-python${PYTHON_VERSION}-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58 AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -50,7 +47,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # RUNTIME STAGE
 # =============================================================================
-FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm@sha256:73dbd1a2ad74137451593a8ac30f7bdd0f5010fc05fb34644190cffa7696bbf3 AS runtime
 
 WORKDIR /app
 
