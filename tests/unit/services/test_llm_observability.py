@@ -25,7 +25,6 @@ class TestLLMServiceObservability:
             model="gpt-4o-mini",
         )
 
-    @pytest.mark.asyncio
     async def test_generate_answer_passes_name_for_tracing(self, llm_service):
         """generate_answer should pass name parameter for Langfuse tracing."""
         mock_response = MagicMock()
@@ -42,7 +41,6 @@ class TestLLMServiceObservability:
         call_args = llm_service.client.chat.completions.create.call_args
         assert call_args[1]["name"] == "generate-answer"
 
-    @pytest.mark.asyncio
     async def test_generate_answer_tracks_model(self, llm_service):
         """generate_answer should use the configured model name."""
         mock_response = MagicMock()
