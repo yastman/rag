@@ -15,7 +15,7 @@ services:
   # =============================================================================
 
   postgres:
-    image: pgvector/pgvector:pg17@sha256:1a20228d87a48db9587caebaecfdff065268ebe248dafa5f8b447ce3dc96e594
+    image: pgvector/pgvector:pg17@sha256:3e8b3adfd27b5707128f60956f62a793c3c9326ea8cfaf0eab7adccb5d700b21
     container_name: dev-postgres
     restart: unless-stopped
     logging: *default-logging
@@ -36,7 +36,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
+    image: redis:8.6.0@sha256:7b6fb55d8b0adcd77269dc52b3cfffe5f59ca5d43dec3c90dbe18aacce7942e1
     container_name: dev-redis
     restart: unless-stopped
     logging: *default-logging
@@ -196,7 +196,7 @@ services:
 
   # MinIO S3-compatible storage for Langfuse v3
   minio:
-    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3
     container_name: dev-minio
     profiles: ["ml", "full"]
     restart: unless-stopped
@@ -219,7 +219,7 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
-    image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
+    image: redis:8.6.0@sha256:7b6fb55d8b0adcd77269dc52b3cfffe5f59ca5d43dec3c90dbe18aacce7942e1
     container_name: dev-redis-langfuse
     profiles: ["ml", "full"]
     restart: unless-stopped
@@ -234,7 +234,7 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.150.0
+    image: langfuse/langfuse-worker:3.153.0@sha256:32e2fe1193c3703c44a85e00aac005690570a85a309f0202a51b72d432673e78
     container_name: dev-langfuse-worker
     profiles: ["ml", "full"]
     restart: always
@@ -291,7 +291,7 @@ services:
 
   # Langfuse v3 Web
   langfuse:
-    image: langfuse/langfuse:3.150.0
+    image: langfuse/langfuse:3.153.0@sha256:99eae0d0734a62e29378f038b84de9eed4ba8dbe69878f9b680351c2324a4949
     container_name: dev-langfuse
     profiles: ["ml", "full"]
     restart: always
@@ -450,7 +450,7 @@ services:
       start_period: 10s
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.81.3-stable
+    image: ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:3d80908e35230a0dfb58051ae4e2847371b2a327b44e105e79b8c4f67a65596c
     container_name: dev-litellm
     profiles: ["bot", "voice", "full"]
     ports:
@@ -652,7 +652,7 @@ services:
           memory: 512M
 
   livekit-server:
-    image: livekit/livekit-server:v1.8@sha256:621fd87bd64a0c83e1f2418ee0323eb920d00acdd73e5f79b303c64f6cc532af
+    image: livekit/livekit-server:v1.9@sha256:289262ffae8b827f45186331aa315d08ed275eb30f9b0add337ec57948e44ca1
     container_name: dev-livekit
     profiles: ["voice", "full"]
     restart: unless-stopped
