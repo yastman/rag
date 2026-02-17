@@ -52,6 +52,7 @@ class TestContextualizedEmbeddingService:
 
 class TestContextualizedDocumentEmbedding:
     """Tests for document embedding functionality."""
+
     async def test_embed_single_document(self):
         """Test embedding a single document with multiple chunks."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -83,6 +84,7 @@ class TestContextualizedDocumentEmbedding:
             assert call_kwargs["inputs"] == doc_chunks
             assert call_kwargs["model"] == "voyage-context-3"
             assert call_kwargs["input_type"] == "document"
+
     async def test_embed_multiple_documents(self):
         """Test embedding multiple documents in one call."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -112,6 +114,7 @@ class TestContextualizedDocumentEmbedding:
 
             assert len(result.embeddings) == 5  # 2 + 3
             assert result.chunks_per_document == [2, 3]
+
     async def test_embed_empty_list(self):
         """Test embedding empty document list."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -132,6 +135,7 @@ class TestContextualizedDocumentEmbedding:
 
 class TestContextualizedQueryEmbedding:
     """Tests for query embedding functionality."""
+
     async def test_embed_single_query(self):
         """Test embedding a single query."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -157,6 +161,7 @@ class TestContextualizedQueryEmbedding:
             call_kwargs = mock_client.contextualized_embed.call_args[1]
             assert call_kwargs["inputs"] == [["test query"]]
             assert call_kwargs["input_type"] == "query"
+
     async def test_embed_multiple_queries(self):
         """Test embedding multiple queries."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -180,6 +185,7 @@ class TestContextualizedQueryEmbedding:
             assert len(embeddings) == 2
             assert embeddings[0][0] == 0.1
             assert embeddings[1][0] == 0.2
+
     async def test_embed_empty_queries(self):
         """Test embedding empty query list."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -197,6 +203,7 @@ class TestContextualizedQueryEmbedding:
 
 class TestContextualizedValidation:
     """Tests for input validation."""
+
     async def test_too_many_documents(self):
         """Test rejection when too many documents."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -209,6 +216,7 @@ class TestContextualizedValidation:
 
             with pytest.raises(ValueError, match="Too many documents"):
                 await service.embed_documents(doc_chunks)
+
     async def test_too_many_chunks(self):
         """Test rejection when too many total chunks."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService

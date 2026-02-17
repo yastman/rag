@@ -35,6 +35,7 @@ class TestVoyageServiceUnit:
             assert service._model_docs == "voyage-3-large"
             assert service._model_queries == "voyage-3-lite"
             assert service._model_rerank == "rerank-2"
+
     async def test_embed_documents_batches_large_input(self):
         """Test embed_documents splits into batches of 128."""
         from telegram_bot.services.voyage import VoyageService
@@ -64,6 +65,7 @@ class TestVoyageServiceUnit:
             # Second batch: 72 texts
             second_call = mock_client.embed.call_args_list[1]
             assert len(second_call[1]["texts"]) == 72
+
     async def test_embed_documents_uses_document_model(self):
         """Test embed_documents uses model_docs."""
         from telegram_bot.services.voyage import VoyageService
@@ -79,6 +81,7 @@ class TestVoyageServiceUnit:
             call_kwargs = mock_client.embed.call_args[1]
             assert call_kwargs["model"] == "voyage-4-large"
             assert call_kwargs["input_type"] == "document"
+
     async def test_embed_query_uses_query_model(self):
         """Test embed_query uses model_queries (asymmetric retrieval)."""
         from telegram_bot.services.voyage import VoyageService
@@ -94,6 +97,7 @@ class TestVoyageServiceUnit:
             call_kwargs = mock_client.embed.call_args[1]
             assert call_kwargs["model"] == "voyage-4-lite"
             assert call_kwargs["input_type"] == "query"
+
     async def test_embed_documents_empty_list(self):
         """Test embed_documents with empty list returns empty."""
         from telegram_bot.services.voyage import VoyageService
@@ -103,6 +107,7 @@ class TestVoyageServiceUnit:
             result = await service.embed_documents([])
 
             assert result == []
+
     async def test_rerank_returns_formatted_results(self):
         """Test rerank returns list of dicts with index and score."""
         from telegram_bot.services.voyage import VoyageService
@@ -123,6 +128,7 @@ class TestVoyageServiceUnit:
             assert result[0]["index"] == 1
             assert result[0]["relevance_score"] == 0.95
             assert result[0]["document"] == "doc1"
+
     async def test_rerank_empty_documents(self):
         """Test rerank with empty documents returns empty list."""
         from telegram_bot.services.voyage import VoyageService
@@ -132,6 +138,7 @@ class TestVoyageServiceUnit:
             result = await service.rerank("query", [])
 
             assert result == []
+
     async def test_rerank_uses_rerank_model(self):
         """Test rerank uses model_rerank."""
         from telegram_bot.services.voyage import VoyageService
@@ -150,6 +157,7 @@ class TestVoyageServiceUnit:
 
 class TestVoyageServiceBackwardCompatibility:
     """Tests to ensure VoyageService can replace existing services."""
+
     async def test_can_replace_voyage_embedding_service(self):
         """Test VoyageService provides same interface as VoyageEmbeddingService."""
         from telegram_bot.services.voyage import VoyageService
@@ -169,6 +177,7 @@ class TestVoyageServiceBackwardCompatibility:
             # embed_documents (async) - used for indexing
             result = await service.embed_documents(["test"])
             assert len(result) == 1
+
     async def test_can_replace_voyage_reranker_service(self):
         """Test VoyageService provides same interface as VoyageRerankerService."""
         from telegram_bot.services.voyage import VoyageService
@@ -218,6 +227,7 @@ class TestVoyageServiceMatryoshka:
 
         assert VoyageService.MATRYOSHKA_DIMS == (2048, 1024, 512, 256)
         assert VoyageService.DEFAULT_DIM == 1024
+
     async def test_embed_documents_matryoshka_passes_output_dimension(self):
         """Test embed_documents_matryoshka passes output_dimension to API."""
         from telegram_bot.services.voyage import VoyageService
@@ -232,6 +242,7 @@ class TestVoyageServiceMatryoshka:
 
             call_kwargs = mock_client.embed.call_args[1]
             assert call_kwargs["output_dimension"] == 512
+
     async def test_embed_query_matryoshka_passes_output_dimension(self):
         """Test embed_query_matryoshka passes output_dimension to API."""
         from telegram_bot.services.voyage import VoyageService
@@ -246,6 +257,7 @@ class TestVoyageServiceMatryoshka:
 
             call_kwargs = mock_client.embed.call_args[1]
             assert call_kwargs["output_dimension"] == 256
+
     async def test_embed_documents_matryoshka_invalid_dimension_raises(self):
         """Test embed_documents_matryoshka raises for invalid dimensions."""
         from telegram_bot.services.voyage import VoyageService
@@ -258,6 +270,7 @@ class TestVoyageServiceMatryoshka:
 
             assert "Invalid output_dimension 999" in str(exc_info.value)
             assert "Supported: (2048, 1024, 512, 256)" in str(exc_info.value)
+
     async def test_embed_query_matryoshka_invalid_dimension_raises(self):
         """Test embed_query_matryoshka raises for invalid dimensions."""
         from telegram_bot.services.voyage import VoyageService
@@ -269,6 +282,7 @@ class TestVoyageServiceMatryoshka:
                 await service.embed_query_matryoshka("test", output_dimension=100)
 
             assert "Invalid output_dimension 100" in str(exc_info.value)
+
     async def test_embed_documents_matryoshka_empty_list(self):
         """Test embed_documents_matryoshka with empty list returns empty."""
         from telegram_bot.services.voyage import VoyageService
@@ -278,6 +292,7 @@ class TestVoyageServiceMatryoshka:
             result = await service.embed_documents_matryoshka([])
 
             assert result == []
+
     async def test_embed_documents_matryoshka_batches_correctly(self):
         """Test embed_documents_matryoshka batches like embed_documents."""
         from telegram_bot.services.voyage import VoyageService
