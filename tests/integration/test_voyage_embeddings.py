@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 
 class TestVoyageEmbeddingServiceUnit:
     """Unit tests for VoyageEmbeddingService."""
@@ -53,6 +51,7 @@ class TestVoyageEmbeddingServiceUnit:
             service.embed_query_sync("test")
 
             mock_client.embed_query_sync.assert_called_with("test", model="voyage-3-lite")
+
     async def test_async_embed_query(self):
         """Test async embed_query method."""
         from telegram_bot.services.voyage_embeddings import VoyageEmbeddingService

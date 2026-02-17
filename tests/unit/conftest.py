@@ -1,17 +1,20 @@
 """Unit test specific fixtures for isolation."""
 
+import contextlib
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 
 @pytest.fixture(autouse=True)
 def isolate_otel_langfuse(monkeypatch):
-    """Block OTEL/Langfuse network calls without mutating import state.
+    """Block OTEL/Langfuse network calls in unit tests.
 
-    The fixture must not clear or replace ``sys.modules`` entries because that
-    breaks package imports inside the same xdist worker process.
+    Uses env vars + targeted patches only.  Does NOT manipulate sys.modules
+    because deleting/replacing modules breaks import references in other
+    tests running in the same xdist worker process.
     """
-
-    # Reset prompt_manager singleton so it picks up mocked Langfuse
+    # Reset prompt_manager singleton so it uses fresh env vars each test
     from telegram_bot.integrations.prompt_manager import _reset_client
 
     _reset_client()
@@ -25,10 +28,42 @@ def isolate_otel_langfuse(monkeypatch):
     monkeypatch.setenv("LANGFUSE_ENABLED", "false")
     monkeypatch.setenv("LANGFUSE_HOST", "")
     monkeypatch.setenv("LANGFUSE_TRACING_ENABLED", "false")
-    monkeypatch.setenv("RAGAS_DO_NOT_TRACK", "true")
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
-    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+
+    # Create no-op mocks
+    mock_noop = MagicMock()
+
+    # Patch at entry points to prevent any network initialization.
+    # Do NOT patch "langfuse.Langfuse" — the patch() call itself imports
+    # langfuse and can corrupt module state on stop().  Instead, patch the
+    # higher-level wrappers that our code actually calls.
+    patches = [
+        # OTEL entry point - make setup_opentelemetry a no-op
+        patch("src.observability.otel_setup.setup_opentelemetry", mock_noop),
+        # Langfuse — patch our wrapper, not the SDK class directly
+        patch("telegram_bot.services.observability.get_client", lambda: mock_noop),
+        # Fallback: patch low-level OTEL exporters in case setup_opentelemetry is called
+        patch(
+            "opentelemetry.exporter.otlp.proto.grpc.trace_exporter.OTLPSpanExporter",
+            mock_noop,
+        ),
+        patch(
+            "opentelemetry.exporter.otlp.proto.grpc.metric_exporter.OTLPMetricExporter",
+            mock_noop,
+        ),
+        patch("opentelemetry.sdk.trace.export.BatchSpanProcessor", mock_noop),
+        patch(
+            "opentelemetry.sdk.metrics.export.PeriodicExportingMetricReader",
+            mock_noop,
+        ),
+    ]
+
+    for p in patches:
+        with contextlib.suppress(Exception):
+            p.start()
 
     yield
 
-    _reset_client()
+    for p in patches:
+        with contextlib.suppress(Exception):
+            p.stop()
