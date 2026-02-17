@@ -152,7 +152,7 @@ docker stats
 
 | Type | Strategy | Example |
 |------|----------|---------|
-| Stable 3rd-party | Versioned tag | `redis:8.4.0`, `qdrant/qdrant:v1.16`, `clickhouse:24.8` |
+| Stable 3rd-party | Versioned tag | `redis:8.4.0`, `qdrant/qdrant:v1.16.2`, `clickhouse:24.8` |
 | Floating tag only | Digest pin | `docling-serve-cpu@sha256:4e93e8e...` |
 | Self-built | Local build | `services/bm42/Dockerfile` |
 
