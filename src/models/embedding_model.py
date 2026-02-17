@@ -2,19 +2,29 @@
 
 Loading BGE-M3 multiple times wastes 4-6GB RAM per instance.
 This module ensures only ONE model instance exists in memory.
+
+NOTE: FlagEmbedding and sentence_transformers are imported lazily to avoid
+pulling torch at import time. Install with: uv sync --extra ml-local
 """
 
-import logging
+from __future__ import annotations
 
-from FlagEmbedding import BGEM3FlagModel
-from sentence_transformers import SentenceTransformer
+import logging
+from typing import TYPE_CHECKING, Any
+
+
+if TYPE_CHECKING:
+    from FlagEmbedding import BGEM3FlagModel
+    from sentence_transformers import SentenceTransformer
 
 
 logger = logging.getLogger(__name__)
 
-# Global singleton instances
-_bge_m3_model: BGEM3FlagModel | None = None
-_sentence_transformer: SentenceTransformer | None = None
+# Global singleton instances (typed as Any to avoid import at module level)
+_bge_m3_model: Any | None = None
+_sentence_transformer: Any | None = None
+
+_INSTALL_HINT = "Install ml-local extra: uv sync --extra ml-local"
 
 
 def get_bge_m3_model(use_fp16: bool = True, device: str | None = None) -> BGEM3FlagModel:
@@ -30,12 +40,20 @@ def get_bge_m3_model(use_fp16: bool = True, device: str | None = None) -> BGEM3F
 
     Returns:
         Shared BGEM3FlagModel instance
+
+    Raises:
+        ImportError: If FlagEmbedding is not installed
     """
     global _bge_m3_model
 
     if _bge_m3_model is None:
+        try:
+            from FlagEmbedding import BGEM3FlagModel as _BGEM3
+        except ImportError as e:
+            raise ImportError(f"FlagEmbedding is not installed. {_INSTALL_HINT}") from e
+
         logger.info("Loading BGE-M3 model (FlagEmbedding) - first initialization")
-        _bge_m3_model = BGEM3FlagModel(
+        _bge_m3_model = _BGEM3(
             "BAAI/bge-m3",
             use_fp16=use_fp16,
             device=device,
@@ -59,12 +77,20 @@ def get_sentence_transformer(model_name: str = "BAAI/bge-m3") -> SentenceTransfo
 
     Returns:
         Shared SentenceTransformer instance
+
+    Raises:
+        ImportError: If sentence_transformers is not installed
     """
     global _sentence_transformer
 
     if _sentence_transformer is None:
+        try:
+            from sentence_transformers import SentenceTransformer as _ST
+        except ImportError as e:
+            raise ImportError(f"sentence_transformers is not installed. {_INSTALL_HINT}") from e
+
         logger.info(f"Loading SentenceTransformer ({model_name}) - first initialization")
-        _sentence_transformer = SentenceTransformer(model_name)
+        _sentence_transformer = _ST(model_name)
         logger.info("SentenceTransformer loaded successfully (singleton)")
     else:
         logger.debug("Using existing SentenceTransformer instance (singleton)")
