@@ -1,9 +1,13 @@
 """Qdrant retrieval service."""
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from qdrant_client import QdrantClient, models
+from qdrant_client import QdrantClient
+
+
+if TYPE_CHECKING:
+    from qdrant_client.http.models.models import Filter as QdrantFilter
 
 
 logger = logging.getLogger(__name__)
@@ -105,7 +109,7 @@ class RetrieverService:
             self._is_healthy = False
             return []
 
-    def _build_base_filter(self) -> models.Filter | None:
+    def _build_base_filter(self) -> "QdrantFilter | None":
         """
         Build base Qdrant Filter.
 
@@ -118,7 +122,7 @@ class RetrieverService:
         # No base filter - search all documents in collection
         return None
 
-    def _build_filter(self, filters: dict[str, Any]) -> models.Filter | None:
+    def _build_filter(self, filters: dict[str, Any]) -> "QdrantFilter | None":
         """
         Build Qdrant Filter from extracted filters dict.
 
@@ -131,6 +135,9 @@ class RetrieverService:
         """
         if not filters:
             return None
+
+        # Import lazily so returned models stay consistent with current qdrant_client module state.
+        from qdrant_client import models
 
         conditions = []
 
