@@ -24,7 +24,8 @@ uv sync
 make docker-up          ***REMOVED*** Start core (5 services, ~17s)
 make docker-full-up     ***REMOVED*** Start all (20 services)
 make check              ***REMOVED*** Lint + type check
-make test               ***REMOVED*** Run tests
+make test               ***REMOVED*** Fast deterministic gate
+make test-full          ***REMOVED*** Full test suite (all tiers)
 ```
 
 ***REMOVED******REMOVED*** Documentation
