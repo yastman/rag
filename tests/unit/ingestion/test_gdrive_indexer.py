@@ -1,11 +1,21 @@
-"""Tests for Google Drive hybrid indexer."""
+"""Tests for Google Drive hybrid indexer.
+
+DEPRECATED: src.ingestion.gdrive_indexer is superseded by unified pipeline.
+"""
 
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
+pytest.importorskip("fastembed", reason="fastembed not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
 from src.ingestion.chunker import Chunk
+
+
+pytestmark = pytest.mark.legacy_api
 
 
 class TestGDriveIndexerPointId:

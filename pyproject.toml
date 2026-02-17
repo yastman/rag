@@ -380,13 +380,13 @@ markers = [
     "slow: Tests taking > 5 seconds",
     "legacy_api: tests for pre-LangGraph API (may need rewrite)",
     "smoke: Smoke tests (requires running services)",
+    "requires_extras: Tests needing optional deps (voice/ingest/eval); skipped in core tier",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
 ]
 filterwarnings = [
-    # trustcall 0.0.39 imports Send from langgraph.constants (deprecated V1, removed V2).
-    # No upstream fix available yet — suppress until trustcall publishes a new release.
-    # Tracking: https://github.com/yastman/rag/issues/306
-    "ignore:Importing Send from langgraph.constants is deprecated:Warning",
+    # trustcall 0.0.39 imports Send from deprecated langgraph.constants;
+    # no upstream fix available yet (tracked in #306)
+    "ignore:Importing Send from langgraph:DeprecationWarning",
 ]
 
 # =============================================================================
