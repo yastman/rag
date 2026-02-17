@@ -837,7 +837,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'voice'", specifier = ">=0.27.0" },
     { name = "langchain-core", specifier = ">=1.2" },
     { name = "langfuse", specifier = ">=3.0.0" },
-    { name = "langgraph", specifier = ">=1.0.3" },
+    { name = "langgraph", specifier = ">=1.0.3,<2.0" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0" },
     { name = "langgraph-checkpoint-redis", specifier = ">=0.2.0" },
     { name = "langmem", specifier = ">=0.0.30" },
