@@ -3,7 +3,7 @@
 ## Baseline Required Checks
 Run these for most code changes:
 - `make check`
-- `make test-unit`
+- `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 
 Run full test suite when touching cross-cutting logic:
 - `make test`
