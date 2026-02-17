@@ -13,6 +13,7 @@ uv run pytest tests/unit/ -n auto  # Parallel (4x faster, ~5 min)
 uv run pytest tests/integration/ -v  # Integration tests (~5s, no Docker)
 make docker-up             # Start core services (5 containers, ~17s)
 make docker-bot-up         # Core + bot/litellm
+make docker-voice-up       # Core + LiveKit/SIP/voice-agent (preflight)
 make docker-full-up        # All services (17 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
 make eval-judge            # LLM-as-a-Judge batch (24h traces, RAG Triad)
