@@ -234,16 +234,22 @@ class TestJSONFormatter:
 class TestSetupLogging:
     """Test setup_logging function."""
 
+    @staticmethod
+    def _close_root_handlers() -> None:
+        """Close and remove all root handlers to avoid ResourceWarning leaks."""
+        root_logger = logging.getLogger()
+        for handler in list(root_logger.handlers):
+            handler.close()
+            root_logger.removeHandler(handler)
+
     def setup_method(self):
         """Reset root logger before each test."""
-        root_logger = logging.getLogger()
-        root_logger.handlers.clear()
-        root_logger.setLevel(logging.WARNING)
+        self._close_root_handlers()
+        logging.getLogger().setLevel(logging.WARNING)
 
     def teardown_method(self):
         """Clean up after each test."""
-        root_logger = logging.getLogger()
-        root_logger.handlers.clear()
+        self._close_root_handlers()
 
     def test_setup_logging_default_settings(self):
         """Test setup with default settings."""
@@ -307,6 +313,7 @@ class TestSetupLogging:
         finally:
             import os
 
+            self._close_root_handlers()
             os.unlink(log_file)
 
     def test_setup_logging_clears_existing_handlers(self):
