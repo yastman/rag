@@ -343,8 +343,10 @@ class DoclingClient:
             )
 
         for raw_chunk in raw_chunks:
-            # Extract text - contextualized if available
-            text = raw_chunk.get("contextualized_text") or raw_chunk.get("text", "")
+            # Respect caller preference: contextualized text or raw text.
+            text = (
+                raw_chunk.get("contextualized_text") if contextualize else raw_chunk.get("text")
+            ) or raw_chunk.get("text", "")
             if not text:
                 continue
 
@@ -409,7 +411,9 @@ class DoclingClient:
             )
 
         for raw_chunk in raw_chunks:
-            text = raw_chunk.get("contextualized_text") or raw_chunk.get("text", "")
+            text = (
+                raw_chunk.get("contextualized_text") if contextualize else raw_chunk.get("text")
+            ) or raw_chunk.get("text", "")
             if not text:
                 continue
 

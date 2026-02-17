@@ -50,6 +50,7 @@ class ClaudeContextualizer(ContextualizeProvider):
 
         Uses batch processing for efficiency.
         """
+        _ = context_window
         results = []
         for i, chunk in enumerate(chunks):
             try:

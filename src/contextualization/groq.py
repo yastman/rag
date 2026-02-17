@@ -33,6 +33,7 @@ class GroqContextualizer(ContextualizeProvider):
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using Groq."""
+        _ = context_window
         results = []
         for i, chunk in enumerate(chunks):
             try:
