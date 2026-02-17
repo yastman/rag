@@ -2,10 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
-
-@pytest.mark.asyncio
 async def test_llm_service_has_generate_method():
     """LLMService should have generate() method."""
     from telegram_bot.services.llm import LLMService
@@ -15,7 +12,6 @@ async def test_llm_service_has_generate_method():
     await service.close()
 
 
-@pytest.mark.asyncio
 async def test_generate_returns_text():
     """generate() should return text from LLM."""
     from telegram_bot.services.llm import LLMService
@@ -40,7 +36,6 @@ async def test_generate_returns_text():
     await service.close()
 
 
-@pytest.mark.asyncio
 async def test_generate_uses_low_temperature():
     """generate() should use low temperature for structured output."""
     from telegram_bot.services.llm import LLMService
@@ -167,7 +162,6 @@ class TestLLMServiceFallback:
 class TestLLMServiceGenerateAnswer:
     """Tests for generate_answer method."""
 
-    @pytest.mark.asyncio
     async def test_generate_answer_success(self):
         """generate_answer returns LLM response."""
         from telegram_bot.services.llm import LLMService
@@ -192,7 +186,6 @@ class TestLLMServiceGenerateAnswer:
 
         await service.close()
 
-    @pytest.mark.asyncio
     async def test_generate_answer_uses_system_prompt(self):
         """generate_answer includes system prompt in messages."""
         from telegram_bot.services.llm import LLMService
@@ -222,7 +215,6 @@ class TestLLMServiceGenerateAnswer:
 
         await service.close()
 
-    @pytest.mark.asyncio
     async def test_generate_answer_fallback_on_timeout(self):
         """generate_answer returns fallback on timeout."""
         import openai
@@ -244,7 +236,6 @@ class TestLLMServiceGenerateAnswer:
 
         await service.close()
 
-    @pytest.mark.asyncio
     async def test_generate_answer_fallback_on_http_error(self):
         """generate_answer returns fallback on generic error."""
         from telegram_bot.services.llm import LLMService

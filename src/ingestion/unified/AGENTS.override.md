@@ -16,7 +16,7 @@
 ## Required Validation
 - Base checks:
   - `make check`
-  - `make test-unit`
+  - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 - Ingestion functional checks when behavior changes:
   - `make ingest-unified-status`
   - `python -m src.ingestion.unified.cli preflight`
@@ -29,5 +29,6 @@
 
 ## References
 - `docs/INGESTION.md`
-- `.claude/rules/features/ingestion.md`
+- `docs/agent-rules/workflow.md`
+- `docs/agent-rules/testing-and-validation.md`
 - `src/ingestion/unified/cli.py`
