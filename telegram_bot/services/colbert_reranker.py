@@ -2,14 +2,14 @@
 
 HTTP client for bge-m3-api /rerank endpoint (ColBERT MaxSim).
 Replaces VoyageService.rerank when RERANK_PROVIDER=colbert.
+Delegates to BGEM3Client (unified SDK layer).
 """
 
 import logging
 import os
 
-import httpx
-
 from telegram_bot.observability import observe
+from telegram_bot.services.bge_m3_client import BGEM3Client
 
 
 logger = logging.getLogger(__name__)
@@ -22,24 +22,17 @@ class ColbertRerankerService:
     Uses ColBERT MaxSim scoring for local, fast reranking.
     """
 
-    MAX_LENGTH = 512
-
     def __init__(
         self,
         base_url: str = "http://localhost:8000",
         timeout: float | None = None,
+        *,
+        client: BGEM3Client | None = None,
     ):
-        """Initialize service.
-
-        Args:
-            base_url: BGE-M3 API base URL
-            timeout: Request timeout in seconds (default from COLBERT_TIMEOUT env, fallback 120s)
-        """
         if timeout is None:
             timeout = float(os.getenv("COLBERT_TIMEOUT", "120.0"))
-        self.base_url = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(timeout=timeout)
-        logger.info(f"ColbertRerankerService initialized: {base_url} (timeout={timeout}s)")
+        self._client = client or BGEM3Client(base_url=base_url, timeout=timeout)
+        logger.info("ColbertRerankerService initialized: %s (timeout=%ss)", base_url, timeout)
 
     @observe(name="colbert-rerank")
     async def rerank(
@@ -50,33 +43,13 @@ class ColbertRerankerService:
     ) -> list[dict]:
         """Rerank documents by relevance to query.
 
-        Args:
-            query: Search query
-            documents: List of document texts
-            top_k: Number of top results to return
-
-        Returns:
-            List of dicts with 'index' and 'score' keys,
-            sorted by score descending. Compatible with bot's
-            existing rerank result handling.
+        Returns list of dicts with 'index' and 'score' keys,
+        sorted by score descending.
         """
         if not documents:
             return []
-
-        response = await self._client.post(
-            f"{self.base_url}/rerank",
-            json={
-                "query": query,
-                "documents": documents,
-                "top_k": top_k,
-                "max_length": self.MAX_LENGTH,
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        # Return in format expected by bot (index + score)
-        return [{"index": r["index"], "score": r["score"]} for r in data["results"]]
+        result = await self._client.rerank(query, documents, top_k)
+        return result.results
 
     async def close(self):
         """Close HTTP client."""
