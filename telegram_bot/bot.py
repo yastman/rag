@@ -192,6 +192,16 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
             value=float(result["checkpointer_overhead_proxy_ms"]),
         )
 
+    # --- Source attribution (#225) ---
+    sources_count = result.get("sources_count", 0)
+    lf.score_current_trace(
+        name="sources_shown",
+        value=1 if sources_count > 0 else 0,
+        data_type="BOOLEAN",
+    )
+    if sources_count > 0:
+        lf.score_current_trace(name="sources_count", value=float(sources_count))
+
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
     """Create unified session_id format: {type}-{hash}-{YYYYMMDD}.
@@ -672,6 +682,7 @@ class PropertyBot:
             query=message.text or "",
         )
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
+        state["show_sources"] = self._graph_config.show_sources
 
         with propagate_attributes(
             session_id=state["session_id"],
@@ -895,6 +906,7 @@ class PropertyBot:
         state["voice_duration_s"] = float(voice.duration)
         state["input_type"] = "voice"
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
+        state["show_sources"] = self._graph_config.show_sources
 
         with propagate_attributes(
             session_id=state["session_id"],
