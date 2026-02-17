@@ -6,6 +6,12 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+
+pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+pytestmark = pytest.mark.requires_extras
+
 from src.api.main import app, lifespan, query
 from src.api.schemas import QueryRequest
 
