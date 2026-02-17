@@ -105,6 +105,17 @@ strategy:
 # Each shard: --splits 4 --group ${{ matrix.group }} -n auto --dist loadscope
 ```
 
+### CI Dependency Profile
+
+Unit/integration/baseline CI jobs must install optional runtime dependencies used by imports in the test graph:
+
+```bash
+uv sync --frozen --extra voice --extra ingest --extra eval
+```
+
+Do not use `--all-extras` for this profile unless docs tooling is required.
+If new imports are added to the suite, update the preflight module list in `.github/workflows/ci.yml`.
+
 ### Updating `.test_durations`
 
 Regenerate after adding/removing tests or significant refactors:
