@@ -58,6 +58,23 @@ COLLECTION_BASE_NAMES = COLLECTIONS_TO_CHECK
 
 STREAMING_QUERY_COUNT = 5  # First N cold queries for streaming TTFT phase (deterministic)
 
+# All node observation names tracked by enrichment and aggregation.
+# Order mirrors the LangGraph pipeline: transcribe → classify → … → respond → summarize.
+TRACKED_NODE_NAMES = [
+    "transcribe",
+    "classify",
+    "cache_check",
+    "retrieve",
+    "grade",
+    "rerank",
+    "generate",
+    "rewrite",
+    "cache_store",
+    "respond",
+    "summarize",
+]
+_TRACKED_NODE_SET = frozenset(TRACKED_NODE_NAMES)
+
 GO_NO_GO_THRESHOLDS_PATH = (
     Path(__file__).resolve().parent.parent / "tests" / "baseline" / "thresholds.yaml"
 )
@@ -660,9 +677,12 @@ async def enrich_results_from_langfuse(
                     if level and str(level).upper().endswith("ERROR"):
                         observation_error_count += 1
                     obs_name = getattr(obs, "name", "") or ""
-                    if not obs_name.startswith("node-"):
+                    if obs_name.startswith("node-"):
+                        node_name = obs_name.removeprefix("node-").replace("-", "_")
+                    elif obs_name in _TRACKED_NODE_SET:
+                        node_name = obs_name
+                    else:
                         continue
-                    node_name = obs_name.replace("node-", "").replace("-", "_")
 
                     def _json_size(value: Any) -> int:
                         if value is None:
@@ -958,17 +978,7 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
         agg["results_count_mean"] = float(np.mean(counts)) if counts else 0.0
 
         # Per-node latency p50/p95 (prefer Langfuse spans, fallback to state latency_stages)
-        node_names = [
-            "classify",
-            "cache_check",
-            "retrieve",
-            "grade",
-            "rerank",
-            "generate",
-            "rewrite",
-            "cache_store",
-            "respond",
-        ]
+        node_names = TRACKED_NODE_NAMES
         node_latencies: dict[str, list[float]] = {n: [] for n in node_names}
         for r in phase_results:
             if r.node_spans_ms:
