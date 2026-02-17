@@ -37,9 +37,6 @@ def test_transcript_store_init():
     store = TranscriptStore(database_url="postgresql://test:test@localhost/test")
     assert store._database_url == "postgresql://test:test@localhost/test"
     assert store._pool is None
-
-
-@pytest.mark.asyncio
 async def test_create_call_uses_provided_call_id():
     from src.voice.transcript_store import TranscriptStore
 
