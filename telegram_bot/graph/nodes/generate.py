@@ -47,6 +47,11 @@ _HISTORY_INSTRUCTION = (
     "Учитывай историю диалога. Если пользователь ссылается на предыдущие "
     "сообщения — отвечай из контекста разговора, а не из документов."
 )
+_CITATION_INSTRUCTION = (
+    "Когда используешь информацию из контекста, ссылайся на источники как [1], [2] и т.д. "
+    "Номера соответствуют объектам в контексте: [Объект 1] = [1], [Объект 2] = [2].\n"
+    "НЕ добавляй список источников в конце ответа — он будет сформирован автоматически."
+)
 
 
 def _extract_sent_message_ref(sent_msg: Any) -> dict[str, int] | None:
@@ -307,6 +312,11 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         max_tokens = legacy_max_tokens
 
     system_prompt = _ensure_history_instruction(system_prompt)
+
+    # Citation instruction (#225) — only when sources are enabled
+    if getattr(config, "show_sources", True) and documents:
+        separator = "\n" if system_prompt.endswith("\n") else "\n\n"
+        system_prompt = f"{system_prompt}{separator}{_CITATION_INSTRUCTION}"
 
     # Build OpenAI-format messages
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
