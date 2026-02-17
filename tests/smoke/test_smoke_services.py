@@ -21,6 +21,7 @@ class TestSmokeServices:
     """Verify all services are alive and responding."""
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(not _is_port_open("localhost", 6333), reason="Qdrant not running (6333)")
     async def test_qdrant_health(self):
         """Qdrant responds to health check."""
         url = os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -29,6 +30,7 @@ class TestSmokeServices:
             assert response.status_code == 200
 
     @pytest.mark.asyncio
+    @pytest.mark.skipif(not _is_port_open("localhost", 6379), reason="Redis not running (6379)")
     async def test_redis_health(self):
         """Redis responds to PING."""
         url = os.getenv("REDIS_URL", "redis://localhost:6379")

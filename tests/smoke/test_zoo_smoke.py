@@ -147,6 +147,9 @@ class TestZooCache:
         """CacheLayerManager for testing."""
         from telegram_bot.integrations.cache import CacheLayerManager
 
+        if not _is_port_open("localhost", 6379):
+            pytest.skip("Redis not running (port 6379)")
+
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         password = os.getenv("REDIS_PASSWORD", "")
         if password and "@" not in redis_url:
@@ -180,6 +183,9 @@ class TestZooEndToEnd:
     async def cache_service(self):
         """CacheLayerManager for testing."""
         from telegram_bot.integrations.cache import CacheLayerManager
+
+        if not _is_port_open("localhost", 6379):
+            pytest.skip("Redis not running (port 6379)")
 
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
         password = os.getenv("REDIS_PASSWORD", "")
