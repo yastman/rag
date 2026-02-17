@@ -165,18 +165,100 @@ Messaging: `message` (to one) or `broadcast` (to all — use sparingly, costs sc
 
 Teammates start with lead's permission settings. Changeable individually after spawning, but not at spawn time.
 
+## Model Selection
+
+**Default: Opus 4.6** (`model: "opus"`) for all teammates. Sonnet/Haiku only for trivial read-only tasks.
+
+```python
+# Always specify model explicitly
+Task(name="reviewer", model="opus", team_name="my-team", ...)
+```
+
+## Git Worktrees (MANDATORY for parallel branch work)
+
+**Problem:** Multiple agents sharing one repo switch branches simultaneously → lost edits, false test failures, repeated rework.
+
+**Rule:** When 2+ agents work on **different branches** — each MUST use its own worktree.
+
+```bash
+# Before spawning teammates
+git worktree add /home/user/projects/rag-fresh-wt-pr280 claude/optimize-test-suite-RBhOe
+git worktree add /home/user/projects/rag-fresh-wt-pr251 feat/docker-cleanup
+
+# In teammate spawn prompt — specify working directory
+"Working directory: /home/user/projects/rag-fresh-wt-pr280"
+
+# Cleanup after merge
+git worktree remove /home/user/projects/rag-fresh-wt-pr280
+```
+
+| Scenario | Approach |
+|----------|----------|
+| All agents on same branch (e.g. review) | Normal — shared repo OK |
+| Agents on different branches | **Worktree per agent** |
+| Sequential PR fixes (one at a time) | Normal — switch branches between tasks |
+| Lead + workers on different PRs | Lead in main repo, workers in worktrees |
+
+## Teammate Skills Workflow
+
+**MANDATORY** — include in every teammate spawn prompt:
+
+```
+SKILLS (invoke in this order):
+1. /executing-plans — step-by-step execution
+2. /requesting-code-review — code review AFTER finishing work (before commit)
+   Invoke: Skill(skill="requesting-code-review")
+3. /verification-before-completion — final check before reporting done
+   Invoke: Skill(skill="verification-before-completion")
+
+MCP TOOLS:
+- Context7: resolve-library-id → query-docs for SDK documentation
+- Exa: web_search_exa, get_code_context_exa for fresh examples
+
+ISSUE TRACKING:
+- Found pre-existing bug? Create issue via Skill(skill="gh-issues")
+- Include "Found during PR #N review" in description
+```
+
+## Teammate Prompt Template
+
+```
+You are **{role}** on team "{team_name}".
+
+## YOUR TASK
+{task_description}
+
+## WORKING DIRECTORY
+{worktree_path or main repo path}
+Branch: {branch_name} (already checked out)
+
+## SAFETY RULES
+- Do NOT switch branches. Do NOT cd to other directories.
+- Do NOT use `git add -A` — only add files you actually changed
+- Do NOT merge PRs — report back when ready
+- BEFORE commit: `git diff --cached --stat` — verify ONLY your files
+
+## SKILLS (invoke in order)
+1. Skill(skill="requesting-code-review") — after finishing work
+2. Skill(skill="verification-before-completion") — before reporting done
+
+## MCP TOOLS
+- Context7: resolve-library-id → query-docs for SDK docs
+- Exa: web_search_exa for fresh solutions
+
+## WORKFLOW
+1. Claim task via TaskUpdate(taskId="{id}", status="in_progress")
+2. Do the work
+3. Run skills (review → verification)
+4. Send findings to lead via SendMessage
+5. Mark task completed via TaskUpdate
+```
+
 ## Best Practices
 
 ### Give Teammates Enough Context
 
-Include task-specific details in spawn prompt — teammates don't inherit conversation history:
-
-```
-Spawn a security reviewer teammate with the prompt: "Review the authentication module
-at src/auth/ for security vulnerabilities. Focus on token handling, session
-management, and input validation. The app uses JWT tokens stored in
-httpOnly cookies. Report any issues with severity ratings."
-```
+Include task-specific details in spawn prompt — teammates don't inherit conversation history. Use the template above.
 
 ### Size Tasks Appropriately
 
@@ -184,7 +266,7 @@ httpOnly cookies. Report any issues with severity ratings."
 - **Too large**: too long without check-ins, wasted effort risk.
 - **Just right**: self-contained deliverable (function, test file, review).
 
-5-6 tasks per teammate keeps everyone productive. Ask lead to split work into smaller pieces if needed.
+5-6 tasks per teammate keeps everyone productive.
 
 ### Wait for Teammates to Finish
 
@@ -202,7 +284,7 @@ New to agent teams? Start with read-only tasks: reviewing a PR, researching a li
 
 ### Avoid File Conflicts
 
-Two teammates editing same file = overwrites. Break work so each teammate owns different files.
+Two teammates editing same file = overwrites. Use worktrees for branch isolation, and break work so each teammate owns different files within a branch.
 
 ### Monitor and Steer
 
@@ -237,6 +319,10 @@ debate. Update the findings doc with whatever consensus emerges.
 | Lead shuts down early | Tell it to keep going, or use delegate mode |
 | Orphaned tmux sessions | `tmux ls` then `tmux kill-session -t <name>` |
 | Task stuck | Check if work done, update status manually or nudge teammate |
+| **"Could not determine pane count"** | Ghost pane from shutdown teammate. Fix: `tmux kill-pane -t {window}.{pane}` |
+| **Branch switching interference** | Agents share repo and switch branches. Fix: use git worktrees (see above) |
+| **Lost edits after teammate switch** | Same root cause — worktrees required for parallel branch work |
+| **Task tool fails after shutdown** | Ghost tmux panes block new spawns. Kill orphan panes first |
 
 ## Limitations
 
@@ -249,3 +335,6 @@ debate. Update the findings doc with whatever consensus emerges.
 - Permissions set at spawn (changeable individually after)
 - Split panes need tmux/iTerm2 (not VS Code terminal, Windows Terminal, Ghostty)
 - CLAUDE.md works normally — teammates read it from working directory
+- **Shared git repo** — agents switching branches break each other's work. Use worktrees.
+- **Ghost tmux panes** — after teammate shutdown, dead panes block new spawns. Kill manually.
+- **Task tool after shutdowns** — may fail with "Could not determine pane count". Kill ghost panes first.
