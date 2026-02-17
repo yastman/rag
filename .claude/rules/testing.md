@@ -84,11 +84,77 @@ uv run pytest tests/unit/test_validate_queries.py tests/unit/test_validate_aggre
 | `test_validate_queries.py` | 10 | Query sets, collection mapping, warmup/cache selection |
 | `test_validate_aggregates.py` | 8 | p50/p95, phase split, score_rate, node latencies |
 
+## CI Pipeline: Sharded Unit Tests (pytest-split)
+
+CI splits unit tests into **4 parallel shards** using `pytest-split` for ~4x faster feedback.
+
+### How it works
+
+1. `.test_durations` (committed) contains per-test timing data
+2. `pytest-split` uses durations to distribute tests evenly across shards
+3. Each shard runs with `pytest-xdist` (`-n auto`) for intra-shard parallelism
+4. On `main` branch, durations are re-measured and cached for future runs
+
+### CI matrix
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    group: [1, 2, 3, 4]
+# Each shard: --splits 4 --group ${{ matrix.group }} -n auto --dist loadscope
+```
+
+### CI Dependency Profile
+
+Unit/integration/baseline CI jobs must install optional runtime dependencies used by imports in the test graph:
+
+```bash
+uv sync --frozen --extra voice --extra ingest --extra eval
+```
+
+Do not use `--all-extras` for this profile unless docs tooling is required.
+If new imports are added to the suite, update the preflight module list in `.github/workflows/ci.yml`.
+
+### Updating `.test_durations`
+
+Regenerate after adding/removing tests or significant refactors:
+
+```bash
+uv run pytest tests/unit/ --store-durations --timeout=30 -m "not legacy_api" -q
+```
+
+This overwrites `.test_durations` with fresh timing data. Commit the updated file.
+
+On `main` branch, CI automatically re-measures and caches durations.
+
+### Running sharded tests locally
+
+```bash
+# Run a specific shard (e.g., shard 2 of 4)
+uv run pytest tests/unit/ --splits 4 --group 2 -n auto --dist loadscope --timeout=30 -m "not legacy_api"
+
+# Run all 4 shards sequentially (for debugging split balance)
+for g in 1 2 3 4; do
+  echo "=== Shard $g ==="
+  uv run pytest tests/unit/ --splits 4 --group $g -n auto --dist loadscope --timeout=30 -m "not legacy_api" -q
+done
+```
+
+### Integration tests in CI
+
+Graph path tests run as a separate CI job (no Docker, ~5s):
+
+```bash
+uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
+```
+
 ## Notes
 
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Integration tests require: `make docker-up`
-- CI runs unit tests with `-m "not legacy_api" --timeout=30` (see `.github/workflows/ci.yml`)
+- CI runs unit tests sharded across 4 matrix jobs (see `.github/workflows/ci.yml`)
+- `--dist loadscope` groups tests by module to avoid fixture teardown/setup overhead
 
 ## Test Dependencies
 
@@ -100,6 +166,7 @@ uv run pytest tests/unit/test_validate_queries.py tests/unit/test_validate_aggre
 | `pytest-httpx>=0.35.0` | HTTP request mocking |
 | `pytest-xdist>=3.8.0` | Parallel test execution (`-n auto`) |
 | `pytest-timeout>=2.3.0` | Per-test timeout (default 30s) |
+| `pytest-split>=0.11.0` | CI shard splitting by test duration |
 
 ### HTTP Mocking with pytest-httpx
 
