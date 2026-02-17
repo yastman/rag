@@ -54,11 +54,14 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 
-## LangGraph Pipeline (10 nodes)
+## LangGraph Pipeline (11 nodes)
 
 ```
-START → [voice_audio?] → transcribe → classify → ...
-      → [text]         → classify → ...
+START → [voice_audio?] → transcribe → guard → classify → ...
+      → [text]         → guard → classify → ...
+
+guard → [injection_detected] → respond (blocked message) → END
+      → [clean] → classify → ...
 
 START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
                  → [other] → cache_check → [HIT] → respond → END
@@ -73,6 +76,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 | Node | File | Injected Deps |
 |------|------|---------------|
+| guard | `graph/nodes/guard.py` | — (regex patterns, EN+RU, configurable via GUARD_MODE: hard/soft/log) |
 | transcribe | `graph/nodes/transcribe.py` | llm (AsyncOpenAI, Whisper API via LiteLLM), message (optional preview) |
 | classify | `graph/nodes/classify.py` | — (regex-based, no external deps) |
 | cache_check | `graph/nodes/cache.py` | cache, embeddings |
@@ -88,7 +92,8 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 | Function | From → To |
 |----------|-----------|
-| `route_start` | START → transcribe (voice_audio present) or classify (text) |
+| `route_start` | START → transcribe (voice_audio present) or guard (text) |
+| `route_guard` | guard → respond (injection_detected) or classify (clean) |
 | `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
 | `route_cache` | cache_check → respond (hit) or retrieve (miss) |
 | `route_grade` | grade → generate (relevant + confidence >= `skip_rerank_threshold`), rerank (relevant + low confidence), rewrite (count < `max_rewrite_attempts` AND `rewrite_effective`), generate (fallback) |
@@ -132,6 +137,8 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `rewrite_max_tokens` | `REWRITE_MAX_TOKENS` | `64` | Token budget for rewrite LLM call |
 | `rewrite_model` | `REWRITE_MODEL` | `gpt-4o-mini` | Model for rewrites |
 | `bge_m3_timeout` | `BGE_M3_TIMEOUT` | `120.0` | BGE-M3 API timeout (seconds) |
+| `guard_mode` | `GUARD_MODE` | `hard` | Content filter mode: hard (block), soft (flag+continue), log (log only) |
+| `content_filter_enabled` | `CONTENT_FILTER_ENABLED` | `true` | Enable/disable guard_node entirely |
 
 ## Service Dependencies (initialized in PropertyBot.__init__)
 
