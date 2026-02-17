@@ -14,6 +14,7 @@ pytestmark = pytest.mark.skipif(
 
 class TestUserBaseCacheIntegration:
     """Integration tests requiring running services."""
+
     async def test_russian_paraphrase_matching(self):
         """Should match Russian paraphrases with USER-base."""
         from telegram_bot.services.vectorizers import UserBaseVectorizer
