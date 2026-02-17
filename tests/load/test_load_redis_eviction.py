@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import redis.asyncio as redis
+from redis.exceptions import AuthenticationError
 
 
 REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
@@ -23,6 +24,24 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
+def _redis_url_candidates() -> list[str]:
+    """Return Redis URLs to try in order (auth first, then plain)."""
+    base_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    if "@" in base_url:
+        return [base_url]
+
+    urls: list[str] = []
+    for password in (os.getenv("REDIS_PASSWORD", ""), "dev_redis_pass"):
+        if password:
+            auth_url = base_url.replace("redis://", f"redis://:{password}@", 1)
+            if auth_url not in urls:
+                urls.append(auth_url)
+
+    if base_url not in urls:
+        urls.append(base_url)
+    return urls
+
+
 @pytest.mark.skipif(not os.getenv("REDIS_URL"), reason="REDIS_URL not set")
 class TestLoadRedisEviction:
     """Test Redis eviction behavior under load."""
@@ -31,12 +50,24 @@ class TestLoadRedisEviction:
     async def redis_client(self):
         if not _is_port_open("localhost", 6379):
             pytest.skip("Redis not running on localhost:6379")
-        client = redis.from_url(
-            os.getenv("REDIS_URL", "redis://localhost:6379"),
-            decode_responses=True,
-        )
-        yield client
-        await client.close()
+        last_error: Exception | None = None
+        for url in _redis_url_candidates():
+            client = redis.from_url(url, decode_responses=True)
+            try:
+                await client.ping()
+                yield client
+                await client.aclose()
+                return
+            except AuthenticationError as exc:
+                last_error = exc
+                await client.aclose()
+                continue
+            except Exception as exc:  # pragma: no cover - environment dependent
+                last_error = exc
+                await client.aclose()
+                continue
+
+        pytest.skip(f"Redis not reachable with current auth settings: {last_error}")
 
     @pytest.fixture
     def eviction_config(self):
