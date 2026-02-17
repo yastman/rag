@@ -68,6 +68,8 @@ class ContextualizeProvider(ABC):
         Returns:
             List of contextualized chunks with metadata
         """
+        _ = context_window
+        raise NotImplementedError
 
     @abstractmethod
     async def contextualize_single(
