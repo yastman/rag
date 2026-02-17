@@ -119,7 +119,7 @@ def process_document_contextual_kg(
     print_info(f"Document: {document_name}", 0)
     print_info(f"PDF Path: {pdf_path}", 0)
     print_info(f"Collection: {collection_name}", 0)
-    print_info(f"Max chunks: {max_chunks if max_chunks else 'ALL'}", 0)
+    print_info(f"Max chunks: {max_chunks or 'ALL'}", 0)
 
     start_time = time.time()
 
