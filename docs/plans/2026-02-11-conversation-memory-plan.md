@@ -2,11 +2,16 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add persistent conversation memory with semantic search — store Q&A history in Qdrant, replace MemorySaver with PostgresSaver, enable bot auto-recall and manager search.
+> **2026-02-17 Alignment Note (#243):**
+> PostgresSaver tasks (1-2) were NOT implemented — Redis checkpointer remains the thread state backend.
+> Qdrant `conversation_history` (tasks 3+) was implemented in #239. History agent integrated in #240.
+> This plan is partially superseded. See actual implementation in `telegram_bot/services/history_service.py`.
 
-**Architecture:** PostgresSaver for thread persistence (replaces MemorySaver), new Qdrant collection `conversation_history` for Q&A pairs with hybrid search (BGE-M3 dense+sparse), two new graph nodes (history_recall + history_store). LangMem for background fact extraction deferred to Phase 2.
+**Goal:** Add persistent conversation memory with semantic search — store Q&A history in Qdrant ~~, replace MemorySaver with PostgresSaver,~~ enable bot auto-recall and manager search.
 
-**Tech Stack:** langgraph-checkpoint-postgres, psycopg[binary,pool], qdrant-client (existing), BGE-M3 (existing)
+**Architecture:** ~~PostgresSaver for thread persistence (replaces MemorySaver),~~ Redis checkpointer for thread state (existing), new Qdrant collection `conversation_history` for Q&A pairs with dense search (BGE-M3), `/history` command + supervisor `history_search` tool. LangMem for background fact extraction deferred to Phase 2.
+
+**Tech Stack:** ~~langgraph-checkpoint-postgres, psycopg[binary,pool],~~ qdrant-client (existing), BGE-M3 (existing)
 
 **Design Doc:** `docs/plans/2026-02-11-conversation-memory-design.md`
 
