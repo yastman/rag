@@ -652,7 +652,7 @@ services:
           memory: 512M
 
   livekit-server:
-    image: livekit/livekit-server:v1.8@sha256:621fd87bd64a0c83e1f2418ee0323eb920d00acdd73e5f79b303c64f6cc532af
+    image: livekit/livekit-server:v1.9@sha256:289262ffae8b827f45186331aa315d08ed275eb30f9b0add337ec57948e44ca1
     container_name: dev-livekit
     profiles: ["voice", "full"]
     restart: unless-stopped
