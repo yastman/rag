@@ -382,6 +382,11 @@ markers = [
     "smoke: Smoke tests (requires running services)",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
 ]
+filterwarnings = [
+    ***REMOVED*** trustcall 0.0.39 imports Send from deprecated langgraph.constants;
+    ***REMOVED*** no upstream fix available yet (tracked in ***REMOVED***306)
+    "ignore:Importing Send from langgraph:DeprecationWarning",
+]
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** COVERAGE CONFIGURATION

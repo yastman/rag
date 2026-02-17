@@ -855,6 +855,7 @@ class TestQdrantServiceClose:
             mock_client.close.assert_called_once()
 
 
+@pytest.mark.filterwarnings("ignore:Api key is used with an insecure connection:UserWarning")
 class TestQdrantServiceInit:
     """Tests for initialization."""
 
