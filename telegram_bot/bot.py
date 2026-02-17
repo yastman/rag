@@ -702,6 +702,7 @@ class PropertyBot:
                 llm=self._llm,
                 message=message,
                 checkpointer=self._checkpointer,
+                content_filter_enabled=self.config.content_filter_enabled,
             )
 
             invoke_config = {
@@ -929,6 +930,7 @@ class PropertyBot:
                 show_transcription=self.config.show_transcription,
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
+                content_filter_enabled=self.config.content_filter_enabled,
             )
 
             invoke_config = {
