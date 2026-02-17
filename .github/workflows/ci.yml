@@ -61,10 +61,42 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra voice --extra ingest --extra eval
 
-      - name: Cache test durations
-        uses: actions/cache@v4
+      - name: Preflight imports (unit profile)
+        run: |
+          uv run python - <<'PY'
+          import importlib
+          import sys
+
+          required_modules = [
+              "fastapi",
+              "pydantic_settings",
+              "pymupdf",
+              "mlflow",
+              "ragas",
+              "fastembed",
+              "cachetools",
+          ]
+
+          failed = []
+          for module_name in required_modules:
+              try:
+                  importlib.import_module(module_name)
+              except Exception as exc:
+                  failed.append((module_name, exc))
+
+          if failed:
+              print("CI dependency preflight failed:")
+              for module_name, exc in failed:
+                  print(f" - {module_name}: {exc!r}")
+              sys.exit(1)
+
+          print("CI dependency preflight passed.")
+          PY
+
+      - name: Restore test durations
+        uses: actions/cache/restore@v4
         with:
           path: .test_durations
           key: test-durations-${{ github.sha }}
@@ -81,8 +113,8 @@ jobs:
             --durations=20 --durations-min=1.0 \
             -q
 
-      - name: Store durations (main only)
-        if: github.ref == 'refs/heads/main'
+      - name: Store durations (main only, shard 1)
+        if: github.ref == 'refs/heads/main' && matrix.group == 1
         run: |
           uv run pytest tests/unit/ \
             --store-durations \
@@ -90,8 +122,8 @@ jobs:
             -m "not legacy_api" \
             -q || true
 
-      - name: Upload durations
-        if: always() && github.ref == 'refs/heads/main'
+      - name: Upload durations (main only, shard 1)
+        if: always() && github.ref == 'refs/heads/main' && matrix.group == 1
         uses: actions/cache/save@v4
         with:
           path: .test_durations
@@ -116,10 +148,14 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra voice --extra ingest --extra eval
 
       - name: Run integration tests
-        run: uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
+        run: |
+          uv run pytest \
+            tests/integration/test_graph_paths.py \
+            tests/integration/test_bot_hybrid_search.py \
+            -v --timeout=30
 
   # ---------------------------------------------------------------------------
   # Baseline regression — main only (keeps PR feedback loop fast)
@@ -147,7 +183,7 @@ jobs:
 
       - name: Install dependencies
         if: env.LANGFUSE_AVAILABLE == 'true'
-        run: uv sync --frozen
+        run: uv sync --frozen --extra voice --extra ingest --extra eval
 
       - name: Run baseline comparison
         if: env.LANGFUSE_AVAILABLE == 'true'
