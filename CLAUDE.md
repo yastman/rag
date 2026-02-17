@@ -22,7 +22,7 @@ make validate-traces-fast  # Trace validation (cold+cache, Langfuse report)
 make monitoring-up         # Start alerting stack
 make ingest-unified        # Unified ingestion (CocoIndex v3.2.1); also: -watch, -status
 make repo-cleanup          # Repo hygiene: branches, worktrees, stashes (dry-run)
-make repo-cleanup-force    # Repo hygiene: interactive deletion mode
+make export-dataset        # Export low-scoring Langfuse traces to evaluation dataset
 # VPS CLI: python -m src.ingestion.unified.cli preflight|bootstrap|run|status|reprocess
 ```
 
@@ -40,7 +40,7 @@ make repo-cleanup-force    # Repo hygiene: interactive deletion mode
 
 ```
 Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Bot:        Query → LangGraph StateGraph (10 nodes) → classify → cache_check
+Bot:        Query → LangGraph StateGraph (11 nodes) → guard → classify → cache_check
             → retrieve (RRF, hybrid embed 1-call) → grade → rerank (ColBERT) → generate → respond
 Supervisor: Query → Supervisor LLM → tool choice (rag_search | history_search | direct_response)
             → tool executes (wraps existing RAG graph / HistoryService) → respond
@@ -51,9 +51,11 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 | Module | Purpose |
 |--------|---------|
 | `telegram_bot/bot.py` | PropertyBot (~500 LOC, LangGraph orchestrator + supervisor + score writing) |
-| `telegram_bot/graph/` | LangGraph 10-node RAG pipeline (incl. transcribe for voice) |
-| `telegram_bot/agents/` | Multi-agent supervisor architecture (#240): tools, rag_agent, history_agent, supervisor |
+| `telegram_bot/graph/` | LangGraph 11-node RAG pipeline (guard, transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, cache_store, respond) |
+| `telegram_bot/graph/nodes/guard.py` | Content filtering: toxicity, prompt injection, topic guardrails (regex, configurable via GUARD_MODE) |
+| `telegram_bot/agents/` | Multi-agent supervisor architecture: tools, rag_agent, history_agent, supervisor |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
+| `telegram_bot/services/bge_m3_client.py` | Unified BGE-M3 SDK (BGEM3Client async + BGEM3SyncClient) — replaces separate wrappers |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
 | `telegram_bot/observability.py` | Langfuse init, @observe decorator, PII masking |
 | `src/api/` | RAG API (FastAPI wrapper around LangGraph, POST /query) |
@@ -62,6 +64,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 | `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
 | `telegram_bot/evaluation/` | LLM-as-a-Judge (RAG Triad: faithfulness, relevance, context) |
 | `scripts/validate_*.py` | Trace validation runner + query goldset |
+| `scripts/export_traces_to_dataset.py` | Export low-scoring Langfuse traces to versioned evaluation datasets |
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
@@ -73,7 +76,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 - **Linter/Formatter:** Ruff | **Types:** MyPy (strict in CI) | **Line length:** 100 | **Docstrings:** Google style
 - **Pre-commit:** ruff-check (--fix) → ruff-format → trailing-whitespace → check-yaml/toml/json
-- **CI:** lint (`uv run` ruff + mypy) → test (unit, `-m "not legacy_api"`) → baseline-compare (PR only)
+- **CI:** lint (ruff + mypy) → test-fast (PR gate, 4 shards) → test-nightly (chaos/load/E2E) → baseline-compare (PR only)
 - **Commits:** `feat(scope): message` | `fix(scope): message` | `docs(scope): message`
 
 ## Dependency Management
@@ -88,13 +91,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 ## Task Management
 
-**Active:** `TODO.md` | **Backlog:** `gh issue list --label "next"`
-
-**Claude Code Tasks:** Для shared task list между терминалами:
-```bash
-CLAUDE_CODE_TASK_LIST_ID=my-project claude
-```
-См. `.claude/rules/shared-tasks.md`
+**Active:** `TODO.md` | **Backlog:** `gh issue list --label "next"` | **Shared tasks:** `CLAUDE_CODE_TASK_LIST_ID=X claude` → `.claude/rules/shared-tasks.md`
 
 ## Environment
 
@@ -121,7 +118,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
 | `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`, `USE_SUPERVISOR=false`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`, `USE_SUPERVISOR=false`, `GUARD_MODE=hard|soft|log`, `CONTENT_FILTER_ENABLED=true|false`
 
 ## Deployment
 
@@ -163,22 +160,7 @@ make k3s-status                     # Check pods
 
 ## Repository Hygiene
 
-Weekly checklist (run after merging PRs):
-
-```bash
-make repo-cleanup          # Dry-run: report stale branches, worktrees, stashes
-make repo-cleanup-force    # Interactive: delete with confirmation
-make git-hygiene           # Python report: merged branches, transient files
-```
-
-| Check | Tool | Frequency |
-|-------|------|-----------|
-| Prune remote refs | `git fetch --prune` | Weekly |
-| Delete merged remote branches | `make repo-cleanup-force` (Step 2) | Weekly |
-| Delete merged local branches | `make repo-cleanup-force` (Step 3) | Weekly |
-| Remove stale worktrees | `make repo-cleanup-force` (Step 4) | After agent sessions |
-| Drop stale stashes | `make repo-cleanup-force` (Step 5) | Monthly |
-| Transient files | `make git-hygiene` | Weekly |
+`make repo-cleanup` (dry-run) | `make repo-cleanup-force` (interactive) — branches, worktrees, stashes. Details: `.claude/rules/git-workflow.md`
 
 ## Skills Workflow
 
@@ -189,17 +171,6 @@ make git-hygiene           # Python report: merged branches, transient files
 ```
 
 **Details:** `.claude/rules/skills.md`
-## Long-Running Commands
-
-For docker build, large tests (> 30 sec) — use tmux + logs:
-
-```bash
-mkdir -p logs
-tmux new-window -n "W-BUILD" -c /home/user/projects/rag-fresh
-tmux send-keys -t "W-BUILD" "docker compose build ingestion 2>&1 | tee logs/build.log; echo '[COMPLETE]'" Enter
-```
-
-Check: `tail -f logs/build.log` | Done: `grep '\[COMPLETE\]' logs/build.log`
 
 ## Modular Docs
 
