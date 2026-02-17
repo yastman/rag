@@ -60,10 +60,16 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Install dependencies
-        run: uv sync --frozen --extra voice --extra ingest --extra eval
+      - name: Install dependencies (core for PRs, full for main)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            uv sync --frozen
+          else
+            uv sync --frozen --extra voice --extra ingest --extra eval
+          fi
 
-      - name: Preflight imports (unit profile)
+      - name: Preflight imports (full tier only)
+        if: github.event_name != 'pull_request'
         run: |
           uv run python - <<'PY'
           import importlib
@@ -103,13 +109,22 @@ jobs:
           restore-keys: |
             test-durations-
 
+      - name: Set marker expression
+        id: markers
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "expr=not legacy_api and not requires_extras" >> "$GITHUB_OUTPUT"
+          else
+            echo "expr=not legacy_api" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run unit tests (shard ${{ matrix.group }}/4)
         run: |
           uv run pytest tests/unit/ \
             --splits 4 --group ${{ matrix.group }} \
             -n auto --dist loadscope \
             --timeout=30 \
-            -m "not legacy_api" \
+            -m "${{ steps.markers.outputs.expr }}" \
             --durations=20 --durations-min=1.0 \
             -q
 

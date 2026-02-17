@@ -15,6 +15,8 @@ import numpy as np
 import pytest
 
 
+pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+pytestmark = pytest.mark.requires_extras
 _USERBASE_SERVICE_DIR = str(Path(__file__).resolve().parents[2] / "services" / "user-base")
 
 
