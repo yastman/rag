@@ -898,6 +898,8 @@ class PropertyBot:
         value, trace_id = parsed
         user_id = callback.from_user.id if callback.from_user else 0
 
+        await callback.answer("Спасибо за отзыв!")
+
         # Write score to Langfuse (direct client, not context-dependent)
         try:
             lf_client = get_langfuse_client()
@@ -910,7 +912,6 @@ class PropertyBot:
                     comment=f"user_id:{user_id}",
                     score_id=f"{trace_id}-user_feedback",
                 )
-                lf_client.flush()
         except Exception:
             logger.warning("Failed to write feedback score to Langfuse", exc_info=True)
 
@@ -922,8 +923,6 @@ class PropertyBot:
                 await msg.edit_reply_markup(reply_markup=build_feedback_confirmation(liked=liked))
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
-
-        await callback.answer("Спасибо за отзыв!")
 
     async def start(self):
         """Start bot polling."""
