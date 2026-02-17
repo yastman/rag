@@ -13,6 +13,8 @@ Tests the regex-based parsing of Ukrainian legal documents including:
 - Graph edges for article navigation
 """
 
+import pytest
+
 from src.utils.structure_parser import (
     ROMAN_NUMERALS,
     UKRAINIAN_NUMBERS,
@@ -28,44 +30,28 @@ from src.utils.structure_parser import (
 class TestRomanToInt:
     """Tests for Roman numeral to integer conversion."""
 
-    def test_basic_roman_numerals(self):
-        """Test basic Roman numerals I-X."""
-        assert roman_to_int("I") == 1
-        assert roman_to_int("II") == 2
-        assert roman_to_int("III") == 3
-        assert roman_to_int("IV") == 4
-        assert roman_to_int("V") == 5
-        assert roman_to_int("VI") == 6
-        assert roman_to_int("VII") == 7
-        assert roman_to_int("VIII") == 8
-        assert roman_to_int("IX") == 9
-        assert roman_to_int("X") == 10
+    @pytest.mark.parametrize(
+        ("numeral", "expected"),
+        [
+            ("I", 1), ("II", 2), ("III", 3), ("IV", 4), ("V", 5),
+            ("VI", 6), ("VII", 7), ("VIII", 8), ("IX", 9), ("X", 10),
+            ("XI", 11), ("XII", 12), ("XV", 15), ("XVIII", 18), ("XIX", 19), ("XX", 20),
+            # Case insensitive
+            ("i", 1), ("iv", 4), ("x", 10), ("xv", 15),
+        ],
+    )
+    def test_valid_roman_numerals(self, numeral, expected):
+        assert roman_to_int(numeral) == expected
 
-    def test_extended_roman_numerals(self):
-        """Test extended Roman numerals XI-XX."""
-        assert roman_to_int("XI") == 11
-        assert roman_to_int("XII") == 12
-        assert roman_to_int("XV") == 15
-        assert roman_to_int("XVIII") == 18
-        assert roman_to_int("XIX") == 19
-        assert roman_to_int("XX") == 20
-
-    def test_case_insensitivity(self):
-        """Test that conversion is case-insensitive."""
-        assert roman_to_int("i") == 1
-        assert roman_to_int("iv") == 4
-        assert roman_to_int("x") == 10
-        assert roman_to_int("xv") == 15
-
-    def test_invalid_roman_numeral(self):
-        """Test that invalid Roman numerals return None."""
-        assert roman_to_int("XXI") is None  # Beyond defined range
-        assert roman_to_int("INVALID") is None
-        assert roman_to_int("") is None
-        assert roman_to_int("123") is None
+    @pytest.mark.parametrize(
+        "numeral",
+        [pytest.param("XXI", id="beyond_range"), pytest.param("INVALID", id="invalid"),
+         pytest.param("", id="empty"), pytest.param("123", id="digits")],
+    )
+    def test_invalid_roman_numerals(self, numeral):
+        assert roman_to_int(numeral) is None
 
     def test_roman_numerals_mapping_complete(self):
-        """Test that ROMAN_NUMERALS mapping contains expected values."""
         assert len(ROMAN_NUMERALS) == 20
         assert ROMAN_NUMERALS["I"] == 1
         assert ROMAN_NUMERALS["XX"] == 20
@@ -74,47 +60,30 @@ class TestRomanToInt:
 class TestUkrainianNumberToInt:
     """Tests for Ukrainian number word to integer conversion."""
 
-    def test_basic_feminine_forms(self):
-        """Test feminine forms of Ukrainian numbers (used with 'Книга')."""
-        assert ukrainian_number_to_int("перша") == 1
-        assert ukrainian_number_to_int("друга") == 2
-        assert ukrainian_number_to_int("третя") == 3
-        assert ukrainian_number_to_int("четверта") == 4
-        assert ukrainian_number_to_int("п'ята") == 5
-        assert ukrainian_number_to_int("шоста") == 6
-        assert ukrainian_number_to_int("сьома") == 7
-        assert ukrainian_number_to_int("восьма") == 8
-        assert ukrainian_number_to_int("дев'ята") == 9
-        assert ukrainian_number_to_int("десята") == 10
+    @pytest.mark.parametrize(
+        ("word", "expected"),
+        [
+            # Feminine forms (used with 'Книга')
+            ("перша", 1), ("друга", 2), ("третя", 3), ("четверта", 4), ("п'ята", 5),
+            ("шоста", 6), ("сьома", 7), ("восьма", 8), ("дев'ята", 9), ("десята", 10),
+            # Masculine forms
+            ("перший", 1), ("другий", 2), ("третій", 3), ("четвертий", 4), ("п'ятий", 5),
+            ("шостий", 6), ("сьомий", 7), ("восьмий", 8), ("дев'ятий", 9), ("десятий", 10),
+            # Case insensitive
+            ("ПЕРША", 1), ("Друга", 2), ("тРеТя", 3),
+        ],
+    )
+    def test_valid_ukrainian_numbers(self, word, expected):
+        assert ukrainian_number_to_int(word) == expected
 
-    def test_basic_masculine_forms(self):
-        """Test masculine forms of Ukrainian numbers."""
-        assert ukrainian_number_to_int("перший") == 1
-        assert ukrainian_number_to_int("другий") == 2
-        assert ukrainian_number_to_int("третій") == 3
-        assert ukrainian_number_to_int("четвертий") == 4
-        assert ukrainian_number_to_int("п'ятий") == 5
-        assert ukrainian_number_to_int("шостий") == 6
-        assert ukrainian_number_to_int("сьомий") == 7
-        assert ukrainian_number_to_int("восьмий") == 8
-        assert ukrainian_number_to_int("дев'ятий") == 9
-        assert ukrainian_number_to_int("десятий") == 10
-
-    def test_case_insensitivity(self):
-        """Test that conversion is case-insensitive."""
-        assert ukrainian_number_to_int("ПЕРША") == 1
-        assert ukrainian_number_to_int("Друга") == 2
-        assert ukrainian_number_to_int("тРеТя") == 3
-
-    def test_invalid_words(self):
-        """Test that invalid words return None."""
-        assert ukrainian_number_to_int("invalid") is None
-        assert ukrainian_number_to_int("") is None
-        assert ukrainian_number_to_int("одинадцята") is None  # 11 not in mapping
-        assert ukrainian_number_to_int("123") is None
+    @pytest.mark.parametrize(
+        "word",
+        ["invalid", "", "одинадцята", "123"],
+    )
+    def test_invalid_words(self, word):
+        assert ukrainian_number_to_int(word) is None
 
     def test_ukrainian_numbers_mapping_complete(self):
-        """Test that UKRAINIAN_NUMBERS mapping contains expected values."""
         assert len(UKRAINIAN_NUMBERS) == 20  # 10 feminine + 10 masculine
         assert UKRAINIAN_NUMBERS["перша"] == 1
         assert UKRAINIAN_NUMBERS["десятий"] == 10
@@ -124,28 +93,16 @@ class TestExtractRelatedArticles:
     """Tests for extracting article references from text."""
 
     def test_extract_single_reference(self):
-        """Test extracting a single article reference."""
-        text = "відповідно до статті 12"
-        result = extract_related_articles(text)
+        result = extract_related_articles("відповідно до статті 12")
         assert 12 in result
 
     def test_extract_multiple_references(self):
-        """Test extracting multiple article references."""
-        text = "згідно зі статті 25 та статті 30"
-        result = extract_related_articles(text)
+        result = extract_related_articles("згідно зі статті 25 та статті 30")
         assert 25 in result
         assert 30 in result
 
     def test_extract_various_forms(self):
-        """Test extraction of various Ukrainian word forms.
-
-        Note: The current regex pattern `статт[іяює]` matches single characters
-        after 'статт', so it captures:
-        - стаття (nominative)
-        - статті (genitive/locative)
-        - статтю (accusative)
-        But NOT 'статтею' (instrumental) which has two chars after 'статт'.
-        """
+        """Test extraction of various Ukrainian word forms."""
         text = """
         стаття 1 визначає загальні положення
         статті 2 стосується конкретних випадків
@@ -156,39 +113,24 @@ class TestExtractRelatedArticles:
         assert sorted(result) == [1, 2, 3, 4]
 
     def test_instrumental_case_limitation(self):
-        """Test that 'статтею' (instrumental case) is NOT matched.
-
-        This documents a known limitation in the current regex pattern.
-        The pattern `статт[іяює]` only matches single characters after 'статт',
-        but 'статтею' has two characters ('е' + 'ю').
-        """
-        text = "статтею 99 передбачено"
-        result = extract_related_articles(text)
-        # This is a known limitation - instrumental case is not matched
+        """Known limitation: 'статтею' (instrumental) is NOT matched."""
+        result = extract_related_articles("статтею 99 передбачено")
         assert 99 not in result
 
     def test_no_duplicates(self):
-        """Test that duplicate references are not included."""
-        text = "стаття 10 та ще раз стаття 10 і знову статті 10"
-        result = extract_related_articles(text)
+        result = extract_related_articles("стаття 10 та ще раз стаття 10 і знову статті 10")
         assert result.count(10) == 1
 
     def test_sorted_results(self):
-        """Test that results are sorted."""
-        text = "статті 50, статті 10, статті 30"
-        result = extract_related_articles(text)
+        result = extract_related_articles("статті 50, статті 10, статті 30")
         assert result == sorted(result)
 
     def test_no_references(self):
-        """Test text without article references."""
-        text = "Цей текст не містить посилань на статті."
-        result = extract_related_articles(text)
+        result = extract_related_articles("Цей текст не містить посилань на статті.")
         assert result == []
 
     def test_case_insensitivity(self):
-        """Test that extraction is case-insensitive."""
-        text = "СТАТТЯ 15 та Статті 20"
-        result = extract_related_articles(text)
+        result = extract_related_articles("СТАТТЯ 15 та Статті 20")
         assert 15 in result
         assert 20 in result
 
@@ -197,57 +139,60 @@ class TestParseLegalStructure:
     """Tests for the main legal structure parsing function."""
 
     def test_parse_article_standard_format(self):
-        """Test parsing article in standard format."""
-        text = "Стаття 25. Цивільна правоздатність фізичної особи"
-        metadata = parse_legal_structure(text)
+        metadata = parse_legal_structure("Стаття 25. Цивільна правоздатність фізичної особи")
         assert metadata["article_number"] == 25
         assert metadata["article_title"] == "Цивільна правоздатність фізичної особи"
 
     def test_parse_article_multiline_title(self):
-        """Test parsing article with title that might have extra whitespace."""
-        text = "Стаття 13.   Межі здійснення   цивільних прав"
-        metadata = parse_legal_structure(text)
+        metadata = parse_legal_structure("Стаття 13.   Межі здійснення   цивільних прав")
         assert metadata["article_number"] == 13
-        # Whitespace should be normalized
         assert "  " not in metadata["article_title"]
 
     def test_parse_chapter(self):
-        """Test parsing chapter (Глава)."""
-        text = "Глава 2. Здійснення цивільних прав та виконання обов'язків"
-        metadata = parse_legal_structure(text)
+        metadata = parse_legal_structure(
+            "Глава 2. Здійснення цивільних прав та виконання обов'язків"
+        )
         assert metadata["chapter_number"] == 2
         assert "Здійснення цивільних прав" in metadata["chapter"]
 
-    def test_parse_section_roman_numerals(self):
-        """Test parsing section (Розділ) with Roman numerals."""
-        text = "Розділ I. Загальні положення"
+    @pytest.mark.parametrize(
+        ("text", "expected_number", "expected_title"),
+        [
+            pytest.param("Розділ I. Загальні положення", 1, "Загальні положення", id="I"),
+            pytest.param("Розділ II. Особи", 2, "Особи", id="II"),
+            pytest.param("Розділ IV. Речі. Майно", 4, "Речі. Майно", id="IV"),
+            pytest.param("Розділ IX. Зобов'язання", 9, "Зобов'язання", id="IX"),
+            pytest.param("Розділ XV. Особливі положення", 15, "Особливі положення", id="XV"),
+            pytest.param("Розділ XIX. Прикінцеві положення", 19, "Прикінцеві положення", id="XIX"),
+        ],
+    )
+    def test_parse_section_roman_numerals(self, text, expected_number, expected_title):
         metadata = parse_legal_structure(text)
-        assert metadata["section_number"] == 1
-        assert metadata["section"] == "Загальні положення"
+        assert metadata["section_number"] == expected_number
+        assert metadata["section"] == expected_title
 
-    def test_parse_section_higher_roman(self):
-        """Test parsing section with higher Roman numerals."""
-        text = "Розділ XV. Особливі положення"
+    @pytest.mark.parametrize(
+        ("text", "expected_number", "expected_title"),
+        [
+            pytest.param("Книга перша. Загальні положення", 1, "Загальні положення", id="first"),
+            pytest.param("Книга друга. Особлива частина", 2, "Особлива частина", id="second"),
+            pytest.param("Книга третя. Авторське право", 3, "Авторське право", id="third"),
+            pytest.param(
+                "Книга четверта. Право інтелектуальної власності",
+                4,
+                "Право інтелектуальної власності",
+                id="fourth",
+            ),
+            pytest.param("Книга п'ята. Зобов'язальне право", 5, "Зобов'язальне право", id="fifth"),
+            pytest.param("Книга шоста. Спадкове право", 6, "Спадкове право", id="sixth"),
+        ],
+    )
+    def test_parse_book(self, text, expected_number, expected_title):
         metadata = parse_legal_structure(text)
-        assert metadata["section_number"] == 15
-        assert metadata["section"] == "Особливі положення"
-
-    def test_parse_book_feminine_form(self):
-        """Test parsing book (Книга) with feminine number word."""
-        text = "Книга перша. Загальні положення"
-        metadata = parse_legal_structure(text)
-        assert metadata["book_number"] == 1
-        assert metadata["book"] == "Загальні положення"
-
-    def test_parse_book_second(self):
-        """Test parsing second book."""
-        text = "Книга друга. Особлива частина"
-        metadata = parse_legal_structure(text)
-        assert metadata["book_number"] == 2
-        assert metadata["book"] == "Особлива частина"
+        assert metadata["book_number"] == expected_number
+        assert metadata["book"] == expected_title
 
     def test_parse_full_structure(self):
-        """Test parsing document with full structure."""
         text = """Книга перша. Загальні положення
 
 Розділ I. Загальні положення
@@ -269,7 +214,6 @@ class TestParseLegalStructure:
         assert "Межі здійснення цивільних прав" in metadata["article_title"]
 
     def test_parse_with_related_articles(self):
-        """Test that related articles are extracted."""
         text = """Стаття 13. Межі здійснення цивільних прав
 
 При здійсненні своїх прав особа зобов'язана утримуватися від дій,
@@ -280,7 +224,6 @@ class TestParseLegalStructure:
         assert 25 in metadata["related_articles"]
 
     def test_parse_empty_text(self):
-        """Test parsing empty text."""
         metadata = parse_legal_structure("")
         assert metadata["book"] is None
         assert metadata["section"] is None
@@ -290,16 +233,13 @@ class TestParseLegalStructure:
         assert metadata["related_articles"] == []
 
     def test_parse_text_without_structure(self):
-        """Test parsing text without legal structure."""
-        text = "Це звичайний текст без структури документа."
-        metadata = parse_legal_structure(text)
+        metadata = parse_legal_structure("Це звичайний текст без структури документа.")
         assert metadata["book"] is None
         assert metadata["section"] is None
         assert metadata["chapter"] is None
         assert metadata["article_number"] is None
 
     def test_parse_article_only(self):
-        """Test parsing text with only article."""
         text = """Стаття 25. Цивільна правоздатність фізичної особи
 
 1. Здатність мати цивільні права та обов'язки мають усі фізичні особи."""
@@ -311,21 +251,11 @@ class TestParseLegalStructure:
         assert metadata["chapter"] is None
 
     def test_metadata_structure(self):
-        """Test that returned metadata has all expected keys."""
-        text = "Some text"
-        metadata = parse_legal_structure(text)
-        expected_keys = [
-            "book",
-            "book_number",
-            "section",
-            "section_number",
-            "chapter",
-            "chapter_number",
-            "article_number",
-            "article_title",
-            "related_articles",
-        ]
-        for key in expected_keys:
+        metadata = parse_legal_structure("Some text")
+        for key in [
+            "book", "book_number", "section", "section_number",
+            "chapter", "chapter_number", "article_number", "article_title", "related_articles",
+        ]:
             assert key in metadata
 
 
@@ -333,16 +263,11 @@ class TestExtractContextualPrefix:
     """Tests for contextual prefix generation."""
 
     def test_prefix_with_all_metadata(self):
-        """Test prefix generation with full metadata."""
         metadata = {
-            "book": "Загальні положення",
-            "book_number": 1,
-            "section": "Загальні положення",
-            "section_number": 1,
-            "chapter": "Здійснення цивільних прав",
-            "chapter_number": 2,
-            "article_number": 13,
-            "article_title": "Межі здійснення цивільних прав",
+            "book": "Загальні положення", "book_number": 1,
+            "section": "Загальні положення", "section_number": 1,
+            "chapter": "Здійснення цивільних прав", "chapter_number": 2,
+            "article_number": 13, "article_title": "Межі здійснення цивільних прав",
         }
         prefix = extract_contextual_prefix(metadata)
         assert "Документ: Цивільний кодекс України" in prefix
@@ -352,31 +277,21 @@ class TestExtractContextualPrefix:
         assert "Стаття 13: Межі здійснення цивільних прав" in prefix
 
     def test_prefix_with_custom_document_name(self):
-        """Test prefix with custom document name."""
         metadata = {
-            "article_number": 10,
-            "article_title": "Тестова стаття",
-            "book": None,
-            "book_number": None,
-            "section": None,
-            "section_number": None,
-            "chapter": None,
-            "chapter_number": None,
+            "article_number": 10, "article_title": "Тестова стаття",
+            "book": None, "book_number": None,
+            "section": None, "section_number": None,
+            "chapter": None, "chapter_number": None,
         }
         prefix = extract_contextual_prefix(metadata, "Кримінальний кодекс України")
         assert "Документ: Кримінальний кодекс України" in prefix
 
     def test_prefix_with_article_only(self):
-        """Test prefix with only article information."""
         metadata = {
-            "book": None,
-            "book_number": None,
-            "section": None,
-            "section_number": None,
-            "chapter": None,
-            "chapter_number": None,
-            "article_number": 25,
-            "article_title": "Цивільна правоздатність",
+            "book": None, "book_number": None,
+            "section": None, "section_number": None,
+            "chapter": None, "chapter_number": None,
+            "article_number": 25, "article_title": "Цивільна правоздатність",
         }
         prefix = extract_contextual_prefix(metadata)
         assert "Документ:" in prefix
@@ -386,79 +301,52 @@ class TestExtractContextualPrefix:
         assert "Глава" not in prefix
 
     def test_prefix_with_article_no_title(self):
-        """Test prefix with article number but no title."""
         metadata = {
-            "book": None,
-            "book_number": None,
-            "section": None,
-            "section_number": None,
-            "chapter": None,
-            "chapter_number": None,
-            "article_number": 100,
-            "article_title": None,
+            "book": None, "book_number": None,
+            "section": None, "section_number": None,
+            "chapter": None, "chapter_number": None,
+            "article_number": 100, "article_title": None,
         }
         prefix = extract_contextual_prefix(metadata)
         assert "Стаття 100" in prefix
-        # Should not have colon if no title
         lines = prefix.split("\n")
         article_line = next(line for line in lines if "Стаття" in line)
         assert article_line == "Стаття 100"
 
     def test_prefix_empty_metadata(self):
-        """Test prefix with empty/None metadata."""
         metadata = {
-            "book": None,
-            "book_number": None,
-            "section": None,
-            "section_number": None,
-            "chapter": None,
-            "chapter_number": None,
-            "article_number": None,
-            "article_title": None,
+            "book": None, "book_number": None,
+            "section": None, "section_number": None,
+            "chapter": None, "chapter_number": None,
+            "article_number": None, "article_title": None,
         }
         prefix = extract_contextual_prefix(metadata)
-        # Should only contain document name
         assert prefix == "Документ: Цивільний кодекс України"
 
 
 class TestAddGraphEdges:
     """Tests for graph edges (prev/next article) functionality."""
 
-    def test_add_edges_middle_article(self):
-        """Test adding edges for an article in the middle."""
-        metadata = {"article_number": 25}
-        result = add_graph_edges(metadata)
-        assert result["prev_article"] == 24
-        assert result["next_article"] == 26
-
-    def test_add_edges_first_article(self):
-        """Test adding edges for article 1 (no previous)."""
-        metadata = {"article_number": 1}
-        result = add_graph_edges(metadata)
-        assert result["prev_article"] is None
-        assert result["next_article"] == 2
+    @pytest.mark.parametrize(
+        ("article_number", "expected_prev", "expected_next"),
+        [
+            pytest.param(25, 24, 26, id="middle"),
+            pytest.param(1, None, 2, id="first"),
+            pytest.param(999, 998, 1000, id="high"),
+        ],
+    )
+    def test_graph_edges(self, article_number, expected_prev, expected_next):
+        result = add_graph_edges({"article_number": article_number})
+        assert result["prev_article"] == expected_prev
+        assert result["next_article"] == expected_next
 
     def test_add_edges_no_article(self):
-        """Test that no edges are added when no article number."""
-        metadata = {"article_number": None}
-        result = add_graph_edges(metadata)
+        result = add_graph_edges({"article_number": None})
         assert "prev_article" not in result or result.get("prev_article") is None
         assert "next_article" not in result or result.get("next_article") is None
 
-    def test_add_edges_high_article_number(self):
-        """Test edges for high article numbers."""
-        metadata = {"article_number": 999}
-        result = add_graph_edges(metadata)
-        assert result["prev_article"] == 998
-        assert result["next_article"] == 1000
-
     def test_original_metadata_preserved(self):
-        """Test that original metadata is preserved after adding edges."""
-        metadata = {
-            "article_number": 50,
-            "article_title": "Test Article",
-            "chapter": "Test Chapter",
-        }
+        metadata = {"article_number": 50, "article_title": "Test Article", "chapter": "Test Chapter"}
         result = add_graph_edges(metadata)
         assert result["article_number"] == 50
         assert result["article_title"] == "Test Article"
@@ -469,7 +357,6 @@ class TestEdgeCasesAndIntegration:
     """Integration tests and edge cases."""
 
     def test_full_parsing_workflow(self):
-        """Test complete parsing workflow."""
         text = """Книга друга. Особлива частина
 
 Розділ VIII. Злочини проти власності
@@ -481,16 +368,10 @@ class TestEdgeCasesAndIntegration:
 1. Таємне викрадення чужого майна (крадіжка) -
 карається відповідно до статті 186 або статті 187.
 """
-        # Parse structure
         metadata = parse_legal_structure(text)
-
-        # Add graph edges
         metadata = add_graph_edges(metadata)
-
-        # Generate contextual prefix
         prefix = extract_contextual_prefix(metadata, "Кримінальний кодекс України")
 
-        # Verify all components
         assert metadata["book_number"] == 2
         assert metadata["section_number"] == 8
         assert metadata["chapter_number"] == 24
@@ -502,13 +383,10 @@ class TestEdgeCasesAndIntegration:
         assert "Кримінальний кодекс України" in prefix
 
     def test_text_with_special_characters(self):
-        """Test parsing text with special Ukrainian characters."""
-        text = "Стаття 5. Застосування права України\n\nп'ята книга"
-        metadata = parse_legal_structure(text)
+        metadata = parse_legal_structure("Стаття 5. Застосування права України\n\nп'ята книга")
         assert metadata["article_number"] == 5
 
     def test_multiline_article_content(self):
-        """Test article with multiline content."""
         text = """Стаття 100. Довга назва статті
 
 1. Перший пункт статті.
@@ -520,15 +398,11 @@ class TestEdgeCasesAndIntegration:
         assert "Довга назва статті" in metadata["article_title"]
 
     def test_whitespace_handling(self):
-        """Test handling of various whitespace."""
-        text = "Стаття   50.    Назва   статті   з   пробілами"
-        metadata = parse_legal_structure(text)
+        metadata = parse_legal_structure("Стаття   50.    Назва   статті   з   пробілами")
         assert metadata["article_number"] == 50
-        # Title should have normalized whitespace
         assert "  " not in metadata["article_title"]
 
     def test_newline_in_structure(self):
-        """Test that newlines properly delimit structures."""
         text = """Глава 10. Перша глава
 
 Стаття 100. Стаття в першій главі
@@ -536,12 +410,10 @@ class TestEdgeCasesAndIntegration:
 Глава 11. Друга глава (не повинна бути витягнута)
 """
         metadata = parse_legal_structure(text)
-        # Should extract first chapter
         assert metadata["chapter_number"] == 10
         assert "Перша глава" in metadata["chapter"]
 
     def test_mixed_numerals_in_same_text(self):
-        """Test text containing both Roman and Arabic numerals."""
         text = """Розділ III. Зобов'язання
 
 Глава 47. Загальні положення про зобов'язання
@@ -549,12 +421,11 @@ class TestEdgeCasesAndIntegration:
 Стаття 509. Поняття зобов'язання
 """
         metadata = parse_legal_structure(text)
-        assert metadata["section_number"] == 3  # From Roman III
-        assert metadata["chapter_number"] == 47  # Arabic
-        assert metadata["article_number"] == 509  # Arabic
+        assert metadata["section_number"] == 3
+        assert metadata["chapter_number"] == 47
+        assert metadata["article_number"] == 509
 
     def test_partial_structure_chapter_article(self):
-        """Test document with only chapter and article."""
         text = """Глава 3. Представництво. Довіреність
 
 Стаття 31. Представник
@@ -571,66 +442,7 @@ class TestArticlePatternAlternatives:
     """Tests for alternative article patterns."""
 
     def test_numbered_format_without_stattya(self):
-        """Test pattern matching for numbered format."""
         text = """1. Загальні положення цього розділу
 
 Текст статті."""
         parse_legal_structure(text)
-        # The parser should attempt to match this pattern
-        # Based on the code, this might or might not match depending on context
-
-
-class TestBookVariants:
-    """Tests for various book number forms."""
-
-    def test_book_third(self):
-        """Test parsing third book."""
-        text = "Книга третя. Авторське право"
-        metadata = parse_legal_structure(text)
-        assert metadata["book_number"] == 3
-
-    def test_book_fourth(self):
-        """Test parsing fourth book."""
-        text = "Книга четверта. Право інтелектуальної власності"
-        metadata = parse_legal_structure(text)
-        assert metadata["book_number"] == 4
-
-    def test_book_fifth(self):
-        """Test parsing fifth book."""
-        text = "Книга п'ята. Зобов'язальне право"
-        metadata = parse_legal_structure(text)
-        assert metadata["book_number"] == 5
-
-    def test_book_sixth(self):
-        """Test parsing sixth book."""
-        text = "Книга шоста. Спадкове право"
-        metadata = parse_legal_structure(text)
-        assert metadata["book_number"] == 6
-
-
-class TestSectionRomanVariants:
-    """Tests for various section Roman numeral formats."""
-
-    def test_section_ii(self):
-        """Test section II."""
-        text = "Розділ II. Особи"
-        metadata = parse_legal_structure(text)
-        assert metadata["section_number"] == 2
-
-    def test_section_iv(self):
-        """Test section IV."""
-        text = "Розділ IV. Речі. Майно"
-        metadata = parse_legal_structure(text)
-        assert metadata["section_number"] == 4
-
-    def test_section_ix(self):
-        """Test section IX."""
-        text = "Розділ IX. Зобов'язання"
-        metadata = parse_legal_structure(text)
-        assert metadata["section_number"] == 9
-
-    def test_section_xix(self):
-        """Test section XIX."""
-        text = "Розділ XIX. Прикінцеві положення"
-        metadata = parse_legal_structure(text)
-        assert metadata["section_number"] == 19

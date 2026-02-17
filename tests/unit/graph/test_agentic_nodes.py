@@ -13,56 +13,38 @@ from telegram_bot.graph.state import make_initial_state
 
 
 class TestGradeNode:
-    @pytest.mark.asyncio
-    async def test_relevant_documents(self):
-        """Documents with top score > 0.3 are relevant."""
+    @pytest.mark.parametrize(
+        ("documents", "expected_relevant"),
+        [
+            pytest.param(
+                [{"text": "doc1", "score": 0.5}, {"text": "doc2", "score": 0.2}],
+                True,
+                id="high_scores_relevant",
+            ),
+            pytest.param(
+                [{"text": "doc1", "score": 0.003}, {"text": "doc2", "score": 0.001}],
+                False,
+                id="low_scores_not_relevant",
+            ),
+            pytest.param([], False, id="empty_not_relevant"),
+            pytest.param(
+                [{"text": "doc1", "score": 0.005}],
+                False,
+                id="threshold_boundary_not_relevant",
+            ),
+        ],
+    )
+    async def test_grade_relevance(self, documents, expected_relevant):
         from telegram_bot.graph.nodes.grade import grade_node
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = [
-            {"text": "doc1", "score": 0.5},
-            {"text": "doc2", "score": 0.2},
-        ]
+        state["documents"] = documents
         result = await grade_node(state)
-        assert result["documents_relevant"] is True
+        assert result["documents_relevant"] is expected_relevant
         assert "grade" in result["latency_stages"]
-
-    @pytest.mark.asyncio
-    async def test_not_relevant_documents(self):
-        """Documents with top score <= 0.005 are not relevant."""
-        from telegram_bot.graph.nodes.grade import grade_node
-
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = [
-            {"text": "doc1", "score": 0.003},
-            {"text": "doc2", "score": 0.001},
-        ]
-        result = await grade_node(state)
-        assert result["documents_relevant"] is False
-
-    @pytest.mark.asyncio
-    async def test_empty_documents(self):
-        """No documents → not relevant."""
-        from telegram_bot.graph.nodes.grade import grade_node
-
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = []
-        result = await grade_node(state)
-        assert result["documents_relevant"] is False
-
-    @pytest.mark.asyncio
-    async def test_threshold_boundary(self):
-        """Score exactly at threshold (0.005) is NOT relevant (strictly >)."""
-        from telegram_bot.graph.nodes.grade import grade_node
-
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["documents"] = [{"text": "doc1", "score": 0.005}]
-        result = await grade_node(state)
-        assert result["documents_relevant"] is False
 
 
 class TestGradeNodeRRFScores:
-    @pytest.mark.asyncio
     async def test_rrf_scores_are_relevant(self):
         """RRF scores ~0.016 should be considered relevant (not irrelevant)."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -75,8 +57,6 @@ class TestGradeNodeRRFScores:
         ]
         result = await grade_node(state)
         assert result["documents_relevant"] is True
-
-    @pytest.mark.asyncio
     async def test_very_low_scores_are_not_relevant(self):
         """Scores near zero should still be irrelevant."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -87,8 +67,6 @@ class TestGradeNodeRRFScores:
         ]
         result = await grade_node(state)
         assert result["documents_relevant"] is False
-
-    @pytest.mark.asyncio
     async def test_rrf_high_confidence_skips_rerank(self):
         """RRF top-1 score 0.016 exceeds skip_rerank_threshold (0.012) → skip_rerank=True."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -102,8 +80,6 @@ class TestGradeNodeRRFScores:
         assert result["documents_relevant"] is True
         assert result["skip_rerank"] is True
         assert result["grade_confidence"] == 0.016
-
-    @pytest.mark.asyncio
     async def test_rrf_low_confidence_does_not_skip_rerank(self):
         """RRF score 0.010 below skip_rerank_threshold (0.012) → skip_rerank=False."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -116,8 +92,6 @@ class TestGradeNodeRRFScores:
         result = await grade_node(state)
         assert result["documents_relevant"] is True
         assert result["skip_rerank"] is False
-
-    @pytest.mark.asyncio
     async def test_threshold_configurable_via_env(self):
         """RELEVANCE_THRESHOLD_RRF env var should override default."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -133,7 +107,6 @@ class TestGradeNodeRRFScores:
 
 
 class TestRerankNode:
-    @pytest.mark.asyncio
     async def test_rerank_with_colbert(self):
         """ColBERT reranker reorders documents and sets rerank_applied=True."""
         from telegram_bot.graph.nodes.rerank import rerank_node
@@ -157,8 +130,6 @@ class TestRerankNode:
         assert result["documents"][0]["text"] == "doc B"
         assert result["documents"][0]["score"] == 0.9
         assert "rerank" in result["latency_stages"]
-
-    @pytest.mark.asyncio
     async def test_rerank_without_colbert(self):
         """Without reranker, sorts by score and takes top-k."""
         from telegram_bot.graph.nodes.rerank import rerank_node
@@ -176,8 +147,6 @@ class TestRerankNode:
         # Sorted by score desc: B(0.5), C(0.4)
         assert result["documents"][0]["text"] == "doc B"
         assert result["documents"][1]["text"] == "doc C"
-
-    @pytest.mark.asyncio
     async def test_rerank_empty_documents(self):
         """Empty documents returns empty list."""
         from telegram_bot.graph.nodes.rerank import rerank_node
@@ -187,8 +156,6 @@ class TestRerankNode:
         result = await rerank_node(state, reranker=None)
         assert result["documents"] == []
         assert result["rerank_applied"] is False
-
-    @pytest.mark.asyncio
     async def test_rerank_colbert_failure_fallback(self):
         """If ColBERT fails, falls back to score sort."""
         from telegram_bot.graph.nodes.rerank import rerank_node
@@ -222,7 +189,6 @@ def _make_mock_llm(content: str = "rewritten query") -> MagicMock:
 
 
 class TestRewriteNode:
-    @pytest.mark.asyncio
     async def test_rewrite_increments_count(self):
         """Rewrite increments rewrite_count."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -237,8 +203,6 @@ class TestRewriteNode:
         assert result["query_embedding"] is None
         assert result["sparse_embedding"] is None
         assert "rewrite" in result["latency_stages"]
-
-    @pytest.mark.asyncio
     async def test_rewrite_updates_messages(self):
         """Rewrite appends a new HumanMessage with rewritten query."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -252,8 +216,6 @@ class TestRewriteNode:
         assert len(result["messages"]) == 1
         msg = result["messages"][0]
         assert msg.content == "rewritten query"
-
-    @pytest.mark.asyncio
     async def test_rewrite_llm_failure_keeps_original(self):
         """If LLM fails, keeps original query."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -267,8 +229,6 @@ class TestRewriteNode:
         assert result["rewrite_count"] == 1
         msg = result["messages"][0]
         assert msg.content == "original query"
-
-    @pytest.mark.asyncio
     async def test_rewrite_second_attempt(self):
         """Second rewrite attempt increments count to 2."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -280,8 +240,6 @@ class TestRewriteNode:
 
         result = await rewrite_node(state, llm=mock_llm)
         assert result["rewrite_count"] == 2
-
-    @pytest.mark.asyncio
     async def test_rewrite_empty_content_sets_ineffective(self):
         """When LLM returns empty content, rewrite_effective=False."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -293,8 +251,6 @@ class TestRewriteNode:
 
         assert result["rewrite_effective"] is False
         assert result["rewrite_count"] == 1
-
-    @pytest.mark.asyncio
     async def test_rewrite_same_text_sets_ineffective(self):
         """When LLM returns the same text as original, rewrite_effective=False."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -306,8 +262,6 @@ class TestRewriteNode:
 
         assert result["rewrite_effective"] is False
         assert result["rewrite_count"] == 1
-
-    @pytest.mark.asyncio
     async def test_rewrite_with_content_sets_effective(self):
         """When LLM returns valid content, rewrite_effective=True."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -318,8 +272,6 @@ class TestRewriteNode:
         result = await rewrite_node(state, llm=mock_llm)
 
         assert result["rewrite_effective"] is True
-
-    @pytest.mark.asyncio
     async def test_rewrite_latency_stages_contains_only_numeric_values(self):
         """latency_stages must keep only numeric durations."""
         from telegram_bot.graph.nodes.rewrite import rewrite_node
@@ -338,7 +290,6 @@ class TestRewriteNode:
 
 
 class TestGradeNodeScoreImproved:
-    @pytest.mark.asyncio
     async def test_first_grade_always_improved(self):
         """First grade (prev=0.0) always sets score_improved=True."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -348,8 +299,6 @@ class TestGradeNodeScoreImproved:
         # grade_confidence starts at 0.0
         result = await grade_node(state)
         assert result["score_improved"] is True
-
-    @pytest.mark.asyncio
     async def test_score_improved_above_delta(self):
         """Score improved by >= delta → score_improved=True."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -359,8 +308,6 @@ class TestGradeNodeScoreImproved:
         state["documents"] = [{"text": "doc", "score": 0.005}]  # delta = 0.002 > 0.001
         result = await grade_node(state)
         assert result["score_improved"] is True
-
-    @pytest.mark.asyncio
     async def test_score_not_improved_below_delta(self):
         """Score didn't improve enough → score_improved=False."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -370,8 +317,6 @@ class TestGradeNodeScoreImproved:
         state["documents"] = [{"text": "doc", "score": 0.0045}]  # delta = 0.0005 < 0.001
         result = await grade_node(state)
         assert result["score_improved"] is False
-
-    @pytest.mark.asyncio
     async def test_score_decreased_not_improved(self):
         """Score got worse → score_improved=False."""
         from telegram_bot.graph.nodes.grade import grade_node
@@ -381,8 +326,6 @@ class TestGradeNodeScoreImproved:
         state["documents"] = [{"text": "doc", "score": 0.004}]  # worse
         result = await grade_node(state)
         assert result["score_improved"] is False
-
-    @pytest.mark.asyncio
     async def test_empty_docs_not_improved(self):
         """Empty documents → score_improved=False."""
         from telegram_bot.graph.nodes.grade import grade_node

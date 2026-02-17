@@ -15,8 +15,6 @@ from telegram_bot.graph.state import make_initial_state
 
 class TestLatencyUnitsConsistency:
     """All latency_stages values must be in seconds (< 1.0 for fast ops)."""
-
-    @pytest.mark.asyncio
     async def test_cache_check_latency_in_seconds(self):
         """cache_check_node stores latency in seconds, not ms.
 
@@ -46,8 +44,6 @@ class TestLatencyUnitsConsistency:
         # In seconds: 0.05. In ms: 50.0. Threshold at 1.0 catches the bug.
         assert latency < 1.0, f"cache_check latency {latency} looks like ms, should be seconds"
         assert 0.04 < latency < 0.06, f"Expected ~0.05s, got {latency}"
-
-    @pytest.mark.asyncio
     async def test_retrieve_latency_in_seconds(self):
         """retrieve_node stores latency in seconds, not ms.
 
