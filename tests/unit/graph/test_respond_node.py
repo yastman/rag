@@ -4,8 +4,22 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from telegram_bot.graph.nodes.respond import respond_node
+from telegram_bot.graph.nodes.respond import _format_sources, respond_node
 from telegram_bot.graph.state import make_initial_state
+
+
+_SAMPLE_DOCS = [
+    {
+        "text": "Квартира в Несебре",
+        "score": 0.92,
+        "metadata": {"title": "Апартамент Несебр", "city": "Несебр", "price": 65000},
+    },
+    {
+        "text": "Студия в Равде",
+        "score": 0.87,
+        "metadata": {"title": "Студия с видом", "city": "Равда", "price": 35000},
+    },
+]
 
 
 class TestRespondNode:
@@ -178,4 +192,139 @@ class TestRespondNodeFeedbackButtons:
         await respond_node(state)
 
         message.answer.assert_not_called()
+        message.bot.edit_message_reply_markup.assert_awaited_once()
+
+
+class TestFormatSources:
+    """Test _format_sources() output format (#225)."""
+
+    def test_formats_sources_with_city(self):
+        result = _format_sources(_SAMPLE_DOCS)
+        assert "*Источники:*" in result
+        assert "`[1]` Апартамент Несебр — Несебр" in result
+        assert "`[2]` Студия с видом — Равда" in result
+        assert "0.92" in result
+        assert "0.87" in result
+
+    def test_empty_documents(self):
+        assert _format_sources([]) == ""
+
+    def test_max_sources_cap(self):
+        docs = [
+            {"text": f"Doc {i}", "score": 0.5, "metadata": {"title": f"Doc {i}"}} for i in range(10)
+        ]
+        result = _format_sources(docs, max_sources=3)
+        assert "`[3]`" in result
+        assert "`[4]`" not in result
+
+    def test_missing_city(self):
+        docs = [{"text": "t", "score": 0.5, "metadata": {"title": "NoCity"}}]
+        result = _format_sources(docs)
+        assert "NoCity" in result
+        assert " — " not in result  # no city separator
+
+
+class TestRespondNodeSourceAttribution:
+    """Test source attribution in respond_node (#225)."""
+
+    async def test_sources_appended_non_streaming(self):
+        """Non-streaming: sources appended to response text before sending."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Answer text"
+        state["message"] = message
+        state["documents"] = _SAMPLE_DOCS
+        state["query_type"] = "GENERAL"
+
+        result = await respond_node(state)
+
+        sent_text = message.answer.call_args[0][0]
+        assert "Answer text" in sent_text
+        assert "*Источники:*" in sent_text
+        assert "Апартамент Несебр" in sent_text
+        assert result["sources_count"] == 2
+
+    async def test_sources_appended_streaming(self):
+        """Streaming: sources appended via edit_message_text."""
+        message = AsyncMock()
+        message.bot = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Streamed answer"
+        state["message"] = message
+        state["response_sent"] = True
+        state["sent_message"] = {"chat_id": 12345, "message_id": 77}
+        state["documents"] = _SAMPLE_DOCS
+        state["query_type"] = "GENERAL"
+
+        result = await respond_node(state)
+
+        message.bot.edit_message_text.assert_awaited_once()
+        edit_kwargs = message.bot.edit_message_text.call_args.kwargs
+        assert "Streamed answer" in edit_kwargs["text"]
+        assert "*Источники:*" in edit_kwargs["text"]
+        assert result["sources_count"] == 2
+
+    async def test_no_sources_for_chitchat(self):
+        """CHITCHAT queries should not have sources appended."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="Привет")
+        state["response"] = "Привет!"
+        state["message"] = message
+        state["documents"] = _SAMPLE_DOCS
+        state["query_type"] = "CHITCHAT"
+
+        result = await respond_node(state)
+
+        sent_text = message.answer.call_args[0][0]
+        assert "Источники" not in sent_text
+        assert result["sources_count"] == 0
+
+    async def test_no_sources_when_disabled(self):
+        """show_sources=False should suppress source attribution."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Answer"
+        state["message"] = message
+        state["documents"] = _SAMPLE_DOCS
+        state["show_sources"] = False
+
+        result = await respond_node(state)
+
+        sent_text = message.answer.call_args[0][0]
+        assert "Источники" not in sent_text
+        assert result["sources_count"] == 0
+
+    async def test_no_sources_when_no_documents(self):
+        """No documents means no source attribution."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Answer"
+        state["message"] = message
+        # documents is [] by default
+
+        result = await respond_node(state)
+
+        sent_text = message.answer.call_args[0][0]
+        assert "Источники" not in sent_text
+        assert result["sources_count"] == 0
+
+    async def test_streaming_sources_fallback_to_buttons_only(self):
+        """If edit_message_text fails, still try to attach feedback buttons."""
+        message = AsyncMock()
+        message.bot = AsyncMock()
+        message.bot.edit_message_text = AsyncMock(side_effect=Exception("edit fail"))
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["response"] = "Streamed"
+        state["message"] = message
+        state["response_sent"] = True
+        state["trace_id"] = "trace123"
+        state["sent_message"] = {"chat_id": 12345, "message_id": 77}
+        state["documents"] = _SAMPLE_DOCS
+        state["query_type"] = "GENERAL"
+
+        await respond_node(state)
+
+        # edit_message_text was attempted (2 calls: Markdown + plain)
+        assert message.bot.edit_message_text.await_count == 2
+        # Fallback: edit_message_reply_markup for buttons
         message.bot.edit_message_reply_markup.assert_awaited_once()
