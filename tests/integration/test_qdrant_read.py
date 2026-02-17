@@ -4,8 +4,10 @@
 Проверяет поиск и получение точек из существующей коллекции.
 """
 
+import socket
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 project_root = Path(__file__).parent
@@ -13,6 +15,7 @@ sys.path.insert(0, str(project_root))
 
 import os
 
+import pytest
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 
@@ -24,8 +27,8 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://REDACTED_VPS_IP:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 
 
-def test_qdrant_read():
-    """Тест чтения из Qdrant."""
+def _run_qdrant_read_checks() -> bool:
+    """Выполнить проверки чтения из Qdrant."""
 
     print("=" * 80)
     print("ТЕСТ ЧТЕНИЯ ИЗ QDRANT")
@@ -123,6 +126,24 @@ def test_qdrant_read():
         return False
 
 
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def test_qdrant_read():
+    """Тест чтения из Qdrant."""
+    parsed = urlparse(QDRANT_URL)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6333
+    if not _is_port_open(host, port):
+        pytest.skip(f"Qdrant not running on {host}:{port}")
+    assert _run_qdrant_read_checks()
+
+
 if __name__ == "__main__":
-    success = test_qdrant_read()
+    success = _run_qdrant_read_checks()
     sys.exit(0 if success else 1)
