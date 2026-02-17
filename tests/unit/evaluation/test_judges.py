@@ -1,6 +1,6 @@
 """Tests for LLM-as-a-Judge evaluators."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -102,12 +102,14 @@ class TestJudgeFunctions:
     async def test_judge_handles_llm_error(self):
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(side_effect=Exception("API error"))
-        result = await judge_faithfulness(
-            client=mock_client,
-            model="test-model",
-            query="q",
-            answer="a",
-            context="c",
-        )
+        with patch("telegram_bot.evaluation.judges.asyncio.sleep", new=AsyncMock()) as mock_sleep:
+            result = await judge_faithfulness(
+                client=mock_client,
+                model="test-model",
+                query="q",
+                answer="a",
+                context="c",
+            )
         assert result.score is None
         assert "error" in result.reasoning.lower()
+        assert mock_sleep.await_count == 2
