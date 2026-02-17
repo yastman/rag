@@ -14,18 +14,18 @@ dependencies = [
     "aiohttp",
     "requests",
     "qdrant-client>=1.16.2",  # Vector database client (v1.15+ for BM42 support)
-    "langfuse>=3.0.0",        # LLM observability & tracing
+    "langfuse>=3.14.0",       # LLM observability & tracing
     # Voyage AI Integration (2026-01-21)
     "voyageai>=0.3.0",        # Voyage AI embeddings and reranking
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
     "redis>=7.1.0",
     "redisvl>=0.13.2",
-    "aiogram>=3.22.0",
+    "aiogram>=3.25.0",
     "asyncpg>=0.31.0",
     # Performance (2026-02-06)
     "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
     # LangGraph Pipeline (2026-02-09)
-    "langgraph>=1.0.3",                   # State graph for RAG pipeline
+    "langgraph>=1.0.3,<2.0",               # State graph for RAG pipeline
     "langchain-core>=1.2",                # Core abstractions (Embeddings, etc.)
     "langgraph-checkpoint-postgres>=2.0", # Postgres checkpointing for LangGraph
     # Conversation memory (#154)
@@ -384,8 +384,12 @@ markers = [
     "unit: Unit tests with mocks (fast, no external deps)",
     "integration: Integration tests (requires Docker/API keys)",
     "slow: Tests taking > 5 seconds",
-    "legacy_api: tests for pre-LangGraph API (may need rewrite)",
+    "chaos: Chaos/resilience tests (service failures, fallbacks)",
+    "load: Load/performance tests (concurrent users, throughput)",
+    "e2e: End-to-end pipeline tests (require live services)",
     "smoke: Smoke tests (requires running services)",
+    "benchmark: Benchmark tests (parser/reranker comparisons)",
+    "legacy_api: tests for pre-LangGraph API (may need rewrite)",
     "requires_extras: Tests needing optional deps (voice/ingest/eval); skipped in core tier",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
 ]
