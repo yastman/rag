@@ -183,17 +183,30 @@ class HistoryService:
 
             turns: list[dict[str, Any]] = []
             for p in all_points:
-                meta = (p.payload or {}).get("metadata", {})
+                payload = p.payload if isinstance(p.payload, dict) else {}
+                meta = payload.get("metadata", {})
+                if not isinstance(meta, dict):
+                    continue
+
                 query = meta.get("query", "")
                 response = meta.get("response", "")
+                query = query if isinstance(query, str) else str(query or "")
+                response = response if isinstance(response, str) else str(response or "")
                 if not query and not response:
                     continue
+
+                timestamp = meta.get("timestamp", "")
+                timestamp = timestamp if isinstance(timestamp, str) else str(timestamp or "")
+
+                input_type = meta.get("input_type", "text")
+                input_type = input_type if isinstance(input_type, str) else "text"
+
                 turns.append(
                     {
                         "query": query,
                         "response": response,
-                        "timestamp": meta.get("timestamp", ""),
-                        "input_type": meta.get("input_type", "text"),
+                        "timestamp": timestamp,
+                        "input_type": input_type,
                     }
                 )
 

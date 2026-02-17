@@ -330,3 +330,25 @@ class TestGetSessionTurns:
 
         assert turns == []
         mock_client.scroll.assert_not_called()
+
+    async def test_skips_malformed_metadata_and_keeps_valid_turns(self, service, mock_client):
+        """Malformed payload metadata should be skipped without dropping valid turns."""
+        bad_point = MagicMock()
+        bad_point.payload = {"metadata": "corrupted"}
+
+        good_point = MagicMock()
+        good_point.payload = {
+            "metadata": {
+                "query": "валидный вопрос",
+                "response": "валидный ответ",
+                "timestamp": "2026-02-17T10:01:00+00:00",
+                "input_type": "text",
+            }
+        }
+
+        mock_client.scroll = AsyncMock(return_value=([bad_point, good_point], None))
+
+        turns = await service.get_session_turns(user_id=100, session_id="chat-abc-20260217")
+
+        assert len(turns) == 1
+        assert turns[0]["query"] == "валидный вопрос"
