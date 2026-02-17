@@ -31,9 +31,10 @@ def mock_evaluation_imports():
     mock_mlflow_integration = MagicMock()
     mock_search_engines = MagicMock()
 
-    ***REMOVED*** Setup mock classes
-    ***REMOVED*** Use instances, not the MagicMock class object, to avoid mutating
-    ***REMOVED*** unittest.mock.MagicMock global class attributes via return_value.
+    ***REMOVED*** Setup mock classes — use instances, NOT the MagicMock class itself.
+    ***REMOVED*** Assigning `MagicMock` (the class) then setting `.return_value` on it
+    ***REMOVED*** overwrites the class-level property descriptor and permanently corrupts
+    ***REMOVED*** MagicMock for all subsequent tests in the process.
     mock_search_engines.BaselineSearchEngine = MagicMock()
     mock_search_engines.HybridSearchEngine = MagicMock()
     mock_search_engines.HybridDBSFColBERTSearchEngine = MagicMock()
@@ -41,8 +42,12 @@ def mock_evaluation_imports():
     ***REMOVED*** Mock MLflow logger
     mock_logger = MagicMock()
     mock_logger.tracking_uri = "http://localhost:5000"
-    mock_logger.start_run.return_value.__enter__ = MagicMock(return_value=mock_logger)
-    mock_logger.start_run.return_value.__exit__ = MagicMock(return_value=False)
+    ***REMOVED*** Use standard MagicMock context-manager configuration instead of replacing
+    ***REMOVED*** dunder methods directly — assigning __enter__/__exit__ on a MagicMock
+    ***REMOVED*** instance corrupts the MagicMock CLASS property descriptors (return_value)
+    ***REMOVED*** and breaks `patch(..., return_value=X)` in all subsequent tests.
+    mock_logger.start_run.return_value.__enter__.return_value = mock_logger
+    mock_logger.start_run.return_value.__exit__.return_value = False
     mock_logger.get_run_url.return_value = "http://localhost:5000/runs/123"
     mock_mlflow_integration.MLflowRAGLogger.return_value = mock_logger
 
