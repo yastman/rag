@@ -35,3 +35,91 @@ class SessionSummary(BaseModel):
 
     sentiment: Literal["positive", "neutral", "negative"]
     """Overall conversation tone."""
+
+
+_SUMMARY_SYSTEM_PROMPT = """\
+Ты — ассистент риелторского агентства. Проанализируй диалог бота с клиентом \
+и создай structured summary для карточки сделки в CRM.
+
+Правила:
+- brief: 1-2 предложения, главная тема и итог разговора
+- client_needs: конкретные запросы клиента (тип жилья, количество комнат, расположение)
+- budget: точная сумма если озвучена, иначе null
+- preferences: детали предпочтений (район, этаж, площадь, особенности)
+- next_steps: что договорились сделать дальше
+- sentiment: общий тон разговора (positive/neutral/negative)
+
+Извлекай только факты из диалога. Не додумывай."""
+
+_MAX_TURNS_FOR_SUMMARY = 40
+_MAX_DIALOG_CHARS = 12_000
+
+
+def format_turns_for_prompt(turns: list[dict]) -> str:
+    """Format Q&A turns as readable dialog for LLM prompt."""
+    if not turns:
+        return ""
+    lines = []
+    for turn in turns:
+        lines.append(f"Клиент: {turn['query']}")
+        lines.append(f"Бот: {turn['response']}")
+    return "\n".join(lines)
+
+
+def _trim_turns_for_summary(turns: list[dict]) -> list[dict]:
+    """Drop empty turns and cap dialog size for stable LLM latency."""
+    cleaned = [t for t in turns if t.get("query") or t.get("response")]
+    return cleaned[-_MAX_TURNS_FOR_SUMMARY:]
+
+
+async def generate_summary(
+    *,
+    turns: list[dict],
+    llm: object,
+    model: str = "gpt-4o-mini",
+) -> SessionSummary | None:
+    """Generate structured session summary from Q&A turns.
+
+    Args:
+        turns: List of Q&A dicts with query, response, timestamp, input_type.
+        llm: AsyncOpenAI client (langfuse.openai.AsyncOpenAI or compatible).
+        model: LLM model name for summary generation.
+
+    Returns:
+        SessionSummary on success, None on empty input or error.
+    """
+    trimmed_turns = _trim_turns_for_summary(turns)
+    if not trimmed_turns:
+        return None
+
+    dialog = format_turns_for_prompt(trimmed_turns)
+    if len(dialog) > _MAX_DIALOG_CHARS:
+        dialog = dialog[-_MAX_DIALOG_CHARS:]
+
+    try:
+        if hasattr(llm, "responses") and hasattr(llm.responses, "parse"):
+            response = await llm.responses.parse(  # type: ignore[union-attr]
+                model=model,
+                input=[
+                    {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Диалог:\n{dialog}"},
+                ],
+                text_format=SessionSummary,
+                temperature=0.0,
+            )
+            return getattr(response, "output_parsed", None)
+
+        # Fallback for wrappers that expose only Chat Completions parse
+        completion = await llm.beta.chat.completions.parse(  # type: ignore[union-attr]
+            model=model,
+            messages=[
+                {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
+                {"role": "user", "content": f"Диалог:\n{dialog}"},
+            ],
+            response_format=SessionSummary,
+            temperature=0.0,
+        )
+        return getattr(completion.choices[0].message, "parsed", None)
+    except Exception:
+        logger.warning("Failed to generate session summary", exc_info=True)
+        return None

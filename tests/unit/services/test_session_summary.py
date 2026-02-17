@@ -1,6 +1,12 @@
 """Unit tests for SessionSummary model and generate_summary()."""
 
-from telegram_bot.services.session_summary import SessionSummary
+from unittest.mock import AsyncMock, MagicMock
+
+from telegram_bot.services.session_summary import (
+    SessionSummary,
+    format_turns_for_prompt,
+    generate_summary,
+)
 
 
 class TestSessionSummaryModel:
@@ -45,3 +51,125 @@ class TestSessionSummaryModel:
                 sentiment=sentiment,
             )
             assert summary.sentiment == sentiment
+
+
+class TestFormatTurnsForPrompt:
+    """Test turns formatting for LLM prompt."""
+
+    def test_formats_turns_as_dialog(self):
+        """format_turns_for_prompt renders Q&A pairs as readable dialog."""
+        turns = [
+            {
+                "query": "Какие квартиры у моря?",
+                "response": "Есть варианты в Sunny Beach от $50K.",
+                "timestamp": "2026-02-17T10:00:00+00:00",
+                "input_type": "text",
+            },
+            {
+                "query": "А с двумя комнатами?",
+                "response": "2-комнатные от $75K, есть 3 варианта.",
+                "timestamp": "2026-02-17T10:02:00+00:00",
+                "input_type": "text",
+            },
+        ]
+        result = format_turns_for_prompt(turns)
+
+        assert "Клиент: Какие квартиры у моря?" in result
+        assert "Бот: Есть варианты в Sunny Beach от $50K." in result
+        assert "Клиент: А с двумя комнатами?" in result
+
+    def test_empty_turns(self):
+        """format_turns_for_prompt returns empty string for no turns."""
+        assert format_turns_for_prompt([]) == ""
+
+
+class TestGenerateSummary:
+    """Test generate_summary() with mocked LLM."""
+
+    async def test_returns_session_summary(self):
+        """generate_summary returns SessionSummary from LLM response."""
+        mock_llm = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.output_parsed = SessionSummary(
+            brief="Клиент ищет квартиру у моря.",
+            client_needs=["2-комнатная", "вид на море"],
+            budget="$80,000",
+            preferences=["Sunny Beach"],
+            next_steps=["подобрать варианты"],
+            sentiment="positive",
+        )
+        mock_llm.responses.parse = AsyncMock(return_value=mock_response)
+
+        turns = [
+            {
+                "query": "Ищу квартиру у моря",
+                "response": "Есть варианты от $50K",
+                "timestamp": "2026-02-17T10:00:00+00:00",
+                "input_type": "text",
+            }
+        ]
+
+        result = await generate_summary(turns=turns, llm=mock_llm)
+
+        assert isinstance(result, SessionSummary)
+        assert result.brief == "Клиент ищет квартиру у моря."
+        assert result.budget == "$80,000"
+        mock_llm.responses.parse.assert_awaited_once()
+
+    async def test_passes_model_parameter(self):
+        """generate_summary uses provided model name."""
+        mock_llm = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.output_parsed = SessionSummary(
+            brief="Test.",
+            client_needs=[],
+            budget=None,
+            preferences=[],
+            next_steps=[],
+            sentiment="neutral",
+        )
+        mock_llm.responses.parse = AsyncMock(return_value=mock_response)
+
+        await generate_summary(
+            turns=[{"query": "q", "response": "r", "timestamp": "t", "input_type": "text"}],
+            llm=mock_llm,
+            model="gpt-4o-mini",
+        )
+
+        call_kwargs = mock_llm.responses.parse.call_args.kwargs
+        assert call_kwargs["model"] == "gpt-4o-mini"
+
+    async def test_returns_none_on_empty_turns(self):
+        """generate_summary returns None when no turns provided."""
+        mock_llm = AsyncMock()
+
+        result = await generate_summary(turns=[], llm=mock_llm)
+
+        assert result is None
+        mock_llm.responses.parse.assert_not_called()
+
+    async def test_returns_none_on_llm_error(self):
+        """generate_summary returns None on LLM exception."""
+        mock_llm = AsyncMock()
+        mock_llm.responses.parse = AsyncMock(side_effect=RuntimeError("API error"))
+
+        result = await generate_summary(
+            turns=[{"query": "q", "response": "r", "timestamp": "t", "input_type": "text"}],
+            llm=mock_llm,
+        )
+
+        assert result is None
+
+    async def test_returns_none_on_refusal_or_unparsed_output(self):
+        """generate_summary returns None when model does not produce parsed payload."""
+        mock_llm = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.output_parsed = None
+        mock_llm.responses.parse = AsyncMock(return_value=mock_response)
+
+        result = await generate_summary(
+            turns=[{"query": "q", "response": "r", "timestamp": "t", "input_type": "text"}],
+            llm=mock_llm,
+        )
+
+        assert result is None
