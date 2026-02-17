@@ -382,6 +382,12 @@ markers = [
     "smoke: Smoke tests (requires running services)",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
 ]
+filterwarnings = [
+    # trustcall 0.0.39 imports Send from langgraph.constants (deprecated V1, removed V2).
+    # No upstream fix available yet — suppress until trustcall publishes a new release.
+    # Tracking: https://github.com/yastman/rag/issues/306
+    "ignore:Importing Send from langgraph.constants is deprecated:Warning",
+]
 
 # =============================================================================
 # COVERAGE CONFIGURATION
