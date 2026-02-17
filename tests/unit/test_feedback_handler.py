@@ -75,3 +75,28 @@ class TestHandleFeedbackLangfuse:
 
         # Should complete without error — no create_score call
         callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
+
+
+class TestFeedbackConfirmationCleanup:
+    async def test_clears_confirmation_markup_after_delay(self):
+        from telegram_bot.bot import PropertyBot
+
+        message = AsyncMock()
+        bot = object.__new__(PropertyBot)
+
+        with patch("telegram_bot.bot.asyncio.sleep", new=AsyncMock()) as mocked_sleep:
+            await bot._clear_feedback_confirmation_later(message, delay_s=3.0)
+
+        mocked_sleep.assert_awaited_once_with(3.0)
+        message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
+
+    async def test_suppresses_edit_exception(self):
+        from telegram_bot.bot import PropertyBot
+
+        message = AsyncMock()
+        message.edit_reply_markup.side_effect = Exception("Telegram API error")
+        bot = object.__new__(PropertyBot)
+
+        with patch("telegram_bot.bot.asyncio.sleep", new=AsyncMock()):
+            # Should not raise
+            await bot._clear_feedback_confirmation_later(message, delay_s=1.0)
