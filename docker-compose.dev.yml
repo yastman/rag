@@ -662,8 +662,8 @@ services:
       - "7881:7881"
       - "50000-50100:50000-50100/udp"
     volumes:
-      - ./docker/livekit/livekit.yaml:/etc/livekit.yaml:ro
-    command: --config /etc/livekit.yaml --dev
+      - ./docker/livekit:/etc/livekit:ro
+    command: --config /etc/livekit/livekit.yaml --dev
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7880 || exit 1"]
       interval: 15s
