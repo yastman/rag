@@ -2,19 +2,18 @@
 
 ## Scope And Sources
 This analysis summarizes repository structure and operating conventions from:
-- `CLAUDE.md`
-- `.claude/rules/*.md`
-- `.claude/rules/features/*.md`
+- `AGENTS.md`, scoped `AGENTS.override.md`
+- `docs/agent-rules/*.md`
 - `README.md`
 - `docs/PROJECT_STACK.md`, `docs/PIPELINE_OVERVIEW.md`, `docs/LOCAL-DEVELOPMENT.md`
 - `Makefile` targets currently available in repo
 
-Snapshot date: 2026-02-13.
+Snapshot date: 2026-02-17.
 
-Primary reference policy: `CLAUDE.md` and the file paths listed in that document are treated as canonical sources for project guidance.
+Primary reference policy: `AGENTS.md`, scoped `AGENTS.override.md`, and `docs/agent-rules/*.md` are treated as canonical sources for agent guidance.
 
 ## High-Level Assessment
-- The project has clear subsystem boundaries (bot, ingestion, retrieval, infra, docs), but instructions were previously fragmented across `CLAUDE.md` and `.claude/rules/*` without Codex-native AGENTS chain.
+- The project has clear subsystem boundaries (bot, ingestion, retrieval, infra, docs), and guidance is now centered on a Codex-native AGENTS chain.
 - Runtime workflows are mature (compose profiles, k3s overlays, observability, ingestion CLI), but contributor guidance was distributed and at risk of drift.
 - Existing docs include deep historical plans/reports; canonical operational docs are present but need explicit “source of truth” positioning.
 
