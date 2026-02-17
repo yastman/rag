@@ -1,6 +1,7 @@
 """Test that no global sys.modules pollution occurs during test runs."""
 
 import sys
+from types import ModuleType
 
 import pytest
 
@@ -36,8 +37,8 @@ def test_langfuse_not_globally_mocked():
     """Langfuse mock must be fixture-scoped, not global."""
     if "langfuse" in sys.modules:
         module = sys.modules["langfuse"]
-        # Real langfuse has __file__ attribute; MagicMock does not
-        if not hasattr(module, "__file__"):
+        # Real langfuse should be an importable module backed by a file.
+        if not isinstance(module, ModuleType) or not getattr(module, "__file__", None):
             pytest.fail(
                 "Global langfuse mock detected. Use @pytest.fixture(autouse=True) "
                 "with monkeypatch.setitem(sys.modules, ...) instead."

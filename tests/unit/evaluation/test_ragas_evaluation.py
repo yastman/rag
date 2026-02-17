@@ -10,6 +10,7 @@ import pytest
 class TestRAGASEvaluatorInit:
     """Tests for RAGASEvaluator initialization."""
 
+    @patch("src.evaluation.ragas_evaluation._get_evaluator_llm")
     @patch("src.evaluation.ragas_evaluation.MLflowRAGLogger")
     @patch("src.evaluation.ragas_evaluation.faithfulness")
     @patch("src.evaluation.ragas_evaluation.context_precision")
@@ -22,10 +23,12 @@ class TestRAGASEvaluatorInit:
         mock_ctx_prec,
         mock_faith,
         mock_logger_class,
+        mock_get_llm,
     ):
         """Test evaluator creates MLflow logger."""
         from src.evaluation.ragas_evaluation import RAGASEvaluator
 
+        mock_get_llm.return_value = MagicMock()
         mock_logger = MagicMock()
         mock_logger_class.return_value = mock_logger
 
@@ -34,6 +37,7 @@ class TestRAGASEvaluatorInit:
         mock_logger_class.assert_called_once_with(experiment_name="ragas_quality_baseline")
         assert evaluator.mlflow_logger == mock_logger
 
+    @patch("src.evaluation.ragas_evaluation._get_evaluator_llm")
     @patch("src.evaluation.ragas_evaluation.MLflowRAGLogger")
     @patch("src.evaluation.ragas_evaluation.faithfulness")
     @patch("src.evaluation.ragas_evaluation.context_precision")
@@ -46,10 +50,12 @@ class TestRAGASEvaluatorInit:
         mock_ctx_prec,
         mock_faith,
         mock_logger_class,
+        mock_get_llm,
     ):
         """Test evaluator initializes with RAGAS metrics."""
         from src.evaluation.ragas_evaluation import RAGASEvaluator
 
+        mock_get_llm.return_value = MagicMock()
         mock_logger_class.return_value = MagicMock()
 
         evaluator = RAGASEvaluator()
@@ -68,23 +74,24 @@ class TestEvaluatePipeline:
     def evaluator(self):
         """Create evaluator with mocked dependencies."""
         with patch("src.evaluation.ragas_evaluation.MLflowRAGLogger") as mock_logger_class:
-            with patch("src.evaluation.ragas_evaluation.faithfulness"):
-                with patch("src.evaluation.ragas_evaluation.context_precision"):
-                    with patch("src.evaluation.ragas_evaluation.context_recall"):
-                        with patch("src.evaluation.ragas_evaluation.answer_relevancy"):
-                            mock_logger = MagicMock()
-                            mock_logger.start_run.return_value.__enter__ = MagicMock()
-                            mock_logger.start_run.return_value.__exit__ = MagicMock(
-                                return_value=False
-                            )
-                            mock_logger.get_run_url.return_value = "http://mlflow/run/123"
-                            mock_logger_class.return_value = mock_logger
+            with patch("src.evaluation.ragas_evaluation._get_evaluator_llm") as mock_get_llm:
+                with patch("src.evaluation.ragas_evaluation.faithfulness"):
+                    with patch("src.evaluation.ragas_evaluation.context_precision"):
+                        with patch("src.evaluation.ragas_evaluation.context_recall"):
+                            with patch("src.evaluation.ragas_evaluation.answer_relevancy"):
+                                mock_get_llm.return_value = MagicMock()
+                                mock_logger = MagicMock()
+                                mock_logger.start_run.return_value.__enter__ = MagicMock()
+                                mock_logger.start_run.return_value.__exit__ = MagicMock(
+                                    return_value=False
+                                )
+                                mock_logger.get_run_url.return_value = "http://mlflow/run/123"
+                                mock_logger_class.return_value = mock_logger
 
-                            from src.evaluation.ragas_evaluation import RAGASEvaluator
+                                from src.evaluation.ragas_evaluation import RAGASEvaluator
 
-                            yield RAGASEvaluator()
+                                yield RAGASEvaluator()
 
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_loads_test_set(self, evaluator):
         """Test evaluate_pipeline loads golden test set."""
         mock_pipeline = AsyncMock()
@@ -107,7 +114,6 @@ class TestEvaluatePipeline:
 
                     mock_dataset.from_list.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_calls_rag_pipeline(self, evaluator):
         """Test evaluate_pipeline queries RAG pipeline for each test query."""
         mock_pipeline = AsyncMock()
@@ -140,7 +146,6 @@ class TestEvaluatePipeline:
                     mock_pipeline.query.assert_any_call("query 1", top_k=10)
                     mock_pipeline.query.assert_any_call("query 2", top_k=10)
 
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_handles_query_errors(self, evaluator, capsys):
         """Test evaluate_pipeline handles query failures gracefully."""
         mock_pipeline = AsyncMock()
@@ -172,7 +177,6 @@ class TestEvaluatePipeline:
                     captured = capsys.readouterr()
                     assert "Failed query" in captured.out
 
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_returns_metrics(self, evaluator):
         """Test evaluate_pipeline returns RAGAS metrics."""
         mock_pipeline = AsyncMock()
@@ -200,7 +204,6 @@ class TestEvaluatePipeline:
                     assert "eval_duration_seconds" in result
                     assert "queries_evaluated" in result
 
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_logs_to_mlflow(self, evaluator):
         """Test evaluate_pipeline logs metrics to MLflow."""
         mock_pipeline = AsyncMock()
@@ -224,7 +227,6 @@ class TestEvaluatePipeline:
                     evaluator.mlflow_logger.log_metrics.assert_called_once()
                     evaluator.mlflow_logger.log_dict_artifact.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_prints_acceptance_passed(self, evaluator, capsys):
         """Test acceptance criteria passed message."""
         mock_pipeline = AsyncMock()
@@ -249,7 +251,6 @@ class TestEvaluatePipeline:
                     captured = capsys.readouterr()
                     assert "PASSED" in captured.out
 
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_prints_acceptance_failed(self, evaluator, capsys):
         """Test acceptance criteria failed message."""
         mock_pipeline = AsyncMock()
@@ -274,7 +275,6 @@ class TestEvaluatePipeline:
                     captured = capsys.readouterr()
                     assert "FAILED" in captured.out
 
-    @pytest.mark.asyncio
     async def test_evaluate_pipeline_limits_queries_to_50(self, evaluator):
         """Test evaluate_pipeline limits queries to first 50."""
         mock_pipeline = AsyncMock()
