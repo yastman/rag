@@ -210,9 +210,7 @@ class TestLLMStreamingFallback:
             pytest.param("http_500", [], id="http_error"),
         ],
     )
-    async def test_streaming_error_yields_fallback(
-        self, httpx_mock: HTTPXMock, setup_mock, chunks
-    ):
+    async def test_streaming_error_yields_fallback(self, httpx_mock: HTTPXMock, setup_mock, chunks):
         """Verify streaming yields fallback on error."""
         if setup_mock == "timeout":
             httpx_mock.add_exception(httpx.TimeoutException("Stream timeout"))
