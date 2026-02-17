@@ -15,6 +15,17 @@ paths: ".github/**,renovate.json"
 | **Rebase policy** | Rebase on `main` before push. Use `--force-with-lease` (never `--force`) |
 | **Stale branches** | Delete after merge. `make git-hygiene` for audit |
 
+## Bug Handling During PR Review
+
+| Found during review | Action |
+|---------------------|--------|
+| Bug **in PR code** (new/changed lines) | PR review comment → author fixes in same PR |
+| **Pre-existing** bug (existed before PR) | New issue with `Found during #PR` in description |
+| **CI flake** (unrelated to PR) | New issue with label `flaky-test` |
+| **Conflict** with another PR | PR comment, coordinate merge order |
+
+**Rule:** PR fixes only what's in scope. Everything else → separate issue. Don't bloat PRs with unrelated fixes.
+
 ## Merge Discipline
 
 - PRs merge only with green CI (lint + unit shards + integration)
