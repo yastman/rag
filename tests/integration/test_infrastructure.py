@@ -123,7 +123,6 @@ class TestRedisInfrastructure:
         yield client
         await client.aclose()
 
-    @pytest.mark.asyncio
     async def test_query_engine_available(self, redis_client):
         """FT.* commands are available (Query Engine)."""
         try:
@@ -132,7 +131,6 @@ class TestRedisInfrastructure:
         except Exception as e:
             pytest.fail(f"Query Engine not available: {e}")
 
-    @pytest.mark.asyncio
     async def test_vector_search_available(self, redis_client):
         """Vector search (FT.CREATE with VECTOR) works."""
         index_name = "test:infra:vec_idx"
@@ -167,7 +165,6 @@ class TestRedisInfrastructure:
             with contextlib.suppress(Exception):
                 await redis_client.execute_command("FT.DROPINDEX", index_name)
 
-    @pytest.mark.asyncio
     async def test_json_commands_available(self, redis_client):
         """JSON.* commands are available."""
         require_json = os.getenv("REQUIRE_REDIS_JSON", "0") == "1"
@@ -188,7 +185,6 @@ class TestRedisInfrastructure:
             with contextlib.suppress(Exception):
                 await redis_client.delete(test_key)
 
-    @pytest.mark.asyncio
     async def test_set_get_operations(self, redis_client):
         """Basic set/get operations work."""
         test_key = "test:infrastructure:key"
@@ -204,7 +200,6 @@ class TestRedisInfrastructure:
 class TestMLflowInfrastructure:
     """MLflow tracking server tests."""
 
-    @pytest.mark.asyncio
     async def test_experiments_list(self):
         """Can list experiments."""
         url = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
@@ -224,7 +219,6 @@ class TestMLflowInfrastructure:
 class TestLangfuseInfrastructure:
     """Langfuse tracing tests."""
 
-    @pytest.mark.asyncio
     async def test_api_accessible(self):
         """Langfuse API is accessible."""
         url = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
