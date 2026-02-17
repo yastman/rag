@@ -16,9 +16,12 @@ from telegram_bot.observability import get_client, observe
 logger = logging.getLogger(__name__)
 
 
-def _build_reply_markup(trace_id: str) -> Any:
-    """Build feedback keyboard if trace_id is available, else None."""
-    if not trace_id:
+_NO_FEEDBACK_TYPES = frozenset({"CHITCHAT", "OFF_TOPIC"})
+
+
+def _build_reply_markup(trace_id: str, query_type: str = "") -> Any:
+    """Build feedback keyboard if trace_id is available and query is RAG-eligible."""
+    if not trace_id or query_type in _NO_FEEDBACK_TYPES:
         return None
     from telegram_bot.feedback import build_feedback_keyboard
 
@@ -54,6 +57,7 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
     response = state.get("response", "")
     response_sent = state.get("response_sent", False)
     trace_id = state.get("trace_id", "")
+    query_type = state.get("query_type", "")
 
     if not response:
         response = "Извините, не удалось сформировать ответ. Попробуйте переформулировать вопрос."
@@ -67,7 +71,7 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
         }
     )
 
-    reply_markup = _build_reply_markup(trace_id)
+    reply_markup = _build_reply_markup(trace_id, query_type)
 
     # Streaming path: response already delivered, just attach feedback buttons
     if response_sent:
