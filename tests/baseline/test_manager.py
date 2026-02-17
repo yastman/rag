@@ -203,3 +203,70 @@ class TestBaselineManager:
 
         assert passed is False
         assert any("cache" in r.lower() for r in regressions)
+
+
+class TestJudgeThresholds:
+    """Test LLM-as-a-Judge threshold comparison."""
+
+    def test_judge_thresholds_pass(self):
+        """Should pass when all judge metrics are above thresholds."""
+        collector = Mock()
+        manager = BaselineManager(collector=collector)
+
+        current_judge = {
+            "faithfulness_mean": 0.85,
+            "answer_relevance_mean": 0.80,
+            "context_relevance_mean": 0.75,
+        }
+        baseline_judge = {
+            "faithfulness_mean": 0.82,
+            "answer_relevance_mean": 0.78,
+            "context_relevance_mean": 0.70,
+        }
+
+        passed, regressions = manager.compare_judge(current_judge, baseline_judge)
+
+        assert passed is True
+        assert len(regressions) == 0
+
+    def test_judge_thresholds_fail(self):
+        """Should fail when a judge metric is below threshold."""
+        collector = Mock()
+        manager = BaselineManager(collector=collector)
+
+        current_judge = {
+            "faithfulness_mean": 0.60,  # Below 0.75 threshold
+            "answer_relevance_mean": 0.80,
+            "context_relevance_mean": 0.75,
+        }
+        baseline_judge = {
+            "faithfulness_mean": 0.80,
+            "answer_relevance_mean": 0.75,
+            "context_relevance_mean": 0.70,
+        }
+
+        passed, regressions = manager.compare_judge(current_judge, baseline_judge)
+
+        assert passed is False
+        assert len(regressions) == 1
+        assert "faithfulness" in regressions[0].lower()
+
+    def test_judge_thresholds_skip_when_absent(self):
+        """Should skip judge check without error when judge data is absent."""
+        collector = Mock()
+        manager = BaselineManager(collector=collector)
+
+        # Both None
+        passed, regressions = manager.compare_judge(None, None)
+        assert passed is True
+        assert len(regressions) == 0
+
+        # Current present, baseline absent
+        passed, regressions = manager.compare_judge({"faithfulness_mean": 0.5}, None)
+        assert passed is True
+        assert len(regressions) == 0
+
+        # Current absent, baseline present
+        passed, regressions = manager.compare_judge(None, {"faithfulness_mean": 0.8})
+        assert passed is True
+        assert len(regressions) == 0
