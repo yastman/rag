@@ -29,11 +29,16 @@ FROM python:3.14-slim-bookworm@sha256:f0540d0436a220db0a576ccfe75631ab072391e43a
 
 WORKDIR /app
 
+RUN groupadd -g 1001 appuser && \
+    useradd -u 1001 -g appuser -m -d /app -s /bin/false appuser
+
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY --from=builder /app/telegram_bot /app/telegram_bot
 
 ENV PATH="/app/.venv/bin:$PATH"
+
+USER appuser
 
 EXPOSE 8080
 
