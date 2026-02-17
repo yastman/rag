@@ -50,7 +50,6 @@ def mock_message() -> MagicMock:
 
 
 class TestHandleQueryObservability:
-    @pytest.mark.asyncio
     async def test_handle_query_updates_trace(
         self, mock_config: BotConfig, mock_message: MagicMock
     ):
@@ -81,7 +80,6 @@ class TestHandleQueryObservability:
         assert kwargs["input"]["query"] == "квартиры до 100000 евро"
         assert kwargs["output"]["response"] == "ok"
 
-    @pytest.mark.asyncio
     async def test_handle_query_includes_expected_metadata_fields(
         self,
         mock_config: BotConfig,
