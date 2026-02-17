@@ -17,6 +17,23 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
+def _redis_url_candidates() -> list[str]:
+    """Return Redis URLs to try in order (auth first, then plain)."""
+    base_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    if "@" in base_url:
+        return [base_url]
+
+    urls: list[str] = []
+    for password in (os.getenv("REDIS_PASSWORD", ""), "dev_redis_pass"):
+        if password:
+            auth_url = base_url.replace("redis://", f"redis://:{password}@", 1)
+            if auth_url not in urls:
+                urls.append(auth_url)
+    if base_url not in urls:
+        urls.append(base_url)
+    return urls
+
+
 class TestZooHealth:
     """Health checks for services without existing coverage."""
 
@@ -150,14 +167,16 @@ class TestZooCache:
         if not _is_port_open("localhost", 6379):
             pytest.skip("Redis not running (port 6379)")
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        password = os.getenv("REDIS_PASSWORD", "")
-        if password and "@" not in redis_url:
-            redis_url = redis_url.replace("redis://", f"redis://:{password}@", 1)
-        service = CacheLayerManager(redis_url=redis_url)
-        await service.initialize()
-        yield service
-        await service.close()
+        for redis_url in _redis_url_candidates():
+            service = CacheLayerManager(redis_url=redis_url)
+            await service.initialize()
+            if service.redis is not None:
+                yield service
+                await service.close()
+                return
+            await service.close()
+
+        pytest.skip("Redis requires authentication (set REDIS_PASSWORD)")
 
     @pytest.mark.asyncio
     async def test_sparse_cache_roundtrip(self, cache_service):
@@ -187,14 +206,16 @@ class TestZooEndToEnd:
         if not _is_port_open("localhost", 6379):
             pytest.skip("Redis not running (port 6379)")
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        password = os.getenv("REDIS_PASSWORD", "")
-        if password and "@" not in redis_url:
-            redis_url = redis_url.replace("redis://", f"redis://:{password}@", 1)
-        service = CacheLayerManager(redis_url=redis_url)
-        await service.initialize()
-        yield service
-        await service.close()
+        for redis_url in _redis_url_candidates():
+            service = CacheLayerManager(redis_url=redis_url)
+            await service.initialize()
+            if service.redis is not None:
+                yield service
+                await service.close()
+                return
+            await service.close()
+
+        pytest.skip("Redis requires authentication (set REDIS_PASSWORD)")
 
     @pytest.mark.asyncio
     async def test_second_request_has_cache_hits(self, cache_service):
