@@ -1130,3 +1130,68 @@ class TestGenerateNodeResponseStyle:
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         system_msg = messages[0]["content"]
         assert "истори" in system_msg.lower()
+
+
+class TestGenerateNodeCitationInstruction:
+    """Test citation instruction injection (#225)."""
+
+    async def test_citation_instruction_in_system_prompt(self) -> None:
+        """System prompt includes citation instruction when show_sources=True."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config()
+        mock_config.show_sources = True
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        system_msg = messages[0]["content"]
+        assert "[1]" in system_msg
+        assert "источник" in system_msg.lower()
+
+    async def test_no_citation_instruction_when_disabled(self) -> None:
+        """System prompt omits citation instruction when show_sources=False."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config()
+        mock_config.show_sources = False
+        state = _make_state_with_docs()
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        system_msg = messages[0]["content"]
+        assert "[Объект 1] = [1]" not in system_msg
+
+    async def test_no_citation_instruction_without_documents(self) -> None:
+        """No citation instruction when documents are empty."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, mock_client = _make_mock_config()
+        mock_config.show_sources = True
+        # Build state directly — _make_state_with_docs replaces [] with defaults
+        state = make_initial_state(user_id=123, session_id="s-test", query="test")
+        state["query_type"] = "GENERAL"
+        state["documents"] = []
+
+        with patch(
+            "telegram_bot.graph.nodes.generate._get_config",
+            return_value=mock_config,
+        ):
+            await generate_node(state)
+
+        call_kwargs = mock_client.chat.completions.create.call_args
+        messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
+        system_msg = messages[0]["content"]
+        assert "[Объект 1]" not in system_msg
