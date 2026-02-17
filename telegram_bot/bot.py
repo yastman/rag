@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # --- Checkpoint namespace constants (versioned for safe migration) ---
 _CHECKPOINT_NS_TEXT = "tg:text:v1"
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
+_FEEDBACK_CONFIRMATION_TTL_S = 5.0
 
 # --- Query type mapping for scores ---
 _QUERY_TYPE_SCORE = {
@@ -941,8 +942,22 @@ class PropertyBot:
             msg = callback.message
             if msg is not None and hasattr(msg, "edit_reply_markup"):
                 await msg.edit_reply_markup(reply_markup=build_feedback_confirmation(liked=liked))
+                cleanup_task = asyncio.create_task(
+                    self._clear_feedback_confirmation_later(msg, _FEEDBACK_CONFIRMATION_TTL_S)
+                )
+                _ = cleanup_task
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
+
+    async def _clear_feedback_confirmation_later(
+        self, message: Any, delay_s: float = _FEEDBACK_CONFIRMATION_TTL_S
+    ) -> None:
+        """Clear feedback confirmation button after a short delay."""
+        await asyncio.sleep(delay_s)
+        try:
+            await message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
     async def start(self):
         """Start bot polling."""
