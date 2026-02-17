@@ -1041,7 +1041,6 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
 
-
     async def _clear_feedback_confirmation_later(
         self, message: Any, delay_s: float = _FEEDBACK_CONFIRMATION_TTL_S
     ) -> None:
