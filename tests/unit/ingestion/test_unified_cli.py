@@ -603,49 +603,53 @@ class TestMainDispatch:
         assert result == 0
         mock_cmd.assert_called_once()
 
-    @patch("src.ingestion.unified.cli.asyncio.run", return_value=0)
+    @patch("src.ingestion.unified.cli.cmd_status", new_callable=AsyncMock, return_value=0)
     @patch("src.ingestion.unified.cli.setup_logging")
     @patch("src.ingestion.unified.cli.load_dotenv")
-    def test_main_dispatches_status(self, mock_dotenv, mock_logging, mock_arun, monkeypatch):
+    def test_main_dispatches_status(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "status"])
 
         from src.ingestion.unified.cli import main
 
         result = main()
         assert result == 0
+        mock_cmd.assert_awaited_once()
 
-    @patch("src.ingestion.unified.cli.asyncio.run", return_value=0)
+    @patch("src.ingestion.unified.cli.cmd_preflight", new_callable=AsyncMock, return_value=0)
     @patch("src.ingestion.unified.cli.setup_logging")
     @patch("src.ingestion.unified.cli.load_dotenv")
-    def test_main_dispatches_preflight(self, mock_dotenv, mock_logging, mock_arun, monkeypatch):
+    def test_main_dispatches_preflight(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "preflight"])
 
         from src.ingestion.unified.cli import main
 
         result = main()
         assert result == 0
+        mock_cmd.assert_awaited_once()
 
-    @patch("src.ingestion.unified.cli.asyncio.run", return_value=0)
+    @patch("src.ingestion.unified.cli.cmd_bootstrap", new_callable=AsyncMock, return_value=0)
     @patch("src.ingestion.unified.cli.setup_logging")
     @patch("src.ingestion.unified.cli.load_dotenv")
-    def test_main_dispatches_bootstrap(self, mock_dotenv, mock_logging, mock_arun, monkeypatch):
+    def test_main_dispatches_bootstrap(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "bootstrap"])
 
         from src.ingestion.unified.cli import main
 
         result = main()
         assert result == 0
+        mock_cmd.assert_awaited_once()
 
-    @patch("src.ingestion.unified.cli.asyncio.run", return_value=0)
+    @patch("src.ingestion.unified.cli.cmd_reprocess", new_callable=AsyncMock, return_value=0)
     @patch("src.ingestion.unified.cli.setup_logging")
     @patch("src.ingestion.unified.cli.load_dotenv")
-    def test_main_dispatches_reprocess(self, mock_dotenv, mock_logging, mock_arun, monkeypatch):
+    def test_main_dispatches_reprocess(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "reprocess", "--errors"])
 
         from src.ingestion.unified.cli import main
 
         result = main()
         assert result == 0
+        mock_cmd.assert_awaited_once()
 
     @patch("src.ingestion.unified.cli.setup_logging")
     @patch("src.ingestion.unified.cli.load_dotenv")

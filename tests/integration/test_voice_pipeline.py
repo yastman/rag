@@ -10,7 +10,6 @@ RAG_URL = "http://localhost:8080"
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
 async def test_rag_api_health():
     """RAG API should return healthy status."""
     async with httpx.AsyncClient() as client:
@@ -23,7 +22,6 @@ async def test_rag_api_health():
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
 async def test_rag_api_query():
     """RAG API should return a response for a query."""
     async with httpx.AsyncClient() as client:
@@ -43,7 +41,6 @@ async def test_rag_api_query():
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
 async def test_livekit_server_health():
     """LiveKit server should be running."""
     async with httpx.AsyncClient() as client:
