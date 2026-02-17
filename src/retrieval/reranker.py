@@ -4,7 +4,7 @@ Reranking improves retrieval accuracy by 10-15% NDCG.
 Uses lightweight cross-encoder for CPU inference (~50-100ms latency).
 
 NOTE: sentence_transformers is imported lazily to avoid pulling torch
-for bot runtime. Install with: uv sync --group indexing
+for bot runtime. Install with: uv sync --extra ml-local
 """
 
 import logging
@@ -46,8 +46,8 @@ def get_cross_encoder(model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") 
             from sentence_transformers import CrossEncoder
         except ImportError as e:
             raise ImportError(
-                "sentence_transformers not installed. This is a heavy ML package. "
-                "Run: uv sync --group indexing"
+                "sentence_transformers is not installed. "
+                "Install ml-local extra: uv sync --extra ml-local"
             ) from e
 
         logger.info(f"Loading cross-encoder: {model_name}")
