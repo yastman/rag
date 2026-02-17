@@ -101,8 +101,13 @@ class GraphConfig:
             stt_model=os.getenv("STT_MODEL", "whisper"),
         )
 
-    def create_llm(self) -> Any:
-        """Create an AsyncOpenAI instance for the pipeline."""
+    def create_llm(self, model_override: str | None = None) -> Any:
+        """Create an AsyncOpenAI instance for the pipeline.
+
+        Args:
+            model_override: Optional model name for supervisor/routing LLM.
+                The caller must pass this to completions.create(model=...).
+        """
         from langfuse.openai import AsyncOpenAI
 
         return AsyncOpenAI(
