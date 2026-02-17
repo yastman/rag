@@ -203,3 +203,6 @@ tests/baseline/.current_baseline
 
 ***REMOVED*** Disabled workflows (temporary backups)
 .github/workflows.disabled/
+
+***REMOVED*** Exported evaluation datasets (generated, not committed)
+datasets/*.jsonl
