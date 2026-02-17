@@ -222,7 +222,8 @@ class TestClearModels:
         assert embedding_module._bge_m3_model is not None
 
         # Clear
-        clear_models()
+        with patch("gc.collect", return_value=0):
+            clear_models()
         assert embedding_module._bge_m3_model is None
 
     @patch("src.models.embedding_model.BGEM3FlagModel")
@@ -240,7 +241,8 @@ class TestClearModels:
         assert embedding_module._sentence_transformer is not None
 
         # Clear
-        clear_models()
+        with patch("gc.collect", return_value=0):
+            clear_models()
         assert embedding_module._sentence_transformer is None
 
     @patch("src.models.embedding_model.BGEM3FlagModel")
@@ -259,7 +261,8 @@ class TestClearModels:
         assert model1 is mock_instance_1
 
         # Clear
-        clear_models()
+        with patch("gc.collect", return_value=0):
+            clear_models()
 
         # Second initialization - should create new instance
         model2 = get_bge_m3_model()
@@ -294,7 +297,8 @@ class TestClearModels:
         assert embedding_module._sentence_transformer is None
 
         # Should not raise any exception
-        clear_models()
+        with patch("gc.collect", return_value=0):
+            clear_models()
 
         # Should still be None
         assert embedding_module._bge_m3_model is None
@@ -355,7 +359,8 @@ class TestSingletonIsolation:
         assert embedding_module._sentence_transformer is not None
 
         # Clear both
-        clear_models()
+        with patch("gc.collect", return_value=0):
+            clear_models()
 
         assert embedding_module._bge_m3_model is None
         assert embedding_module._sentence_transformer is None
@@ -426,7 +431,8 @@ class TestLogging:
         get_bge_m3_model()
         mock_logger.reset_mock()
 
-        clear_models()
+        with patch("gc.collect", return_value=0):
+            clear_models()
 
         # Should log clearing BGE-M3
         mock_logger.info.assert_called()
