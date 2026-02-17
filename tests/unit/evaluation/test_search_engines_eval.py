@@ -11,54 +11,27 @@ class TestConvertToPythonTypes:
     """Tests for convert_to_python_types helper function."""
 
     def test_convert_numpy_array_to_list(self):
-        """Test numpy array to list conversion."""
         from src.evaluation.search_engines import convert_to_python_types
 
-        arr = np.array([1.0, 2.0, 3.0])
-        result = convert_to_python_types(arr)
-
+        result = convert_to_python_types(np.array([1.0, 2.0, 3.0]))
         assert result == [1.0, 2.0, 3.0]
         assert isinstance(result, list)
 
-    def test_convert_numpy_float32(self):
-        """Test numpy float32 to Python float."""
+    @pytest.mark.parametrize(
+        ("np_val", "expected", "expected_type"),
+        [
+            (np.float32(3.14), 3.14, float),
+            (np.float64(3.14159), 3.14159, float),
+            (np.int32(42), 42, int),
+            (np.int64(42), 42, int),
+        ],
+    )
+    def test_convert_numpy_scalar(self, np_val, expected, expected_type):
         from src.evaluation.search_engines import convert_to_python_types
 
-        val = np.float32(3.14)
-        result = convert_to_python_types(val)
-
-        assert result == pytest.approx(3.14, rel=1e-5)
-        assert isinstance(result, float)
-
-    def test_convert_numpy_float64(self):
-        """Test numpy float64 to Python float."""
-        from src.evaluation.search_engines import convert_to_python_types
-
-        val = np.float64(3.14159)
-        result = convert_to_python_types(val)
-
-        assert result == pytest.approx(3.14159)
-        assert isinstance(result, float)
-
-    def test_convert_numpy_int32(self):
-        """Test numpy int32 to Python int."""
-        from src.evaluation.search_engines import convert_to_python_types
-
-        val = np.int32(42)
-        result = convert_to_python_types(val)
-
-        assert result == 42
-        assert isinstance(result, int)
-
-    def test_convert_numpy_int64(self):
-        """Test numpy int64 to Python int."""
-        from src.evaluation.search_engines import convert_to_python_types
-
-        val = np.int64(42)
-        result = convert_to_python_types(val)
-
-        assert result == 42
-        assert isinstance(result, int)
+        result = convert_to_python_types(np_val)
+        assert result == pytest.approx(expected, rel=1e-5)
+        assert isinstance(result, expected_type)
 
     def test_convert_nested_dict(self):
         """Test conversion of nested dict with numpy types."""
