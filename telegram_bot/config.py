@@ -295,9 +295,9 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
     )
 
-    # Supervisor architecture (#240)
+    # Supervisor architecture (#240, #310 — default since v3.3)
     use_supervisor: bool = Field(
-        default=False,
+        default=True,
         validation_alias=AliasChoices("use_supervisor", "USE_SUPERVISOR"),
     )
     supervisor_model: str = Field(
