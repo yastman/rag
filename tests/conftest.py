@@ -43,45 +43,53 @@ load_dotenv()
 # =============================================================================
 # MOCK HEAVY IMPORTS FOR UNIT TESTS
 # =============================================================================
-# These modules are slow to import due to model loading. Mock them at startup
-# to allow fast unit test collection and execution.
+# These modules are slow to import due to model loading.  Mocks are installed
+# in ``pytest_configure`` (earliest hook, before collection) and removed in
+# ``pytest_unconfigure`` so that no MagicMock leaks into sys.modules after the
+# session ends.
+#
+# Policy: NEVER assign to sys.modules at module level.  Use
+# ``monkeypatch.setitem(sys.modules, ...)`` inside fixtures, or register mocks
+# via ``pytest_configure`` for collection-time needs.  See
+# ``.claude/rules/testing.md`` § "sys.modules hygiene".
+
+_saved_modules: dict[str, object] = {}
+_mocked_module_names: list[str] = []
 
 
-def _setup_mock_heavy_imports():
-    """Mock slow-to-import ML libraries at startup."""
-    # Skip if already mocked
-    if "sentence_transformers" in sys.modules and not isinstance(
+def pytest_configure(config):
+    """Install lightweight mocks for heavy ML libs before test collection."""
+    # -- sentence_transformers / FlagEmbedding (slow model loading) ----------
+    # Skip if: (a) real module already loaded, or (b) re-entry (already mocked).
+    _already_mocked = "sentence_transformers" in _mocked_module_names
+    _real_module_loaded = "sentence_transformers" in sys.modules and not isinstance(
         sys.modules["sentence_transformers"], MagicMock
-    ):
-        return
+    )
+    if not _already_mocked and not _real_module_loaded:
+        for mod_name in ("sentence_transformers", "FlagEmbedding"):
+            _saved_modules[mod_name] = sys.modules.get(mod_name)
 
-    # Mock sentence_transformers
-    mock_st = MagicMock()
-    mock_st.CrossEncoder = MagicMock()
-    mock_st.SentenceTransformer = MagicMock()
-    sys.modules["sentence_transformers"] = mock_st
+        mock_st = MagicMock()
+        mock_st.CrossEncoder = MagicMock()
+        mock_st.SentenceTransformer = MagicMock()
+        sys.modules["sentence_transformers"] = mock_st
+        _mocked_module_names.append("sentence_transformers")
 
-    # Mock FlagEmbedding
-    mock_flag = MagicMock()
-    mock_flag.BGEM3FlagModel = MagicMock()
-    sys.modules["FlagEmbedding"] = mock_flag
+        mock_flag = MagicMock()
+        mock_flag.BGEM3FlagModel = MagicMock()
+        sys.modules["FlagEmbedding"] = mock_flag
+        _mocked_module_names.append("FlagEmbedding")
 
-
-# Run at conftest load time to prevent slow imports during test collection
-_setup_mock_heavy_imports()
-
-
-def _setup_mock_optional_telegram_deps():
-    """Mock optional Telegram deps (aiogram) when not installed.
-
-    Unit tests should not require Telegram runtime dependencies to be present.
-    """
+    # -- aiogram (optional Telegram runtime dep) -----------------------------
     try:
         import importlib.util
 
         if importlib.util.find_spec("aiogram") is None:
             raise ModuleNotFoundError("aiogram not installed")
     except ModuleNotFoundError:
+        for mod_name in ("aiogram", "aiogram.filters", "aiogram.types"):
+            _saved_modules[mod_name] = sys.modules.get(mod_name)
+
         mock_aiogram = MagicMock()
         mock_aiogram.Bot = MagicMock()
         mock_aiogram.Dispatcher = MagicMock()
@@ -96,9 +104,19 @@ def _setup_mock_optional_telegram_deps():
         sys.modules["aiogram"] = mock_aiogram
         sys.modules["aiogram.filters"] = mock_filters
         sys.modules["aiogram.types"] = mock_types
+        _mocked_module_names.extend(["aiogram", "aiogram.filters", "aiogram.types"])
 
 
-_setup_mock_optional_telegram_deps()
+def pytest_unconfigure(config):
+    """Restore original modules after test session."""
+    for mod_name in _mocked_module_names:
+        original = _saved_modules.get(mod_name)
+        if original is None:
+            sys.modules.pop(mod_name, None)
+        else:
+            sys.modules[mod_name] = original  # type: ignore[assignment]
+    _mocked_module_names.clear()
+    _saved_modules.clear()
 
 
 # =============================================================================
