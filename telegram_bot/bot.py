@@ -17,6 +17,7 @@ from aiogram.filters import Command
 from aiogram.types import BotCommand, CallbackQuery, Message
 from aiogram.utils.chat_action import ChatActionSender
 
+from .agents.supervisor import build_supervisor_graph
 from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 # --- Checkpoint namespace constants (versioned for safe migration) ---
 _CHECKPOINT_NS_TEXT = "tg:text:v1"
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
+_FEEDBACK_CONFIRMATION_TTL_S = 5.0
 
 # --- Query type mapping for scores ---
 _QUERY_TYPE_SCORE = {
@@ -616,6 +618,11 @@ class PropertyBot:
         bot = message.bot
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
+        # --- Supervisor path (#240) ---
+        if self.config.use_supervisor:
+            await self._handle_query_supervisor(message, pipeline_start)
+            return
+
         state = make_initial_state(
             user_id=message.from_user.id,
             session_id=make_session_id("chat", message.chat.id),
@@ -725,6 +732,92 @@ class PropertyBot:
                     )
                 except Exception:
                     logger.warning("Failed to save history turn", exc_info=True)
+
+    async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
+        """Handle query via supervisor graph (feature flag: USE_SUPERVISOR=true, #240)."""
+        from .agents.rag_agent import create_rag_agent
+        from .agents.tools import create_history_search_tool, direct_response
+        from .graph.supervisor_state import make_supervisor_state
+
+        assert message.bot is not None
+        assert message.from_user is not None
+        bot = message.bot
+        user_id = message.from_user.id
+        session_id = make_session_id("chat", message.chat.id)
+
+        # Build supervisor tools
+        tools = [
+            create_rag_agent(
+                cache=self._cache,
+                embeddings=self._embeddings,
+                sparse_embeddings=self._sparse,
+                qdrant=self._qdrant,
+                reranker=self._reranker,
+                llm=self._llm,
+            ),
+            direct_response,
+        ]
+        if self._history_service is not None:
+            tools.append(create_history_search_tool(history_service=self._history_service))
+
+        # Build supervisor LLM (cheap model for routing)
+        supervisor_llm = self._graph_config.create_llm(model_override=self.config.supervisor_model)
+
+        supervisor_graph = build_supervisor_graph(
+            supervisor_llm=supervisor_llm,
+            tools=tools,
+        )
+
+        state = make_supervisor_state(
+            user_id=user_id,
+            session_id=session_id,
+            query=message.text or "",
+        )
+        config = {
+            "configurable": {
+                "user_id": user_id,
+                "session_id": session_id,
+            }
+        }
+
+        with propagate_attributes(
+            session_id=session_id,
+            user_id=str(user_id),
+            tags=["telegram", "rag", "supervisor"],
+        ):
+            async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                result = await supervisor_graph.ainvoke(state, config=config)
+
+            # Extract response from final message
+            messages = result.get("messages", [])
+            response_text = ""
+            if messages:
+                last_msg = messages[-1]
+                response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+
+            # Send response to user
+            if response_text and not result.get("response_sent"):
+                await message.answer(response_text)
+
+            # Write Langfuse trace metadata
+            lf = get_client()
+            lf.update_current_trace(
+                input={"query": message.text},
+                output={"response": response_text},
+                metadata={
+                    "agent_used": result.get("agent_used", ""),
+                    "supervisor_latency": result.get("latency_stages", {}).get("supervisor", 0),
+                    "pipeline_mode": "supervisor",
+                },
+            )
+            lf.score_current_trace(
+                name="agent_used", value=result.get("agent_used", ""), data_type="CATEGORICAL"
+            )
+            supervisor_ms = result.get("latency_stages", {}).get("supervisor", 0) * 1000
+            lf.score_current_trace(name="supervisor_latency_ms", value=supervisor_ms)
+            lf.score_current_trace(
+                name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
+            )
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
@@ -941,8 +1034,22 @@ class PropertyBot:
             msg = callback.message
             if msg is not None and hasattr(msg, "edit_reply_markup"):
                 await msg.edit_reply_markup(reply_markup=build_feedback_confirmation(liked=liked))
+                asyncio.create_task(  # noqa: RUF006
+                    self._clear_feedback_confirmation_later(msg, _FEEDBACK_CONFIRMATION_TTL_S)
+                )
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
+
+
+    async def _clear_feedback_confirmation_later(
+        self, message: Any, delay_s: float = _FEEDBACK_CONFIRMATION_TTL_S
+    ) -> None:
+        """Clear feedback confirmation button after a short delay."""
+        await asyncio.sleep(delay_s)
+        try:
+            await message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
     async def start(self):
         """Start bot polling."""

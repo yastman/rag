@@ -1202,3 +1202,63 @@ class TestMakeSessionId:
     def test_different_ids(self, id_a, id_b):
         """Different identifiers produce different session IDs."""
         assert make_session_id("chat", id_a) != make_session_id("chat", id_b)
+
+
+class TestSupervisorIntegration:
+    """Test USE_SUPERVISOR feature flag integration (#240)."""
+
+    async def test_handle_query_uses_supervisor_when_enabled(self, mock_config):
+        """handle_query uses supervisor graph when USE_SUPERVISOR=true."""
+        mock_config_with_supervisor = BotConfig(
+            telegram_token="test-token",
+            voyage_api_key="voyage-key",
+            llm_api_key="llm-key",
+            llm_base_url="https://api.example.com/v1",
+            llm_model="gpt-4o-mini",
+            qdrant_url="http://localhost:6333",
+            qdrant_api_key="qdrant-key",
+            qdrant_collection="test_collection",
+            redis_url="redis://localhost:6379",
+            rerank_provider="none",
+            use_supervisor=True,
+        )
+        bot, _ = _create_bot(mock_config_with_supervisor)
+
+        mock_supervisor_graph = AsyncMock()
+        mock_supervisor_graph.ainvoke = AsyncMock(
+            return_value={
+                "messages": [MagicMock(content="Supervisor response")],
+                "agent_used": "rag_search",
+                "latency_stages": {"supervisor": 0.1},
+            }
+        )
+
+        with (
+            patch(
+                "telegram_bot.bot.build_supervisor_graph",
+                return_value=mock_supervisor_graph,
+            ),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("цены на квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+            mock_supervisor_graph.ainvoke.assert_called_once()
+
+    async def test_handle_query_uses_monolith_when_supervisor_disabled(self, mock_config):
+        """handle_query uses monolithic graph when USE_SUPERVISOR=false (default)."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok", "query_type": "GENERAL"})
+
+        with patch("telegram_bot.bot.build_graph", return_value=mock_graph):
+            message = _make_text_message("цены на квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+            mock_graph.ainvoke.assert_called_once()
