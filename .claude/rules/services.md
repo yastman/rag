@@ -20,24 +20,25 @@ telegram_bot/
 │   ├── query_preprocessor.py ***REMOVED*** HyDEGenerator + QueryPreprocessor
 │   ├── filter_extractor.py ***REMOVED*** Regex filter extraction
 │   ├── qdrant.py          ***REMOVED*** QdrantService (async, gRPC, batch_search_rrf, group_by)
-│   ├── colbert_reranker.py ***REMOVED*** ColbertRerankerService (BGE-M3 /rerank)
+│   ├── bge_m3_client.py   ***REMOVED*** BGEM3Client (async) + BGEM3SyncClient — unified SDK for all BGE-M3 endpoints
+│   ├── colbert_reranker.py ***REMOVED*** ColbertRerankerService (uses BGEM3Client)
 │   ├── voyage.py          ***REMOVED*** VoyageService (embeddings + rerank API)
-│   ├── vectorizers.py     ***REMOVED*** UserBaseVectorizer + BgeM3CacheVectorizer
+│   ├── vectorizers.py     ***REMOVED*** UserBaseVectorizer + BgeM3CacheVectorizer (uses BGEM3Client)
 │   ├── metrics.py         ***REMOVED*** PipelineMetrics (p50/p95 tracking)
 │   └── redis_monitor.py   ***REMOVED*** RedisHealthMonitor (background task)
 ├── integrations/          ***REMOVED*** LangGraph-compatible wrappers
 │   ├── cache.py           ***REMOVED*** CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
-│   ├── embeddings.py      ***REMOVED*** BGEM3HybridEmbeddings (preferred) + legacy Dense/Sparse
+│   ├── embeddings.py      ***REMOVED*** BGEM3HybridEmbeddings (uses BGEM3Client) + legacy wrappers
 │   ├── event_stream.py    ***REMOVED*** EventStream for graph→bot communication
 │   ├── langfuse.py        ***REMOVED*** (legacy) Langfuse callback handler — replaced by @observe
 │   ├── memory.py          ***REMOVED*** MemorySaver for conversation persistence
 │   └── prompt_manager.py  ***REMOVED*** Langfuse Prompt Management with fallback templates
 └── graph/                 ***REMOVED*** LangGraph pipeline
-    ├── graph.py           ***REMOVED*** build_graph() — 9-node StateGraph assembly
+    ├── graph.py           ***REMOVED*** build_graph() — 11-node StateGraph assembly
     ├── state.py           ***REMOVED*** RAGState TypedDict + make_initial_state()
-    ├── edges.py           ***REMOVED*** 3 routing functions
-    ├── config.py          ***REMOVED*** GraphConfig (service factories)
-    └── nodes/             ***REMOVED*** 8 node modules
+    ├── edges.py           ***REMOVED*** 4 routing functions (incl. route_guard)
+    ├── config.py          ***REMOVED*** GraphConfig (service factories, guard_mode)
+    └── nodes/             ***REMOVED*** 9 node modules (incl. guard.py — content filtering)
 ```
 
 ***REMOVED******REMOVED*** Key Patterns
