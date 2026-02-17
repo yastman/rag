@@ -136,10 +136,14 @@ async def query(req: QueryRequest) -> QueryResponse:
                 "query_type": result.get("query_type", ""),
             },
         )
+        # Set wall-time fields so _write_langfuse_scores reports real latency
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        result["pipeline_wall_ms"] = elapsed_ms
+        summarize_s = result.get("latency_stages", {}).get("summarize", 0)
+        result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
+
         # Write Langfuse scores for observability parity with bot
         _write_langfuse_scores(lf, result)
-
-    elapsed_ms = (time.perf_counter() - start) * 1000
 
     return QueryResponse(
         response=result.get("response", ""),
