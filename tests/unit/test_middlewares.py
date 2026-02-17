@@ -28,8 +28,6 @@ class TestErrorHandlerMiddleware:
         """Test that middleware can be created."""
         middleware = ErrorHandlerMiddleware()
         assert middleware is not None
-
-    @pytest.mark.asyncio
     async def test_middleware_passes_through_on_success(self):
         """Test that middleware passes through when handler succeeds."""
         middleware = ErrorHandlerMiddleware()
@@ -42,8 +40,6 @@ class TestErrorHandlerMiddleware:
 
         assert result == "success"
         handler.assert_called_once_with(event, data)
-
-    @pytest.mark.asyncio
     async def test_middleware_handles_exception(self):
         """Test that middleware handles exceptions and sends error message."""
         middleware = ErrorHandlerMiddleware()
@@ -60,8 +56,6 @@ class TestErrorHandlerMiddleware:
         event.answer.assert_called_once()
         call_args = event.answer.call_args[0][0]
         assert "ошибка" in call_args.lower()
-
-    @pytest.mark.asyncio
     async def test_middleware_logs_error(self, caplog):
         """Test that middleware logs errors."""
         middleware = ErrorHandlerMiddleware()
@@ -108,8 +102,6 @@ class TestThrottlingMiddleware:
 
         assert middleware.rate_limit == 2.0
         assert middleware.admin_ids == {123, 456}
-
-    @pytest.mark.asyncio
     async def test_middleware_allows_first_request(self):
         """Test that first request is allowed."""
         middleware = ThrottlingMiddleware(rate_limit=1.5)
@@ -126,8 +118,6 @@ class TestThrottlingMiddleware:
 
         assert result == "success"
         handler.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_middleware_throttles_rapid_requests(self):
         """Test that rapid requests are throttled."""
         middleware = ThrottlingMiddleware(rate_limit=1.5)
@@ -151,8 +141,6 @@ class TestThrottlingMiddleware:
 
         # Should have sent throttle message
         event.answer.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_middleware_exempts_admins(self):
         """Test that admins are exempt from throttling."""
         middleware = ThrottlingMiddleware(rate_limit=1.5, admin_ids=[12345])
@@ -172,8 +160,6 @@ class TestThrottlingMiddleware:
         # Second rapid request - admin should not be throttled
         result2 = await middleware(handler, event, data)
         assert result2 == "success"
-
-    @pytest.mark.asyncio
     async def test_middleware_handles_no_user(self):
         """Test that middleware handles events without user."""
         middleware = ThrottlingMiddleware()

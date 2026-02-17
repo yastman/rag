@@ -109,8 +109,6 @@ class TestHyDEGenerator:
 
         hyde = HyDEGenerator()
         assert isinstance(hyde.client, AsyncOpenAI)
-
-    @pytest.mark.asyncio
     async def test_generate_hypothetical_document_success(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
@@ -122,8 +120,6 @@ class TestHyDEGenerator:
 
         assert "Несебре" in result or "квартира" in result.lower()
         hyde.client.chat.completions.create.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_generate_hypothetical_document_fallback_on_error(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
@@ -134,8 +130,6 @@ class TestHyDEGenerator:
         result = await hyde.generate_hypothetical_document("квартира у моря")
 
         assert result == "квартира у моря"
-
-    @pytest.mark.asyncio
     async def test_generate_hypothetical_document_fallback_on_generic_error(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
@@ -144,8 +138,6 @@ class TestHyDEGenerator:
         result = await hyde.generate_hypothetical_document("квартира у моря")
 
         assert result == "квартира у моря"
-
-    @pytest.mark.asyncio
     async def test_generate_hypothetical_document_api_call_structure(self):
         hyde = HyDEGenerator(
             api_key="test-key",
@@ -167,8 +159,6 @@ class TestHyDEGenerator:
         assert call_kwargs["messages"][0]["role"] == "system"
         assert call_kwargs["messages"][1]["role"] == "user"
         assert "test query" in call_kwargs["messages"][1]["content"]
-
-    @pytest.mark.asyncio
     async def test_close(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
@@ -176,8 +166,6 @@ class TestHyDEGenerator:
         await hyde.close()
 
         hyde.client.close.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_generate_handles_none_content(self):
         hyde = HyDEGenerator()
         hyde.client = AsyncMock()
