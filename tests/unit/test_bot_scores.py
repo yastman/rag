@@ -160,6 +160,8 @@ FULL_PIPELINE_RESULT = {
     "answer_chars": 65,
     "answer_to_question_ratio": 2.4,
     "response_policy_mode": "enforced",
+    ***REMOVED*** Source attribution (***REMOVED***225)
+    "sources_count": 3,
     ***REMOVED*** Conversation memory (***REMOVED***154)
     "messages": [
         {"role": "user", "content": "query"},
@@ -256,13 +258,16 @@ class TestScoreWriting:
             ***REMOVED*** Embedding resilience (***REMOVED***210)
             "bge_embed_error",
             "bge_embed_latency_ms",
+            ***REMOVED*** Source attribution (***REMOVED***225)
+            "sources_shown",
+            "sources_count",
             ***REMOVED*** Conversation memory (***REMOVED***159)
             "memory_messages_count",
             "summarization_triggered",
             "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.score_current_trace.call_count == 30
+        assert mock_lf.score_current_trace.call_count == 32
 
     async def test_score_values_full_pipeline(self, mock_config):
         """Score values should match the graph result state."""
