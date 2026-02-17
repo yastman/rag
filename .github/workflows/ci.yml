@@ -95,8 +95,8 @@ jobs:
           print("CI dependency preflight passed.")
           PY
 
-      - name: Cache test durations
-        uses: actions/cache@v4
+      - name: Restore test durations
+        uses: actions/cache/restore@v4
         with:
           path: .test_durations
           key: test-durations-${{ github.sha }}
@@ -113,8 +113,8 @@ jobs:
             --durations=20 --durations-min=1.0 \
             -q
 
-      - name: Store durations (main only)
-        if: github.ref == 'refs/heads/main'
+      - name: Store durations (main only, shard 1)
+        if: github.ref == 'refs/heads/main' && matrix.group == 1
         run: |
           uv run pytest tests/unit/ \
             --store-durations \
@@ -122,8 +122,8 @@ jobs:
             -m "not legacy_api" \
             -q || true
 
-      - name: Upload durations
-        if: always() && github.ref == 'refs/heads/main'
+      - name: Upload durations (main only, shard 1)
+        if: always() && github.ref == 'refs/heads/main' && matrix.group == 1
         uses: actions/cache/save@v4
         with:
           path: .test_durations
@@ -151,7 +151,11 @@ jobs:
         run: uv sync --frozen --extra voice --extra ingest --extra eval
 
       - name: Run integration tests
-        run: uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
+        run: |
+          uv run pytest \
+            tests/integration/test_graph_paths.py \
+            tests/integration/test_bot_hybrid_search.py \
+            -v --timeout=30
 
   # ---------------------------------------------------------------------------
   # Baseline regression — main only (keeps PR feedback loop fast)
