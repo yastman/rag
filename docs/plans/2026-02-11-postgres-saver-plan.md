@@ -1,8 +1,13 @@
 # PostgresSaver for LangGraph Persistence — Implementation Plan
 
+> **2026-02-17 Alignment Note (#243):**
+> This plan was NOT implemented. Redis checkpointer is used for thread state.
+> Conversation history is stored in Qdrant (`conversation_history` collection) via `HistoryService` (#239).
+> PostgresSaver is no longer planned. See `telegram_bot/services/history_service.py`.
+
 **Issue:** [#74](https://github.com/yastman/rag/issues/74) feat: enable PostgresSaver for LangGraph persistence
-**Priority:** P0 | **Effort:** Low (~30 min)
-**Milestone:** Deferred: Post-Baseline
+**Priority:** ~~P0~~ Superseded | **Effort:** Low (~30 min)
+**Milestone:** ~~Deferred: Post-Baseline~~ Not Implemented
 
 ## Goal
 
