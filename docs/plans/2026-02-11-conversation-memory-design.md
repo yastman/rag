@@ -1,9 +1,15 @@
 # Conversation Memory — Design Document
 
 **Date:** 2026-02-11
-**Status:** Draft
-**Issue:** TBD
+**Status:** Partially Implemented (see note below)
+**Issue:** #239
 **Scope:** Хранение истории переписки с клиентом + семантический поиск
+
+> **2026-02-17 Alignment Note (#243):**
+> - **Qdrant `conversation_history`** — IMPLEMENTED in `telegram_bot/services/history_service.py`.
+> - **PostgresSaver** — NOT IMPLEMENTED, superseded by Redis checkpointer (already in use).
+> - **LangMem** — deferred to future phase.
+> - Canonical architecture: see `telegram_bot/agents/` (#240) and `telegram_bot/services/history_service.py` (#239).
 
 ## Проблема
 
