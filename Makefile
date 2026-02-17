@@ -7,7 +7,8 @@
 	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
 	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
-	qdrant-backup
+	qdrant-backup \
+	git-hygiene git-hygiene-fix
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev-redis
@@ -856,3 +857,17 @@ k3s-ingest-stop: ## Scale ingestion to 0 replicas
 
 k3s-push-%: ## Build and push image to VPS k3s: make k3s-push-bot
 	docker save rag/$*:latest | ssh vps 'sudo k3s ctr -n k8s.io images import -'
+
+# =============================================================================
+# GIT HYGIENE
+# =============================================================================
+
+git-hygiene: ## Git hygiene report (merged branches, stale worktrees, transient files)
+	@echo "$(BLUE)Running git hygiene report...$(NC)"
+	uv run python scripts/git_hygiene.py || true
+	@echo ""
+
+git-hygiene-fix: ## Git hygiene safe cleanup preview (dry-run)
+	@echo "$(BLUE)Running git hygiene cleanup (dry-run)...$(NC)"
+	uv run python scripts/git_hygiene.py --fix --dry-run || true
+	@echo ""
