@@ -2,6 +2,14 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+
+pytest.importorskip(
+    "telegram_bot.services.voyage_reranker",
+    reason="telegram_bot.services.voyage_reranker module removed",
+)
+
 
 class TestVoyageRerankerServiceUnit:
     """Unit tests for VoyageRerankerService."""
