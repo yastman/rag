@@ -19,13 +19,12 @@ from numpy.typing import NDArray
 
 try:
     import cocoindex
-    from cocoindex import DataScope, DataSlice, FlowBuilder
+    from cocoindex import DataScope, FlowBuilder
 
     COCOINDEX_AVAILABLE = True
 except ImportError:
     COCOINDEX_AVAILABLE = False
     cocoindex = None  ***REMOVED*** type: ignore
-    DataSlice = Any  ***REMOVED*** type: ignore
     FlowBuilder = Any  ***REMOVED*** type: ignore
     DataScope = Any  ***REMOVED*** type: ignore
 
