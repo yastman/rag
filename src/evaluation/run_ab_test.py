@@ -20,8 +20,6 @@ import sys
 import time
 from datetime import datetime
 
-from FlagEmbedding import BGEM3FlagModel
-
 
 sys.path.append("/srv/contextual_rag")
 
@@ -67,6 +65,13 @@ def run_ab_test(
     print()
 
     # Initialize embedding model
+    try:
+        from FlagEmbedding import BGEM3FlagModel
+    except ImportError as e:
+        raise ImportError(
+            "FlagEmbedding is not installed. Install ml-local extra: uv sync --extra ml-local"
+        ) from e
+
     print("🤖 Loading BGE-M3 embedding model...")
     start_time = time.time()
     model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
