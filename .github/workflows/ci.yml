@@ -61,7 +61,39 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra voice --extra ingest --extra eval
+
+      - name: Preflight imports (unit profile)
+        run: |
+          uv run python - <<'PY'
+          import importlib
+          import sys
+
+          required_modules = [
+              "fastapi",
+              "pydantic_settings",
+              "pymupdf",
+              "mlflow",
+              "ragas",
+              "fastembed",
+              "cachetools",
+          ]
+
+          failed = []
+          for module_name in required_modules:
+              try:
+                  importlib.import_module(module_name)
+              except Exception as exc:
+                  failed.append((module_name, exc))
+
+          if failed:
+              print("CI dependency preflight failed:")
+              for module_name, exc in failed:
+                  print(f" - {module_name}: {exc!r}")
+              sys.exit(1)
+
+          print("CI dependency preflight passed.")
+          PY
 
       - name: Cache test durations
         uses: actions/cache@v4
@@ -116,7 +148,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --extra voice --extra ingest --extra eval
 
       - name: Run integration tests
         run: uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
@@ -147,7 +179,7 @@ jobs:
 
       - name: Install dependencies
         if: env.LANGFUSE_AVAILABLE == 'true'
-        run: uv sync --frozen
+        run: uv sync --frozen --extra voice --extra ingest --extra eval
 
       - name: Run baseline comparison
         if: env.LANGFUSE_AVAILABLE == 'true'
