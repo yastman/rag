@@ -1,11 +1,30 @@
+# syntax=docker/dockerfile:1@sha256:b6afd42430b15f2d2a4c5a02b919e98a525b785b1aaff16747d2f623364e39b6
+# Voice Agent — uv sync pattern (2026 best practices)
+
+# ====== BUILD STAGE ======
 FROM ghcr.io/astral-sh/uv:0.9-python3.12-bookworm-slim@sha256:e5b65587bce7de595f299855d7385fe7fca39b8a74baa261ba1b7147afa78e58 AS builder
+
 WORKDIR /app
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
+# Deps layer (cached separately from code)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    uv sync --frozen --no-dev --extra voice --no-install-project
+
+# Code layer
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --extra voice --no-install-project
 COPY src/ src/
 COPY telegram_bot/ telegram_bot/
-RUN uv sync --frozen --no-dev --extra voice
 
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --extra voice
+
+# ====== RUNTIME STAGE ======
 FROM python:3.14-slim-bookworm@sha256:f0540d0436a220db0a576ccfe75631ab072391e43a24b88972ef9833f699095f AS runtime
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv

@@ -56,8 +56,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Create non-root user BEFORE copying files
 RUN useradd -m -u 1000 ingestion
 
-# Copy uv binary
-COPY --from=ghcr.io/astral-sh/uv:0.10@sha256:94a23af2d50e97b87b522d3cea24aaf8a1faedec1344c952767434f69585cbf9 /uv /usr/local/bin/uv
+# Copy uv binary from builder (same version as build stage)
+COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
 # Copy venv with --chown (avoids 9GB duplicate layer from chown -R)
 COPY --from=builder --chown=ingestion:ingestion /app/.venv /app/.venv
