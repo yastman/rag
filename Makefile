@@ -876,6 +876,18 @@ k3s-push-%: ***REMOVED******REMOVED*** Build and push image to VPS k3s: make k3s
 	docker save rag/$*:latest | ssh vps 'sudo k3s ctr -n k8s.io images import -'
 
 ***REMOVED*** =============================================================================
+***REMOVED*** DOCKER IMAGE DRIFT (***REMOVED***322)
+***REMOVED*** =============================================================================
+
+.PHONY: verify-compose-images verify-compose-images-json
+
+verify-compose-images: ***REMOVED******REMOVED*** Check running containers match compose-pinned images
+	@uv run python scripts/check_image_drift.py --fix
+
+verify-compose-images-json: ***REMOVED******REMOVED*** Check image drift (JSON output for CI)
+	@uv run python scripts/check_image_drift.py --json
+
+***REMOVED*** =============================================================================
 ***REMOVED*** GIT HYGIENE
 ***REMOVED*** =============================================================================
 
