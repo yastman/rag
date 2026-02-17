@@ -84,6 +84,31 @@ Config: `tests/baseline/thresholds.yaml` (includes `go_no_go` section for valida
 | Component | Span Name | Details |
 |-----------|-----------|---------|
 | `bot.py` handle_query | `telegram-rag-query` | Root span, session_id, user_id, tags |
+| `bot.py` _handle_query_supervisor | `telegram-rag-supervisor` | Supervisor root span (USE_SUPERVISOR=true) |
+
+### Supervisor Spans (#242)
+
+When `USE_SUPERVISOR=true`, the trace tree is:
+```
+telegram-rag-supervisor → supervisor-routing → tool-rag-search → [existing graph nodes]
+                                             → tool-history-search
+                                             → tool-direct-response
+```
+
+| Component | Span Name | capture_input/output | Curated Metadata |
+|-----------|-----------|---------------------|------------------|
+| `supervisor.py` supervisor_node | `supervisor-routing` | disabled | input: message_count; output: tool_selected, latency_ms |
+| `rag_agent.py` rag_search | `tool-rag-search` | disabled | input: query_preview; output: response_length |
+| `history_agent.py` history_search | `tool-history-search` | auto | — |
+| `tools.py` direct_response | `tool-direct-response` | auto | — |
+
+Supervisor-specific scores (written by `_handle_query_supervisor`):
+
+| Score | Type | Purpose |
+|-------|------|---------|
+| `agent_used` | CATEGORICAL | Which tool was selected (rag_search, history_search, direct_response) |
+| `supervisor_latency_ms` | NUMERIC | Routing decision time (ms) |
+| `supervisor_model` | CATEGORICAL | Model used for routing |
 
 ### Entry Point Pattern (Orphan Prevention)
 
