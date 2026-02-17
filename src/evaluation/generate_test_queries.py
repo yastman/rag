@@ -2,16 +2,16 @@
 """
 Generate test queries using LLM.
 Creates 3 types of queries for each article:
-1. Direct (точный запрос)
-2. Semantic (семантический вариант)
-3. Paraphrased (перефразированный)
+1. Direct (exact query)
+2. Semantic (semantic variant)
+3. Paraphrased (paraphrased)
 """
 
 import asyncio
 import json
 import sys
 
-import requests  # type: ignore[import-untyped]
+from qdrant_client import QdrantClient, models
 
 
 sys.path.append("/home/admin/contextual_rag")
@@ -26,6 +26,13 @@ QDRANT_URL = _settings.qdrant_url
 QDRANT_API_KEY = _settings.qdrant_api_key or ""
 
 
+def _make_client() -> QdrantClient:
+    """Create a QdrantClient from resolved settings."""
+    if QDRANT_API_KEY:
+        return QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+    return QdrantClient(url=QDRANT_URL)
+
+
 def fetch_article_texts(collection_name: str, article_numbers: list[str]) -> dict[str, str]:
     """
     Fetch full texts for specified articles from Qdrant.
@@ -37,43 +44,39 @@ def fetch_article_texts(collection_name: str, article_numbers: list[str]) -> dic
     Returns:
         Dict mapping article_number (str) -> full_text
     """
-    print(f"📚 Fetching {len(article_numbers)} articles from Qdrant...")
+    print(f"Fetching {len(article_numbers)} articles from Qdrant...")
 
+    client = _make_client()
     articles = {}
 
     for article_num in article_numbers:
         # Search for article by article_number filter
         # IMPORTANT: Qdrant stores article_number as int, not string!
-        payload = {
-            "filter": {
-                "must": [
-                    {
-                        "key": "article_number",
-                        "match": {"value": int(article_num)},  # Convert to int!
-                    }
-                ]
-            },
-            "limit": 1,
-            "with_payload": True,
-            "with_vector": False,
-        }
-
-        response = requests.post(
-            f"{QDRANT_URL}/collections/{collection_name}/points/scroll",
-            json=payload,
-            headers={"api-key": QDRANT_API_KEY},
+        scroll_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="article_number",
+                    match=models.MatchValue(value=int(article_num)),
+                )
+            ]
         )
-        response.raise_for_status()
 
-        points = response.json()["result"]["points"]
+        points, _ = client.scroll(
+            collection_name=collection_name,
+            scroll_filter=scroll_filter,
+            limit=1,
+            with_payload=True,
+            with_vectors=False,
+        )
+
         if points:
-            text = points[0]["payload"].get("text", "")
+            text = (points[0].payload or {}).get("text", "")
             articles[article_num] = text
-            print(f"  ✓ Article {article_num}: {len(text)} chars")
+            print(f"  Article {article_num}: {len(text)} chars")
         else:
-            print(f"  ✗ Article {article_num}: NOT FOUND")
+            print(f"  Article {article_num}: NOT FOUND")
 
-    print(f"✅ Fetched {len(articles)}/{len(article_numbers)} articles\n")
+    print(f"Fetched {len(articles)}/{len(article_numbers)} articles\n")
     return articles
 
 
@@ -182,7 +185,7 @@ async def generate_all_queries(
     Returns:
         List of all generated queries
     """
-    print(f"🤖 Generating queries with {model}...")
+    print(f"Generating queries with {model}...")
     print(f"   Max concurrent: {max_concurrent}")
     print(f"   Total articles: {len(article_texts)}\n")
 
@@ -204,12 +207,12 @@ async def generate_all_queries(
             queries = await task_coro
             all_queries.extend(queries)
             completed += 1
-            print(f"[{completed}/{len(tasks)}] Article {article_num}: ✓ 3 queries generated")
+            print(f"[{completed}/{len(tasks)}] Article {article_num}: 3 queries generated")
         except Exception as e:
-            print(f"[{completed}/{len(tasks)}] Article {article_num}: ✗ ERROR: {e}")
+            print(f"[{completed}/{len(tasks)}] Article {article_num}: ERROR: {e}")
             completed += 1
 
-    print(f"\n✅ Generated {len(all_queries)} queries total")
+    print(f"\nGenerated {len(all_queries)} queries total")
 
     # Print stats
     llm.print_stats()
@@ -238,7 +241,7 @@ def select_representative_articles(all_articles: dict[str, list], n: int = 50) -
     # Convert to int for display
     selected_ints = [int(a) for a in selected]
 
-    print(f"📊 Selected {len(selected)} articles:")
+    print(f"Selected {len(selected)} articles:")
     print(f"   Range: {min(selected_ints)} - {max(selected_ints)}")
     print(f"   Sample: {selected_ints[:10]}...")
 
@@ -248,7 +251,7 @@ def select_representative_articles(all_articles: dict[str, list], n: int = 50) -
 async def main():
     """Main entry point."""
     print("=" * 80)
-    print("🔬 TEST QUERY GENERATION - Criminal Code Ukraine")
+    print("TEST QUERY GENERATION - Criminal Code Ukraine")
     print("=" * 80)
 
     collection_name = "ukraine_criminal_code_zai_full"
@@ -260,15 +263,15 @@ async def main():
         all_articles = json.load(f)
 
     # Select representative articles
-    print(f"\n📌 Step 1: Select {num_articles} representative articles")
+    print(f"\nStep 1: Select {num_articles} representative articles")
     selected_articles = select_representative_articles(all_articles, n=num_articles)
 
     # Fetch article texts
-    print("\n📌 Step 2: Fetch article texts from Qdrant")
+    print("\nStep 2: Fetch article texts from Qdrant")
     article_texts = fetch_article_texts(collection_name, selected_articles)
 
     # Generate queries
-    print("📌 Step 3: Generate test queries with LLM")
+    print("Step 3: Generate test queries with LLM")
     queries = await generate_all_queries(
         article_texts,
         model="openai/gpt-oss-120b",  # 120B parameters, 100% accuracy
@@ -280,17 +283,17 @@ async def main():
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(queries, f, ensure_ascii=False, indent=2)
 
-    print(f"\n💾 Saved {len(queries)} queries to: {output_file}")
+    print(f"\nSaved {len(queries)} queries to: {output_file}")
 
     # Print summary
-    print("\n📊 Test Set Summary:")
+    print("\nTest Set Summary:")
     print(f"   Total queries: {len(queries)}")
     print(f"   Direct: {len([q for q in queries if q['type'] == 'direct'])}")
     print(f"   Semantic: {len([q for q in queries if q['type'] == 'semantic'])}")
     print(f"   Paraphrased: {len([q for q in queries if q['type'] == 'paraphrased'])}")
     print(f"   Articles covered: {len({q['expected_article'] for q in queries})}")
 
-    print("\n✅ Test query generation completed!")
+    print("\nTest query generation completed!")
 
 
 if __name__ == "__main__":
