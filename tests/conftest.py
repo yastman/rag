@@ -1,5 +1,6 @@
 """Shared pytest fixtures for all tests."""
 
+import logging
 import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -25,6 +26,15 @@ os.environ.setdefault("OTEL_LOGS_EXPORTER", "none")
 # Disable Langfuse completely (belt and suspenders)
 os.environ.setdefault("LANGFUSE_ENABLED", "false")
 os.environ.setdefault("LANGFUSE_HOST", "http://localhost:3001")
+os.environ.setdefault("RAGAS_DO_NOT_TRACK", "true")
+
+# Ragas registers an atexit shutdown hook that logs debug messages late in
+# interpreter teardown. In pytest this can hit already-closed handlers and print
+# noisy "I/O operation on closed file" tracebacks after all tests passed.
+for _logger_name in ("ragas", "ragas._analytics"):
+    _logger = logging.getLogger(_logger_name)
+    _logger.disabled = True
+    _logger.propagate = False
 
 # Load environment variables before any imports
 load_dotenv()
@@ -129,9 +139,9 @@ def mock_httpx_response():
 # =============================================================================
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_context_chunks():
-    """Sample context chunks for LLM tests."""
+    """Sample context chunks for LLM tests (read-only, session-scoped)."""
     return [
         {
             "text": "Квартира в Солнечном берегу, 2 комнаты, 65 м².",
@@ -182,9 +192,9 @@ def openai_api_key():
     return os.getenv("OPENAI_API_KEY", "")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_texts():
-    """Sample texts for embedding tests."""
+    """Sample texts for embedding tests (read-only, session-scoped)."""
     return [
         "Кримінальний кодекс України визначає злочини та покарання.",
         "Стаття 115 передбачає відповідальність за умисне вбивство.",
@@ -192,7 +202,7 @@ def sample_texts():
     ]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def sample_query():
-    """Sample query for search tests."""
+    """Sample query for search tests (read-only, session-scoped)."""
     return "Яке покарання за крадіжку?"
