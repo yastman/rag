@@ -8,10 +8,21 @@ Requires:
 
 import contextlib
 import os
+import socket
 import tempfile
 from pathlib import Path
 
 import pytest
+
+
+def _port_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(2.0)
+        try:
+            s.connect((host, port))
+            return True
+        except (OSError, TimeoutError):
+            return False
 
 
 # Skip if services not available
@@ -20,6 +31,10 @@ pytestmark = [
     pytest.mark.skipif(
         not os.getenv("VOYAGE_API_KEY"),
         reason="VOYAGE_API_KEY not set",
+    ),
+    pytest.mark.skipif(
+        not _port_open("localhost", 5001),
+        reason="docling-serve not running on localhost:5001",
     ),
 ]
 
@@ -84,6 +99,8 @@ async def setup_collection():
     # Cleanup after
     with contextlib.suppress(Exception):
         client.delete_collection(test_collection)
+
+
 async def test_full_ingestion_pipeline(temp_sync_dir, setup_collection):
     """Test complete ingestion from file to searchable vectors."""
     from qdrant_client import QdrantClient
@@ -109,6 +126,8 @@ async def test_full_ingestion_pipeline(temp_sync_dir, setup_collection):
     info = client.get_collection(setup_collection)
 
     assert info.points_count == results[0].chunks_count
+
+
 async def test_replace_semantics_on_update(temp_sync_dir, setup_collection):
     """Test that re-processing replaces existing chunks."""
     from qdrant_client import QdrantClient
@@ -144,6 +163,8 @@ async def test_replace_semantics_on_update(temp_sync_dir, setup_collection):
 
     # Should have replaced, not duplicated
     assert info2.points_count == results2[0].chunks_count
+
+
 async def test_deletion_removes_points(temp_sync_dir, setup_collection):
     """Deleting a file from the sync dir should delete its points from Qdrant."""
     from qdrant_client import QdrantClient
@@ -170,6 +191,8 @@ async def test_deletion_removes_points(temp_sync_dir, setup_collection):
 
     info2 = client.get_collection(setup_collection)
     assert info2.points_count == 0
+
+
 async def test_skip_unchanged_files(temp_sync_dir, setup_collection):
     """Unchanged files should not be re-processed."""
     from src.ingestion.gdrive_flow import GDriveFileProcessor, GDriveFlowConfig
@@ -191,6 +214,8 @@ async def test_skip_unchanged_files(temp_sync_dir, setup_collection):
 
     # Hash should be the same (file wasn't re-processed because unchanged)
     assert results2[0].content_hash == first_hash
+
+
 async def test_multiple_files(temp_sync_dir, setup_collection):
     """Test processing multiple files."""
     from qdrant_client import QdrantClient
@@ -216,6 +241,8 @@ async def test_multiple_files(temp_sync_dir, setup_collection):
     client = QdrantClient(url="http://localhost:6333", timeout=30)
     info = client.get_collection(setup_collection)
     assert info.points_count == total_chunks
+
+
 async def test_unsupported_files_ignored(temp_sync_dir, setup_collection):
     """Unsupported file types should be ignored."""
     from src.ingestion.gdrive_flow import GDriveFlowConfig, run_once
