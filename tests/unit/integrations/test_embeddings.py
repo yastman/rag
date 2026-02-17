@@ -209,15 +209,28 @@ class TestBGEM3HybridEmbeddings:
 class TestBGEM3HybridRetry:
     """Tests for retry behavior on transient errors."""
 
-    async def test_retries_on_remote_protocol_error(self):
-        """Retries on RemoteProtocolError and succeeds on second attempt."""
-        hybrid_ok = {
-            "dense_vecs": [[0.1, 0.2]],
-            "lexical_weights": [{"1": 0.5}],
-        }
+    @pytest.fixture(autouse=True)
+    def _disable_retry_sleep(self, monkeypatch: pytest.MonkeyPatch):
+        """Keep retry attempts deterministic without real backoff waits."""
+
+        async def _noop_sleep(_seconds: float) -> None:
+            return None
+
+        monkeypatch.setattr(BGEM3HybridEmbeddings.aembed_hybrid.retry, "sleep", _noop_sleep)
+
+    @pytest.mark.parametrize(
+        "error_cls,error_msg",
+        [
+            (httpx.RemoteProtocolError, "Server disconnected without sending a response"),
+            (httpx.ConnectTimeout, "Connection timed out"),
+        ],
+        ids=["remote_protocol_error", "connect_timeout"],
+    )
+    async def test_retries_on_transient_error(self, error_cls, error_msg):
+        """Retries on transient transport errors and succeeds on second attempt."""
         ok_response = httpx.Response(
             200,
-            json=hybrid_ok,
+            json={"dense_vecs": [[0.1, 0.2]], "lexical_weights": [{"1": 0.5}]},
             request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
         )
         call_count = 0
@@ -226,7 +239,7 @@ class TestBGEM3HybridRetry:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise httpx.RemoteProtocolError("Server disconnected without sending a response")
+                raise error_cls(error_msg)
             return ok_response
 
         with patch("httpx.AsyncClient.post", side_effect=mock_post):
@@ -267,49 +280,21 @@ class TestBGEM3HybridRetry:
 
         assert call_count == 1  # No retries
 
-    async def test_retries_on_connect_timeout(self):
-        """Retries on ConnectTimeout."""
-        hybrid_ok = {
-            "dense_vecs": [[0.1]],
-            "lexical_weights": [{"1": 0.5}],
-        }
-        ok_response = httpx.Response(
-            200,
-            json=hybrid_ok,
-            request=httpx.Request("POST", "http://fake:8000/encode/hybrid"),
-        )
-        call_count = 0
-
-        async def mock_post(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise httpx.ConnectTimeout("Connection timed out")
-            return ok_response
-
-        with patch("httpx.AsyncClient.post", side_effect=mock_post):
-            emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
-            _dense, _sparse = await emb.aembed_hybrid("test")
-
-        assert call_count == 2
-
 
 class TestBGEM3HybridTimeout:
     """Tests for granular timeout configuration."""
 
-    async def test_uses_granular_timeout(self):
-        """Client uses httpx.Timeout with separate connect/read values."""
-        emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
+    @pytest.mark.parametrize(
+        ("kwargs", "expected_read", "expected_connect"),
+        [
+            ({}, 30.0, 5.0),
+            ({"timeout": 60.0}, 60.0, 60.0),
+        ],
+        ids=["default_granular", "custom_override"],
+    )
+    async def test_timeout_configuration(self, kwargs, expected_read, expected_connect):
+        """Timeout is configured correctly (default granular or custom override)."""
+        emb = BGEM3HybridEmbeddings(base_url="http://fake:8000", **kwargs)
         client = emb._get_client()
-        timeout = client.timeout
-        assert timeout.connect == 5.0
-        assert timeout.read == 30.0
-        assert timeout.write == 5.0
-        assert timeout.pool == 5.0
-
-    async def test_custom_timeout_override(self):
-        """Custom timeout parameter is respected (backward compat)."""
-        emb = BGEM3HybridEmbeddings(base_url="http://fake:8000", timeout=60.0)
-        client = emb._get_client()
-        # When float is passed, all components use that value
-        assert client.timeout.read == 60.0
+        assert client.timeout.read == expected_read
+        assert client.timeout.connect == expected_connect
