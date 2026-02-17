@@ -7,6 +7,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+pytest.importorskip("ragas", reason="ragas not installed (eval extra)")
+pytestmark = pytest.mark.requires_extras
+
 from src.evaluation.ragas_evaluation import (
     ANSWER_RELEVANCY_THRESHOLD,
     CONTEXT_PRECISION_THRESHOLD,
