@@ -1,6 +1,13 @@
 """Session summary generation for CRM integration.
 
 Generates structured summaries from Q&A dialog turns using LLM.
+
+Compatibility:
+    - ``responses.parse`` (Responses API) requires langfuse >= 3.2.4 (fix:
+      langfuse-python#1292, merged 2025-08-12) and openai >= 1.37.0.
+    - Older versions expose the attribute but fail at runtime; the guard
+      below detects this and forces the ``beta.chat.completions.parse``
+      fallback automatically.
 """
 
 import logging
@@ -11,6 +18,11 @@ from pydantic import BaseModel
 
 
 logger = logging.getLogger(__name__)
+
+# Module-level flag: when True, skip responses.parse even if the attribute
+# exists on the client.  Set by check_responses_parse_compat() at startup.
+_force_chat_completions_fallback: bool = False
+_compat_checked: bool = False
 
 
 class SessionSummary(BaseModel):
@@ -54,6 +66,47 @@ _SUMMARY_SYSTEM_PROMPT = """\
 
 _MAX_TURNS_FOR_SUMMARY = 40
 _MAX_DIALOG_CHARS = 12_000
+
+
+def check_responses_parse_compat(llm: Any) -> bool:
+    """Probe whether *llm.responses.parse* is safe to call.
+
+    Performs a lightweight attribute check **without** making a network call.
+    If the Responses API is absent or the wrapper is known-incompatible
+    (e.g. langfuse < 3.2.4 that exposes the attribute but raises at runtime),
+    the module-level ``_force_chat_completions_fallback`` flag is set so all
+    future calls skip the Responses path.
+
+    Call once at application startup / preflight.
+
+    Returns:
+        True if responses.parse looks usable, False otherwise.
+    """
+    global _force_chat_completions_fallback, _compat_checked
+
+    _compat_checked = True
+
+    if not hasattr(llm, "responses") or not hasattr(llm.responses, "parse"):
+        _force_chat_completions_fallback = True
+        logger.info(
+            "responses.parse not available on LLM client — "
+            "using beta.chat.completions.parse fallback"
+        )
+        return False
+
+    # Extra guard: some langfuse wrappers (< 3.2.4) expose the attribute but
+    # the underlying object is not callable or raises TypeError on invocation.
+    parse_attr = getattr(llm.responses, "parse", None)
+    if not callable(parse_attr):
+        _force_chat_completions_fallback = True
+        logger.warning(
+            "responses.parse exists but is not callable (langfuse < 3.2.4?) — "
+            "forcing beta.chat.completions.parse fallback"
+        )
+        return False
+
+    logger.debug("responses.parse compatibility check passed")
+    return True
 
 
 def format_turns_for_prompt(turns: list[dict]) -> str:
@@ -101,8 +154,16 @@ async def generate_summary(
         if newline_idx > 0:
             dialog = dialog[newline_idx + 1 :]
 
-    try:
-        if hasattr(llm, "responses") and hasattr(llm.responses, "parse"):
+    # Determine whether to attempt the Responses API path.
+    # Skipped when: (a) preflight set the fallback flag, or (b) attribute missing.
+    use_responses = (
+        not _force_chat_completions_fallback
+        and hasattr(llm, "responses")
+        and hasattr(llm.responses, "parse")
+    )
+
+    if use_responses:
+        try:
             response = await llm.responses.parse(  # type: ignore[attr-defined]
                 model=model,
                 input=[
@@ -113,8 +174,17 @@ async def generate_summary(
                 temperature=0.0,
             )
             return getattr(response, "output_parsed", None)
+        except Exception:
+            # Graceful degradation: responses.parse failed at runtime
+            # (e.g. langfuse wrapper incompatibility).  Fall through to
+            # beta.chat.completions.parse instead of returning None.
+            logger.warning(
+                "responses.parse raised at runtime — falling back to beta.chat.completions.parse",
+                exc_info=True,
+            )
 
-        # Fallback for wrappers that expose only Chat Completions parse
+    # Fallback: beta.chat.completions.parse (stable across all langfuse versions)
+    try:
         completion = await llm.beta.chat.completions.parse(  # type: ignore[attr-defined]
             model=model,
             messages=[
