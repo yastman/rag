@@ -14,10 +14,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-# Mock langfuse module before any imports
-@pytest.fixture(autouse=True)
-def mock_langfuse_module(monkeypatch: pytest.MonkeyPatch):
-    """Mock langfuse module and its components."""
+# Mock langfuse module before imports in tests that explicitly request it.
+@pytest.fixture(scope="module")
+def _langfuse_module_base() -> dict[str, Any]:
+    """Create one shared langfuse mock module and restore sys.modules on teardown."""
 
     # Configure observe to return a pass-through decorator
     def observe_passthrough(*args, **kwargs):
@@ -49,7 +49,8 @@ def mock_langfuse_module(monkeypatch: pytest.MonkeyPatch):
     mock_langfuse_mod.get_client = MagicMock(return_value=mock_client_instance)
     mock_langfuse_mod.observe = observe_passthrough
 
-    monkeypatch.setitem(sys.modules, "langfuse", mock_langfuse_mod)
+    mp = pytest.MonkeyPatch()
+    mp.setitem(sys.modules, "langfuse", mock_langfuse_mod)
 
     yield {
         "Langfuse": mock_langfuse_class,
@@ -59,6 +60,38 @@ def mock_langfuse_module(monkeypatch: pytest.MonkeyPatch):
         "span": mock_span,
         "module": mock_langfuse_mod,
     }
+    mp.undo()
+
+
+@pytest.fixture
+def mock_langfuse_module(_langfuse_module_base: dict[str, Any]) -> dict[str, Any]:
+    """Reset call history/state for per-test isolation with shared module mock."""
+    mock_langfuse = _langfuse_module_base["Langfuse"]
+    mock_client = _langfuse_module_base["client_instance"]
+    mock_get_client = _langfuse_module_base["get_client"]
+    mock_span = _langfuse_module_base["span"]
+
+    mock_langfuse.reset_mock(return_value=False, side_effect=True)
+    mock_get_client.reset_mock(return_value=False, side_effect=True)
+    mock_client.reset_mock(return_value=False, side_effect=True)
+    mock_client.update_current_trace.reset_mock(return_value=False, side_effect=True)
+    mock_client.score_current_trace.reset_mock(return_value=False, side_effect=True)
+    mock_client.start_as_current_span.reset_mock(return_value=False, side_effect=True)
+    mock_span.reset_mock(return_value=False, side_effect=True)
+    mock_span.update.reset_mock(return_value=False, side_effect=True)
+    mock_span.score.reset_mock(return_value=False, side_effect=True)
+    mock_span.start_as_current_span.reset_mock(return_value=False, side_effect=True)
+
+    mock_langfuse.side_effect = None
+    mock_langfuse.return_value = mock_client
+    mock_get_client.side_effect = None
+    mock_get_client.return_value = mock_client
+    mock_client.start_as_current_span.return_value = mock_span
+    mock_span.__enter__.return_value = mock_span
+    mock_span.__exit__.return_value = False
+    mock_span.start_as_current_span.return_value = mock_span
+
+    return _langfuse_module_base
 
 
 class TestInitializeLangfuse:
