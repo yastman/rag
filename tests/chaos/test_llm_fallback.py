@@ -80,28 +80,20 @@ class TestLLMHTTPErrors:
 
         assert "временно недоступен" in result
 
-    async def test_llm_rate_limit_error_fallback(self, httpx_mock: HTTPXMock):
-        """Verify graceful handling of rate limit errors."""
-        httpx_mock.add_response(
-            status_code=429,
-            json={"error": {"message": "Rate limit exceeded"}},
-        )
+    @pytest.mark.parametrize(
+        ("status_code", "error_json"),
+        [
+            pytest.param(429, {"error": {"message": "Rate limit exceeded"}}, id="rate_limit"),
+            pytest.param(401, {"error": {"message": "Invalid API key"}}, id="auth_error"),
+        ],
+    )
+    async def test_llm_error_with_json_body_fallback(
+        self, httpx_mock: HTTPXMock, status_code, error_json
+    ):
+        """Verify graceful handling of HTTP errors with JSON body."""
+        httpx_mock.add_response(status_code=status_code, json=error_json)
 
         service = LLMService(api_key="test-key")
-
-        result = await service.generate_answer("Query", [])
-
-        assert "временно недоступен" in result
-
-    async def test_llm_auth_error_fallback(self, httpx_mock: HTTPXMock):
-        """Verify graceful handling of authentication errors."""
-        httpx_mock.add_response(
-            status_code=401,
-            json={"error": {"message": "Invalid API key"}},
-        )
-
-        service = LLMService(api_key="invalid-key")
-
         result = await service.generate_answer("Query", [])
 
         assert "временно недоступен" in result
@@ -207,29 +199,30 @@ class TestLLMFallbackChain:
 class TestLLMStreamingFallback:
     """Tests for LLM streaming fallback."""
 
-    async def test_streaming_timeout_yields_fallback(self, httpx_mock: HTTPXMock):
-        """Verify streaming yields fallback on timeout."""
-        httpx_mock.add_exception(httpx.TimeoutException("Stream timeout"))
+    @pytest.mark.parametrize(
+        ("setup_mock", "chunks"),
+        [
+            pytest.param(
+                "timeout",
+                [{"text": "Data", "metadata": {"title": "Test"}, "score": 0.9}],
+                id="timeout",
+            ),
+            pytest.param("http_500", [], id="http_error"),
+        ],
+    )
+    async def test_streaming_error_yields_fallback(
+        self, httpx_mock: HTTPXMock, setup_mock, chunks
+    ):
+        """Verify streaming yields fallback on error."""
+        if setup_mock == "timeout":
+            httpx_mock.add_exception(httpx.TimeoutException("Stream timeout"))
+        else:
+            httpx_mock.add_response(status_code=500)
 
         service = LLMService(api_key="test-key")
-
-        chunks = [{"text": "Data", "metadata": {"title": "Test"}, "score": 0.9}]
 
         collected = []
         async for chunk in service.stream_answer("Query", chunks):
-            collected.append(chunk)
-
-        full_response = "".join(collected)
-        assert "временно недоступен" in full_response
-
-    async def test_streaming_http_error_yields_fallback(self, httpx_mock: HTTPXMock):
-        """Verify streaming yields fallback on HTTP error."""
-        httpx_mock.add_response(status_code=500)
-
-        service = LLMService(api_key="test-key")
-
-        collected = []
-        async for chunk in service.stream_answer("Query", []):
             collected.append(chunk)
 
         full_response = "".join(collected)
