@@ -6,6 +6,14 @@ Tests verify graceful degradation when Redis is unavailable.
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+
+pytest.importorskip(
+    "telegram_bot.services.cache",
+    reason="telegram_bot.services.cache module removed in current architecture",
+)
+
 
 class TestRedisDisconnect:
     """Tests for Redis disconnection handling."""

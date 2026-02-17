@@ -2,10 +2,19 @@
 """Smoke tests for Qdrant quantization A/B testing."""
 
 import os
+import socket
 import time
 
 import numpy as np
 import pytest
+
+
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 @pytest.fixture
@@ -31,7 +40,7 @@ async def qdrant_service():
     await service.close()
 
 
-@pytest.mark.skipif(not os.getenv("QDRANT_URL"), reason="QDRANT_URL not set")
+@pytest.mark.skipif(not _is_port_open("localhost", 6333), reason="Qdrant not running (6333)")
 class TestSmokeQuantization:
     """Test quantization A/B switching."""
 

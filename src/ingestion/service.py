@@ -242,10 +242,24 @@ class IngestionService:
                     "error": "Collection not found",
                     "points_count": 0,
                 }
-            return {"error": str(e)}
+            return {
+                "name": self.collection_name,
+                "error": str(e),
+                "points_count": 0,
+            }
         except Exception as e:
+            if "not found" in str(e).lower() or getattr(e, "status_code", None) == 404:
+                return {
+                    "name": self.collection_name,
+                    "error": "Collection not found",
+                    "points_count": 0,
+                }
             logger.error(f"Error getting collection stats: {e}")
-            return {"error": str(e)}
+            return {
+                "name": self.collection_name,
+                "error": str(e),
+                "points_count": 0,
+            }
 
     async def close(self) -> None:
         """Close service connections."""
