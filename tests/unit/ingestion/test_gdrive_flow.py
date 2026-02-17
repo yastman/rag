@@ -10,7 +10,8 @@ from unittest.mock import patch
 import pytest
 
 
-pytestmark = pytest.mark.legacy_api
+pytest.importorskip("fastembed", reason="fastembed not installed (ingest extra)")
+pytestmark = [pytest.mark.legacy_api, pytest.mark.requires_extras]
 
 
 class TestGDriveFlowConfig:
