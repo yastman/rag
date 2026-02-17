@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 
+import src.ingestion.cocoindex_flow as cocoindex_flow
 from src.ingestion.cocoindex_flow import (
     FlowConfig,
     VoyageEmbedFunction,
@@ -90,15 +91,16 @@ class TestVoyageEmbedFunction:
         mock_service.embed_documents = AsyncMock(return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])
         func._service = mock_service
 
-        with patch("asyncio.run", side_effect=lambda _coro: [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]):
-            with patch("asyncio.get_event_loop") as mock_loop:
-                mock_loop.return_value.is_running.return_value = False
-                mock_loop.return_value.run_until_complete.return_value = [
-                    [0.1, 0.2, 0.3],
-                    [0.4, 0.5, 0.6],
-                ]
+        def _run_until_complete(coro):
+            # Test double for loop.run_until_complete that avoids leaked coroutine warnings.
+            coro.close()
+            return [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
 
-                result = func(["text1", "text2"])
+        with patch("asyncio.get_event_loop") as mock_loop:
+            mock_loop.return_value.is_running.return_value = False
+            mock_loop.return_value.run_until_complete.side_effect = _run_until_complete
+
+            result = func(["text1", "text2"])
 
         assert len(result) == 2
         assert isinstance(result[0], np.ndarray)
@@ -119,19 +121,19 @@ class TestCreateDocumentFlow:
 
     def test_returns_none_when_cocoindex_unavailable(self):
         """Test that None is returned when CocoIndex not available."""
-        with patch("src.ingestion.cocoindex_flow.COCOINDEX_AVAILABLE", False):
+        with patch.object(cocoindex_flow, "COCOINDEX_AVAILABLE", False):
             result = create_document_flow()
 
         assert result is None
 
     def test_creates_flow_when_available(self):
         """Test flow creation when CocoIndex is available."""
-        with patch("src.ingestion.cocoindex_flow.COCOINDEX_AVAILABLE", True):
+        with patch.object(cocoindex_flow, "COCOINDEX_AVAILABLE", True):
             # Mock cocoindex module with proper decorator signature
             mock_cocoindex = MagicMock()
             mock_cocoindex.flow_def = MagicMock(return_value=lambda f: f)
 
-            with patch("src.ingestion.cocoindex_flow.cocoindex", mock_cocoindex):
+            with patch.object(cocoindex_flow, "cocoindex", mock_cocoindex):
                 result = create_document_flow(
                     config=FlowConfig(collection_name="test"),
                     source_path="/test/path",
@@ -146,7 +148,7 @@ class TestSetupAndRunFlow:
 
     def test_returns_error_when_cocoindex_unavailable(self):
         """Test error return when CocoIndex not available."""
-        with patch("src.ingestion.cocoindex_flow.COCOINDEX_AVAILABLE", False):
+        with patch.object(cocoindex_flow, "COCOINDEX_AVAILABLE", False):
             result = setup_and_run_flow("/test/path")
 
         assert result["success"] is False
@@ -154,10 +156,10 @@ class TestSetupAndRunFlow:
 
     def test_handles_flow_creation_failure(self):
         """Test handling of flow creation failure."""
-        with patch("src.ingestion.cocoindex_flow.COCOINDEX_AVAILABLE", True):
-            with patch("src.ingestion.cocoindex_flow.create_document_flow", return_value=None):
+        with patch.object(cocoindex_flow, "COCOINDEX_AVAILABLE", True):
+            with patch.object(cocoindex_flow, "create_document_flow", return_value=None):
                 mock_cocoindex = MagicMock()
-                with patch("src.ingestion.cocoindex_flow.cocoindex", mock_cocoindex):
+                with patch.object(cocoindex_flow, "cocoindex", mock_cocoindex):
                     result = setup_and_run_flow("/test/path")
 
         assert result["success"] is False
@@ -165,11 +167,11 @@ class TestSetupAndRunFlow:
 
     def test_successful_flow_execution(self):
         """Test successful flow execution."""
-        with patch("src.ingestion.cocoindex_flow.COCOINDEX_AVAILABLE", True):
+        with patch.object(cocoindex_flow, "COCOINDEX_AVAILABLE", True):
             mock_flow = MagicMock()
-            with patch("src.ingestion.cocoindex_flow.create_document_flow", return_value=mock_flow):
+            with patch.object(cocoindex_flow, "create_document_flow", return_value=mock_flow):
                 mock_cocoindex = MagicMock()
-                with patch("src.ingestion.cocoindex_flow.cocoindex", mock_cocoindex):
+                with patch.object(cocoindex_flow, "cocoindex", mock_cocoindex):
                     config = FlowConfig(collection_name="test_collection")
                     result = setup_and_run_flow("/test/path", config=config)
 
@@ -180,10 +182,10 @@ class TestSetupAndRunFlow:
 
     def test_handles_exception(self):
         """Test handling of exceptions during flow execution."""
-        with patch("src.ingestion.cocoindex_flow.COCOINDEX_AVAILABLE", True):
+        with patch.object(cocoindex_flow, "COCOINDEX_AVAILABLE", True):
             mock_cocoindex = MagicMock()
             mock_cocoindex.init.side_effect = RuntimeError("Init failed")
-            with patch("src.ingestion.cocoindex_flow.cocoindex", mock_cocoindex):
+            with patch.object(cocoindex_flow, "cocoindex", mock_cocoindex):
                 result = setup_and_run_flow("/test/path")
 
         assert result["success"] is False
