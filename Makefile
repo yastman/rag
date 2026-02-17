@@ -8,7 +8,7 @@
 	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
-	git-hygiene git-hygiene-fix
+	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force
 
 ***REMOVED*** Configurable container names & thresholds
 REDIS_CONTAINER ?= dev-redis
@@ -887,4 +887,14 @@ git-hygiene: ***REMOVED******REMOVED*** Git hygiene report (merged branches, sta
 git-hygiene-fix: ***REMOVED******REMOVED*** Git hygiene safe cleanup preview (dry-run)
 	@echo "$(BLUE)Running git hygiene cleanup (dry-run)...$(NC)"
 	uv run python scripts/git_hygiene.py --fix --dry-run || true
+	@echo ""
+
+repo-cleanup: ***REMOVED******REMOVED*** Full repo cleanup: branches, worktrees, stashes (dry-run)
+	@echo "$(BLUE)Running repo cleanup (dry-run)...$(NC)"
+	bash scripts/repo_cleanup.sh --dry-run
+	@echo ""
+
+repo-cleanup-force: ***REMOVED******REMOVED*** Full repo cleanup: interactive deletion mode
+	@echo "$(BLUE)Running repo cleanup (interactive)...$(NC)"
+	bash scripts/repo_cleanup.sh --force
 	@echo ""
