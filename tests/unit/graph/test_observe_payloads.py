@@ -99,7 +99,7 @@ def _extract_span_payloads(mock_lf_client: MagicMock) -> list[dict]:
     """Collect all input/output dicts from update_current_span calls."""
     payloads: list[dict] = []
     for c in mock_lf_client.update_current_span.call_args_list:
-        kwargs = c.kwargs if c.kwargs else {}
+        kwargs = c.kwargs or {}
         if "input" in kwargs and isinstance(kwargs["input"], dict):
             payloads.append(kwargs["input"])
         if "output" in kwargs and isinstance(kwargs["output"], dict):
