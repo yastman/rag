@@ -78,6 +78,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 - **Config:** `renovate.json` | Schedule: Monday before 9:00 Kyiv
 - **Skill:** `/deps` — review and merge updates
 - **Lock maintenance:** `uv.lock` refreshed weekly via Renovate
+- **PR workflow:** `.claude/rules/git-workflow.md` — PR size limits, merge discipline, Renovate batching
 
 ## Task Management
 
@@ -198,4 +199,5 @@ See `.claude/rules/` for domain-specific documentation:
 | `k3s.md` | k3s manifests, deployment, VPS | `k8s/**` |
 | `testing.md` | Unit tests, chaos tests, E2E | `tests/**` |
 | `skills.md` | Superpowers workflow | `docs/plans/**` |
+| `git-workflow.md` | PR discipline, merge rules, Renovate strategy | `.github/**, renovate.json` |
 | `shared-tasks.md` | Shared task list between terminals | — |
