@@ -62,8 +62,8 @@ def format_turns_for_prompt(turns: list[dict]) -> str:
         return ""
     lines = []
     for turn in turns:
-        lines.append(f"Клиент: {turn['query']}")
-        lines.append(f"Бот: {turn['response']}")
+        lines.append(f"Клиент: {turn.get('query', '')}")
+        lines.append(f"Бот: {turn.get('response', '')}")
     return "\n".join(lines)
 
 
@@ -97,6 +97,9 @@ async def generate_summary(
     dialog = format_turns_for_prompt(trimmed_turns)
     if len(dialog) > _MAX_DIALOG_CHARS:
         dialog = dialog[-_MAX_DIALOG_CHARS:]
+        newline_idx = dialog.find("\n")
+        if newline_idx > 0:
+            dialog = dialog[newline_idx + 1 :]
 
     try:
         if hasattr(llm, "responses") and hasattr(llm.responses, "parse"):
@@ -130,7 +133,7 @@ async def generate_summary(
 def format_summary_as_note(summary: SessionSummary) -> str:
     """Format SessionSummary as a readable CRM note text.
 
-    Output is designed for Kommo lead notes (plain text with emoji markers).
+    Output is designed for Kommo lead notes (plain text with labeled sections).
     """
     lines = [f"AI Summary ({datetime.now(UTC).strftime('%Y-%m-%d')})", ""]
     lines.append(summary.brief)

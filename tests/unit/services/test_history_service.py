@@ -314,3 +314,19 @@ class TestGetSessionTurns:
         )
         assert [t["query"] for t in turns] == ["q1", "q2"]
         assert mock_client.scroll.await_count == 2
+        second_call_kwargs = mock_client.scroll.call_args_list[1].kwargs
+        assert second_call_kwargs["offset"] == "offset-1"
+
+    async def test_returns_empty_on_zero_limit(self, service, mock_client):
+        """get_session_turns returns empty list when limit <= 0."""
+        turns = await service.get_session_turns(user_id=100, session_id="s", limit=0)
+
+        assert turns == []
+        mock_client.scroll.assert_not_called()
+
+    async def test_returns_empty_on_negative_limit(self, service, mock_client):
+        """get_session_turns returns empty list when limit is negative."""
+        turns = await service.get_session_turns(user_id=100, session_id="s", limit=-5)
+
+        assert turns == []
+        mock_client.scroll.assert_not_called()
