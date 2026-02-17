@@ -62,29 +62,33 @@ class TestClassifyQuery:
 class TestClassifyNode:
     """Integration tests for the classify_node LangGraph node."""
 
-    async def test_chitchat_returns_response(self):
-        state = make_initial_state(user_id=1, session_id="s", query="Привет!")
+    @pytest.mark.parametrize(
+        ("query", "expected_type"),
+        [
+            ("Привет!", CHITCHAT),
+            ("как написать код на python", OFF_TOPIC),
+        ],
+    )
+    async def test_early_exit_returns_canned_response(self, query, expected_type):
+        """CHITCHAT and OFF_TOPIC queries produce a canned response (early exit)."""
+        state = make_initial_state(user_id=1, session_id="s", query=query)
         result = await classify_node(state)
-        assert result["query_type"] == CHITCHAT
+        assert result["query_type"] == expected_type
         assert result["response"]  # non-empty canned response
         assert "classify" in result["latency_stages"]
 
-    async def test_off_topic_returns_response(self):
-        state = make_initial_state(user_id=1, session_id="s", query="как написать код на python")
+    @pytest.mark.parametrize(
+        ("query", "expected_type"),
+        [
+            ("2 комнаты до 80000 евро", STRUCTURED),
+            ("как оформить покупку", FAQ),
+        ],
+    )
+    async def test_rag_types_have_no_canned_response(self, query, expected_type):
+        """STRUCTURED and FAQ queries continue to RAG pipeline (no canned response)."""
+        state = make_initial_state(user_id=1, session_id="s", query=query)
         result = await classify_node(state)
-        assert result["query_type"] == OFF_TOPIC
-        assert result["response"]
-
-    async def test_structured_no_canned_response(self):
-        state = make_initial_state(user_id=1, session_id="s", query="2 комнаты до 80000 евро")
-        result = await classify_node(state)
-        assert result["query_type"] == STRUCTURED
-        assert "response" not in result
-
-    async def test_faq_no_canned_response(self):
-        state = make_initial_state(user_id=1, session_id="s", query="как оформить покупку")
-        result = await classify_node(state)
-        assert result["query_type"] == FAQ
+        assert result["query_type"] == expected_type
         assert "response" not in result
 
     async def test_records_latency(self):

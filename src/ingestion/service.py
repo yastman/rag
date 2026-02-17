@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import anyio
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 
@@ -127,7 +128,7 @@ class IngestionService:
         start_time = time.time()
         stats = IngestionStats()
 
-        if not directory.exists():
+        if not await anyio.Path(directory).exists():
             stats.errors.append(f"Directory not found: {directory}")
             return stats
 
@@ -137,11 +138,13 @@ class IngestionService:
 
         # Count documents
         supported_extensions = {".pdf", ".docx", ".doc", ".md", ".txt", ".html", ".htm"}
-        documents = [
-            f
-            for f in directory.iterdir()
-            if f.is_file() and f.suffix.lower() in supported_extensions
-        ]
+        documents = await anyio.to_thread.run_sync(
+            lambda: [
+                Path(entry.path)
+                for entry in os.scandir(directory)
+                if entry.is_file() and Path(entry.path).suffix.lower() in supported_extensions
+            ]
+        )
         stats.total_documents = len(documents)
 
         if stats.total_documents == 0:
@@ -197,7 +200,7 @@ class IngestionService:
             )
             return stats
 
-        if not Path(self.google_service_account_key).exists():
+        if not await anyio.Path(self.google_service_account_key).exists():
             stats.errors.append(
                 f"Service account key file not found: {self.google_service_account_key}"
             )
