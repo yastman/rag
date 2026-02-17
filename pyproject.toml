@@ -380,6 +380,7 @@ markers = [
     "slow: Tests taking > 5 seconds",
     "legacy_api: tests for pre-LangGraph API (may need rewrite)",
     "smoke: Smoke tests (requires running services)",
+    "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
 ]
 
 # =============================================================================
