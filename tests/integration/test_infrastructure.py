@@ -1,12 +1,28 @@
-"""Infrastructure tests for Qdrant, Redis, MLflow, Langfuse."""
+"""Infrastructure tests for Qdrant, Redis, MLflow, Langfuse.
+
+Each test class gracefully skips if the target service is unavailable.
+"""
 
 import contextlib
 import os
+import socket
 
 import httpx
 import pytest
-import redis.asyncio as redis
+import redis.asyncio as aioredis
 from qdrant_client import QdrantClient
+from redis.exceptions import AuthenticationError as RedisAuthError
+
+
+def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
+    """Check if a TCP port is open."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        try:
+            s.connect((host, port))
+            return True
+        except (OSError, TimeoutError):
+            return False
 
 
 class TestQdrantInfrastructure:
@@ -27,8 +43,6 @@ class TestQdrantInfrastructure:
         names = [c.name for c in collections]
 
         assert "contextual_bulgaria_voyage" in names
-        # legal_documents may not exist in all envs
-        # assert "legal_documents" in names
 
     def test_collection_voyage_vector_config(self, qdrant_client):
         """Voyage collection has correct vector config."""
@@ -42,52 +56,49 @@ class TestQdrantInfrastructure:
         # Check sparse vector exists (may be named 'sparse' or 'bm42')
         sparse_config = info.config.params.sparse_vectors
         assert sparse_config is not None
-        assert len(sparse_config) > 0  # At least one sparse vector configured
+        assert len(sparse_config) > 0
 
     def test_collection_points_count(self, qdrant_client):
         """Collection has expected number of points."""
         info = qdrant_client.get_collection("contextual_bulgaria_voyage")
-        assert info.points_count >= 90  # At least 90 documents
+        assert info.points_count >= 90
 
     def test_search_dense_returns_results(self, qdrant_client):
-        """Dense search returns results."""
-        # Use random vector for test
+        """Dense search returns results (using query_points API)."""
         dummy_vector = [0.1] * 1024
 
-        results = qdrant_client.search(
+        results = qdrant_client.query_points(
             collection_name="contextual_bulgaria_voyage",
-            query_vector=("dense", dummy_vector),
+            query=dummy_vector,
+            using="dense",
             limit=5,
+            with_payload=True,
         )
 
-        assert len(results) > 0
-        assert results[0].score is not None
+        assert len(results.points) > 0
+        assert results.points[0].score is not None
 
     def test_search_sparse_works(self, qdrant_client):
         """Sparse search executes without error."""
-        from qdrant_client.models import NamedSparseVector, SparseVector
+        from qdrant_client.models import SparseVector
 
         # Get actual sparse vector name from collection config
         info = qdrant_client.get_collection("contextual_bulgaria_voyage")
         sparse_names = list(info.config.params.sparse_vectors.keys())
         sparse_name = sparse_names[0] if sparse_names else "bm42"
 
-        # Minimal sparse vector using NamedSparseVector
-        # Note: random indices may not match any documents (returns empty)
-        sparse = NamedSparseVector(
-            name=sparse_name,
-            vector=SparseVector(indices=[1, 2, 3], values=[0.5, 0.3, 0.2]),
-        )
+        sparse = SparseVector(indices=[1, 2, 3], values=[0.5, 0.3, 0.2])
 
-        results = qdrant_client.search(
+        results = qdrant_client.query_points(
             collection_name="contextual_bulgaria_voyage",
-            query_vector=sparse,
+            query=sparse,
+            using=sparse_name,
             limit=5,
+            with_payload=True,
         )
 
         # Sparse search with random indices may return 0 results
-        # The important thing is it executes without error
-        assert isinstance(results, list)
+        assert isinstance(results.points, list)
 
 
 class TestRedisInfrastructure:
@@ -96,22 +107,34 @@ class TestRedisInfrastructure:
     @pytest.fixture
     async def redis_client(self):
         """Create async Redis client."""
-        url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        client = redis.from_url(url, decode_responses=True, socket_timeout=5.0)
+        if not _check_tcp("localhost", 6379):
+            pytest.skip("Redis not running on localhost:6379")
+        password = os.getenv("REDIS_PASSWORD", "")
+        if password:
+            url = f"redis://:{password}@localhost:6379"
+        else:
+            url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        client = aioredis.from_url(url, decode_responses=True, socket_timeout=5.0)
+        try:
+            await client.ping()
+        except RedisAuthError:
+            await client.aclose()
+            pytest.skip("Redis requires authentication (set REDIS_PASSWORD)")
         yield client
         await client.aclose()
+
     async def test_query_engine_available(self, redis_client):
         """FT.* commands are available (Query Engine)."""
         try:
             result = await redis_client.execute_command("FT._LIST")
-            assert isinstance(result, list)  # Empty list is OK
+            assert isinstance(result, list)
         except Exception as e:
             pytest.fail(f"Query Engine not available: {e}")
+
     async def test_vector_search_available(self, redis_client):
         """Vector search (FT.CREATE with VECTOR) works."""
         index_name = "test:infra:vec_idx"
         try:
-            # Create index with VECTOR field (DIM 4 for minimal test)
             await redis_client.execute_command(
                 "FT.CREATE",
                 index_name,
@@ -134,7 +157,6 @@ class TestRedisInfrastructure:
                 "DISTANCE_METRIC",
                 "COSINE",
             )
-            # Verify index exists
             info = await redis_client.execute_command("FT.INFO", index_name)
             assert info is not None
         except Exception as e:
@@ -142,11 +164,9 @@ class TestRedisInfrastructure:
         finally:
             with contextlib.suppress(Exception):
                 await redis_client.execute_command("FT.DROPINDEX", index_name)
-    async def test_json_commands_available(self, redis_client):
-        """JSON.* commands are available.
 
-        Set REQUIRE_REDIS_JSON=1 for strict mode (fail instead of skip).
-        """
+    async def test_json_commands_available(self, redis_client):
+        """JSON.* commands are available."""
         require_json = os.getenv("REQUIRE_REDIS_JSON", "0") == "1"
         test_key = "test:infrastructure:json_check"
 
@@ -164,6 +184,7 @@ class TestRedisInfrastructure:
         finally:
             with contextlib.suppress(Exception):
                 await redis_client.delete(test_key)
+
     async def test_set_get_operations(self, redis_client):
         """Basic set/get operations work."""
         test_key = "test:infrastructure:key"
@@ -178,11 +199,14 @@ class TestRedisInfrastructure:
 
 class TestMLflowInfrastructure:
     """MLflow tracking server tests."""
+
     async def test_experiments_list(self):
         """Can list experiments."""
         url = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+        if not _check_tcp("localhost", 5000):
+            pytest.skip("MLflow not running on localhost:5000")
+
         async with httpx.AsyncClient(timeout=5.0) as client:
-            # MLflow search experiments requires POST with max_results
             response = await client.post(
                 f"{url}/api/2.0/mlflow/experiments/search",
                 json={"max_results": 10},
@@ -194,9 +218,13 @@ class TestMLflowInfrastructure:
 
 class TestLangfuseInfrastructure:
     """Langfuse tracing tests."""
+
     async def test_api_accessible(self):
         """Langfuse API is accessible."""
         url = os.getenv("LANGFUSE_HOST", "http://localhost:3001")
+        if not _check_tcp("localhost", 3001):
+            pytest.skip("Langfuse not running on localhost:3001")
+
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{url}/api/public/health")
             assert response.status_code == 200

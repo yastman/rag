@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def voyage_service():
     api_key = os.getenv("VOYAGE_API_KEY")
     if not api_key:
@@ -18,7 +18,7 @@ async def voyage_service():
     return VoyageService(api_key=api_key)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def qdrant_service():
     from telegram_bot.services.qdrant import QdrantService
 
@@ -34,6 +34,7 @@ async def qdrant_service():
 @pytest.mark.skipif(not os.getenv("QDRANT_URL"), reason="QDRANT_URL not set")
 class TestSmokeQuantization:
     """Test quantization A/B switching."""
+
     async def test_search_with_quantization_returns_results(self, voyage_service, qdrant_service):
         """Search with quantization should return results."""
         embedding = await voyage_service.embed_query("квартира в Солнечном берегу")
@@ -43,6 +44,7 @@ class TestSmokeQuantization:
             top_k=5,
         )
         assert len(results) > 0
+
     async def test_search_without_quantization_returns_results(
         self, voyage_service, qdrant_service
     ):
@@ -54,6 +56,7 @@ class TestSmokeQuantization:
             top_k=5,
         )
         assert len(results) > 0
+
     async def test_quantization_results_overlap_60_percent(self, voyage_service, qdrant_service):
         """Results should have >= 60% overlap between modes."""
         embedding = await voyage_service.embed_query("студия с видом на море")
