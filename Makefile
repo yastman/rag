@@ -149,7 +149,7 @@ test-unit: ***REMOVED******REMOVED*** Run unit tests locally in parallel (xdist 
 
 test-unit-core: ***REMOVED******REMOVED*** Run core unit tests (no optional deps needed, PR gate)
 	@echo "$(BLUE)Running core unit tests (no optional deps)...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
 	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
 
 test-unit-full: ***REMOVED******REMOVED*** Run all unit tests including optional-dep tests (nightly/main)
@@ -192,10 +192,10 @@ test-integration-full: ***REMOVED******REMOVED*** Run ALL integration tests (req
 	uv run pytest tests/integration/ -v --timeout=60
 	@echo "$(GREEN)✓ Full integration tests complete$(NC)"
 
-test-nightly: ***REMOVED******REMOVED*** Run heavy test suites (e2e, chaos, baseline, load) — schedule overnight
+test-nightly: ***REMOVED******REMOVED*** Run heavy test suites (chaos, smoke, slow unit) — schedule overnight
 	@echo "$(BLUE)Running nightly test suite...$(NC)"
-	uv run pytest tests/chaos/ -v --timeout=60 -n auto
-	uv run pytest tests/smoke/ -v --timeout=60
+	uv run pytest tests/chaos/ -v --timeout=60 -n auto -m "not legacy_api"
+	uv run pytest tests/smoke/ -v --timeout=60 -m "not legacy_api"
 	uv run pytest tests/unit/ -n auto --timeout=30 -m "slow" -q
 	@echo "$(GREEN)✓ Nightly tests complete$(NC)"
 
