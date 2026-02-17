@@ -1,6 +1,6 @@
 """Bot configuration."""
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -303,6 +303,32 @@ class BotConfig(BaseSettings):
     supervisor_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),
+    )
+
+    # Session summary + CRM (#305)
+    session_summary_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("session_summary_enabled", "SESSION_SUMMARY_ENABLED"),
+    )
+    session_timeout_minutes: int = Field(
+        default=30,
+        validation_alias=AliasChoices("session_timeout_minutes", "SESSION_TIMEOUT_MINUTES"),
+    )
+    kommo_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("kommo_enabled", "KOMMO_ENABLED"),
+    )
+    kommo_subdomain: str = Field(
+        default="",
+        validation_alias=AliasChoices("kommo_subdomain", "KOMMO_SUBDOMAIN"),
+    )
+    kommo_access_token: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("kommo_access_token", "KOMMO_ACCESS_TOKEN"),
+    )
+    kommo_telegram_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_telegram_field_id", "KOMMO_TELEGRAM_FIELD_ID"),
     )
 
     # LLM-as-a-Judge online sampling
