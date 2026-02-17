@@ -15,24 +15,39 @@ class TestMainFunction:
     """Test main() function logic."""
 
     @pytest.fixture(autouse=True)
-    def cleanup_modules(self, monkeypatch):
-        """Clear module cache for each test using monkeypatch (auto-restored).
+    def cleanup_modules(self):
+        """Isolate telegram_bot.main imports while restoring original modules.
 
-        Uses monkeypatch.delitem so removed modules are restored on teardown,
-        preventing pollution of other test files in the same xdist worker.
+        We clear the modules that ``telegram_bot.main`` imports and then
+        restore original module objects after each test, preventing leakage
+        into other test files that keep imported references.
         """
-        prefixes = (
-            "telegram_bot",
-            "src.observability",
+        tracked = (
+            "telegram_bot.main",
+            "telegram_bot.bot",
+            "telegram_bot.config",
+            "telegram_bot.logging_config",
         )
-
-        for key in list(sys.modules.keys()):
-            if key.startswith(prefixes):
-                monkeypatch.delitem(sys.modules, key)
-
+        originals = {name: sys.modules.get(name) for name in tracked}
+        pkg = sys.modules.get("telegram_bot")
+        had_main_attr = pkg is not None and hasattr(pkg, "main")
+        original_main_attr = getattr(pkg, "main", None) if had_main_attr else None
+        for name in tracked:
+            sys.modules.pop(name, None)
+        if pkg is not None and hasattr(pkg, "main"):
+            delattr(pkg, "main")
         yield
+        for name, module in originals.items():
+            if module is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
+        if pkg is not None:
+            if had_main_attr:
+                pkg.main = original_main_attr
+            elif hasattr(pkg, "main"):
+                delattr(pkg, "main")
 
-    @pytest.mark.asyncio
     async def test_main_success_flow(self):
         """Test successful bot startup and shutdown."""
         mock_property_bot_instance = AsyncMock()
@@ -71,7 +86,6 @@ class TestMainFunction:
             mock_property_bot_instance.stop.assert_awaited_once()
             mock_property_bot.assert_called_once_with(mock_config_instance)
 
-    @pytest.mark.asyncio
     async def test_main_no_telegram_token_exits_early(self):
         """Test main exits early when no telegram token."""
         mock_property_bot = MagicMock()
@@ -107,7 +121,6 @@ class TestMainFunction:
             # Bot should not be created when token is missing
             mock_property_bot.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_main_retries_on_temporary_startup_error(self):
         """Temporary network errors should trigger retry with sleep."""
         mock_property_bot_instance = AsyncMock()
@@ -147,7 +160,6 @@ class TestMainFunction:
             mock_sleep.assert_awaited_once()
             mock_property_bot_instance.stop.assert_awaited_once()
 
-    @pytest.mark.asyncio
     async def test_main_propagates_non_retryable_startup_error(self):
         """Unexpected startup errors should not be retried indefinitely."""
         mock_property_bot_instance = AsyncMock()

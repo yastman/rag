@@ -2,12 +2,9 @@
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from telegram_bot.services.redis_monitor import RedisHealthMonitor
 
 
-@pytest.mark.asyncio
 async def test_check_health_scans_all_checkpoint_keys_and_alerts_on_growth():
     """SCAN iterates cursor until 0; warns when checkpoint keys grow."""
     monitor = RedisHealthMonitor("redis://localhost:6379")
@@ -42,7 +39,6 @@ async def test_check_health_scans_all_checkpoint_keys_and_alerts_on_growth():
     )
 
 
-@pytest.mark.asyncio
 async def test_check_health_no_warning_on_first_run():
     """No growth warning when _prev_checkpoint_count is None (first run)."""
     monitor = RedisHealthMonitor("redis://localhost:6379")
@@ -70,7 +66,6 @@ async def test_check_health_no_warning_on_first_run():
     assert monitor._prev_checkpoint_count == 1
 
 
-@pytest.mark.asyncio
 async def test_check_health_no_warning_when_count_stable():
     """No growth warning when checkpoint count stays the same."""
     monitor = RedisHealthMonitor("redis://localhost:6379")
@@ -100,7 +95,6 @@ async def test_check_health_no_warning_when_count_stable():
         assert "checkpoint key growth" not in str(call)
 
 
-@pytest.mark.asyncio
 async def test_check_health_checkpoint_scan_failure_is_non_fatal():
     """Checkpoint SCAN failure should not abort the whole health cycle."""
     monitor = RedisHealthMonitor("redis://localhost:6379")
