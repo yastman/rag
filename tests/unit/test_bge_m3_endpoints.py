@@ -2,35 +2,24 @@
 
 Covers /encode/sparse, /encode/colbert, /encode/hybrid, /encode/dense,
 /health, /metrics, and config defaults.
+
+All sys.modules mocking is fixture-scoped (no module-level pollution).
 """
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import httpx
 import numpy as np
 import pytest
-
-
-# ── Mock heavy dependencies BEFORE importing app ──
-mock_flag = MagicMock()
-mock_prom = MagicMock()
-sys.modules["FlagEmbedding"] = mock_flag
-sys.modules["prometheus_client"] = mock_prom
-
-# pydantic_settings is available in test env, but config.py imports it;
-# also re-export make_asgi_app so app.py can mount metrics
-mock_prom.make_asgi_app = MagicMock(return_value=MagicMock())
-
-# Add service directory to path
-sys.path.insert(0, str(Path(__file__).parents[2] / "services" / "bge-m3-api"))
-
-import httpx
 
 
 # ── Fake model that returns deterministic numpy arrays ──
 _DENSE_DIM = 1024
 _COLBERT_DIM = 1024
+
+_BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
 
 
 def _make_fake_model():
@@ -64,25 +53,46 @@ def _make_fake_model():
     return model
 
 
-# Add config for defaults test
-import app as app_module
+@pytest.fixture(scope="module")
+def bge_app():
+    """Mock heavy deps, import bge-m3-api app, install fake model.
 
-# Import app and patch model
-from app import app as fastapi_app
+    Uses MonkeyPatch.context() for automatic teardown of sys.modules entries.
+    """
+    with pytest.MonkeyPatch.context() as mp:
+        mock_flag = MagicMock()
+        mock_prom = MagicMock()
+        mock_prom.make_asgi_app = MagicMock(return_value=MagicMock())
 
-import config as _cfg
+        mp.setitem(sys.modules, "FlagEmbedding", mock_flag)
+        mp.setitem(sys.modules, "prometheus_client", mock_prom)
+        mp.syspath_prepend(_BGE_SERVICE_DIR)
+
+        import app as app_module
+        from app import app as fastapi_app
+
+        import config as _cfg
+
+        fake_model = _make_fake_model()
+        app_module._model = fake_model
+        app_module.get_model = MagicMock(return_value=fake_model)
+
+        yield {
+            "app": fastapi_app,
+            "app_module": app_module,
+            "config": _cfg,
+            "fake_model": fake_model,
+        }
+
+        # Clean up cached service imports (not mocks — real modules imported
+        # via syspath_prepend that shouldn't leak to other test files).
+        for mod_name in ("app", "config"):
+            sys.modules.pop(mod_name, None)
 
 
-# Install fake model
-_fake_model = _make_fake_model()
-app_module._model = _fake_model
-app_module.get_model = MagicMock(return_value=_fake_model)
-
-
-# ── Async client fixture ──
 @pytest.fixture
-def client():
-    transport = httpx.ASGITransport(app=fastapi_app)
+def client(bge_app):
+    transport = httpx.ASGITransport(app=bge_app["app"])
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
 
@@ -152,7 +162,8 @@ class TestMetrics:
 
 
 class TestConfigDefaults:
-    def test_settings_defaults(self):
+    def test_settings_defaults(self, bge_app):
+        _cfg = bge_app["config"]
         assert _cfg.settings.MAX_LENGTH == 2048
         assert _cfg.settings.BATCH_SIZE == 12
         assert _cfg.settings.USE_FP16 is True
