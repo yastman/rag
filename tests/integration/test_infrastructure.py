@@ -31,6 +31,8 @@ class TestQdrantInfrastructure:
     @pytest.fixture
     def qdrant_client(self):
         """Create Qdrant client."""
+        if not _check_tcp("localhost", 6333):
+            pytest.skip("Qdrant not running on localhost:6333")
         url = os.getenv("QDRANT_URL", "http://localhost:6333")
         api_key = os.getenv("QDRANT_API_KEY", "")
         if api_key:

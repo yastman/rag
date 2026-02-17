@@ -7,6 +7,7 @@ not just declared in code. Run before any other smoke/load tests.
 
 import json
 import os
+import socket
 from pathlib import Path
 
 import httpx
@@ -17,8 +18,20 @@ import redis.asyncio as redis
 REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
 
 
+def _check_tcp(host: str, port: int, timeout: float = 2.0) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        try:
+            s.connect((host, port))
+            return True
+        except OSError:
+            return False
+
+
 @pytest.fixture(scope="module")
 def qdrant_url():
+    if not _check_tcp("localhost", 6333):
+        pytest.skip("Qdrant not running on localhost:6333")
     return os.getenv("QDRANT_URL", "http://localhost:6333")
 
 
@@ -77,6 +90,8 @@ class TestPreflightRedis:
 
     @pytest.fixture
     async def redis_client(self, redis_url):
+        if not _check_tcp("localhost", 6379):
+            pytest.skip("Redis not running on localhost:6379")
         client = redis.from_url(redis_url, decode_responses=True)
         yield client
         await client.close()
@@ -160,6 +175,8 @@ class TestPreflightReport:
 
     async def test_generate_preflight_report(self, qdrant_url, redis_url, collection_name):
         """Generate reports/preflight.json with all config values."""
+        if not _check_tcp("localhost", 6333) or not _check_tcp("localhost", 6379):
+            pytest.skip("Qdrant/Redis not running locally")
         report = {
             "qdrant": {},
             "redis": {},
