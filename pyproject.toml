@@ -101,6 +101,7 @@ dev = [
     "opentelemetry-exporter-otlp-proto-grpc>=1.39.0",
     "pre-commit>=3.8.0",
     "telethon>=1.42.0",
+    "pytest-split>=0.11.0",
 ]
 
 # =============================================================================
@@ -361,6 +362,7 @@ addopts = """
     -ra
     --strict-markers
     --strict-config
+    --dist=loadscope
 """
 testpaths = ["tests"]
 pythonpath = ["."]
