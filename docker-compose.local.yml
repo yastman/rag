@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
+    image: redis:8.6.0@sha256:7b6fb55d8b0adcd77269dc52b3cfffe5f59ca5d43dec3c90dbe18aacce7942e1
     container_name: rag-redis-local
     ports:
       - "6379:6379"
@@ -64,7 +64,7 @@ services:
           memory: 6G
 
   docling:
-    image: quay.io/docling-project/docling-serve@sha256:0acc75bd86219a8c8cdf38970cb651b0567844d6c97ec9d9023624c8209c6efc
+    image: quay.io/docling-project/docling-serve@sha256:471e3f41a5b747b54499eecc578ce9772e0304c6307c88f6473ffb43297dced0
     container_name: rag-docling-local
     ports:
       - "5001:5001"
