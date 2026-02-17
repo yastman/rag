@@ -945,7 +945,7 @@ class PropertyBot:
                 cleanup_task = asyncio.create_task(
                     self._clear_feedback_confirmation_later(msg, _FEEDBACK_CONFIRMATION_TTL_S)
                 )
-                _ = cleanup_task
+                cleanup_task.add_done_callback(lambda t: t.result() if not t.cancelled() else None)
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
 
