@@ -178,7 +178,7 @@ class BgeM3CacheVectorizer(BaseVectorizer):
 
     Used only for Redis index creation. Actual embeddings are passed via
     ``vector=`` parameter to ``acheck()``/``astore()``, so embed methods
-    are rarely called. Falls back to BGE-M3 API if called.
+    are rarely called. Falls back to BGEM3Client if called.
     """
 
     model: str = "BAAI/bge-m3"
@@ -188,10 +188,17 @@ class BgeM3CacheVectorizer(BaseVectorizer):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    _async_client: httpx.AsyncClient | None = None
+    _bge_client: Any = None  # BGEM3Client, lazy-init
 
     def __init__(self, base_url: str = "http://bge-m3:8000", **kwargs: Any):
         super().__init__(base_url=base_url, **kwargs)
+
+    def _get_bge_client(self) -> Any:
+        if self._bge_client is None:
+            from telegram_bot.services.bge_m3_client import BGEM3Client
+
+            self._bge_client = BGEM3Client(base_url=self.base_url, timeout=self.timeout)
+        return self._bge_client
 
     def embed(
         self, text: str, preprocess: Any = None, as_buffer: bool = False, **kwargs: Any
@@ -210,22 +217,15 @@ class BgeM3CacheVectorizer(BaseVectorizer):
     async def aembed(
         self, text: str, preprocess: Any = None, as_buffer: bool = False, **kwargs: Any
     ) -> list[float]:
-        """Fallback: generate embedding via BGE-M3 API (should rarely be called)."""
-        if self._async_client is None:
-            self._async_client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
-        response = await self._async_client.post("/encode/dense", json={"texts": [text]})
-        response.raise_for_status()
-        data = response.json()
-        vecs = data.get("dense_vecs") or data.get("embeddings")
-        return cast(list[float], vecs[0])
+        """Fallback: generate embedding via BGEM3Client (should rarely be called)."""
+        client = self._get_bge_client()
+        result = await client.encode_dense([text])
+        return cast(list[float], result.vectors[0])
 
     async def aembed_many(
         self, texts: list[str], preprocess: Any = None, as_buffer: bool = False, **kwargs: Any
     ) -> list[list[float]]:
-        """Fallback: generate embeddings via BGE-M3 API (should rarely be called)."""
-        if self._async_client is None:
-            self._async_client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
-        response = await self._async_client.post("/encode/dense", json={"texts": texts})
-        response.raise_for_status()
-        data = response.json()
-        return cast(list[list[float]], data.get("dense_vecs") or data.get("embeddings"))
+        """Fallback: generate embeddings via BGEM3Client (should rarely be called)."""
+        client = self._get_bge_client()
+        result = await client.encode_dense(texts)
+        return cast(list[list[float]], result.vectors)
