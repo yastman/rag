@@ -259,6 +259,12 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("stt_model", "STT_MODEL"),
     )
 
+    # Content filtering (#227)
+    content_filter_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("content_filter_enabled", "CONTENT_FILTER_ENABLED"),
+    )
+
     # Guardrails
     enable_confidence_scoring: bool = Field(
         default=False,
