@@ -1,6 +1,6 @@
 """Bot configuration."""
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -322,8 +322,8 @@ class BotConfig(BaseSettings):
         default="",
         validation_alias=AliasChoices("kommo_subdomain", "KOMMO_SUBDOMAIN"),
     )
-    kommo_access_token: str = Field(
-        default="",
+    kommo_access_token: SecretStr = Field(
+        default=SecretStr(""),
         validation_alias=AliasChoices("kommo_access_token", "KOMMO_ACCESS_TOKEN"),
     )
     kommo_telegram_field_id: int = Field(
