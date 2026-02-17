@@ -6,6 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+pytest.importorskip("pymupdf", reason="pymupdf not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
 import src.ingestion.document_parser as document_parser
 from src.ingestion.document_parser import (
     ParsedDocument,
