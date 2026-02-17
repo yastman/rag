@@ -67,6 +67,9 @@ class RAGState(TypedDict):
     input_type: str  ***REMOVED*** "text" or "voice"
     ***REMOVED*** LLM-as-a-Judge evaluation context
     retrieved_context: list[dict[str, Any]]
+    ***REMOVED*** Source attribution (***REMOVED***225)
+    show_sources: bool
+    sources_count: int
     ***REMOVED*** Content filtering (***REMOVED***227)
     guard_blocked: bool
     guard_reason: str | None
@@ -132,6 +135,9 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "input_type": "text",
         ***REMOVED*** LLM-as-a-Judge evaluation context
         "retrieved_context": [],
+        ***REMOVED*** Source attribution (***REMOVED***225)
+        "show_sources": True,
+        "sources_count": 0,
         ***REMOVED*** Content filtering (***REMOVED***227)
         "guard_blocked": False,
         "guard_reason": None,
