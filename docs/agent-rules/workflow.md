@@ -10,7 +10,8 @@
 - Setup: `uv sync`
 - Quick gate: `make check`
 - Unit tests: `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
-- Full tests: `make test`
+- Fast gate tests: `make test`
+- Full tests: `make test-full`
 
 ## Service Stack Commands
 - Start core stack: `make docker-up`
