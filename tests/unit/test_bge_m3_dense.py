@@ -14,7 +14,6 @@ class TestBgeM3DenseService:
 
         return BgeM3DenseService(base_url="http://localhost:8000")
 
-    @pytest.mark.asyncio
     async def test_embed_query_returns_vector(self, service):
         """Test embed_query returns 1024-dim vector."""
         mock_response = MagicMock()
@@ -35,7 +34,6 @@ class TestBgeM3DenseService:
             call_args = mock_post.call_args
             assert "/encode/dense" in call_args[0][0]
 
-    @pytest.mark.asyncio
     async def test_embed_documents_batch(self, service):
         """Test embed_documents handles batching."""
         mock_response = MagicMock()
@@ -53,13 +51,11 @@ class TestBgeM3DenseService:
             assert len(result) == 2
             assert all(len(v) == 1024 for v in result)
 
-    @pytest.mark.asyncio
     async def test_embed_documents_empty_list(self, service):
         """Test embed_documents with empty list returns empty list."""
         result = await service.embed_documents([])
         assert result == []
 
-    @pytest.mark.asyncio
     async def test_embed_documents_large_batch(self, service):
         """Test embed_documents handles large batches correctly."""
         # Create 40 documents (more than BATCH_SIZE of 32)
@@ -87,7 +83,6 @@ class TestBgeM3DenseService:
             assert len(result) == 40
             assert mock_post.call_count == 2
 
-    @pytest.mark.asyncio
     async def test_close_client(self, service):
         """Test close method closes the HTTP client."""
         with patch.object(service._client, "aclose", new_callable=AsyncMock) as mock_close:
