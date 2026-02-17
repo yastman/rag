@@ -36,19 +36,16 @@ class TestLoadRedisEviction:
             "sample_interval_sec": 2,
         }
 
-    @pytest.mark.asyncio
     async def test_redis_lfu_policy_configured(self, redis_client):
         """Verify volatile-lfu eviction policy."""
         policy = await redis_client.config_get("maxmemory-policy")
         assert policy.get("maxmemory-policy") == "volatile-lfu"
 
-    @pytest.mark.asyncio
     async def test_redis_maxmemory_set(self, redis_client):
         """Verify maxmemory is configured."""
         maxmem = await redis_client.config_get("maxmemory")
         assert int(maxmem.get("maxmemory", 0)) > 0
 
-    @pytest.mark.asyncio
     async def test_eviction_under_pressure(self, redis_client, eviction_config):
         """Test eviction behavior under write pressure."""
         total_mb = eviction_config["total_mb"]
@@ -98,7 +95,6 @@ class TestLoadRedisEviction:
 
         print(f"\nWrote {num_keys} keys ({total_mb}MB), evictions: {evictions}")
 
-    @pytest.mark.asyncio
     async def test_hit_rate_under_zipf_access(self, redis_client):
         """Test hit rate under Zipf-like access pattern."""
         test_prefix = f"rag:zipf_test:{int(time.time())}"
