@@ -6,6 +6,8 @@ Verifies that HybridRRFSearchEngine uses both dense and sparse vectors via RRF.
 
 import socket
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -92,6 +94,19 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
+def _collection_exists(url: str, api_key: str, collection_name: str) -> bool:
+    req = urllib.request.Request(f"{url}/collections/{collection_name}")
+    if api_key:
+        req.add_header("api-key", api_key)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            return response.status == 200
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        raise
+
+
 def test_hybrid_search_with_sparse():
     """Test hybrid search using dense + sparse vectors."""
     settings = Settings()
@@ -100,6 +115,10 @@ def test_hybrid_search_with_sparse():
     port = parsed.port or 6333
     if not _is_port_open(host, port):
         pytest.skip(f"Qdrant not running on {host}:{port}")
+    if not _collection_exists(
+        settings.qdrant_url, settings.qdrant_api_key, settings.collection_name
+    ):
+        pytest.skip(f"Collection not found: {settings.collection_name}")
     assert _run_hybrid_search_with_sparse()
 
 
