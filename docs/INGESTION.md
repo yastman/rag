@@ -177,4 +177,5 @@ RUN_INTEGRATION_TESTS=1 pytest tests/integration/test_ingestion_e2e.py -v
 
 - [PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md) — Full RAG pipeline
 - [QDRANT_STACK.md](QDRANT_STACK.md) — Vector database details
-- `.claude/rules/features/ingestion.md` — Ingestion rules
+- [agent-rules/workflow.md](agent-rules/workflow.md) — Codex workflow
+- [agent-rules/testing-and-validation.md](agent-rules/testing-and-validation.md) — Validation gates
