@@ -61,10 +61,12 @@ class TestSmallToBigService:
             max_expanded_chunks=10,
             max_context_tokens=8000,
         )
+
     async def test_expand_context_empty_chunks(self, service):
         """Test expand_context with empty input."""
         result = await service.expand_context(chunks=[])
         assert result == []
+
     async def test_expand_context_missing_metadata(self, service, mock_client):
         """Test expand_context when chunks have no doc_id/order."""
         chunks = [
@@ -80,6 +82,7 @@ class TestSmallToBigService:
         assert result[0].neighbor_chunks == []
         # Client should not be called
         mock_client.scroll.assert_not_called()
+
     async def test_expand_context_with_neighbors(self, service, mock_client):
         """Test expand_context fetches and merges neighbors."""
         # Setup input chunk
@@ -135,6 +138,7 @@ class TestSmallToBigService:
 
         # Check neighbor chunks
         assert len(expanded.neighbor_chunks) == 2
+
     async def test_expand_context_respects_max_chunks_limit(self, service, mock_client):
         """Test that expansion stops when max_expanded_chunks is reached."""
         service._max_expanded_chunks = 2
@@ -151,6 +155,7 @@ class TestSmallToBigService:
 
         # Should only expand first 2 chunks
         assert len(result) == 2
+
     async def test_expand_context_respects_token_limit(self, service, mock_client):
         """Test that expansion stops when max_context_tokens is reached."""
         service._max_context_tokens = 50  # ~200 characters
@@ -164,6 +169,7 @@ class TestSmallToBigService:
 
         # Should stop after ~2 chunks (200 chars = 50 tokens)
         assert len(result) <= 3
+
     async def test_expand_context_deduplicates(self, service, mock_client):
         """Test that duplicate chunks are removed across expansions."""
         # Two adjacent chunks that would fetch overlapping neighbors
@@ -187,6 +193,7 @@ class TestSmallToBigService:
 
         assert len(result) == 2
         # Both should be expanded but no duplicates in final context
+
     async def test_fetch_neighbors_builds_correct_filter(self, service, mock_client):
         """Test that _fetch_neighbors builds correct Qdrant filter."""
         mock_client.scroll.return_value = ([], None)
