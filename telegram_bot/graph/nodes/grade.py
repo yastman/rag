@@ -41,7 +41,20 @@ async def grade_node(state: dict[str, Any]) -> dict[str, Any]:
             "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
         }
 
-    top_score = max(doc.get("score", 0) for doc in documents)
+    # Defensive normalization: documents can include non-dict placeholders.
+    scores = [doc.get("score", 0) for doc in documents if isinstance(doc, dict)]
+    if not scores:
+        elapsed = time.perf_counter() - t0
+        logger.info("grade: no valid scored documents, marking not relevant (%.3fs)", elapsed)
+        return {
+            "documents_relevant": False,
+            "grade_confidence": 0.0,
+            "skip_rerank": False,
+            "score_improved": False,
+            "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
+        }
+
+    top_score = max(scores)
 
     # RRF scores = 1/(k+rank), k=60 → rank 1 = ~0.016, rank 10 = ~0.014
     # Threshold must be below typical top-1 RRF score
