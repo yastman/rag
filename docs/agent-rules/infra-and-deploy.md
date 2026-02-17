@@ -28,7 +28,8 @@ Primary commands:
 - Optional voice stack uses LiveKit/SIP and API bridge services.
 
 ## Operations References
-- `CLAUDE.md`
-- `.claude/rules/docker.md`
-- `.claude/rules/k3s.md`
+- `AGENTS.md`
+- `docs/agent-rules/workflow.md`
+- `docs/LOCAL-DEVELOPMENT.md`
+- `docs/QDRANT_STACK.md`
 - `docs/ALERTING.md`
