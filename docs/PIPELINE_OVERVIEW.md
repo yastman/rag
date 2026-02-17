@@ -327,6 +327,28 @@ async for chunk in llm.stream_response(query, context):
 
 ---
 
+## Supervisor Architecture (#240)
+
+**Feature flag:** `USE_SUPERVISOR=true` (default: off)
+
+Replaces monolithic `classify_node` routing with LLM-based supervisor that selects tools:
+
+```
+User Query → Supervisor LLM (gpt-4o-mini) → tool_choice
+  → rag_search      → build_graph().ainvoke() (existing 10-node RAG pipeline)
+  → history_search  → HistoryService.search_user_history() (Qdrant + BGE-M3)
+  → direct_response → pass-through (greetings, chitchat)
+```
+
+**Observability:** Single Langfuse trace with scores:
+- `agent_used` (CATEGORICAL) — which tool was selected
+- `supervisor_latency_ms` (NUMERIC) — routing decision time
+- `supervisor_model` (CATEGORICAL) — model used for routing
+
+**Runtime context:** Tools receive `user_id`/`session_id` via `RunnableConfig.configurable`.
+
+---
+
 ## Telegram Bot Services
 
 **Модуль:** `telegram_bot/services/`
@@ -372,6 +394,11 @@ rag-fresh/
 │   └── core/                     # RAGPipeline orchestrator
 │
 ├── telegram_bot/                 # Bot + 13 unified services
+│   ├── agents/                   # Multi-agent supervisor (#240)
+│   │   ├── supervisor.py         # build_supervisor_graph (LLM + ToolNode)
+│   │   ├── rag_agent.py          # RAG graph wrapper tool
+│   │   ├── history_agent.py      # HistoryService wrapper tool
+│   │   └── tools.py              # Tool factories with runtime context
 │   ├── services/                 # VoyageService, QdrantService, etc.
 │   └── bot.py                    # Main handler
 │
