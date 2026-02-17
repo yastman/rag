@@ -19,7 +19,6 @@ def _make_voice_state(audio: bytes = b"fake-ogg-data", duration: float = 5.0) ->
 
 
 class TestTranscribeNode:
-    @pytest.mark.asyncio
     async def test_transcribe_returns_text(self):
         """transcribe_node calls Whisper API and returns transcribed text."""
         mock_llm = AsyncMock()
@@ -36,7 +35,6 @@ class TestTranscribeNode:
         assert result["stt_duration_ms"] > 0
         mock_llm.audio.transcriptions.create.assert_awaited_once()
 
-    @pytest.mark.asyncio
     async def test_transcribe_sets_messages(self):
         """transcribe_node sets messages with transcribed text."""
         mock_llm = AsyncMock()
@@ -51,7 +49,6 @@ class TestTranscribeNode:
         assert len(result["messages"]) == 1
         assert result["messages"][0]["content"] == "тест запрос"
 
-    @pytest.mark.asyncio
     async def test_transcribe_empty_text_raises(self):
         """transcribe_node raises ValueError on empty transcription."""
         mock_llm = AsyncMock()
@@ -65,7 +62,6 @@ class TestTranscribeNode:
         with pytest.raises(ValueError, match="Empty transcription"):
             await node(state)
 
-    @pytest.mark.asyncio
     async def test_transcribe_passes_language(self):
         """transcribe_node passes language parameter to Whisper API."""
         mock_llm = AsyncMock()
@@ -81,7 +77,6 @@ class TestTranscribeNode:
         assert call_kwargs["language"] == "uk"
         assert call_kwargs["model"] == "whisper"
 
-    @pytest.mark.asyncio
     async def test_transcribe_api_error(self):
         """transcribe_node propagates API errors."""
         mock_llm = AsyncMock()
@@ -95,7 +90,6 @@ class TestTranscribeNode:
         with pytest.raises(Exception, match="API timeout"):
             await node(state)
 
-    @pytest.mark.asyncio
     async def test_transcribe_show_transcription(self):
         """transcribe_node sends transcription preview when show_transcription=True."""
         mock_llm = AsyncMock()
@@ -118,7 +112,6 @@ class TestTranscribeNode:
         call_args = mock_message.answer.call_args
         assert "тест" in call_args[0][0]
 
-    @pytest.mark.asyncio
     async def test_transcribe_no_preview_when_disabled(self):
         """transcribe_node does not send preview when show_transcription=False."""
         mock_llm = AsyncMock()
@@ -139,7 +132,6 @@ class TestTranscribeNode:
 
         mock_message.answer.assert_not_awaited()
 
-    @pytest.mark.asyncio
     async def test_transcribe_writes_curated_span(self):
         """transcribe_node writes curated Langfuse span input/output."""
         mock_llm = AsyncMock()
