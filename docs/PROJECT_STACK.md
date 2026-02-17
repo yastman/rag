@@ -50,7 +50,7 @@
 | Technology | Version | Purpose |
 |------------|---------|---------|
 | Qdrant | v1.16 | Vector DB (gRPC + HTTP, hybrid search) |
-| Redis | 8.4.0 | 6-tier cache (volatile-lfu, 512MB) |
+| Redis | 8.4.0 | 6-tier cache (volatile-lfu, 512MB, `REDIS_PASSWORD` required) |
 | PostgreSQL | 17 (pgvector) | Langfuse, MLflow, CocoIndex state, transcripts |
 | redisvl | >=0.13.2 | Semantic cache (RedisVL) |
 
@@ -426,6 +426,8 @@ Without `traced_pipeline`, each `@observe` creates a separate root trace.
 | k3s overhead | ~1.6GB | System |
 
 **k3s overlays:** core (11 resources) → bot (19) → ingest (17) → full (23)
+
+**Redis auth:** All profiles (local, VPS, k3s) require `REDIS_PASSWORD`. Redis runs with `--requirepass`, app services use `REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379`.
 
 ### Monitoring Stack
 
