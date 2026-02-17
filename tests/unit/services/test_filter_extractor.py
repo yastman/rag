@@ -171,9 +171,7 @@ class TestFilterExtractorDistanceToSea:
         assert _ext.extract_filters(query)["distance_to_sea"] == {"lte": 200}
 
     def test_no_distance_filter(self) -> None:
-        assert "distance_to_sea" not in _ext.extract_filters(
-            "двукомнатная квартира в Бургасе"
-        )
+        assert "distance_to_sea" not in _ext.extract_filters("двукомнатная квартира в Бургасе")
 
 
 # ---------------------------------------------------------------------------
@@ -386,14 +384,10 @@ class TestFilterExtractorEdgeCases:
         assert result["price"] == {"lt": 50000}
 
     def test_distance_meters_without_sea_context(self) -> None:
-        assert "distance_to_sea" not in _ext.extract_filters(
-            "квартира 100 метров от центра"
-        )
+        assert "distance_to_sea" not in _ext.extract_filters("квартира 100 метров от центра")
 
     def test_rooms_digit_in_middle_of_text(self) -> None:
-        assert _ext.extract_filters(
-            "ищу хорошую 2-комнатную квартиру в Бургасе"
-        )["rooms"] == 2
+        assert _ext.extract_filters("ищу хорошую 2-комнатную квартиру в Бургасе")["rooms"] == 2
 
     def test_studiya_case_variations(self) -> None:
         assert _ext.extract_filters("СТУДИЯ в центре города")["rooms"] == 1
