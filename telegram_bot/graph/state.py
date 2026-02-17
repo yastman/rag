@@ -70,6 +70,9 @@ class RAGState(TypedDict):
     # Source attribution (#225)
     show_sources: bool
     sources_count: int
+    # Content filtering (#227)
+    guard_blocked: bool
+    guard_reason: str | None
     # User feedback (#229)
     trace_id: str
     sent_message: dict[str, int] | None  # {"chat_id": int, "message_id": int}
@@ -135,6 +138,9 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         # Source attribution (#225)
         "show_sources": True,
         "sources_count": 0,
+        # Content filtering (#227)
+        "guard_blocked": False,
+        "guard_reason": None,
         # User feedback (#229)
         "trace_id": "",
         "sent_message": None,
