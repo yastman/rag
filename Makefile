@@ -340,7 +340,7 @@ clean: ## Clean up cache files and build artifacts
 # Common compose command with --compatibility to enforce deploy.resources.limits
 COMPOSE_CMD := docker compose --compatibility -f docker-compose.dev.yml
 
-.PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
+.PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
 docker-core-up: ## Start core services (postgres, qdrant, redis, docling)
 	@echo "$(BLUE)Starting core services...$(NC)"
@@ -371,6 +371,13 @@ docker-ingest-up: ## Start core + ingestion service
 	@echo "$(BLUE)Starting ingestion service...$(NC)"
 	$(COMPOSE_CMD) --profile ingest up -d
 	@echo "$(GREEN)✓ Ingestion service started$(NC)"
+
+docker-voice-up: ## Start core + voice services (livekit, sip, voice-agent)
+	@echo "$(BLUE)Preflight: checking livekit config...$(NC)"
+	@test -f docker/livekit/livekit.yaml || { echo "$(RED)✗ docker/livekit/livekit.yaml not found$(NC)"; exit 1; }
+	@echo "$(BLUE)Starting voice services...$(NC)"
+	$(COMPOSE_CMD) --profile voice up -d
+	@echo "$(GREEN)✓ Voice services started$(NC)"
 
 docker-full-up: ## Start all services (full stack)
 	@echo "$(BLUE)Starting full stack...$(NC)"
