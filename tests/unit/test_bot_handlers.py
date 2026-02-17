@@ -553,7 +553,9 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history цены")
 
-        await bot.cmd_history(message)
+        with patch("telegram_bot.bot.get_client", return_value=MagicMock()):
+            with patch("telegram_bot.bot.propagate_attributes"):
+                await bot.cmd_history(message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
@@ -578,7 +580,9 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history тест")
 
-        await bot.cmd_history(message)
+        with patch("telegram_bot.bot.get_client", return_value=MagicMock()):
+            with patch("telegram_bot.bot.propagate_attributes"):
+                await bot.cmd_history(message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
@@ -596,11 +600,94 @@ class TestCmdHistory:
         )
         message = _make_text_message("/history тест")
 
-        await bot.cmd_history(message)
+        with patch("telegram_bot.bot.get_client", return_value=MagicMock()):
+            with patch("telegram_bot.bot.propagate_attributes"):
+                await bot.cmd_history(message)
 
         message.answer.assert_called_once()
         answer_text = message.answer.call_args[0][0]
         assert "не найден" in answer_text.lower() or "нет" in answer_text.lower()
+
+    async def test_history_search_writes_langfuse_scores(self, mock_config):
+        """Successful /history search writes trace + 4 scores."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(
+            return_value=[
+                {
+                    "query": "цены",
+                    "response": "Ответ",
+                    "timestamp": "2026-02-13T10:00:00",
+                    "score": 0.9,
+                },
+            ]
+        )
+        message = _make_text_message("/history цены")
+
+        mock_lf = MagicMock()
+        with patch("telegram_bot.bot.get_client", return_value=mock_lf):
+            with patch("telegram_bot.bot.propagate_attributes"):
+                await bot.cmd_history(message)
+
+        # Trace metadata
+        mock_lf.update_current_trace.assert_called_once()
+        trace_kwargs = mock_lf.update_current_trace.call_args[1]
+        assert trace_kwargs["input"]["command"] == "/history"
+        assert trace_kwargs["input"]["query"] == "цены"
+        assert trace_kwargs["output"]["results_count"] == 1
+
+        # Scores
+        score_calls = mock_lf.score_current_trace.call_args_list
+        score_names = [c[1]["name"] for c in score_calls]
+        assert "history_search_count" in score_names
+        assert "history_search_latency_ms" in score_names
+        assert "history_search_empty" in score_names
+        assert "history_backend" in score_names
+
+        # Verify values
+        score_map = {c[1]["name"]: c[1]["value"] for c in score_calls}
+        assert score_map["history_search_count"] == 1
+        assert score_map["history_search_empty"] == 0.0
+        assert score_map["history_backend"] == "qdrant"
+        assert isinstance(score_map["history_search_latency_ms"], float)
+
+    async def test_history_empty_writes_langfuse_scores(self, mock_config):
+        """Empty /history result writes history_search_empty=1.0."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(return_value=[])
+        message = _make_text_message("/history несуществующее")
+
+        mock_lf = MagicMock()
+        with patch("telegram_bot.bot.get_client", return_value=mock_lf):
+            with patch("telegram_bot.bot.propagate_attributes"):
+                await bot.cmd_history(message)
+
+        score_calls = mock_lf.score_current_trace.call_args_list
+        score_map = {c[1]["name"]: c[1]["value"] for c in score_calls}
+        assert score_map["history_search_count"] == 0
+        assert score_map["history_search_empty"] == 1.0
+
+    async def test_history_unavailable_writes_langfuse_scores(self, mock_config):
+        """Unavailable service writes scores with error metadata."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = None
+        message = _make_text_message("/history цены")
+
+        mock_lf = MagicMock()
+        with patch("telegram_bot.bot.get_client", return_value=mock_lf):
+            with patch("telegram_bot.bot.propagate_attributes"):
+                await bot.cmd_history(message)
+
+        # Trace should indicate error
+        trace_kwargs = mock_lf.update_current_trace.call_args[1]
+        assert trace_kwargs["output"]["error"] == "service_unavailable"
+
+        # Scores
+        score_calls = mock_lf.score_current_trace.call_args_list
+        score_map = {c[1]["name"]: c[1]["value"] for c in score_calls}
+        assert score_map["history_search_count"] == 0
+        assert score_map["history_search_empty"] == 1.0
 
 
 class TestCheckpointNamespace:
