@@ -15,6 +15,8 @@ import numpy as np
 import pytest
 
 
+pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+pytestmark = pytest.mark.requires_extras
 # ── Fake model that returns deterministic numpy arrays ──
 _DENSE_DIM = 1024
 _COLBERT_DIM = 1024

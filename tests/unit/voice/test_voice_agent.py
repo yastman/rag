@@ -8,6 +8,7 @@ import pytest
 
 
 pytest.importorskip("livekit")
+pytestmark = pytest.mark.requires_extras
 
 
 def test_voice_bot_init():
