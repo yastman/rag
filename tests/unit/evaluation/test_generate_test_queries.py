@@ -19,7 +19,6 @@ import pytest
 @pytest.fixture(autouse=True)
 def mock_imports():
     """Mock external dependencies that won't pollute other tests."""
-    mock_requests = MagicMock()
     mock_contextualize = MagicMock()
     mock_settings = MagicMock()
 
@@ -42,7 +41,6 @@ def mock_imports():
     try:
         with patch("src.config.Settings", mock_settings):
             yield {
-                "requests": mock_requests,
                 "contextualize": mock_contextualize,
                 "settings": mock_settings,
             }
@@ -59,38 +57,21 @@ class TestFetchArticleTexts:
     """Tests for fetch_article_texts function."""
 
     def test_fetch_single_article(self, mock_imports):
-        """Test fetching a single article from Qdrant."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "result": {"points": [{"payload": {"text": "Article 115 text content"}}]}
-        }
-        mock_response.raise_for_status = MagicMock()
-        mock_imports["requests"].post.return_value = mock_response
+        """Test fetching a single article from Qdrant via SDK scroll."""
+        mock_client = MagicMock()
 
-        # Simulate fetch_article_texts behavior
-        article_numbers = ["115"]
-        articles = {}
+        # Mock scroll return: a point with text
+        mock_point = MagicMock()
+        mock_point.payload = {"text": "Article 115 text content"}
+        mock_client.scroll.return_value = ([mock_point], None)
 
-        for article_num in article_numbers:
-            response = mock_imports["requests"].post(
-                "http://localhost:6333/collections/test/points/scroll",
-                json={
-                    "filter": {
-                        "must": [{"key": "article_number", "match": {"value": int(article_num)}}]
-                    },
-                    "limit": 1,
-                    "with_payload": True,
-                    "with_vector": False,
-                },
-                headers={"api-key": "test-key"},
-            )
-            points = response.json()["result"]["points"]
-            if points:
-                text = points[0]["payload"].get("text", "")
-                articles[article_num] = text
+        with patch("src.evaluation.generate_test_queries._make_client", return_value=mock_client):
+            from src.evaluation.generate_test_queries import fetch_article_texts
 
-        assert "115" in articles
-        assert articles["115"] == "Article 115 text content"
+            result = fetch_article_texts("test_collection", ["115"])
+
+        assert "115" in result
+        assert result["115"] == "Article 115 text content"
 
     def test_fetch_multiple_articles(self, mock_imports):
         """Test fetching multiple articles."""
@@ -100,79 +81,59 @@ class TestFetchArticleTexts:
             "185": "Theft article text",
         }
 
-        def mock_post(url, json=None, headers=None):
-            article_num = json["filter"]["must"][0]["match"]["value"]
-            response = MagicMock()
-            response.json.return_value = {
-                "result": {
-                    "points": [{"payload": {"text": article_texts.get(str(article_num), "")}}]
-                    if str(article_num) in article_texts
-                    else []
-                }
-            }
-            response.raise_for_status = MagicMock()
-            return response
+        mock_client = MagicMock()
 
-        mock_imports["requests"].post.side_effect = mock_post
+        def mock_scroll(collection_name, scroll_filter, limit, with_payload, with_vectors):
+            # Extract article number from the filter
+            must = scroll_filter.must
+            value = must[0].match.value
+            article_num = str(value)
+            if article_num in article_texts:
+                p = MagicMock()
+                p.payload = {"text": article_texts[article_num]}
+                return ([p], None)
+            return ([], None)
 
-        # Fetch articles
-        fetched = {}
-        for num in ["115", "121", "185"]:
-            response = mock_imports["requests"].post(
-                "url",
-                json={
-                    "filter": {"must": [{"key": "article_number", "match": {"value": int(num)}}]}
-                },
-                headers={},
-            )
-            points = response.json()["result"]["points"]
-            if points:
-                fetched[num] = points[0]["payload"]["text"]
+        mock_client.scroll.side_effect = mock_scroll
 
-        assert len(fetched) == 3
-        assert fetched["115"] == "Murder article text"
+        with patch("src.evaluation.generate_test_queries._make_client", return_value=mock_client):
+            from src.evaluation.generate_test_queries import fetch_article_texts
+
+            result = fetch_article_texts("test_collection", ["115", "121", "185"])
+
+        assert len(result) == 3
+        assert result["115"] == "Murder article text"
 
     def test_fetch_article_not_found(self, mock_imports):
         """Test handling when article is not found."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"result": {"points": []}}
-        mock_response.raise_for_status = MagicMock()
-        mock_imports["requests"].post.return_value = mock_response
+        mock_client = MagicMock()
+        mock_client.scroll.return_value = ([], None)
 
-        article_numbers = ["999"]
-        articles = {}
+        with patch("src.evaluation.generate_test_queries._make_client", return_value=mock_client):
+            from src.evaluation.generate_test_queries import fetch_article_texts
 
-        for article_num in article_numbers:
-            response = mock_imports["requests"].post("url", json={}, headers={})
-            points = response.json()["result"]["points"]
-            if points:
-                articles[article_num] = points[0]["payload"]["text"]
+            result = fetch_article_texts("test_collection", ["999"])
 
-        assert "999" not in articles
-        assert len(articles) == 0
+        assert "999" not in result
+        assert len(result) == 0
 
-    def test_qdrant_request_payload_structure(self):
-        """Test Qdrant request payload is correctly structured."""
+    def test_qdrant_scroll_filter_structure(self, mock_imports):
+        """Test Qdrant scroll filter is correctly structured."""
+        from qdrant_client import models
+
         article_num = "115"
 
-        payload = {
-            "filter": {
-                "must": [
-                    {
-                        "key": "article_number",
-                        "match": {"value": int(article_num)},
-                    }
-                ]
-            },
-            "limit": 1,
-            "with_payload": True,
-            "with_vector": False,
-        }
+        scroll_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="article_number",
+                    match=models.MatchValue(value=int(article_num)),
+                )
+            ]
+        )
 
-        assert payload["filter"]["must"][0]["match"]["value"] == 115
-        assert payload["limit"] == 1
-        assert payload["with_payload"] is True
-        assert payload["with_vector"] is False
+        assert scroll_filter.must[0].match.value == 115
+        assert scroll_filter.must[0].key == "article_number"
 
 
 class TestGenerateQueriesForArticle:
@@ -571,10 +532,16 @@ class TestErrorHandling:
 
     def test_qdrant_connection_error(self, mock_imports):
         """Test handling Qdrant connection errors."""
-        mock_imports["requests"].post.side_effect = ConnectionError("Connection refused")
+        mock_client = MagicMock()
+        mock_client.scroll.side_effect = ConnectionError("Connection refused")
 
-        with pytest.raises(ConnectionError):
-            mock_imports["requests"].post("http://localhost:6333/...")
+        with (
+            patch("src.evaluation.generate_test_queries._make_client", return_value=mock_client),
+            pytest.raises(ConnectionError),
+        ):
+            from src.evaluation.generate_test_queries import fetch_article_texts
+
+            fetch_article_texts("test_collection", ["115"])
 
     def test_invalid_json_response(self):
         """Test handling invalid JSON in LLM response."""
