@@ -271,13 +271,16 @@ class TestSmallToBigSettings:
         with patch.dict(
             "os.environ",
             {
+                # Isolate from runner secrets/default provider selection
+                "API_PROVIDER": "groq",
+                "GROQ_API_KEY": "test-groq-key",
                 "SMALL_TO_BIG_MODE": "on",
                 "SMALL_TO_BIG_WINDOW_BEFORE": "2",
                 "SMALL_TO_BIG_WINDOW_AFTER": "3",
                 "MAX_EXPANDED_CHUNKS": "15",
                 "MAX_CONTEXT_TOKENS": "10000",
             },
-            clear=False,
+            clear=True,
         ):
             # Import after patching env
             from src.config.settings import Settings
@@ -295,8 +298,12 @@ class TestSmallToBigSettings:
         """Test default values for small-to-big settings."""
         with patch.dict(
             "os.environ",
-            {},
-            clear=False,
+            {
+                # Ensure Settings() is valid regardless of host environment
+                "API_PROVIDER": "groq",
+                "GROQ_API_KEY": "test-groq-key",
+            },
+            clear=True,
         ):
             from src.config.settings import Settings
 
@@ -310,16 +317,24 @@ class TestSmallToBigSettings:
 
     def test_settings_to_dict_includes_small_to_big(self):
         """Test that to_dict includes small-to-big settings."""
-        from src.config.settings import Settings
+        with patch.dict(
+            "os.environ",
+            {
+                "API_PROVIDER": "groq",
+                "GROQ_API_KEY": "test-groq-key",
+            },
+            clear=True,
+        ):
+            from src.config.settings import Settings
 
-        settings = Settings()
-        settings_dict = settings.to_dict()
+            settings = Settings()
+            settings_dict = settings.to_dict()
 
-        assert "small_to_big_mode" in settings_dict
-        assert "small_to_big_window_before" in settings_dict
-        assert "small_to_big_window_after" in settings_dict
-        assert "max_expanded_chunks" in settings_dict
-        assert "max_context_tokens" in settings_dict
+            assert "small_to_big_mode" in settings_dict
+            assert "small_to_big_window_before" in settings_dict
+            assert "small_to_big_window_after" in settings_dict
+            assert "max_expanded_chunks" in settings_dict
+            assert "max_context_tokens" in settings_dict
 
 
 class TestIndexerMetadataFields:
