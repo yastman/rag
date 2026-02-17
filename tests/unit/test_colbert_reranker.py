@@ -1,6 +1,6 @@
 """Tests for ColBERT reranker service."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -26,21 +26,23 @@ class TestColbertRerankerService:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch.object(service._client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
+        # Patch the internal httpx client inside BGEM3Client
+        http_client = AsyncMock()
+        http_client.post = AsyncMock(return_value=mock_response)
+        http_client.is_closed = False
+        service._client._client = http_client
 
-            results = await service.rerank(
-                query="test",
-                documents=["doc1", "doc2"],
-                top_k=2,
-            )
+        results = await service.rerank(
+            query="test",
+            documents=["doc1", "doc2"],
+            top_k=2,
+        )
 
-            assert len(results) == 2
-            assert results[0]["index"] == 1
-            assert results[0]["score"] == 0.95
-            # Verify contract matches bot expectations
-            assert "index" in results[0]
-            assert "score" in results[0]
+        assert len(results) == 2
+        assert results[0]["index"] == 1
+        assert results[0]["score"] == 0.95
+        assert "index" in results[0]
+        assert "score" in results[0]
 
     async def test_rerank_empty_documents(self, service):
         """Test rerank with empty documents returns empty list."""
@@ -56,25 +58,31 @@ class TestColbertRerankerService:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch.object(service._client, "post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
+        http_client = AsyncMock()
+        http_client.post = AsyncMock(return_value=mock_response)
+        http_client.is_closed = False
+        service._client._client = http_client
 
-            await service.rerank(
-                query="квартира",
-                documents=["doc1"],
-                top_k=3,
-            )
+        await service.rerank(
+            query="квартира",
+            documents=["doc1"],
+            top_k=3,
+        )
 
-            mock_post.assert_called_once()
-            call_args = mock_post.call_args
-            assert "/rerank" in call_args[0][0]
-            payload = call_args[1]["json"]
-            assert payload["query"] == "квартира"
-            assert payload["documents"] == ["doc1"]
-            assert payload["top_k"] == 3
+        http_client.post.assert_called_once()
+        call_args = http_client.post.call_args
+        assert "/rerank" in call_args[0][0]
+        payload = call_args[1]["json"]
+        assert payload["query"] == "квартира"
+        assert payload["documents"] == ["doc1"]
+        assert payload["top_k"] == 3
 
     async def test_close_client(self, service):
         """Test close method closes the HTTP client."""
-        with patch.object(service._client, "aclose", new_callable=AsyncMock) as mock_close:
-            await service.close()
-            mock_close.assert_called_once()
+        mock_http = AsyncMock()
+        mock_http.is_closed = False
+        mock_http.aclose = AsyncMock()
+        service._client._client = mock_http
+
+        await service.close()
+        mock_http.aclose.assert_called_once()
