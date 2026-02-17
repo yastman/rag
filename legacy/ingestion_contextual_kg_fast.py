@@ -634,7 +634,7 @@ async def process_document_contextual_kg_async(
     print_info(f"Document: {document_name}", 0)
     print_info(f"PDF Path: {pdf_path}", 0)
     print_info(f"Collection: {collection_name}", 0)
-    print_info(f"Max chunks: {max_chunks if max_chunks else 'ALL'}", 0)
+    print_info(f"Max chunks: {max_chunks or 'ALL'}", 0)
     print_info(f"Concurrency: {max_concurrent} parallel requests", 0)
     if enable_mlflow:
         print_info("📊 MLflow: ENABLED (tracking experiment)", 0)
