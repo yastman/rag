@@ -1,4 +1,7 @@
-"""Tests for BGE-M3 LangChain embedding wrappers."""
+"""Tests for BGE-M3 LangChain embedding wrappers.
+
+Wrappers delegate to BGEM3Client; tests mock at the httpx level.
+"""
 
 from __future__ import annotations
 
@@ -172,7 +175,7 @@ class TestBGEM3HybridEmbeddings:
             assert "/encode/hybrid" in call_args[0][0]
 
     async def test_shared_client_reused(self):
-        """Client is created once and reused across calls."""
+        """BGEM3Client is created once and reused across calls."""
         hybrid_response = {
             "dense_vecs": [[0.1]],
             "lexical_weights": [{"indices": [1], "values": [0.1]}],
@@ -186,7 +189,7 @@ class TestBGEM3HybridEmbeddings:
             emb = BGEM3HybridEmbeddings(base_url="http://fake:8000")
             await emb.aembed_hybrid("test1")
             await emb.aembed_hybrid("test2")
-            # Same client instance used (shared)
+            # Same BGEM3Client instance used
             assert emb._client is not None
 
     async def test_aembed_query_delegates_to_hybrid(self):
@@ -212,11 +215,12 @@ class TestBGEM3HybridRetry:
     @pytest.fixture(autouse=True)
     def _disable_retry_sleep(self, monkeypatch: pytest.MonkeyPatch):
         """Keep retry attempts deterministic without real backoff waits."""
+        from telegram_bot.services.bge_m3_client import BGEM3Client
 
         async def _noop_sleep(_seconds: float) -> None:
             return None
 
-        monkeypatch.setattr(BGEM3HybridEmbeddings.aembed_hybrid.retry, "sleep", _noop_sleep)
+        monkeypatch.setattr(BGEM3Client.encode_hybrid.retry, "sleep", _noop_sleep)
 
     @pytest.mark.parametrize(
         "error_cls,error_msg",
@@ -295,6 +299,7 @@ class TestBGEM3HybridTimeout:
     async def test_timeout_configuration(self, kwargs, expected_read, expected_connect):
         """Timeout is configured correctly (default granular or custom override)."""
         emb = BGEM3HybridEmbeddings(base_url="http://fake:8000", **kwargs)
-        client = emb._get_client()
+        # Access internal BGEM3Client's httpx client
+        client = emb._client._get_client()
         assert client.timeout.read == expected_read
         assert client.timeout.connect == expected_connect
