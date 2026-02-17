@@ -6,7 +6,7 @@ Run these for most code changes:
 - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 
 Run full test suite when touching cross-cutting logic:
-- `make test`
+- `make test-full`
 
 ## Bot And Graph Changes
 - Always run:
