@@ -14,7 +14,6 @@ class TestColbertRerankerService:
 
         return ColbertRerankerService(base_url="http://localhost:8000")
 
-    @pytest.mark.asyncio
     async def test_rerank_returns_sorted_results(self, service):
         """Test rerank returns results with index and score."""
         mock_response = MagicMock()
@@ -43,13 +42,11 @@ class TestColbertRerankerService:
             assert "index" in results[0]
             assert "score" in results[0]
 
-    @pytest.mark.asyncio
     async def test_rerank_empty_documents(self, service):
         """Test rerank with empty documents returns empty list."""
         results = await service.rerank(query="test", documents=[], top_k=5)
         assert results == []
 
-    @pytest.mark.asyncio
     async def test_rerank_calls_correct_endpoint(self, service):
         """Test rerank calls /rerank endpoint with correct payload."""
         mock_response = MagicMock()
@@ -76,7 +73,6 @@ class TestColbertRerankerService:
             assert payload["documents"] == ["doc1"]
             assert payload["top_k"] == 3
 
-    @pytest.mark.asyncio
     async def test_close_client(self, service):
         """Test close method closes the HTTP client."""
         with patch.object(service._client, "aclose", new_callable=AsyncMock) as mock_close:
