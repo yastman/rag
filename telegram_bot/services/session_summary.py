@@ -4,6 +4,7 @@ Generates structured summaries from Q&A dialog turns using LLM.
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -123,3 +124,24 @@ async def generate_summary(
     except Exception:
         logger.warning("Failed to generate session summary", exc_info=True)
         return None
+
+
+def format_summary_as_note(summary: SessionSummary) -> str:
+    """Format SessionSummary as a readable CRM note text.
+
+    Output is designed for Kommo lead notes (plain text with emoji markers).
+    """
+    lines = [f"AI Summary ({datetime.now(UTC).strftime('%Y-%m-%d')})", ""]
+    lines.append(summary.brief)
+    lines.append("")
+
+    if summary.client_needs:
+        lines.append("Потребности: " + ", ".join(summary.client_needs))
+    if summary.budget:
+        lines.append(f"Бюджет: {summary.budget}")
+    if summary.preferences:
+        lines.append("Предпочтения: " + ", ".join(summary.preferences))
+    if summary.next_steps:
+        lines.append("Следующие шаги: " + ", ".join(summary.next_steps))
+
+    return "\n".join(lines)

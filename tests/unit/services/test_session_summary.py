@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from telegram_bot.services.session_summary import (
     SessionSummary,
+    format_summary_as_note,
     format_turns_for_prompt,
     generate_summary,
 )
@@ -173,3 +174,42 @@ class TestGenerateSummary:
         )
 
         assert result is None
+
+
+class TestFormatSummaryAsNote:
+    """Test CRM note formatting."""
+
+    def test_formats_full_summary(self):
+        """format_summary_as_note produces readable CRM note."""
+        summary = SessionSummary(
+            brief="Клиент ищет квартиру у моря.",
+            client_needs=["2-комнатная квартира", "вид на море"],
+            budget="$80,000",
+            preferences=["Sunny Beach", "не выше 5 этажа"],
+            next_steps=["подобрать 3 варианта", "назначить показ"],
+            sentiment="positive",
+        )
+        note = format_summary_as_note(summary)
+
+        assert "AI Summary" in note
+        assert "Клиент ищет квартиру у моря." in note
+        assert "2-комнатная квартира" in note
+        assert "$80,000" in note
+        assert "Sunny Beach" in note
+        assert "подобрать 3 варианта" in note
+
+    def test_formats_minimal_summary(self):
+        """format_summary_as_note handles empty optional fields."""
+        summary = SessionSummary(
+            brief="Короткий разговор.",
+            client_needs=[],
+            budget=None,
+            preferences=[],
+            next_steps=[],
+            sentiment="neutral",
+        )
+        note = format_summary_as_note(summary)
+
+        assert "Короткий разговор." in note
+        # No budget section when None
+        assert "Бюджет" not in note
