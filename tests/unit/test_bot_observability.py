@@ -79,6 +79,7 @@ class TestHandleQueryObservability:
         kwargs = mock_lf.update_current_trace.call_args.kwargs
         assert kwargs["input"]["query"] == "квартиры до 100000 евро"
         assert kwargs["output"]["response"] == "ok"
+
     async def test_handle_query_includes_expected_metadata_fields(
         self,
         mock_config: BotConfig,

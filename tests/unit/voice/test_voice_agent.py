@@ -60,6 +60,8 @@ def test_prewarm_stores_vad_in_userdata():
         _prewarm_process(proc)
         mock_load.assert_called_once()
     assert proc.userdata["vad"] == "fake-vad"
+
+
 async def test_search_tool_appends_transcript_entries_with_store():
     from src.voice.agent import VoiceBot
 
