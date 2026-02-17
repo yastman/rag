@@ -4,6 +4,13 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:This module is deprecated. Use src.ingestion.unified instead.:DeprecationWarning"
+)
+
 
 class TestGDriveFlowConfig:
     """Test flow configuration."""
