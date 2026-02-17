@@ -32,6 +32,7 @@ class OpenAIContextualizer(ContextualizeProvider):
         context_window: int = 3,
     ) -> list[ContextualizedChunk]:
         """Contextualize multiple chunks using OpenAI."""
+        _ = context_window
         results = []
         for i, chunk in enumerate(chunks):
             try:
