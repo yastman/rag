@@ -873,6 +873,7 @@ class TestQdrantServiceInit:
         ],
         ids=["defaults", "custom_vector_names", "with_api_key"],
     )
+    @pytest.mark.filterwarnings("ignore:Api key is used with an insecure connection.")
     def test_init(self, extra_kwargs, expected):
         """Test initialization with various configurations."""
         with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
