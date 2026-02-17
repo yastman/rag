@@ -142,6 +142,7 @@ class TestIndexChunks:
                     idx.voyage_service = mock_voyage_inst
                     idx.sparse_model = mock_sparse_inst
                     yield idx
+
     async def test_index_chunks_single_batch(self, indexer):
         """Test indexing a single batch of chunks."""
         from src.ingestion.chunker import Chunk
@@ -163,6 +164,7 @@ class TestIndexChunks:
         assert stats.indexed_chunks == 1
         assert stats.failed_chunks == 0
         indexer.client.upsert.assert_called_once()
+
     async def test_index_chunks_handles_error(self, indexer):
         """Test indexing handles errors gracefully."""
         from src.ingestion.chunker import Chunk
@@ -303,6 +305,7 @@ class TestMultipleBatchIndexing:
                     idx.voyage_service = mock_voyage_inst
                     idx.sparse_model = mock_sparse_inst
                     yield idx
+
     async def test_index_chunks_multiple_batches(self, indexer):
         """Test indexing with multiple batches."""
         from src.ingestion.chunker import Chunk
@@ -321,6 +324,7 @@ class TestMultipleBatchIndexing:
         assert stats.indexed_chunks == 3
         # With batch_size=2 and 3 chunks, should have 2 upsert calls
         assert indexer.client.upsert.call_count >= 1
+
     async def test_index_chunks_tracks_duration(self, indexer):
         """Test that indexing tracks duration."""
         from src.ingestion.chunker import Chunk
