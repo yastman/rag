@@ -77,6 +77,18 @@ def test_compose_redis_uses_requirepass():
 
 
 @pytest.mark.timeout(0)
+def test_stack_doc_mentions_redis_auth_requirement():
+    """Ensure PROJECT_STACK.md documents the REDIS_PASSWORD requirement."""
+    from pathlib import Path
+
+    content = (Path(__file__).parent.parent.parent.parent / "docs" / "PROJECT_STACK.md").read_text()
+    assert "REDIS_PASSWORD" in content, (
+        "docs/PROJECT_STACK.md must document the REDIS_PASSWORD requirement. "
+        "Redis auth is enforced in compose and k8s — the stack doc should reflect this."
+    )
+
+
+@pytest.mark.timeout(0)
 def test_k8s_bot_redis_password_declared_before_redis_url():
     """K8s expands $(VAR) only from previously declared env vars in the same list."""
     from pathlib import Path
