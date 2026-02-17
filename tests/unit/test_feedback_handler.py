@@ -34,9 +34,10 @@ class TestHandleFeedbackLangfuse:
         callback.from_user.id = 42
         callback.message = AsyncMock()
 
-        with patch("telegram_bot.bot.get_langfuse_client", return_value=mock_lf):
-            from telegram_bot.bot import PropertyBot
+        from telegram_bot import bot as bot_module
+        from telegram_bot.bot import PropertyBot
 
+        with patch.object(bot_module, "get_langfuse_client", return_value=mock_lf):
             bot_instance = MagicMock(spec=PropertyBot)
             bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
                 bot_instance, PropertyBot
@@ -51,7 +52,8 @@ class TestHandleFeedbackLangfuse:
             comment="user_id:42",
             score_id="trace123abc-user_feedback",
         )
-        mock_lf.flush.assert_called_once()
+        mock_lf.flush.assert_not_called()
+        callback.answer.assert_awaited_once_with("Спасибо за отзыв!")
 
     async def test_no_score_when_langfuse_disabled(self):
         """Feedback score NOT written when get_langfuse_client returns None."""
@@ -61,9 +63,10 @@ class TestHandleFeedbackLangfuse:
         callback.from_user.id = 42
         callback.message = AsyncMock()
 
-        with patch("telegram_bot.bot.get_langfuse_client", return_value=None):
-            from telegram_bot.bot import PropertyBot
+        from telegram_bot import bot as bot_module
+        from telegram_bot.bot import PropertyBot
 
+        with patch.object(bot_module, "get_langfuse_client", return_value=None):
             bot_instance = MagicMock(spec=PropertyBot)
             bot_instance.handle_feedback = PropertyBot.handle_feedback.__get__(
                 bot_instance, PropertyBot
