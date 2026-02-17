@@ -35,7 +35,6 @@ async def qdrant_service():
 class TestSmokeQuantization:
     """Test quantization A/B switching."""
 
-    @pytest.mark.asyncio
     async def test_search_with_quantization_returns_results(self, voyage_service, qdrant_service):
         """Search with quantization should return results."""
         embedding = await voyage_service.embed_query("квартира в Солнечном берегу")
@@ -46,7 +45,6 @@ class TestSmokeQuantization:
         )
         assert len(results) > 0
 
-    @pytest.mark.asyncio
     async def test_search_without_quantization_returns_results(
         self, voyage_service, qdrant_service
     ):
@@ -59,7 +57,6 @@ class TestSmokeQuantization:
         )
         assert len(results) > 0
 
-    @pytest.mark.asyncio
     async def test_quantization_results_overlap_60_percent(self, voyage_service, qdrant_service):
         """Results should have >= 60% overlap between modes."""
         embedding = await voyage_service.embed_query("студия с видом на море")
@@ -78,7 +75,6 @@ class TestSmokeQuantization:
         assert overlap >= 0.6, f"Overlap {overlap:.0%} < 60%"
 
     @pytest.mark.xfail(reason="Flaky timing comparison — depends on system load", strict=False)
-    @pytest.mark.asyncio
     async def test_quantization_latency_comparison(self, voyage_service, qdrant_service):
         """Measure latency with/without quantization (5 runs each, compare p95)."""
         embedding = await voyage_service.embed_query("апартаменты с бассейном")

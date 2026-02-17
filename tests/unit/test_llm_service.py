@@ -175,7 +175,6 @@ class TestGetFallbackAnswer:
 class TestGenerateAnswer:
     """Test answer generation."""
 
-    @pytest.mark.asyncio
     async def test_generate_answer_success(self):
         """Test successful answer generation."""
         service = LLMService(api_key="test-key")
@@ -191,7 +190,6 @@ class TestGenerateAnswer:
 
         assert result == "Generated answer"
 
-    @pytest.mark.asyncio
     async def test_generate_answer_timeout(self):
         """Test timeout returns fallback."""
         service = LLMService(api_key="test-key")
@@ -208,7 +206,6 @@ class TestGenerateAnswer:
         assert "⚠️" in result
         assert "Apt" in result
 
-    @pytest.mark.asyncio
     async def test_generate_answer_http_error(self):
         """Test API error returns fallback."""
         service = LLMService(api_key="test-key")
@@ -224,7 +221,6 @@ class TestGenerateAnswer:
 
         assert "⚠️" in result
 
-    @pytest.mark.asyncio
     async def test_generate_answer_custom_system_prompt(self):
         """Test using custom system prompt."""
         service = LLMService(api_key="test-key")
@@ -245,7 +241,6 @@ class TestGenerateAnswer:
 class TestGenerate:
     """Test simple text generation."""
 
-    @pytest.mark.asyncio
     async def test_generate_success(self):
         """Test successful text generation."""
         service = LLMService(api_key="test-key")
@@ -256,7 +251,6 @@ class TestGenerate:
 
         assert result == "Result"
 
-    @pytest.mark.asyncio
     async def test_generate_uses_low_temperature(self):
         """Test that generate uses low temperature (0.3)."""
         service = LLMService(api_key="test-key")
@@ -268,7 +262,6 @@ class TestGenerate:
         call_args = service.client.chat.completions.create.call_args
         assert call_args[1]["temperature"] == 0.3
 
-    @pytest.mark.asyncio
     async def test_generate_custom_max_tokens(self):
         """Test generate with custom max_tokens."""
         service = LLMService(api_key="test-key")
@@ -280,7 +273,6 @@ class TestGenerate:
         call_args = service.client.chat.completions.create.call_args
         assert call_args[1]["max_tokens"] == 500
 
-    @pytest.mark.asyncio
     async def test_generate_raises_on_error(self):
         """Test that generate raises exceptions (doesn't use fallback)."""
         service = LLMService(api_key="test-key")
@@ -294,7 +286,6 @@ class TestGenerate:
 class TestClose:
     """Test client closing."""
 
-    @pytest.mark.asyncio
     async def test_close_closes_client(self):
         """Test that close() closes the client."""
         service = LLMService(api_key="test-key")
