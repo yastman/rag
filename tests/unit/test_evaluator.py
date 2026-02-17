@@ -310,6 +310,7 @@ class TestCompareEngines:
                 "relative_improvement_pct"
             ] == pytest.approx(12.5)
 
+    @pytest.mark.filterwarnings("ignore:.*sample.*too small.*")
     def test_compare_engines_failure_rate_improvement(self):
         """Test failure rate improvement (lower is better)."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
