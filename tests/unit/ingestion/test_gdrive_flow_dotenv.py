@@ -3,6 +3,12 @@
 import importlib
 from pathlib import Path
 
+import pytest
+
+
+pytest.importorskip("fastembed", reason="fastembed not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
 
 class TestDotenvLoading:
     """Test that .env variables are loaded before config initialization."""

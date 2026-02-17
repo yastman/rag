@@ -5,6 +5,11 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
+
+
+pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+pytestmark = pytest.mark.requires_extras
 
 
 # Mock heavy dependencies before importing app

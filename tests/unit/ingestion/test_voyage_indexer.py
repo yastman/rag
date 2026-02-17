@@ -4,6 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+
+pytest.importorskip("fastembed", reason="fastembed not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
 from src.ingestion.voyage_indexer import IndexStats, VoyageIndexer
 
 

@@ -12,6 +12,10 @@ import numpy as np
 import pytest
 
 
+pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+pytestmark = pytest.mark.requires_extras
+
+
 # Mock SentenceTransformer BEFORE importing the app module
 _mock_st_class = MagicMock()
 _mock_model_instance = MagicMock()

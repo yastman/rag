@@ -4,6 +4,12 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+
+pytest.importorskip("fastembed", reason="fastembed not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
 
 class TestGDriveFlowConfig:
     """Test flow configuration."""
