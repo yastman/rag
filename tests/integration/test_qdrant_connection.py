@@ -4,21 +4,24 @@
 Тестирует подключение и выводит информацию о коллекциях.
 """
 
+import socket
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+import pytest
 from qdrant_client import QdrantClient
 
 from src.config.settings import Settings
 
 
-def test_qdrant_connection():
-    """Проверка подключения к Qdrant."""
+def _run_qdrant_connection_checks() -> bool:
+    """Выполнить проверки подключения к Qdrant."""
 
     print("=" * 70)
     print("ТЕСТ ПОДКЛЮЧЕНИЯ К QDRANT")
@@ -74,6 +77,25 @@ def test_qdrant_connection():
         return False
 
 
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def test_qdrant_connection():
+    """Проверка подключения к Qdrant."""
+    settings = Settings()
+    parsed = urlparse(settings.qdrant_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6333
+    if not _is_port_open(host, port):
+        pytest.skip(f"Qdrant not running on {host}:{port}")
+    assert _run_qdrant_connection_checks()
+
+
 if __name__ == "__main__":
-    success = test_qdrant_connection()
+    success = _run_qdrant_connection_checks()
     sys.exit(0 if success else 1)
