@@ -19,7 +19,7 @@ services:
     logging: *default-logging
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -268,7 +268,7 @@ services:
     stop_grace_period: 30s
     environment:
       - GDRIVE_SYNC_DIR=/data/drive-sync
-      - INGESTION_DATABASE_URL=postgresql://postgres:postgres@postgres:5432/cocoindex
+      - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
       - DOCLING_URL=http://docling:5001
       - GDRIVE_COLLECTION_NAME=gdrive_documents_bge
