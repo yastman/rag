@@ -211,8 +211,6 @@ class TestCreatePayloadIndexes:
 
 class TestIndexChunks:
     """Test chunk indexing."""
-
-    @pytest.mark.asyncio
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
@@ -321,8 +319,6 @@ class TestCreatePayloadIndexesError:
 
 class TestIndexBatch:
     """Test _index_batch method."""
-
-    @pytest.mark.asyncio
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
@@ -378,8 +374,6 @@ class TestIndexBatch:
 
         captured = capsys.readouterr()
         assert "Indexed 1 chunks" in captured.out
-
-    @pytest.mark.asyncio
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
@@ -438,8 +432,6 @@ class TestIndexBatch:
 
 class TestEmbedTexts:
     """Test _embed_texts method."""
-
-    @pytest.mark.asyncio
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
