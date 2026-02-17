@@ -331,7 +331,7 @@ COMPOSE_CMD := docker compose --compatibility -f docker-compose.dev.yml
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-full-up docker-down docker-ps
 
-docker-core-up: ## Start core services (postgres, qdrant, redis, docling, bm42)
+docker-core-up: ## Start core services (postgres, qdrant, redis, docling)
 	@echo "$(BLUE)Starting core services...$(NC)"
 	$(COMPOSE_CMD) up -d
 	@echo "$(GREEN)✓ Core services started$(NC)"
@@ -351,7 +351,7 @@ docker-ml-up: ## Start core + ML platform (langfuse, mlflow, clickhouse, minio)
 	$(COMPOSE_CMD) --profile ml up -d
 	@echo "$(GREEN)✓ ML platform started$(NC)"
 
-docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base, lightrag)
+docker-ai-up: ## Start core + heavy AI services (bge-m3, user-base)
 	@echo "$(BLUE)Starting AI services...$(NC)"
 	$(COMPOSE_CMD) --profile ai up -d
 	@echo "$(GREEN)✓ AI services started$(NC)"
@@ -597,6 +597,18 @@ eval-rag-full: ## Full RAG evaluation with all metrics
 	EVAL_INCLUDE_DEEPEVAL=true \
 	uv run python -m src.evaluation.ragas_evaluation
 	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
+
+.PHONY: eval-judge eval-judge-sample
+
+eval-judge: ## LLM-as-a-Judge: batch evaluation (24h traces)
+	@echo "$(BLUE)Running LLM-as-a-Judge evaluation...$(NC)"
+	uv run python scripts/evaluate_judge.py --hours 24 --tag rag
+	@echo "$(GREEN)✓ Judge evaluation complete$(NC)"
+
+eval-judge-sample: ## LLM-as-a-Judge: 50% sample of 48h traces
+	@echo "$(BLUE)Running LLM-as-a-Judge sample evaluation...$(NC)"
+	uv run python scripts/evaluate_judge.py --hours 48 --tag rag --sample-rate 0.5
+	@echo "$(GREEN)✓ Judge sample evaluation complete$(NC)"
 
 # =============================================================================
 # MONITORING & ALERTING
