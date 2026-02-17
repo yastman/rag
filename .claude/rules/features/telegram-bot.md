@@ -19,6 +19,14 @@ Text:  User Message → ThrottlingMiddleware → ErrorMiddleware
                    → [classify → cache_check → retrieve → grade → rerank → generate → cache_store → respond]
                    → Markdown Response (with plain text fallback)
 
+Supervisor (USE_SUPERVISOR=true):
+       User Message → PropertyBot.handle_query()
+                   → _handle_query_supervisor()
+                   → build_supervisor_graph(supervisor_llm, tools)
+                   → Supervisor LLM → tool_choice (rag_search | history_search | direct_response)
+                   → tool executes → respond
+                   → Langfuse: agent_used + supervisor_latency_ms + supervisor_model scores
+
 Voice: Voice Message → PropertyBot.handle_voice()
                     → download .ogg → make_initial_state(voice_audio=bytes)
                     → [transcribe → classify → ... same pipeline]
@@ -37,6 +45,11 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/graph/edges.py` | 4 routing functions (`route_start` voice→transcribe/classify, `route_grade` checks `grade_confidence`) |
 | `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `show_transcription`, `voice_language`, `stt_model`, `streaming_enabled`) |
 | `telegram_bot/graph/nodes/` | 9 node modules (transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
+| `telegram_bot/agents/supervisor.py` | `build_supervisor_graph()` — supervisor LLM + ToolNode loop |
+| `telegram_bot/agents/rag_agent.py` | `create_rag_agent()` — wraps existing RAG graph as tool |
+| `telegram_bot/agents/history_agent.py` | `create_history_agent()` — wraps HistoryService as tool |
+| `telegram_bot/agents/tools.py` | `create_rag_search_tool()`, `create_history_search_tool()`, `direct_response` |
+| `telegram_bot/graph/supervisor_state.py` | `SupervisorState` TypedDict + `make_supervisor_state()` factory |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, PII masking |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
@@ -102,6 +115,8 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `domain_language` | `BOT_LANGUAGE` | `ru` | Response language |
 | `rerank_provider` | `RERANK_PROVIDER` | `voyage` | colbert / none / voyage |
 | `admin_ids` | `ADMIN_IDS` | [] | Comma-separated Telegram IDs |
+| `use_supervisor` | `USE_SUPERVISOR` | `false` | Enable supervisor routing (LLM-based tool selection) |
+| `supervisor_model` | `SUPERVISOR_MODEL` | `gpt-4o-mini` | Model for supervisor routing decisions |
 | `streaming_enabled` | `STREAMING_ENABLED` | `true` | Stream LLM output to Telegram via edit_text |
 | `show_transcription` | `SHOW_TRANSCRIPTION` | `true` | Show transcribed text before RAG response |
 | `voice_language` | `VOICE_LANGUAGE` | `ru` | Whisper language hint (ISO code) |
@@ -164,6 +179,31 @@ with propagate_attributes(session_id=..., user_id=..., tags=["telegram", "rag"])
     _write_langfuse_scores(lf, result)  # 12 scores
 ```
 
+## Supervisor Path (USE_SUPERVISOR=true)
+
+When `use_supervisor=True`, `handle_query` delegates to `_handle_query_supervisor`:
+
+```python
+# 1. Build tools (rag_search wraps existing RAG graph, direct_response, optionally history_search)
+tools = [create_rag_agent(...), direct_response]
+if history_service: tools.append(create_history_search_tool(history_service))
+
+# 2. Supervisor LLM routes to appropriate tool
+graph = build_supervisor_graph(supervisor_llm=llm, tools=tools)
+result = await graph.ainvoke(state, config={"configurable": {"user_id": ..., "session_id": ...}})
+
+# 3. Langfuse scores: agent_used (CATEGORICAL), supervisor_latency_ms (NUMERIC), supervisor_model (CATEGORICAL)
+```
+
+**Tools:**
+- `rag_search` — wraps `build_graph().ainvoke()` (existing 10-node RAG pipeline)
+- `history_search` — wraps `HistoryService.search_user_history()` (Qdrant + BGE-M3)
+- `direct_response` — returns message as-is (for greetings, chitchat)
+
+**Runtime context:** Tools receive `user_id`/`session_id` via `RunnableConfig.configurable`.
+
+**Feature flag:** `USE_SUPERVISOR=false` (default) preserves monolithic RAG graph path.
+
 ## Streaming Delivery
 
 When `STREAMING_ENABLED=true` (default), `generate_node` streams LLM output directly to Telegram:
@@ -199,7 +239,8 @@ Catches all exceptions, logs with `exc_info=True`, returns user-friendly message
 ```bash
 pytest tests/unit/test_bot_handlers.py -v
 pytest tests/unit/test_middlewares.py -v
-pytest tests/unit/graph/ -v                    # All graph tests (incl. test_transcribe_node.py)
+pytest tests/unit/graph/ -v                              # All graph tests (incl. test_transcribe_node.py)
+pytest tests/unit/agents/ -v                             # Supervisor tests (state, tools, routing, observability)
 pytest tests/integration/test_graph_paths.py -v          # Graph path tests incl. voice flow (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 ```
