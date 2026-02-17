@@ -2,7 +2,6 @@
 """Tests for unified ingestion metrics: structured logging and timing."""
 
 import logging
-import time
 from datetime import UTC, datetime
 
 import pytest
@@ -96,26 +95,32 @@ class TestToStructuredLog:
 class TestTimedOperation:
     """Test timed_operation() context manager."""
 
-    def test_records_docling_duration(self):
+    @pytest.mark.parametrize(
+        ("operation", "attr", "start", "end"),
+        [
+            ("docling", "docling_duration_ms", 100.0, 100.011),
+            ("voyage", "voyage_duration_ms", 200.0, 200.022),
+            ("qdrant", "qdrant_duration_ms", 300.0, 300.033),
+        ],
+    )
+    def test_records_duration_for_operation(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        operation: str,
+        attr: str,
+        start: float,
+        end: float,
+    ):
         """timed_operation stores elapsed time in the correct attr."""
+        values = iter([start, end])
+        monkeypatch.setattr(
+            "src.ingestion.unified.metrics.time.perf_counter",
+            lambda: next(values),
+        )
         m = IngestionMetrics(file_id="f1", source_path="x.pdf")
-        with timed_operation(m, "docling"):
-            time.sleep(0.01)
-        assert m.docling_duration_ms > 0
-
-    def test_records_voyage_duration(self):
-        """Voyage timing is recorded."""
-        m = IngestionMetrics(file_id="f1", source_path="x.pdf")
-        with timed_operation(m, "voyage"):
-            time.sleep(0.01)
-        assert m.voyage_duration_ms > 0
-
-    def test_records_qdrant_duration(self):
-        """Qdrant timing is recorded."""
-        m = IngestionMetrics(file_id="f1", source_path="x.pdf")
-        with timed_operation(m, "qdrant"):
-            time.sleep(0.01)
-        assert m.qdrant_duration_ms > 0
+        with timed_operation(m, operation):
+            pass
+        assert getattr(m, attr) == pytest.approx((end - start) * 1000)
 
     def test_unknown_operation_is_noop(self):
         """Unknown operation name does not crash."""
@@ -124,13 +129,18 @@ class TestTimedOperation:
             pass
         # No crash, no attr set
 
-    def test_timing_on_exception(self):
+    def test_timing_on_exception(self, monkeypatch: pytest.MonkeyPatch):
         """Duration is still recorded even if the block raises."""
+        values = iter([400.0, 400.005])
+        monkeypatch.setattr(
+            "src.ingestion.unified.metrics.time.perf_counter",
+            lambda: next(values),
+        )
         m = IngestionMetrics(file_id="f1", source_path="x.pdf")
         with pytest.raises(ValueError, match="boom"):
             with timed_operation(m, "docling"):
                 raise ValueError("boom")
-        assert m.docling_duration_ms > 0
+        assert m.docling_duration_ms == pytest.approx(5.0)
 
 
 class TestLogIngestionResult:

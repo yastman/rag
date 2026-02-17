@@ -17,7 +17,7 @@ import pytest
 # Note: We don't mock 'aiohttp' or 'requests' in sys.modules because they're used
 # by httpx internally and mocking them causes test pollution in other test modules.
 @pytest.fixture(autouse=True)
-def mock_imports():
+def mock_imports(monkeypatch: pytest.MonkeyPatch):
     """Mock external dependencies that won't pollute other tests."""
     mock_contextualize = MagicMock()
     mock_settings = MagicMock()
@@ -29,28 +29,13 @@ def mock_imports():
     mock_settings.return_value = mock_settings_instance
 
     # Only mock modules that won't affect other parts of the codebase
-    mock_keys = ["contextualize_groq_async"]
-    original_modules = {k: sys.modules.get(k) for k in mock_keys}
+    monkeypatch.setitem(sys.modules, "contextualize_groq_async", mock_contextualize)
 
-    # Apply mocks
-    mocks = {
-        "contextualize_groq_async": mock_contextualize,
-    }
-    sys.modules.update(mocks)
-
-    try:
-        with patch("src.config.Settings", mock_settings):
-            yield {
-                "contextualize": mock_contextualize,
-                "settings": mock_settings,
-            }
-    finally:
-        # Restore original state
-        for key, value in original_modules.items():
-            if value is None:
-                sys.modules.pop(key, None)
-            else:
-                sys.modules[key] = value
+    with patch("src.config.Settings", mock_settings):
+        yield {
+            "contextualize": mock_contextualize,
+            "settings": mock_settings,
+        }
 
 
 class TestFetchArticleTexts:

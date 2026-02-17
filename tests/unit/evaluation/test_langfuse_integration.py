@@ -16,7 +16,7 @@ import pytest
 
 # Mock langfuse module before any imports
 @pytest.fixture(autouse=True)
-def mock_langfuse_module():
+def mock_langfuse_module(monkeypatch: pytest.MonkeyPatch):
     """Mock langfuse module and its components."""
 
     # Configure observe to return a pass-through decorator
@@ -49,29 +49,16 @@ def mock_langfuse_module():
     mock_langfuse_mod.get_client = MagicMock(return_value=mock_client_instance)
     mock_langfuse_mod.observe = observe_passthrough
 
-    # Save original state
-    mock_keys = ["langfuse"]
-    original_modules = {k: sys.modules.get(k) for k in mock_keys}
+    monkeypatch.setitem(sys.modules, "langfuse", mock_langfuse_mod)
 
-    # Apply mock
-    sys.modules["langfuse"] = mock_langfuse_mod
-
-    try:
-        yield {
-            "Langfuse": mock_langfuse_class,
-            "client_instance": mock_client_instance,
-            "get_client": mock_langfuse_mod.get_client,
-            "observe": observe_passthrough,
-            "span": mock_span,
-            "module": mock_langfuse_mod,
-        }
-    finally:
-        # Restore original state
-        for key, value in original_modules.items():
-            if value is None:
-                sys.modules.pop(key, None)
-            else:
-                sys.modules[key] = value
+    yield {
+        "Langfuse": mock_langfuse_class,
+        "client_instance": mock_client_instance,
+        "get_client": mock_langfuse_mod.get_client,
+        "observe": observe_passthrough,
+        "span": mock_span,
+        "module": mock_langfuse_mod,
+    }
 
 
 class TestInitializeLangfuse:
@@ -229,12 +216,13 @@ class TestTraceSearchWithDecorator:
         """Test latency is measured during search."""
 
         def mock_search(query: str) -> list:
-            time.sleep(0.01)  # 10ms simulated latency
+            _ = query
             return []
 
-        start_time = time.time()
-        mock_search("test")
-        latency_ms = (time.time() - start_time) * 1000
+        with patch("time.time", side_effect=[100.0, 100.012]):
+            start_time = time.time()
+            mock_search("test")
+            latency_ms = (time.time() - start_time) * 1000
 
         assert latency_ms >= 10
         assert latency_ms < 100  # Should be under 100ms
@@ -396,9 +384,9 @@ class TestMetricsCalculation:
 
     def test_latency_calculation(self):
         """Test latency is calculated correctly in milliseconds."""
-        start_time = time.time()
-        time.sleep(0.05)  # 50ms
-        latency_ms = (time.time() - start_time) * 1000
+        with patch("time.time", side_effect=[200.0, 200.05]):
+            start_time = time.time()
+            latency_ms = (time.time() - start_time) * 1000
 
         assert 45 < latency_ms < 100  # Allow some tolerance
 
