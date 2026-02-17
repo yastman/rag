@@ -381,7 +381,7 @@ rag-fresh/
 │
 ├── tests/                        ***REMOVED*** pytest (unit, integration, e2e, smoke, load)
 ├── docs/                         ***REMOVED*** Documentation
-├── CLAUDE.md                     ***REMOVED*** Full technical context (17KB)
+├── AGENTS.md                     ***REMOVED*** Codex workflow + instruction chain root
 └── pyproject.toml                ***REMOVED*** Dependencies, Ruff, MyPy
 ```
 
@@ -457,7 +457,8 @@ make deploy-code
 
 ***REMOVED******REMOVED*** См. также
 
-- `CLAUDE.md` - полный технический контекст (17KB)
+- `AGENTS.md` - корневые инструкции Codex
+- `docs/agent-rules/workflow.md` - цикл разработки и команды
 - `docs/QDRANT_STACK.md` - конфигурация Qdrant
 - `docs/LOCAL-DEVELOPMENT.md` - локальная разработка
 - `CACHING.md` - 6-tier cache architecture

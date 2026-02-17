@@ -52,7 +52,6 @@ def test_collection_name() -> str:
 class TestIngestionServiceE2E:
     """E2E tests for CocoIndexIngestionService."""
 
-    @pytest.mark.asyncio
     async def test_ingest_directory_creates_nodes(self, tmp_path: Path, test_collection_name: str):
         """Test that directory ingestion creates nodes in Qdrant."""
         from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
@@ -78,7 +77,6 @@ class TestIngestionServiceE2E:
         finally:
             await service.close()
 
-    @pytest.mark.asyncio
     async def test_get_collection_stats(self, test_collection_name: str):
         """Test getting collection statistics."""
         from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
@@ -95,7 +93,6 @@ class TestIngestionServiceE2E:
         finally:
             await service.close()
 
-    @pytest.mark.asyncio
     async def test_ingest_gdrive_without_credentials_fails_gracefully(self):
         """Test that GDrive ingestion fails gracefully without credentials."""
         from telegram_bot.services.ingestion_cocoindex import CocoIndexIngestionService
@@ -144,7 +141,6 @@ class TestQdrantSetupScript:
 class TestConvenienceFunctionsE2E:
     """E2E tests for convenience functions."""
 
-    @pytest.mark.asyncio
     async def test_get_ingestion_status(self):
         """Test get_ingestion_status convenience function."""
         from telegram_bot.services.ingestion_cocoindex import get_ingestion_status
