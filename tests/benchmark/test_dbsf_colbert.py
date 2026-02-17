@@ -4,8 +4,12 @@ Test DBSF + ColBERT multivector rerank in production code (Variant B).
 Verifies DBSFColBERTSearchEngine uses: Dense + Sparse + DBSF fusion + ColBERT rerank.
 """
 
+import socket
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
+
+import pytest
 
 
 # Add project root to path
@@ -16,8 +20,8 @@ from src.config import Settings
 from src.retrieval import DBSFColBERTSearchEngine
 
 
-def test_dbsf_colbert():
-    """Test Variant B: Hybrid DBSF + ColBERT rerank."""
+def _run_dbsf_colbert() -> tuple[bool, dict[str, list[dict[str, str | float | None]]] | None]:
+    """Run Variant B benchmark flow and return success flag with collected results."""
 
     print("=" * 80)
     print("TEST: VARIANT B - HYBRID DBSF + COLBERT RERANK")
@@ -114,8 +118,29 @@ def test_dbsf_colbert():
     return True, all_results
 
 
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def test_dbsf_colbert():
+    """Test Variant B: Hybrid DBSF + ColBERT rerank."""
+    settings = Settings()
+    parsed = urlparse(settings.qdrant_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6333
+    if not _is_port_open(host, port):
+        pytest.skip(f"Qdrant not running on {host}:{port}")
+    success, results = _run_dbsf_colbert()
+    assert success
+    assert results is not None
+
+
 if __name__ == "__main__":
-    success, results = test_dbsf_colbert()
+    success, results = _run_dbsf_colbert()
 
     if success and results:
         # Save results for comparison with RRF
