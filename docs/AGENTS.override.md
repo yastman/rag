@@ -8,7 +8,7 @@
 - Keep source-of-truth docs current and avoid contradictory duplicates.
 - Prefer updating existing canonical docs over adding new top-level files.
 - Put long historical material into `docs/archive/` or dated plan files.
-- Use `CLAUDE.md` and the paths it references as the primary source set when reconciling documentation.
+- Use `AGENTS.md`, nearest `AGENTS.override.md`, and `docs/agent-rules/*.md` as the primary source set when reconciling documentation.
 
 ## Documentation Strategy
 - Canonical operational docs:
@@ -26,6 +26,6 @@
 - Use explicit dates in dated reports/plans.
 
 ## References
-- `CLAUDE.md`
+- `AGENTS.md`
 - `docs/agent-rules/workflow.md`
 - `docs/agent-rules/project-analysis.md`
