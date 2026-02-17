@@ -8,6 +8,8 @@ dependencies = [
     "openai",
     "groq",
     "python-dotenv",
+    "pydantic-settings>=2.0.0",  # Required by telegram_bot/config.py (BotConfig)
+    "cachetools>=5.0.0",  # Required by telegram_bot/middlewares/throttling.py
     "numpy",
     "aiohttp",
     "requests",
@@ -101,6 +103,7 @@ dev = [
     "opentelemetry-exporter-otlp-proto-grpc>=1.39.0",
     "pre-commit>=3.8.0",
     "telethon>=1.42.0",
+    "pytest-split>=0.11.0",
 ]
 
 # =============================================================================
@@ -227,6 +230,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "test_*.py" = ["E402", "T201", "SIM117"]  # Allow late imports, print(), nested with in tests
 "tests/**/*.py" = ["E402", "T201", "SIM117"]  # Same for tests/ directory
 "legacy/*.py" = ["ASYNC210"]      # Allow blocking HTTP calls in async functions (legacy code)
+"src/ingestion/docling_client.py" = ["ASYNC240"]  # Legacy ingestion (replaced by unified pipeline)
+"src/ingestion/gdrive_flow.py" = ["ASYNC240"]     # Legacy ingestion (replaced by unified pipeline)
+"src/ingestion/service.py" = ["ASYNC240"]          # Legacy ingestion (replaced by unified pipeline)
 "*.py" = ["ARG001"]               # Allow unused function arguments (common in callbacks)
 
 # Import sorting configuration (isort replacement)
@@ -361,6 +367,7 @@ addopts = """
     -ra
     --strict-markers
     --strict-config
+    --dist=loadscope
 """
 testpaths = ["tests"]
 pythonpath = ["."]

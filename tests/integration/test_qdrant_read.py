@@ -38,7 +38,7 @@ def test_qdrant_read():
     try:
         # Подключение
         print("\n🔌 Подключение к Qdrant...")
-        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY if QDRANT_API_KEY else None)
+        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY or None)
         print("   ✅ Подключено!")
 
         # Список коллекций
