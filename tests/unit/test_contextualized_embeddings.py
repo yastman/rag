@@ -380,12 +380,7 @@ class TestFeatureFlag:
 
     def test_settings_default_disabled(self):
         """Test that contextualized embeddings are disabled by default."""
-        # Clear any cached settings
-        import importlib
-
-        import src.config.settings as settings_module
-
-        importlib.reload(settings_module)
+        from src.config import settings as settings_module
 
         # Should default to False
         with patch.dict("os.environ", {}, clear=True):
