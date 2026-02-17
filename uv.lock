@@ -716,11 +716,6 @@ dependencies = [
     { name = "aiohttp" },
     { name = "anthropic" },
     { name = "asyncpg" },
-    { name = "cocoindex" },
-    { name = "datasets" },
-    { name = "docling" },
-    { name = "docling-core" },
-    { name = "fastembed" },
     { name = "flagembedding" },
     { name = "groq" },
     { name = "langchain-core" },
@@ -729,14 +724,10 @@ dependencies = [
     { name = "langgraph-checkpoint-postgres" },
     { name = "langgraph-checkpoint-redis" },
     { name = "langmem" },
-    { name = "mlflow" },
     { name = "numpy" },
     { name = "openai" },
-    { name = "pandas" },
-    { name = "pymupdf" },
     { name = "python-dotenv" },
     { name = "qdrant-client" },
-    { name = "ragas" },
     { name = "redis" },
     { name = "redisvl" },
     { name = "requests" },
@@ -754,7 +745,12 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "cocoindex" },
+    { name = "datasets" },
+    { name = "docling" },
+    { name = "docling-core" },
     { name = "fastapi" },
+    { name = "fastembed" },
     { name = "httpx" },
     { name = "livekit" },
     { name = "livekit-agents", extra = ["silero", "turn-detector"] },
@@ -763,14 +759,31 @@ all = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
+    { name = "mlflow" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
+    { name = "pandas" },
+    { name = "pymupdf" },
+    { name = "ragas" },
     { name = "uvicorn" },
 ]
 docs = [
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
+]
+eval = [
+    { name = "datasets" },
+    { name = "mlflow" },
+    { name = "pandas" },
+    { name = "ragas" },
+]
+ingest = [
+    { name = "cocoindex" },
+    { name = "docling" },
+    { name = "docling-core" },
+    { name = "fastembed" },
+    { name = "pymupdf" },
 ]
 voice = [
     { name = "fastapi" },
@@ -809,13 +822,13 @@ requires-dist = [
     { name = "aiohttp" },
     { name = "anthropic" },
     { name = "asyncpg", specifier = ">=0.31.0" },
-    { name = "cocoindex", specifier = ">=0.3.28" },
-    { name = "contextual-rag", extras = ["docs", "voice"], marker = "extra == 'all'" },
-    { name = "datasets", specifier = ">=3.0.0" },
-    { name = "docling", specifier = ">=2.70.0" },
-    { name = "docling-core", specifier = ">=2.61.0" },
+    { name = "cocoindex", marker = "extra == 'ingest'", specifier = ">=0.3.28" },
+    { name = "contextual-rag", extras = ["docs", "voice", "eval", "ingest"], marker = "extra == 'all'" },
+    { name = "datasets", marker = "extra == 'eval'", specifier = ">=3.0.0" },
+    { name = "docling", marker = "extra == 'ingest'", specifier = ">=2.70.0" },
+    { name = "docling-core", marker = "extra == 'ingest'", specifier = ">=2.61.0" },
     { name = "fastapi", marker = "extra == 'voice'", specifier = ">=0.115.0" },
-    { name = "fastembed", specifier = ">=0.7.4" },
+    { name = "fastembed", marker = "extra == 'ingest'", specifier = ">=0.7.4" },
     { name = "flagembedding" },
     { name = "groq" },
     { name = "httpx", marker = "extra == 'voice'", specifier = ">=0.27.0" },
@@ -832,16 +845,16 @@ requires-dist = [
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6.0" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.25.0" },
-    { name = "mlflow", specifier = ">=3.9.0" },
+    { name = "mlflow", marker = "extra == 'eval'", specifier = ">=3.9.0" },
     { name = "numpy" },
     { name = "openai" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'voice'", specifier = ">=1.39.0" },
     { name = "opentelemetry-sdk", marker = "extra == 'voice'", specifier = ">=1.39.0" },
-    { name = "pandas", specifier = ">=2.0.0" },
-    { name = "pymupdf", specifier = ">=1.26.0" },
+    { name = "pandas", marker = "extra == 'eval'", specifier = ">=2.0.0" },
+    { name = "pymupdf", marker = "extra == 'ingest'", specifier = ">=1.26.0" },
     { name = "python-dotenv" },
     { name = "qdrant-client", specifier = ">=1.16.2" },
-    { name = "ragas", specifier = ">=0.4.3" },
+    { name = "ragas", marker = "extra == 'eval'", specifier = ">=0.4.3" },
     { name = "redis", specifier = ">=7.1.0" },
     { name = "redisvl", specifier = ">=0.13.2" },
     { name = "requests" },
@@ -855,7 +868,7 @@ requires-dist = [
     { name = "uvloop", specifier = ">=0.21.0" },
     { name = "voyageai", specifier = ">=0.3.0" },
 ]
-provides-extras = ["docs", "voice", "all"]
+provides-extras = ["docs", "voice", "ingest", "eval", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1183,6 +1196,15 @@ wheels = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
 name = "dill"
 version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1273,9 +1295,10 @@ wheels = [
 
 [[package]]
 name = "docling-core"
-version = "2.64.0"
+version = "2.65.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "defusedxml" },
     { name = "jsonref" },
     { name = "jsonschema" },
     { name = "latex2mathml" },
@@ -1287,9 +1310,9 @@ dependencies = [
     { name = "typer" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/23/f2/692de80893b0e0b22e4a5faa03f970b65de6d274a84d375c0ef92b54700b/docling_core-2.64.0.tar.gz", hash = "sha256:5ceb993d1ad743a882fe9bbae63a6b91ae5475e9d90cdf7451e9a1a7c2c2589f", size = 251646, upload-time = "2026-02-09T12:04:51.565Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/f0/54e61a05728f6e44f45092ab115b11b24464b64274f8a5fe8fcfe90ac70d/docling_core-2.65.1.tar.gz", hash = "sha256:3a143adb9cc613c503380eff92f5895078fc5a00fc7264f327d0d85ff60176cd", size = 253164, upload-time = "2026-02-13T12:23:06.472Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/65/9b/9f75957f7ac2e048c0cfad56631267e9d5a23b0d5708b7639598072f5253/docling_core-2.64.0-py3-none-any.whl", hash = "sha256:38dd5d8c60eba8b76a0f37c6f3510c0e53d3d53e0e2585329755b1886887b714", size = 239264, upload-time = "2026-02-09T12:04:50.256Z" },
+    { url = "https://files.pythonhosted.org/packages/54/ee/2a450f8cf9a153dd080551b1ff09d45f200d629c30917b2047ecb8e1f6b6/docling_core-2.65.1-py3-none-any.whl", hash = "sha256:fcdb30254bc5046b52b8bec5919de3b6cdbeed915399cede5351ff328cdd020d", size = 240086, upload-time = "2026-02-13T12:23:04.289Z" },
 ]
 
 [package.optional-dependencies]
