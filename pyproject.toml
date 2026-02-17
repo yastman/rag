@@ -50,9 +50,9 @@ docs = [
 
 # Voice bot (LiveKit Agents + RAG API)
 voice = [
-    "livekit-agents[silero,turn-detector]~=1.3",
-    "livekit-plugins-elevenlabs~=1.0",
-    "livekit-plugins-openai~=1.0",
+    "livekit-agents[silero,turn-detector]~=1.4",
+    "livekit-plugins-elevenlabs~=1.1",
+    "livekit-plugins-openai~=1.1",
     "livekit~=1.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
