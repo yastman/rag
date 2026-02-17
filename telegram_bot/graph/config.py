@@ -46,6 +46,8 @@ class GraphConfig:
     response_style_shadow_mode: bool = False
     # Source attribution (#225)
     show_sources: bool = True
+    # Content filtering (#227)
+    content_filter_enabled: bool = True
     # Voice transcription (#151)
     show_transcription: bool = True
     voice_language: str = "ru"
@@ -99,6 +101,7 @@ class GraphConfig:
             response_style_shadow_mode=os.getenv("RESPONSE_STYLE_SHADOW_MODE", "false").lower()
             == "true",
             show_sources=os.getenv("SHOW_SOURCES", "true").lower() == "true",
+            content_filter_enabled=os.getenv("CONTENT_FILTER_ENABLED", "true").lower() == "true",
             show_transcription=os.getenv("SHOW_TRANSCRIPTION", "true").lower() == "true",
             voice_language=os.getenv("VOICE_LANGUAGE", "ru"),
             stt_model=os.getenv("STT_MODEL", "whisper"),
