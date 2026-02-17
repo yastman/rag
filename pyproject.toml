@@ -378,8 +378,12 @@ markers = [
     "unit: Unit tests with mocks (fast, no external deps)",
     "integration: Integration tests (requires Docker/API keys)",
     "slow: Tests taking > 5 seconds",
-    "legacy_api: tests for pre-LangGraph API (may need rewrite)",
+    "chaos: Chaos/resilience tests (service failures, fallbacks)",
+    "load: Load/performance tests (concurrent users, throughput)",
+    "e2e: End-to-end pipeline tests (require live services)",
     "smoke: Smoke tests (requires running services)",
+    "benchmark: Benchmark tests (parser/reranker comparisons)",
+    "legacy_api: tests for pre-LangGraph API (may need rewrite)",
     "requires_extras: Tests needing optional deps (voice/ingest/eval); skipped in core tier",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
 ]
