@@ -39,6 +39,8 @@ make ingest-unified        # Unified ingestion (CocoIndex v3.2.1); also: -watch,
 Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
 Bot:        Query → LangGraph StateGraph (10 nodes) → classify → cache_check
             → retrieve (RRF, hybrid embed 1-call) → grade → rerank (ColBERT) → generate → respond
+Supervisor: Query → Supervisor LLM → tool choice (rag_search | history_search | direct_response)
+            → tool executes (wraps existing RAG graph / HistoryService) → respond
 Voice STT:  Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API (FastAPI)
 ```
@@ -47,6 +49,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 |--------|---------|
 | `telegram_bot/bot.py` | PropertyBot (~300 LOC, LangGraph orchestrator + score writing) |
 | `telegram_bot/graph/` | LangGraph 10-node RAG pipeline (incl. transcribe for voice) |
+| `telegram_bot/agents/` | Multi-agent supervisor architecture (#240): tools, rag_agent, history_agent, supervisor |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
 | `telegram_bot/observability.py` | Langfuse init, @observe decorator, PII masking |
@@ -59,7 +62,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
-**Observability:** Langfuse v3 — 35 observations/trace, 14 scores + 3 judge scores (parity: Telegram + FastAPI /query), curated spans on 5 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
+**Observability:** Langfuse v3 — 35 observations/trace, 14 scores + 3 judge scores + 3 supervisor scores (agent_used, supervisor_latency_ms, supervisor_model), curated spans on 5 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `eval` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
 
