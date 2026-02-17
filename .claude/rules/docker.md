@@ -34,6 +34,7 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 | `make docker-ai-up` | core + bge-m3, user-base | Heavy AI models |
 | `make docker-eval-up` | core + mlflow | Evaluation (RAGAS, A/B tests) |
 | `make docker-ingest-up` | core + ingestion | Ingestion container |
+| `make docker-voice-up` | core + livekit, sip, voice-agent | Voice/SIP dev (preflight check) |
 | `make docker-full-up` | everything (14+ services) | Full stack |
 
 ### Combining Profiles
