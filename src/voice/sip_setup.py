@@ -2,18 +2,27 @@
 
 import asyncio
 import os
-from typing import Any, cast
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, cast
 
-from livekit import api
 from livekit.protocol.sip import CreateSIPOutboundTrunkRequest, SIPOutboundTrunkInfo
+
+
+if TYPE_CHECKING:
+    from livekit.api import LiveKitAPI
+
+api = cast(Any, import_module("livekit.api"))
 
 
 async def setup_lifecell_trunk() -> str:
     """Create lifecell outbound SIP trunk. Returns trunk ID."""
-    lk = cast(Any, api).LiveKitAPI(
-        url=os.getenv("LIVEKIT_URL", "http://localhost:7880"),
-        api_key=os.getenv("LIVEKIT_API_KEY", "devkey"),
-        api_secret=os.getenv("LIVEKIT_API_SECRET", "secret"),
+    lk = cast(
+        "LiveKitAPI",
+        api.LiveKitAPI(
+            url=os.getenv("LIVEKIT_URL", "http://localhost:7880"),
+            api_key=os.getenv("LIVEKIT_API_KEY", "devkey"),
+            api_secret=os.getenv("LIVEKIT_API_SECRET", "secret"),
+        ),
     )
 
     sip_user = os.getenv("LIFECELL_SIP_USER", "")

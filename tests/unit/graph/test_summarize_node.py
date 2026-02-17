@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
+
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:Importing Send from langgraph.constants is deprecated.*"
+)
+
 
 class TestSummarizationNodeIntegration:
     def test_summarize_node_is_runnable(self):
