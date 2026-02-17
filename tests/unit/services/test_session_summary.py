@@ -1,9 +1,11 @@
 """Unit tests for SessionSummary model and generate_summary()."""
 
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram_bot.services.session_summary import (
     SessionSummary,
+    _trim_turns_for_summary,
     format_summary_as_note,
     format_turns_for_prompt,
     generate_summary,
@@ -175,12 +177,93 @@ class TestGenerateSummary:
 
         assert result is None
 
+    async def test_fallback_to_chat_completions_parse(self):
+        """generate_summary uses beta.chat.completions.parse when responses API unavailable."""
+        mock_llm = MagicMock(spec=[])  # no 'responses' attribute
+        expected = SessionSummary(
+            brief="Fallback test.",
+            client_needs=[],
+            budget=None,
+            preferences=[],
+            next_steps=[],
+            sentiment="neutral",
+        )
+        mock_message = MagicMock()
+        mock_message.parsed = expected
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_completion = MagicMock()
+        mock_completion.choices = [mock_choice]
+        mock_llm.beta = MagicMock()
+        mock_llm.beta.chat.completions.parse = AsyncMock(return_value=mock_completion)
+
+        result = await generate_summary(
+            turns=[{"query": "q", "response": "r", "timestamp": "t", "input_type": "text"}],
+            llm=mock_llm,
+        )
+
+        assert result == expected
+        mock_llm.beta.chat.completions.parse.assert_awaited_once()
+        call_kwargs = mock_llm.beta.chat.completions.parse.call_args.kwargs
+        assert call_kwargs["response_format"] is SessionSummary
+        assert call_kwargs["temperature"] == 0.0
+
+    async def test_fallback_error_returns_none(self):
+        """generate_summary returns None when fallback path also fails."""
+        mock_llm = MagicMock(spec=[])  # no 'responses' attribute
+        mock_llm.beta = MagicMock()
+        mock_llm.beta.chat.completions.parse = AsyncMock(side_effect=RuntimeError("fallback error"))
+
+        result = await generate_summary(
+            turns=[{"query": "q", "response": "r", "timestamp": "t", "input_type": "text"}],
+            llm=mock_llm,
+        )
+
+        assert result is None
+
+
+class TestTrimTurnsForSummary:
+    """Test _trim_turns_for_summary internal function."""
+
+    def test_filters_empty_turns(self):
+        """_trim_turns_for_summary removes turns with no query and no response."""
+        turns = [
+            {"query": "q1", "response": "r1"},
+            {"query": "", "response": ""},
+            {"query": "q2", "response": "r2"},
+        ]
+        result = _trim_turns_for_summary(turns)
+        assert len(result) == 2
+        assert result[0]["query"] == "q1"
+        assert result[1]["query"] == "q2"
+
+    def test_caps_at_max_turns(self):
+        """_trim_turns_for_summary keeps only last 40 turns."""
+        turns = [{"query": f"q{i}", "response": f"r{i}"} for i in range(60)]
+        result = _trim_turns_for_summary(turns)
+        assert len(result) == 40
+        assert result[0]["query"] == "q20"
+        assert result[-1]["query"] == "q59"
+
+    def test_returns_empty_for_empty_input(self):
+        """_trim_turns_for_summary returns empty list for no turns."""
+        assert _trim_turns_for_summary([]) == []
+
+    def test_keeps_turns_with_only_query(self):
+        """_trim_turns_for_summary keeps turns that have only query."""
+        turns = [{"query": "q1", "response": ""}]
+        result = _trim_turns_for_summary(turns)
+        assert len(result) == 1
+
 
 class TestFormatSummaryAsNote:
     """Test CRM note formatting."""
 
-    def test_formats_full_summary(self):
-        """format_summary_as_note produces readable CRM note."""
+    @patch("telegram_bot.services.session_summary.datetime")
+    def test_formats_full_summary(self, mock_dt):
+        """format_summary_as_note produces readable CRM note with date."""
+        mock_dt.now.return_value = datetime(2026, 2, 17, tzinfo=UTC)
+        mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
         summary = SessionSummary(
             brief="Клиент ищет квартиру у моря.",
             client_needs=["2-комнатная квартира", "вид на море"],
@@ -191,7 +274,7 @@ class TestFormatSummaryAsNote:
         )
         note = format_summary_as_note(summary)
 
-        assert "AI Summary" in note
+        assert "AI Summary (2026-02-17)" in note
         assert "Клиент ищет квартиру у моря." in note
         assert "2-комнатная квартира" in note
         assert "$80,000" in note

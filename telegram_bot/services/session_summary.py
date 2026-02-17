@@ -5,7 +5,7 @@ Generates structured summaries from Q&A dialog turns using LLM.
 
 import logging
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -76,14 +76,15 @@ def _trim_turns_for_summary(turns: list[dict]) -> list[dict]:
 async def generate_summary(
     *,
     turns: list[dict],
-    llm: object,
+    llm: Any,
     model: str = "gpt-4o-mini",
 ) -> SessionSummary | None:
     """Generate structured session summary from Q&A turns.
 
     Args:
         turns: List of Q&A dicts with query, response, timestamp, input_type.
-        llm: AsyncOpenAI client (langfuse.openai.AsyncOpenAI or compatible).
+        llm: AsyncOpenAI-compatible client with responses.parse or
+            beta.chat.completions.parse method.
         model: LLM model name for summary generation.
 
     Returns:
