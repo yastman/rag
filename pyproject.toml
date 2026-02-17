@@ -18,13 +18,13 @@ dependencies = [
     "sentence-transformers",  # BGE-M3 embeddings
     "qdrant-client>=1.16.2",  # Vector database client (v1.15+ for BM42 support)
     "transformers>=4.30.0",   # For HuggingFace tokenizers in HybridChunker
-    "langfuse>=3.0.0",        # LLM observability & tracing
+    "langfuse>=3.14.0",       # LLM observability & tracing
     # Voyage AI Integration (2026-01-21)
     "voyageai>=0.3.0",        # Voyage AI embeddings and reranking
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
     "redis>=7.1.0",
     "redisvl>=0.13.2",
-    "aiogram>=3.22.0",
+    "aiogram>=3.25.0",
     # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
     "torch>=2.0.0",
     "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
