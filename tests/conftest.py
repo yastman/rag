@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -38,6 +39,26 @@ for _logger_name in ("ragas", "ragas._analytics"):
 
 # Load environment variables before any imports
 load_dotenv()
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Apply stable directory-based markers for test tiering."""
+    root = Path(__file__).resolve().parent
+    path_to_marker = {
+        root / "unit": "unit",
+        root / "integration": "integration",
+        root / "smoke": "smoke",
+        root / "e2e": "e2e",
+        root / "chaos": "chaos",
+        root / "load": "load",
+        root / "benchmark": "benchmark",
+    }
+
+    for item in items:
+        item_path = Path(str(item.path)).resolve()
+        for directory, marker in path_to_marker.items():
+            if directory in item_path.parents:
+                item.add_marker(getattr(pytest.mark, marker))
 
 
 # =============================================================================
