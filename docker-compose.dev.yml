@@ -36,7 +36,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
+    image: redis:8.6.0@sha256:7b6fb55d8b0adcd77269dc52b3cfffe5f59ca5d43dec3c90dbe18aacce7942e1
     container_name: dev-redis
     restart: unless-stopped
     logging: *default-logging
@@ -219,7 +219,7 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
-    image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
+    image: redis:8.6.0@sha256:7b6fb55d8b0adcd77269dc52b3cfffe5f59ca5d43dec3c90dbe18aacce7942e1
     container_name: dev-redis-langfuse
     profiles: ["ml", "full"]
     restart: unless-stopped
