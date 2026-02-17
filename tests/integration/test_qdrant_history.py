@@ -60,6 +60,7 @@ async def service(qdrant_client, mock_embeddings):
 )
 class TestQdrantHistoryIntegration:
     """Integration tests requiring live Qdrant."""
+
     async def test_save_and_search_returns_own_data(self, service, mock_embeddings):
         """Upsert Q&A and retrieve via search with user_id filter."""
         await service.save_turn(
@@ -76,6 +77,7 @@ class TestQdrantHistoryIntegration:
         assert len(results) >= 1
         assert results[0]["query"] == "цены на квартиры"
         assert results[0]["response"] == "Квартиры от 50к евро"
+
     async def test_cross_user_isolation(self, service, mock_embeddings):
         """User A cannot retrieve user B records."""
         # User A saves

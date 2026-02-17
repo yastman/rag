@@ -73,6 +73,7 @@ class TestCacheLayerManagerInit:
 
 class TestCacheLayerManagerInitialize:
     """Test async initialization."""
+
     async def test_initialize_uses_hardened_connection_params(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
 
@@ -96,6 +97,7 @@ class TestCacheLayerManagerInitialize:
         from redis.retry import Retry
 
         assert isinstance(call_kwargs["retry"], Retry)
+
     async def test_initialize_connects_redis(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
 
@@ -110,6 +112,7 @@ class TestCacheLayerManagerInitialize:
 
         assert mgr.redis is mock_redis
         mock_redis.ping.assert_awaited_once()
+
     async def test_initialize_graceful_on_failure(self):
         mgr = CacheLayerManager(redis_url="redis://bad:6379")
 
@@ -124,6 +127,7 @@ class TestCacheLayerManagerInitialize:
 
 class TestSemanticCache:
     """Test semantic cache check/store."""
+
     async def test_semantic_miss_returns_none(self, _ensure_redisvl_filter_mock):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
@@ -136,6 +140,7 @@ class TestSemanticCache:
         )
         assert result is None
         assert mgr._metrics["semantic"]["misses"] == 1
+
     async def test_semantic_hit_returns_response(self, _ensure_redisvl_filter_mock):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
@@ -152,6 +157,7 @@ class TestSemanticCache:
         )
         assert result == "cached answer"
         assert mgr._metrics["semantic"]["hits"] == 1
+
     async def test_semantic_timeout_returns_none(self, _ensure_redisvl_filter_mock):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
@@ -171,6 +177,7 @@ class TestSemanticCache:
         )
         assert result is None
         assert mgr._metrics["semantic"]["misses"] == 1
+
     async def test_semantic_store(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
@@ -185,12 +192,14 @@ class TestSemanticCache:
             query_type="GENERAL",
         )
         mgr.semantic_cache.astore.assert_awaited_once()
+
     async def test_semantic_check_disabled_returns_none(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = None
 
         result = await mgr.check_semantic(query="test", vector=[0.1] * 1024, query_type="GENERAL")
         assert result is None
+
     async def test_semantic_check_filters_by_user_id(self, _ensure_redisvl_filter_mock):
         """check_semantic with user_id builds combined Tag filter (user_id + language)."""
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
@@ -211,6 +220,7 @@ class TestSemanticCache:
         # Verify acheck was called with a filter_expression
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
+
     async def test_semantic_store_includes_user_id_in_filters(self):
         """store_semantic with user_id passes it in filters dict."""
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
@@ -234,6 +244,7 @@ class TestSemanticCache:
 
 class TestExactCaches:
     """Test exact key-value caches (embeddings, sparse, analysis, search, rerank)."""
+
     async def test_exact_store_and_get(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.redis = AsyncMock()
@@ -248,6 +259,7 @@ class TestExactCaches:
         result = await mgr.get_exact("embeddings", "key1")
         assert result == [0.1, 0.2, 0.3]
         assert mgr._metrics["embeddings"]["hits"] == 1
+
     async def test_exact_miss(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.redis = AsyncMock()
@@ -256,12 +268,14 @@ class TestExactCaches:
         result = await mgr.get_exact("search", "nonexistent")
         assert result is None
         assert mgr._metrics["search"]["misses"] == 1
+
     async def test_exact_disabled_returns_none(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.redis = None
 
         result = await mgr.get_exact("embeddings", "key1")
         assert result is None
+
     async def test_search_cache_with_hash_key(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.redis = AsyncMock()
@@ -293,6 +307,7 @@ class TestMetrics:
         metrics = mgr.get_metrics()
         assert metrics["overall_hit_rate"] == 0.0
         assert metrics["total_requests"] == 0
+
     async def test_metrics_accumulate(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.redis = AsyncMock()
