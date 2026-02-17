@@ -695,6 +695,7 @@ services:
         ws_url: ws://livekit-server:7880
         redis:
           address: redis:6379
+          password: ${REDIS_PASSWORD:-dev_redis_pass}
         sip_port: 5060
         rtp_port: 10000-10100
         use_external_ip: false
