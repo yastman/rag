@@ -717,7 +717,6 @@ dependencies = [
     { name = "anthropic" },
     { name = "asyncpg" },
     { name = "cachetools" },
-    { name = "flagembedding" },
     { name = "groq" },
     { name = "langchain-core" },
     { name = "langfuse" },
@@ -733,14 +732,7 @@ dependencies = [
     { name = "redis" },
     { name = "redisvl" },
     { name = "requests" },
-    { name = "scipy" },
-    { name = "sentence-transformers" },
     { name = "tenacity" },
-    { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
-    { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
-    { name = "torchvision", version = "0.25.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
-    { name = "torchvision", version = "0.25.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
-    { name = "transformers" },
     { name = "uvloop" },
     { name = "voyageai" },
 ]
@@ -753,6 +745,7 @@ all = [
     { name = "docling-core" },
     { name = "fastapi" },
     { name = "fastembed" },
+    { name = "flagembedding" },
     { name = "httpx" },
     { name = "livekit" },
     { name = "livekit-agents", extra = ["silero", "turn-detector"] },
@@ -767,6 +760,13 @@ all = [
     { name = "pandas" },
     { name = "pymupdf" },
     { name = "ragas" },
+    { name = "scipy" },
+    { name = "sentence-transformers" },
+    { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "torchvision", version = "0.25.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torchvision", version = "0.25.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "transformers" },
     { name = "uvicorn" },
 ]
 docs = [
@@ -786,6 +786,16 @@ ingest = [
     { name = "docling-core" },
     { name = "fastembed" },
     { name = "pymupdf" },
+]
+ml-local = [
+    { name = "flagembedding" },
+    { name = "scipy" },
+    { name = "sentence-transformers" },
+    { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "torchvision", version = "0.25.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torchvision", version = "0.25.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "transformers" },
 ]
 voice = [
     { name = "fastapi" },
@@ -826,13 +836,13 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "cachetools", specifier = ">=5.0.0" },
     { name = "cocoindex", marker = "extra == 'ingest'", specifier = ">=0.3.28" },
-    { name = "contextual-rag", extras = ["docs", "voice", "eval", "ingest"], marker = "extra == 'all'" },
+    { name = "contextual-rag", extras = ["docs", "voice", "eval", "ingest", "ml-local"], marker = "extra == 'all'" },
     { name = "datasets", marker = "extra == 'eval'", specifier = ">=3.0.0" },
     { name = "docling", marker = "extra == 'ingest'", specifier = ">=2.70.0" },
     { name = "docling-core", marker = "extra == 'ingest'", specifier = ">=2.61.0" },
     { name = "fastapi", marker = "extra == 'voice'", specifier = ">=0.115.0" },
     { name = "fastembed", marker = "extra == 'ingest'", specifier = ">=0.7.4" },
-    { name = "flagembedding" },
+    { name = "flagembedding", marker = "extra == 'ml-local'" },
     { name = "groq" },
     { name = "httpx", marker = "extra == 'voice'", specifier = ">=0.27.0" },
     { name = "langchain-core", specifier = ">=1.2" },
@@ -862,17 +872,17 @@ requires-dist = [
     { name = "redis", specifier = ">=7.1.0" },
     { name = "redisvl", specifier = ">=0.13.2" },
     { name = "requests" },
-    { name = "scipy" },
-    { name = "sentence-transformers" },
+    { name = "scipy", marker = "extra == 'ml-local'" },
+    { name = "sentence-transformers", marker = "extra == 'ml-local'" },
     { name = "tenacity", specifier = ">=8.2.0" },
-    { name = "torch", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "torchvision", specifier = ">=0.15.0", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "transformers", specifier = ">=4.30.0" },
+    { name = "torch", marker = "extra == 'ml-local'", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torchvision", marker = "extra == 'ml-local'", specifier = ">=0.15.0", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "transformers", marker = "extra == 'ml-local'", specifier = ">=4.30.0" },
     { name = "uvicorn", marker = "extra == 'voice'", specifier = ">=0.30.0" },
     { name = "uvloop", specifier = ">=0.21.0" },
     { name = "voyageai", specifier = ">=0.3.0" },
 ]
-provides-extras = ["docs", "voice", "ingest", "eval", "all"]
+provides-extras = ["ml-local", "docs", "voice", "ingest", "eval", "all"]
 
 [package.metadata.requires-dev]
 dev = [
