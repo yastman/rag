@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.ingestion.chunker import Chunk
 from src.ingestion.indexer import DocumentIndexer, IndexStats
 
@@ -211,6 +209,7 @@ class TestCreatePayloadIndexes:
 
 class TestIndexChunks:
     """Test chunk indexing."""
+
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
@@ -319,6 +318,7 @@ class TestCreatePayloadIndexesError:
 
 class TestIndexBatch:
     """Test _index_batch method."""
+
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
@@ -374,6 +374,7 @@ class TestIndexBatch:
 
         captured = capsys.readouterr()
         assert "Indexed 1 chunks" in captured.out
+
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
@@ -432,6 +433,7 @@ class TestIndexBatch:
 
 class TestEmbedTexts:
     """Test _embed_texts method."""
+
     @patch("src.ingestion.indexer.get_bge_m3_model")
     @patch("src.ingestion.indexer.QdrantClient")
     @patch("src.ingestion.indexer.Settings")
