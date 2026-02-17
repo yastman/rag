@@ -592,28 +592,17 @@ class PropertyBot:
                 )
             except Exception:
                 logger.exception("History search failed for user %s", user_id)
+                lf.update_current_trace(
+                    input={"command": "/history", "query": query},
+                    output={"error": "backend_exception"},
+                    metadata={"user_id": user_id},
+                )
+                lf.score_current_trace(name="history_search_count", value=0, data_type="NUMERIC")
+                lf.score_current_trace(name="history_search_empty", value=1.0, data_type="NUMERIC")
                 await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
                 return
 
             search_ms = (time.perf_counter() - search_start) * 1000
-
-            lf.update_current_trace(
-                input={"command": "/history", "query": query},
-                output={"results_count": len(results)},
-                metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
-            )
-            lf.score_current_trace(
-                name="history_search_count", value=len(results), data_type="NUMERIC"
-            )
-            lf.score_current_trace(
-                name="history_search_latency_ms", value=search_ms, data_type="NUMERIC"
-            )
-            lf.score_current_trace(
-                name="history_search_empty",
-                value=1.0 if not results else 0.0,
-                data_type="NUMERIC",
-            )
-            lf.score_current_trace(name="history_backend", value="qdrant", data_type="CATEGORICAL")
 
             valid = []
             for r in results:
@@ -624,6 +613,24 @@ class PropertyBot:
                 if not isinstance(q, str) or not isinstance(resp, str):
                     continue
                 valid.append(r)
+
+            lf.update_current_trace(
+                input={"command": "/history", "query": query},
+                output={"results_count": len(results), "valid_count": len(valid)},
+                metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
+            )
+            lf.score_current_trace(
+                name="history_search_count", value=len(valid), data_type="NUMERIC"
+            )
+            lf.score_current_trace(
+                name="history_search_latency_ms", value=search_ms, data_type="NUMERIC"
+            )
+            lf.score_current_trace(
+                name="history_search_empty",
+                value=1.0 if not valid else 0.0,
+                data_type="NUMERIC",
+            )
+            lf.score_current_trace(name="history_backend", value="qdrant", data_type="CATEGORICAL")
 
             if not valid:
                 await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
