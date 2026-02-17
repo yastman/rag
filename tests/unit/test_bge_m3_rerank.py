@@ -1,24 +1,37 @@
-"""Tests for bge-m3-api /rerank endpoint."""
+"""Tests for bge-m3-api /rerank endpoint.
+
+All sys.modules mocking is fixture-scoped (no module-level pollution).
+"""
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 
-# Mock heavy dependencies before importing app
-sys.modules["FlagEmbedding"] = MagicMock()
-sys.modules["prometheus_client"] = MagicMock()
+_BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
 
-# Add services/bge-m3-api to path for imports
-sys.path.insert(0, str(Path(__file__).parents[2] / "services" / "bge-m3-api"))
+
+@pytest.fixture(scope="module")
+def bge_rerank_app():
+    """Mock heavy deps and add bge-m3-api to sys.path for imports."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "FlagEmbedding", MagicMock())
+        mp.setitem(sys.modules, "prometheus_client", MagicMock())
+        mp.syspath_prepend(_BGE_SERVICE_DIR)
+        yield
+        # Clean up cached service imports (not mocks — real modules imported
+        # via syspath_prepend that shouldn't leak to other test files).
+        for mod in ("app", "config"):
+            sys.modules.pop(mod, None)
 
 
 class TestRerankEndpoint:
     """Tests for ColBERT MaxSim rerank endpoint."""
 
-    def test_rerank_request_model_validation(self):
+    def test_rerank_request_model_validation(self, bge_rerank_app):
         """Test RerankRequest validates input."""
         from app import RerankRequest
 
@@ -32,7 +45,7 @@ class TestRerankEndpoint:
         assert len(req.documents) == 2
         assert req.top_k == 2
 
-    def test_rerank_response_model(self):
+    def test_rerank_response_model(self, bge_rerank_app):
         """Test RerankResponse structure."""
         from app import RerankResponse, RerankResult
 
@@ -42,7 +55,7 @@ class TestRerankEndpoint:
         assert response.results[0].index == 0
         assert response.results[0].score == 0.95
 
-    def test_maxsim_score_calculation(self):
+    def test_maxsim_score_calculation(self, bge_rerank_app):
         """Test MaxSim scoring function."""
         from app import compute_maxsim_scores
 
