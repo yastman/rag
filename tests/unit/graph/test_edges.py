@@ -36,10 +36,10 @@ class TestRouteByQueryType:
         [
             pytest.param("CHITCHAT", "respond", id="chitchat"),
             pytest.param("OFF_TOPIC", "respond", id="off_topic"),
-            pytest.param("STRUCTURED", "cache_check", id="structured"),
-            pytest.param("FAQ", "cache_check", id="faq"),
-            pytest.param("ENTITY", "cache_check", id="entity"),
-            pytest.param("GENERAL", "cache_check", id="general"),
+            pytest.param("STRUCTURED", "guard", id="structured"),
+            pytest.param("FAQ", "guard", id="faq"),
+            pytest.param("ENTITY", "guard", id="entity"),
+            pytest.param("GENERAL", "guard", id="general"),
         ],
     )
     def test_routes_by_query_type(self, query_type, expected):
