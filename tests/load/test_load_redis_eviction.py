@@ -4,6 +4,7 @@
 import json
 import os
 import random
+import socket
 import time
 from pathlib import Path
 
@@ -14,12 +15,22 @@ import redis.asyncio as redis
 REPORTS_DIR = Path(__file__).parent.parent.parent / "reports"
 
 
+def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 @pytest.mark.skipif(not os.getenv("REDIS_URL"), reason="REDIS_URL not set")
 class TestLoadRedisEviction:
     """Test Redis eviction behavior under load."""
 
     @pytest.fixture
     async def redis_client(self):
+        if not _is_port_open("localhost", 6379):
+            pytest.skip("Redis not running on localhost:6379")
         client = redis.from_url(
             os.getenv("REDIS_URL", "redis://localhost:6379"),
             decode_responses=True,
