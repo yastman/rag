@@ -113,7 +113,7 @@ jobs:
         id: markers
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "expr=not legacy_api and not requires_extras" >> "$GITHUB_OUTPUT"
+            echo "expr=not legacy_api and not requires_extras and not slow" >> "$GITHUB_OUTPUT"
           else
             echo "expr=not legacy_api" >> "$GITHUB_OUTPUT"
           fi
