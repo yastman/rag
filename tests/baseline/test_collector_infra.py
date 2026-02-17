@@ -23,8 +23,6 @@ class TestInfrastructureMetrics:
         collector.redis_url = "redis://localhost:6379"
         collector.qdrant_url = "http://localhost:6333"
         return collector
-
-    @pytest.mark.asyncio
     async def test_collects_redis_stats(self, collector):
         """Should collect Redis INFO stats."""
         mock_info_stats = {
@@ -55,8 +53,6 @@ class TestInfrastructureMetrics:
 
         assert metrics["redis"]["keyspace_hits"] == 1000
         assert metrics["redis"]["hit_rate"] == 83.33  # 1000/(1000+200)*100
-
-    @pytest.mark.asyncio
     async def test_collects_qdrant_metrics(self, collector):
         """Should fetch Qdrant /metrics endpoint."""
         with patch("redis.from_url") as mock_redis_from_url:
@@ -76,8 +72,6 @@ class TestInfrastructureMetrics:
                 metrics = await collector.collect_infrastructure_metrics()
 
         assert "qdrant_raw" in metrics or "qdrant" in metrics
-
-    @pytest.mark.asyncio
     async def test_handles_redis_error(self, collector):
         """Should handle Redis connection errors gracefully."""
         with patch("redis.from_url") as mock_redis_from_url:
@@ -94,8 +88,6 @@ class TestInfrastructureMetrics:
                 metrics = await collector.collect_infrastructure_metrics()
 
         assert "error" in metrics["redis"]
-
-    @pytest.mark.asyncio
     async def test_handles_qdrant_error(self, collector):
         """Should handle Qdrant connection errors gracefully."""
         with patch("redis.from_url") as mock_redis_from_url:
@@ -112,8 +104,6 @@ class TestInfrastructureMetrics:
                 metrics = await collector.collect_infrastructure_metrics()
 
         assert "qdrant_error" in metrics
-
-    @pytest.mark.asyncio
     async def test_includes_timestamp(self, collector):
         """Should include timestamp in metrics."""
         with patch("redis.from_url") as mock_redis_from_url:

@@ -87,8 +87,6 @@ class TestContextualizedEmbeddingServiceInit:
 
 class TestEmbedDocuments:
     """Test document embedding functionality."""
-
-    @pytest.mark.asyncio
     async def test_embed_documents_basic(self, mock_voyage_client, mock_langfuse):
         """Test basic document embedding."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -127,8 +125,6 @@ class TestEmbedDocuments:
         assert call_kwargs["inputs"] == document_chunks
         assert call_kwargs["model"] == "voyage-context-3"
         assert call_kwargs["input_type"] == "document"
-
-    @pytest.mark.asyncio
     async def test_embed_documents_empty_input(self, mock_voyage_client, mock_langfuse):
         """Test embedding with empty input."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -140,8 +136,6 @@ class TestEmbedDocuments:
         assert result.embeddings == []
         assert result.total_tokens == 0
         assert result.chunks_per_document == []
-
-    @pytest.mark.asyncio
     async def test_embed_documents_too_many_documents(self, mock_voyage_client, mock_langfuse):
         """Test validation for too many documents."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -153,8 +147,6 @@ class TestEmbedDocuments:
 
         with pytest.raises(ValueError, match="Too many documents"):
             await service.embed_documents(document_chunks)
-
-    @pytest.mark.asyncio
     async def test_embed_documents_too_many_chunks(self, mock_voyage_client, mock_langfuse):
         """Test validation for too many total chunks."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -170,8 +162,6 @@ class TestEmbedDocuments:
 
 class TestEmbedQuery:
     """Test query embedding functionality."""
-
-    @pytest.mark.asyncio
     async def test_embed_query_basic(self, mock_voyage_client, mock_langfuse):
         """Test basic query embedding."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -198,8 +188,6 @@ class TestEmbedQuery:
         call_kwargs = mock_voyage_client.contextualized_embed.call_args.kwargs
         assert call_kwargs["inputs"] == [["test query"]]  # Wrapped in double list
         assert call_kwargs["input_type"] == "query"
-
-    @pytest.mark.asyncio
     async def test_embed_queries_multiple(self, mock_voyage_client, mock_langfuse):
         """Test embedding multiple queries."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -229,8 +217,6 @@ class TestEmbedQuery:
         # Verify API call format
         call_kwargs = mock_voyage_client.contextualized_embed.call_args.kwargs
         assert call_kwargs["inputs"] == [["query1"], ["query2"]]
-
-    @pytest.mark.asyncio
     async def test_embed_queries_empty(self, mock_voyage_client, mock_langfuse):
         """Test embedding empty queries list."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -288,8 +274,6 @@ class TestSyncWrappers:
 
 class TestRetryLogic:
     """Test retry behavior on API errors."""
-
-    @pytest.mark.asyncio
     async def test_retry_on_rate_limit_error(self, mock_voyage_client, mock_langfuse):
         """Test retry on RateLimitError."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -316,8 +300,6 @@ class TestRetryLogic:
 
         assert len(result.embeddings) == 1
         assert mock_voyage_client.contextualized_embed.call_count == 2
-
-    @pytest.mark.asyncio
     async def test_retry_on_service_unavailable(self, mock_voyage_client, mock_langfuse):
         """Test retry on ServiceUnavailableError."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
@@ -347,8 +329,6 @@ class TestRetryLogic:
 
 class TestOutputDtype:
     """Test different output data types."""
-
-    @pytest.mark.asyncio
     async def test_int8_output_dtype(self, mock_voyage_client, mock_langfuse):
         """Test int8 output data type."""
         from src.models.contextualized_embedding import ContextualizedEmbeddingService
