@@ -1,5 +1,5 @@
 ---
-paths: ".github/**,renovate.json"
+paths: ".github/**,renovate.json,.claude/rules/git-workflow.md"
 ---
 
 # Git & PR Workflow
@@ -62,4 +62,35 @@ make git-hygiene-fix      # Auto-cleanup merged branches
 
 - Merged branches: delete immediately after merge
 - Stale feature branches (> 30 days, no activity): close PR with comment, delete branch
-- Worktrees: clean up after feature completion
+- Worktrees: clean up after feature completion (`git worktree remove <path>`)
+
+## Parallel Agents & Git Worktrees
+
+**Problem:** Multiple agents sharing one repo switch branches simultaneously → files change under each other, tests fail on wrong code, edits get lost.
+
+**Rule:** When 2+ agents work on different branches in parallel — each agent MUST use its own worktree.
+
+```bash
+# Create worktree for agent
+git worktree add /repo-wt-{name} {branch}
+
+# Agent works in its own directory — no branch conflicts
+# Clean up after merge
+git worktree remove /repo-wt-{name}
+```
+
+| Scenario | Approach |
+|----------|----------|
+| 1 agent, 1 PR | Normal checkout in main repo |
+| 2+ agents, different PRs | Each agent in own worktree |
+| Lead + workers | Lead in main repo, workers in worktrees |
+| Sequential PR fixes | Normal checkout, switch between branches |
+
+**In agent team prompts:** Include working directory path explicitly:
+```
+Working directory: /repo-wt-pr280
+Branch: claude/optimize-test-suite-RBhOe (already checked out)
+Do NOT switch branches. Do NOT cd to other directories.
+```
+
+**Cleanup:** `git worktree list` → `git worktree remove <path>` for completed work. `make git-hygiene` includes orphan worktree check.
