@@ -20,24 +20,25 @@ telegram_bot/
 │   ├── query_preprocessor.py # HyDEGenerator + QueryPreprocessor
 │   ├── filter_extractor.py # Regex filter extraction
 │   ├── qdrant.py          # QdrantService (async, gRPC, batch_search_rrf, group_by)
-│   ├── colbert_reranker.py # ColbertRerankerService (BGE-M3 /rerank)
+│   ├── bge_m3_client.py   # BGEM3Client (async) + BGEM3SyncClient — unified SDK for all BGE-M3 endpoints
+│   ├── colbert_reranker.py # ColbertRerankerService (uses BGEM3Client)
 │   ├── voyage.py          # VoyageService (embeddings + rerank API)
-│   ├── vectorizers.py     # UserBaseVectorizer + BgeM3CacheVectorizer
+│   ├── vectorizers.py     # UserBaseVectorizer + BgeM3CacheVectorizer (uses BGEM3Client)
 │   ├── metrics.py         # PipelineMetrics (p50/p95 tracking)
 │   └── redis_monitor.py   # RedisHealthMonitor (background task)
 ├── integrations/          # LangGraph-compatible wrappers
 │   ├── cache.py           # CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
-│   ├── embeddings.py      # BGEM3HybridEmbeddings (preferred) + legacy Dense/Sparse
+│   ├── embeddings.py      # BGEM3HybridEmbeddings (uses BGEM3Client) + legacy wrappers
 │   ├── event_stream.py    # EventStream for graph→bot communication
 │   ├── langfuse.py        # (legacy) Langfuse callback handler — replaced by @observe
 │   ├── memory.py          # MemorySaver for conversation persistence
 │   └── prompt_manager.py  # Langfuse Prompt Management with fallback templates
 └── graph/                 # LangGraph pipeline
-    ├── graph.py           # build_graph() — 9-node StateGraph assembly
+    ├── graph.py           # build_graph() — 11-node StateGraph assembly
     ├── state.py           # RAGState TypedDict + make_initial_state()
-    ├── edges.py           # 3 routing functions
-    ├── config.py          # GraphConfig (service factories)
-    └── nodes/             # 8 node modules
+    ├── edges.py           # 4 routing functions (incl. route_guard)
+    ├── config.py          # GraphConfig (service factories, guard_mode)
+    └── nodes/             # 9 node modules (incl. guard.py — content filtering)
 ```
 
 ## Key Patterns
