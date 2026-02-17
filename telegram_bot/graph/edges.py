@@ -1,8 +1,9 @@
 """Conditional edge functions for RAG LangGraph pipeline.
 
-Four routing functions that control the graph flow:
+Five routing functions that control the graph flow:
 - route_start: START → transcribe or classify
-- route_by_query_type: classify → respond or cache_check
+- route_by_query_type: classify → respond or guard
+- route_after_guard: guard → respond or cache_check
 - route_cache: cache_check → respond or retrieve
 - route_grade: grade → rerank, rewrite, or generate
 """
@@ -23,10 +24,19 @@ def route_start(
 
 def route_by_query_type(
     state: dict[str, Any],
-) -> Literal["respond", "cache_check"]:
-    """Route after classification: CHITCHAT/OFF_TOPIC → respond, else → cache_check."""
+) -> Literal["respond", "guard"]:
+    """Route after classification: CHITCHAT/OFF_TOPIC → respond, else → guard."""
     query_type = state.get("query_type", "GENERAL")
     if query_type in ("CHITCHAT", "OFF_TOPIC"):
+        return "respond"
+    return "guard"
+
+
+def route_after_guard(
+    state: dict[str, Any],
+) -> Literal["respond", "cache_check"]:
+    """Route after guard: blocked → respond, allowed → cache_check."""
+    if state.get("guard_blocked", False):
         return "respond"
     return "cache_check"
 
