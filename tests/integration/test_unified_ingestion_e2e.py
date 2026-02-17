@@ -52,8 +52,6 @@ def cleanup_collection(qdrant_client, test_collection_name):
 
 class TestUnifiedPipelinePayload:
     """Tests for payload contract compliance."""
-
-    @pytest.mark.asyncio
     async def test_payload_has_required_fields(
         self, temp_sync_dir, test_collection_name, qdrant_client, cleanup_collection
     ):
@@ -120,8 +118,6 @@ class TestUnifiedPipelinePayload:
 
 class TestUnifiedPipelineDeleteSemantics:
     """Tests for delete semantics."""
-
-    @pytest.mark.asyncio
     async def test_delete_removes_points(
         self, temp_sync_dir, test_collection_name, qdrant_client, cleanup_collection
     ):
