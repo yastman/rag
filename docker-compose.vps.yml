@@ -13,7 +13,7 @@ services:
   # =============================================================================
 
   postgres:
-    image: pgvector/pgvector:pg17@sha256:1a20228d87a48db9587caebaecfdff065268ebe248dafa5f8b447ce3dc96e594
+    image: pgvector/pgvector:pg17@sha256:3e8b3adfd27b5707128f60956f62a793c3c9326ea8cfaf0eab7adccb5d700b21
     container_name: vps-postgres
     restart: unless-stopped
     logging: *default-logging
@@ -35,7 +35,7 @@ services:
           memory: 512M
 
   redis:
-    image: redis:8.4.0@sha256:c22af04bb576503bf16b3e34a1fd2fd82de0f765afd866d2e380145e0af30d78
+    image: redis:8.6.0@sha256:7b6fb55d8b0adcd77269dc52b3cfffe5f59ca5d43dec3c90dbe18aacce7942e1
     container_name: vps-redis
     restart: unless-stopped
     logging: *default-logging
@@ -170,7 +170,7 @@ services:
   # =============================================================================
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.81.3-stable
+    image: ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:3d80908e35230a0dfb58051ae4e2847371b2a327b44e105e79b8c4f67a65596c
     container_name: vps-litellm
     restart: unless-stopped
     logging: *default-logging
