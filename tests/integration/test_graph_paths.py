@@ -202,6 +202,52 @@ async def test_path_chitchat_early_exit():
 
 
 ***REMOVED*** ---------------------------------------------------------------------------
+***REMOVED*** Path 1b: classify(GENERAL) → guard(BLOCKED) → respond → END
+***REMOVED*** ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_guard_blocked():
+    """Toxic query is blocked by guard_node before reaching cache_check."""
+    mocks = _make_graph_mocks()
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    state = make_initial_state(user_id=1, session_id="test-guard", query="я тебя убью")
+
+    with traced_pipeline(session_id="test-guard-blocked", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
+
+    ***REMOVED*** State assertions
+    assert result["guard_blocked"] is True
+    assert result["guard_reason"] == "toxicity"
+    assert result["response"]  ***REMOVED*** canned blocked response
+    assert result["cache_hit"] is False
+    assert result["documents"] == []
+
+    ***REMOVED*** Skipped nodes: no cache, no search, no LLM
+    mocks["cache"].get_embedding.assert_not_awaited()
+    mocks["cache"].check_semantic.assert_not_awaited()
+    mocks["qdrant"].hybrid_search_rrf.assert_not_awaited()
+    mocks["llm"].chat.completions.create.assert_not_awaited()
+    mocks["reranker"].rerank.assert_not_awaited()
+
+    ***REMOVED*** respond_node sent the blocked message
+    mocks["message"].answer.assert_awaited_once()
+
+
+***REMOVED*** ---------------------------------------------------------------------------
 ***REMOVED*** Path 2: classify(FAQ) → cache_check(HIT) → respond → END
 ***REMOVED*** ---------------------------------------------------------------------------
 
