@@ -6,20 +6,17 @@ Uses httpx.AsyncClient + ASGITransport for async endpoint testing.
 All sys.modules mocking is fixture-scoped (no module-level pollution).
 """
 
-import pytest
-
-
-pytest.importorskip("fastapi", reason="fastapi not installed")
-pytestmark = pytest.mark.requires_optional
-
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import httpx
 import numpy as np
+import pytest
 
 
+pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
+pytestmark = pytest.mark.requires_extras
 _USERBASE_SERVICE_DIR = str(Path(__file__).resolve().parents[2] / "services" / "user-base")
 
 

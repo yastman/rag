@@ -1,10 +1,10 @@
+from unittest.mock import MagicMock
+
 import pytest
 
 
-pytest.importorskip("mlflow", reason="mlflow not installed")
-pytestmark = pytest.mark.requires_optional
-
-from unittest.mock import MagicMock
+pytest.importorskip("mlflow", reason="mlflow not installed (eval extra)")
+pytestmark = pytest.mark.requires_extras
 
 
 @pytest.fixture

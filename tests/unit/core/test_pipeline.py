@@ -1,13 +1,13 @@
 """Tests for RAG pipeline."""
 
+import os
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 
-pytest.importorskip("pymupdf", reason="pymupdf not installed")
-pytestmark = pytest.mark.requires_optional
-
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
+pytest.importorskip("pymupdf", reason="pymupdf not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
 
 from src.core.pipeline import RAGPipeline, RAGResult
 

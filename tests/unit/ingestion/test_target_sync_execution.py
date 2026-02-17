@@ -6,6 +6,10 @@ import asyncio
 import pytest
 
 
+pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
+
 @pytest.mark.xdist_group("cocoindex")
 class TestTargetSyncExecution:
     """Test that mutate() works without asyncio.run() conflicts."""

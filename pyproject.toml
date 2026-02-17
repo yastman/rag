@@ -32,7 +32,7 @@ dependencies = [
     # Performance (2026-02-06)
     "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
     # LangGraph Pipeline (2026-02-09)
-    "langgraph>=1.0.3",                   # State graph for RAG pipeline
+    "langgraph>=1.0.3,<2.0",               # State graph for RAG pipeline
     "langchain-core>=1.2",                # Core abstractions (Embeddings, etc.)
     "langgraph-checkpoint-postgres>=2.0", # Postgres checkpointing for LangGraph
     # Conversation memory (#154)
@@ -380,8 +380,8 @@ markers = [
     "slow: Tests taking > 5 seconds",
     "legacy_api: tests for pre-LangGraph API (may need rewrite)",
     "smoke: Smoke tests (requires running services)",
+    "requires_extras: Tests needing optional deps (voice/ingest/eval); skipped in core tier",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
-    "requires_optional: Tests requiring optional deps (fastapi, mlflow, pymupdf, fastembed, ragas, cocoindex, livekit)",
 ]
 filterwarnings = [
     # trustcall 0.0.39 imports Send from deprecated langgraph.constants;

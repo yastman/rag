@@ -1,15 +1,14 @@
 # tests/unit/evaluation/test_ragas_evaluation.py
 """Tests for RAGAS evaluation module."""
 
+import json
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+
 import pytest
 
 
-pytest.importorskip("ragas", reason="ragas not installed")
-pytest.importorskip("mlflow", reason="mlflow not installed")
-pytestmark = pytest.mark.requires_optional
-
-import json
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+pytest.importorskip("ragas", reason="ragas not installed (eval extra)")
+pytestmark = pytest.mark.requires_extras
 
 
 class TestRAGASEvaluatorInit:
