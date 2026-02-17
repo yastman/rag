@@ -1,9 +1,11 @@
 """Main Telegram bot logic — LangGraph pipeline."""
 
+import asyncio
 import hashlib
 import io
 import json
 import logging
+import random
 import re
 import time
 import uuid
@@ -651,6 +653,36 @@ class PropertyBot:
 
             # Write Langfuse scores (14 + latency + response length #129)
             _write_langfuse_scores(lf, result)
+
+            # Online LLM-as-a-Judge sampling
+            if (
+                self.config.judge_sample_rate > 0
+                and not result.get("cache_hit")
+                and result.get("retrieved_context")
+                and random.random() < self.config.judge_sample_rate
+            ):
+                from .evaluation.runner import run_online_judge
+
+                trace_id = lf.get_current_trace_id() if hasattr(lf, "get_current_trace_id") else ""
+                if trace_id:
+                    context_text = "\n\n".join(
+                        f"[{d.get('score', 0):.2f}] {d.get('content', '')}"
+                        for d in result.get("retrieved_context", [])
+                    )
+                    _judge_task = asyncio.create_task(
+                        run_online_judge(
+                            langfuse=lf,
+                            trace_id=trace_id,
+                            query=message.text or "",
+                            answer=result.get("response", ""),
+                            context=context_text,
+                            model=self.config.judge_model,
+                            llm_base_url=self.config.llm_base_url,
+                        )
+                    )
+                    _judge_task.add_done_callback(
+                        lambda t: t.result() if not t.cancelled() else None
+                    )
 
             # Persist Q&A to history (fail-soft)
             if self._history_service and result.get("response"):
