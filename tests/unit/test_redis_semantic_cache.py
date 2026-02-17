@@ -29,7 +29,6 @@ def cache(mock_redis, mock_tracer):
     return RedisSemanticCache(redis_url="redis://localhost:6379/0", index_version="1.0.0")
 
 
-@pytest.mark.asyncio
 async def test_get_embedding_hit(cache, mock_redis):
     # Setup
     query = "test query"
@@ -48,7 +47,6 @@ async def test_get_embedding_hit(cache, mock_redis):
     assert call_args.startswith("embedding_v1.0.0_")
 
 
-@pytest.mark.asyncio
 async def test_get_embedding_miss(cache, mock_redis):
     # Setup
     mock_redis.get.return_value = None
@@ -61,7 +59,6 @@ async def test_get_embedding_miss(cache, mock_redis):
     assert cache.get_stats()["cache_misses"] == 1
 
 
-@pytest.mark.asyncio
 async def test_set_embedding(cache, mock_redis):
     # Setup
     query = "test query"
@@ -77,7 +74,6 @@ async def test_set_embedding(cache, mock_redis):
     assert call_args[0][1] == cache.embedding_ttl
 
 
-@pytest.mark.asyncio
 async def test_get_response_hit(cache, mock_redis):
     # Setup
     query = "test query"
@@ -96,7 +92,6 @@ async def test_get_response_hit(cache, mock_redis):
     assert "_10" in call_args
 
 
-@pytest.mark.asyncio
 async def test_set_response(cache, mock_redis):
     query = "test query"
     response = {"results": ["doc1"]}

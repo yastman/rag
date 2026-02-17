@@ -31,7 +31,8 @@ make test               # Run tests
 
 | File | Purpose |
 |------|---------|
-| **[CLAUDE.md](CLAUDE.md)** | Full technical context (architecture, commands, patterns) |
+| **[AGENTS.md](AGENTS.md)** | Codex workflow and repository-wide agent rules |
+| **[docs/agent-rules/workflow.md](docs/agent-rules/workflow.md)** | Development loop and command map |
 | **[CHANGELOG.md](CHANGELOG.md)** | Version history (auto-generated) |
 | **[TODO.md](TODO.md)** | Current tasks |
 
@@ -43,4 +44,4 @@ make test               # Run tests
 
 ---
 
-**Version:** See [CHANGELOG.md](CHANGELOG.md) | **Details:** See [CLAUDE.md](CLAUDE.md)
+**Version:** See [CHANGELOG.md](CHANGELOG.md) | **Details:** See [AGENTS.md](AGENTS.md)

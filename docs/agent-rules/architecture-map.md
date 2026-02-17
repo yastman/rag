@@ -32,8 +32,9 @@ Contextual RAG platform with hybrid retrieval, reranking, multi-tier caching, in
 - `docs/` - operational docs, plans, and archives.
 
 ## Canonical Source Files
-- `CLAUDE.md`
-- `.claude/rules/features/*.md`
-- `.claude/rules/docker.md`
-- `.claude/rules/k3s.md`
+- `AGENTS.md`
+- `docs/agent-rules/workflow.md`
 - `docs/PROJECT_STACK.md`
+- `docs/PIPELINE_OVERVIEW.md`
+- `docs/LOCAL-DEVELOPMENT.md`
+- `docs/agent-rules/infra-and-deploy.md`
