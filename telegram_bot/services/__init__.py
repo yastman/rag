@@ -19,6 +19,12 @@ if TYPE_CHECKING:
     from .query_analyzer import QueryAnalyzer
     from .query_preprocessor import HyDEGenerator, QueryPreprocessor
     from .retriever import RetrieverService
+    from .session_summary import (
+        SessionSummary,
+        check_responses_parse_compat,
+        format_summary_as_note,
+        generate_summary,
+    )
     from .small_to_big import ExpandedChunk, SmallToBigService
     from .vectorizers import UserBaseVectorizer
     from .voyage import VoyageService
@@ -39,9 +45,13 @@ __all__ = [
     "QueryAnalyzer",
     "QueryPreprocessor",
     "RetrieverService",
+    "SessionSummary",
     "SmallToBigService",
     "UserBaseVectorizer",
     "VoyageService",
+    "check_responses_parse_compat",
+    "format_summary_as_note",
+    "generate_summary",
 ]
 
 # Lazy import mapping
@@ -53,6 +63,8 @@ _IMPORT_MAP = {
     "ExpandedChunk": ".small_to_big",
     "HistoryService": ".history_service",
     "HyDEGenerator": ".query_preprocessor",
+    "SessionSummary": ".session_summary",
+    "check_responses_parse_compat": ".session_summary",
     "LLMService": ".llm",
     "LOW_CONFIDENCE_THRESHOLD": ".llm",
     "PipelineMetrics": ".metrics",
@@ -63,6 +75,8 @@ _IMPORT_MAP = {
     "SmallToBigService": ".small_to_big",
     "UserBaseVectorizer": ".vectorizers",
     "VoyageService": ".voyage",
+    "format_summary_as_note": ".session_summary",
+    "generate_summary": ".session_summary",
 }
 
 

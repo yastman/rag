@@ -1,56 +1,68 @@
 """Tests for USER2-base FastAPI endpoints (services/user-base/main.py).
 
-Mocks SentenceTransformer before importing app to avoid model download.
+Mocks SentenceTransformer via fixture before importing app to avoid model download.
 Uses httpx.AsyncClient + ASGITransport for async endpoint testing.
+
+All sys.modules mocking is fixture-scoped (no module-level pollution).
 """
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import numpy as np
 import pytest
 
 
-# Mock SentenceTransformer BEFORE importing the app module
-_mock_st_class = MagicMock()
-_mock_model_instance = MagicMock()
-_mock_model_instance.get_sentence_embedding_dimension.return_value = 768
-_mock_model_instance.encode.side_effect = lambda text, **_kw: (
-    np.random.rand(768).astype(np.float32)
-    if isinstance(text, str)
-    else np.random.rand(len(text), 768).astype(np.float32)
-)
-_mock_st_class.return_value = _mock_model_instance
-
-_mock_module = MagicMock()
-_mock_module.SentenceTransformer = _mock_st_class
-sys.modules["sentence_transformers"] = _mock_module
-
-# Import main.py from services/user-base/ (not a Python package due to hyphen)
-_service_dir = str(Path(__file__).resolve().parents[2] / "services" / "user-base")
-sys.path.insert(0, _service_dir)
-import main as userbase_main
+_USERBASE_SERVICE_DIR = str(Path(__file__).resolve().parents[2] / "services" / "user-base")
 
 
-app = userbase_main.app
-sys.path.pop(0)
+@pytest.fixture(scope="module")
+def userbase_env():
+    """Mock sentence_transformers & import user-base app.
 
-import httpx
+    Returns dict with app, main module, mock class and mock model instance.
+    """
+    mock_st_class = MagicMock()
+    mock_model_instance = MagicMock()
+    mock_model_instance.get_sentence_embedding_dimension.return_value = 768
+    mock_model_instance.encode.side_effect = lambda text, **_kw: (
+        np.random.rand(768).astype(np.float32)
+        if isinstance(text, str)
+        else np.random.rand(len(text), 768).astype(np.float32)
+    )
+    mock_st_class.return_value = mock_model_instance
+
+    mock_module = MagicMock()
+    mock_module.SentenceTransformer = mock_st_class
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "sentence_transformers", mock_module)
+        mp.syspath_prepend(_USERBASE_SERVICE_DIR)
+
+        import main as userbase_main
+
+        yield {
+            "main": userbase_main,
+            "app": userbase_main.app,
+            "mock_st_class": mock_st_class,
+            "mock_model_instance": mock_model_instance,
+        }
+
+        # Clean up cached service import (not a mock — real module imported
+        # via syspath_prepend that shouldn't leak to other test files).
+        sys.modules.pop("main", None)
 
 
 @pytest.fixture
-async def client():
-    """Create async test client with ASGI transport.
-
-    Sets the module-level model to the mock instance since lifespan
-    doesn't run with ASGITransport.
-    """
-    userbase_main.model = _mock_model_instance
-    transport = httpx.ASGITransport(app=app)
+async def client(userbase_env):
+    """Create async test client with ASGI transport."""
+    userbase_env["main"].model = userbase_env["mock_model_instance"]
+    transport = httpx.ASGITransport(app=userbase_env["app"])
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
-    userbase_main.model = None
+    userbase_env["main"].model = None
 
 
 class TestHealthEndpoint:
@@ -135,46 +147,55 @@ class TestEmbedBatchEndpoint:
 class TestLoadModelBackend:
     """Tests for _load_model backend selection and fallback."""
 
-    def test_default_backend_is_pytorch(self):
+    def test_default_backend_is_pytorch(self, userbase_env):
         """Default EMBEDDING_BACKEND loads pytorch."""
-        with patch.object(userbase_main, "EMBEDDING_BACKEND", "pytorch"):
-            model = userbase_main._load_model()
-            assert userbase_main._active_backend == "pytorch"
-            assert model is _mock_model_instance
+        ub = userbase_env["main"]
+        mock_model = userbase_env["mock_model_instance"]
+        with patch.object(ub, "EMBEDDING_BACKEND", "pytorch"):
+            model = ub._load_model()
+            assert ub._active_backend == "pytorch"
+            assert model is mock_model
 
-    def test_onnx_backend_falls_back_on_import_error(self):
+    def test_onnx_backend_falls_back_on_import_error(self, userbase_env):
         """ONNX backend falls back to pytorch when onnxruntime not installed."""
+        ub = userbase_env["main"]
+        mock_model = userbase_env["mock_model_instance"]
         with (
-            patch.object(userbase_main, "EMBEDDING_BACKEND", "onnx"),
+            patch.object(ub, "EMBEDDING_BACKEND", "onnx"),
             patch.dict(sys.modules, {"onnxruntime": None}),
         ):
-            model = userbase_main._load_model()
-            assert userbase_main._active_backend == "pytorch"
-            assert model is _mock_model_instance
+            model = ub._load_model()
+            assert ub._active_backend == "pytorch"
+            assert model is mock_model
 
-    def test_onnx_backend_loads_when_available(self):
+    def test_onnx_backend_loads_when_available(self, userbase_env):
         """ONNX backend used when onnxruntime is importable."""
+        ub = userbase_env["main"]
+        mock_st = userbase_env["mock_st_class"]
         mock_ort = MagicMock()
         with (
-            patch.object(userbase_main, "EMBEDDING_BACKEND", "onnx"),
+            patch.object(ub, "EMBEDDING_BACKEND", "onnx"),
             patch.dict(sys.modules, {"onnxruntime": mock_ort}),
         ):
-            userbase_main._load_model()
-            assert userbase_main._active_backend == "onnx"
-            _mock_st_class.assert_called_with("deepvk/USER2-base", backend="onnx")
+            ub._load_model()
+            assert ub._active_backend == "onnx"
+            mock_st.assert_called_with("deepvk/USER2-base", backend="onnx")
 
-    def test_onnx_backend_falls_back_on_exception(self):
+    def test_onnx_backend_falls_back_on_exception(self, userbase_env):
         """ONNX backend falls back to pytorch on any SentenceTransformer error."""
+        ub = userbase_env["main"]
+        mock_st = userbase_env["mock_st_class"]
+        mock_model = userbase_env["mock_model_instance"]
         mock_ort = MagicMock()
-        _mock_st_class.side_effect = [RuntimeError("ONNX export failed"), _mock_model_instance]
+        mock_st.side_effect = [RuntimeError("ONNX export failed"), mock_model]
         try:
             with (
-                patch.object(userbase_main, "EMBEDDING_BACKEND", "onnx"),
+                patch.object(ub, "EMBEDDING_BACKEND", "onnx"),
                 patch.dict(sys.modules, {"onnxruntime": mock_ort}),
             ):
-                model = userbase_main._load_model()
-                assert userbase_main._active_backend == "pytorch"
-                assert model is _mock_model_instance
+                model = ub._load_model()
+                assert ub._active_backend == "pytorch"
+                assert model is mock_model
         finally:
-            _mock_st_class.side_effect = None
-            _mock_st_class.return_value = _mock_model_instance
+            mock_st.side_effect = None
+            mock_st.return_value = mock_model
