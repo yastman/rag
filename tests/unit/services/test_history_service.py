@@ -204,3 +204,151 @@ class TestSearchUserHistory:
         results = await service.search_user_history(user_id=1, query="test", limit=5)
 
         assert results == []
+
+
+class TestGetSessionTurns:
+    """Test get_session_turns retrieves Q&A pairs by session_id."""
+
+    async def test_returns_turns_ordered_by_timestamp(self, service, mock_client):
+        """get_session_turns returns turns sorted by timestamp ascending."""
+        point1 = MagicMock()
+        point1.id = "p1"
+        point1.payload = {
+            "metadata": {
+                "user_id": 100,
+                "session_id": "chat-abc-20260217",
+                "query": "первый вопрос",
+                "response": "первый ответ",
+                "timestamp": "2026-02-17T10:00:00+00:00",
+                "input_type": "text",
+            }
+        }
+        point2 = MagicMock()
+        point2.id = "p2"
+        point2.payload = {
+            "metadata": {
+                "user_id": 100,
+                "session_id": "chat-abc-20260217",
+                "query": "второй вопрос",
+                "response": "второй ответ",
+                "timestamp": "2026-02-17T10:05:00+00:00",
+                "input_type": "text",
+            }
+        }
+        mock_client.scroll = AsyncMock(return_value=([point2, point1], None))  # unordered
+
+        turns = await service.get_session_turns(user_id=100, session_id="chat-abc-20260217")
+
+        assert len(turns) == 2
+        assert turns[0]["query"] == "первый вопрос"
+        assert turns[1]["query"] == "второй вопрос"
+        assert turns[0]["timestamp"] < turns[1]["timestamp"]
+
+    async def test_filters_by_user_and_session(self, service, mock_client):
+        """get_session_turns passes correct filters to Qdrant scroll."""
+        mock_client.scroll = AsyncMock(return_value=([], None))
+
+        await service.get_session_turns(user_id=100, session_id="chat-abc-20260217")
+
+        mock_client.scroll.assert_awaited_once()
+        call_kwargs = mock_client.scroll.call_args.kwargs
+        assert call_kwargs["collection_name"] == "test_history"
+        scroll_filter = call_kwargs["scroll_filter"]
+        filter_keys = [c.key for c in scroll_filter.must]
+        assert "metadata.user_id" in filter_keys
+        assert "metadata.session_id" in filter_keys
+
+    async def test_returns_empty_on_no_turns(self, service, mock_client):
+        """get_session_turns returns empty list when no points match."""
+        mock_client.scroll = AsyncMock(return_value=([], None))
+
+        turns = await service.get_session_turns(user_id=100, session_id="chat-nonexistent")
+
+        assert turns == []
+
+    async def test_graceful_on_qdrant_error(self, service, mock_client):
+        """get_session_turns returns empty list on Qdrant exception."""
+        mock_client.scroll = AsyncMock(side_effect=RuntimeError("connection lost"))
+
+        turns = await service.get_session_turns(user_id=100, session_id="s")
+
+        assert turns == []
+
+    async def test_respects_limit(self, service, mock_client):
+        """get_session_turns passes limit to Qdrant scroll."""
+        mock_client.scroll = AsyncMock(return_value=([], None))
+
+        await service.get_session_turns(user_id=100, session_id="s", limit=10)
+
+        call_kwargs = mock_client.scroll.call_args.kwargs
+        assert call_kwargs["limit"] == 10
+
+    async def test_paginates_until_next_page_offset_is_none(self, service, mock_client):
+        """get_session_turns aggregates pages while next_page_offset exists."""
+        p1 = MagicMock()
+        p1.payload = {
+            "metadata": {
+                "query": "q1",
+                "response": "r1",
+                "timestamp": "2026-02-17T10:00:00+00:00",
+            }
+        }
+        p2 = MagicMock()
+        p2.payload = {
+            "metadata": {
+                "query": "q2",
+                "response": "r2",
+                "timestamp": "2026-02-17T10:01:00+00:00",
+            }
+        }
+
+        mock_client.scroll = AsyncMock(
+            side_effect=[
+                ([p1], "offset-1"),
+                ([p2], None),
+            ]
+        )
+
+        turns = await service.get_session_turns(
+            user_id=100, session_id="chat-abc-20260217", limit=50
+        )
+        assert [t["query"] for t in turns] == ["q1", "q2"]
+        assert mock_client.scroll.await_count == 2
+        second_call_kwargs = mock_client.scroll.call_args_list[1].kwargs
+        assert second_call_kwargs["offset"] == "offset-1"
+
+    async def test_returns_empty_on_zero_limit(self, service, mock_client):
+        """get_session_turns returns empty list when limit <= 0."""
+        turns = await service.get_session_turns(user_id=100, session_id="s", limit=0)
+
+        assert turns == []
+        mock_client.scroll.assert_not_called()
+
+    async def test_returns_empty_on_negative_limit(self, service, mock_client):
+        """get_session_turns returns empty list when limit is negative."""
+        turns = await service.get_session_turns(user_id=100, session_id="s", limit=-5)
+
+        assert turns == []
+        mock_client.scroll.assert_not_called()
+
+    async def test_skips_malformed_metadata_and_keeps_valid_turns(self, service, mock_client):
+        """Malformed payload metadata should be skipped without dropping valid turns."""
+        bad_point = MagicMock()
+        bad_point.payload = {"metadata": "corrupted"}
+
+        good_point = MagicMock()
+        good_point.payload = {
+            "metadata": {
+                "query": "валидный вопрос",
+                "response": "валидный ответ",
+                "timestamp": "2026-02-17T10:01:00+00:00",
+                "input_type": "text",
+            }
+        }
+
+        mock_client.scroll = AsyncMock(return_value=([bad_point, good_point], None))
+
+        turns = await service.get_session_turns(user_id=100, session_id="chat-abc-20260217")
+
+        assert len(turns) == 1
+        assert turns[0]["query"] == "валидный вопрос"

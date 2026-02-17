@@ -136,3 +136,87 @@ class HistoryService:
         except Exception:
             logger.warning("Failed to search history", exc_info=True)
             return []
+
+    async def get_session_turns(
+        self,
+        user_id: int,
+        session_id: str,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Get session Q&A turns ordered by timestamp ascending."""
+        if limit <= 0:
+            return []
+
+        try:
+            all_points: list[Any] = []
+            offset: Any = None
+            remaining = min(limit, 500)  # hard cap to keep summary bounded
+
+            while remaining > 0:
+                page_limit = min(remaining, 100)
+                points, next_offset = await self._client.scroll(
+                    collection_name=self._collection_name,
+                    scroll_filter=models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="metadata.user_id",
+                                match=models.MatchValue(value=user_id),
+                            ),
+                            models.FieldCondition(
+                                key="metadata.session_id",
+                                match=models.MatchValue(value=session_id),
+                            ),
+                        ]
+                    ),
+                    limit=page_limit,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                if not points:
+                    break
+                all_points.extend(points)
+                remaining -= len(points)
+                if next_offset is None:
+                    break
+                offset = next_offset
+
+            turns: list[dict[str, Any]] = []
+            for p in all_points:
+                payload = p.payload if isinstance(p.payload, dict) else {}
+                meta = payload.get("metadata", {})
+                if not isinstance(meta, dict):
+                    continue
+
+                query = meta.get("query", "")
+                response = meta.get("response", "")
+                query = query if isinstance(query, str) else str(query or "")
+                response = response if isinstance(response, str) else str(response or "")
+                if not query and not response:
+                    continue
+
+                timestamp = meta.get("timestamp", "")
+                timestamp = timestamp if isinstance(timestamp, str) else str(timestamp or "")
+
+                input_type = meta.get("input_type", "text")
+                input_type = input_type if isinstance(input_type, str) else "text"
+
+                turns.append(
+                    {
+                        "query": query,
+                        "response": response,
+                        "timestamp": timestamp,
+                        "input_type": input_type,
+                    }
+                )
+
+            turns.sort(key=lambda t: t["timestamp"])
+            return turns
+        except Exception:
+            logger.warning(
+                "Failed to get session turns: user_id=%s session_id=%s",
+                user_id,
+                session_id,
+                exc_info=True,
+            )
+            return []
