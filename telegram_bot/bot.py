@@ -171,6 +171,21 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
             value=round(cache_check_s * 1000, 1),
         )
 
+    # --- Prompt injection defense (#226) ---
+    lf.score_current_trace(
+        name="security_alert",
+        value=1 if result.get("injection_detected") else 0,
+        data_type="BOOLEAN",
+    )
+    injection_risk = result.get("injection_risk_score", 0.0)
+    if injection_risk > 0:
+        lf.score_current_trace(name="injection_risk_score", value=float(injection_risk))
+    injection_pattern = result.get("injection_pattern")
+    if injection_pattern:
+        lf.score_current_trace(
+            name="injection_pattern", value=injection_pattern, data_type="CATEGORICAL"
+        )
+
     # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:
@@ -691,6 +706,7 @@ class PropertyBot:
                 llm=self._llm,
                 message=message,
                 checkpointer=self._checkpointer,
+                guard_mode=self.config.guard_mode,
             )
 
             invoke_config = {
@@ -917,6 +933,7 @@ class PropertyBot:
                 show_transcription=self.config.show_transcription,
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
+                guard_mode=self.config.guard_mode,
             )
 
             invoke_config = {

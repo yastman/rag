@@ -256,13 +256,15 @@ class TestScoreWriting:
             # Embedding resilience (#210)
             "bge_embed_error",
             "bge_embed_latency_ms",
+            # Prompt injection defense (#226)
+            "security_alert",
             # Conversation memory (#159)
             "memory_messages_count",
             "summarization_triggered",
             "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.score_current_trace.call_count == 30
+        assert mock_lf.score_current_trace.call_count == 31
 
     async def test_score_values_full_pipeline(self, mock_config):
         """Score values should match the graph result state."""

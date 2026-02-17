@@ -48,6 +48,8 @@ class GraphConfig:
     show_transcription: bool = True
     voice_language: str = "ru"
     stt_model: str = "whisper"
+    # Prompt injection defense (#226)
+    guard_mode: str = "hard"  # "hard" = block, "soft" = flag + continue, "log" = log only
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -99,6 +101,7 @@ class GraphConfig:
             show_transcription=os.getenv("SHOW_TRANSCRIPTION", "true").lower() == "true",
             voice_language=os.getenv("VOICE_LANGUAGE", "ru"),
             stt_model=os.getenv("STT_MODEL", "whisper"),
+            guard_mode=os.getenv("GUARD_MODE", "hard"),
         )
 
     def create_llm(self, model_override: str | None = None) -> Any:

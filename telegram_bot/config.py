@@ -259,6 +259,12 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("stt_model", "STT_MODEL"),
     )
 
+    # Prompt injection defense (#226)
+    guard_mode: str = Field(
+        default="hard",
+        validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),
+    )
+
     # Guardrails
     enable_confidence_scoring: bool = Field(
         default=False,

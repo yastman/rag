@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from telegram_bot.graph.edges import route_by_query_type, route_cache, route_grade, route_start
+from telegram_bot.graph.edges import (
+    route_by_query_type,
+    route_cache,
+    route_grade,
+    route_guard,
+    route_start,
+)
 from telegram_bot.graph.state import make_initial_state
 
 
@@ -14,14 +20,34 @@ class TestRouteStart:
         state["voice_audio"] = b"fake-ogg"
         assert route_start(state) == "transcribe"
 
-    def test_voice_audio_none_routes_to_classify(self):
+    def test_voice_audio_none_routes_to_guard(self):
         state = make_initial_state(user_id=1, session_id="s", query="hello")
         state["voice_audio"] = None
-        assert route_start(state) == "classify"
+        assert route_start(state) == "guard"
 
-    def test_voice_audio_absent_routes_to_classify(self):
+    def test_voice_audio_absent_routes_to_guard(self):
         state = {"query": "hello"}  # no voice_audio key at all
-        assert route_start(state) == "classify"
+        assert route_start(state) == "guard"
+
+
+class TestRouteGuard:
+    def test_injection_with_response_routes_to_respond(self):
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["injection_detected"] = True
+        state["response"] = "Blocked."
+        assert route_guard(state) == "respond"
+
+    def test_injection_without_response_routes_to_classify(self):
+        """Soft/log mode: injection_detected but no response set."""
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["injection_detected"] = True
+        state["response"] = ""
+        assert route_guard(state) == "classify"
+
+    def test_no_injection_routes_to_classify(self):
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["injection_detected"] = False
+        assert route_guard(state) == "classify"
 
 
 def test_initial_state_has_score_improved():
