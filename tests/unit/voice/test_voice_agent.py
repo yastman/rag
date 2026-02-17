@@ -63,6 +63,77 @@ def test_prewarm_stores_vad_in_userdata():
     assert proc.userdata["vad"] == "fake-vad"
 
 
+def test_voice_bot_stores_langfuse_trace_id():
+    """langfuse_trace_id is stored on the agent for trace linking (#241)."""
+    from src.voice.agent import VoiceBot
+
+    agent = VoiceBot(call_id="test-789", langfuse_trace_id="trace-abc123")
+    assert agent._langfuse_trace_id == "trace-abc123"
+
+
+def test_voice_bot_langfuse_trace_id_defaults_none():
+    from src.voice.agent import VoiceBot
+
+    agent = VoiceBot(call_id="test-789")
+    assert agent._langfuse_trace_id is None
+
+
+async def test_search_tool_forwards_langfuse_trace_id():
+    """langfuse_trace_id is included in the RAG API payload (#241)."""
+    from src.voice.agent import VoiceBot
+
+    store = MagicMock()
+    store.append_transcript = AsyncMock()
+
+    agent = VoiceBot(
+        call_id="22222222-2222-2222-2222-222222222222",
+        transcript_store=store,
+        langfuse_trace_id="trace-link-test",
+    )
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {"response": "OK"}
+
+    mock_client = MagicMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+
+    client_cm = AsyncMock()
+    client_cm.__aenter__.return_value = mock_client
+    client_cm.__aexit__.return_value = None
+
+    with patch("src.voice.agent.httpx.AsyncClient", return_value=client_cm):
+        await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "test query")
+
+    payload = mock_client.post.await_args.kwargs["json"]
+    assert payload["langfuse_trace_id"] == "trace-link-test"
+    assert payload["channel"] == "voice"
+
+
+async def test_search_tool_omits_langfuse_trace_id_when_none():
+    """langfuse_trace_id is NOT in payload when not provided (#241)."""
+    from src.voice.agent import VoiceBot
+
+    agent = VoiceBot(call_id="22222222-2222-2222-2222-222222222222")
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {"response": "OK"}
+
+    mock_client = MagicMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+
+    client_cm = AsyncMock()
+    client_cm.__aenter__.return_value = mock_client
+    client_cm.__aexit__.return_value = None
+
+    with patch("src.voice.agent.httpx.AsyncClient", return_value=client_cm):
+        await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "test query")
+
+    payload = mock_client.post.await_args.kwargs["json"]
+    assert "langfuse_trace_id" not in payload
+
+
 async def test_search_tool_appends_transcript_entries_with_store():
     from src.voice.agent import VoiceBot
 
