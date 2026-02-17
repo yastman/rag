@@ -4,8 +4,11 @@ Test ColBERT multivector rerank in production code (Variant A - Complete).
 Verifies HybridRRFColBERTSearchEngine uses: Dense + Sparse + ColBERT rerank.
 """
 
+import os
 import socket
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -112,14 +115,36 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
+def _collection_exists(url: str, api_key: str, collection_name: str) -> bool:
+    req = urllib.request.Request(f"{url}/collections/{collection_name}")
+    if api_key:
+        req.add_header("api-key", api_key)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            return response.status == 200
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        raise
+
+
 def test_colbert_rerank():
     """Test Variant A: Hybrid RRF + ColBERT rerank."""
+    if os.getenv("RUN_BENCHMARK_TESTS", "0") != "1":
+        pytest.skip("Benchmark tests disabled (set RUN_BENCHMARK_TESTS=1)")
+
     settings = Settings()
     parsed = urlparse(settings.qdrant_url)
     host = parsed.hostname or "localhost"
     port = parsed.port or 6333
     if not _is_port_open(host, port):
         pytest.skip(f"Qdrant not running on {host}:{port}")
+
+    if not _collection_exists(
+        settings.qdrant_url, settings.qdrant_api_key, settings.collection_name
+    ):
+        pytest.skip(f"Collection not found: {settings.collection_name}")
+
     assert _run_colbert_rerank()
 
 
