@@ -13,11 +13,7 @@ dependencies = [
     "numpy",
     "aiohttp",
     "requests",
-    "FlagEmbedding",
-    "scipy",
-    "sentence-transformers",  # BGE-M3 embeddings
     "qdrant-client>=1.16.2",  # Vector database client (v1.15+ for BM42 support)
-    "transformers>=4.30.0",   # For HuggingFace tokenizers in HybridChunker
     "langfuse>=3.14.0",       # LLM observability & tracing
     # Voyage AI Integration (2026-01-21)
     "voyageai>=0.3.0",        # Voyage AI embeddings and reranking
@@ -25,9 +21,6 @@ dependencies = [
     "redis>=7.1.0",
     "redisvl>=0.13.2",
     "aiogram>=3.25.0",
-    # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
-    "torch>=2.0.0",
-    "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
     "asyncpg>=0.31.0",
     # Performance (2026-02-06)
     "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
@@ -41,6 +34,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Local ML models (torch, FlagEmbedding, sentence-transformers)
+# Only needed when running local model inference (BGE-M3, cross-encoder, etc.)
+# Install: uv sync --extra ml-local
+ml-local = [
+    "FlagEmbedding",
+    "scipy",
+    "sentence-transformers",
+    # PyTorch CPU-only (forced via [tool.uv.sources] → pytorch-cpu index)
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",  # Must be direct dep for [tool.uv.sources] to apply CPU index
+    "transformers>=4.30.0", # For HuggingFace tokenizers in HybridChunker
+]
+
 # Documentation tools
 docs = [
     "mkdocs>=1.6.0",         # Documentation generator
@@ -80,7 +86,7 @@ eval = [
 
 # All optional dependencies
 all = [
-    "contextual-rag[docs,voice,eval,ingest]",
+    "contextual-rag[docs,voice,eval,ingest,ml-local]",
 ]
 
 # =============================================================================
