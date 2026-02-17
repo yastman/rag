@@ -14,7 +14,7 @@ Usage:
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from qdrant_client import AsyncQdrantClient, models
@@ -23,7 +23,7 @@ from qdrant_client import AsyncQdrantClient, models
 logger = logging.getLogger(__name__)
 
 
-class SmallToBigMode(str, Enum):
+class SmallToBigMode(StrEnum):
     """Small-to-big expansion mode."""
 
     OFF = "off"  # No expansion
@@ -148,8 +148,10 @@ class SmallToBigService:
             # Build expanded text (sorted by order)
             all_chunks = [chunk, *neighbors]
             all_chunks.sort(
-                key=lambda c: c.get("metadata", {}).get("order", 0)
-                or c.get("metadata", {}).get("chunk_order", 0)
+                key=lambda c: (
+                    c.get("metadata", {}).get("order", 0)
+                    or c.get("metadata", {}).get("chunk_order", 0)
+                )
             )
 
             expanded_text = "\n\n".join(c.get("text", "") for c in all_chunks)
