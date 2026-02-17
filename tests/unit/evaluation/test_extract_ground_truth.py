@@ -288,8 +288,14 @@ class TestMain:
         mock_extract.assert_called_once_with("ukraine_criminal_code_zai_full")
         mock_stats.assert_called_once()
 
-        # Should write to two files
-        assert mock_file.call_count == 2
+        opened_paths = [call.args[0] for call in mock_file.call_args_list]
+        assert (
+            "/srv/app/evaluation/data/ground_truth_articles.json" in opened_paths
+        )
+        assert (
+            "/srv/app/evaluation/data/article_to_chunk_mapping.json"
+            in opened_paths
+        )
 
     @patch("src.evaluation.extract_ground_truth.extract_articles")
     @patch("src.evaluation.extract_ground_truth.print_statistics")

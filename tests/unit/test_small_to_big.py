@@ -62,13 +62,11 @@ class TestSmallToBigService:
             max_context_tokens=8000,
         )
 
-    @pytest.mark.asyncio
     async def test_expand_context_empty_chunks(self, service):
         """Test expand_context with empty input."""
         result = await service.expand_context(chunks=[])
         assert result == []
 
-    @pytest.mark.asyncio
     async def test_expand_context_missing_metadata(self, service, mock_client):
         """Test expand_context when chunks have no doc_id/order."""
         chunks = [
@@ -85,7 +83,6 @@ class TestSmallToBigService:
         # Client should not be called
         mock_client.scroll.assert_not_called()
 
-    @pytest.mark.asyncio
     async def test_expand_context_with_neighbors(self, service, mock_client):
         """Test expand_context fetches and merges neighbors."""
         # Setup input chunk
@@ -142,7 +139,6 @@ class TestSmallToBigService:
         # Check neighbor chunks
         assert len(expanded.neighbor_chunks) == 2
 
-    @pytest.mark.asyncio
     async def test_expand_context_respects_max_chunks_limit(self, service, mock_client):
         """Test that expansion stops when max_expanded_chunks is reached."""
         service._max_expanded_chunks = 2
@@ -160,7 +156,6 @@ class TestSmallToBigService:
         # Should only expand first 2 chunks
         assert len(result) == 2
 
-    @pytest.mark.asyncio
     async def test_expand_context_respects_token_limit(self, service, mock_client):
         """Test that expansion stops when max_context_tokens is reached."""
         service._max_context_tokens = 50  # ~200 characters
@@ -175,7 +170,6 @@ class TestSmallToBigService:
         # Should stop after ~2 chunks (200 chars = 50 tokens)
         assert len(result) <= 3
 
-    @pytest.mark.asyncio
     async def test_expand_context_deduplicates(self, service, mock_client):
         """Test that duplicate chunks are removed across expansions."""
         # Two adjacent chunks that would fetch overlapping neighbors
@@ -200,7 +194,6 @@ class TestSmallToBigService:
         assert len(result) == 2
         # Both should be expanded but no duplicates in final context
 
-    @pytest.mark.asyncio
     async def test_fetch_neighbors_builds_correct_filter(self, service, mock_client):
         """Test that _fetch_neighbors builds correct Qdrant filter."""
         mock_client.scroll.return_value = ([], None)
@@ -278,13 +271,16 @@ class TestSmallToBigSettings:
         with patch.dict(
             "os.environ",
             {
+                # Isolate from runner secrets/default provider selection
+                "API_PROVIDER": "groq",
+                "GROQ_API_KEY": "test-groq-key",
                 "SMALL_TO_BIG_MODE": "on",
                 "SMALL_TO_BIG_WINDOW_BEFORE": "2",
                 "SMALL_TO_BIG_WINDOW_AFTER": "3",
                 "MAX_EXPANDED_CHUNKS": "15",
                 "MAX_CONTEXT_TOKENS": "10000",
             },
-            clear=False,
+            clear=True,
         ):
             # Import after patching env
             from src.config.settings import Settings
@@ -302,8 +298,12 @@ class TestSmallToBigSettings:
         """Test default values for small-to-big settings."""
         with patch.dict(
             "os.environ",
-            {},
-            clear=False,
+            {
+                # Ensure Settings() is valid regardless of host environment
+                "API_PROVIDER": "groq",
+                "GROQ_API_KEY": "test-groq-key",
+            },
+            clear=True,
         ):
             from src.config.settings import Settings
 
@@ -317,16 +317,24 @@ class TestSmallToBigSettings:
 
     def test_settings_to_dict_includes_small_to_big(self):
         """Test that to_dict includes small-to-big settings."""
-        from src.config.settings import Settings
+        with patch.dict(
+            "os.environ",
+            {
+                "API_PROVIDER": "groq",
+                "GROQ_API_KEY": "test-groq-key",
+            },
+            clear=True,
+        ):
+            from src.config.settings import Settings
 
-        settings = Settings()
-        settings_dict = settings.to_dict()
+            settings = Settings()
+            settings_dict = settings.to_dict()
 
-        assert "small_to_big_mode" in settings_dict
-        assert "small_to_big_window_before" in settings_dict
-        assert "small_to_big_window_after" in settings_dict
-        assert "max_expanded_chunks" in settings_dict
-        assert "max_context_tokens" in settings_dict
+            assert "small_to_big_mode" in settings_dict
+            assert "small_to_big_window_before" in settings_dict
+            assert "small_to_big_window_after" in settings_dict
+            assert "max_expanded_chunks" in settings_dict
+            assert "max_context_tokens" in settings_dict
 
 
 class TestIndexerMetadataFields:

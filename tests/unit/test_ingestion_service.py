@@ -70,7 +70,6 @@ class TestIngestionService:
         assert service.chunk_size == 1024
         assert service.chunk_overlap == 100
 
-    @pytest.mark.asyncio
     async def test_ingest_directory_not_found(self, service):
         """Test ingestion with non-existent directory."""
         stats = await service.ingest_directory(Path("/nonexistent/path"))
@@ -79,7 +78,6 @@ class TestIngestionService:
         assert len(stats.errors) == 1
         assert "not found" in stats.errors[0].lower()
 
-    @pytest.mark.asyncio
     async def test_ingest_directory_empty(self, service, tmp_path):
         """Test ingestion with empty directory."""
         with patch("src.ingestion.service.check_cocoindex_available", return_value=True):
@@ -89,7 +87,6 @@ class TestIngestionService:
         assert len(stats.errors) == 1
         assert "no supported documents" in stats.errors[0].lower()
 
-    @pytest.mark.asyncio
     async def test_ingest_directory_cocoindex_not_available(self, service, tmp_path):
         """Test ingestion when CocoIndex is not installed."""
         # Create a test file
@@ -102,7 +99,6 @@ class TestIngestionService:
         assert len(stats.errors) == 1
         assert "cocoindex not available" in stats.errors[0].lower()
 
-    @pytest.mark.asyncio
     async def test_ingest_directory_counts_documents(self, service, tmp_path):
         """Test that ingestion counts supported documents correctly."""
         # Create test files
@@ -117,7 +113,6 @@ class TestIngestionService:
 
         assert stats.total_documents == 3  # pdf, md, txt (not xyz)
 
-    @pytest.mark.asyncio
     async def test_ingest_gdrive_no_credentials(self, service):
         """Test GDrive ingestion without credentials."""
         service.google_service_account_key = None
@@ -127,7 +122,6 @@ class TestIngestionService:
         assert len(stats.errors) == 1
         assert "GOOGLE_SERVICE_ACCOUNT_KEY" in stats.errors[0]
 
-    @pytest.mark.asyncio
     async def test_ingest_gdrive_file_not_found(self, service):
         """Test GDrive ingestion with missing credentials file."""
         service.google_service_account_key = "/nonexistent/credentials.json"
@@ -137,7 +131,6 @@ class TestIngestionService:
         assert len(stats.errors) == 1
         assert "not found" in stats.errors[0].lower()
 
-    @pytest.mark.asyncio
     async def test_get_collection_stats(self, service, mock_qdrant_client):
         """Test getting collection statistics."""
         stats = await service.get_collection_stats()
@@ -147,7 +140,6 @@ class TestIngestionService:
         assert stats["vectors_count"] == 100
         mock_qdrant_client.get_collection.assert_called_once_with("test_collection")
 
-    @pytest.mark.asyncio
     async def test_get_collection_stats_not_found(self, service, mock_qdrant_client):
         """Test getting stats for non-existent collection."""
         from qdrant_client.http.exceptions import UnexpectedResponse
@@ -165,7 +157,6 @@ class TestIngestionService:
         assert "error" in stats
         assert stats["points_count"] == 0
 
-    @pytest.mark.asyncio
     async def test_close(self, service, mock_qdrant_client):
         """Test service cleanup."""
         await service.close()
@@ -210,7 +201,6 @@ class TestIngestionStats:
 class TestConvenienceFunctions:
     """Tests for module-level convenience functions."""
 
-    @pytest.mark.asyncio
     async def test_ingest_from_directory(self, tmp_path):
         """Test convenience function for directory ingestion."""
         with patch.object(IngestionService, "ingest_directory") as mock_ingest:
@@ -222,7 +212,6 @@ class TestConvenienceFunctions:
                 assert stats.total_documents == 5
                 mock_close.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_ingest_from_gdrive(self):
         """Test convenience function for GDrive ingestion."""
         with patch.object(IngestionService, "ingest_gdrive") as mock_ingest:
@@ -234,7 +223,6 @@ class TestConvenienceFunctions:
                 assert len(stats.errors) == 1
                 mock_close.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_get_ingestion_status(self):
         """Test convenience function for getting status."""
         with patch.object(IngestionService, "get_collection_stats") as mock_stats:
