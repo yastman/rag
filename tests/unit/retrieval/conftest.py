@@ -7,11 +7,13 @@ import pytest
 
 
 @pytest.fixture
-def mock_cross_encoder():
+def mock_cross_encoder(monkeypatch):
     """Provide access to mocked CrossEncoder for assertions.
 
     Since reranker.py now uses lazy import, we need to ensure the mock
     is in sys.modules BEFORE the test imports reranker.
+
+    Uses monkeypatch.setitem for automatic teardown of sys.modules entries.
 
     Returns dict with:
     - encoder: Mock CrossEncoder instance
@@ -26,7 +28,7 @@ def mock_cross_encoder():
     mock_st = MagicMock()
     mock_encoder_instance = MagicMock()
     mock_st.CrossEncoder.return_value = mock_encoder_instance
-    sys.modules["sentence_transformers"] = mock_st
+    monkeypatch.setitem(sys.modules, "sentence_transformers", mock_st)
 
     # Now import reranker - it will use our mock
     from src.retrieval import reranker

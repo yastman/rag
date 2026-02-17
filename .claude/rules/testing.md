@@ -26,6 +26,23 @@ make test-cov                                          # Opens htmlcov/index.htm
 
 **pytest-timeout:** All tests have 30s default timeout (pyproject.toml). Override per-test with `@pytest.mark.timeout(60)`.
 
+## sys.modules Hygiene
+
+**Policy:** NEVER assign to `sys.modules` at module level in test files.
+
+| Pattern | Status |
+|---------|--------|
+| `sys.modules["foo"] = MagicMock()` at module level | **FORBIDDEN** |
+| `monkeypatch.setitem(sys.modules, "foo", mock)` in fixture | **OK** |
+| `pytest.MonkeyPatch.context()` in module-scoped fixture | **OK** |
+| `sys.modules["foo"] = mock` in `pytest_configure` (conftest) | **OK** (with `pytest_unconfigure` cleanup) |
+
+**Why:** Module-level patching leaks mocks into the session, breaks xdist isolation, and causes flaky tests from import-order dependencies.
+
+**For collection-time mocks** (heavy ML libs): use `pytest_configure` / `pytest_unconfigure` hooks in `conftest.py`.
+
+**Guard:** `test_module_pollution.py::test_no_module_level_sys_modules_assignment` scans all test files via AST and fails if bare module-level `sys.modules[...] = ...` is found.
+
 ## Integration Tests
 
 ### Graph Path Tests (no Docker required)
