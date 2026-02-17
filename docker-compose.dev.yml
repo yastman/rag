@@ -234,7 +234,7 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.150.0
+    image: langfuse/langfuse-worker:3.153.0@sha256:32e2fe1193c3703c44a85e00aac005690570a85a309f0202a51b72d432673e78
     container_name: dev-langfuse-worker
     profiles: ["ml", "full"]
     restart: always
@@ -291,7 +291,7 @@ services:
 
   # Langfuse v3 Web
   langfuse:
-    image: langfuse/langfuse:3.150.0
+    image: langfuse/langfuse:3.153.0@sha256:99eae0d0734a62e29378f038b84de9eed4ba8dbe69878f9b680351c2324a4949
     container_name: dev-langfuse
     profiles: ["ml", "full"]
     restart: always
@@ -450,7 +450,7 @@ services:
       start_period: 10s
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-v1.81.3-stable
+    image: ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:3d80908e35230a0dfb58051ae4e2847371b2a327b44e105e79b8c4f67a65596c
     container_name: dev-litellm
     profiles: ["bot", "voice", "full"]
     ports:
