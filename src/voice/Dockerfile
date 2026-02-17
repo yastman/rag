@@ -8,12 +8,18 @@ RUN uv sync --frozen --no-dev --extra voice
 
 FROM python:3.14-slim-bookworm@sha256:f0540d0436a220db0a576ccfe75631ab072391e43a24b88972ef9833f699095f AS runtime
 WORKDIR /app
+
+RUN groupadd -g 1001 appuser && \
+    useradd -u 1001 -g appuser -m -d /app -s /bin/false appuser
+
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY --from=builder /app/telegram_bot /app/telegram_bot
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Download VAD/turn-detector models
+# Download VAD/turn-detector models (before switching to non-root)
 RUN python -c "from livekit.plugins.silero import VAD; VAD.load()" 2>/dev/null || true
+
+USER appuser
 
 CMD ["python", "-m", "src.voice.agent", "start"]
