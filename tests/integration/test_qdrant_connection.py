@@ -38,7 +38,7 @@ def test_qdrant_connection():
         print("\n🔌 Подключение к Qdrant...")
         client = QdrantClient(
             url=settings.qdrant_url,
-            api_key=settings.qdrant_api_key if settings.qdrant_api_key else None,
+            api_key=settings.qdrant_api_key or None,
         )
 
         # Получение списка коллекций

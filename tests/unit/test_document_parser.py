@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import src.ingestion.document_parser as document_parser
 from src.ingestion.document_parser import (
     ParsedDocument,
     ParserCache,
@@ -165,7 +166,7 @@ class TestUniversalDocumentParser:
 
         assert parser.docling_converter is None
 
-    @patch("src.ingestion.document_parser.DocumentConverter")
+    @patch.object(document_parser, "DocumentConverter")
     def test_parser_docling_converter_created(self, mock_converter_cls):
         """Test that Docling converter is created on first use."""
         mock_converter = MagicMock()
@@ -177,7 +178,7 @@ class TestUniversalDocumentParser:
         assert converter is mock_converter
         mock_converter_cls.assert_called_once()
 
-    @patch("src.ingestion.document_parser.DocumentConverter")
+    @patch.object(document_parser, "DocumentConverter")
     def test_parser_docling_converter_reused(self, mock_converter_cls):
         """Test that Docling converter is reused."""
         mock_converter = MagicMock()
@@ -196,7 +197,7 @@ class TestUniversalDocumentParser:
 class TestParsePDF:
     """Test PDF parsing."""
 
-    @patch("src.ingestion.document_parser.pymupdf")
+    @patch.object(document_parser, "pymupdf")
     def test_parse_pdf_success(self, mock_pymupdf):
         """Test successful PDF parsing."""
         # Create mock PDF document
@@ -224,7 +225,7 @@ class TestParsePDF:
             assert result.num_pages == 1
             assert result.metadata["parser"] == "pymupdf"
 
-    @patch("src.ingestion.document_parser.pymupdf")
+    @patch.object(document_parser, "pymupdf")
     def test_parse_pdf_no_metadata(self, mock_pymupdf):
         """Test PDF parsing when metadata is None."""
         mock_page = MagicMock()
@@ -251,7 +252,7 @@ class TestParsePDF:
 class TestParseWithDocling:
     """Test Docling parsing."""
 
-    @patch("src.ingestion.document_parser.DocumentConverter")
+    @patch.object(document_parser, "DocumentConverter")
     def test_parse_docling_success(self, mock_converter_cls):
         """Test successful Docling parsing."""
         mock_result = MagicMock()
@@ -278,7 +279,7 @@ class TestParseWithDocling:
 class TestParseFile:
     """Test main parse_file method."""
 
-    @patch("src.ingestion.document_parser.pymupdf")
+    @patch.object(document_parser, "pymupdf")
     def test_parse_file_uses_cache(self, mock_pymupdf):
         """Test that parse_file uses cache."""
         mock_page = MagicMock()
@@ -315,7 +316,7 @@ class TestParseFile:
 class TestConvenienceFunction:
     """Test parse_document convenience function."""
 
-    @patch("src.ingestion.document_parser.pymupdf")
+    @patch.object(document_parser, "pymupdf")
     def test_parse_document_function(self, mock_pymupdf):
         """Test parse_document convenience function."""
         mock_page = MagicMock()
