@@ -65,7 +65,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             uv sync --frozen
           else
-            uv sync --frozen --extra voice --extra ingest --extra eval
+            uv sync --frozen --extra voice --extra ingest --extra eval --extra ml-local
           fi
 
       - name: Preflight imports (full tier only)
