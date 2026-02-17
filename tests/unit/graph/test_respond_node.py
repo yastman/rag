@@ -136,6 +136,34 @@ class TestRespondNodeFeedbackButtons:
         call_kwargs = message.answer.call_args
         assert call_kwargs.kwargs.get("reply_markup") is None
 
+    async def test_no_buttons_for_chitchat(self):
+        """CHITCHAT responses don't get feedback buttons even with trace_id (#277)."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="Привет")
+        state["response"] = "Привет! 👋"
+        state["message"] = message
+        state["trace_id"] = "abc123def456"
+        state["query_type"] = "CHITCHAT"
+
+        await respond_node(state)
+
+        call_kwargs = message.answer.call_args
+        assert call_kwargs.kwargs.get("reply_markup") is None
+
+    async def test_no_buttons_for_off_topic(self):
+        """OFF_TOPIC responses don't get feedback buttons even with trace_id (#277)."""
+        message = AsyncMock()
+        state = make_initial_state(user_id=1, session_id="s", query="рецепт борща")
+        state["response"] = "Я отвечаю только на вопросы о недвижимости."
+        state["message"] = message
+        state["trace_id"] = "abc123def456"
+        state["query_type"] = "OFF_TOPIC"
+
+        await respond_node(state)
+
+        call_kwargs = message.answer.call_args
+        assert call_kwargs.kwargs.get("reply_markup") is None
+
     async def test_streaming_adds_reply_markup_via_edit(self):
         """When response_sent=True, respond_node edits markup on streamed message."""
         message = AsyncMock()

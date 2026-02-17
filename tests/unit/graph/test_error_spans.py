@@ -9,8 +9,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from telegram_bot.graph.state import make_initial_state
 
 
@@ -30,6 +28,7 @@ def _make_state(query: str = "Какие квартиры?") -> dict:
 
 class TestGenerateNodeErrorSpan:
     """generate_node sets ERROR span when LLM fails."""
+
     async def test_llm_error_sets_error_span(self) -> None:
         from telegram_bot.graph.nodes.generate import generate_node
 
@@ -77,6 +76,7 @@ class TestGenerateNodeErrorSpan:
 
 class TestRewriteNodeErrorSpan:
     """rewrite_node sets ERROR span when LLM rewrite fails."""
+
     async def test_llm_rewrite_error_sets_error_span(self) -> None:
         from telegram_bot.graph.nodes.rewrite import rewrite_node
 
@@ -113,6 +113,7 @@ class TestRewriteNodeErrorSpan:
 
 class TestRerankNodeErrorSpan:
     """rerank_node sets ERROR span when ColBERT fails."""
+
     async def test_colbert_error_sets_error_span(self) -> None:
         from telegram_bot.graph.nodes.rerank import rerank_node
 
@@ -137,6 +138,7 @@ class TestRerankNodeErrorSpan:
 
 class TestRespondNodeErrorSpan:
     """respond_node sets ERROR span when Telegram send fails."""
+
     async def test_send_error_sets_error_span(self) -> None:
         from telegram_bot.graph.nodes.respond import respond_node
 

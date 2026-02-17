@@ -6,8 +6,6 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from src.api.main import app, lifespan, query
 from src.api.schemas import QueryRequest
 
@@ -25,6 +23,8 @@ class _DummyGraph:
             "search_results_count": 0,
             "rerank_applied": False,
         }
+
+
 async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
     graph = _DummyGraph()
     app.state.graph = graph
@@ -41,6 +41,8 @@ async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
 
     assert graph.last_state is not None
     assert graph.last_state["max_rewrite_attempts"] == 3
+
+
 async def test_query_writes_langfuse_scores() -> None:
     """POST /query must call _write_langfuse_scores for score parity with bot."""
     graph = _DummyGraph()
@@ -63,6 +65,8 @@ async def test_query_writes_langfuse_scores() -> None:
     call_args = mock_write_scores.call_args
     assert call_args[0][0] is lf  # first arg: langfuse client
     assert isinstance(call_args[0][1], dict)  # second arg: result dict
+
+
 async def test_lifespan_respects_rerank_provider_none() -> None:
     fake_cfg = SimpleNamespace(
         redis_url="redis://localhost:6379",
