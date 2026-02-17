@@ -147,6 +147,16 @@ test-unit: ## Run unit tests locally in parallel (xdist worksteal)
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Unit tests complete$(NC)"
 
+test-unit-core: ## Run core unit tests (no optional deps needed, PR gate)
+	@echo "$(BLUE)Running core unit tests (no optional deps)...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras"
+	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
+
+test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main)
+	@echo "$(BLUE)Running full unit tests (all extras)...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
+	@echo "$(GREEN)✓ Full unit tests complete$(NC)"
+
 test-fast: ## Run unit tests in parallel (xdist, loadscope)
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto -q --timeout=30 -m "not legacy_api"

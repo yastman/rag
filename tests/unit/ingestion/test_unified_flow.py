@@ -5,6 +5,12 @@ import hashlib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+
+pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
 
 class TestComputeFileId:
     """Test compute_file_id: legacy sha256-based file identity."""

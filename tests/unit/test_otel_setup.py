@@ -12,6 +12,8 @@ if importlib.util.find_spec("opentelemetry.instrumentation") is None:
         allow_module_level=True,
     )
 
+pytestmark = pytest.mark.requires_extras
+
 
 @pytest.fixture(autouse=True)
 def fresh_otel_setup_module():

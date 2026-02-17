@@ -9,6 +9,7 @@ import pytest
 
 
 livekit = pytest.importorskip("livekit")
+pytestmark = pytest.mark.requires_extras
 
 
 class TestSetupLifecellTrunk:
