@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import time
+from typing import Any
 
 import httpx
 from dotenv import load_dotenv
@@ -92,6 +93,7 @@ class VoiceBot(Agent):
         call_id: str = "",
         lead_data: dict | None = None,
         transcript_store: TranscriptStore | None = None,
+        langfuse_trace_id: str | None = None,
     ) -> None:
         lead_desc = ""
         if lead_data:
@@ -114,6 +116,7 @@ class VoiceBot(Agent):
         )
         self._call_id = call_id
         self._transcript_store = transcript_store
+        self._langfuse_trace_id = langfuse_trace_id
 
     async def _append_transcript(self, role: str, text: str) -> None:
         """Best-effort transcript persistence that never breaks the call flow."""
@@ -139,14 +142,17 @@ class VoiceBot(Agent):
         await self._append_transcript("user", query)
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
+                payload: dict[str, Any] = {
+                    "query": query,
+                    "user_id": 0,
+                    "session_id": f"voice-{self._call_id}",
+                    "channel": "voice",
+                }
+                if self._langfuse_trace_id:
+                    payload["langfuse_trace_id"] = self._langfuse_trace_id
                 resp = await client.post(
                     f"{RAG_API_URL}/query",
-                    json={
-                        "query": query,
-                        "user_id": 0,
-                        "session_id": f"voice-{self._call_id}",
-                        "channel": "voice",
-                    },
+                    json=payload,
                 )
                 resp.raise_for_status()
                 data = resp.json()
@@ -192,6 +198,7 @@ async def entrypoint(ctx: agents.JobContext):
         lead_data = {}
     phone = str(metadata.get("phone", "")).strip()
     callback_chat_id = metadata.get("callback_chat_id")
+    langfuse_trace_id = metadata.get("langfuse_trace_id")
 
     store = await _get_transcript_store()
     if store is not None and phone:
@@ -221,7 +228,32 @@ async def entrypoint(ctx: agents.JobContext):
         vad=ctx.proc.userdata.get("vad") or silero.VAD.load(),
     )
 
-    agent = VoiceBot(call_id=call_id, lead_data=lead_data, transcript_store=store)
+    call_start = time.monotonic()
+
+    agent = VoiceBot(
+        call_id=call_id,
+        lead_data=lead_data,
+        transcript_store=store,
+        langfuse_trace_id=langfuse_trace_id,
+    )
+
+    # Register cleanup callback to finalize the call when the session ends
+    async def _finalize() -> None:
+        if not store or not call_id:
+            return
+        duration_sec = int(time.monotonic() - call_start)
+        try:
+            await store.finalize_call(
+                call_id=call_id,
+                duration_sec=duration_sec,
+                langfuse_trace_id=langfuse_trace_id,
+            )
+            logger.info("Call %s finalized: duration=%ds", call_id, duration_sec)
+        except Exception:
+            logger.exception("Failed to finalize call %s", call_id)
+
+    ctx.add_shutdown_callback(_finalize)
+
     await session.start(room=ctx.room, agent=agent)
 
     # Start conversation with greeting
