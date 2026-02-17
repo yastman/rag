@@ -21,6 +21,6 @@
 - Do not remove PVC-related resources without explicit migration plan.
 
 ## References
-- `.claude/rules/k3s.md`
+- `docs/LOCAL-DEVELOPMENT.md`
 - `docs/agent-rules/infra-and-deploy.md`
 - `k8s/base/kustomization.yaml`
