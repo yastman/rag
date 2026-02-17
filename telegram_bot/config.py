@@ -295,6 +295,16 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
     )
 
+    # Supervisor architecture (#240)
+    use_supervisor: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("use_supervisor", "USE_SUPERVISOR"),
+    )
+    supervisor_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),
+    )
+
     # LLM-as-a-Judge online sampling
     judge_sample_rate: float = Field(
         default=0.0,
