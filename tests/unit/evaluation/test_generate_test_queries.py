@@ -178,7 +178,6 @@ class TestFetchArticleTexts:
 class TestGenerateQueriesForArticle:
     """Tests for generate_queries_for_article function."""
 
-    @pytest.mark.asyncio
     async def test_generate_queries_success(self, mock_imports):
         """Test successful query generation for an article."""
         # Mock LLM response
@@ -311,7 +310,6 @@ Some additional text"""
 class TestGenerateAllQueries:
     """Tests for generate_all_queries function."""
 
-    @pytest.mark.asyncio
     async def test_generate_all_queries_success(self, mock_imports):
         """Test generating queries for multiple articles."""
         article_texts = {
@@ -345,7 +343,6 @@ class TestGenerateAllQueries:
         assert all_queries[0]["expected_article"] == "115"
         assert all_queries[3]["expected_article"] == "121"
 
-    @pytest.mark.asyncio
     async def test_generate_queries_with_errors(self, mock_imports):
         """Test error handling during query generation."""
         article_texts = {

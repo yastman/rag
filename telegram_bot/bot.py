@@ -22,7 +22,7 @@ from .graph.config import GraphConfig
 from .graph.graph import build_graph
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
-from .observability import get_client, observe, propagate_attributes
+from .observability import get_client, get_langfuse_client, observe, propagate_attributes
 from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # --- Checkpoint namespace constants (versioned for safe migration) ---
 _CHECKPOINT_NS_TEXT = "tg:text:v1"
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
+_FEEDBACK_CONFIRMATION_TTL_S = 5.0
 
 # --- Query type mapping for scores ---
 _QUERY_TYPE_SCORE = {
@@ -547,9 +548,14 @@ class PropertyBot:
             logger.exception("Failed to initiate call to %s", phone)
             await message.answer("Ошибка инициации звонка. Попробуйте позже.")
 
+    @observe(name="telegram-history-search")
     async def cmd_history(self, message: Message):
         """Handle /history command — semantic search in conversation history."""
+        search_start = time.perf_counter()
         assert message.from_user is not None
+        user_id = message.from_user.id
+        session_id = make_session_id("history", message.chat.id)
+
         text = (message.text or "").strip()
         parts = text.split(maxsplit=1)
 
@@ -559,32 +565,90 @@ class PropertyBot:
             )
             return
 
-        if self._history_service is None:
-            await message.answer("История диалогов временно недоступна.")
-            return
-
         query = parts[1]
-        results = await self._history_service.search_user_history(
-            user_id=message.from_user.id,
-            query=query,
-            limit=5,
-        )
 
-        if not results:
-            await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
-            return
+        with propagate_attributes(
+            session_id=session_id,
+            user_id=str(user_id),
+            tags=["telegram", "history"],
+        ):
+            lf = get_client()
 
-        lines = [f"📋 Найдено {len(results)} записей:\n"]
-        for i, r in enumerate(results, 1):
-            ts = r.get("timestamp", "")[:16].replace("T", " ")
-            lines.append(f"{i}. [{ts}]")
-            lines.append(f"   В: {r['query']}")
-            resp_preview = r["response"][:150]
-            if len(r["response"]) > 150:
-                resp_preview += "..."
-            lines.append(f"   О: {resp_preview}\n")
+            if self._history_service is None:
+                lf.update_current_trace(
+                    input={"command": "/history", "query": query},
+                    output={"error": "service_unavailable"},
+                    metadata={"user_id": user_id},
+                )
+                lf.score_current_trace(name="history_search_count", value=0, data_type="NUMERIC")
+                lf.score_current_trace(name="history_search_empty", value=1.0, data_type="NUMERIC")
+                await message.answer("История диалогов временно недоступна.")
+                return
 
-        await message.answer("\n".join(lines))
+            try:
+                results = await self._history_service.search_user_history(
+                    user_id=user_id,
+                    query=query,
+                    limit=5,
+                )
+            except Exception:
+                logger.exception("History search failed for user %s", user_id)
+                lf.update_current_trace(
+                    input={"command": "/history", "query": query},
+                    output={"error": "backend_exception"},
+                    metadata={"user_id": user_id},
+                )
+                lf.score_current_trace(name="history_search_count", value=0, data_type="NUMERIC")
+                lf.score_current_trace(name="history_search_empty", value=1.0, data_type="NUMERIC")
+                await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
+                return
+
+            search_ms = (time.perf_counter() - search_start) * 1000
+
+            valid = []
+            for r in results:
+                if not isinstance(r, dict):
+                    continue
+                q = r.get("query")
+                resp = r.get("response")
+                if not isinstance(q, str) or not isinstance(resp, str):
+                    continue
+                valid.append(r)
+
+            lf.update_current_trace(
+                input={"command": "/history", "query": query},
+                output={"results_count": len(results), "valid_count": len(valid)},
+                metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
+            )
+            lf.score_current_trace(
+                name="history_search_count", value=len(valid), data_type="NUMERIC"
+            )
+            lf.score_current_trace(
+                name="history_search_latency_ms", value=search_ms, data_type="NUMERIC"
+            )
+            lf.score_current_trace(
+                name="history_search_empty",
+                value=1.0 if not valid else 0.0,
+                data_type="NUMERIC",
+            )
+            lf.score_current_trace(name="history_backend", value="qdrant", data_type="CATEGORICAL")
+
+            if not valid:
+                await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
+                return
+
+            lines = [f"📋 Найдено {len(valid)} записей:\n"]
+            for i, r in enumerate(valid, 1):
+                ts = r.get("timestamp", "")
+                ts = ts[:16].replace("T", " ") if isinstance(ts, str) else ""
+                lines.append(f"{i}. [{ts}]")
+                lines.append(f"   В: {r['query']}")
+                resp_preview = r["response"][:150]
+                if len(r["response"]) > 150:
+                    resp_preview += "..."
+                lines.append(f"   О: {resp_preview}\n")
+
+            await message.answer("\n".join(lines))
 
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message):
@@ -603,15 +667,15 @@ class PropertyBot:
         )
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
 
-        # Inject Langfuse trace_id for feedback buttons (#229)
-        lf_pre = get_client()
-        state["trace_id"] = lf_pre.get_current_trace_id() or ""
-
         with propagate_attributes(
             session_id=state["session_id"],
             user_id=str(state["user_id"]),
             tags=["telegram", "rag"],
         ):
+            # Inject Langfuse trace_id INSIDE propagate_attributes (#277)
+            lf_pre = get_client()
+            state["trace_id"] = lf_pre.get_current_trace_id() or ""
+
             graph = build_graph(
                 cache=self._cache,
                 embeddings=self._embeddings,
@@ -739,15 +803,15 @@ class PropertyBot:
         state["input_type"] = "voice"
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
 
-        # Inject Langfuse trace_id for feedback buttons (#229)
-        lf_pre = get_client()
-        state["trace_id"] = lf_pre.get_current_trace_id() or ""
-
         with propagate_attributes(
             session_id=state["session_id"],
             user_id=str(state["user_id"]),
             tags=["telegram", "rag", "voice"],
         ):
+            # Inject Langfuse trace_id INSIDE propagate_attributes (#277)
+            lf_pre = get_client()
+            state["trace_id"] = lf_pre.get_current_trace_id() or ""
+
             graph = build_graph(
                 cache=self._cache,
                 embeddings=self._embeddings,
@@ -898,18 +962,22 @@ class PropertyBot:
         value, trace_id = parsed
         user_id = callback.from_user.id if callback.from_user else 0
 
-        # Write score to Langfuse
+        await callback.answer("Спасибо за отзыв!")
+
+        # Write score to Langfuse (direct client, not context-dependent)
         try:
-            lf = get_client()
-            lf.create_score(
-                trace_id=trace_id,
-                name="user_feedback",
-                value=value,
-                data_type="NUMERIC",
-                comment=f"user_id:{user_id}",
-            )
+            lf_client = get_langfuse_client()
+            if lf_client is not None:
+                lf_client.create_score(
+                    trace_id=trace_id,
+                    name="user_feedback",
+                    value=value,
+                    data_type="NUMERIC",
+                    comment=f"user_id:{user_id}",
+                    score_id=f"{trace_id}-user_feedback",
+                )
         except Exception:
-            logger.debug("Failed to write feedback score to Langfuse", exc_info=True)
+            logger.warning("Failed to write feedback score to Langfuse", exc_info=True)
 
         # Update keyboard to confirmation
         liked = value > 0
@@ -917,10 +985,22 @@ class PropertyBot:
             msg = callback.message
             if msg is not None and hasattr(msg, "edit_reply_markup"):
                 await msg.edit_reply_markup(reply_markup=build_feedback_confirmation(liked=liked))
+                cleanup_task = asyncio.create_task(
+                    self._clear_feedback_confirmation_later(msg, _FEEDBACK_CONFIRMATION_TTL_S)
+                )
+                cleanup_task.add_done_callback(lambda t: t.result() if not t.cancelled() else None)
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
 
-        await callback.answer("Спасибо за отзыв!")
+    async def _clear_feedback_confirmation_later(
+        self, message: Any, delay_s: float = _FEEDBACK_CONFIRMATION_TTL_S
+    ) -> None:
+        """Clear feedback confirmation button after a short delay."""
+        await asyncio.sleep(delay_s)
+        try:
+            await message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
     async def start(self):
         """Start bot polling."""

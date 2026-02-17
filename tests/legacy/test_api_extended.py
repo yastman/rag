@@ -218,8 +218,9 @@ def print_comparison_table(all_results: list[dict]):
     # Best balance (quality/price ratio)
     balanced = max(
         [r for r in successful if r["accuracy"] >= 0.9],
-        key=lambda x: x["accuracy"]
-        / (x["stats"].get("total_cost_usd", 0.001) / len(x["results"]) + 0.000001),
+        key=lambda x: (
+            x["accuracy"] / (x["stats"].get("total_cost_usd", 0.001) / len(x["results"]) + 0.000001)
+        ),
     )
 
     print(f"\n⚡ Fastest: {fastest['label']}")
