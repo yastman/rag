@@ -36,9 +36,13 @@ Check done: `grep '\[COMPLETE\]' logs/docker-build.log`
 
 **Never run directly:** docker build, npm install, pytest (full suite), deployments.
 
-## tmux for Parallel Claude Workers
+## Parallel Agent Work
 
-For 3+ independent tasks, use `/tmux-swarm-orchestration` skill:
+**Agent Teams (`/agent-teams`):** For 2+ agents working on different PRs/branches:
+- Each agent MUST use its own git worktree (see `.claude/rules/git-workflow.md`)
+- Without worktrees, agents switch branches under each other → lost edits, false test failures
+
+**tmux Swarm (`/tmux-swarm-orchestration`):** For 3+ independent tasks:
 - Spawns Claude workers in tmux windows
 - Each worker has own worktree
 - Auto-monitor closes on [COMPLETE]

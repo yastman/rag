@@ -143,7 +143,6 @@ class TestIndexChunks:
                     idx.sparse_model = mock_sparse_inst
                     yield idx
 
-    @pytest.mark.asyncio
     async def test_index_chunks_single_batch(self, indexer):
         """Test indexing a single batch of chunks."""
         from src.ingestion.chunker import Chunk
@@ -166,7 +165,6 @@ class TestIndexChunks:
         assert stats.failed_chunks == 0
         indexer.client.upsert.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_index_chunks_handles_error(self, indexer):
         """Test indexing handles errors gracefully."""
         from src.ingestion.chunker import Chunk
@@ -308,7 +306,6 @@ class TestMultipleBatchIndexing:
                     idx.sparse_model = mock_sparse_inst
                     yield idx
 
-    @pytest.mark.asyncio
     async def test_index_chunks_multiple_batches(self, indexer):
         """Test indexing with multiple batches."""
         from src.ingestion.chunker import Chunk
@@ -328,7 +325,6 @@ class TestMultipleBatchIndexing:
         # With batch_size=2 and 3 chunks, should have 2 upsert calls
         assert indexer.client.upsert.call_count >= 1
 
-    @pytest.mark.asyncio
     async def test_index_chunks_tracks_duration(self, indexer):
         """Test that indexing tracks duration."""
         from src.ingestion.chunker import Chunk
