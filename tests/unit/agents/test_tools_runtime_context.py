@@ -118,6 +118,39 @@ async def test_history_search_without_user_id_returns_error(history_service):
     assert "error" in result.lower() or "user" in result.lower()
 
 
+async def test_history_search_service_exception_returns_error(history_service):
+    """history_search fails soft when history backend raises."""
+    from telegram_bot.agents.tools import create_history_search_tool
+
+    history_service.search_user_history = AsyncMock(side_effect=RuntimeError("backend down"))
+    history_search = create_history_search_tool(history_service=history_service)
+    config = _make_config(user_id=42)
+
+    result = await history_search.ainvoke({"query": "цены"}, config=config)
+    assert "ошибк" in result.lower() or "error" in result.lower()
+
+
+async def test_history_search_skips_invalid_results(history_service):
+    """history_search skips malformed entries and still returns valid ones."""
+    from telegram_bot.agents.tools import create_history_search_tool
+
+    history_service.search_user_history = AsyncMock(
+        return_value=[
+            {"timestamp": "2026-02-13T10:00:00"},
+            {
+                "query": "цены на квартиры",
+                "response": "Средние цены...",
+                "timestamp": "2026-02-13T10:00:00",
+            },
+        ]
+    )
+    history_search = create_history_search_tool(history_service=history_service)
+    config = _make_config(user_id=42)
+
+    result = await history_search.ainvoke({"query": "цены"}, config=config)
+    assert "цены на квартиры" in result
+
+
 async def test_direct_response_returns_message():
     """direct_response tool returns the message as-is."""
     from telegram_bot.agents.tools import direct_response
