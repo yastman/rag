@@ -10,7 +10,7 @@ make check                 # Lint + types
 make test                  # All tests
 make test-unit             # Unit tests only (fast)
 uv run pytest tests/unit/ -n auto  # Parallel (4x faster, ~5 min)
-uv run pytest tests/integration/test_graph_paths.py -v  # Graph path tests (~5s, no Docker)
+uv run pytest tests/integration/ -v  # Integration tests (~5s, no Docker)
 make docker-up             # Start core services (5 containers, ~17s)
 make docker-bot-up         # Core + bot/litellm
 make docker-full-up        # All services (17 containers)
@@ -47,7 +47,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 | Module | Purpose |
 |--------|---------|
-| `telegram_bot/bot.py` | PropertyBot (~300 LOC, LangGraph orchestrator + score writing) |
+| `telegram_bot/bot.py` | PropertyBot (~500 LOC, LangGraph orchestrator + supervisor + score writing) |
 | `telegram_bot/graph/` | LangGraph 10-node RAG pipeline (incl. transcribe for voice) |
 | `telegram_bot/agents/` | Multi-agent supervisor architecture (#240): tools, rag_agent, history_agent, supervisor |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
@@ -62,7 +62,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
-**Observability:** Langfuse v3 — 35 observations/trace, 14 scores + 3 judge scores + 3 supervisor scores (agent_used, supervisor_latency_ms, supervisor_model), curated spans on 5 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
+**Observability:** Langfuse v3 — 35 observations/trace, 21 scores (14 RAG + 4 /history + 3 supervisor) + 3 judge scores, curated spans on 6 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `eval` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
 
@@ -118,7 +118,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
 | `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`, `USE_SUPERVISOR=false`
 
 ## Deployment
 
@@ -192,7 +192,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/embeddings.md` | BGE-M3 (/encode/hybrid, dense, sparse), Voyage | `**/embed*.py` |
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
-| `features/telegram-bot.md` | LangGraph pipeline, bot, middlewares | `telegram_bot/*.py` |
+| `features/telegram-bot.md` | LangGraph pipeline, bot, supervisor, middlewares | `telegram_bot/*.py` |
 | `features/voice-bot.md` | LiveKit Agent, SIP, RAG API, /call | `src/voice/**, src/api/**` |
 | `features/user-personalization.md` | CESC, user context, preferences | `**/user_context*.py` |
 | `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
