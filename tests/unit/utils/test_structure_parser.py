@@ -33,11 +33,27 @@ class TestRomanToInt:
     @pytest.mark.parametrize(
         ("numeral", "expected"),
         [
-            ("I", 1), ("II", 2), ("III", 3), ("IV", 4), ("V", 5),
-            ("VI", 6), ("VII", 7), ("VIII", 8), ("IX", 9), ("X", 10),
-            ("XI", 11), ("XII", 12), ("XV", 15), ("XVIII", 18), ("XIX", 19), ("XX", 20),
+            ("I", 1),
+            ("II", 2),
+            ("III", 3),
+            ("IV", 4),
+            ("V", 5),
+            ("VI", 6),
+            ("VII", 7),
+            ("VIII", 8),
+            ("IX", 9),
+            ("X", 10),
+            ("XI", 11),
+            ("XII", 12),
+            ("XV", 15),
+            ("XVIII", 18),
+            ("XIX", 19),
+            ("XX", 20),
             # Case insensitive
-            ("i", 1), ("iv", 4), ("x", 10), ("xv", 15),
+            ("i", 1),
+            ("iv", 4),
+            ("x", 10),
+            ("xv", 15),
         ],
     )
     def test_valid_roman_numerals(self, numeral, expected):
@@ -45,8 +61,12 @@ class TestRomanToInt:
 
     @pytest.mark.parametrize(
         "numeral",
-        [pytest.param("XXI", id="beyond_range"), pytest.param("INVALID", id="invalid"),
-         pytest.param("", id="empty"), pytest.param("123", id="digits")],
+        [
+            pytest.param("XXI", id="beyond_range"),
+            pytest.param("INVALID", id="invalid"),
+            pytest.param("", id="empty"),
+            pytest.param("123", id="digits"),
+        ],
     )
     def test_invalid_roman_numerals(self, numeral):
         assert roman_to_int(numeral) is None
@@ -64,13 +84,31 @@ class TestUkrainianNumberToInt:
         ("word", "expected"),
         [
             # Feminine forms (used with 'Книга')
-            ("перша", 1), ("друга", 2), ("третя", 3), ("четверта", 4), ("п'ята", 5),
-            ("шоста", 6), ("сьома", 7), ("восьма", 8), ("дев'ята", 9), ("десята", 10),
+            ("перша", 1),
+            ("друга", 2),
+            ("третя", 3),
+            ("четверта", 4),
+            ("п'ята", 5),
+            ("шоста", 6),
+            ("сьома", 7),
+            ("восьма", 8),
+            ("дев'ята", 9),
+            ("десята", 10),
             # Masculine forms
-            ("перший", 1), ("другий", 2), ("третій", 3), ("четвертий", 4), ("п'ятий", 5),
-            ("шостий", 6), ("сьомий", 7), ("восьмий", 8), ("дев'ятий", 9), ("десятий", 10),
+            ("перший", 1),
+            ("другий", 2),
+            ("третій", 3),
+            ("четвертий", 4),
+            ("п'ятий", 5),
+            ("шостий", 6),
+            ("сьомий", 7),
+            ("восьмий", 8),
+            ("дев'ятий", 9),
+            ("десятий", 10),
             # Case insensitive
-            ("ПЕРША", 1), ("Друга", 2), ("тРеТя", 3),
+            ("ПЕРША", 1),
+            ("Друга", 2),
+            ("тРеТя", 3),
         ],
     )
     def test_valid_ukrainian_numbers(self, word, expected):
@@ -253,8 +291,15 @@ class TestParseLegalStructure:
     def test_metadata_structure(self):
         metadata = parse_legal_structure("Some text")
         for key in [
-            "book", "book_number", "section", "section_number",
-            "chapter", "chapter_number", "article_number", "article_title", "related_articles",
+            "book",
+            "book_number",
+            "section",
+            "section_number",
+            "chapter",
+            "chapter_number",
+            "article_number",
+            "article_title",
+            "related_articles",
         ]:
             assert key in metadata
 
@@ -264,10 +309,14 @@ class TestExtractContextualPrefix:
 
     def test_prefix_with_all_metadata(self):
         metadata = {
-            "book": "Загальні положення", "book_number": 1,
-            "section": "Загальні положення", "section_number": 1,
-            "chapter": "Здійснення цивільних прав", "chapter_number": 2,
-            "article_number": 13, "article_title": "Межі здійснення цивільних прав",
+            "book": "Загальні положення",
+            "book_number": 1,
+            "section": "Загальні положення",
+            "section_number": 1,
+            "chapter": "Здійснення цивільних прав",
+            "chapter_number": 2,
+            "article_number": 13,
+            "article_title": "Межі здійснення цивільних прав",
         }
         prefix = extract_contextual_prefix(metadata)
         assert "Документ: Цивільний кодекс України" in prefix
@@ -278,20 +327,28 @@ class TestExtractContextualPrefix:
 
     def test_prefix_with_custom_document_name(self):
         metadata = {
-            "article_number": 10, "article_title": "Тестова стаття",
-            "book": None, "book_number": None,
-            "section": None, "section_number": None,
-            "chapter": None, "chapter_number": None,
+            "article_number": 10,
+            "article_title": "Тестова стаття",
+            "book": None,
+            "book_number": None,
+            "section": None,
+            "section_number": None,
+            "chapter": None,
+            "chapter_number": None,
         }
         prefix = extract_contextual_prefix(metadata, "Кримінальний кодекс України")
         assert "Документ: Кримінальний кодекс України" in prefix
 
     def test_prefix_with_article_only(self):
         metadata = {
-            "book": None, "book_number": None,
-            "section": None, "section_number": None,
-            "chapter": None, "chapter_number": None,
-            "article_number": 25, "article_title": "Цивільна правоздатність",
+            "book": None,
+            "book_number": None,
+            "section": None,
+            "section_number": None,
+            "chapter": None,
+            "chapter_number": None,
+            "article_number": 25,
+            "article_title": "Цивільна правоздатність",
         }
         prefix = extract_contextual_prefix(metadata)
         assert "Документ:" in prefix
@@ -302,10 +359,14 @@ class TestExtractContextualPrefix:
 
     def test_prefix_with_article_no_title(self):
         metadata = {
-            "book": None, "book_number": None,
-            "section": None, "section_number": None,
-            "chapter": None, "chapter_number": None,
-            "article_number": 100, "article_title": None,
+            "book": None,
+            "book_number": None,
+            "section": None,
+            "section_number": None,
+            "chapter": None,
+            "chapter_number": None,
+            "article_number": 100,
+            "article_title": None,
         }
         prefix = extract_contextual_prefix(metadata)
         assert "Стаття 100" in prefix
@@ -315,10 +376,14 @@ class TestExtractContextualPrefix:
 
     def test_prefix_empty_metadata(self):
         metadata = {
-            "book": None, "book_number": None,
-            "section": None, "section_number": None,
-            "chapter": None, "chapter_number": None,
-            "article_number": None, "article_title": None,
+            "book": None,
+            "book_number": None,
+            "section": None,
+            "section_number": None,
+            "chapter": None,
+            "chapter_number": None,
+            "article_number": None,
+            "article_title": None,
         }
         prefix = extract_contextual_prefix(metadata)
         assert prefix == "Документ: Цивільний кодекс України"
@@ -346,7 +411,11 @@ class TestAddGraphEdges:
         assert "next_article" not in result or result.get("next_article") is None
 
     def test_original_metadata_preserved(self):
-        metadata = {"article_number": 50, "article_title": "Test Article", "chapter": "Test Chapter"}
+        metadata = {
+            "article_number": 50,
+            "article_title": "Test Article",
+            "chapter": "Test Chapter",
+        }
         result = add_graph_edges(metadata)
         assert result["article_number"] == 50
         assert result["article_title"] == "Test Article"
