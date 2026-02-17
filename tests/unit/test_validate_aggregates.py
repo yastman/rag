@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from scripts.validate_traces import (
+    TRACKED_NODE_NAMES,
     TraceResult,
     ValidationRun,
     _flush_redis_caches,
@@ -168,6 +169,33 @@ class TestComputeAggregates:
         # retrieve: [100ms, 300ms] → p50=200ms
         assert agg["cold"]["node_p50"]["retrieve"] == pytest.approx(200.0, abs=10)
         assert "generate" in agg["cold"]["node_p50"]
+
+    def test_tracked_node_names_includes_voice_and_summarize(self):
+        """TRACKED_NODE_NAMES covers transcribe and summarize spans (#241)."""
+        assert "transcribe" in TRACKED_NODE_NAMES
+        assert "summarize" in TRACKED_NODE_NAMES
+        # All original 9 pipeline nodes still present
+        for node in [
+            "classify",
+            "cache_check",
+            "retrieve",
+            "grade",
+            "rerank",
+            "generate",
+            "rewrite",
+            "cache_store",
+            "respond",
+        ]:
+            assert node in TRACKED_NODE_NAMES
+
+    def test_node_latencies_includes_transcribe(self):
+        """Transcribe node spans are tracked in aggregates (#241)."""
+        results = [
+            _make_result(latency_stages={"transcribe": 0.08, "classify": 0.05}),
+        ]
+        agg = compute_aggregates(results)
+        assert "transcribe" in agg["cold"]["node_p50"]
+        assert agg["cold"]["node_p50"]["transcribe"] == pytest.approx(80.0, abs=5)
 
     def test_empty_results(self):
         agg = compute_aggregates([])
