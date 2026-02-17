@@ -5,6 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+pytest.importorskip("mlflow", reason="mlflow not installed (eval extra)")
+pytestmark = pytest.mark.requires_extras
+
 from src.evaluation.mlflow_integration import MLflowRAGLogger, log_ab_test_results
 
 

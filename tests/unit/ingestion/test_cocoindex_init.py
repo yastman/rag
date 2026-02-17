@@ -4,6 +4,12 @@
 import contextlib
 from unittest.mock import patch
 
+import pytest
+
+
+pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
 
 class TestCocoIndexInit:
     """Test CocoIndex initialization with database settings."""
