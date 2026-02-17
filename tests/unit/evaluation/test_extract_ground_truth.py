@@ -7,67 +7,49 @@ from unittest.mock import MagicMock, mock_open, patch
 class TestExtractArticles:
     """Tests for extract_articles function."""
 
-    @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "test_key")
-    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
-    def test_extract_articles_scrolls_collection(self, mock_requests):
+    @patch("src.evaluation.extract_ground_truth._make_client")
+    def test_extract_articles_scrolls_collection(self, mock_make_client):
         """Test extract_articles scrolls through Qdrant collection."""
-        # First response with points
-        first_response = MagicMock()
-        first_response.json.return_value = {
-            "result": {
-                "points": [
-                    {
-                        "id": "point-1",
-                        "payload": {
-                            "article_number": 121,
-                            "chunk_id": "chunk-1",
-                            "text": "Article 121 text",
-                        },
-                    }
-                ],
-                "next_page_offset": None,
-            }
+        mock_client = MagicMock()
+
+        # First scroll returns points, second returns empty
+        mock_point = MagicMock()
+        mock_point.id = "point-1"
+        mock_point.payload = {
+            "article_number": 121,
+            "chunk_id": "chunk-1",
+            "text": "Article 121 text",
         }
-        first_response.raise_for_status = MagicMock()
-        mock_requests.post.return_value = first_response
+
+        mock_client.scroll.return_value = ([mock_point], None)
+        mock_make_client.return_value = mock_client
 
         from src.evaluation.extract_ground_truth import extract_articles
 
         extract_articles("test_collection")
 
-        mock_requests.post.assert_called()
-        call_args = mock_requests.post.call_args
-        assert "test_collection" in call_args[0][0]
-        assert call_args[1]["headers"]["api-key"] == "test_key"
+        mock_client.scroll.assert_called()
+        call_kwargs = mock_client.scroll.call_args[1]
+        assert call_kwargs["collection_name"] == "test_collection"
 
-    @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
-    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
-    def test_extract_articles_groups_by_article_number(self, mock_requests):
+    @patch("src.evaluation.extract_ground_truth._make_client")
+    def test_extract_articles_groups_by_article_number(self, mock_make_client):
         """Test extract_articles groups chunks by article number."""
-        response = MagicMock()
-        response.json.return_value = {
-            "result": {
-                "points": [
-                    {
-                        "id": "point-1",
-                        "payload": {"article_number": 121, "chunk_id": "chunk-1", "text": "A"},
-                    },
-                    {
-                        "id": "point-2",
-                        "payload": {"article_number": 121, "chunk_id": "chunk-2", "text": "B"},
-                    },
-                    {
-                        "id": "point-3",
-                        "payload": {"article_number": 122, "chunk_id": "chunk-3", "text": "C"},
-                    },
-                ],
-                "next_page_offset": None,
-            }
-        }
-        response.raise_for_status = MagicMock()
-        mock_requests.post.return_value = response
+        mock_client = MagicMock()
+
+        mock_points = []
+        for pid, article, chunk_id, text in [
+            ("point-1", 121, "chunk-1", "A"),
+            ("point-2", 121, "chunk-2", "B"),
+            ("point-3", 122, "chunk-3", "C"),
+        ]:
+            p = MagicMock()
+            p.id = pid
+            p.payload = {"article_number": article, "chunk_id": chunk_id, "text": text}
+            mock_points.append(p)
+
+        mock_client.scroll.return_value = (mock_points, None)
+        mock_make_client.return_value = mock_client
 
         from src.evaluation.extract_ground_truth import extract_articles
 
@@ -78,62 +60,50 @@ class TestExtractArticles:
         assert len(result["121"]) == 2
         assert len(result["122"]) == 1
 
-    @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
-    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
-    def test_extract_articles_handles_pagination(self, mock_requests):
+    @patch("src.evaluation.extract_ground_truth._make_client")
+    def test_extract_articles_handles_pagination(self, mock_make_client):
         """Test extract_articles handles multiple pages."""
+        mock_client = MagicMock()
+
         # First page
-        first_response = MagicMock()
-        first_response.json.return_value = {
-            "result": {
-                "points": [
-                    {"id": "1", "payload": {"article_number": 1, "chunk_id": "c1", "text": "A"}}
-                ],
-                "next_page_offset": "offset-1",
-            }
-        }
-        first_response.raise_for_status = MagicMock()
+        p1 = MagicMock()
+        p1.id = "1"
+        p1.payload = {"article_number": 1, "chunk_id": "c1", "text": "A"}
 
         # Second page
-        second_response = MagicMock()
-        second_response.json.return_value = {
-            "result": {
-                "points": [
-                    {"id": "2", "payload": {"article_number": 2, "chunk_id": "c2", "text": "B"}}
-                ],
-                "next_page_offset": None,
-            }
-        }
-        second_response.raise_for_status = MagicMock()
+        p2 = MagicMock()
+        p2.id = "2"
+        p2.payload = {"article_number": 2, "chunk_id": "c2", "text": "B"}
 
-        mock_requests.post.side_effect = [first_response, second_response]
+        mock_client.scroll.side_effect = [
+            ([p1], "offset-1"),
+            ([p2], None),
+        ]
+        mock_make_client.return_value = mock_client
 
         from src.evaluation.extract_ground_truth import extract_articles
 
         result = extract_articles("test")
 
-        assert mock_requests.post.call_count == 2
+        assert mock_client.scroll.call_count == 2
         assert "1" in result
         assert "2" in result
 
-    @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
-    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
-    def test_extract_articles_skips_points_without_article(self, mock_requests):
+    @patch("src.evaluation.extract_ground_truth._make_client")
+    def test_extract_articles_skips_points_without_article(self, mock_make_client):
         """Test extract_articles skips points without article_number."""
-        response = MagicMock()
-        response.json.return_value = {
-            "result": {
-                "points": [
-                    {"id": "1", "payload": {"article_number": 121, "text": "A"}},
-                    {"id": "2", "payload": {"text": "No article number"}},  # Missing article
-                ],
-                "next_page_offset": None,
-            }
-        }
-        response.raise_for_status = MagicMock()
-        mock_requests.post.return_value = response
+        mock_client = MagicMock()
+
+        p1 = MagicMock()
+        p1.id = "1"
+        p1.payload = {"article_number": 121, "text": "A"}
+
+        p2 = MagicMock()
+        p2.id = "2"
+        p2.payload = {"text": "No article number"}  # Missing article
+
+        mock_client.scroll.return_value = ([p1, p2], None)
+        mock_make_client.return_value = mock_client
 
         from src.evaluation.extract_ground_truth import extract_articles
 
@@ -142,22 +112,17 @@ class TestExtractArticles:
         assert "121" in result
         assert len(result) == 1  # Only one article extracted
 
-    @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
-    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
-    def test_extract_articles_uses_point_id_as_fallback(self, mock_requests):
+    @patch("src.evaluation.extract_ground_truth._make_client")
+    def test_extract_articles_uses_point_id_as_fallback(self, mock_make_client):
         """Test extract_articles uses point ID when chunk_id missing."""
-        response = MagicMock()
-        response.json.return_value = {
-            "result": {
-                "points": [
-                    {"id": "point-123", "payload": {"article_number": 121, "text": "A"}},
-                ],
-                "next_page_offset": None,
-            }
-        }
-        response.raise_for_status = MagicMock()
-        mock_requests.post.return_value = response
+        mock_client = MagicMock()
+
+        p = MagicMock()
+        p.id = "point-123"
+        p.payload = {"article_number": 121, "text": "A"}
+
+        mock_client.scroll.return_value = ([p], None)
+        mock_make_client.return_value = mock_client
 
         from src.evaluation.extract_ground_truth import extract_articles
 
@@ -165,26 +130,18 @@ class TestExtractArticles:
 
         assert result["121"][0]["chunk_id"] == "point-123"
 
-    @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
-    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
-    def test_extract_articles_stores_text_preview(self, mock_requests):
+    @patch("src.evaluation.extract_ground_truth._make_client")
+    def test_extract_articles_stores_text_preview(self, mock_make_client):
         """Test extract_articles stores truncated text preview."""
+        mock_client = MagicMock()
+
         long_text = "A" * 200  # Longer than 100 chars
-        response = MagicMock()
-        response.json.return_value = {
-            "result": {
-                "points": [
-                    {
-                        "id": "1",
-                        "payload": {"article_number": 121, "chunk_id": "c1", "text": long_text},
-                    }
-                ],
-                "next_page_offset": None,
-            }
-        }
-        response.raise_for_status = MagicMock()
-        mock_requests.post.return_value = response
+        p = MagicMock()
+        p.id = "1"
+        p.payload = {"article_number": 121, "chunk_id": "c1", "text": long_text}
+
+        mock_client.scroll.return_value = ([p], None)
+        mock_make_client.return_value = mock_client
 
         from src.evaluation.extract_ground_truth import extract_articles
 
@@ -193,20 +150,12 @@ class TestExtractArticles:
         # Text preview should be truncated to 100 chars
         assert len(result["121"][0]["text_preview"]) == 100
 
-    @patch("src.evaluation.extract_ground_truth.requests")
-    @patch("src.evaluation.extract_ground_truth._qdrant_api_key", new=lambda: "")
-    @patch("src.evaluation.extract_ground_truth._qdrant_url", new=lambda: "http://localhost:6333")
-    def test_extract_articles_empty_collection(self, mock_requests):
+    @patch("src.evaluation.extract_ground_truth._make_client")
+    def test_extract_articles_empty_collection(self, mock_make_client):
         """Test extract_articles handles empty collection."""
-        response = MagicMock()
-        response.json.return_value = {
-            "result": {
-                "points": [],
-                "next_page_offset": None,
-            }
-        }
-        response.raise_for_status = MagicMock()
-        mock_requests.post.return_value = response
+        mock_client = MagicMock()
+        mock_client.scroll.return_value = ([], None)
+        mock_make_client.return_value = mock_client
 
         from src.evaluation.extract_ground_truth import extract_articles
 

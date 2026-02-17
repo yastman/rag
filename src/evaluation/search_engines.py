@@ -9,7 +9,7 @@ import os
 from abc import ABC, abstractmethod
 
 import numpy as np
-import requests  # type: ignore[import-untyped]
+from qdrant_client import QdrantClient, models
 
 from src.config import HSNWParameters, RetrievalStages, Settings, ThresholdValues
 
@@ -57,13 +57,30 @@ def convert_to_python_types(obj):
     return obj
 
 
+def _lexical_weights_to_sparse(lexical_weights) -> models.SparseVector:
+    """Convert BGE-M3 lexical weights to Qdrant SparseVector."""
+    if hasattr(lexical_weights, "indices"):
+        # Scipy sparse format
+        sparse_indices = lexical_weights.indices.tolist()
+        sparse_values = lexical_weights.values.tolist()
+    else:
+        # Dict format - keys are strings, need to convert to ints
+        sparse_indices = [int(k) for k in lexical_weights]
+        sparse_values = list(lexical_weights.values())
+    return models.SparseVector(indices=sparse_indices, values=sparse_values)
+
+
 class SearchEngine(ABC):
     """Abstract base class for search engines."""
 
     def __init__(self, collection_name: str):
         self.collection_name = collection_name
-        self.qdrant_url = _qdrant_url()
-        self.headers = {"api-key": _qdrant_api_key()}
+        url = _qdrant_url()
+        api_key = _qdrant_api_key()
+        if api_key:
+            self.client = QdrantClient(url=url, api_key=api_key)
+        else:
+            self.client = QdrantClient(url=url)
 
     @abstractmethod
     def search(self, query: str, top_k: int = 10) -> list[dict]:
@@ -104,33 +121,25 @@ class BaselineSearchEngine(SearchEngine):
             query, return_dense=True, return_sparse=False, return_colbert_vecs=False
         )
 
-        # Search using dense vector only
-        search_payload = {
-            "vector": {"name": "dense", "vector": query_embedding["dense_vecs"].tolist()},
-            "limit": top_k,
-            "with_payload": True,
-            "with_vector": False,
-        }
+        dense_vector = convert_to_python_types(query_embedding["dense_vecs"])
 
-        response = requests.post(
-            f"{self.qdrant_url}/collections/{self.collection_name}/points/search",
-            json=search_payload,
-            headers=self.headers,
+        response = self.client.query_points(
+            collection_name=self.collection_name,
+            query=dense_vector,
+            using="dense",
+            limit=top_k,
+            with_payload=True,
         )
-        response.raise_for_status()
 
-        results = []
-        for point in response.json()["result"]:
-            results.append(
-                {
-                    "point_id": point["id"],
-                    "score": point["score"],
-                    "article_number": self._extract_article_number(point["payload"]),
-                    "text": point["payload"].get("text", "")[:200] + "...",
-                }
-            )
-
-        return results
+        return [
+            {
+                "point_id": point.id,
+                "score": point.score,
+                "article_number": self._extract_article_number(point.payload or {}),
+                "text": (point.payload or {}).get("text", "")[:200] + "...",
+            }
+            for point in response.points
+        ]
 
 
 class HybridSearchEngine(SearchEngine):
@@ -156,97 +165,39 @@ class HybridSearchEngine(SearchEngine):
         Uses Qdrant's query API with prefetch and RRF fusion:
         1. Dense vector search
         2. Sparse BM25 search
-        3. ColBERT multi-vector search
-        4. RRF combines all three result sets
+        3. RRF combines both result sets
         """
         # Generate all embeddings for query
         query_embeddings = self.embedding_model.encode(
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
 
-        # Convert sparse to Qdrant format
-        # lexical_weights is a dict, need to convert to lists
-        lexical_weights = query_embeddings["lexical_weights"]
-        if hasattr(lexical_weights, "indices"):
-            # Scipy sparse format
-            sparse_indices = lexical_weights.indices.tolist()
-            sparse_values = lexical_weights.values.tolist()
-        else:
-            # Dict format - keys are strings, need to convert to ints!
-            sparse_indices = [int(k) for k in lexical_weights]
-            sparse_values = list(lexical_weights.values())
+        dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
+        sparse_vector = _lexical_weights_to_sparse(query_embeddings["lexical_weights"])
 
         # Build hybrid search with RRF using query API
-        # NOTE: Testing without ColBERT first - will add back if dense+sparse works
-        search_payload = {
-            "prefetch": [
-                # Prefetch 1: Dense vector search
-                {
-                    "query": query_embeddings["dense_vecs"].tolist(),
-                    "using": "dense",
-                    "limit": 100,  # Get more candidates for fusion
-                },
-                # Prefetch 2: Sparse BM25 search
-                {
-                    "query": {
-                        "values": sparse_values,  # values BEFORE indices (Qdrant API requirement)
-                        "indices": sparse_indices,
-                    },
-                    "using": "sparse",
-                    "limit": 100,
-                },
-                # Temporarily disabled ColBERT for testing
-                # {
-                #     "query": query_embeddings["colbert_vecs"].tolist(),
-                #     "using": "colbert",
-                #     "limit": 100
-                # }
-            ],
-            "query": {
-                "fusion": "rrf"  # Reciprocal Rank Fusion
-            },
-            "limit": top_k,
-            "with_payload": True,
-            "with_vector": False,
-        }
+        prefetch = [
+            models.Prefetch(query=dense_vector, using="dense", limit=100),
+            models.Prefetch(query=sparse_vector, using="sparse", limit=100),
+        ]
 
-        # Convert all numpy types to Python types for JSON serialization
-        search_payload = convert_to_python_types(search_payload)
-
-        response = requests.post(
-            f"{self.qdrant_url}/collections/{self.collection_name}/points/query",
-            json=search_payload,
-            headers=self.headers,
+        response = self.client.query_points(
+            collection_name=self.collection_name,
+            prefetch=prefetch,
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            limit=top_k,
+            with_payload=True,
         )
 
-        if response.status_code != 200:
-            # Print detailed error for debugging
-            print(f"ERROR: {response.status_code} - {response.text}")
-
-        response.raise_for_status()
-
-        resp_data = response.json()
-
-        # Query API returns dict with 'points' key, not a list
-        if isinstance(resp_data["result"], dict):
-            points_list = resp_data["result"].get("points", [])
-        elif isinstance(resp_data["result"], list):
-            points_list = resp_data["result"]
-        else:
-            points_list = []
-
-        results = []
-        for point in points_list:
-            results.append(
-                {
-                    "point_id": point["id"],
-                    "score": point["score"],
-                    "article_number": self._extract_article_number(point["payload"]),
-                    "text": point["payload"].get("text", "")[:200] + "...",
-                }
-            )
-
-        return results
+        return [
+            {
+                "point_id": point.id,
+                "score": point.score,
+                "article_number": self._extract_article_number(point.payload or {}),
+                "text": (point.payload or {}).get("text", "")[:200] + "...",
+            }
+            for point in response.points
+        ]
 
 
 class HybridDBSFColBERTSearchEngine(SearchEngine):
@@ -254,9 +205,9 @@ class HybridDBSFColBERTSearchEngine(SearchEngine):
     Advanced hybrid search using DBSF fusion + ColBERT reranking (Qdrant 2025 Best Practices).
 
     3-Stage Retrieval Pipeline:
-    1. Prefetch: Dense + Sparse → 100 candidates each
+    1. Prefetch: Dense + Sparse -> 100 candidates each
     2. Fusion: DBSF (Distribution-Based Score Fusion) combines results
-    3. Rerank: ColBERT multivector server-side reranking → top-K
+    3. Rerank: ColBERT multivector server-side reranking -> top-K
 
     Based on official Qdrant documentation:
     - DBSF: https://qdrant.tech/articles/hybrid-search/
@@ -290,89 +241,39 @@ class HybridDBSFColBERTSearchEngine(SearchEngine):
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
 
-        # Convert sparse to Qdrant format
-        lexical_weights = query_embeddings["lexical_weights"]
-        if hasattr(lexical_weights, "indices"):
-            # Scipy sparse format
-            sparse_indices = lexical_weights.indices.tolist()
-            sparse_values = lexical_weights.values.tolist()
-        else:
-            # Dict format - keys are strings, need to convert to ints
-            sparse_indices = [int(k) for k in lexical_weights]
-            sparse_values = list(lexical_weights.values())
+        dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
+        sparse_vector = _lexical_weights_to_sparse(query_embeddings["lexical_weights"])
+        colbert_vectors = convert_to_python_types(query_embeddings["colbert_vecs"])
 
         # Build 3-stage query with DBSF fusion + ColBERT reranking
-        search_payload = {
-            "prefetch": [
-                # Stage 1a: Dense vector search (prefetch 100 candidates)
-                {
-                    "prefetch": [
-                        {
-                            "query": query_embeddings["dense_vecs"].tolist(),
-                            "using": "dense",
-                            "limit": self.stage1_limit,
-                        },
-                        # Stage 1b: Sparse BM25 search (prefetch 100 candidates)
-                        {
-                            "query": {"values": sparse_values, "indices": sparse_indices},
-                            "using": "sparse",
-                            "limit": self.stage1_limit,
-                        },
-                    ],
-                    # Stage 2: DBSF fusion combines dense + sparse results
-                    "query": {
-                        "fusion": "dbsf"  # Distribution-Based Score Fusion
-                    },
-                }
+        dbsf_prefetch = models.Prefetch(
+            prefetch=[
+                models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
+                models.Prefetch(query=sparse_vector, using="sparse", limit=self.stage1_limit),
             ],
-            # Stage 3: ColBERT multivector reranking on fused results
-            "query": query_embeddings["colbert_vecs"].tolist(),
-            "using": "colbert",
-            "limit": top_k,
-            "score_threshold": self.score_threshold,
-            "params": {
-                "hnsw_ef": self.hnsw_ef  # Higher precision for ColBERT search
-            },
-            "with_payload": self.payload_fields,
-            "with_vector": False,
-        }
-
-        # Convert numpy types to Python types
-        search_payload = convert_to_python_types(search_payload)
-
-        # Execute query using Qdrant Query API
-        response = requests.post(
-            f"{self.qdrant_url}/collections/{self.collection_name}/points/query",
-            json=search_payload,
-            headers=self.headers,
+            query=models.FusionQuery(fusion=models.Fusion.DBSF),
         )
 
-        if response.status_code != 200:
-            print(f"ERROR: {response.status_code} - {response.text}")
+        response = self.client.query_points(
+            collection_name=self.collection_name,
+            prefetch=[dbsf_prefetch],
+            query=colbert_vectors,
+            using="colbert",
+            limit=top_k,
+            score_threshold=self.score_threshold,
+            search_params=models.SearchParams(hnsw_ef=self.hnsw_ef),
+            with_payload=self.payload_fields,
+        )
 
-        response.raise_for_status()
-        resp_data = response.json()
-
-        # Parse response
-        if isinstance(resp_data["result"], dict):
-            points_list = resp_data["result"].get("points", [])
-        elif isinstance(resp_data["result"], list):
-            points_list = resp_data["result"]
-        else:
-            points_list = []
-
-        results = []
-        for point in points_list:
-            results.append(
-                {
-                    "point_id": point["id"],
-                    "score": point["score"],
-                    "article_number": self._extract_article_number(point["payload"]),
-                    "text": point["payload"].get("text", "")[:200] + "...",
-                }
-            )
-
-        return results
+        return [
+            {
+                "point_id": point.id,
+                "score": point.score,
+                "article_number": self._extract_article_number(point.payload or {}),
+                "text": (point.payload or {}).get("text", "")[:200] + "...",
+            }
+            for point in response.points
+        ]
 
 
 class HybridRRFColBERTSearchEngine(SearchEngine):
@@ -380,9 +281,9 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
     Advanced hybrid search using RRF fusion + ColBERT reranking (Official Qdrant Method).
 
     3-Stage Retrieval Pipeline:
-    1. Prefetch: Dense + Sparse → 100 candidates each
+    1. Prefetch: Dense + Sparse -> 100 candidates each
     2. Fusion: RRF (Reciprocal Rank Fusion) combines results - OFFICIAL QDRANT METHOD
-    3. Rerank: ColBERT multivector server-side reranking → top-K
+    3. Rerank: ColBERT multivector server-side reranking -> top-K
 
     Based on official Qdrant documentation:
     - RRF: https://qdrant.tech/articles/hybrid-search/ (officially supported)
@@ -416,89 +317,39 @@ class HybridRRFColBERTSearchEngine(SearchEngine):
             query, return_dense=True, return_sparse=True, return_colbert_vecs=True
         )
 
-        # Convert sparse to Qdrant format
-        lexical_weights = query_embeddings["lexical_weights"]
-        if hasattr(lexical_weights, "indices"):
-            # Scipy sparse format
-            sparse_indices = lexical_weights.indices.tolist()
-            sparse_values = lexical_weights.values.tolist()
-        else:
-            # Dict format - keys are strings, need to convert to ints
-            sparse_indices = [int(k) for k in lexical_weights]
-            sparse_values = list(lexical_weights.values())
+        dense_vector = convert_to_python_types(query_embeddings["dense_vecs"])
+        sparse_vector = _lexical_weights_to_sparse(query_embeddings["lexical_weights"])
+        colbert_vectors = convert_to_python_types(query_embeddings["colbert_vecs"])
 
         # Build 3-stage query with RRF fusion + ColBERT reranking
-        search_payload = {
-            "prefetch": [
-                # Stage 1a: Dense vector search (prefetch 100 candidates)
-                {
-                    "prefetch": [
-                        {
-                            "query": query_embeddings["dense_vecs"].tolist(),
-                            "using": "dense",
-                            "limit": self.stage1_limit,
-                        },
-                        # Stage 1b: Sparse BM25 search (prefetch 100 candidates)
-                        {
-                            "query": {"values": sparse_values, "indices": sparse_indices},
-                            "using": "sparse",
-                            "limit": self.stage1_limit,
-                        },
-                    ],
-                    # Stage 2: RRF fusion combines dense + sparse results
-                    "query": {
-                        "fusion": "rrf"  # Reciprocal Rank Fusion (OFFICIAL METHOD)
-                    },
-                }
+        rrf_prefetch = models.Prefetch(
+            prefetch=[
+                models.Prefetch(query=dense_vector, using="dense", limit=self.stage1_limit),
+                models.Prefetch(query=sparse_vector, using="sparse", limit=self.stage1_limit),
             ],
-            # Stage 3: ColBERT multivector reranking on fused results
-            "query": query_embeddings["colbert_vecs"].tolist(),
-            "using": "colbert",
-            "limit": top_k,
-            "score_threshold": self.score_threshold,
-            "params": {
-                "hnsw_ef": self.hnsw_ef  # Higher precision for ColBERT search
-            },
-            "with_payload": self.payload_fields,
-            "with_vector": False,
-        }
-
-        # Convert numpy types to Python types
-        search_payload = convert_to_python_types(search_payload)
-
-        # Execute query using Qdrant Query API
-        response = requests.post(
-            f"{self.qdrant_url}/collections/{self.collection_name}/points/query",
-            json=search_payload,
-            headers=self.headers,
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
         )
 
-        if response.status_code != 200:
-            print(f"ERROR: {response.status_code} - {response.text}")
+        response = self.client.query_points(
+            collection_name=self.collection_name,
+            prefetch=[rrf_prefetch],
+            query=colbert_vectors,
+            using="colbert",
+            limit=top_k,
+            score_threshold=self.score_threshold,
+            search_params=models.SearchParams(hnsw_ef=self.hnsw_ef),
+            with_payload=self.payload_fields,
+        )
 
-        response.raise_for_status()
-        resp_data = response.json()
-
-        # Parse response
-        if isinstance(resp_data["result"], dict):
-            points_list = resp_data["result"].get("points", [])
-        elif isinstance(resp_data["result"], list):
-            points_list = resp_data["result"]
-        else:
-            points_list = []
-
-        results = []
-        for point in points_list:
-            results.append(
-                {
-                    "point_id": point["id"],
-                    "score": point["score"],
-                    "article_number": self._extract_article_number(point["payload"]),
-                    "text": point["payload"].get("text", "")[:200] + "...",
-                }
-            )
-
-        return results
+        return [
+            {
+                "point_id": point.id,
+                "score": point.score,
+                "article_number": self._extract_article_number(point.payload or {}),
+                "text": (point.payload or {}).get("text", "")[:200] + "...",
+            }
+            for point in response.points
+        ]
 
 
 def create_search_engine(engine_type: str, collection_name: str, embedding_model) -> SearchEngine:
