@@ -27,6 +27,7 @@ def service():
 
 class TestQdrantErrorSignal:
     """Test per-call backend_error meta from hybrid_search_rrf."""
+
     async def test_backend_exception_returns_error_meta(self, service):
         """Qdrant SDK exception -> backend_error=True, error_type filled."""
         service._client.query_points = AsyncMock(
@@ -42,6 +43,7 @@ class TestQdrantErrorSignal:
         assert meta["backend_error"] is True
         assert meta["error_type"] == "ResponseHandlingException"
         assert "connection reset" in meta["error_message"]
+
     async def test_empty_results_returns_no_error(self, service):
         """Genuine empty search -> backend_error=False."""
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
@@ -55,6 +57,7 @@ class TestQdrantErrorSignal:
         assert meta["backend_error"] is False
         assert meta["error_type"] is None
         assert meta["error_message"] is None
+
     async def test_unexpected_response_returns_error_meta(self, service):
         """UnexpectedResponse exception -> backend_error=True."""
         import httpx
@@ -76,6 +79,7 @@ class TestQdrantErrorSignal:
         assert results == []
         assert meta["backend_error"] is True
         assert meta["error_type"] == "UnexpectedResponse"
+
     async def test_return_meta_false_preserves_old_contract(self, service):
         """Default return_meta=False returns list[dict] (backward compat)."""
         mock_point = MagicMock()
@@ -94,6 +98,7 @@ class TestQdrantErrorSignal:
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0]["id"] == "1"
+
     async def test_success_with_results_meta(self, service):
         """Successful search with results -> backend_error=False, results populated."""
         mock_point = MagicMock()

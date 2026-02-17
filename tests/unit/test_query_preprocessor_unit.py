@@ -167,7 +167,13 @@ class TestAnalyze:
 
     def test_analyze_returns_all_keys(self):
         result = _pp.analyze("test query")
-        for key in ["original_query", "normalized_query", "rrf_weights", "cache_threshold", "is_exact"]:
+        for key in [
+            "original_query",
+            "normalized_query",
+            "rrf_weights",
+            "cache_threshold",
+            "is_exact",
+        ]:
             assert key in result
 
     def test_analyze_rrf_weights_structure(self):

@@ -105,6 +105,7 @@ class TestGDriveIndexerDeleteFilePoints:
                     idx = GDriveIndexer(voyage_api_key="test")
                     idx.client = mock_client
                     yield idx
+
     async def test_delete_file_points_calls_qdrant_delete(self, indexer):
         """Delete should call Qdrant delete with proper filter."""
         # Mock count to return existing points
@@ -116,6 +117,7 @@ class TestGDriveIndexerDeleteFilePoints:
 
         assert deleted == 5
         indexer.client.delete.assert_called_once()
+
     async def test_delete_file_points_no_points(self, indexer):
         """Delete should skip when no points exist."""
         mock_count = MagicMock()
@@ -165,6 +167,7 @@ class TestGDriveIndexerIndexFileChunks:
                     idx.voyage_service = mock_voyage_inst
                     idx.sparse_model = mock_sparse_inst
                     yield idx
+
     async def test_index_file_chunks_single_chunk(self, indexer):
         """Test indexing a single chunk."""
         chunks = [
@@ -187,6 +190,7 @@ class TestGDriveIndexerIndexFileChunks:
         assert stats.indexed_chunks == 1
         assert stats.failed_chunks == 0
         indexer.client.upsert.assert_called_once()
+
     async def test_delete_called_before_upsert(self, indexer):
         """Indexer should delete existing points before upserting new ones."""
         # Mock count to show existing points
@@ -226,6 +230,7 @@ class TestGDriveIndexerIndexFileChunks:
         assert delete_idx is not None, "delete was not called"
         assert upsert_idx is not None, "upsert was not called"
         assert delete_idx < upsert_idx, "delete should be called before upsert"
+
     async def test_index_empty_chunks_returns_warning(self, indexer):
         """Indexing empty chunks should return early with warning."""
         stats = await indexer.index_file_chunks(
@@ -237,6 +242,7 @@ class TestGDriveIndexerIndexFileChunks:
         assert stats.total_chunks == 0
         assert stats.indexed_chunks == 0
         indexer.client.upsert.assert_not_called()
+
     async def test_index_handles_embedding_error(self, indexer):
         """Indexing should handle embedding errors gracefully."""
         indexer.voyage_service.embed_documents.side_effect = Exception("API error")

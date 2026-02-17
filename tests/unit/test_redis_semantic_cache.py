@@ -27,6 +27,8 @@ def mock_tracer():
 @pytest.fixture
 def cache(mock_redis, mock_tracer):
     return RedisSemanticCache(redis_url="redis://localhost:6379/0", index_version="1.0.0")
+
+
 async def test_get_embedding_hit(cache, mock_redis):
     # Setup
     query = "test query"
@@ -43,6 +45,8 @@ async def test_get_embedding_hit(cache, mock_redis):
     # Check key format
     call_args = mock_redis.get.call_args[0][0]
     assert call_args.startswith("embedding_v1.0.0_")
+
+
 async def test_get_embedding_miss(cache, mock_redis):
     # Setup
     mock_redis.get.return_value = None
@@ -53,6 +57,8 @@ async def test_get_embedding_miss(cache, mock_redis):
     # Assert
     assert result is None
     assert cache.get_stats()["cache_misses"] == 1
+
+
 async def test_set_embedding(cache, mock_redis):
     # Setup
     query = "test query"
@@ -66,6 +72,8 @@ async def test_set_embedding(cache, mock_redis):
     call_args = mock_redis.setex.call_args
     # Check TTL used
     assert call_args[0][1] == cache.embedding_ttl
+
+
 async def test_get_response_hit(cache, mock_redis):
     # Setup
     query = "test query"
@@ -82,6 +90,8 @@ async def test_get_response_hit(cache, mock_redis):
     call_args = mock_redis.get.call_args[0][0]
     assert "response_v1.0.0_" in call_args
     assert "_10" in call_args
+
+
 async def test_set_response(cache, mock_redis):
     query = "test query"
     response = {"results": ["doc1"]}
