@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+import anyio
+
 from src.ingestion.docling_client import DoclingClient, DoclingConfig
 from src.ingestion.gdrive_indexer import GDriveIndexer
 
@@ -200,7 +202,7 @@ class GDriveFileProcessor:
                         "source_path": rel_path,
                         "mime_type": self._get_mime_type(path),
                         "modified_time": datetime.fromtimestamp(
-                            path.stat().st_mtime, tz=UTC
+                            (await anyio.Path(path).stat()).st_mtime, tz=UTC
                         ).isoformat(),
                         "content_hash": content_hash,
                     }
