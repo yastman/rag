@@ -733,6 +733,7 @@ class PropertyBot:
                 except Exception:
                     logger.warning("Failed to save history turn", exc_info=True)
 
+    @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
         """Handle query via supervisor graph (feature flag: USE_SUPERVISOR=true, #240)."""
         from .agents.rag_agent import create_rag_agent

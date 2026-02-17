@@ -13,6 +13,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from telegram_bot.agents.tools import _get_user_context
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ def create_rag_agent(
     """
 
     @tool
+    @observe(name="tool-rag-search", capture_input=False, capture_output=False)
     async def rag_search(query: str, config: RunnableConfig) -> str:
         """Search the knowledge base for domain-specific information.
 
@@ -43,6 +45,9 @@ def create_rag_agent(
         """
         from telegram_bot.graph.graph import build_graph
         from telegram_bot.graph.state import make_initial_state
+
+        lf = get_client()
+        lf.update_current_span(input={"query_preview": query[:120]})
 
         user_id, session_id = _get_user_context(config)
         if user_id is None:
@@ -65,10 +70,12 @@ def create_rag_agent(
             result = await graph.ainvoke(state)
             if isinstance(result, dict):
                 response = result.get("response", "No response generated.")
+                lf.update_current_span(output={"response_length": len(str(response))})
                 return cast(str, response)
             return "No response generated."
         except Exception:
             logger.exception("RAG agent graph invocation failed")
+            lf.update_current_span(level="ERROR", status_message="RAG graph invocation failed")
             return "Произошла ошибка при поиске. Попробуйте позже."
 
     return rag_search
