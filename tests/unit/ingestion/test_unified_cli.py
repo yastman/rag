@@ -9,6 +9,10 @@ import httpx
 import pytest
 
 
+pytest.importorskip("cocoindex", reason="cocoindex not installed (ingest extra)")
+pytestmark = pytest.mark.requires_extras
+
+
 # ---------------------------------------------------------------------------
 # Arg parsing
 # ---------------------------------------------------------------------------
