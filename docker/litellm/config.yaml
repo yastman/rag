@@ -1,6 +1,6 @@
 ***REMOVED*** LiteLLM Proxy Configuration
 ***REMOVED*** Docs: https://docs.litellm.ai/docs/proxy/configs
-***REMOVED*** Image: ghcr.io/berriai/litellm:main-v1.81.0-stable
+***REMOVED*** Image: ghcr.io/berriai/litellm:main-v1.81.3-stable
 
 model_list:
   ***REMOVED*** Primary: gpt-oss-120b on Cerebras (3000 tok/s)
