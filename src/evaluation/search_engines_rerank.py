@@ -7,8 +7,6 @@ Search engine with reranker for 2-stage retrieval:
 
 import sys
 
-from FlagEmbedding import FlagReranker
-
 
 sys.path.append("/home/admin/contextual_rag")
 
@@ -50,6 +48,13 @@ class RerankSearchEngine:
         self.baseline_engine = BaselineSearchEngine(collection_name, embedding_model)
 
         # Stage 2: Reranker (multilingual BGE-reranker-v2-m3)
+        try:
+            from FlagEmbedding import FlagReranker
+        except ImportError as e:
+            raise ImportError(
+                "FlagEmbedding is not installed. Install ml-local extra: uv sync --extra ml-local"
+            ) from e
+
         print(f"Loading reranker: {reranker_model_name}...")
         self.reranker = FlagReranker(
             reranker_model_name,
@@ -112,7 +117,10 @@ def create_rerank_search_engine(
 
 if __name__ == "__main__":
     # Quick test
-    from FlagEmbedding import BGEM3FlagModel
+    try:
+        from FlagEmbedding import BGEM3FlagModel
+    except ImportError:
+        raise SystemExit("FlagEmbedding is not installed. Run: uv sync --extra ml-local")
 
     print("Loading BGE-M3 model...")
     model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
