@@ -1,9 +1,13 @@
 # tests/unit/evaluation/test_mlflow_integration.py
 """Tests for MLflow integration."""
 
-from unittest.mock import MagicMock, patch
-
 import pytest
+
+
+pytest.importorskip("mlflow", reason="mlflow not installed")
+pytestmark = pytest.mark.requires_optional
+
+from unittest.mock import MagicMock, patch
 
 from src.evaluation.mlflow_integration import MLflowRAGLogger, log_ab_test_results
 

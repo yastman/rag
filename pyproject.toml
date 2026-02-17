@@ -381,6 +381,7 @@ markers = [
     "legacy_api: tests for pre-LangGraph API (may need rewrite)",
     "smoke: Smoke tests (requires running services)",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
+    "requires_optional: Tests requiring optional deps (fastapi, mlflow, pymupdf, fastembed, ragas, cocoindex, livekit)",
 ]
 filterwarnings = [
     # trustcall 0.0.39 imports Send from deprecated langgraph.constants;

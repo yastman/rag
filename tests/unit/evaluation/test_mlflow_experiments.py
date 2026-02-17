@@ -1,9 +1,13 @@
 # tests/unit/evaluation/test_mlflow_experiments.py
 """Tests for MLflow A/B testing experiments framework."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+
+
+pytest.importorskip("mlflow", reason="mlflow not installed")
+pytestmark = pytest.mark.requires_optional
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.evaluation.mlflow_experiments import RAGExperimentRunner
 

@@ -3,9 +3,13 @@
 Tests RAGAS v0.4 integration, Langfuse scoring, and threshold enforcement.
 """
 
-from unittest.mock import MagicMock, patch
-
 import pytest
+
+
+pytest.importorskip("ragas", reason="ragas not installed")
+pytestmark = pytest.mark.requires_optional
+
+from unittest.mock import MagicMock, patch
 
 from src.evaluation.ragas_evaluation import (
     ANSWER_RELEVANCY_THRESHOLD,

@@ -1,6 +1,12 @@
 # tests/unit/ingestion/test_unified_flow.py
 """Tests for unified ingestion flow module (CocoIndex orchestration)."""
 
+import pytest
+
+
+pytest.importorskip("cocoindex", reason="cocoindex not installed")
+pytestmark = pytest.mark.requires_optional
+
 import hashlib
 from pathlib import Path
 from unittest.mock import MagicMock, patch

@@ -1,12 +1,17 @@
 # tests/unit/ingestion/test_unified_cli.py
 """Tests for unified ingestion CLI (src/ingestion/unified/cli.py)."""
 
+import pytest
+
+
+pytest.importorskip("cocoindex", reason="cocoindex not installed")
+pytestmark = pytest.mark.requires_optional
+
 import argparse
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-import pytest
 
 
 # ---------------------------------------------------------------------------

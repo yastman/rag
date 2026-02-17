@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
+
+pytest.importorskip("fastapi", reason="fastapi not installed")
+pytestmark = pytest.mark.requires_optional
+
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch

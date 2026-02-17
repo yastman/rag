@@ -1,8 +1,12 @@
 """Tests for Voyage AI document indexer."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+
+
+pytest.importorskip("fastembed", reason="fastembed not installed")
+pytestmark = pytest.mark.requires_optional
+
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.ingestion.voyage_indexer import IndexStats, VoyageIndexer
 

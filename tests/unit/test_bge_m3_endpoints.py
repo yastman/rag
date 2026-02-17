@@ -6,13 +6,18 @@ Covers /encode/sparse, /encode/colbert, /encode/hybrid, /encode/dense,
 All sys.modules mocking is fixture-scoped (no module-level pollution).
 """
 
+import pytest
+
+
+pytest.importorskip("fastapi", reason="fastapi not installed")
+pytestmark = pytest.mark.requires_optional
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import httpx
 import numpy as np
-import pytest
 
 
 # ── Fake model that returns deterministic numpy arrays ──

@@ -1,6 +1,12 @@
 # tests/unit/ingestion/test_cocoindex_init.py
 """Tests for CocoIndex initialization."""
 
+import pytest
+
+
+pytest.importorskip("cocoindex", reason="cocoindex not installed")
+pytestmark = pytest.mark.requires_optional
+
 import contextlib
 from unittest.mock import patch
 

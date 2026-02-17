@@ -3,12 +3,17 @@
 All sys.modules mocking is fixture-scoped (no module-level pollution).
 """
 
+import pytest
+
+
+pytest.importorskip("fastapi", reason="fastapi not installed")
+pytestmark = pytest.mark.requires_optional
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
 
 
 _BGE_SERVICE_DIR = str(Path(__file__).parents[2] / "services" / "bge-m3-api")
