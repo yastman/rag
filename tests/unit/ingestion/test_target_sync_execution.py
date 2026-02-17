@@ -3,9 +3,26 @@
 
 import asyncio
 
+import pytest
 
+
+@pytest.mark.xdist_group("cocoindex")
 class TestTargetSyncExecution:
     """Test that mutate() works without asyncio.run() conflicts."""
+
+    @pytest.fixture(autouse=True)
+    def _skip_if_registry_collision(self):
+        """Skip gracefully if cocoindex target_connector is already registered."""
+        try:
+            from src.ingestion.unified.targets.qdrant_hybrid_target import (  # noqa: F401
+                QdrantHybridTargetConnector,
+            )
+        except ImportError as exc:
+            pytest.skip(f"cocoindex not installed: {exc}")
+        except RuntimeError as exc:
+            if "already exists" in str(exc):
+                pytest.skip(f"cocoindex registry collision under xdist: {exc}")
+            raise
 
     def test_mutate_does_not_call_asyncio_run(self):
         """mutate() should not use asyncio.run() directly."""
