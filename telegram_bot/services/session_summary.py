@@ -99,7 +99,7 @@ async def generate_summary(
 
     try:
         if hasattr(llm, "responses") and hasattr(llm.responses, "parse"):
-            response = await llm.responses.parse(  # type: ignore[union-attr]
+            response = await llm.responses.parse(  # type: ignore[attr-defined]
                 model=model,
                 input=[
                     {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
@@ -111,7 +111,7 @@ async def generate_summary(
             return getattr(response, "output_parsed", None)
 
         # Fallback for wrappers that expose only Chat Completions parse
-        completion = await llm.beta.chat.completions.parse(  # type: ignore[union-attr]
+        completion = await llm.beta.chat.completions.parse(  # type: ignore[attr-defined]
             model=model,
             messages=[
                 {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
