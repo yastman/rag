@@ -77,7 +77,6 @@ class QdrantHybridWriter:
             timeout=bge_m3_timeout,
             batch_size=self.BGE_M3_BATCH_SIZE,
         )
-        self._http_client = self._bge_client._client  # keep ref for legacy compat
         logger.info("QdrantHybridWriter BGE-M3 URL: %s", self.bge_m3_url)
         logger.info("QdrantHybridWriter BGE-M3 timeout: %ss", bge_m3_timeout)
 
@@ -166,6 +165,8 @@ class QdrantHybridWriter:
         """
         if not texts:
             return []
+        # Semaphore covers entire call including internal batching.
+        # bge_m3_concurrency defaults to 1; CocoIndex runs sequentially.
         with self._dense_semaphore:
             result = self._bge_client.encode_dense(texts)
         return result.vectors
