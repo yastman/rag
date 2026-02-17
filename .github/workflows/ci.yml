@@ -151,7 +151,11 @@ jobs:
         run: uv sync --frozen --extra voice --extra ingest --extra eval
 
       - name: Run integration tests
-        run: uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
+        run: |
+          uv run pytest \
+            tests/integration/test_graph_paths.py \
+            tests/integration/test_bot_hybrid_search.py \
+            -v --timeout=30
 
   # ---------------------------------------------------------------------------
   # Baseline regression — main only (keeps PR feedback loop fast)
