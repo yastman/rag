@@ -163,6 +163,7 @@ class TestRAGPipelineSearch:
 
                                     pipeline = RAGPipeline()
                                     yield pipeline
+
     async def test_search_returns_rag_result(self, mock_pipeline):
         """Test search returns RAGResult with correct structure."""
         result = await mock_pipeline.search("test query")
@@ -171,27 +172,32 @@ class TestRAGPipelineSearch:
         assert result.query == "test query"
         assert len(result.results) == 1
         assert result.results[0]["article_number"] == "121"
+
     async def test_search_respects_top_k(self, mock_pipeline):
         """Test search uses provided top_k value."""
         await mock_pipeline.search("query", top_k=5)
 
         mock_pipeline.search_engine.search.assert_called()
+
     async def test_search_tracks_execution_time(self, mock_pipeline):
         """Test search tracks execution time."""
         result = await mock_pipeline.search("query")
 
         assert result.execution_time >= 0
+
     async def test_search_uses_context_flag(self, mock_pipeline):
         """Test search respects use_context parameter."""
         result = await mock_pipeline.search("query", use_context=False)
 
         assert result.context_used is False
+
     async def test_search_includes_metadata(self, mock_pipeline):
         """Test search includes metadata in results."""
         result = await mock_pipeline.search("query")
 
         assert "metadata" in result.results[0]
         assert result.results[0]["metadata"] == {"source": "test"}
+
     async def test_search_includes_search_method(self, mock_pipeline):
         """Test search includes search method name."""
         result = await mock_pipeline.search("query")
@@ -284,6 +290,7 @@ class TestRAGPipelineIndex:
                                     pipeline.chunker = mock_chk.return_value
                                     pipeline.parser = mock_psr.return_value
                                     yield pipeline
+
     async def test_index_documents_success(self, mock_pipeline):
         """Test successful document indexing."""
         from src.ingestion.voyage_indexer import IndexStats
@@ -310,6 +317,7 @@ class TestRAGPipelineIndex:
         assert stats["indexed_chunks"] == 1
         mock_pipeline.indexer.create_collection.assert_called_once()
         mock_pipeline.indexer.index_chunks.assert_called_once()
+
     async def test_index_documents_handles_exception(self, mock_pipeline):
         """Test indexing handles parser exceptions."""
         from src.ingestion.voyage_indexer import IndexStats
@@ -344,6 +352,7 @@ class TestRAGPipelineEvaluate:
                                 with patch("src.core.pipeline.UniversalDocumentParser"):
                                     pipeline = RAGPipeline()
                                     yield pipeline
+
     async def test_evaluate_returns_metrics(self, mock_pipeline):
         """Test evaluate returns expected metrics dict."""
         mock_pipeline.search = AsyncMock(return_value=RAGResult("q", [], True, "test", 0.1))
