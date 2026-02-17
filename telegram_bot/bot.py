@@ -564,19 +564,39 @@ class PropertyBot:
             return
 
         query = parts[1]
-        results = await self._history_service.search_user_history(
-            user_id=message.from_user.id,
-            query=query,
-            limit=5,
-        )
+        try:
+            results = await self._history_service.search_user_history(
+                user_id=message.from_user.id,
+                query=query,
+                limit=5,
+            )
+        except Exception:
+            logger.exception("History search failed for user %s", message.from_user.id)
+            await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
+            return
 
         if not results:
             await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
             return
 
-        lines = [f"📋 Найдено {len(results)} записей:\n"]
-        for i, r in enumerate(results, 1):
-            ts = r.get("timestamp", "")[:16].replace("T", " ")
+        valid = []
+        for r in results:
+            if not isinstance(r, dict):
+                continue
+            q = r.get("query")
+            resp = r.get("response")
+            if not isinstance(q, str) or not isinstance(resp, str):
+                continue
+            valid.append(r)
+
+        if not valid:
+            await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
+            return
+
+        lines = [f"📋 Найдено {len(valid)} записей:\n"]
+        for i, r in enumerate(valid, 1):
+            ts = r.get("timestamp", "")
+            ts = ts[:16].replace("T", " ") if isinstance(ts, str) else ""
             lines.append(f"{i}. [{ts}]")
             lines.append(f"   В: {r['query']}")
             resp_preview = r["response"][:150]
