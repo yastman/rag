@@ -68,13 +68,17 @@ class QdrantHybridWriter:
             timeout=120,
         )
 
-        # BGE-M3 HTTP client (always needed for sparse embeddings)
-        import httpx
+        # BGE-M3 HTTP client (unified SDK layer)
+        from telegram_bot.services.bge_m3_client import BGEM3SyncClient
 
         self.bge_m3_url = bge_m3_url or "http://localhost:8000"
-        self._http_client = httpx.Client(timeout=bge_m3_timeout)
-        logger.info(f"QdrantHybridWriter BGE-M3 URL: {self.bge_m3_url}")
-        logger.info(f"QdrantHybridWriter BGE-M3 timeout: {bge_m3_timeout}s")
+        self._bge_client = BGEM3SyncClient(
+            base_url=self.bge_m3_url,
+            timeout=bge_m3_timeout,
+            batch_size=self.BGE_M3_BATCH_SIZE,
+        )
+        logger.info("QdrantHybridWriter BGE-M3 URL: %s", self.bge_m3_url)
+        logger.info("QdrantHybridWriter BGE-M3 timeout: %ss", bge_m3_timeout)
 
         # Dense embeddings: local BGE-M3 or Voyage API
         self.use_local_embeddings = use_local_embeddings
@@ -95,27 +99,14 @@ class QdrantHybridWriter:
         logger.info("QdrantHybridWriter sparse: BGE-M3 /encode/sparse")
 
     def _embed_sparse(self, texts: list[str]) -> list[dict[str, list]]:
-        """Generate sparse embeddings via BGE-M3 /encode/sparse endpoint.
+        """Generate sparse embeddings via BGEM3SyncClient.
 
         Returns list of dicts with 'indices' and 'values' keys.
         """
         if not texts:
             return []
-
-        if self._http_client is None:
-            raise RuntimeError("HTTP client not initialized for sparse embeddings")
-
-        all_sparse: list[dict[str, list]] = []
-        for i in range(0, len(texts), self.BGE_M3_BATCH_SIZE):
-            batch = texts[i : i + self.BGE_M3_BATCH_SIZE]
-            response = self._http_client.post(
-                f"{self.bge_m3_url}/encode/sparse",
-                json={"texts": batch, "batch_size": len(batch), "max_length": 512},
-            )
-            response.raise_for_status()
-            all_sparse.extend(response.json()["lexical_weights"])
-
-        return all_sparse
+        result = self._bge_client.encode_sparse(texts)
+        return result.weights
 
     @staticmethod
     def _to_sparse_vector(sparse_emb: Any) -> SparseVector:
@@ -164,7 +155,7 @@ class QdrantHybridWriter:
         return f"chunk_{index}"
 
     def _embed_documents_local(self, texts: list[str]) -> list[list[float]]:
-        """Embed documents using local BGE-M3 API.
+        """Embed documents using BGEM3SyncClient.
 
         Args:
             texts: List of document texts
@@ -174,22 +165,11 @@ class QdrantHybridWriter:
         """
         if not texts:
             return []
-
-        if self._http_client is None:
-            raise RuntimeError("HTTP client not initialized for local embeddings")
-
-        all_embeddings: list[list[float]] = []
-        for i in range(0, len(texts), self.BGE_M3_BATCH_SIZE):
-            batch = texts[i : i + self.BGE_M3_BATCH_SIZE]
-            with self._dense_semaphore:
-                response = self._http_client.post(
-                    f"{self.bge_m3_url}/encode/dense",
-                    json={"texts": batch, "batch_size": len(batch), "max_length": 512},
-                )
-            response.raise_for_status()
-            all_embeddings.extend(response.json()["dense_vecs"])
-
-        return all_embeddings
+        # Semaphore covers entire call including internal batching.
+        # bge_m3_concurrency defaults to 1; CocoIndex runs sequentially.
+        with self._dense_semaphore:
+            result = self._bge_client.encode_dense(texts)
+        return result.vectors
 
     def build_payload(
         self,
