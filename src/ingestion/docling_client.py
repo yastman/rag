@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import anyio
 import httpx
 
 from src.ingestion.chunker import Chunk
@@ -254,7 +255,8 @@ class DoclingClient:
         Returns:
             ConvertedDocument with extracted text and metadata
         """
-        if not file_path.exists():
+        async_path = anyio.Path(file_path)
+        if not await async_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
         suffix = file_path.suffix.lower()
@@ -263,7 +265,7 @@ class DoclingClient:
 
         # Prepare multipart form data - read file into memory to avoid
         # async context issues with file handles
-        file_content = file_path.read_bytes()
+        file_content = await async_path.read_bytes()
         files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
 
         response = await self.client.post(
@@ -303,7 +305,8 @@ class DoclingClient:
         Returns:
             List of DoclingChunk with rich metadata
         """
-        if not file_path.exists():
+        async_path = anyio.Path(file_path)
+        if not await async_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
         suffix = file_path.suffix.lower()
@@ -312,7 +315,7 @@ class DoclingClient:
 
         # Prepare multipart form data - read file into memory to avoid
         # async context issues with file handles
-        file_content = file_path.read_bytes()
+        file_content = await async_path.read_bytes()
         files = {"files": (file_path.name, file_content, self._get_mime_type(suffix))}
 
         data = self._build_chunking_form_data()
