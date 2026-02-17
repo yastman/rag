@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from qdrant_client import models
 
+import src.retrieval.search_engines as search_engines
 from src.config.constants import SearchEngine
 from src.retrieval.search_engines import (
     BaselineSearchEngine,
@@ -129,8 +130,8 @@ class TestConvertToPythonTypes:
 class TestBaselineSearchEngine:
     """Test BaselineSearchEngine."""
 
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_baseline_get_name(self, mock_settings_cls, mock_qdrant):
         """Test get_name returns 'baseline'."""
         mock_settings = MagicMock()
@@ -142,8 +143,8 @@ class TestBaselineSearchEngine:
 
         assert engine.get_name() == "baseline"
 
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_baseline_search_default_threshold(self, mock_settings_cls, mock_qdrant):
         """Test default score threshold is 0.5."""
         mock_settings = MagicMock()
@@ -162,8 +163,8 @@ class TestBaselineSearchEngine:
         call_kwargs = mock_client.search.call_args[1]
         assert call_kwargs["score_threshold"] == 0.5
 
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_baseline_search_custom_threshold(self, mock_settings_cls, mock_qdrant):
         """Test custom score threshold."""
         mock_settings = MagicMock()
@@ -181,8 +182,8 @@ class TestBaselineSearchEngine:
         call_kwargs = mock_client.search.call_args[1]
         assert call_kwargs["score_threshold"] == 0.7
 
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_baseline_search_returns_results(self, mock_settings_cls, mock_qdrant):
         """Test that search returns formatted results."""
         mock_settings = MagicMock()
@@ -214,9 +215,9 @@ class TestBaselineSearchEngine:
 class TestHybridRRFSearchEngine:
     """Test HybridRRFSearchEngine."""
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_hybrid_get_name(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test get_name returns 'hybrid_rrf'."""
         mock_settings = MagicMock()
@@ -228,9 +229,9 @@ class TestHybridRRFSearchEngine:
 
         assert engine.get_name() == "hybrid_rrf"
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_hybrid_search_with_embedding(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test search with pre-computed embedding uses dense-only."""
         mock_settings = MagicMock()
@@ -248,9 +249,9 @@ class TestHybridRRFSearchEngine:
         # Should call dense-only search when embedding provided
         mock_client.search.assert_called_once()
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_hybrid_search_uses_query_points(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test that hybrid search uses SDK query_points with prefetch."""
         mock_settings = MagicMock()
@@ -302,9 +303,9 @@ class TestHybridRRFSearchEngine:
 class TestHybridRRFColBERTSearchEngine:
     """Test HybridRRFColBERTSearchEngine."""
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_colbert_get_name(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test get_name returns 'hybrid_rrf_colbert'."""
         mock_settings = MagicMock()
@@ -316,9 +317,9 @@ class TestHybridRRFColBERTSearchEngine:
 
         assert engine.get_name() == "hybrid_rrf_colbert"
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_colbert_search_with_embedding(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test search with pre-computed embedding uses dense-only."""
         mock_settings = MagicMock()
@@ -336,9 +337,9 @@ class TestHybridRRFColBERTSearchEngine:
         # Should call dense-only search when embedding provided
         mock_client.search.assert_called_once()
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_colbert_search_uses_nested_prefetch(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test that ColBERT search uses SDK with nested prefetch for 3-stage query."""
         mock_settings = MagicMock()
@@ -388,9 +389,9 @@ class TestHybridRRFColBERTSearchEngine:
 class TestDBSFColBERTSearchEngine:
     """Test DBSFColBERTSearchEngine."""
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_dbsf_get_name(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test get_name returns 'dbsf_colbert'."""
         mock_settings = MagicMock()
@@ -402,9 +403,9 @@ class TestDBSFColBERTSearchEngine:
 
         assert engine.get_name() == "dbsf_colbert"
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_dbsf_search_uses_dbsf_fusion(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test that DBSF search uses DBSF fusion instead of RRF."""
         mock_settings = MagicMock()
@@ -446,9 +447,9 @@ class TestDBSFColBERTSearchEngine:
 class TestCreateSearchEngine:
     """Test search engine factory function."""
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_create_baseline_engine(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test creating baseline engine."""
         mock_settings = MagicMock()
@@ -461,9 +462,9 @@ class TestCreateSearchEngine:
         assert isinstance(engine, BaselineSearchEngine)
         assert engine.get_name() == "baseline"
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_create_hybrid_rrf_engine(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test creating hybrid RRF engine."""
         mock_settings = MagicMock()
@@ -475,9 +476,9 @@ class TestCreateSearchEngine:
         assert isinstance(engine, HybridRRFSearchEngine)
         assert engine.get_name() == "hybrid_rrf"
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_create_hybrid_rrf_colbert_engine(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test creating hybrid RRF ColBERT engine."""
         mock_settings = MagicMock()
@@ -489,9 +490,9 @@ class TestCreateSearchEngine:
         assert isinstance(engine, HybridRRFColBERTSearchEngine)
         assert engine.get_name() == "hybrid_rrf_colbert"
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_create_dbsf_colbert_engine(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test creating DBSF ColBERT engine."""
         mock_settings = MagicMock()
@@ -503,9 +504,9 @@ class TestCreateSearchEngine:
         assert isinstance(engine, DBSFColBERTSearchEngine)
         assert engine.get_name() == "dbsf_colbert"
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_create_default_engine(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test that default engine is HybridRRFColBERT."""
         mock_settings = MagicMock()
@@ -517,9 +518,9 @@ class TestCreateSearchEngine:
 
         assert isinstance(engine, HybridRRFColBERTSearchEngine)
 
-    @patch("src.retrieval.search_engines.get_bge_m3_model")
-    @patch("src.retrieval.search_engines.QdrantClient")
-    @patch("src.retrieval.search_engines.Settings")
+    @patch.object(search_engines, "get_bge_m3_model")
+    @patch.object(search_engines, "QdrantClient")
+    @patch.object(search_engines, "Settings")
     def test_create_uses_settings_engine_type(self, mock_settings_cls, mock_qdrant, mock_bge):
         """Test that factory uses settings.search_engine when type not provided."""
         mock_settings = MagicMock()

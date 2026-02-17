@@ -4,7 +4,7 @@ Note: sentence_transformers is mocked in conftest.py to avoid slow model loading
 The reranker module is provided via fixture to ensure fresh import with mock.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 
@@ -179,7 +179,9 @@ class TestClearCrossEncoder:
         """Test clearing existing encoder."""
         reranker._cross_encoder = mock_cross_encoder["encoder"]
 
-        reranker.clear_cross_encoder()
+        # Avoid collecting unrelated global objects under strict warning mode.
+        with patch("gc.collect", return_value=0):
+            reranker.clear_cross_encoder()
 
         assert reranker._cross_encoder is None
 
@@ -193,7 +195,9 @@ class TestClearCrossEncoder:
         encoder1 = reranker.get_cross_encoder()
         assert encoder1 == mock_encoder1
 
-        reranker.clear_cross_encoder()
+        # Avoid collecting unrelated global objects under strict warning mode.
+        with patch("gc.collect", return_value=0):
+            reranker.clear_cross_encoder()
 
         encoder2 = reranker.get_cross_encoder()
         assert encoder2 == mock_encoder2
