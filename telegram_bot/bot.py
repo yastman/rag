@@ -544,8 +544,9 @@ class PropertyBot:
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
         """Handle query via supervisor graph (#240, #310 — primary query path)."""
+        from .agents.manager_tools import create_manager_tools
         from .agents.rag_agent import create_rag_agent
-        from .agents.tools import create_history_search_tool, direct_response
+        from .agents.tools import build_tools_for_role, create_history_search_tool, direct_response
         from .graph.supervisor_state import make_supervisor_state
 
         assert message.bot is not None
@@ -554,8 +555,11 @@ class PropertyBot:
         user_id = message.from_user.id
         session_id = make_session_id("chat", message.chat.id)
 
-        # Build supervisor tools
-        tools = [
+        # Resolve user role (#388)
+        role = await self._resolve_user_role(user_id)
+
+        # Build supervisor tools (base + role-specific)
+        base_tools = [
             create_rag_agent(
                 cache=self._cache,
                 embeddings=self._embeddings,
@@ -574,7 +578,14 @@ class PropertyBot:
             direct_response,
         ]
         if self._history_service is not None:
-            tools.append(create_history_search_tool(history_service=self._history_service))
+            base_tools.append(create_history_search_tool(history_service=self._history_service))
+
+        # Manager tools (#388) — activated when lead_service is available (#387)
+        manager_tools: list[Any] = []
+        _lead_svc = getattr(self, "_lead_service", None)
+        if _lead_svc is not None:
+            manager_tools = create_manager_tools(lead_service=_lead_svc)
+        tools = build_tools_for_role(role=role, base_tools=base_tools, manager_tools=manager_tools)
 
         # Build supervisor LLM (cheap model for routing)
         supervisor_llm = self._graph_config.create_supervisor_llm(
@@ -643,6 +654,8 @@ class PropertyBot:
             lf.score_current_trace(
                 name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
             )
+            # User role score (#388)
+            lf.score_current_trace(name="user_role", value=role, data_type="CATEGORICAL")
             # Tool call count (#374)
             tool_calls = result.get("tool_call_count", 0)
             if tool_calls > 0:
