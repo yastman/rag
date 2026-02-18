@@ -89,9 +89,12 @@ class UserService:
             msg = f"Unsupported locale: {locale}"
             raise ValueError(msg)
         await self._pool.execute(
-            "UPDATE users SET locale = $1, updated_at = NOW() WHERE telegram_id = $2",
-            locale,
+            """INSERT INTO users (telegram_id, locale)
+               VALUES ($1, $2)
+               ON CONFLICT (telegram_id)
+               DO UPDATE SET locale = EXCLUDED.locale, updated_at = NOW()""",
             telegram_id,
+            locale,
         )
 
     @staticmethod

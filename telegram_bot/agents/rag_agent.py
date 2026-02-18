@@ -35,6 +35,9 @@ def create_rag_agent(
     guard_mode: str = "hard",
     guard_ml_enabled: bool = False,
     llm_guard_client: Any | None = None,
+    max_rewrite_attempts: int = 1,
+    show_sources: bool = True,
+    max_llm_calls: int = 5,
 ) -> Any:
     """Create RAG agent tool wrapping the existing LangGraph pipeline.
 
@@ -80,6 +83,9 @@ def create_rag_agent(
                 session_id=session_id or "",
                 query=query,
             )
+            state["max_rewrite_attempts"] = max_rewrite_attempts
+            state["show_sources"] = show_sources
+            state["max_llm_calls"] = max_llm_calls
             invoke_start = time.perf_counter()
             result = await graph.ainvoke(state)
             ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000

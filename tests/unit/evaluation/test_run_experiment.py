@@ -13,6 +13,15 @@ def test_build_rag_task_returns_callable():
     assert callable(task)
 
 
+def test_build_eval_state_contains_required_rag_fields():
+    from scripts.eval.run_experiment import _build_eval_state
+
+    state = _build_eval_state("What is X?")
+    assert state["messages"][-1]["content"] == "What is X?"
+    assert state["user_id"] == 0
+    assert state["session_id"].startswith("eval-")
+
+
 def test_build_rag_task_invokes_graph():
     from scripts.eval.run_experiment import build_rag_task
 
@@ -32,3 +41,5 @@ def test_build_rag_task_invokes_graph():
 
     assert result["answer"] == "Test answer"
     assert "Doc 1" in result["context"]
+    called_state = mock_graph.ainvoke.await_args.args[0]
+    assert called_state["messages"][-1]["content"] == "What is X?"
