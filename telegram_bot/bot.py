@@ -554,6 +554,7 @@ class PropertyBot:
             model=self.config.supervisor_model,
             tools=tools,
             checkpointer=self._checkpointer,
+            language=self.config.domain_language,
         )
 
         # Build context for tool DI
