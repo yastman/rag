@@ -86,6 +86,18 @@ class TestGraphConfig:
             timeout=60.0,
         )
 
+    def test_create_supervisor_llm(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        with patch("langchain_openai.ChatOpenAI") as mock_chat_openai:
+            mock_chat_openai.return_value = MagicMock()
+            cfg = GraphConfig(llm_model="default-model", llm_base_url="http://test:4000")
+            llm = cfg.create_supervisor_llm(model_override="router-model")
+
+        assert llm is not None
+        assert mock_chat_openai.call_args.kwargs["model"] == "router-model"
+        assert mock_chat_openai.call_args.kwargs["base_url"] == "http://test:4000"
+
     def test_create_embeddings(self):
         from telegram_bot.graph.config import GraphConfig
 
