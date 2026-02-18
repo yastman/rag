@@ -45,43 +45,55 @@ class UserService:
         telegram_id: int,
         first_name: str | None = None,
         language_code: str | None = None,
-    ) -> User:
-        """Get existing user or create new one."""
-        row = await self._pool.fetchrow(
-            "SELECT * FROM users WHERE telegram_id = $1",
-            telegram_id,
-        )
-        if row is not None:
-            return self._row_to_user(row)
+    ) -> User | None:
+        """Get existing user or create new one. Returns None on DB errors (#420)."""
+        try:
+            row = await self._pool.fetchrow(
+                "SELECT * FROM users WHERE telegram_id = $1",
+                telegram_id,
+            )
+            if row is not None:
+                return self._row_to_user(row)
 
-        locale = detect_locale(language_code)
-        row = await self._pool.fetchrow(
-            """INSERT INTO users (telegram_id, locale, first_name, telegram_language_code)
-               VALUES ($1, $2, $3, $4)
-               ON CONFLICT (telegram_id) DO UPDATE SET updated_at = NOW()
-               RETURNING *""",
-            telegram_id,
-            locale,
-            first_name,
-            language_code,
-        )
-        return self._row_to_user(row)
+            locale = detect_locale(language_code)
+            row = await self._pool.fetchrow(
+                """INSERT INTO users (telegram_id, locale, first_name, telegram_language_code)
+                   VALUES ($1, $2, $3, $4)
+                   ON CONFLICT (telegram_id) DO UPDATE SET updated_at = NOW()
+                   RETURNING *""",
+                telegram_id,
+                locale,
+                first_name,
+                language_code,
+            )
+            return self._row_to_user(row)
+        except Exception:
+            logger.warning("get_or_create DB query failed", exc_info=True)
+            return None
 
     async def get_role(self, *, telegram_id: int) -> str:
-        """Get user role. Returns 'client' for unknown users."""
-        role = await self._pool.fetchval(
-            "SELECT role FROM users WHERE telegram_id = $1",
-            telegram_id,
-        )
-        return role or "client"
+        """Get user role. Returns 'client' on DB errors or unknown users (#420)."""
+        try:
+            role = await self._pool.fetchval(
+                "SELECT role FROM users WHERE telegram_id = $1",
+                telegram_id,
+            )
+            return role or "client"
+        except Exception:
+            logger.warning("get_role DB query failed, returning default", exc_info=True)
+            return "client"
 
     async def get_locale(self, *, telegram_id: int) -> str:
-        """Get user locale. Returns 'ru' for unknown users."""
-        locale = await self._pool.fetchval(
-            "SELECT locale FROM users WHERE telegram_id = $1",
-            telegram_id,
-        )
-        return locale or _DEFAULT_LOCALE
+        """Get user locale. Returns 'ru' on DB errors or unknown users (#420)."""
+        try:
+            locale = await self._pool.fetchval(
+                "SELECT locale FROM users WHERE telegram_id = $1",
+                telegram_id,
+            )
+            return locale or _DEFAULT_LOCALE
+        except Exception:
+            logger.warning("get_locale DB query failed, returning default", exc_info=True)
+            return _DEFAULT_LOCALE
 
     async def set_locale(self, *, telegram_id: int, locale: str) -> None:
         """Update user locale."""
