@@ -37,6 +37,7 @@ def _create_bot_patched(config):
         patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
         patch("telegram_bot.services.qdrant.QdrantService"),
         patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+        patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
     ):
         return PropertyBot(config)
 
