@@ -281,6 +281,7 @@ async def classify_node(state: dict[str, Any]) -> dict[str, Any]:
 
     result: dict[str, Any] = {
         "query_type": query_type,
+        "llm_call_count": state.get("llm_call_count", 0) + 1,
         "latency_stages": {**state.get("latency_stages", {}), "classify": time.perf_counter() - t0},
     }
 
