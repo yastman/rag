@@ -17,6 +17,7 @@ import logging
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 
 logger = logging.getLogger(__name__)
@@ -57,8 +58,7 @@ class NurturingScheduler:
         )
         self._scheduler.add_job(
             self.run_funnel_rollup,
-            "cron",
-            minute=15,
+            trigger=CronTrigger.from_crontab(self._config.funnel_rollup_cron),
             id="funnel-analytics-rollup",
             replace_existing=True,
         )
