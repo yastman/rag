@@ -1,16 +1,28 @@
 # Langfuse Experiments Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Синтетический gold set из Qdrant → Langfuse Dataset → `dataset.run_experiment()` для regression testing RAG pipeline.
 
-**Architecture:** Максимально SDK-based. `task` = HTTP POST к RAG API (:8080). Judge evaluators — Langfuse UI managed (0 кода). Единственный code evaluator — `retrieval_recall`. Gold set генерация — Qdrant scroll → LLM Q&A gen → groundedness validation → Langfuse Dataset + JSONL backup.
+**Architecture:** Максимально SDK-based. `task` = HTTP POST к RAG API (:8080). MVP-оценка в коде: `retrieval_recall` + run-level aggregate через `run_evaluators`. Managed evaluators в Langfuse UI — опциональный слой после базового SDK-пайплайна. Gold set генерация — Qdrant scroll → LLM Q&A gen → groundedness validation → Langfuse Dataset + JSONL backup.
 
 **Tech Stack:** Langfuse Python SDK v3 (`get_client`, `Evaluation`, `run_experiment`), qdrant-client, httpx, LiteLLM (OpenAI SDK)
 
 **Issue:** #383 | **Design doc:** `docs/plans/2026-02-18-langfuse-experiments-design.md`
 
 **Worktree:** `.worktrees/langfuse-experiments-383` | **Branch:** `feat/langfuse-experiments-383`
+
+---
+
+## Review Patch (2026-02-18)
+
+1. `langfuse` API в проекте проверен на версии из lockfile: для `dataset.run_experiment(...)` обязательно передавать `max_concurrency=args.concurrency`; для версионного прогона поддерживается `langfuse.get_dataset(name=..., version=<UTC datetime>)`.
+2. В `run_experiment` разделяем `name` (стабильное имя эксперимента) и `run_name` (конкретный запуск), чтобы сравнения в UI не фрагментировались.
+3. Формула `max(3, round(chunks / 4))` в Python даёт `20` для `82` чанков (`round(20.5) == 20`), поэтому тест-кейс на `82` корректируется.
+4. Upload gold set делаем idempotent: `create_dataset` только при отсутствии датасета, а `create_dataset_item` со стабильным `id` для dedupe/re-run.
+5. `Makefile` не должен содержать зашитую дату датасета; датасет передаётся через `DATASET=...`.
+6. В `.gitignore` добавляем только `data/gold_set*.jsonl`, а не `data/` целиком.
+7. Перед завершением обязателен репо-гейт из AGENTS: `make check` и `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`.
 
 ---
 
@@ -185,7 +197,7 @@ experiment:
 
 **Step 2: Verify YAML is valid**
 
-Run: `python -c "import yaml; yaml.safe_load(open('tests/baseline/thresholds.yaml')); print('OK')"`
+Run: `uv run python -c "import yaml; yaml.safe_load(open('tests/baseline/thresholds.yaml')); print('OK')"`
 Expected: `OK`
 
 **Step 3: Commit**
@@ -287,7 +299,7 @@ class TestGroupByDocument:
 class TestCalculateQuestionsCount:
     @pytest.mark.parametrize(
         ("chunks", "expected_min"),
-        [(1, 3), (6, 3), (12, 3), (20, 5), (44, 11), (82, 21)],
+        [(1, 3), (6, 3), (12, 3), (20, 5), (44, 11), (82, 20)],
     )
     def test_formula_min_3(self, chunks: int, expected_min: int):
         from scripts.generate_gold_set import calculate_questions_count
@@ -412,6 +424,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -664,12 +677,19 @@ def upload_to_langfuse(
     """Upload items to Langfuse Dataset."""
     if not items:
         return 0
-    langfuse.create_dataset(name=dataset_name)
+    try:
+        langfuse.get_dataset(name=dataset_name)
+    except Exception:
+        langfuse.create_dataset(name=dataset_name)
     for item in items:
         langfuse.create_dataset_item(
             dataset_name=dataset_name,
             input={"query": item["query"]},
             expected_output={"answer": item["answer"]},
+            id=(
+                f"{item.get('source_file_id', 'na')}::"
+                f"{hashlib.sha256(item['query'].encode()).hexdigest()[:16]}"
+            ),
             metadata={
                 "source_doc": item.get("source_doc", ""),
                 "source_file_id": item.get("source_file_id", ""),
@@ -915,7 +935,7 @@ Task = HTTP POST to RAG API. Judge evaluators = Langfuse UI managed.
 Only retrieval_recall is a code evaluator.
 
 Usage:
-    uv run python scripts/run_experiment.py --dataset rag-gold-set-v20260218 --name baseline
+    uv run python scripts/run_experiment.py --dataset rag-gold-set-v1 --name baseline
 """
 
 from __future__ import annotations
@@ -1028,22 +1048,33 @@ def main() -> None:
     parser.add_argument("--name", default=None, help="Experiment run name")
     parser.add_argument("--description", default="", help="Description")
     parser.add_argument("--concurrency", type=int, default=5)
+    parser.add_argument(
+        "--version",
+        default=None,
+        help="Dataset version timestamp in ISO 8601 UTC, e.g. 2026-02-18T12:00:00Z",
+    )
     args = parser.parse_args()
 
     from langfuse import get_client
 
     langfuse = get_client()
-    dataset = langfuse.get_dataset(name=args.dataset)
+    version_dt = None
+    if args.version:
+        version_dt = datetime.fromisoformat(args.version.replace("Z", "+00:00")).astimezone(UTC)
+
+    dataset = langfuse.get_dataset(name=args.dataset, version=version_dt)
     logger.info("Dataset '%s': %d items", args.dataset, len(dataset.items))
 
     run_name = args.name or f"exp-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
 
     result = dataset.run_experiment(
-        name=run_name,
+        name="rag-gold-set-regression",
+        run_name=run_name,
         description=args.description or f"Experiment {run_name}",
         task=rag_task,
         evaluators=[retrieval_recall_eval],
         run_evaluators=[avg_scores_evaluator],
+        max_concurrency=args.concurrency,
         metadata={
             "model": os.getenv("LLM_MODEL", "gpt-4o-mini"),
             "collection": os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge"),
@@ -1097,21 +1128,21 @@ eval-gold-gen-dry: ## Dry-run gold set generation (JSONL only, no Langfuse)
 
 eval-experiment: ## Run experiment on latest gold set dataset
 	@echo "$(BLUE)Running experiment on gold set...$(NC)"
-	uv run python scripts/run_experiment.py --dataset $(or $(DATASET),rag-gold-set-v20260218)
+	uv run python scripts/run_experiment.py --dataset $(DATASET)
 
 eval-experiment-named: ## Run named experiment (NAME=prompt-v2 make eval-experiment-named)
 	@echo "$(BLUE)Running experiment '$(NAME)'...$(NC)"
-	uv run python scripts/run_experiment.py --dataset $(or $(DATASET),rag-gold-set-v20260218) --name $(NAME)
+	uv run python scripts/run_experiment.py --dataset $(DATASET) --name $(NAME)
 ```
 
-**Step 2: Check `.gitignore` covers `data/`**
+**Step 2: Check `.gitignore` covers only generated gold-set artifacts**
 
 Run: `grep -n "^data" .gitignore || echo "NOT FOUND"`
 
-Если `data/` не в `.gitignore`, добавить:
+Добавить (если нет) именно этот паттерн:
 
 ```
-data/
+data/gold_set*.jsonl
 ```
 
 **Step 3: Verify make targets parse**
@@ -1145,10 +1176,11 @@ Run: `uv run ruff format tests/unit/test_generate_gold_set.py tests/unit/test_ru
 Run: `uv run pytest tests/unit/test_generate_gold_set.py tests/unit/test_run_experiment.py -v`
 Expected: All PASS
 
-**Step 4: Run full unit test suite (no regressions)**
+**Step 4: Run required repository gates (AGENTS minimum)**
 
-Run: `uv run pytest tests/unit/ -n auto --timeout=30 -q`
-Expected: All PASS, no regressions
+Run: `make check`
+Run: `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
+Expected: оба проходят
 
 **Step 5: Commit lint fixes if any**
 
@@ -1197,9 +1229,9 @@ Expected: 60-120 lines, valid JSON with `input.query`, `expected_output.answer`,
 
 ---
 
-## Task 10: Configure Langfuse UI managed evaluators
+## Task 10 (Optional): Configure Langfuse UI managed evaluators
 
-**No code.** Configure in Langfuse web UI (http://localhost:3001).
+**No code.** Опциональный слой после рабочего SDK/MVP-контура.
 
 **Step 1:** Open Langfuse UI → Settings → Evaluators
 
@@ -1211,9 +1243,9 @@ Expected: 60-120 lines, valid JSON with `input.query`, `expected_output.answer`,
 | `answer_relevance` | LLM-as-a-judge | gpt-4o-mini | ≥0.70 |
 | `context_relevance` | LLM-as-a-judge | gpt-4o-mini | ≥0.65 |
 
-Use prompts from `telegram_bot/evaluation/prompts.py` (FAITHFULNESS_PROMPT, ANSWER_RELEVANCE_PROMPT, CONTEXT_RELEVANCE_PROMPT) adapted for Langfuse evaluator template format.
+Use prompts from `telegram_bot/evaluation/prompts.py` (`FAITHFULNESS`, `ANSWER_RELEVANCE`, `CONTEXT_RELEVANCE`) adapted for Langfuse evaluator template format.
 
-These auto-run on experiment traces, scoring via the same prompts as `judges.py`.
+Использовать как дополнительный online-monitoring слой; gating в MVP остаётся на кодовых evaluators + thresholds из репозитория.
 
 **Step 3:** Verify — run `make eval-experiment` and check scores appear in Langfuse UI.
 
@@ -1232,5 +1264,5 @@ These auto-run on experiment traces, scoring via the same prompts as `judges.py`
 | 7 | Makefile | 15 lines | — |
 | 8 | Lint + tests | — | — |
 | 9 | Smoke test | — | — |
-| 10 | Langfuse UI evaluators | **0 lines** | Managed evaluators |
+| 10 (optional) | Langfuse UI evaluators | **0 lines** | Managed evaluators |
 | **Total** | | **~500 lines** (incl. tests) | |
