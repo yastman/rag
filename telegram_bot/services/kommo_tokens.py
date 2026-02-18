@@ -8,12 +8,22 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 import httpx
 
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class KommoTokenStoreProtocol(Protocol):
+    """Abstract token store contract for future Postgres migration (#384)."""
+
+    async def get_valid_token(self) -> str: ...
+
+    async def force_refresh(self) -> str: ...
+
 
 REDIS_KEY = "kommo:oauth:tokens"
 REFRESH_BUFFER_SEC = 300  # refresh 5 min before expiry
