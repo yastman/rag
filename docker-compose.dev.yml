@@ -191,6 +191,7 @@ services:
     logging: *default-logging
     ports:
       - "127.0.0.1:5001:5001"
+    read_only: false
     environment:
       UVICORN_HOST: 0.0.0.0
       UVICORN_PORT: 5001
