@@ -42,8 +42,8 @@ class TestBuildGraph:
         # Get node names from the graph
         node_names = set(graph.get_graph().nodes.keys())
         expected_nodes = {
-            "classify",
             "guard",
+            "classify",
             "cache_check",
             "retrieve",
             "grade",

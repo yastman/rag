@@ -264,6 +264,18 @@ class BotConfig(BaseSettings):
         default=True,
         validation_alias=AliasChoices("content_filter_enabled", "CONTENT_FILTER_ENABLED"),
     )
+    guard_mode: str = Field(
+        default="hard",
+        validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),
+    )
+    guard_ml_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("guard_ml_enabled", "GUARD_ML_ENABLED"),
+    )
+    llm_guard_url: str = Field(
+        default="http://llm-guard:8100",
+        validation_alias=AliasChoices("llm_guard_url", "LLM_GUARD_URL"),
+    )
 
     # Guardrails
     enable_confidence_scoring: bool = Field(
