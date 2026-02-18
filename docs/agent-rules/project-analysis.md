@@ -8,7 +8,7 @@ This analysis summarizes repository structure and operating conventions from:
 - `docs/PROJECT_STACK.md`, `docs/PIPELINE_OVERVIEW.md`, `docs/LOCAL-DEVELOPMENT.md`
 - `Makefile` targets currently available in repo
 
-Snapshot date: 2026-02-17.
+Snapshot date: 2026-02-18.
 
 Primary reference policy: `AGENTS.md`, scoped `AGENTS.override.md`, and `docs/agent-rules/*.md` are treated as canonical sources for agent guidance.
 
@@ -45,9 +45,9 @@ Primary reference policy: `AGENTS.md`, scoped `AGENTS.override.md`, and `docs/ag
 - Recommendation: codify canonical docs and route deep agent rules through `docs/agent-rules/*` references.
 
 ## Documentation Gaps Closed By This Update
-- Added root `AGENTS.md` for global Codex execution constraints.
-- Added scoped overrides for bot, ingestion, k8s, and docs.
-- Added runbook layer in `docs/agent-rules/` for architecture, workflow, testing, and infra.
+- Canonical operations docs were refreshed against current `Makefile` and compose/runtime state.
+- Docker/service profile documentation was normalized in `DOCKER.md`.
+- A dated audit record was added: `docs/2026-02-18-docs-docker-audit.md`.
 
 ## Maintenance Policy
 - Keep AGENTS files concise and conflict-free.

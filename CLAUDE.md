@@ -42,9 +42,10 @@ make export-dataset        # Export low-scoring Langfuse traces to evaluation da
 
 ```
 Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Bot:        Query → Supervisor LLM → tool choice (rag_search | history_search | direct_response)
-            → rag_search wraps LangGraph 11-node pipeline (with guard node) → respond
-            (#310: supervisor-only, monolith path removed)
+Bot:        Query → create_agent SDK (langchain.agents) → tool choice
+            → rag_search (11-node LangGraph pipeline) | history_search (4-node sub-graph)
+            → 8 CRM tools (Kommo API) | direct response
+            (#413: create_agent SDK + BotContext DI, replaces build_supervisor_graph)
 Voice STT:  Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API (FastAPI)
 ```
@@ -55,11 +56,15 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 | `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` (#310) |
 | `telegram_bot/graph/` | LangGraph 11-node RAG pipeline (guard, transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, cache_store, respond) |
 | `telegram_bot/graph/nodes/guard.py` | Content filtering: toxicity, prompt injection, topic guardrails (regex, configurable via GUARD_MODE) |
-| `telegram_bot/agents/` | Multi-agent supervisor architecture (#240): tools, rag_agent, history_agent, supervisor |
+| `telegram_bot/agents/` | create_agent SDK (#413): agent.py (factory), context.py (BotContext DI), rag_tool.py, history_tool.py, crm_tools.py (8 Kommo tools) |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/bge_m3_client.py` | Unified BGE-M3 SDK (BGEM3Client async + BGEM3SyncClient) — replaces separate wrappers |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
-| `telegram_bot/observability.py` | Langfuse init, @observe decorator, PII masking |
+| `telegram_bot/services/{lead_scoring,nurturing,funnel}*.py` | CRM: lead scoring + Kommo sync, nurturing scheduler, funnel analytics (#384, #390) |
+| `telegram_bot/services/kommo_client.py` | KommoClient (async httpx, OAuth2 auto-refresh via KommoTokenStore) |
+| `telegram_bot/services/kommo_token_store.py` | Redis-backed OAuth2 token store for Kommo |
+| `telegram_bot/services/kommo_models.py` | Pydantic v2 models for Kommo API v4 (Lead, Contact, Task, Note, Pipeline) |
+| `telegram_bot/observability.py` | Langfuse init, @observe, PII masking, `create_callback_handler` (for create_agent) |
 | `src/api/` | RAG API (FastAPI wrapper around LangGraph, POST /query) |
 | `src/voice/` | Voice Bot (LiveKit Agent + ElevenLabs + SIP trunk + transcripts) |
 | `src/retrieval/search_engines.py` | 4 search variants (evaluation) |
@@ -70,7 +75,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
-**Observability:** Langfuse v3 — 35 observations/trace, 21 scores (14 RAG + 4 /history + 3 supervisor) + 3 judge scores, curated spans on 6 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
+**Observability:** Langfuse v3 — 35 observations/trace, 25 scores (14 RAG + 4 /history + 3 supervisor + 4 CRM) + 3 judge scores, curated spans on 6 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `eval` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
 
@@ -99,7 +104,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 2. Copy `.env.example` → `.env`
-3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` (Whisper STT), `LANGFUSE_*`, `REDIS_PASSWORD` | Voice: `ELEVENLABS_API_KEY`, `LIVEKIT_*`, `LIFECELL_SIP_*`
+3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` (Whisper STT), `LANGFUSE_*`, `REDIS_PASSWORD` | Voice: `ELEVENLABS_API_KEY`, `LIVEKIT_*` | CRM: `KOMMO_*`, `NURTURING_ENABLED`
 4. `uv sync && make docker-up`
 
 ## Key Docs
@@ -120,8 +125,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
 | `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`, `GUARD_MODE=hard|soft|log`, `CONTENT_FILTER_ENABLED=true|false`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`, `GUARD_MODE=hard|soft|log`, `CONTENT_FILTER_ENABLED=true|false`, `NURTURING_ENABLED=true|false`, `NURTURING_INTERVAL_MINUTES`, `KOMMO_LEAD_SCORE_FIELD_ID`, `KOMMO_LEAD_BAND_FIELD_ID`, `FUNNEL_ROLLUP_CRON`
 
 ## Deployment
 
@@ -169,8 +173,7 @@ make k3s-status                     # Check pods
 
 ```
 /writing-plans → /executing-plans → /finishing-a-development-branch
-/deps                              — dependency audit (Mend Renovate)
-/agent-teams                       — multi-agent coordination
+/deps — dependency audit (Mend Renovate) | /agent-teams — multi-agent coordination
 ```
 
 **Details:** `.claude/rules/skills.md`
