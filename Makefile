@@ -446,25 +446,27 @@ qa: all-checks test ## Full quality assurance
 	@echo "$(GREEN)✓✓✓ Full QA complete! ✓✓✓$(NC)"
 
 # =============================================================================
-# Local Development (docker-compose.local.yml)
+# Local Development (single docker-compose.dev.yml)
 # =============================================================================
 
 .PHONY: local-up local-down local-logs local-ps local-build
+LOCAL_SERVICES := redis qdrant bge-m3 docling
 
 local-up:  ## Start local Docker services
-	docker compose -f docker-compose.local.yml up -d
+	$(COMPOSE_CMD) up -d $(LOCAL_SERVICES)
 
 local-down:  ## Stop local Docker services
-	docker compose -f docker-compose.local.yml down
+	$(COMPOSE_CMD) stop $(LOCAL_SERVICES) || true
+	$(COMPOSE_CMD) rm -f $(LOCAL_SERVICES) || true
 
 local-logs:  ## View local Docker logs
-	docker compose -f docker-compose.local.yml logs -f
+	$(COMPOSE_CMD) logs -f $(LOCAL_SERVICES)
 
 local-ps:  ## Show local Docker status
-	docker compose -f docker-compose.local.yml ps
+	$(COMPOSE_CMD) ps $(LOCAL_SERVICES)
 
 local-build:  ## Rebuild local Docker services
-	docker compose -f docker-compose.local.yml build
+	$(COMPOSE_CMD) build bge-m3 docling
 
 # =============================================================================
 # Deployment
