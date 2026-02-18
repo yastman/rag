@@ -26,3 +26,7 @@ class QueryResponse(BaseModel):
     documents_count: int = Field(default=0, description="Number of retrieved documents")
     rerank_applied: bool = Field(default=False, description="Whether reranking was applied")
     latency_ms: float = Field(default=0.0, description="Total pipeline latency in milliseconds")
+    context: list[dict] = Field(
+        default_factory=list,
+        description="Retrieved context documents (for evaluation)",
+    )
