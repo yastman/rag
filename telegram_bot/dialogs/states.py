@@ -26,7 +26,7 @@ class FunnelSG(StatesGroup):
     """BANT sales funnel."""
 
     property_type = State()
-    area = State()
+    area = State()  # Phase 3: area/location selection (deferred)
     budget = State()
     timeline = State()
     results = State()
