@@ -33,6 +33,8 @@ dependencies = [
     ***REMOVED*** Conversation memory (***REMOVED***154)
     "langgraph-checkpoint-redis>=0.2.0",  ***REMOVED*** Redis checkpointer for LangGraph
     "langmem>=0.0.30",                    ***REMOVED*** SummarizationNode for conversation compression
+    ***REMOVED*** Scheduled nurturing + analytics (***REMOVED***390)
+    "apscheduler>=3.11.2,<4.0",           ***REMOVED*** Async job scheduling (v3 API)
 ]
 
 [project.optional-dependencies]
