@@ -195,6 +195,24 @@ def write_langfuse_scores(lf: Any, result: dict) -> None:
             value=float(result["checkpointer_overhead_proxy_ms"]),
         )
 
+    # --- Nurturing + funnel analytics (#390) ---
+    if "nurturing_batch_size" in result:
+        lf.score_current_trace(
+            name="nurturing_batch_size", value=float(result["nurturing_batch_size"])
+        )
+    if "nurturing_sent_count" in result:
+        lf.score_current_trace(
+            name="nurturing_sent_count", value=float(result["nurturing_sent_count"])
+        )
+    if "funnel_conversion_rate" in result:
+        lf.score_current_trace(
+            name="funnel_conversion_rate", value=float(result["funnel_conversion_rate"])
+        )
+    if "funnel_dropoff_rate" in result:
+        lf.score_current_trace(
+            name="funnel_dropoff_rate", value=float(result["funnel_dropoff_rate"])
+        )
+
     # --- Source attribution (#225) ---
     sources_count = int(result.get("sources_count", 0) or 0)
     lf.score_current_trace(
