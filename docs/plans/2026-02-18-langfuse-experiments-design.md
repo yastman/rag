@@ -6,6 +6,16 @@
 
 ---
 
+## Точечный Review Patch (2026-02-18)
+
+1. API `langfuse` сверен на версии из lockfile: для версионного датасета используется `langfuse.get_dataset(name=..., version=<UTC datetime>)`, а в `dataset.run_experiment(...)` доступны `run_name`, `max_concurrency`, `metadata`.
+2. Для `retrieval_recall` читаем `chunk_location` из top-level поля контекста (`doc["chunk_location"]`), так как именно его добавляем в API-ответ.
+3. Upload gold set должен быть idempotent: `create_dataset` вызывать только при отсутствии датасета, а `create_dataset_item` лучше делать со стабильным `id` для dedupe.
+4. В MVP этого issue не включаем CLI-флаги `--append` и `--cross-document-only` (вынести в follow-up после базового pipeline).
+5. В `Makefile` не хардкодим датасет по дате; передаём `DATASET=...` явно при запуске.
+
+---
+
 ## Контекст
 
 ### Текущее состояние
@@ -16,7 +26,7 @@
 | `telegram_bot/evaluation/judges.py` | RAG Triad (faithfulness, relevance, context) | Обёртка как experiment evaluators |
 | `scripts/validate_traces.py` | 4-phase validation с Go/No-Go | Прогон по фиксированному gold set |
 | `tests/baseline/` | Regression detection по метрикам | Regression detection по качеству ответов |
-| Langfuse SDK v3 | `create_dataset`, `create_dataset_item` | `run_experiment()`, versioned datasets |
+| Langfuse SDK v3 | `create_dataset`, `create_dataset_item`, `run_experiment()`, `get_dataset(version=...)` | стабильный процесс экспериментов для текущего проекта |
 
 ### Qdrant: gdrive_documents_bge
 
@@ -144,19 +154,13 @@ langfuse.create_dataset_item(
 
 ```bash
 # Полная генерация + upload в Langfuse
-python scripts/generate_gold_set.py --collection gdrive_documents_bge
+uv run python scripts/generate_gold_set.py --collection gdrive_documents_bge
 
 # Dry-run: генерация без upload, только JSONL
-python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
-
-# Дополнить существующий dataset (не пересоздавать)
-python scripts/generate_gold_set.py --append --dataset-name rag-gold-set-v1
-
-# Только cross-document вопросы
-python scripts/generate_gold_set.py --cross-document-only
+uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
 
 # Кастомное количество вопросов на документ
-python scripts/generate_gold_set.py --questions-per-doc 10
+uv run python scripts/generate_gold_set.py --questions-per-doc 10
 ```
 
 ### LLM промпт для генерации
@@ -226,34 +230,49 @@ async def rag_task(*, item, **kwargs):
 
 ```python
 from langfuse import Evaluation
+from telegram_bot.evaluation.judges import (
+    judge_answer_relevance,
+    judge_context_relevance,
+    judge_faithfulness,
+)
 
-def faithfulness_eval(*, input, output, expected_output, metadata, **kwargs):
-    """Обёртка над существующим judge_faithfulness из judges.py"""
-    score = call_judge(
-        judge_type="faithfulness",
+def _context_to_text(context_items):
+    return "\n\n".join(
+        str(doc.get("content", ""))
+        for doc in context_items
+        if isinstance(doc, dict) and doc.get("content")
+    )
+
+async def faithfulness_eval(*, input, output, expected_output, metadata, **kwargs):
+    """Обёртка над существующим judge_faithfulness из judges.py."""
+    result = await judge_faithfulness(
+        client=judge_client,  # AsyncOpenAI/LiteLLM client
+        model=judge_model,
         query=input["query"],
         answer=output["response"],
-        context=output.get("context", [])
+        context=_context_to_text(output.get("context", [])),
     )
-    return Evaluation(name="faithfulness", value=score)
+    return Evaluation(name="faithfulness", value=result.score or 0.0, comment=result.reasoning)
 
-def answer_relevance_eval(*, input, output, expected_output, metadata, **kwargs):
-    """Обёртка над judge_answer_relevance"""
-    score = call_judge(
-        judge_type="answer_relevance",
+async def answer_relevance_eval(*, input, output, expected_output, metadata, **kwargs):
+    """Обёртка над judge_answer_relevance."""
+    result = await judge_answer_relevance(
+        client=judge_client,
+        model=judge_model,
         query=input["query"],
-        answer=output["response"]
+        answer=output["response"],
     )
-    return Evaluation(name="answer_relevance", value=score)
+    return Evaluation(name="answer_relevance", value=result.score or 0.0, comment=result.reasoning)
 
-def context_relevance_eval(*, input, output, expected_output, metadata, **kwargs):
-    """Обёртка над judge_context_relevance"""
-    score = call_judge(
-        judge_type="context_relevance",
+async def context_relevance_eval(*, input, output, expected_output, metadata, **kwargs):
+    """Обёртка над judge_context_relevance."""
+    result = await judge_context_relevance(
+        client=judge_client,
+        model=judge_model,
         query=input["query"],
-        context=output.get("context", [])
+        context=_context_to_text(output.get("context", [])),
     )
-    return Evaluation(name="context_relevance", value=score)
+    return Evaluation(name="context_relevance", value=result.score or 0.0, comment=result.reasoning)
 
 def retrieval_recall_eval(*, input, output, expected_output, metadata, **kwargs):
     """Новый: проверяет нашёл ли retrieval нужные source_chunks."""
@@ -263,7 +282,7 @@ def retrieval_recall_eval(*, input, output, expected_output, metadata, **kwargs)
 
     retrieved_chunks = set()
     for doc in output.get("context", []):
-        loc = doc.get("metadata", {}).get("chunk_location", "")
+        loc = doc.get("chunk_location", "")
         if loc:
             retrieved_chunks.add(loc)
 
@@ -333,17 +352,17 @@ print(f"Langfuse UI: {result.dataset_run_url}")
 
 ```bash
 # Запуск эксперимента
-python scripts/run_experiment.py --dataset rag-gold-set-v1 --name "baseline-v1"
+uv run python scripts/run_experiment.py --dataset rag-gold-set-v1 --name "baseline-v1"
 
 # С описанием изменений
-python scripts/run_experiment.py \
+uv run python scripts/run_experiment.py \
     --dataset rag-gold-set-v1 \
     --name "prompt-v2" \
     --description "Updated system prompt" \
     --concurrency 3
 
 # На версированном датасете
-python scripts/run_experiment.py \
+uv run python scripts/run_experiment.py \
     --dataset rag-gold-set-v1 \
     --version "2026-02-18T12:00:00Z" \
     --name "regression-check"
@@ -358,11 +377,11 @@ eval-gold-gen:          ## Generate gold set from Qdrant → Langfuse Dataset
 eval-gold-gen-dry:      ## Dry-run gold set generation (JSONL only)
 	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
 
-eval-experiment:        ## Run experiment on gold set
-	uv run python scripts/run_experiment.py --dataset rag-gold-set-v1
+eval-experiment:        ## Run experiment on gold set (usage: make eval-experiment DATASET=rag-gold-set-v1)
+	uv run python scripts/run_experiment.py --dataset $(DATASET)
 
 eval-experiment-named:  ## Run named experiment (NAME=prompt-v2 make eval-experiment-named)
-	uv run python scripts/run_experiment.py --dataset rag-gold-set-v1 --name $(NAME)
+	uv run python scripts/run_experiment.py --dataset $(DATASET) --name $(NAME)
 ```
 
 ---
@@ -373,7 +392,7 @@ eval-experiment-named:  ## Run named experiment (NAME=prompt-v2 make eval-experi
 
 | Существующий модуль | Как используем |
 |---------------------|----------------|
-| `telegram_bot/evaluation/judges.py` | `call_judge()` → обёртка в experiment evaluators |
+| `telegram_bot/evaluation/judges.py` | `judge_*()` async функции → обёртки в experiment evaluators |
 | `telegram_bot/evaluation/prompts.py` | Промпты для faithfulness/relevance/context judges |
 | `telegram_bot/services/qdrant.py` | `QdrantService` для scroll чанков при генерации gold set |
 | `telegram_bot/graph/` | LangGraph pipeline как `task` в `run_experiment()` |
