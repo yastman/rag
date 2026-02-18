@@ -301,11 +301,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
     )
 
-    # Supervisor architecture (#240)
-    use_supervisor: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("use_supervisor", "USE_SUPERVISOR"),
-    )
+    # Supervisor routing model (#240, #310 — supervisor-only since v3.3)
     supervisor_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),

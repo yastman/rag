@@ -11,7 +11,7 @@ from telegram_bot.config import BotConfig
 
 @pytest.fixture
 def supervisor_config():
-    """BotConfig with USE_SUPERVISOR=true."""
+    """BotConfig for supervisor tests (#310: supervisor-only)."""
     return BotConfig(
         telegram_token="test-token",
         voyage_api_key="voyage-key",
@@ -23,7 +23,6 @@ def supervisor_config():
         qdrant_collection="test_collection",
         redis_url="redis://localhost:6379",
         rerank_provider="none",
-        use_supervisor=True,
     )
 
 
