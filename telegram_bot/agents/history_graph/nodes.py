@@ -296,3 +296,28 @@ async def history_summarize_node(
         "summary": summary,
         "latency_stages": {**state.get("latency_stages", {}), "summarize": elapsed},
     }
+
+
+# --- Langfuse Scores ---
+
+
+def write_history_scores(lf: Any, result: dict[str, Any]) -> None:
+    """Write history sub-graph scores to current Langfuse trace.
+
+    Scores:
+        history_results_count (NUMERIC): Number of retrieved results.
+        history_relevance (NUMERIC): 1.0 if relevant, 0.0 if not.
+        history_rewrite_count (NUMERIC): Number of query rewrites.
+        history_latency_ms (NUMERIC): Total sub-graph wall time (ms).
+    """
+    results = result.get("results", [])
+    latency_stages = result.get("latency_stages", {})
+    total_ms = sum(latency_stages.values()) * 1000
+
+    lf.score_current_trace(name="history_results_count", value=len(results))
+    lf.score_current_trace(
+        name="history_relevance",
+        value=1.0 if result.get("results_relevant") else 0.0,
+    )
+    lf.score_current_trace(name="history_rewrite_count", value=result.get("rewrite_count", 0))
+    lf.score_current_trace(name="history_latency_ms", value=round(total_ms, 1))
