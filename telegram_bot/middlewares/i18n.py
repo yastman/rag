@@ -103,6 +103,7 @@ class I18nMiddleware(BaseMiddleware):
 
         data["i18n"] = self._hub.get_translator_by_locale(locale)
         data["locale"] = locale
+        data["user_service"] = self._user_service
         return await handler(event, data)
 
 
