@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+from unittest.mock import patch
+
 import pytest
 from qdrant_client import QdrantClient
 
@@ -87,13 +89,17 @@ def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
 
 def test_qdrant_connection():
     """Проверка подключения к Qdrant."""
-    settings = Settings()
+    settings = Settings(api_provider="openai", openai_api_key="test-key")
     parsed = urlparse(settings.qdrant_url)
     host = parsed.hostname or "localhost"
     port = parsed.port or 6333
     if not _is_port_open(host, port):
         pytest.skip(f"Qdrant not running on {host}:{port}")
-    assert _run_qdrant_connection_checks()
+    with patch.dict(
+        "os.environ",
+        {"API_PROVIDER": "openai", "OPENAI_API_KEY": "test-key"},
+    ):
+        assert _run_qdrant_connection_checks()
 
 
 if __name__ == "__main__":
