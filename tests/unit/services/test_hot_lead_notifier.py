@@ -46,3 +46,17 @@ async def test_notifier_returns_false_on_missing_fields():
 
     assert result is False
     bot.send_message.assert_not_awaited()
+
+
+async def test_notifier_handles_non_numeric_score_without_crashing():
+    """Invalid score payload should not crash notification flow."""
+    cache = AsyncMock()
+    cache.redis = None
+    bot = AsyncMock()
+    notifier = HotLeadNotifier(bot=bot, cache=cache, manager_ids=[1], dedupe_ttl_sec=3600)
+
+    result = await notifier.notify_if_hot({"lead_id": 1, "score": "high", "session_id": "s1"})
+
+    assert result is True
+    bot.send_message.assert_awaited_once()
+    assert "score=0" in bot.send_message.await_args.kwargs["text"]
