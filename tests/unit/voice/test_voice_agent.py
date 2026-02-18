@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 
@@ -98,11 +99,7 @@ async def test_search_tool_forwards_langfuse_trace_id():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_response)
 
-    client_cm = AsyncMock()
-    client_cm.__aenter__.return_value = mock_client
-    client_cm.__aexit__.return_value = None
-
-    with patch("src.voice.agent.httpx.AsyncClient", return_value=client_cm):
+    with patch("src.voice.agent._get_http_client", return_value=mock_client):
         await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "test query")
 
     payload = mock_client.post.await_args.kwargs["json"]
@@ -123,11 +120,7 @@ async def test_search_tool_omits_langfuse_trace_id_when_none():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_response)
 
-    client_cm = AsyncMock()
-    client_cm.__aenter__.return_value = mock_client
-    client_cm.__aexit__.return_value = None
-
-    with patch("src.voice.agent.httpx.AsyncClient", return_value=client_cm):
+    with patch("src.voice.agent._get_http_client", return_value=mock_client):
         await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "test query")
 
     payload = mock_client.post.await_args.kwargs["json"]
@@ -149,11 +142,7 @@ async def test_search_tool_appends_transcript_entries_with_store():
     mock_client = MagicMock()
     mock_client.post = AsyncMock(return_value=mock_response)
 
-    client_cm = AsyncMock()
-    client_cm.__aenter__.return_value = mock_client
-    client_cm.__aexit__.return_value = None
-
-    with patch("src.voice.agent.httpx.AsyncClient", return_value=client_cm):
+    with patch("src.voice.agent._get_http_client", return_value=mock_client):
         result = await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "что есть в Несебре")
 
     assert result == "Найдено 3 варианта."
@@ -163,3 +152,48 @@ async def test_search_tool_appends_transcript_entries_with_store():
     assert first["call_id"] == "22222222-2222-2222-2222-222222222222"
     assert first["role"] == "user"
     assert second["role"] == "bot"
+
+
+def test_get_http_client_returns_shared_instance():
+    """_get_http_client returns the same AsyncClient on repeated calls (#369)."""
+    import src.voice.agent as mod
+
+    original = mod._http_client
+    try:
+        mod._http_client = None
+        first = mod._get_http_client()
+        second = mod._get_http_client()
+        assert first is second
+        assert isinstance(first, httpx.AsyncClient)
+    finally:
+        mod._http_client = original
+
+
+def test_get_http_client_has_pool_limits():
+    """Shared httpx client uses connection pool limits (#369)."""
+    import src.voice.agent as mod
+
+    original = mod._http_client
+    try:
+        mod._http_client = None
+        client = mod._get_http_client()
+        pool = client._transport._pool
+        assert pool._max_connections == 10
+        assert pool._max_keepalive_connections == 5
+    finally:
+        mod._http_client = original
+
+
+async def test_close_http_client():
+    """_close_http_client closes the client and resets the global (#369)."""
+    import src.voice.agent as mod
+
+    original = mod._http_client
+    try:
+        mod._http_client = None
+        mod._get_http_client()
+        assert mod._http_client is not None
+        await mod._close_http_client()
+        assert mod._http_client is None
+    finally:
+        mod._http_client = original

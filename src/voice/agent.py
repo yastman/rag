@@ -34,6 +34,26 @@ logger = logging.getLogger(__name__)
 RAG_API_URL = os.getenv("RAG_API_URL", "http://rag-api:8080")
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("VOICE_DATABASE_URL", "")
 _transcript_store: TranscriptStore | None = None
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    """Return a shared httpx client with connection pooling."""
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(
+            timeout=30.0,
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+    return _http_client
+
+
+async def _close_http_client() -> None:
+    """Close the shared httpx client (called on server shutdown)."""
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
 
 
 async def _get_transcript_store() -> TranscriptStore | None:
@@ -141,24 +161,24 @@ class VoiceBot(Agent):
         """
         await self._append_transcript("user", query)
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                payload: dict[str, Any] = {
-                    "query": query,
-                    "user_id": 0,
-                    "session_id": f"voice-{self._call_id}",
-                    "channel": "voice",
-                }
-                if self._langfuse_trace_id:
-                    payload["langfuse_trace_id"] = self._langfuse_trace_id
-                resp = await client.post(
-                    f"{RAG_API_URL}/query",
-                    json=payload,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                answer = str(data.get("response", "Информация не найдена."))
-                await self._append_transcript("bot", answer)
-                return answer
+            client = _get_http_client()
+            payload: dict[str, Any] = {
+                "query": query,
+                "user_id": 0,
+                "session_id": f"voice-{self._call_id}",
+                "channel": "voice",
+            }
+            if self._langfuse_trace_id:
+                payload["langfuse_trace_id"] = self._langfuse_trace_id
+            resp = await client.post(
+                f"{RAG_API_URL}/query",
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            answer = str(data.get("response", "Информация не найдена."))
+            await self._append_transcript("bot", answer)
+            return answer
         except Exception:
             logger.exception("RAG API call failed")
             fallback = "Извините, не могу найти информацию сейчас."
