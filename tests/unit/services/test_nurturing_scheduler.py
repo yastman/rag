@@ -48,3 +48,16 @@ async def test_scheduler_stop_is_idempotent(fake_services):
     await scheduler.stop()
     # Second stop should not raise
     await scheduler.stop()
+
+
+@pytest.mark.asyncio
+async def test_scheduler_uses_funnel_rollup_cron_from_config(fake_services):
+    fake_services["config"].funnel_rollup_cron = "7 * * * *"
+    scheduler = NurturingScheduler(**fake_services)
+    await scheduler.start()
+
+    job = scheduler._scheduler.get_job("funnel-analytics-rollup")
+    assert job is not None
+    assert "minute='7'" in str(job.trigger)
+
+    await scheduler.stop()
