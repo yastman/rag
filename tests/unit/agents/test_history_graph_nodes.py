@@ -186,3 +186,82 @@ async def test_grade_node_filters_low_scores(_patch_observe):
     assert result["results_relevant"] is True
     # Low-score items filtered
     assert len(result["results"]) == 1
+
+
+# --- rewrite node ---
+
+
+async def test_rewrite_node_reformulates_query(_patch_observe):
+    """rewrite_node calls LLM to reformulate query."""
+    from telegram_bot.agents.history_graph.nodes import history_rewrite_node
+
+    mock_llm = AsyncMock()
+    mock_response = AsyncMock()
+    mock_response.choices = [AsyncMock(message=AsyncMock(content="цены на квартиры в Варне"))]
+    mock_llm.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    state = {
+        "query": "цены",
+        "user_id": 42,
+        "results": [],
+        "results_relevant": False,
+        "rewrite_count": 0,
+        "max_rewrite_attempts": 1,
+        "summary": "",
+        "latency_stages": {},
+    }
+    result = await history_rewrite_node(state, llm=mock_llm)
+
+    assert result["query"] == "цены на квартиры в Варне"
+    assert result["rewrite_count"] == 1
+    mock_llm.chat.completions.create.assert_called_once()
+
+
+async def test_rewrite_node_llm_failure_keeps_query(_patch_observe):
+    """LLM failure keeps original query."""
+    from telegram_bot.agents.history_graph.nodes import history_rewrite_node
+
+    mock_llm = AsyncMock()
+    mock_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM down"))
+
+    state = {
+        "query": "оригинальный",
+        "user_id": 42,
+        "results": [],
+        "results_relevant": False,
+        "rewrite_count": 0,
+        "max_rewrite_attempts": 1,
+        "summary": "",
+        "latency_stages": {},
+    }
+    result = await history_rewrite_node(state, llm=mock_llm)
+
+    assert result["query"] == "оригинальный"
+    assert result["rewrite_count"] == 1
+
+
+# --- routing ---
+
+
+def test_route_history_grade_relevant():
+    """Relevant results route to summarize."""
+    from telegram_bot.agents.history_graph.nodes import route_history_grade
+
+    state = {"results_relevant": True, "rewrite_count": 0, "max_rewrite_attempts": 1}
+    assert route_history_grade(state) == "summarize"
+
+
+def test_route_history_grade_not_relevant_rewrite():
+    """Not relevant + rewrites left → rewrite."""
+    from telegram_bot.agents.history_graph.nodes import route_history_grade
+
+    state = {"results_relevant": False, "rewrite_count": 0, "max_rewrite_attempts": 1}
+    assert route_history_grade(state) == "rewrite"
+
+
+def test_route_history_grade_exhausted():
+    """Not relevant + rewrites exhausted → summarize (fallback)."""
+    from telegram_bot.agents.history_graph.nodes import route_history_grade
+
+    state = {"results_relevant": False, "rewrite_count": 1, "max_rewrite_attempts": 1}
+    assert route_history_grade(state) == "summarize"
