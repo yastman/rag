@@ -30,11 +30,7 @@ def build_rag_task(graph: Any) -> Any:
         question = (
             item.input.get("question", "") if isinstance(item.input, dict) else str(item.input)
         )
-        loop = asyncio.new_event_loop()
-        try:
-            result = loop.run_until_complete(graph.ainvoke({"query": question}))
-        finally:
-            loop.close()
+        result = asyncio.run(graph.ainvoke({"query": question}))
         return {
             "answer": result.get("response", ""),
             "context": "\n".join(
@@ -59,17 +55,20 @@ def main() -> None:
     from telegram_bot.config import BotConfig
     from telegram_bot.graph.graph import build_graph
     from telegram_bot.services.bge_m3_client import BGEM3HybridEmbeddings, BGEM3SparseEmbeddings
+    from telegram_bot.services.colbert_reranker import ColbertRerankerService
 
     config = BotConfig()
     embeddings = BGEM3HybridEmbeddings(base_url=config.bge_m3_url)
     sparse = BGEM3SparseEmbeddings(base_url=config.bge_m3_url)
     qdrant = QdrantService(url=config.qdrant_url, collection_name=config.get_collection_name())
+    reranker = ColbertRerankerService(base_url=config.bge_m3_url)
 
     graph = build_graph(
         cache=None,
         embeddings=embeddings,
         sparse_embeddings=sparse,
         qdrant=qdrant,
+        reranker=reranker,
     )
 
     langfuse = Langfuse()
