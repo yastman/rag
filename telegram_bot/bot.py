@@ -568,9 +568,6 @@ class PropertyBot:
             "configurable": {
                 "user_id": user_id,
                 "session_id": session_id,
-                # Judge sampling config passed to rag_search tool (#310)
-                "judge_sample_rate": self.config.judge_sample_rate,
-                "judge_model": self.config.judge_model,
                 "llm_base_url": self.config.llm_base_url,
             }
         }
