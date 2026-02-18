@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from .bge_m3_client import BGEM3Client, BGEM3SyncClient
     from .colbert_reranker import ColbertRerankerService
     from .history_service import HistoryService
+    from .lead_scoring_store import LeadScoringStore
     from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
     from .metrics import PipelineMetrics
     from .qdrant import QdrantService
@@ -38,6 +39,7 @@ __all__ = [
     "HistoryService",
     "HyDEGenerator",
     "LLMService",
+    "LeadScoringStore",
     "PipelineMetrics",
     "QdrantService",
     "QueryAnalyzer",
@@ -60,6 +62,7 @@ _IMPORT_MAP = {
     "ExpandedChunk": ".small_to_big",
     "HistoryService": ".history_service",
     "HyDEGenerator": ".query_preprocessor",
+    "LeadScoringStore": ".lead_scoring_store",
     "SessionSummary": ".session_summary",
     "check_responses_parse_compat": ".session_summary",
     "LLMService": ".llm",
