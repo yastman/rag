@@ -152,4 +152,5 @@ async def query(req: QueryRequest) -> QueryResponse:
         documents_count=result.get("search_results_count", 0),
         rerank_applied=result.get("rerank_applied", False),
         latency_ms=round(elapsed_ms, 1),
+        context=result.get("retrieved_context", []),
     )
