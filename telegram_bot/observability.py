@@ -125,7 +125,7 @@ if LANGFUSE_ENABLED:
 
     def create_callback_handler(
         *,
-        trace_context: dict | None = None,
+        trace_context: Any | None = None,
         update_trace: bool = False,
     ):
         """Create a Langfuse CallbackHandler for create_agent integration.
