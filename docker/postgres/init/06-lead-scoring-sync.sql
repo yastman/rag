@@ -35,3 +35,6 @@ CREATE TABLE IF NOT EXISTS lead_score_sync_audit (
 
 CREATE INDEX IF NOT EXISTS idx_lead_scores_pending_sync
     ON lead_scores (sync_status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_lead_scores_band_sync
+    ON lead_scores (score_band, sync_status, updated_at DESC);
