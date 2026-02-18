@@ -1,181 +1,80 @@
-# Document Ingestion Pipeline
+# Ingestion
 
-Production-ready pipeline for ingesting documents from local directories and Google Drive into Qdrant.
+This project currently uses a unified CocoIndex-based ingestion pipeline as the primary path.
 
-## Overview
+## Primary Runtime
 
-The ingestion pipeline uses CocoIndex for document processing with:
-- **CocoIndex IngestionPipeline** — Document loading, chunking, embedding
-- **Voyage AI** — High-quality embeddings (voyage-4-large, 1024-dim)
-- **Qdrant** — Vector storage with hybrid search (dense + BM42 sparse)
-- **Postgres** — Ingestion state tracking (optional)
+- Package: `src/ingestion/unified/`
+- CLI entrypoint: `python -m src.ingestion.unified.cli`
+- Pipeline version in code: `v3.2.1`
 
-## Architecture
+## What The Pipeline Does
 
-```
-Local Directory / Google Drive
-            │
-            ▼
-┌───────────────────────────────────────────┐
-│  CocoIndex Flow                            │
-│  - LocalFile source                        │
-│  - SplitRecursively (512 tokens, 50 overlap)│
-│  - VoyageEmbedFunction (voyage-4-large)    │
-└───────────────────────────────────────────┘
-            │
-            ▼
-┌───────────────────────────────────────────┐
-│  Qdrant Target                             │
-│  - Dense vectors: voyage-4-large (1024-dim)│
-│  - Cosine similarity                       │
-│  - Incremental updates                     │
-└───────────────────────────────────────────┘
-```
+1. Reads files from `GDRIVE_SYNC_DIR` (LocalFile source).
+2. Computes stable file identity via manifest/content hash.
+3. Parses and chunks files through Docling.
+4. Generates embeddings:
+   - default: local BGE-M3 (`USE_LOCAL_DENSE_EMBEDDINGS=true`)
+   - optional: Voyage dense + BGE-M3 sparse
+5. Upserts/deletes points in Qdrant.
+6. Tracks file state/retries/DLQ in PostgreSQL.
 
-## Quick Start
+## Core Commands
 
 ```bash
-# 1. Setup Qdrant collection with payload indexes
-make ingest-setup
+# One-shot run
+make ingest-unified
 
-# 2. Ingest from local directory
-make ingest-dir DIR=path/to/documents
+# Continuous watch mode
+make ingest-unified-watch
 
-# 3. Or ingest from Google Drive
-export GOOGLE_SERVICE_ACCOUNT_KEY=path/to/credentials.json
-make ingest-gdrive FOLDER_ID=your_folder_id
+# State/DLQ status
+make ingest-unified-status
 
-# 4. Check status
-make ingest-status
+# Reprocess files in error state
+make ingest-unified-reprocess
 ```
 
-## Supported Formats
-
-| Format | Source | Notes |
-|--------|--------|-------|
-| PDF | LocalFile | Auto-detected |
-| DOCX | LocalFile | Auto-detected |
-| MD | LocalFile | Auto-detected |
-| TXT | LocalFile | Auto-detected |
-| HTML | LocalFile | Auto-detected |
-| Google Docs | Not yet supported | Use DoclingClient instead |
-| Google Sheets | Not yet supported | Use DoclingClient instead |
-
-## Configuration
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant server URL |
-| `QDRANT_API_KEY` | - | Qdrant API key (optional) |
-| `VOYAGE_API_KEY` | - | Voyage AI API key (required) |
-| `QDRANT_COLLECTION` | `contextual_bulgaria_voyage` | Target collection |
-| `GOOGLE_SERVICE_ACCOUNT_KEY` | - | Path to GDrive service account JSON |
-
-### Chunking Parameters
-
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| `chunk_size` | 512 | Tokens per chunk |
-| `chunk_overlap` | 50 | Overlap between chunks |
-
-## Makefile Targets
+Direct CLI equivalents:
 
 ```bash
-make ingest-setup    # Setup Qdrant collection with indexes
-make ingest-dir      # Ingest from directory (DIR=path)
-make ingest-gdrive   # Ingest from Google Drive (FOLDER_ID=xxx)
-make ingest-status   # Show collection statistics
-make ingest-test     # Run ingestion unit tests
+uv run python -m src.ingestion.unified.cli preflight
+uv run python -m src.ingestion.unified.cli bootstrap
+uv run python -m src.ingestion.unified.cli run --watch
+uv run python -m src.ingestion.unified.cli status
+uv run python -m src.ingestion.unified.cli reprocess --errors
 ```
 
-## Python API
+## Required Environment Variables
 
-### Basic Usage
+- `INGESTION_DATABASE_URL`
+- `QDRANT_URL`
+- `DOCLING_URL`
+- `BGE_M3_URL`
 
-```python
-from telegram_bot.services.ingestion_cocoindex import (
-    CocoIndexIngestionService,
-    ingest_from_directory,
-    ingest_from_gdrive,
-    get_ingestion_status,
-)
+Commonly used:
+- `GDRIVE_SYNC_DIR`
+- `GDRIVE_COLLECTION_NAME`
+- `USE_LOCAL_DENSE_EMBEDDINGS`
+- `BGE_M3_TIMEOUT`
+- `BGE_M3_CONCURRENCY`
+- `MANIFEST_DIR`
 
-# Convenience functions
-stats = await ingest_from_directory("/path/to/docs")
-stats = await ingest_from_gdrive("folder_id")
-status = await get_ingestion_status()
-```
+## Docker Service
 
-### Service Class
-
-```python
-service = CocoIndexIngestionService(
-    qdrant_url="http://localhost:6333",
-    voyage_api_key="your-api-key",
-    collection_name="my_collection",
-)
-
-# Ingest directory
-stats = await service.ingest_directory(Path("/path/to/docs"))
-
-# Ingest Google Drive
-stats = await service.ingest_gdrive("folder_id")
-
-# Get stats
-collection_stats = await service.get_collection_stats()
-
-# Cleanup
-await service.close()
-```
-
-### Ingestion Stats
-
-```python
-@dataclass
-class CocoIndexIngestionStats:
-    total_documents: int = 0
-    total_nodes: int = 0
-    indexed_nodes: int = 0
-    skipped_nodes: int = 0
-    duration_seconds: float = 0.0
-    errors: list[str] = []
-```
-
-## Postgres State Tracking (Optional)
-
-For advanced state management, use the `cocoindex` database:
+`docker-compose.dev.yml` includes `ingestion` service under profile `ingest`.
 
 ```bash
-# Database auto-created on Postgres startup
-# Tables: ingestion_state, ingestion_dead_letter
+make docker-ingest-up
+make ingest-unified-logs
 ```
 
-Schema in `docker/postgres/init/02-cocoindex.sql`.
+## Legacy Commands
 
-## Testing
-
-```bash
-# Unit tests (no Docker required)
-make ingest-test
-
-# Integration tests (requires Docker services)
-RUN_INTEGRATION_TESTS=1 pytest tests/integration/test_ingestion_e2e.py -v
-```
+`make ingest-gdrive` is deprecated. Use unified ingestion commands above for active development.
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Voyage 429 rate limit | Reduce batch size, add delays |
-| Qdrant connection refused | `docker compose up -d qdrant` |
-| GDrive auth error | Check `GOOGLE_SERVICE_ACCOUNT_KEY` path |
-| No documents found | Check directory path, file extensions |
-
-## See Also
-
-- [PIPELINE_OVERVIEW.md](PIPELINE_OVERVIEW.md) — Full RAG pipeline
-- [QDRANT_STACK.md](QDRANT_STACK.md) — Vector database details
-- [agent-rules/workflow.md](agent-rules/workflow.md) — Codex workflow
-- [agent-rules/testing-and-validation.md](agent-rules/testing-and-validation.md) — Validation gates
+- `preflight` fails on Qdrant: confirm collection exists or run `bootstrap`.
+- `status` shows only errors: run `reprocess --errors`, then inspect Docling/BGE-M3 logs.
+- No files processed: verify `GDRIVE_SYNC_DIR` mount/path and allowed file extensions.
