@@ -41,5 +41,8 @@ CREATE TABLE IF NOT EXISTS scheduler_leases (
 CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending
     ON nurturing_jobs (status, scheduled_for ASC);
 
+-- Add stage_name to funnel_events (#387 dependency — needed by analytics queries)
+ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_funnel_events_date_stage
     ON funnel_events (DATE(created_at), stage_name);
