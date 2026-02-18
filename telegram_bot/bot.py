@@ -225,6 +225,9 @@ class PropertyBot:
         # PostgreSQL pool — initialized in start()
         self._pg_pool: Any = None
 
+        # Kommo CRM client (initialized in start() if enabled)
+        self._kommo_client: Any | None = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -565,6 +568,22 @@ class PropertyBot:
         ]
         if self._history_service is not None:
             tools.append(create_history_search_tool(history_service=self._history_service))
+
+        # CRM tools (conditional on KOMMO_ENABLED + initialized client)
+        if self.config.kommo_enabled and self._kommo_client is not None:
+            from .agents.crm_tools import create_crm_tools
+
+            tools.extend(
+                create_crm_tools(
+                    kommo=self._kommo_client,
+                    llm=self._llm,
+                    history_service=self._history_service,
+                    default_pipeline_id=self.config.kommo_default_pipeline_id,
+                    responsible_user_id=self.config.kommo_responsible_user_id,
+                    session_field_id=self.config.kommo_session_field_id,
+                    idempotency_store=self._cache.redis,
+                )
+            )
 
         # Build supervisor LLM (cheap model for routing)
         supervisor_llm = self._graph_config.create_supervisor_llm(
@@ -936,6 +955,37 @@ class PropertyBot:
             logger.warning("History service init failed, /history disabled", exc_info=True)
             self._history_service = None
 
+        # Initialize Kommo CRM client if enabled
+        if self.config.kommo_enabled and self.config.kommo_subdomain:
+            try:
+                from .services.kommo_client import KommoClient
+                from .services.kommo_tokens import KommoTokenStore
+
+                if self._cache.redis is None:
+                    raise RuntimeError("Cache redis client is not initialized")
+
+                token_store = KommoTokenStore(
+                    redis=self._cache.redis,
+                    client_id=self.config.kommo_client_id,
+                    client_secret=self.config.kommo_client_secret.get_secret_value(),
+                    subdomain=self.config.kommo_subdomain,
+                    redirect_uri=self.config.kommo_redirect_uri,
+                )
+                auth_code = self.config.kommo_auth_code or None
+                await token_store.initialize(authorization_code=auth_code)
+
+                self._kommo_client = KommoClient(
+                    subdomain=self.config.kommo_subdomain,
+                    token_store=token_store,
+                )
+                logger.info(
+                    "Kommo CRM client initialized (subdomain=%s)",
+                    self.config.kommo_subdomain,
+                )
+            except Exception:
+                logger.exception("Failed to initialize Kommo CRM client")
+                self._kommo_client = None
+
         # Initialize PostgreSQL pool for realestate DB
         try:
             import asyncpg
@@ -1010,6 +1060,9 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
+        if self._kommo_client is not None:
+            await self._kommo_client.close()
+            self._kommo_client = None
         if self._llm_guard_client is not None and hasattr(self._llm_guard_client, "aclose"):
             await self._llm_guard_client.aclose()
         if self._checkpointer is not None:
