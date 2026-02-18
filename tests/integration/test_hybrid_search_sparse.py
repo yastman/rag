@@ -109,7 +109,7 @@ def _collection_exists(url: str, api_key: str, collection_name: str) -> bool:
 
 def test_hybrid_search_with_sparse():
     """Test hybrid search using dense + sparse vectors."""
-    settings = Settings()
+    settings = Settings(api_provider="openai", openai_api_key="test-key")
     parsed = urlparse(settings.qdrant_url)
     host = parsed.hostname or "localhost"
     port = parsed.port or 6333

@@ -138,6 +138,7 @@ test: ***REMOVED******REMOVED*** Run fast deterministic PR/local gate (unit + cr
 
 test-full: ***REMOVED******REMOVED*** Run full test suite (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
+	uv sync --all-extras --all-groups
 	uv run pytest tests/
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
 
