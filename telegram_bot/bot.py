@@ -552,7 +552,7 @@ class PropertyBot:
             tools.append(create_history_search_tool(history_service=self._history_service))
 
         # Build supervisor LLM (cheap model for routing)
-        supervisor_llm = self._graph_config.create_llm(model_override=self.config.supervisor_model)
+        supervisor_llm = self._graph_config.create_llm()
 
         supervisor_graph = build_supervisor_graph(
             supervisor_llm=supervisor_llm,
