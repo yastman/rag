@@ -118,6 +118,51 @@ spec:
                 secretKeyRef:
                   name: api-keys
                   key: LANGFUSE_HOST
+            # CRM — Kommo
+            - name: KOMMO_ENABLED
+              value: "false"
+            - name: KOMMO_SUBDOMAIN
+              value: ""
+            - name: KOMMO_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: KOMMO_ACCESS_TOKEN
+                  optional: true
+            - name: KOMMO_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: KOMMO_CLIENT_ID
+                  optional: true
+            - name: KOMMO_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: api-keys
+                  key: KOMMO_CLIENT_SECRET
+                  optional: true
+            - name: KOMMO_REDIRECT_URI
+              value: ""
+            - name: KOMMO_TELEGRAM_FIELD_ID
+              value: "0"
+            - name: KOMMO_DEFAULT_PIPELINE_ID
+              value: "0"
+            - name: KOMMO_SESSION_FIELD_ID
+              value: "0"
+            - name: KOMMO_LEAD_SCORE_FIELD_ID
+              value: "0"
+            - name: KOMMO_LEAD_BAND_FIELD_ID
+              value: "0"
+            # Manager
+            - name: MANAGER_IDS
+              value: ""
+            - name: MANAGER_HOT_LEAD_THRESHOLD
+              value: "60"
+            - name: MANAGER_HOT_LEAD_DEDUPE_SEC
+              value: "3600"
+            # Real Estate DB
+            - name: REALESTATE_DATABASE_URL
+              value: "postgresql://postgres:postgres@postgres:5432/realestate"
           resources:
             requests:
               memory: 128Mi
