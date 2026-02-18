@@ -85,6 +85,21 @@ class TestKommoTokenStore:
             assert token == "initial_token"
             mock_exchange.assert_called_once_with("auth_code_123")
 
+    async def test_initialize_prefers_cached_token_over_auth_code(self, token_store, mock_redis):
+        """Existing valid token should be reused even if auth code is provided."""
+        future_ts = str(int(time.time()) + 3600)
+        mock_redis.hgetall.return_value = {
+            b"access_token": b"cached_token",
+            b"refresh_token": b"refresh_123",
+            b"expires_at": future_ts.encode(),
+        }
+        with patch.object(
+            token_store, "_exchange_auth_code", new_callable=AsyncMock
+        ) as mock_exchange:
+            token = await token_store.initialize(authorization_code="auth_code_123")
+            assert token == "cached_token"
+            mock_exchange.assert_not_called()
+
     async def test_save_tokens_to_redis(self, token_store, mock_redis):
         """Verify tokens are persisted to Redis hash."""
         await token_store._save_tokens(
