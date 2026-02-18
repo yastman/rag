@@ -10,7 +10,11 @@ Five routing functions that control the graph flow:
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal
+
+
+logger = logging.getLogger(__name__)
 
 
 def route_start(
@@ -55,11 +59,23 @@ def route_cache(
 def route_grade(
     state: dict[str, Any],
 ) -> Literal["rerank", "rewrite", "generate"]:
-    """Route after grading: skip_rerank → generate, relevant → rerank, not relevant + retries → rewrite/generate."""
+    """Route after grading: skip_rerank → generate, relevant → rerank, not relevant + retries → rewrite/generate.
+
+    Also enforces LLM call limit (#374): when llm_call_count >= max_llm_calls,
+    prevents further rewrites and routes to generate instead.
+    """
     if state.get("documents_relevant", False):
         if state.get("skip_rerank", False):
             return "generate"
         return "rerank"
+
+    # LLM call limit check (#374) — prevent rewrite loops
+    max_llm = state.get("max_llm_calls", 5)
+    llm_count = state.get("llm_call_count", 0)
+    if llm_count >= max_llm:
+        logger.warning("LLM call limit reached (%d/%d), skipping rewrite", llm_count, max_llm)
+        return "generate"
+
     max_attempts = state.get("max_rewrite_attempts", 1)
     if (
         state.get("rewrite_count", 0) < max_attempts
