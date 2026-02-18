@@ -265,3 +265,93 @@ def test_route_history_grade_exhausted():
 
     state = {"results_relevant": False, "rewrite_count": 1, "max_rewrite_attempts": 1}
     assert route_history_grade(state) == "summarize"
+
+
+# --- summarize node ---
+
+
+async def test_summarize_node_calls_llm(_patch_observe):
+    """summarize_node calls LLM with history context and returns summary."""
+    from telegram_bot.agents.history_graph.nodes import history_summarize_node
+
+    mock_llm = AsyncMock()
+    mock_response = AsyncMock()
+    mock_response.choices = [
+        AsyncMock(message=AsyncMock(content="Ранее вы спрашивали о ценах в Варне."))
+    ]
+    mock_llm.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    state = {
+        "query": "цены",
+        "user_id": 42,
+        "results": [
+            {
+                "query": "цены на квартиры",
+                "response": "Средние цены в Варне от 80k EUR",
+                "timestamp": "2026-02-13T10:00",
+                "score": 0.9,
+            },
+        ],
+        "results_relevant": True,
+        "rewrite_count": 0,
+        "max_rewrite_attempts": 1,
+        "summary": "",
+        "latency_stages": {},
+    }
+    result = await history_summarize_node(state, llm=mock_llm)
+
+    assert "Ранее вы спрашивали" in result["summary"]
+    mock_llm.chat.completions.create.assert_called_once()
+
+
+async def test_summarize_node_empty_results_fallback(_patch_observe):
+    """Empty results produce fallback message without LLM call."""
+    from telegram_bot.agents.history_graph.nodes import history_summarize_node
+
+    mock_llm = AsyncMock()
+    state = {
+        "query": "несуществующий",
+        "user_id": 42,
+        "results": [],
+        "results_relevant": False,
+        "rewrite_count": 0,
+        "max_rewrite_attempts": 1,
+        "summary": "",
+        "latency_stages": {},
+    }
+    result = await history_summarize_node(state, llm=mock_llm)
+
+    assert "не найдено" in result["summary"].lower()
+    mock_llm.chat.completions.create.assert_not_called()
+
+
+async def test_summarize_node_llm_failure_returns_raw(_patch_observe):
+    """LLM failure falls back to raw formatted results."""
+    from telegram_bot.agents.history_graph.nodes import history_summarize_node
+
+    mock_llm = AsyncMock()
+    mock_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM down"))
+
+    state = {
+        "query": "цены",
+        "user_id": 42,
+        "results": [
+            {
+                "query": "цены",
+                "response": "Средние цены...",
+                "timestamp": "2026-02-13T10:00",
+                "score": 0.9,
+            },
+        ],
+        "results_relevant": True,
+        "rewrite_count": 0,
+        "max_rewrite_attempts": 1,
+        "summary": "",
+        "latency_stages": {},
+    }
+    result = await history_summarize_node(state, llm=mock_llm)
+
+    assert isinstance(result["summary"], str)
+    assert len(result["summary"]) > 0
+    # Falls back to raw format
+    assert "цены" in result["summary"]
