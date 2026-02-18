@@ -84,11 +84,11 @@ Config: `tests/baseline/thresholds.yaml` (includes `go_no_go` section for valida
 | Component | Span Name | Details |
 |-----------|-----------|---------|
 | `bot.py` handle_query | `telegram-rag-query` | Root span, session_id, user_id, tags |
-| `bot.py` _handle_query_supervisor | `telegram-rag-supervisor` | Supervisor root span (USE_SUPERVISOR=true) |
+| `bot.py` _handle_query_supervisor | `telegram-rag-supervisor` | Supervisor root span (always-on since #310) |
 
-### Supervisor Spans (#242)
+### Supervisor Spans (#242, #310)
 
-When `USE_SUPERVISOR=true`, the trace tree is:
+Supervisor is the only query path (monolith removed in #310). Trace tree:
 ```
 telegram-rag-supervisor → supervisor-routing → tool-rag-search → [existing graph nodes]
                                              → tool-history-search
@@ -102,7 +102,7 @@ telegram-rag-supervisor → supervisor-routing → tool-rag-search → [existing
 | `history_agent.py` history_search | `tool-history-search` | auto | — |
 | `tools.py` direct_response | `tool-direct-response` | auto | — |
 
-Supervisor-specific scores (written by `_handle_query_supervisor`):
+Supervisor-specific scores (written by `_handle_query_supervisor` in `bot.py`):
 
 | Score | Type | Purpose |
 |-------|------|---------|
@@ -244,7 +244,7 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 
 ## Langfuse Scores (All Exit Paths)
 
-14 scores written via `_write_langfuse_scores(lf, result)` + 3 judge scores (async) in `bot.py` after `graph.ainvoke()`:
+14 scores written via `write_langfuse_scores(lf, result)` (from `telegram_bot/scoring.py`) + 3 judge scores (async). Called by `rag_agent.py` (supervisor path) and `handle_voice` (voice path):
 
 **Latency convention:** `latency_total_ms` is **wall-time** measured via `time.perf_counter` in `handle_query` (pipeline_wall_ms), NOT sum of stages. All `latency_stages` values are in **seconds** (float) for per-stage breakdown only.
 
