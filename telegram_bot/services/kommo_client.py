@@ -1,93 +1,154 @@
-"""Kommo CRM async HTTP client with rate limiting (#389).
+"""Async Kommo CRM API adapter.
 
-Enforces 7 req/s throttle (Kommo API limit) and handles HTTP 429
-with Retry-After from response body or header.
+Pattern follows BGEM3Client: httpx.AsyncClient + tenacity retry + typed responses.
+All methods auto-inject OAuth2 bearer token from KommoTokenStore.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
-from collections import deque
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+
+from telegram_bot.services.kommo_models import (
+    ContactResponse,
+    LeadCreate,
+    LeadResponse,
+    NoteResponse,
+    TaskCreate,
+    TaskResponse,
+)
+
+
+if TYPE_CHECKING:
+    from telegram_bot.services.kommo_models import ContactCreate
+    from telegram_bot.services.kommo_tokens import KommoTokenStore
 
 
 logger = logging.getLogger(__name__)
 
+RETRYABLE = (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout)
+
+
+def _retryable_http_status(exc: BaseException) -> bool:
+    if not isinstance(exc, httpx.HTTPStatusError):
+        return False
+    return exc.response.status_code in {429, 500, 502, 503, 504}
+
+
+_kommo_retry = retry(
+    retry=retry_if_exception_type(RETRYABLE) | retry_if_exception(_retryable_http_status),
+    wait=wait_exponential_jitter(initial=1, max=8, jitter=2),
+    stop=stop_after_attempt(3),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+
 
 class KommoClient:
-    """Async Kommo API client with rate limiting and 429 retry."""
+    """Async Kommo CRM API client."""
 
-    def __init__(
-        self,
-        *,
-        subdomain: str,
-        token_store: Any,
-        rate_limit_rps: int = 7,
-        max_retries: int = 3,
-    ) -> None:
+    def __init__(self, subdomain: str, token_store: KommoTokenStore) -> None:
         self._base_url = f"https://{subdomain}.kommo.com/api/v4"
         self._token_store = token_store
-        self._rate_limit_rps = rate_limit_rps
-        self._max_retries = max_retries
-        self._http = httpx.AsyncClient(base_url=self._base_url, timeout=20.0)
-        self._request_times: deque[float] = deque()
-        self._rate_lock = asyncio.Lock()
+        self._client = httpx.AsyncClient(
+            base_url=self._base_url,
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            headers={"Content-Type": "application/json"},
+        )
 
-    async def _acquire_rate_slot(self) -> None:
-        """Wait until a rate limit slot is available (sliding window)."""
-        async with self._rate_lock:
-            now = time.monotonic()
-            while self._request_times and now - self._request_times[0] >= 1.0:
-                self._request_times.popleft()
-            if len(self._request_times) >= self._rate_limit_rps:
-                wait_s = 1.0 - (now - self._request_times[0])
-                await asyncio.sleep(max(wait_s, 0.0))
-            self._request_times.append(time.monotonic())
+    @_kommo_retry
+    async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
+        """Execute authenticated request with auto-refresh on 401."""
+        token = await self._token_store.get_valid_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = await self._client.request(method, path, headers=headers, **kwargs)
 
-    async def _request_json(
-        self,
-        method: str,
-        path: str,
-        *,
-        json: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Make an authenticated API request with rate limiting and 429 retry."""
-        for attempt in range(self._max_retries + 1):
-            await self._acquire_rate_slot()
-            token = await self._token_store.get_valid_token()
-            response = await self._http.request(
-                method,
-                path,
-                json=json,
-                headers={"Authorization": f"Bearer {token}"},
-            )
+        # Retry once on 401 with refreshed token
+        if response.status_code == 401:
+            logger.warning("Kommo 401 — refreshing token")
+            token = await self._token_store.force_refresh()
+            headers["Authorization"] = f"Bearer {token}"
+            response = await self._client.request(method, path, headers=headers, **kwargs)
 
-            if response.status_code == 429 and attempt < self._max_retries:
-                # Kommo returns retry_after in JSON body; fallback to header
-                payload = response.json() if response.content else {}
-                retry_after = float(
-                    payload.get("retry_after") or response.headers.get("Retry-After") or "1"
-                )
-                logger.warning(
-                    "Kommo 429 on %s %s, retry_after=%.1fs (attempt %d/%d)",
-                    method,
-                    path,
-                    retry_after,
-                    attempt + 1,
-                    self._max_retries,
-                )
-                await asyncio.sleep(retry_after)
-                continue
+        if response.status_code == 204:
+            return {}
 
-            response.raise_for_status()
-            return response.json()
+        # Raise for 429/5xx so tenacity can retry
+        response.raise_for_status()
+        response_json = response.json()
+        if not isinstance(response_json, dict):
+            msg = "Unexpected Kommo API response shape."
+            raise RuntimeError(msg)
+        return cast(dict[str, Any], response_json)
 
-        raise RuntimeError("Kommo request retries exhausted")  # pragma: no cover
+    # --- Leads ---
+
+    async def create_lead(self, lead: LeadCreate) -> LeadResponse:
+        """POST /leads — create a lead."""
+        payload = lead.to_kommo_payload()
+        resp = await self._request("POST", "/leads", json=[payload])
+        lead_data = resp["_embedded"]["leads"][0]
+        return LeadResponse(id=lead_data["id"], name=lead.name, price=lead.price or 0)
+
+    # --- Contacts ---
+
+    async def create_contact(self, data: ContactCreate) -> ContactResponse:
+        """POST /contacts — create a contact."""
+        payload = data.to_kommo_payload()
+        resp = await self._request("POST", "/contacts", json=[payload])
+        contact = resp["_embedded"]["contacts"][0]
+        return ContactResponse(
+            id=contact["id"],
+            name=f"{data.first_name} {data.last_name}".strip(),
+        )
+
+    async def upsert_contact(self, phone: str, data: ContactCreate) -> ContactResponse:
+        """Find contact by phone, or create new."""
+        resp = await self._request("GET", "/contacts", params={"query": phone})
+        contacts = resp.get("_embedded", {}).get("contacts", [])
+        if contacts:
+            c = contacts[0]
+            return ContactResponse(id=c["id"], name=c.get("name", ""))
+        return await self.create_contact(data)
+
+    # --- Links ---
+
+    async def link_contact_to_lead(self, lead_id: int, contact_id: int) -> None:
+        """POST /leads/{id}/link — bind contact to lead."""
+        payload = [{"to_entity_id": contact_id, "to_entity_type": "contacts"}]
+        await self._request("POST", f"/leads/{lead_id}/link", json=payload)
+
+    # --- Notes ---
+
+    async def add_note(self, entity_type: str, entity_id: int, text: str) -> NoteResponse:
+        """POST /{entity_type}/notes — add a text note."""
+        payload = [{"entity_id": entity_id, "note_type": "common", "params": {"text": text}}]
+        resp = await self._request("POST", f"/{entity_type}/notes", json=payload)
+        note = resp["_embedded"]["notes"][0]
+        return NoteResponse(id=note["id"])
+
+    # --- Tasks ---
+
+    async def create_task(self, task: TaskCreate) -> TaskResponse:
+        """POST /tasks — create a task."""
+        payload = task.to_kommo_payload()
+        resp = await self._request("POST", "/tasks", json=[payload])
+        t = resp["_embedded"]["tasks"][0]
+        return TaskResponse(id=t["id"], text=task.text)
+
+    # --- Lifecycle ---
 
     async def close(self) -> None:
-        """Close underlying HTTP client."""
-        await self._http.aclose()
+        """Close the underlying HTTP client."""
+        await self._client.aclose()

@@ -7,6 +7,7 @@ and delegates to existing services (RAG graph, HistoryService).
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from typing import Any, cast
 
 from langchain_core.runnables import RunnableConfig
@@ -130,6 +131,16 @@ def create_history_search_tool(*, history_service: Any) -> Any:
         return "\n".join(lines)
 
     return history_search
+
+
+def build_tools_for_role(
+    *, role: str, base_tools: list[Any], manager_tools: Iterable[Any]
+) -> list[Any]:
+    """Select tools based on user role (#388)."""
+    tools = list(base_tools)
+    if role == "manager":
+        tools.extend(list(manager_tools))
+    return tools
 
 
 @tool

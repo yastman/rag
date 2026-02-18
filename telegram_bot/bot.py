@@ -28,6 +28,7 @@ from .scoring import (
     write_langfuse_scores,
 )
 from .services.history_service import HistoryService
+from .services.manager_menu import render_start_menu
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 
@@ -225,26 +226,8 @@ class PropertyBot:
         # PostgreSQL pool — initialized in start()
         self._pg_pool: Any = None
 
-        # Kommo CRM client (initialized when kommo_enabled=True)
+        # Kommo CRM client (initialized in start() if enabled)
         self._kommo_client: Any | None = None
-        if config.kommo_enabled and config.kommo_subdomain:
-            from .services.kommo_client import KommoClient
-            from .services.kommo_tokens import KommoTokenStore
-
-            token_store = KommoTokenStore(
-                redis=self._cache.redis,
-                client_id=config.kommo_client_id,
-                client_secret=config.kommo_client_secret.get_secret_value(),
-                redirect_uri=config.kommo_redirect_uri,
-                subdomain=config.kommo_subdomain,
-            )
-            self._kommo_client = KommoClient(
-                subdomain=config.kommo_subdomain,
-                token_store=token_store,
-                rate_limit_rps=config.kommo_rate_limit_rps,
-                max_retries=config.kommo_max_retries,
-            )
-            logger.info("Kommo CRM client initialized (subdomain=%s)", config.kommo_subdomain)
 
         # Track initialization state
         self._cache_initialized = False
@@ -274,6 +257,25 @@ class PropertyBot:
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
 
+    async def _resolve_user_role(self, user_id: int) -> str:
+        """Resolve user role from DB or config fallback (#388)."""
+        db_role: str | None = None
+        user_service = getattr(self, "_user_service", None)
+        if user_service is not None and hasattr(user_service, "get_role"):
+            try:
+                resolved = await user_service.get_role(telegram_id=user_id)
+                if isinstance(resolved, str):
+                    normalized = resolved.strip().lower()
+                    if normalized in {"manager", "client"}:
+                        db_role = normalized
+            except Exception:
+                logger.warning("Role lookup failed", exc_info=True)
+
+        # Config manager_ids should still elevate known managers even if DB is stale.
+        if user_id in self.config.manager_ids:
+            return "manager"
+        return db_role or "client"
+
     async def cmd_start(self, message: Message, dialog_manager: Any = None):
         """Handle /start command — launch menu dialog."""
         if dialog_manager is not None:
@@ -284,10 +286,9 @@ class PropertyBot:
             await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Fallback (dialog not initialized)
-            domain = self.config.domain
-            await message.answer(
-                f"Привет! Я бот-помощник по теме: {domain}.\nИспользуй /help для помощи."
-            )
+            assert message.from_user is not None
+            role = await self._resolve_user_role(message.from_user.id)
+            await message.answer(render_start_menu(role=role, domain=self.config.domain))
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -348,10 +349,6 @@ class PropertyBot:
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is an admin."""
         return user_id in self.config.admin_ids
-
-    def _is_manager(self, user_id: int) -> bool:
-        """Check if user is a manager (has access to CRM tools)."""
-        return user_id in self.config.manager_ids
 
     async def cmd_metrics(self, message: Message):
         """Handle /metrics command - show pipeline p50/p95 timing stats."""
@@ -559,8 +556,9 @@ class PropertyBot:
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
         """Handle query via supervisor graph (#240, #310 — primary query path)."""
+        from .agents.manager_tools import create_manager_tools
         from .agents.rag_agent import create_rag_agent
-        from .agents.tools import create_history_search_tool, direct_response
+        from .agents.tools import build_tools_for_role, create_history_search_tool, direct_response
         from .graph.supervisor_state import make_supervisor_state
 
         assert message.bot is not None
@@ -569,8 +567,11 @@ class PropertyBot:
         user_id = message.from_user.id
         session_id = make_session_id("chat", message.chat.id)
 
-        # Build supervisor tools
-        tools = [
+        # Resolve user role (#388)
+        role = await self._resolve_user_role(user_id)
+
+        # Build supervisor tools (base + role-specific)
+        base_tools = [
             create_rag_agent(
                 cache=self._cache,
                 embeddings=self._embeddings,
@@ -589,22 +590,30 @@ class PropertyBot:
             direct_response,
         ]
         if self._history_service is not None:
-            tools.append(create_history_search_tool(history_service=self._history_service))
+            base_tools.append(create_history_search_tool(history_service=self._history_service))
 
-        # CRM tools for manager users (#389)
-        if (
-            self._is_manager(user_id)
-            and self.config.kommo_enabled
-            and self._kommo_client is not None
-        ):
+        # Manager tools (#388) — activated when lead_service is available (#387)
+        manager_tools: list[Any] = []
+        _lead_svc = getattr(self, "_lead_service", None)
+        if _lead_svc is not None:
+            manager_tools = create_manager_tools(lead_service=_lead_svc)
+        tools = build_tools_for_role(role=role, base_tools=base_tools, manager_tools=manager_tools)
+
+        # CRM tools are manager-only (issue #389).
+        if role == "manager" and self.config.kommo_enabled and self._kommo_client is not None:
             from .agents.crm_tools import create_crm_tools
 
-            crm_tools = create_crm_tools(
-                kommo=self._kommo_client,
-                history_service=self._history_service,
-                llm=self._llm,
+            tools.extend(
+                create_crm_tools(
+                    kommo=self._kommo_client,
+                    llm=self._llm,
+                    history_service=self._history_service,
+                    default_pipeline_id=self.config.kommo_default_pipeline_id,
+                    responsible_user_id=self.config.kommo_responsible_user_id,
+                    session_field_id=self.config.kommo_session_field_id,
+                    idempotency_store=self._cache.redis,
+                )
             )
-            tools.extend(crm_tools)
 
         # Build supervisor LLM (cheap model for routing)
         supervisor_llm = self._graph_config.create_supervisor_llm(
@@ -673,6 +682,8 @@ class PropertyBot:
             lf.score_current_trace(
                 name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
             )
+            # User role score (#388)
+            lf.score_current_trace(name="user_role", value=role, data_type="CATEGORICAL")
             # Tool call count (#374)
             tool_calls = result.get("tool_call_count", 0)
             if tool_calls > 0:
@@ -976,6 +987,37 @@ class PropertyBot:
             logger.warning("History service init failed, /history disabled", exc_info=True)
             self._history_service = None
 
+        # Initialize Kommo CRM client if enabled
+        if self.config.kommo_enabled and self.config.kommo_subdomain:
+            try:
+                from .services.kommo_client import KommoClient
+                from .services.kommo_tokens import KommoTokenStore
+
+                if self._cache.redis is None:
+                    raise RuntimeError("Cache redis client is not initialized")
+
+                token_store = KommoTokenStore(
+                    redis=self._cache.redis,
+                    client_id=self.config.kommo_client_id,
+                    client_secret=self.config.kommo_client_secret.get_secret_value(),
+                    subdomain=self.config.kommo_subdomain,
+                    redirect_uri=self.config.kommo_redirect_uri,
+                )
+                auth_code = self.config.kommo_auth_code or None
+                await token_store.initialize(authorization_code=auth_code)
+
+                self._kommo_client = KommoClient(
+                    subdomain=self.config.kommo_subdomain,
+                    token_store=token_store,
+                )
+                logger.info(
+                    "Kommo CRM client initialized (subdomain=%s)",
+                    self.config.kommo_subdomain,
+                )
+            except Exception:
+                logger.exception("Failed to initialize Kommo CRM client")
+                self._kommo_client = None
+
         # Initialize PostgreSQL pool for realestate DB
         try:
             import asyncpg
@@ -1050,11 +1092,11 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
-        if self._llm_guard_client is not None and hasattr(self._llm_guard_client, "aclose"):
-            await self._llm_guard_client.aclose()
         if self._kommo_client is not None:
             await self._kommo_client.close()
-            logger.info("Kommo CRM client closed")
+            self._kommo_client = None
+        if self._llm_guard_client is not None and hasattr(self._llm_guard_client, "aclose"):
+            await self._llm_guard_client.aclose()
         if self._checkpointer is not None:
             try:
                 if hasattr(self._checkpointer, "__aexit__"):

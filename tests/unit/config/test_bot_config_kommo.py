@@ -1,26 +1,49 @@
-"""Tests for Kommo CRM config fields (#389)."""
+"""Tests for Kommo CRM config fields."""
 
-from telegram_bot.config import BotConfig
-
-
-def test_kommo_config_fields_exist_and_defaults():
-    cfg = BotConfig(telegram_token="x", llm_api_key="y")
-    assert cfg.kommo_enabled is False
-    assert cfg.kommo_rate_limit_rps == 7
-    assert cfg.kommo_client_id == ""
-    assert cfg.kommo_client_secret.get_secret_value() == ""
+from __future__ import annotations
 
 
-def test_kommo_secret_field_is_secretstr():
-    cfg = BotConfig(telegram_token="x", llm_api_key="y", kommo_client_secret="super-secret")
-    assert "super-secret" not in str(cfg.kommo_client_secret)
+class TestKommoConfig:
+    def test_kommo_disabled_by_default(self):
+        from telegram_bot.config import BotConfig
 
+        config = BotConfig(telegram_token="test", llm_api_key="test")
+        assert config.kommo_enabled is False
 
-def test_kommo_oauth_fields_defaults():
-    cfg = BotConfig(telegram_token="x", llm_api_key="y")
-    assert cfg.kommo_redirect_uri == ""
-    assert cfg.kommo_auth_code.get_secret_value() == ""
-    assert cfg.kommo_default_pipeline_id == 0
-    assert cfg.kommo_responsible_user_id is None
-    assert cfg.kommo_session_field_id == 0
-    assert cfg.kommo_max_retries == 3
+    def test_kommo_config_fields_exist(self):
+        from telegram_bot.config import BotConfig
+
+        config = BotConfig(
+            telegram_token="test",
+            llm_api_key="test",
+            kommo_enabled=True,
+            kommo_subdomain="mycompany",
+            kommo_client_id="abc123",
+            kommo_client_secret="secret",
+            kommo_redirect_uri="https://example.com/callback",
+            kommo_default_pipeline_id=100,
+        )
+        assert config.kommo_enabled is True
+        assert config.kommo_subdomain == "mycompany"
+        assert config.kommo_client_id == "abc123"
+        assert config.kommo_client_secret.get_secret_value() == "secret"
+        assert config.kommo_redirect_uri == "https://example.com/callback"
+        assert config.kommo_default_pipeline_id == 100
+
+    def test_kommo_auth_code_optional(self):
+        from telegram_bot.config import BotConfig
+
+        config = BotConfig(telegram_token="test", llm_api_key="test")
+        assert config.kommo_auth_code == ""
+
+    def test_kommo_responsible_user_id_optional(self):
+        from telegram_bot.config import BotConfig
+
+        config = BotConfig(telegram_token="test", llm_api_key="test")
+        assert config.kommo_responsible_user_id is None
+
+    def test_kommo_session_field_id_default(self):
+        from telegram_bot.config import BotConfig
+
+        config = BotConfig(telegram_token="test", llm_api_key="test")
+        assert config.kommo_session_field_id == 0
