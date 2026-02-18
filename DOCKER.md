@@ -7,7 +7,6 @@ This document is the source of truth for containerized local/dev/VPS runtime in 
 | File | Scope | Typical use |
 | --- | --- | --- |
 | `docker-compose.dev.yml` | Full development stack with profiles | Local development and integration testing |
-| `docker-compose.local.yml` | Minimal local stack | Fast local retrieval/ingestion checks |
 | `docker-compose.vps.yml` | VPS production-like stack | Server deployment and operations |
 
 ## Compose Profiles (`docker-compose.dev.yml`)
@@ -45,7 +44,7 @@ make docker-full-up
 make docker-ps
 make docker-down
 
-# Minimal local compose
+# Minimal local subset (same compose file)
 make local-up
 make local-ps
 make local-down
@@ -124,4 +123,4 @@ make verify-compose-images
 
 - Compose resources are started with `--compatibility` in `Makefile` to apply `deploy.resources.limits` locally.
 - Images are pinned by tag+digest in compose files; update pins explicitly.
-- `docker-compose.local.yml` uses a separate minimal stack and different container names.
+- Local and profile workflows use the same canonical file: `docker-compose.dev.yml`.
