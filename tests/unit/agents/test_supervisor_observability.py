@@ -254,6 +254,39 @@ async def test_supervisor_propagate_attributes_called_with_supervisor_tag(superv
     assert call_kwargs["user_id"]  # non-empty
 
 
+async def test_supervisor_writes_user_role_score(supervisor_config):
+    """Supervisor path writes user_role CATEGORICAL score (#388)."""
+    supervisor_config.manager_ids = [12345]
+    bot = _create_bot_patched(supervisor_config)
+
+    mock_supervisor_graph = AsyncMock()
+    mock_supervisor_graph.ainvoke = AsyncMock(
+        return_value={
+            "messages": [MagicMock(content="Response")],
+            "agent_used": "rag_search",
+            "latency_stages": {"supervisor": 0.05},
+        }
+    )
+    mock_lf = MagicMock()
+
+    with (
+        patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_supervisor_graph),
+        patch("telegram_bot.bot.get_client", return_value=mock_lf),
+        patch("telegram_bot.bot.propagate_attributes"),
+    ):
+        message = _make_text_message("цены", user_id=12345)
+        with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+    role_scores = [
+        c for c in mock_lf.score_current_trace.call_args_list if c[1].get("name") == "user_role"
+    ]
+    assert len(role_scores) == 1
+    assert role_scores[0][1]["value"] == "manager"
+    assert role_scores[0][1]["data_type"] == "CATEGORICAL"
+
+
 async def test_supervisor_curated_span_metadata_on_routing(supervisor_config):
     """Supervisor node writes curated span metadata for routing decision (#242)."""
     bot = _create_bot_patched(supervisor_config)
