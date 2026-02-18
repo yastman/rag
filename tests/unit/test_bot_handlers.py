@@ -39,6 +39,7 @@ def _create_bot(mock_config):
         patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
         patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
         patch("telegram_bot.graph.config.GraphConfig.create_llm") as mock_llm,
+        patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
     ):
         patches = {
             "bot": mock_bot,
@@ -87,6 +88,7 @@ class TestPropertyBotInit:
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings") as mock_sparse,
             patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
             patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
         ):
             bot = PropertyBot(mock_config)
 
@@ -106,6 +108,7 @@ class TestPropertyBotInit:
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService") as mock_qdrant,
             patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
         ):
             PropertyBot(mock_config)
 
@@ -1180,6 +1183,7 @@ class TestSetupMiddlewares:
             patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
             patch("telegram_bot.services.qdrant.QdrantService"),
             patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
         ):
             PropertyBot(mock_config)
 
