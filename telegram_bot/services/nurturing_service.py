@@ -44,8 +44,24 @@ class NurturingService:
     def __init__(self, *, pool: Any) -> None:
         self._pool = pool
 
+    async def _assert_384_contract(self) -> None:
+        """Fail fast if lead_scores table is missing #384 columns."""
+        row = await self._pool.fetchrow(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'lead_scores'
+              AND column_name IN ('score_band', 'sync_status', 'kommo_lead_id')
+            GROUP BY table_name
+            HAVING COUNT(*) = 3
+            """
+        )
+        if row is None:
+            raise RuntimeError("lead_scores contract from #384 is missing")
+
     async def select_candidates(self, *, limit: int) -> list[_Candidate]:
         """Fetch warm/cold synced leads eligible for nurturing."""
+        await self._assert_384_contract()
         rows = await self._pool.fetch(
             """
             SELECT ls.id, ls.lead_id, ls.score_band, ls.sync_status, ls.kommo_lead_id,
