@@ -6,6 +6,9 @@ import tempfile
 import numpy as np
 import pytest
 
+
+pytest.importorskip("pandas", reason="pandas not installed (eval extra)")
+
 from src.evaluation.evaluator import SearchEvaluator
 
 
