@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -69,13 +69,13 @@ class KommoTokenStore:
 
         If tokens already exist in Redis, returns the current valid token.
         """
-        if authorization_code:
-            return await self._exchange_auth_code(authorization_code)
-
         # Try loading existing tokens
         data = await self._load_tokens()
         if data and data.get("access_token"):
             return await self.get_valid_token()
+
+        if authorization_code:
+            return await self._exchange_auth_code(authorization_code)
 
         msg = "No Kommo tokens and no authorization_code provided."
         raise RuntimeError(msg)
@@ -90,12 +90,18 @@ class KommoTokenStore:
             "redirect_uri": self._redirect_uri,
         }
         resp = await self._token_request(payload)
+        access_token = str(resp.get("access_token", ""))
+        refresh_token = str(resp.get("refresh_token", ""))
+        expires_in = int(resp.get("expires_in", 0))
+        if not access_token or not refresh_token or expires_in <= 0:
+            msg = "Invalid OAuth2 token response from Kommo."
+            raise RuntimeError(msg)
         await self._save_tokens(
-            access_token=resp["access_token"],
-            refresh_token=resp["refresh_token"],
-            expires_in=resp["expires_in"],
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=expires_in,
         )
-        return resp["access_token"]
+        return access_token
 
     async def _refresh_tokens(self, refresh_token: str) -> str:
         """Refresh the access token using refresh_token."""
@@ -107,19 +113,29 @@ class KommoTokenStore:
             "redirect_uri": self._redirect_uri,
         }
         resp = await self._token_request(payload)
+        access_token = str(resp.get("access_token", ""))
+        new_refresh_token = str(resp.get("refresh_token", ""))
+        expires_in = int(resp.get("expires_in", 0))
+        if not access_token or not new_refresh_token or expires_in <= 0:
+            msg = "Invalid OAuth2 refresh response from Kommo."
+            raise RuntimeError(msg)
         await self._save_tokens(
-            access_token=resp["access_token"],
-            refresh_token=resp["refresh_token"],
-            expires_in=resp["expires_in"],
+            access_token=access_token,
+            refresh_token=new_refresh_token,
+            expires_in=expires_in,
         )
-        return resp["access_token"]
+        return access_token
 
     async def _token_request(self, payload: dict) -> dict:
         """POST to Kommo OAuth2 token endpoint."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(self._token_url, json=payload)
             response.raise_for_status()
-            return response.json()
+            response_json = response.json()
+            if not isinstance(response_json, dict):
+                msg = "Unexpected Kommo OAuth2 response shape."
+                raise RuntimeError(msg)
+            return cast(dict[str, Any], response_json)
 
     async def _save_tokens(self, *, access_token: str, refresh_token: str, expires_in: int) -> None:
         """Persist tokens to Redis hash."""
@@ -141,7 +157,9 @@ class KommoTokenStore:
         if not raw:
             return None
         # Decode bytes → str
-        return {
-            k.decode() if isinstance(k, bytes) else k: v.decode() if isinstance(v, bytes) else v
-            for k, v in raw.items()
-        }
+        decoded: dict[str, str] = {}
+        for key, value in raw.items():
+            key_str = key.decode() if isinstance(key, bytes) else str(key)
+            value_str = value.decode() if isinstance(value, bytes) else str(value)
+            decoded[key_str] = value_str
+        return decoded
