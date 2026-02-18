@@ -69,6 +69,8 @@ def create_crm_tools(
         user_id, session_id = _get_user_context(config)
         if not user_id:
             return "Error: user context not available."
+        if history_service is None:
+            return "Error: history service unavailable."
 
         messages = await history_service.get_session_turns(user_id, session_id, limit=40)
         chat_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages)
@@ -81,7 +83,7 @@ def create_crm_tools(
             ],
             name="crm-deal-draft-extraction",
         )
-        draft_json = response.choices[0].message.content
+        draft_json = response.choices[0].message.content or ""
         try:
             draft = DealDraft.model_validate_json(draft_json)
         except Exception:
@@ -214,9 +216,13 @@ def create_crm_tools(
         user_id, session_id = _get_user_context(config)
         if not user_id:
             return "Error: user context not available."
+        if history_service is None:
+            return "Error: history service unavailable."
 
         start = time.perf_counter()
         lf = get_client()
+        idempotency_key: str | None = None
+        idempotency_acquired = False
 
         # Idempotency check
         if idempotency_store is not None:
@@ -232,6 +238,7 @@ def create_crm_tools(
                     name="crm_deal_idempotent_skip", value=1, data_type="BOOLEAN"
                 )
                 return "Idempotent skip: deal for this session is already processed."
+            idempotency_acquired = True
 
         try:
             # Step 1: Extract deal data from chat history
@@ -247,10 +254,12 @@ def create_crm_tools(
                 ],
                 name="crm-finalize-draft-extraction",
             )
-            draft_json = response.choices[0].message.content
+            draft_json = response.choices[0].message.content or ""
             try:
                 draft = DealDraft.model_validate_json(draft_json)
             except Exception:
+                if idempotency_acquired and idempotency_store is not None and idempotency_key:
+                    await idempotency_store.delete(idempotency_key)
                 return f"Failed to extract deal data from chat. Raw: {draft_json[:200]}"
 
             # Step 2: Upsert contact
@@ -322,6 +331,11 @@ def create_crm_tools(
 
         except Exception:
             logger.exception("CRM finalize_deal failed")
+            if idempotency_acquired and idempotency_store is not None and idempotency_key:
+                try:
+                    await idempotency_store.delete(idempotency_key)
+                except Exception:
+                    logger.warning("Failed to clear CRM idempotency key", exc_info=True)
             lf.score_current_trace(name="crm_write_success", value=0, data_type="NUMERIC")
             return "Ошибка при создании сделки в CRM. Попробуйте позже."
 

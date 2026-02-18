@@ -212,3 +212,60 @@ class TestCrmFinalizeDeal:
         second = await finalize_tool.ainvoke({"query": "создай сделку"}, config=runnable_config)
 
         assert "idempotent" in second.lower() or "already" in second.lower()
+
+    async def test_finalize_deal_clears_idempotency_on_failure(
+        self, mock_kommo, mock_llm, mock_history, runnable_config
+    ):
+        """Idempotency key should be removed when finalize flow fails."""
+        from telegram_bot.agents.crm_tools import create_crm_tools
+
+        idem_store = AsyncMock()
+        idem_store.set = AsyncMock(return_value=True)
+        idem_store.delete = AsyncMock()
+
+        draft = DealDraft(
+            client_name="Иван",
+            phone="+380501234567",
+            budget=50000,
+        )
+        mock_llm.chat.completions.create = AsyncMock(
+            return_value=MagicMock(
+                choices=[MagicMock(message=MagicMock(content=draft.model_dump_json()))]
+            )
+        )
+        mock_kommo.create_lead = AsyncMock(side_effect=RuntimeError("kommo outage"))
+
+        tools = create_crm_tools(
+            kommo=mock_kommo,
+            llm=mock_llm,
+            history_service=mock_history,
+            default_pipeline_id=1,
+            responsible_user_id=None,
+            session_field_id=123,
+            idempotency_store=idem_store,
+        )
+        finalize_tool = next(t for t in tools if t.name == "crm_finalize_deal")
+        response = await finalize_tool.ainvoke({"query": "создай сделку"}, config=runnable_config)
+
+        assert "ошибка" in response.lower()
+        idem_store.delete.assert_awaited_once_with("kommo:deal:12345:chat_789")
+
+
+class TestCrmHistoryGuard:
+    async def test_generate_draft_requires_history_service(
+        self, mock_kommo, mock_llm, runnable_config
+    ):
+        """Draft extraction should fail fast when history service is unavailable."""
+        from telegram_bot.agents.crm_tools import create_crm_tools
+
+        tools = create_crm_tools(
+            kommo=mock_kommo,
+            llm=mock_llm,
+            history_service=None,
+            default_pipeline_id=1,
+            responsible_user_id=None,
+            session_field_id=123,
+        )
+        draft_tool = next(t for t in tools if t.name == "crm_generate_deal_draft")
+        result = await draft_tool.ainvoke({"query": "подготовь драфт"}, config=runnable_config)
+        assert "history service unavailable" in result.lower()
