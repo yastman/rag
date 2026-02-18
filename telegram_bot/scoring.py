@@ -141,6 +141,34 @@ def write_langfuse_scores(lf: Any, result: dict) -> None:
             value=round(cache_check_s * 1000, 1),
         )
 
+    # --- Prompt injection defense (#226) ---
+    lf.score_current_trace(
+        name="security_alert",
+        value=1 if result.get("injection_detected") else 0,
+        data_type="BOOLEAN",
+    )
+    injection_risk = float(result.get("injection_risk_score", 0.0) or 0.0)
+    if injection_risk > 0:
+        lf.score_current_trace(name="injection_risk_score", value=injection_risk)
+    injection_pattern = result.get("injection_pattern")
+    if injection_pattern:
+        lf.score_current_trace(
+            name="injection_pattern",
+            value=str(injection_pattern),
+            data_type="CATEGORICAL",
+        )
+    guard_ml_score = float(result.get("guard_ml_score", 0.0) or 0.0)
+    if guard_ml_score > 0:
+        lf.score_current_trace(name="guard_ml_score", value=guard_ml_score)
+    guard_ml_latency = float(result.get("guard_ml_latency_ms", 0.0) or 0.0)
+    if guard_ml_latency > 0:
+        lf.score_current_trace(name="guard_ml_latency_ms", value=guard_ml_latency)
+    lf.score_current_trace(
+        name="guard_ml_available",
+        value=1 if guard_ml_latency > 0 else 0,
+        data_type="BOOLEAN",
+    )
+
     # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:

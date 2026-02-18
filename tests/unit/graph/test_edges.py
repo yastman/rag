@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from telegram_bot.graph.edges import route_by_query_type, route_cache, route_grade, route_start
+from telegram_bot.graph.edges import (
+    route_after_guard,
+    route_by_query_type,
+    route_cache,
+    route_grade,
+    route_start,
+)
 from telegram_bot.graph.state import make_initial_state
 
 
@@ -22,6 +28,18 @@ class TestRouteStart:
     def test_voice_audio_absent_routes_to_classify(self):
         state = {"query": "hello"}  # no voice_audio key at all
         assert route_start(state) == "classify"
+
+
+class TestRouteAfterGuard:
+    def test_blocked_routes_to_respond(self):
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["guard_blocked"] = True
+        assert route_after_guard(state) == "respond"
+
+    def test_allowed_routes_to_cache_check(self):
+        state = make_initial_state(user_id=1, session_id="s", query="test")
+        state["guard_blocked"] = False
+        assert route_after_guard(state) == "cache_check"
 
 
 def test_initial_state_has_score_improved():
