@@ -142,7 +142,8 @@ async def retrieve_node(
                 # Full data for Langfuse managed evaluators (#386)
                 "eval_query": query[:2000],
                 "eval_docs": "\n\n".join(
-                    f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}" for d in cached_ctx
+                    f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
+                    for d in cached_ctx
                 ),
             }
         )
@@ -199,7 +200,7 @@ async def retrieve_node(
             # Full data for Langfuse managed evaluators (#386)
             "eval_query": query[:2000],
             "eval_docs": "\n\n".join(
-                f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}" for d in result_ctx
+                f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in result_ctx
             ),
         }
     )
