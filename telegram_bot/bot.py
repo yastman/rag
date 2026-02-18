@@ -657,6 +657,7 @@ class PropertyBot:
         state["voice_duration_s"] = float(voice.duration)
         state["input_type"] = "voice"
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
+        state["show_sources"] = self._graph_config.show_sources
 
         with propagate_attributes(
             session_id=state["session_id"],
@@ -679,6 +680,7 @@ class PropertyBot:
                 show_transcription=self.config.show_transcription,
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
+                content_filter_enabled=self.config.content_filter_enabled,
             )
 
             invoke_config = {

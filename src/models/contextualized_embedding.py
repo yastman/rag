@@ -151,7 +151,7 @@ class ContextualizedEmbeddingService:
             ValueError: If input exceeds API limits
         """
         # Validate inputs
-        self._validate_inputs(document_chunks, input_type="document")
+        self._validate_inputs(document_chunks)
 
         # Update Langfuse with input metadata
         total_chunks = sum(len(doc) for doc in document_chunks)
@@ -332,13 +332,11 @@ class ContextualizedEmbeddingService:
     def _validate_inputs(
         self,
         document_chunks: list[list[str]],
-        input_type: str = "document",
     ) -> None:
         """Validate inputs against API limits.
 
         Args:
             document_chunks: Input documents with chunks
-            input_type: Type of input (document or query)
 
         Raises:
             ValueError: If inputs exceed API limits

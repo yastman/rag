@@ -33,10 +33,11 @@ LangGraph Pipeline (via integrations/embeddings.py):
 
 | File | Description |
 |------|-------------|
-| `telegram_bot/integrations/embeddings.py` | BGEM3HybridEmbeddings (preferred) + legacy BGEM3Embeddings/BGEM3SparseEmbeddings |
+| `telegram_bot/services/bge_m3_client.py` | **BGEM3Client** (async) + **BGEM3SyncClient** — unified SDK for all BGE-M3 API endpoints |
+| `telegram_bot/integrations/embeddings.py` | BGEM3HybridEmbeddings (uses BGEM3Client) + legacy wrappers |
 | `telegram_bot/services/voyage.py` | VoyageService class |
-| `telegram_bot/services/vectorizers.py` | UserBaseVectorizer + BgeM3CacheVectorizer |
-| `telegram_bot/services/colbert_reranker.py` | ColbertRerankerService |
+| `telegram_bot/services/vectorizers.py` | UserBaseVectorizer + BgeM3CacheVectorizer (uses BGEM3Client) |
+| `telegram_bot/services/colbert_reranker.py` | ColbertRerankerService (uses BGEM3Client) |
 | `services/bge-m3-api/app.py` | BGE-M3 FastAPI endpoints |
 | `services/user-base/main.py` | USER-base FastAPI service |
 

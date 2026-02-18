@@ -93,10 +93,21 @@ def _run_qdrant_connection_checks() -> bool:
                 vectors_config = result.get("config", {}).get("params", {}).get("vectors", {})
                 if vectors_config:
                     print("\n      Конфигурация векторов:")
-                    for name, config in vectors_config.items():
-                        size = config.get("size", "N/A")
-                        distance = config.get("distance", "N/A")
-                        print(f"         • {name}: {size}D, {distance}")
+                    # Qdrant may return either:
+                    # - named vectors mapping: {"dense": {"size": 1024, "distance": "Cosine"}}
+                    # - single unnamed vector object: {"size": 1024, "distance": "Cosine"}
+                    if isinstance(vectors_config, dict) and "size" in vectors_config:
+                        size = vectors_config.get("size", "N/A")
+                        distance = vectors_config.get("distance", "N/A")
+                        print(f"         • default: {size}D, {distance}")
+                    else:
+                        for name, config in vectors_config.items():
+                            if isinstance(config, dict):
+                                size = config.get("size", "N/A")
+                                distance = config.get("distance", "N/A")
+                                print(f"         • {name}: {size}D, {distance}")
+                            else:
+                                print(f"         • {name}: {config}")
 
         except Exception as e:
             print(f"   ❌ Ошибка: {e}")
