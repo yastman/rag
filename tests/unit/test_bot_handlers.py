@@ -178,8 +178,21 @@ class TestCommandHandlers:
 
         await bot.cmd_clear(message)
 
-        bot._checkpointer.adelete_thread.assert_awaited_once_with("12345")
+        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
+
+    async def test_cmd_clear_uses_chat_id_for_thread_namespace(self, mock_config):
+        """Thread cleanup must target chat-scoped SDK thread_id."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        bot._checkpointer = AsyncMock()
+        message = _make_text_message(user_id=777, chat_id=42)
+
+        await bot.cmd_clear(message)
+
+        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_42")
+        bot._cache.clear_conversation.assert_awaited_once_with(777)
 
     async def test_cmd_clear_handles_no_checkpointer(self, mock_config):
         """Test /clear works when checkpointer is None (fallback)."""
@@ -206,7 +219,7 @@ class TestCommandHandlers:
         await bot.cmd_clear(message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
-        bot._checkpointer.adelete_thread.assert_awaited_once_with("12345")
+        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
         message.answer.assert_awaited_once()
         answer_text = message.answer.await_args.args[0]
         assert "частично" in answer_text.lower()
@@ -384,6 +397,27 @@ class TestHandleQuery:
 
             config_arg = mock_agent.ainvoke.call_args[1]["config"]
             assert "bot_context" in config_arg["configurable"]
+
+    async def test_handle_query_uses_chat_scoped_thread_id(self, mock_config):
+        """SDK agent checkpointer thread_id uses chat namespace prefix."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры", user_id=777, chat_id=42)
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        config_arg = mock_agent.ainvoke.call_args[1]["config"]
+        assert config_arg["configurable"]["thread_id"] == "tg_42"
 
     async def test_handle_query_passes_guard_config_in_bot_context(self, mock_config):
         """SDK agent path forwards guard settings via BotContext (#413)."""
