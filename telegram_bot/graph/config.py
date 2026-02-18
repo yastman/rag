@@ -114,8 +114,8 @@ class GraphConfig:
             llm_guard_url=os.getenv("LLM_GUARD_URL", "http://llm-guard:8100"),
         )
 
-    def create_llm(self) -> Any:
-        """Create an AsyncOpenAI instance for the pipeline."""
+    def create_llm(self, model_override: str | None = None) -> Any:
+        """Create AsyncOpenAI client for graph nodes that call chat.completions."""
         from langfuse.openai import AsyncOpenAI
 
         return AsyncOpenAI(
@@ -123,6 +123,17 @@ class GraphConfig:
             base_url=self.llm_base_url,
             max_retries=2,
             timeout=60.0,
+        )
+
+    def create_supervisor_llm(self, model_override: str | None = None) -> Any:
+        """Create LangChain chat model for supervisor graph tool routing."""
+        from langchain_openai import ChatOpenAI
+        from pydantic import SecretStr
+
+        return ChatOpenAI(
+            model=model_override or self.llm_model,
+            api_key=SecretStr(self.llm_api_key or "no-key"),
+            base_url=self.llm_base_url,
         )
 
     def create_embeddings(self) -> Any:
