@@ -166,6 +166,17 @@ class TestCommandHandlers:
         sent = message.answer.call_args[0][0]
         assert "Manager menu" in sent
 
+    async def test_resolve_user_role_prefers_config_manager_ids_on_db_client(self, mock_config):
+        """manager_ids fallback should elevate manager even when DB returns client (#388)."""
+        mock_config.manager_ids = [12345]
+        bot, _ = _create_bot(mock_config)
+        bot._user_service = AsyncMock()
+        bot._user_service.get_role = AsyncMock(return_value="client")
+
+        role = await bot._resolve_user_role(12345)
+
+        assert role == "manager"
+
     async def test_cmd_clear(self, mock_config):
         """Test /clear command handler."""
         bot, _ = _create_bot(mock_config)
