@@ -26,9 +26,11 @@ telegram_bot/
 │   ├── vectorizers.py     # UserBaseVectorizer + BgeM3CacheVectorizer (uses BGEM3Client)
 │   ├── metrics.py         # PipelineMetrics (p50/p95 tracking)
 │   ├── redis_monitor.py   # RedisHealthMonitor (background task)
+│   ├── kommo_client.py        # KommoClient (async httpx, OAuth2 auto-refresh)
+│   ├── kommo_token_store.py   # KommoTokenStore (Redis hash, OAuth2 token mgmt)
+│   ├── kommo_models.py        # Pydantic v2: Lead, Contact, Note, Task, Pipeline, *Create, *Update
 │   ├── lead_scoring_models.py  # LeadScoreRecord, LeadScoreSyncPayload
 │   ├── lead_scoring_store.py   # LeadScoringStore (asyncpg upsert, pending sync queue)
-│   ├── kommo_tokens.py         # KommoTokenStoreProtocol
 │   ├── funnel_analytics_store.py   # FunnelAnalyticsStore (daily metrics)
 │   ├── funnel_analytics_service.py # FunnelAnalyticsService
 │   ├── nurturing_service.py    # NurturingService
@@ -142,6 +144,25 @@ sparse = gc.create_sparse_embeddings()   # BGEM3SparseEmbeddings
 | `conversation:{user_id}` | Chat history |
 
 Bump version when changing models. Old keys expire naturally.
+
+### Kommo CRM Client (#413)
+
+```python
+from telegram_bot.services.kommo_client import KommoClient
+from telegram_bot.services.kommo_token_store import KommoTokenStore
+
+# Token store — Redis-backed OAuth2 with auto-refresh (5-min buffer before expiry)
+token_store = KommoTokenStore(redis=redis, subdomain="mycompany", client_id=..., client_secret=...)
+
+# Client — async httpx, auto-refresh on 401, all methods @observe-traced
+kommo = KommoClient(subdomain="mycompany", token_store=token_store)
+lead = await kommo.create_lead(LeadCreate(name="New deal", budget=50000))
+contact = await kommo.upsert_contact("+1234567890", ContactCreate(first_name="John"))
+await kommo.link_contact_to_lead(lead.id, contact.id)
+await kommo.close()  # close httpx client
+```
+
+**Traced spans:** `kommo-create-lead`, `kommo-get-lead`, `kommo-update-lead`, `kommo-upsert-contact`, `kommo-get-contacts`, `kommo-add-note`, `kommo-create-task`, `kommo-link-contact`, `kommo-list-pipelines`
 
 ### CRM Services (#384, #390)
 
