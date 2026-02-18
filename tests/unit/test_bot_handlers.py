@@ -366,8 +366,11 @@ class TestHandleQuery:
         mock_config.content_filter_enabled = False
         mock_config.guard_mode = "soft"
         mock_config.guard_ml_enabled = True
+        mock_config.max_llm_calls = 11
         bot, _ = _create_bot(mock_config)
         bot._llm_guard_client = MagicMock()
+        bot._graph_config.max_rewrite_attempts = 4
+        bot._graph_config.show_sources = False
 
         mock_graph = AsyncMock()
         mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
@@ -391,6 +394,30 @@ class TestHandleQuery:
         assert kwargs["guard_mode"] == "soft"
         assert kwargs["guard_ml_enabled"] is True
         assert kwargs["llm_guard_client"] is bot._llm_guard_client
+        assert kwargs["max_rewrite_attempts"] == 4
+        assert kwargs["show_sources"] is False
+        assert kwargs["max_llm_calls"] == 11
+
+    async def test_handle_query_passes_max_tool_calls_to_supervisor_state(self, mock_config):
+        """Supervisor invocation state uses configured max_tool_calls."""
+        mock_config.max_tool_calls = 9
+        bot, _ = _create_bot(mock_config)
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        state_arg = mock_graph.ainvoke.call_args.args[0]
+        assert state_arg["max_tool_calls"] == 9
 
 
 class TestHistorySaveOnResponse:

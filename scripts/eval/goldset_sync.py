@@ -37,16 +37,17 @@ def sync_to_langfuse(
     Returns number of items created.
     """
     try:
-        dataset = langfuse.get_dataset(dataset_name)
+        langfuse.get_dataset(dataset_name)
         logger.info("Found existing dataset: %s", dataset_name)
     except Exception:
-        dataset = langfuse.create_dataset(name=dataset_name)
+        langfuse.create_dataset(name=dataset_name)
         logger.info("Created new dataset: %s", dataset_name)
 
     created = 0
     for sample in samples:
         item_id = f"{dataset_name}-{sample.get('id', created)}"
-        dataset.create_item(
+        langfuse.create_dataset_item(
+            dataset_name=dataset_name,
             id=item_id,
             input={"question": sample["question"]},
             expected_output={"answer": sample["ground_truth"]},
