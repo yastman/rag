@@ -148,6 +148,7 @@ async def guard_node(
     *,
     guard_mode: str = "hard",
     guard_ml_enabled: bool = False,
+    llm_guard_client: Any | None = None,
 ) -> dict[str, Any]:
     """LangGraph node: detect prompt injection attempts.
 
@@ -172,17 +173,16 @@ async def guard_node(
     ml_score = 0.0
     ml_latency_ms = 0.0
 
-    # --- Layer 2: ML classifier (opt-in) ---
-    if guard_ml_enabled and risk_score < _REGEX_SKIP_ML_THRESHOLD:
+    # --- Layer 2: ML classifier via HTTP (opt-in) ---
+    if guard_ml_enabled and llm_guard_client is not None and risk_score < _REGEX_SKIP_ML_THRESHOLD:
         ml_t0 = time.perf_counter()
         try:
-            from telegram_bot.services.ml_guard import scan_prompt_injection
-
-            ml_detected, ml_score = scan_prompt_injection(query)
-            ml_latency_ms = (time.perf_counter() - ml_t0) * 1000
+            scan_result = await llm_guard_client.scan_injection(query)
+            ml_score = scan_result.risk_score
+            ml_latency_ms = scan_result.processing_time_ms
             logger.info(
                 "ML guard: detected=%s, score=%.3f, latency=%.1fms",
-                ml_detected,
+                scan_result.detected,
                 ml_score,
                 ml_latency_ms,
             )

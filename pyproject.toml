@@ -84,16 +84,9 @@ eval = [
     "pandas>=2.0.0",
 ]
 
-# Guard ML classifier (llm-guard PromptInjection scanner)
-# Only needed when GUARD_ML_ENABLED=true
-# Install: uv sync --extra guard-ml
-guard-ml = [
-    "llm-guard>=0.3.16",
-]
-
 # All optional dependencies
 all = [
-    "contextual-rag[docs,voice,eval,ingest,ml-local,guard-ml]",
+    "contextual-rag[docs,voice,eval,ingest,ml-local]",
 ]
 
 # =============================================================================

@@ -192,6 +192,11 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
     guard_ml_latency = result.get("guard_ml_latency_ms", 0.0)
     if guard_ml_latency > 0:
         lf.score_current_trace(name="guard_ml_latency_ms", value=float(guard_ml_latency))
+    lf.score_current_trace(
+        name="guard_ml_available",
+        value=1 if guard_ml_latency > 0 else 0,
+        data_type="BOOLEAN",
+    )
 
     # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
@@ -368,6 +373,14 @@ class PropertyBot:
             logger.info("Using ColbertRerankerService for reranking")
         elif config.rerank_provider == "none":
             logger.info("Reranking disabled")
+
+        # LLM Guard ML classifier (opt-in, separate Docker service)
+        self._llm_guard_client = None
+        if config.guard_ml_enabled:
+            from .services.llm_guard_client import LLMGuardClient
+
+            self._llm_guard_client = LLMGuardClient(base_url=config.llm_guard_url)
+            logger.info("LLM Guard ML classifier enabled (url=%s)", config.llm_guard_url)
 
         # LLM (optional, defaults via GraphConfig.create_llm)
         self._llm = self._graph_config.create_llm()
@@ -715,6 +728,7 @@ class PropertyBot:
                 checkpointer=self._checkpointer,
                 guard_mode=self.config.guard_mode,
                 guard_ml_enabled=self.config.guard_ml_enabled,
+                llm_guard_client=self._llm_guard_client,
             )
 
             invoke_config = {
@@ -943,6 +957,7 @@ class PropertyBot:
                 stt_model=self.config.stt_model,
                 guard_mode=self.config.guard_mode,
                 guard_ml_enabled=self.config.guard_ml_enabled,
+                llm_guard_client=self._llm_guard_client,
             )
 
             invoke_config = {
@@ -1194,6 +1209,8 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
+        if self._llm_guard_client:
+            await self._llm_guard_client.aclose()
         if self._checkpointer is not None:
             try:
                 if hasattr(self._checkpointer, "__aexit__"):

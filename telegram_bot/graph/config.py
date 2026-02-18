@@ -51,6 +51,7 @@ class GraphConfig:
     # Prompt injection defense (#226)
     guard_mode: str = "hard"  # "hard" = block, "soft" = flag + continue, "log" = log only
     guard_ml_enabled: bool = False  # opt-in ML classifier layer (llm-guard)
+    llm_guard_url: str = "http://llm-guard:8100"  # URL of llm-guard Docker service
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -104,6 +105,7 @@ class GraphConfig:
             stt_model=os.getenv("STT_MODEL", "whisper"),
             guard_mode=os.getenv("GUARD_MODE", "hard"),
             guard_ml_enabled=os.getenv("GUARD_ML_ENABLED", "false").lower() == "true",
+            llm_guard_url=os.getenv("LLM_GUARD_URL", "http://llm-guard:8100"),
         )
 
     def create_llm(self, model_override: str | None = None) -> Any:

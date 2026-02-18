@@ -35,6 +35,32 @@ class TestGuardMLConfig:
             config = GraphConfig.from_env()
             assert config.guard_ml_enabled is True
 
+    def test_bot_config_llm_guard_url_default(self):
+        from telegram_bot.config import BotConfig
+
+        config = BotConfig()
+        assert config.llm_guard_url == "http://llm-guard:8100"
+
+    def test_bot_config_llm_guard_url_from_env(self):
+        with patch.dict(os.environ, {"LLM_GUARD_URL": "http://custom:9000"}, clear=False):
+            from telegram_bot.config import BotConfig
+
+            config = BotConfig()
+            assert config.llm_guard_url == "http://custom:9000"
+
+    def test_graph_config_llm_guard_url_default(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        config = GraphConfig()
+        assert config.llm_guard_url == "http://llm-guard:8100"
+
+    def test_graph_config_llm_guard_url_from_env(self):
+        with patch.dict(os.environ, {"LLM_GUARD_URL": "http://custom:9000"}, clear=False):
+            from telegram_bot.graph.config import GraphConfig
+
+            config = GraphConfig.from_env()
+            assert config.llm_guard_url == "http://custom:9000"
+
 
 class TestGuardMLState:
     """State fields for ML guard layer."""
