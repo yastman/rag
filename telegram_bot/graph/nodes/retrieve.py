@@ -133,11 +133,18 @@ async def retrieve_node(
     if cached_results is not None:
         latency = time.perf_counter() - start
         logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
+        cached_ctx = _build_retrieved_context(cached_results)
         lf.update_current_span(
             output={
                 "results_count": len(cached_results),
                 "search_cache_hit": True,
                 "duration_ms": round(latency * 1000, 1),
+                # Full data for Langfuse managed evaluators (#386)
+                "eval_query": query[:2000],
+                "eval_docs": "\n\n".join(
+                    f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}"
+                    for d in cached_ctx
+                ),
             }
         )
         return {
@@ -180,6 +187,7 @@ async def retrieve_node(
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
 
     scores = [d.get("score", 0) for d in results if isinstance(d, dict)]
+    result_ctx = _build_retrieved_context(results)
     lf.update_current_span(
         output={
             "results_count": len(results),
@@ -189,6 +197,11 @@ async def retrieve_node(
             "retrieval_backend_error": search_meta.get("backend_error", False),
             "retrieval_error_type": search_meta.get("error_type"),
             "duration_ms": round(latency * 1000, 1),
+            # Full data for Langfuse managed evaluators (#386)
+            "eval_query": query[:2000],
+            "eval_docs": "\n\n".join(
+                f"[{d.get('score', 0):.2f}] {str(d.get('content', ''))[:500]}" for d in result_ctx
+            ),
         }
     )
 

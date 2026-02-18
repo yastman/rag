@@ -1195,3 +1195,91 @@ class TestGenerateNodeCitationInstruction:
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         system_msg = messages[0]["content"]
         assert "[Объект 1]" not in system_msg
+
+
+class TestGenerateNodeEvalFields:
+    """Test eval_query/eval_answer/eval_context fields for managed evaluators (#386)."""
+
+    async def test_span_output_includes_eval_fields(self) -> None:
+        """Curated span output must include eval_ fields for Langfuse evaluators."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, _mock_client = _make_mock_config("Квартира в Несебре стоит 65000€.")
+        state = _make_state_with_docs()
+        state["retrieved_context"] = [
+            {"content": "Квартира в Несебре, 2 комнаты", "score": 0.92},
+            {"content": "Студия в Несебре, вид на море", "score": 0.87},
+        ]
+
+        mock_lf = MagicMock()
+
+        with (
+            patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+            patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+        ):
+            await generate_node(state)
+
+        # Find the span output call with eval_ fields
+        output_calls = [
+            c.kwargs["output"]
+            for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        assert output_calls, "generate_node must emit output span"
+        final_output = output_calls[-1]
+
+        assert "eval_query" in final_output
+        assert "eval_answer" in final_output
+        assert "eval_context" in final_output
+        assert "Несебр" in final_output["eval_query"]
+        assert final_output["eval_answer"] == "Квартира в Несебре стоит 65000€."
+        assert "0.92" in final_output["eval_context"]
+
+    async def test_eval_fields_truncated(self) -> None:
+        """eval_query and eval_answer are truncated to prevent huge spans."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        long_query = "x" * 5000
+        mock_config, _mock_client = _make_mock_config("y" * 5000)
+        state = _make_state_with_docs(query=long_query)
+
+        mock_lf = MagicMock()
+
+        with (
+            patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+            patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+        ):
+            await generate_node(state)
+
+        output_calls = [
+            c.kwargs["output"]
+            for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        final_output = output_calls[-1]
+        assert len(final_output["eval_query"]) <= 2000
+        assert len(final_output["eval_answer"]) <= 3000
+
+    async def test_eval_context_empty_when_no_retrieved_context(self) -> None:
+        """eval_context is empty string when no retrieved_context in state."""
+        from telegram_bot.graph.nodes.generate import generate_node
+
+        mock_config, _mock_client = _make_mock_config("Ответ.")
+        state = _make_state_with_docs()
+        # No retrieved_context in state
+
+        mock_lf = MagicMock()
+
+        with (
+            patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+            patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+        ):
+            await generate_node(state)
+
+        output_calls = [
+            c.kwargs["output"]
+            for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        final_output = output_calls[-1]
+        assert final_output["eval_context"] == ""
