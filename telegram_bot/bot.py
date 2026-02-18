@@ -16,13 +16,20 @@ from aiogram.filters import Command
 from aiogram.types import BotCommand, CallbackQuery, Message
 from aiogram.utils.chat_action import ChatActionSender
 
-from .agents.supervisor import build_supervisor_graph
+from .agents.agent import create_bot_agent
+from .agents.context import BotContext
 from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
-from .observability import get_client, get_langfuse_client, observe, propagate_attributes
+from .observability import (
+    create_callback_handler,
+    get_client,
+    get_langfuse_client,
+    observe,
+    propagate_attributes,
+)
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     write_langfuse_scores,
@@ -521,10 +528,9 @@ class PropertyBot:
 
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
-        """Handle query via supervisor graph (#240, #310 — primary query path)."""
-        from .agents.rag_agent import create_rag_agent
-        from .agents.tools import create_history_search_tool, direct_response
-        from .graph.supervisor_state import make_supervisor_state
+        """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
+        from .agents.history_tool import history_search
+        from .agents.rag_tool import rag_search
 
         assert message.bot is not None
         assert message.from_user is not None
@@ -532,60 +538,61 @@ class PropertyBot:
         user_id = message.from_user.id
         session_id = make_session_id("chat", message.chat.id)
 
-        # Build supervisor tools
-        tools = [
-            create_rag_agent(
-                cache=self._cache,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                reranker=self._reranker,
-                llm=self._llm,
-                content_filter_enabled=self.config.content_filter_enabled,
-                guard_mode=self.config.guard_mode,
-                guard_ml_enabled=self.config.guard_ml_enabled,
-                llm_guard_client=self._llm_guard_client,
-            ),
-            direct_response,
-        ]
+        # Build tools list
+        tools: list[Any] = [rag_search]
         if self._history_service is not None:
-            tools.append(
-                create_history_search_tool(history_service=self._history_service, llm=self._llm)
-            )
+            tools.append(history_search)
 
-        # Build supervisor LLM (cheap model for routing)
-        supervisor_llm = self._graph_config.create_supervisor_llm(
-            model_override=self.config.supervisor_model
-        )
+        # Add CRM tools conditionally
+        if getattr(self.config, "kommo_enabled", False) and getattr(self, "_kommo_client", None):
+            from .agents.crm_tools import get_crm_tools
 
-        supervisor_graph = build_supervisor_graph(
-            supervisor_llm=supervisor_llm,
+            tools.extend(get_crm_tools())
+
+        # Create agent via SDK
+        agent = create_bot_agent(
+            model=self.config.supervisor_model,
             tools=tools,
+            checkpointer=self._checkpointer,
         )
 
-        state = make_supervisor_state(
-            user_id=user_id,
+        # Build context for tool DI
+        ctx = BotContext(
+            telegram_user_id=user_id,
             session_id=session_id,
-            query=message.text or "",
+            language=self.config.domain_language,
+            kommo_client=getattr(self, "_kommo_client", None),
+            history_service=self._history_service,
+            embeddings=self._embeddings,
+            sparse_embeddings=self._sparse,
+            qdrant=self._qdrant,
+            cache=self._cache,
+            reranker=self._reranker,
+            llm=self._llm,
+            content_filter_enabled=self.config.content_filter_enabled,
+            guard_mode=self.config.guard_mode,
         )
-        config = {
-            "configurable": {
-                "user_id": user_id,
-                "session_id": session_id,
-                # Judge sampling config passed to rag_search tool (#310)
-                "judge_sample_rate": self.config.judge_sample_rate,
-                "judge_model": self.config.judge_model,
-                "llm_base_url": self.config.llm_base_url,
-            }
-        }
+
+        # Langfuse handler (new per request)
+        langfuse_handler = create_callback_handler()
+        callbacks = [langfuse_handler] if langfuse_handler else []
 
         with propagate_attributes(
             session_id=session_id,
             user_id=str(user_id),
-            tags=["telegram", "rag", "supervisor"],
+            tags=["telegram", "rag", "agent"],
         ):
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                result = await supervisor_graph.ainvoke(state, config=config)
+                result = await agent.ainvoke(
+                    {"messages": [{"role": "user", "content": message.text or ""}]},
+                    config={
+                        "callbacks": callbacks,
+                        "configurable": {
+                            "thread_id": f"tg_{message.chat.id}",
+                            "bot_context": ctx,
+                        },
+                    },
+                )
 
             # Extract response from final message
             messages = result.get("messages", [])
@@ -595,10 +602,10 @@ class PropertyBot:
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
             # Send response to user
-            if response_text and not result.get("response_sent"):
+            if response_text:
                 await message.answer(response_text)
 
-            # Wall-time for the full supervisor pipeline
+            # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
 
             # Write Langfuse trace metadata
@@ -607,23 +614,17 @@ class PropertyBot:
                 input={"query": message.text},
                 output={"response": response_text},
                 metadata={
-                    "agent_used": result.get("agent_used", ""),
-                    "supervisor_latency": result.get("latency_stages", {}).get("supervisor", 0),
-                    "pipeline_mode": "supervisor",
+                    "pipeline_mode": "sdk_agent",
                     "pipeline_wall_ms": wall_ms,
                 },
             )
-            # Supervisor-specific scores
             lf.score_current_trace(
-                name="agent_used", value=result.get("agent_used", ""), data_type="CATEGORICAL"
-            )
-            supervisor_ms = result.get("latency_stages", {}).get("supervisor", 0) * 1000
-            lf.score_current_trace(name="supervisor_latency_ms", value=supervisor_ms)
-            lf.score_current_trace(
-                name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
+                name="supervisor_model",
+                value=self.config.supervisor_model,
+                data_type="CATEGORICAL",
             )
 
-            # Persist Q&A to history (#310 — ported from monolith path)
+            # Persist Q&A to history
             if self._history_service and response_text:
                 try:
                     saved = await self._history_service.save_turn(
@@ -637,9 +638,6 @@ class PropertyBot:
                         name="history_save_success",
                         value=1 if saved else 0,
                         data_type="BOOLEAN",
-                    )
-                    lf.score_current_trace(
-                        name="history_backend", value="qdrant", data_type="CATEGORICAL"
                     )
                 except Exception:
                     logger.warning("Failed to save history turn", exc_info=True)
