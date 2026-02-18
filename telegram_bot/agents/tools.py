@@ -14,6 +14,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from telegram_bot.observability import observe
+from telegram_bot.services.kommo_models import LeadScoreSyncPayload
 
 
 logger = logging.getLogger(__name__)
@@ -170,13 +171,12 @@ def create_crm_score_sync_tool(
             if rec.kommo_lead_id is None:
                 skipped += 1
                 continue
-            key = f"lead-score:{rec.lead_id}:{rec.session_id}:{rec.score_value}"
-            payload = {
-                "custom_fields_values": [
-                    {"field_id": score_field_id, "values": [{"value": rec.score_value}]},
-                    {"field_id": band_field_id, "values": [{"value": rec.score_band}]},
-                ]
-            }
+            key = f"lead-score:{rec.lead_id}:{rec.session_id}:{rec.score_value}:{rec.score_band}"
+            payload = LeadScoreSyncPayload.from_record(
+                rec,
+                score_field_id=score_field_id,
+                band_field_id=band_field_id,
+            ).to_kommo_payload()
             try:
                 await kommo_client.update_lead_score(
                     lead_id=rec.kommo_lead_id,
