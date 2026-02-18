@@ -143,6 +143,61 @@ def build_tools_for_role(
     return tools
 
 
+def create_crm_score_sync_tool(
+    *,
+    scoring_store: Any,
+    kommo_client: Any,
+    score_field_id: int,
+    band_field_id: int,
+) -> Any:
+    """Create crm_sync_lead_score tool for supervisor (#384)."""
+
+    @tool
+    @observe(name="tool-crm-sync-lead-score")
+    async def crm_sync_lead_score(query: str, config: RunnableConfig) -> str:
+        """Sync pending lead scores to Kommo CRM.
+
+        Use this tool to push scored leads to the CRM system.
+        Handles retries and idempotency automatically.
+        """
+        user_id, session_id = _get_user_context(config)
+        pending = await scoring_store.list_pending_sync(limit=20)
+        synced = 0
+        failed = 0
+        skipped = 0
+
+        for rec in pending:
+            if rec.kommo_lead_id is None:
+                skipped += 1
+                continue
+            key = f"lead-score:{rec.lead_id}:{rec.session_id}:{rec.score_value}"
+            payload = {
+                "custom_fields_values": [
+                    {"field_id": score_field_id, "values": [{"value": rec.score_value}]},
+                    {"field_id": band_field_id, "values": [{"value": rec.score_band}]},
+                ]
+            }
+            try:
+                await kommo_client.update_lead_score(
+                    lead_id=rec.kommo_lead_id,
+                    payload=payload,
+                    idempotency_key=key,
+                )
+                await scoring_store.mark_synced(lead_id=rec.lead_id)
+                synced += 1
+            except Exception:
+                logger.exception("CRM score sync failed for lead %s", rec.lead_id)
+                await scoring_store.mark_failed(lead_id=rec.lead_id, error="kommo_error")
+                failed += 1
+
+        return (
+            f"CRM score sync completed: synced {synced}, failed {failed}, "
+            f"skipped {skipped} (user {user_id}, session {session_id})"
+        )
+
+    return crm_sync_lead_score
+
+
 @tool
 @observe(name="tool-direct-response")
 async def direct_response(message: str) -> str:
