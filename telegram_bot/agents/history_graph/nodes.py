@@ -61,3 +61,43 @@ async def history_retrieve_node(
         "results": results,
         "latency_stages": {**state.get("latency_stages", {}), "retrieve": elapsed},
     }
+
+
+# --- Grade ---
+
+_HISTORY_RELEVANCE_THRESHOLD = 0.7
+
+
+@observe(name="history-grade")
+async def history_grade_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Grade retrieved history results by relevance score.
+
+    Filters out results below threshold and marks overall relevance.
+    """
+    t0 = time.perf_counter()
+    results = state.get("results", [])
+
+    if not results:
+        elapsed = time.perf_counter() - t0
+        return {
+            "results_relevant": False,
+            "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
+        }
+
+    relevant = [r for r in results if r.get("score", 0) >= _HISTORY_RELEVANCE_THRESHOLD]
+    is_relevant = len(relevant) > 0
+
+    elapsed = time.perf_counter() - t0
+    logger.info(
+        "history_grade: %d/%d relevant (threshold=%.2f, %.3fs)",
+        len(relevant),
+        len(results),
+        _HISTORY_RELEVANCE_THRESHOLD,
+        elapsed,
+    )
+
+    return {
+        "results": relevant or results[:3],  # fallback: top-3 if none pass
+        "results_relevant": is_relevant,
+        "latency_stages": {**state.get("latency_stages", {}), "grade": elapsed},
+    }
