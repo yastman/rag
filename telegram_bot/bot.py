@@ -5,7 +5,6 @@ import hashlib
 import io
 import json
 import logging
-import random
 import re
 import time
 import uuid
@@ -36,13 +35,8 @@ from .services.redis_monitor import RedisHealthMonitor
 logger = logging.getLogger(__name__)
 
 # --- Checkpoint namespace constants (versioned for safe migration) ---
-_CHECKPOINT_NS_TEXT = "tg:text:v1"
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
-
-# Aliases for backward compatibility — canonical implementations in scoring.py (#310)
-_compute_checkpointer_overhead_proxy_ms = compute_checkpointer_overhead_proxy_ms
-_write_langfuse_scores = write_langfuse_scores
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -507,145 +501,12 @@ class PropertyBot:
     async def handle_query(self, message: Message):
         """Handle user query via supervisor graph (#310: supervisor-only)."""
         pipeline_start = time.perf_counter()
-        # Early typing ACK — user sees "typing..." immediately
         assert message.bot is not None
         assert message.from_user is not None
         bot = message.bot
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        # --- Legacy monolith path (deprecated, removed in next release) ---
-        if not self.config.use_supervisor:
-            import warnings
-
-            warnings.warn(
-                "USE_SUPERVISOR=false is deprecated and will be removed. "
-                "The monolith query path is no longer maintained (#310).",
-                DeprecationWarning,
-                stacklevel=1,
-            )
-            await self._handle_query_legacy(message, pipeline_start)
-            return
-
         await self._handle_query_supervisor(message, pipeline_start)
-
-    async def _handle_query_legacy(self, message: Message, pipeline_start: float) -> None:
-        """Legacy monolith query handler (deprecated since #310).
-
-        Kept for one release cycle. Will be removed in next major version.
-        """
-        assert message.bot is not None
-        assert message.from_user is not None
-        bot = message.bot
-
-        state = make_initial_state(
-            user_id=message.from_user.id,
-            session_id=make_session_id("chat", message.chat.id),
-            query=message.text or "",
-        )
-        state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
-
-        with propagate_attributes(
-            session_id=state["session_id"],
-            user_id=str(state["user_id"]),
-            tags=["telegram", "rag"],
-        ):
-            # Inject Langfuse trace_id INSIDE propagate_attributes (#277)
-            lf_pre = get_client()
-            state["trace_id"] = lf_pre.get_current_trace_id() or ""
-
-            graph = build_graph(
-                cache=self._cache,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                reranker=self._reranker,
-                llm=self._llm,
-                message=message,
-                checkpointer=self._checkpointer,
-            )
-
-            invoke_config = {
-                "configurable": {
-                    "thread_id": str(message.from_user.id),
-                    "checkpoint_ns": _CHECKPOINT_NS_TEXT,
-                }
-            }
-            async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                invoke_start = time.perf_counter()
-                result = await graph.ainvoke(state, config=invoke_config)
-                ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
-                result["checkpointer_overhead_proxy_ms"] = _compute_checkpointer_overhead_proxy_ms(
-                    result, ainvoke_wall_ms
-                )
-
-            # Wall-time for accurate latency_total_ms
-            result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
-            # User-perceived latency excludes post-respond summarization
-            summarize_s = result.get("latency_stages", {}).get("summarize", 0)
-            result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
-
-            # Update trace with input/output and metadata
-            lf = get_client()
-            lf.update_current_trace(
-                input={"query": message.text},
-                output={"response": result.get("response", "")},
-                metadata=_build_trace_metadata(result),
-            )
-
-            # Write Langfuse scores (14 + latency + response length #129)
-            _write_langfuse_scores(lf, result)
-
-            # Online LLM-as-a-Judge sampling
-            if (
-                self.config.judge_sample_rate > 0
-                and not result.get("cache_hit")
-                and result.get("retrieved_context")
-                and random.random() < self.config.judge_sample_rate
-            ):
-                from .evaluation.runner import run_online_judge
-
-                trace_id = lf.get_current_trace_id() if hasattr(lf, "get_current_trace_id") else ""
-                if trace_id:
-                    context_text = "\n\n".join(
-                        f"[{d.get('score', 0):.2f}] {d.get('content', '')}"
-                        for d in result.get("retrieved_context", [])
-                    )
-                    _judge_task = asyncio.create_task(
-                        run_online_judge(
-                            langfuse=lf,
-                            trace_id=trace_id,
-                            query=message.text or "",
-                            answer=result.get("response", ""),
-                            context=context_text,
-                            model=self.config.judge_model,
-                            llm_base_url=self.config.llm_base_url,
-                        )
-                    )
-                    _judge_task.add_done_callback(
-                        lambda t: t.result() if not t.cancelled() else None
-                    )
-
-            # Persist Q&A to history (fail-soft)
-            if self._history_service and result.get("response"):
-                try:
-                    saved = await self._history_service.save_turn(
-                        user_id=message.from_user.id,
-                        session_id=state["session_id"],
-                        query=message.text or "",
-                        response=result["response"],
-                        input_type="text",
-                        query_embedding=result.get("query_embedding"),
-                    )
-                    lf.score_current_trace(
-                        name="history_save_success",
-                        value=1 if saved else 0,
-                        data_type="BOOLEAN",
-                    )
-                    lf.score_current_trace(
-                        name="history_backend", value="qdrant", data_type="CATEGORICAL"
-                    )
-                except Exception:
-                    logger.warning("Failed to save history turn", exc_info=True)
 
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
@@ -833,7 +694,7 @@ class PropertyBot:
                     result = await graph.ainvoke(state, config=invoke_config)
                     ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
                     result["checkpointer_overhead_proxy_ms"] = (
-                        _compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
+                        compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
                     )
             except ValueError as e:
                 if "Empty transcription" in str(e):
@@ -910,7 +771,7 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to update Langfuse voice trace metadata", exc_info=True)
             try:
-                _write_langfuse_scores(lf, result)
+                write_langfuse_scores(lf, result)
             except Exception:
                 logger.warning("Failed to write Langfuse voice scores", exc_info=True)
 

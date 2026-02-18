@@ -49,9 +49,9 @@ def create_rag_agent(
         Use this tool when the user asks about the domain topic (e.g., real estate,
         legal documents). Returns relevant information from the document collection.
         """
-        from telegram_bot.bot import _write_langfuse_scores
         from telegram_bot.graph.graph import build_graph
         from telegram_bot.graph.state import make_initial_state
+        from telegram_bot.scoring import write_langfuse_scores
 
         lf = get_client()
         lf.update_current_span(input={"query_preview": query[:120]})
@@ -80,9 +80,9 @@ def create_rag_agent(
 
             if isinstance(result, dict):
                 # Compute wall-time metrics (#310)
-                from telegram_bot.bot import _compute_checkpointer_overhead_proxy_ms
+                from telegram_bot.scoring import compute_checkpointer_overhead_proxy_ms
 
-                result["checkpointer_overhead_proxy_ms"] = _compute_checkpointer_overhead_proxy_ms(
+                result["checkpointer_overhead_proxy_ms"] = compute_checkpointer_overhead_proxy_ms(
                     result, ainvoke_wall_ms
                 )
                 result["pipeline_wall_ms"] = ainvoke_wall_ms
@@ -90,7 +90,7 @@ def create_rag_agent(
                 result["user_perceived_wall_ms"] = ainvoke_wall_ms - (summarize_s * 1000)
 
                 # Write full pipeline scores to Langfuse trace (#310)
-                _write_langfuse_scores(lf, result)
+                write_langfuse_scores(lf, result)
 
                 # Online LLM-as-a-Judge sampling (#310)
                 configurable = (config or {}).get("configurable", {})

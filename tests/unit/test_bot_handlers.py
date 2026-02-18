@@ -251,17 +251,6 @@ def _mock_supervisor_result(**overrides):
     return base
 
 
-def _supervisor_test_context(mock_graph):
-    """Context manager stack for supervisor-path tests."""
-    from contextlib import ExitStack
-
-    stack = ExitStack()
-    stack.enter_context(patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph))
-    stack.enter_context(patch("telegram_bot.bot.get_client", return_value=MagicMock()))
-    stack.enter_context(patch("telegram_bot.bot.propagate_attributes"))
-    return stack
-
-
 class TestHandleQuery:
     """Test handle_query method — supervisor-only path (#310)."""
 
@@ -427,7 +416,7 @@ class TestHistorySaveOnResponse:
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = MagicMock()
@@ -733,7 +722,7 @@ class TestCheckpointNamespace:
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = MagicMock()
@@ -798,7 +787,7 @@ class TestHandleVoiceExceptionHandling:
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
-            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.write_langfuse_scores") as mock_write_scores,
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
@@ -828,7 +817,7 @@ class TestHandleVoiceExceptionHandling:
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot._write_langfuse_scores"),
+            patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
@@ -851,7 +840,7 @@ class TestHandleVoiceExceptionHandling:
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.write_langfuse_scores") as mock_write_scores,
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
@@ -881,7 +870,7 @@ class TestHandleVoiceExceptionHandling:
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
-            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.write_langfuse_scores") as mock_write_scores,
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
@@ -914,7 +903,7 @@ class TestHandleVoiceExceptionHandling:
         with (
             patch("telegram_bot.bot.build_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
-            patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+            patch("telegram_bot.bot.write_langfuse_scores") as mock_write_scores,
             patch("telegram_bot.bot.propagate_attributes"),
         ):
             message = self._make_voice_message()
@@ -1157,11 +1146,11 @@ class TestRegisterHandlers:
 
 
 class TestWriteLangfuseScores:
-    """Test _write_langfuse_scores score writing."""
+    """Test write_langfuse_scores score writing (canonical in scoring.py)."""
 
     def test_latency_total_ms_uses_wall_time(self):
         """latency_total_ms should use pipeline_wall_ms from state, not sum of stages."""
-        from telegram_bot.bot import _write_langfuse_scores
+        from telegram_bot.scoring import write_langfuse_scores
 
         mock_lf = MagicMock()
         result = {
@@ -1172,7 +1161,7 @@ class TestWriteLangfuseScores:
             "latency_stages": {"cache_check": 5.0, "retrieve": 8.0, "generate": 3.0},
             "pipeline_wall_ms": 7500.0,  # wall-time set by handle_query
         }
-        _write_langfuse_scores(mock_lf, result)
+        write_langfuse_scores(mock_lf, result)
         # Find the latency_total_ms call
         calls = {
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
@@ -1181,11 +1170,11 @@ class TestWriteLangfuseScores:
 
     def test_latency_total_ms_fallback_zero(self):
         """Without pipeline_wall_ms, latency_total_ms should be 0."""
-        from telegram_bot.bot import _write_langfuse_scores
+        from telegram_bot.scoring import write_langfuse_scores
 
         mock_lf = MagicMock()
         result = {"query_type": "FAQ", "latency_stages": {}}
-        _write_langfuse_scores(mock_lf, result)
+        write_langfuse_scores(mock_lf, result)
         calls = {
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
         }
@@ -1193,7 +1182,7 @@ class TestWriteLangfuseScores:
 
     def test_real_scores_from_state(self):
         """Hardcoded scores should now use real state values."""
-        from telegram_bot.bot import _write_langfuse_scores
+        from telegram_bot.scoring import write_langfuse_scores
 
         mock_lf = MagicMock()
         result = {
@@ -1207,7 +1196,7 @@ class TestWriteLangfuseScores:
             "search_cache_hit": False,
             "grade_confidence": 0.016,
         }
-        _write_langfuse_scores(mock_lf, result)
+        write_langfuse_scores(mock_lf, result)
         calls = {
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
         }
@@ -1217,7 +1206,7 @@ class TestWriteLangfuseScores:
 
     def test_write_langfuse_scores_includes_ttft(self):
         """llm_ttft_ms and llm_response_duration_ms are written as scores."""
-        from telegram_bot.bot import _write_langfuse_scores
+        from telegram_bot.scoring import write_langfuse_scores
 
         mock_lf = MagicMock()
         result = {
@@ -1230,7 +1219,7 @@ class TestWriteLangfuseScores:
             "llm_ttft_ms": 450.0,
             "llm_response_duration_ms": 2500.0,
         }
-        _write_langfuse_scores(mock_lf, result)
+        write_langfuse_scores(mock_lf, result)
         calls = {
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
         }
@@ -1238,8 +1227,8 @@ class TestWriteLangfuseScores:
         assert calls["llm_response_duration_ms"] == 2500.0
 
     def test_writes_embedding_error_score(self):
-        """_write_langfuse_scores writes bge_embed_error when embedding failed."""
-        from telegram_bot.bot import _write_langfuse_scores
+        """write_langfuse_scores writes bge_embed_error when embedding failed."""
+        from telegram_bot.scoring import write_langfuse_scores
 
         mock_lf = MagicMock()
         result = {
@@ -1251,7 +1240,7 @@ class TestWriteLangfuseScores:
             "pipeline_wall_ms": 5200.0,
             "user_perceived_wall_ms": 5200.0,
         }
-        _write_langfuse_scores(mock_lf, result)
+        write_langfuse_scores(mock_lf, result)
 
         calls = {
             c.kwargs["name"]: c.kwargs.get("value")
@@ -1314,43 +1303,3 @@ class TestSupervisorIntegration:
                 await bot.handle_query(message)
 
             mock_supervisor_graph.ainvoke.assert_called_once()
-
-    async def test_handle_query_legacy_path_emits_deprecation_warning(self, mock_config):
-        """USE_SUPERVISOR=false triggers deprecation warning and uses legacy path."""
-        mock_config_legacy = BotConfig(
-            telegram_token="test-token",
-            voyage_api_key="voyage-key",
-            llm_api_key="llm-key",
-            llm_base_url="https://api.example.com/v1",
-            llm_model="gpt-4o-mini",
-            qdrant_url="http://localhost:6333",
-            qdrant_api_key="qdrant-key",
-            qdrant_collection="test_collection",
-            redis_url="redis://localhost:6379",
-            rerank_provider="none",
-            use_supervisor=False,
-        )
-        bot, _ = _create_bot(mock_config_legacy)
-
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value={"response": "ok", "query_type": "GENERAL"})
-
-        import warnings
-
-        with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot._write_langfuse_scores"),
-            patch("telegram_bot.bot.propagate_attributes"),
-            warnings.catch_warnings(record=True) as w,
-        ):
-            warnings.simplefilter("always")
-            message = _make_text_message("цены на квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-            mock_graph.ainvoke.assert_called_once()
-            deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-            assert len(deprecation_warnings) >= 1
-            assert "USE_SUPERVISOR=false is deprecated" in str(deprecation_warnings[0].message)

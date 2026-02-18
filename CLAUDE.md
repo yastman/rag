@@ -40,17 +40,17 @@ make repo-cleanup-force    # Repo hygiene: interactive deletion mode
 
 ```
 Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Bot:        Query → LangGraph StateGraph (10 nodes) → classify → cache_check
-            → retrieve (RRF, hybrid embed 1-call) → grade → rerank (ColBERT) → generate → respond
-Supervisor: Query → Supervisor LLM → tool choice (rag_search | history_search | direct_response)
-            → tool executes (wraps existing RAG graph / HistoryService) → respond
+Bot:        Query → Supervisor LLM → tool choice (rag_search | history_search | direct_response)
+            → rag_search wraps LangGraph 11-node pipeline → respond
+            (#310: supervisor-only, monolith path removed)
 Voice STT:  Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API (FastAPI)
 ```
 
 | Module | Purpose |
 |--------|---------|
-| `telegram_bot/bot.py` | PropertyBot (~500 LOC, LangGraph orchestrator + supervisor + score writing) |
+| `telegram_bot/bot.py` | PropertyBot (~300 LOC, supervisor orchestrator + voice handler) |
+| `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` (#310) |
 | `telegram_bot/graph/` | LangGraph 10-node RAG pipeline (incl. transcribe for voice) |
 | `telegram_bot/agents/` | Multi-agent supervisor architecture (#240): tools, rag_agent, history_agent, supervisor |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
@@ -121,7 +121,7 @@ CLAUDE_CODE_TASK_LIST_ID=my-project claude
 | `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
 | `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
 
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`, `USE_SUPERVISOR=false`
+**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`
 
 ## Deployment
 
