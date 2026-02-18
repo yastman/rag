@@ -9,15 +9,15 @@ Creates 3 types of queries for each article:
 
 import asyncio
 import json
-import sys
 
 from qdrant_client import QdrantClient, models
 
-
-sys.path.append("/home/admin/contextual_rag")
-from contextualize_groq_async import ContextualRetrievalGroqAsync
-
 from src.config import Settings
+
+
+# ContextualRetrievalGroqAsync lives in legacy/ (not a package).
+# Import deferred to generate_all_queries() to avoid hard dependency.
+ContextualRetrievalGroqAsync = None  # type: ignore[assignment]
 
 
 # Load settings
@@ -189,8 +189,22 @@ async def generate_all_queries(
     print(f"   Max concurrent: {max_concurrent}")
     print(f"   Total articles: {len(article_texts)}\n")
 
-    # Initialize LLM
-    llm = ContextualRetrievalGroqAsync(model=model, max_concurrent=max_concurrent)
+    # Lazy import — legacy module not on sys.path by default
+    import importlib.util
+    import os
+
+    _spec = importlib.util.spec_from_file_location(
+        "contextualize_groq_async",
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "legacy", "contextualize_groq_async.py"
+        ),
+    )
+    if _spec is None or _spec.loader is None:
+        raise ImportError("legacy/contextualize_groq_async.py not found")
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+
+    llm = _mod.ContextualRetrievalGroqAsync(model=model, max_concurrent=max_concurrent)
 
     all_queries = []
     completed = 0
