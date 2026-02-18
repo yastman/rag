@@ -1,4 +1,4 @@
-"""Unit tests for bot-level Langfuse trace metadata."""
+"""Unit tests for bot-level Langfuse trace metadata (#310: supervisor-only)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -46,7 +46,18 @@ def mock_message() -> MagicMock:
     message.chat.id = 987654321
     message.bot = MagicMock()
     message.bot.send_chat_action = AsyncMock()
+    message.answer = AsyncMock()
     return message
+
+
+def _mock_supervisor_result(**overrides):
+    base = {
+        "messages": [MagicMock(content="ok")],
+        "agent_used": "rag_search",
+        "latency_stages": {"supervisor": 0.1},
+    }
+    base.update(overrides)
+    return base
 
 
 class TestHandleQueryObservability:
@@ -56,15 +67,12 @@ class TestHandleQueryObservability:
         bot = _create_bot(mock_config)
 
         mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(
-            return_value={"response": "ok", "query_type": "GENERAL", "latency_stages": {}}
-        )
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
         mock_lf = MagicMock()
 
         with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
-            patch("telegram_bot.bot._write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
@@ -89,23 +97,13 @@ class TestHandleQueryObservability:
 
         mock_graph = AsyncMock()
         mock_graph.ainvoke = AsyncMock(
-            return_value={
-                "response": "Найдено 2 варианта.",
-                "query_type": "GENERAL",
-                "cache_hit": False,
-                "search_results_count": 2,
-                "rerank_applied": True,
-                "llm_provider_model": "cerebras/gpt-oss-120b",
-                "llm_ttft_ms": 450.0,
-                "latency_stages": {"generate": 1.2},
-            }
+            return_value=_mock_supervisor_result(agent_used="rag_search")
         )
         mock_lf = MagicMock()
 
         with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
-            patch("telegram_bot.bot._write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
@@ -117,12 +115,6 @@ class TestHandleQueryObservability:
             await bot.handle_query(mock_message)
 
         metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
-        assert metadata["query_type"] == "GENERAL"
-        assert metadata["cache_hit"] is False
-        assert metadata["search_results_count"] == 2
-        assert metadata["rerank_applied"] is True
-        assert metadata["llm_provider_model"] == "cerebras/gpt-oss-120b"
-        assert metadata["llm_ttft_ms"] == 450.0
-        # Embedding resilience (#210)
-        assert metadata["embedding_error"] is False
-        assert metadata["embedding_error_type"] is None
+        assert metadata["pipeline_mode"] == "supervisor"
+        assert metadata["agent_used"] == "rag_search"
+        assert "pipeline_wall_ms" in metadata
