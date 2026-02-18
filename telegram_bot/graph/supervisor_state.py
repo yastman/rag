@@ -27,6 +27,9 @@ class SupervisorState(TypedDict):
     session_id: str
     agent_used: str
     latency_stages: dict[str, float]
+    # Call limits (#374)
+    tool_call_count: int
+    max_tool_calls: int
 
 
 def make_supervisor_state(
@@ -41,4 +44,7 @@ def make_supervisor_state(
         "session_id": session_id,
         "agent_used": "",
         "latency_stages": {},
+        # Call limits (#374)
+        "tool_call_count": 0,
+        "max_tool_calls": 5,
     }
