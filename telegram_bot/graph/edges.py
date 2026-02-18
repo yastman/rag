@@ -1,9 +1,9 @@
 """Conditional edge functions for RAG LangGraph pipeline.
 
 Five routing functions that control the graph flow:
-- route_start: START → transcribe or guard
-- route_guard: guard → respond (blocked) or classify (clean)
-- route_by_query_type: classify → respond or cache_check
+- route_start: START → transcribe or classify
+- route_by_query_type: classify → respond or guard
+- route_after_guard: guard → respond or cache_check
 - route_cache: cache_check → respond or retrieve
 - route_grade: grade → rerank, rewrite, or generate
 """
@@ -15,28 +15,28 @@ from typing import Any, Literal
 
 def route_start(
     state: dict[str, Any],
-) -> Literal["transcribe", "guard"]:
-    """Route at START: voice messages → transcribe, text → guard."""
+) -> Literal["transcribe", "classify"]:
+    """Route at START: voice messages → transcribe, text → classify."""
     if state.get("voice_audio") is not None:
         return "transcribe"
-    return "guard"
-
-
-def route_guard(
-    state: dict[str, Any],
-) -> Literal["respond", "classify"]:
-    """Route after guard: injection detected (hard mode) → respond, else → classify."""
-    if state.get("injection_detected", False) and state.get("response"):
-        return "respond"
     return "classify"
 
 
 def route_by_query_type(
     state: dict[str, Any],
-) -> Literal["respond", "cache_check"]:
-    """Route after classification: CHITCHAT/OFF_TOPIC → respond, else → cache_check."""
+) -> Literal["respond", "guard"]:
+    """Route after classification: CHITCHAT/OFF_TOPIC → respond, else → guard."""
     query_type = state.get("query_type", "GENERAL")
     if query_type in ("CHITCHAT", "OFF_TOPIC"):
+        return "respond"
+    return "guard"
+
+
+def route_after_guard(
+    state: dict[str, Any],
+) -> Literal["respond", "cache_check"]:
+    """Route after guard: blocked → respond, allowed → cache_check."""
+    if state.get("guard_blocked", False):
         return "respond"
     return "cache_check"
 

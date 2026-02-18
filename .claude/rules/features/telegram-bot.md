@@ -15,12 +15,6 @@ Telegram interface for domain-configurable search (default: Bulgarian property) 
 ```
 Text:  User Message → ThrottlingMiddleware → ErrorMiddleware
                    → PropertyBot.handle_query()
-                   → make_initial_state() → build_graph() → graph.ainvoke(state)
-                   → [classify → cache_check → retrieve → grade → rerank → generate → cache_store → respond]
-                   → Markdown Response (with plain text fallback)
-
-Supervisor (USE_SUPERVISOR=true):
-       User Message → PropertyBot.handle_query()
                    → _handle_query_supervisor()
                    → build_supervisor_graph(supervisor_llm, tools)
                    → Supervisor LLM → tool_choice (rag_search | history_search | direct_response)
@@ -37,7 +31,8 @@ Voice: Voice Message → PropertyBot.handle_voice()
 
 | File | Description |
 |------|-------------|
-| `telegram_bot/bot.py` | PropertyBot class (~400 LOC, LangGraph pipeline + score writing + voice handler) |
+| `telegram_bot/bot.py` | PropertyBot class (~300 LOC, supervisor orchestrator + voice handler) |
+| `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` (extracted #310) |
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
 | `telegram_bot/graph/graph.py` | `build_graph()` — assembles 10-node StateGraph |
@@ -54,11 +49,14 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 
-## LangGraph Pipeline (10 nodes)
+## LangGraph Pipeline (11 nodes)
 
 ```
-START → [voice_audio?] → transcribe → classify → ...
-      → [text]         → classify → ...
+START → [voice_audio?] → transcribe → guard → classify → ...
+      → [text]         → guard → classify → ...
+
+guard → [injection_detected] → respond (blocked message) → END
+      → [clean] → classify → ...
 
 START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
                  → [other] → cache_check → [HIT] → respond → END
@@ -73,6 +71,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 | Node | File | Injected Deps |
 |------|------|---------------|
+| guard | `graph/nodes/guard.py` | — (regex patterns, EN+RU, configurable via GUARD_MODE: hard/soft/log) |
 | transcribe | `graph/nodes/transcribe.py` | llm (AsyncOpenAI, Whisper API via LiteLLM), message (optional preview) |
 | classify | `graph/nodes/classify.py` | — (regex-based, no external deps) |
 | cache_check | `graph/nodes/cache.py` | cache, embeddings |
@@ -88,7 +87,8 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 | Function | From → To |
 |----------|-----------|
-| `route_start` | START → transcribe (voice_audio present) or classify (text) |
+| `route_start` | START → transcribe (voice_audio present) or guard (text) |
+| `route_guard` | guard → respond (injection_detected) or classify (clean) |
 | `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
 | `route_cache` | cache_check → respond (hit) or retrieve (miss) |
 | `route_grade` | grade → generate (relevant + confidence >= `skip_rerank_threshold`), rerank (relevant + low confidence), rewrite (count < `max_rewrite_attempts` AND `rewrite_effective`), generate (fallback) |
@@ -115,8 +115,7 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `domain_language` | `BOT_LANGUAGE` | `ru` | Response language |
 | `rerank_provider` | `RERANK_PROVIDER` | `voyage` | colbert / none / voyage |
 | `admin_ids` | `ADMIN_IDS` | [] | Comma-separated Telegram IDs |
-| `use_supervisor` | `USE_SUPERVISOR` | `false` | Enable supervisor routing (LLM-based tool selection) |
-| `supervisor_model` | `SUPERVISOR_MODEL` | `gpt-4o-mini` | Model for supervisor routing decisions |
+| `supervisor_model` | `SUPERVISOR_MODEL` | `gpt-4o-mini` | Model for supervisor routing decisions (#310: supervisor-only since v3.3) |
 | `streaming_enabled` | `STREAMING_ENABLED` | `true` | Stream LLM output to Telegram via edit_text |
 | `show_transcription` | `SHOW_TRANSCRIPTION` | `true` | Show transcribed text before RAG response |
 | `voice_language` | `VOICE_LANGUAGE` | `ru` | Whisper language hint (ISO code) |
@@ -132,6 +131,8 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `rewrite_max_tokens` | `REWRITE_MAX_TOKENS` | `64` | Token budget for rewrite LLM call |
 | `rewrite_model` | `REWRITE_MODEL` | `gpt-4o-mini` | Model for rewrites |
 | `bge_m3_timeout` | `BGE_M3_TIMEOUT` | `120.0` | BGE-M3 API timeout (seconds) |
+| `guard_mode` | `GUARD_MODE` | `hard` | Content filter mode: hard (block), soft (flag+continue), log (log only) |
+| `content_filter_enabled` | `CONTENT_FILTER_ENABLED` | `true` | Enable/disable guard_node entirely |
 
 ## Service Dependencies (initialized in PropertyBot.__init__)
 
@@ -166,24 +167,10 @@ state["input_type"] = "voice"
 
 **Langfuse scores:** `input_type` (CATEGORICAL), `stt_duration_ms` (NUMERIC), `voice_duration_s` (NUMERIC)
 
-## handle_query Flow
+## handle_query Flow (supervisor-only since #310)
 
 ```python
-state = make_initial_state(user_id, session_id, query)
-with propagate_attributes(session_id=..., user_id=..., tags=["telegram", "rag"]):
-    graph = build_graph(cache, embeddings, sparse, qdrant, reranker, llm, message)
-    async with ChatActionSender.typing(...):
-        result = await graph.ainvoke(state)
-    lf = get_client()
-    lf.update_current_trace(input=..., output=..., metadata=...)
-    _write_langfuse_scores(lf, result)  # 12 scores
-```
-
-## Supervisor Path (USE_SUPERVISOR=true)
-
-When `use_supervisor=True`, `handle_query` delegates to `_handle_query_supervisor`:
-
-```python
+# handle_query always delegates to _handle_query_supervisor
 # 1. Build tools (rag_search wraps existing RAG graph, direct_response, optionally history_search)
 tools = [create_rag_agent(...), direct_response]
 if history_service: tools.append(create_history_search_tool(history_service))
@@ -192,17 +179,20 @@ if history_service: tools.append(create_history_search_tool(history_service))
 graph = build_supervisor_graph(supervisor_llm=llm, tools=tools)
 result = await graph.ainvoke(state, config={"configurable": {"user_id": ..., "session_id": ...}})
 
-# 3. Langfuse scores: agent_used (CATEGORICAL), supervisor_latency_ms (NUMERIC), supervisor_model (CATEGORICAL)
+# 3. Langfuse trace + scores
+lf = get_client()
+lf.update_current_trace(input=..., output=..., metadata=...)
+# Scores: agent_used (CATEGORICAL), supervisor_latency_ms (NUMERIC), supervisor_model (CATEGORICAL)
 ```
 
 **Tools:**
-- `rag_search` — wraps `build_graph().ainvoke()` (existing 10-node RAG pipeline)
+- `rag_search` — wraps `build_graph().ainvoke()` (existing 11-node RAG pipeline) + `write_langfuse_scores()`
 - `history_search` — wraps `HistoryService.search_user_history()` (Qdrant + BGE-M3)
 - `direct_response` — returns message as-is (for greetings, chitchat)
 
 **Runtime context:** Tools receive `user_id`/`session_id` via `RunnableConfig.configurable`.
 
-**Feature flag:** `USE_SUPERVISOR=false` (default) preserves monolithic RAG graph path.
+**Score writing:** RAG pipeline scores (14 metrics) are written by `rag_agent.py` via `write_langfuse_scores()` from `telegram_bot/scoring.py`.
 
 ## Streaming Delivery
 

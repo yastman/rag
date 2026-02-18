@@ -33,7 +33,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from datasets import Dataset
 from openai import OpenAI
 from ragas import evaluate
 from ragas.llms import llm_factory
@@ -46,6 +45,7 @@ from ragas.metrics.collections import (
     Faithfulness,
 )
 
+from datasets import Dataset
 from src.evaluation.mlflow_integration import MLflowRAGLogger
 
 

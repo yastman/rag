@@ -1,4 +1,4 @@
-.PHONY: help install install-dev install-all lint format type-check security test test-cov clean all-checks \
+.PHONY: help install install-dev install-all lint format type-check security test test-full test-cov clean all-checks \
 	test-preflight test-smoke test-smoke-routing test-load test-load-ci test-load-eviction \
 	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
@@ -8,7 +8,7 @@
 	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
-	git-hygiene git-hygiene-fix
+	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev-redis
@@ -131,10 +131,15 @@ all-checks: lint type-check security ## Run all code quality checks
 # TESTING
 # =============================================================================
 
-test: ## Run tests with pytest
-	@echo "$(BLUE)Running tests...$(NC)"
+test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
+	@echo "$(BLUE)Running fast test gate (unit + graph_paths)...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ tests/integration/test_graph_paths.py -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras"
+	@echo "$(GREEN)✓ Fast test gate complete$(NC)"
+
+test-full: ## Run full test suite (all tiers)
+	@echo "$(BLUE)Running full test suite...$(NC)"
 	uv run pytest tests/
-	@echo "$(GREEN)✓ Tests complete$(NC)"
+	@echo "$(GREEN)✓ Full test suite complete$(NC)"
 
 test-cov: ## Run tests with coverage
 	@echo "$(BLUE)Running tests with coverage...$(NC)"
@@ -899,4 +904,14 @@ git-hygiene: ## Git hygiene report (merged branches, stale worktrees, transient 
 git-hygiene-fix: ## Git hygiene safe cleanup preview (dry-run)
 	@echo "$(BLUE)Running git hygiene cleanup (dry-run)...$(NC)"
 	uv run python scripts/git_hygiene.py --fix --dry-run || true
+	@echo ""
+
+repo-cleanup: ## Full repo cleanup: branches, worktrees, stashes (dry-run)
+	@echo "$(BLUE)Running repo cleanup (dry-run)...$(NC)"
+	bash scripts/repo_cleanup.sh --dry-run
+	@echo ""
+
+repo-cleanup-force: ## Full repo cleanup: interactive deletion mode
+	@echo "$(BLUE)Running repo cleanup (interactive)...$(NC)"
+	bash scripts/repo_cleanup.sh --force
 	@echo ""

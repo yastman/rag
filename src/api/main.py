@@ -88,7 +88,7 @@ app = FastAPI(title="RAG API", version="0.1.0", lifespan=lifespan)
 
 
 @app.exception_handler(Exception)
-async def generic_error_handler(request: Any, exc: Exception) -> JSONResponse:
+async def generic_error_handler(_request: Any, _exc: Exception) -> JSONResponse:
     """Return structured error response for unhandled exceptions."""
     logger.exception("Unhandled error in RAG API")
     return JSONResponse(status_code=500, content={"error": "Internal server error"})
@@ -103,9 +103,9 @@ async def health() -> dict[str, str]:
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
-    from telegram_bot.bot import _write_langfuse_scores
     from telegram_bot.graph.state import make_initial_state
     from telegram_bot.observability import get_client, propagate_attributes
+    from telegram_bot.scoring import write_langfuse_scores
 
     start = time.perf_counter()
 
@@ -136,14 +136,14 @@ async def query(req: QueryRequest) -> QueryResponse:
                 "query_type": result.get("query_type", ""),
             },
         )
-        # Set wall-time fields so _write_langfuse_scores reports real latency
+        # Set wall-time fields so write_langfuse_scores reports real latency
         elapsed_ms = (time.perf_counter() - start) * 1000
         result["pipeline_wall_ms"] = elapsed_ms
         summarize_s = result.get("latency_stages", {}).get("summarize", 0)
         result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
 
         # Write Langfuse scores for observability parity with bot
-        _write_langfuse_scores(lf, result)
+        write_langfuse_scores(lf, result)
 
     return QueryResponse(
         response=result.get("response", ""),

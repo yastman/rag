@@ -198,6 +198,8 @@ async def guard_node(
         pattern = pattern or "ml_classifier"
 
     result: dict[str, Any] = {
+        "guard_blocked": False,
+        "guard_reason": None,
         "injection_detected": combined_detected,
         "injection_risk_score": combined_score,
         "injection_pattern": pattern,
@@ -230,6 +232,8 @@ async def guard_node(
         )
 
         if guard_mode == "hard":
+            result["guard_blocked"] = True
+            result["guard_reason"] = "injection"
             result["response"] = _BLOCKED_RESPONSE
     else:
         lf.update_current_span(

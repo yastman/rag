@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 
 from telegram_bot.graph.edges import (
+    route_after_guard,
     route_by_query_type,
     route_cache,
     route_grade,
-    route_guard,
     route_start,
 )
 from telegram_bot.graph.state import make_initial_state
@@ -20,34 +20,26 @@ class TestRouteStart:
         state["voice_audio"] = b"fake-ogg"
         assert route_start(state) == "transcribe"
 
-    def test_voice_audio_none_routes_to_guard(self):
+    def test_voice_audio_none_routes_to_classify(self):
         state = make_initial_state(user_id=1, session_id="s", query="hello")
         state["voice_audio"] = None
-        assert route_start(state) == "guard"
+        assert route_start(state) == "classify"
 
-    def test_voice_audio_absent_routes_to_guard(self):
+    def test_voice_audio_absent_routes_to_classify(self):
         state = {"query": "hello"}  # no voice_audio key at all
-        assert route_start(state) == "guard"
+        assert route_start(state) == "classify"
 
 
-class TestRouteGuard:
-    def test_injection_with_response_routes_to_respond(self):
+class TestRouteAfterGuard:
+    def test_blocked_routes_to_respond(self):
         state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["injection_detected"] = True
-        state["response"] = "Blocked."
-        assert route_guard(state) == "respond"
+        state["guard_blocked"] = True
+        assert route_after_guard(state) == "respond"
 
-    def test_injection_without_response_routes_to_classify(self):
-        """Soft/log mode: injection_detected but no response set."""
+    def test_allowed_routes_to_cache_check(self):
         state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["injection_detected"] = True
-        state["response"] = ""
-        assert route_guard(state) == "classify"
-
-    def test_no_injection_routes_to_classify(self):
-        state = make_initial_state(user_id=1, session_id="s", query="test")
-        state["injection_detected"] = False
-        assert route_guard(state) == "classify"
+        state["guard_blocked"] = False
+        assert route_after_guard(state) == "cache_check"
 
 
 def test_initial_state_has_score_improved():
@@ -62,10 +54,10 @@ class TestRouteByQueryType:
         [
             pytest.param("CHITCHAT", "respond", id="chitchat"),
             pytest.param("OFF_TOPIC", "respond", id="off_topic"),
-            pytest.param("STRUCTURED", "cache_check", id="structured"),
-            pytest.param("FAQ", "cache_check", id="faq"),
-            pytest.param("ENTITY", "cache_check", id="entity"),
-            pytest.param("GENERAL", "cache_check", id="general"),
+            pytest.param("STRUCTURED", "guard", id="structured"),
+            pytest.param("FAQ", "guard", id="faq"),
+            pytest.param("ENTITY", "guard", id="entity"),
+            pytest.param("GENERAL", "guard", id="general"),
         ],
     )
     def test_routes_by_query_type(self, query_type, expected):

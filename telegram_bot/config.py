@@ -259,12 +259,15 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("stt_model", "STT_MODEL"),
     )
 
-    # Prompt injection defense (#226)
+    # Content filtering (#227)
+    content_filter_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("content_filter_enabled", "CONTENT_FILTER_ENABLED"),
+    )
     guard_mode: str = Field(
         default="hard",
         validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),
     )
-    # Guard ML classifier (llm-guard, #226 Phase 2)
     guard_ml_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("guard_ml_enabled", "GUARD_ML_ENABLED"),
@@ -310,11 +313,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("max_context_tokens", "MAX_CONTEXT_TOKENS"),
     )
 
-    # Supervisor architecture (#240)
-    use_supervisor: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("use_supervisor", "USE_SUPERVISOR"),
-    )
+    # Supervisor routing model (#240, #310 — supervisor-only since v3.3)
     supervisor_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),

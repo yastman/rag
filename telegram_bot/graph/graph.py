@@ -13,16 +13,26 @@ from typing import Any, cast
 from langgraph.graph import END, START, StateGraph
 
 from telegram_bot.graph.edges import (
+    route_after_guard,
     route_by_query_type,
     route_cache,
     route_grade,
-    route_guard,
     route_start,
 )
 from telegram_bot.graph.state import RAGState
 
 
 logger = logging.getLogger(__name__)
+
+
+def _route_by_query_type_no_guard(
+    state: dict[str, Any],
+) -> str:
+    """Route without guard: CHITCHAT/OFF_TOPIC → respond, else → cache_check."""
+    query_type = state.get("query_type", "GENERAL")
+    if query_type in ("CHITCHAT", "OFF_TOPIC"):
+        return "respond"
+    return "cache_check"
 
 
 def build_graph(
@@ -39,6 +49,7 @@ def build_graph(
     show_transcription: bool = True,
     voice_language: str = "ru",
     stt_model: str = "whisper",
+    content_filter_enabled: bool = True,
     guard_mode: str = "hard",
     guard_ml_enabled: bool = False,
     llm_guard_client: Any | None = None,
@@ -69,16 +80,6 @@ def build_graph(
     workflow = StateGraph(RAGState)
 
     # Add nodes — wrap those that need injected deps via functools.partial
-    workflow.add_node(
-        "guard",
-        functools.partial(
-            guard_node,
-            guard_mode=guard_mode,
-            guard_ml_enabled=guard_ml_enabled,
-            llm_guard_client=llm_guard_client,
-        ),
-    )
-
     workflow.add_node("classify", classify_node)  # type: ignore[type-var]
 
     workflow.add_node(
@@ -91,6 +92,17 @@ def build_graph(
             message=message,
         ),
     )
+
+    if content_filter_enabled:
+        workflow.add_node(
+            "guard",
+            functools.partial(
+                guard_node,
+                guard_mode=guard_mode,
+                guard_ml_enabled=guard_ml_enabled,
+                llm_guard_client=llm_guard_client,
+            ),
+        )
 
     workflow.add_node(
         "cache_check",
@@ -178,28 +190,37 @@ def build_graph(
         route_start,
         {
             "transcribe": "transcribe",
-            "guard": "guard",
-        },
-    )
-    workflow.add_edge("transcribe", "guard")
-
-    workflow.add_conditional_edges(
-        "guard",
-        route_guard,
-        {
-            "respond": "respond",
             "classify": "classify",
         },
     )
+    workflow.add_edge("transcribe", "classify")
 
-    workflow.add_conditional_edges(
-        "classify",
-        route_by_query_type,
-        {
-            "respond": "respond",
-            "cache_check": "cache_check",
-        },
-    )
+    if content_filter_enabled:
+        workflow.add_conditional_edges(
+            "classify",
+            route_by_query_type,
+            {
+                "respond": "respond",
+                "guard": "guard",
+            },
+        )
+        workflow.add_conditional_edges(
+            "guard",
+            route_after_guard,
+            {
+                "respond": "respond",
+                "cache_check": "cache_check",
+            },
+        )
+    else:
+        workflow.add_conditional_edges(
+            "classify",
+            _route_by_query_type_no_guard,
+            {
+                "respond": "respond",
+                "cache_check": "cache_check",
+            },
+        )
 
     workflow.add_conditional_edges(
         "cache_check",
