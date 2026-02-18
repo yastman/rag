@@ -1,6 +1,6 @@
 """Tests for retrieve_node — hybrid RRF search with cache."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -385,3 +385,95 @@ class TestRetrieveNode:
         assert "retrieved_context" in result
         assert len(result["retrieved_context"]) == 1
         assert result["retrieved_context"][0]["score"] == 0.85
+
+
+class TestRetrieveNodeEvalFields:
+    """Test eval_query/eval_docs fields for managed evaluators (#386)."""
+
+    async def test_span_includes_eval_fields(self):
+        """Curated span output must include eval_ fields for Langfuse evaluators."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+
+        mock_docs = [
+            {"id": "1", "text": "Property in Nesebar", "score": 0.9, "metadata": {}},
+            {"id": "2", "text": "Studio in Ravda", "score": 0.7, "metadata": {}},
+        ]
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=None)
+        cache.get_sparse_embedding = AsyncMock(return_value=None)
+        cache.store_sparse_embedding = AsyncMock()
+        cache.store_search_results = AsyncMock()
+
+        sparse_embeddings = AsyncMock()
+        sparse_embeddings.aembed_query = AsyncMock(
+            return_value={"indices": [1, 2], "values": [0.5, 0.3]}
+        )
+
+        qdrant = AsyncMock()
+        qdrant.hybrid_search_rrf = AsyncMock(return_value=(mock_docs, _OK_META))
+
+        mock_lf = MagicMock()
+
+        with patch("telegram_bot.graph.nodes.retrieve.get_client", return_value=mock_lf):
+            await retrieve_node(
+                state,
+                cache=cache,
+                sparse_embeddings=sparse_embeddings,
+                qdrant=qdrant,
+            )
+
+        # Find span output calls
+        output_calls = [
+            c.kwargs["output"]
+            for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        assert output_calls, "retrieve_node must emit output span"
+        final_output = output_calls[-1]
+
+        assert "eval_query" in final_output
+        assert "eval_docs" in final_output
+        assert final_output["eval_query"] == "test query"
+        assert "Property in Nesebar" in final_output["eval_docs"]
+        assert "0.90" in final_output["eval_docs"]
+
+    async def test_cache_hit_includes_eval_fields(self):
+        """Cache hit path must also include eval_ fields in curated span."""
+        state = make_initial_state(user_id=1, session_id="s1", query="cached query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.2] * 1024
+
+        cached_docs = [
+            {"id": "1", "text": "Cached document content", "score": 0.85, "metadata": {}},
+        ]
+
+        cache = AsyncMock()
+        cache.get_search_results = AsyncMock(return_value=cached_docs)
+        qdrant = AsyncMock()
+        sparse_embeddings = AsyncMock()
+
+        mock_lf = MagicMock()
+
+        with patch("telegram_bot.graph.nodes.retrieve.get_client", return_value=mock_lf):
+            await retrieve_node(
+                state,
+                cache=cache,
+                sparse_embeddings=sparse_embeddings,
+                qdrant=qdrant,
+            )
+
+        output_calls = [
+            c.kwargs["output"]
+            for c in mock_lf.update_current_span.call_args_list
+            if "output" in c.kwargs
+        ]
+        assert output_calls, "retrieve_node cache hit must emit output span"
+        final_output = output_calls[-1]
+
+        assert "eval_query" in final_output
+        assert "eval_docs" in final_output
+        assert final_output["eval_query"] == "cached query"
+        assert "Cached document content" in final_output["eval_docs"]
