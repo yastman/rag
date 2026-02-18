@@ -16,8 +16,8 @@ make docker-bot-up         # Core + bot/litellm
 make docker-voice-up       # Core + LiveKit/SIP/voice-agent (preflight)
 make docker-full-up        # All services (17 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
-make eval-judge            # LLM-as-a-Judge batch (24h traces, RAG Triad)
-make eval-judge-sample     # LLM-as-a-Judge 50% sample (48h)
+make eval-goldset-sync     # Sync gold set to Langfuse dataset
+make eval-experiment       # Run RAG experiment on gold set
 make validate-traces-fast  # Trace validation (cold+cache, Langfuse report)
 make monitoring-up         # Start alerting stack
 make ingest-unified        # Unified ingestion (CocoIndex v3.2.1); also: -watch, -status
