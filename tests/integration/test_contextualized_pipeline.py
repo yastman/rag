@@ -324,6 +324,8 @@ class TestContextualizedSettingsIntegration:
                 "VOYAGE_API_KEY": "test",
                 "USE_CONTEXTUALIZED_EMBEDDINGS": "true",
                 "CONTEXTUALIZED_EMBEDDING_DIM": "2048",
+                "API_PROVIDER": "openai",
+                "OPENAI_API_KEY": "test-key",
             },
         ):
             from importlib import reload
@@ -342,7 +344,11 @@ class TestContextualizedSettingsIntegration:
         """Test default values for contextualized settings."""
         with patch.dict(
             "os.environ",
-            {"VOYAGE_API_KEY": "test"},
+            {
+                "VOYAGE_API_KEY": "test",
+                "API_PROVIDER": "openai",
+                "OPENAI_API_KEY": "test-key",
+            },
             clear=True,
         ):
             from importlib import reload
@@ -358,7 +364,14 @@ class TestContextualizedSettingsIntegration:
 
     def test_to_dict_includes_contextualized(self):
         """Test to_dict includes contextualized settings."""
-        with patch.dict("os.environ", {"VOYAGE_API_KEY": "test"}):
+        with patch.dict(
+            "os.environ",
+            {
+                "VOYAGE_API_KEY": "test",
+                "API_PROVIDER": "openai",
+                "OPENAI_API_KEY": "test-key",
+            },
+        ):
             from src.config.settings import Settings
 
             s = Settings()
