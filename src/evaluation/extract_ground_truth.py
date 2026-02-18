@@ -101,6 +101,10 @@ def print_statistics(articles: dict[str, list[str]]):
     print(f"  Total articles: {len(articles)}")
     print(f"  Total chunks: {sum(len(chunks) for chunks in articles.values())}")
 
+    if not articles:
+        print("  No articles to analyze.")
+        return
+
     # Article distribution
     chunks_per_article = [len(chunks) for chunks in articles.values()]
     print("  Chunks per article:")
@@ -124,8 +128,11 @@ def main():
     # Print statistics
     print_statistics(articles)
 
-    # Save to file
-    output_file = "/srv/app/evaluation/data/ground_truth_articles.json"
+    # Save to file (relative to project root)
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    os.makedirs(data_dir, exist_ok=True)
+
+    output_file = os.path.join(data_dir, "ground_truth_articles.json")
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(articles, f, ensure_ascii=False, indent=2)
 
@@ -133,7 +140,7 @@ def main():
 
     # Create simplified mapping (article -> first chunk only) for quick tests
     simple_mapping = {article: chunks[0]["point_id"] for article, chunks in articles.items()}
-    simple_output = "/srv/app/evaluation/data/article_to_chunk_mapping.json"
+    simple_output = os.path.join(data_dir, "article_to_chunk_mapping.json")
     with open(simple_output, "w", encoding="utf-8") as f:
         json.dump(simple_mapping, f, ensure_ascii=False, indent=2)
 
