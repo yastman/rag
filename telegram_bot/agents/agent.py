@@ -12,6 +12,7 @@ from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
 from telegram_bot.agents.context import BotContext
+from telegram_bot.integrations.prompt_manager import get_prompt
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,9 @@ DEFAULT_SYSTEM_PROMPT = """Ты — AI-ассистент по недвижим�
 4. Вопрос по недвижимости → rag_search
 5. Приветствия, small talk → отвечай сам, без tools
 6. Можно вызывать несколько tools для сложных запросов
-7. Отвечай на {language}
+7. Отвечай на {{language}}
+8. Отвечай кратко: 3-6 предложений, без длинных вступлений.
+9. Если вопрос широкий, сначала дай короткий ответ и 1 уточняющий вопрос.
 """
 
 
@@ -65,7 +68,11 @@ def create_bot_agent(
     Returns:
         Compiled agent graph ready for .ainvoke() / .astream().
     """
-    prompt = system_prompt or DEFAULT_SYSTEM_PROMPT.format(language=language)
+    prompt = system_prompt or get_prompt(
+        "supervisor_agent",
+        fallback=DEFAULT_SYSTEM_PROMPT,
+        variables={"language": language},
+    )
 
     ***REMOVED*** Build a ChatOpenAI instance routed through LiteLLM proxy (***REMOVED***420).
     ***REMOVED*** Passing a string model name to create_agent triggers init_chat_model()
