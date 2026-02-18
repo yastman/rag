@@ -16,6 +16,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "langfuse>=3.0.0",
     "openai>=1.10.0",
+    "langchain>=1.2",  # create_agent, ToolRuntime, middleware
     "langchain-core>=1.2",
     "langgraph>=1.0.3",
     "langgraph-checkpoint-redis>=0.2.0",
