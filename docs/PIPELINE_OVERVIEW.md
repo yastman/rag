@@ -327,11 +327,11 @@ async for chunk in llm.stream_response(query, context):
 
 ---
 
-## Supervisor Architecture (#240)
+## Supervisor Architecture (#240, #310)
 
-**Feature flag:** `USE_SUPERVISOR=true` (default: off)
+**Status:** Always-on (monolith path removed in #310).
 
-Replaces monolithic `classify_node` routing with LLM-based supervisor that selects tools:
+LLM-based supervisor selects tools for each query:
 
 ```
 User Query → Supervisor LLM (gpt-4o-mini) → tool_choice
