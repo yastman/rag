@@ -134,6 +134,7 @@ dmypy.json
 logs/
 data/embeddings/
 data/evaluation/
+data/gold_set*.jsonl
 evaluation/results/
 evaluation/evaluation/
 *.tar.gz
