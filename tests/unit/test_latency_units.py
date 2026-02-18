@@ -75,8 +75,8 @@ class TestLatencyUnitsConsistency:
         assert 0.15 < latency < 0.25, f"Expected ~0.2s, got {latency}"
 
     def test_score_writer_converts_seconds_to_ms(self):
-        """_write_langfuse_scores computes total_ms = sum(seconds) * 1000."""
-        from telegram_bot.bot import _write_langfuse_scores
+        """write_langfuse_scores computes total_ms = sum(seconds) * 1000."""
+        from telegram_bot.scoring import write_langfuse_scores as _write_langfuse_scores
 
         mock_lf = MagicMock()
 

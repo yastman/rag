@@ -1,5 +1,5 @@
 # tests/unit/test_bot_scores.py
-"""Tests for Langfuse score writing in handle_query."""
+"""Tests for Langfuse score writing (#310: scoring logic moved to scoring.py)."""
 
 import pytest
 
@@ -8,8 +8,8 @@ pytest.importorskip("aiogram", reason="aiogram not installed")
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.bot import PropertyBot
 from telegram_bot.config import BotConfig
+from telegram_bot.scoring import compute_checkpointer_overhead_proxy_ms, write_langfuse_scores
 
 
 @pytest.fixture
@@ -31,10 +31,12 @@ def mock_config():
 
 def _create_bot(mock_config):
     """Create PropertyBot with all deps mocked."""
+    from telegram_bot.bot import PropertyBot
+
     with (
         patch("telegram_bot.bot.Bot"),
         patch("telegram_bot.integrations.cache.CacheLayerManager"),
-        patch("telegram_bot.integrations.embeddings.BGEM3Embeddings"),
+        patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
         patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
         patch("telegram_bot.services.qdrant.QdrantService"),
         patch("telegram_bot.graph.config.GraphConfig.create_llm"),
@@ -93,30 +95,45 @@ def _make_typing_cm():
     return mock_cm
 
 
-async def _run_handle_query(mock_config, graph_result, mock_lf_client, *, history_service=None):
-    """Shared helper: run handle_query with mocked graph and Langfuse client.
+def _run_score_writer(result, mock_lf):
+    """Call write_langfuse_scores directly for unit testing scoring logic.
 
-    Args:
-        history_service: If provided, set bot._history_service before invoking.
+    Since #310, pipeline scores are written by scoring.py (called from rag_agent tool
+    and handle_voice). This helper tests the scoring function in isolation.
     """
+    write_langfuse_scores(mock_lf, result)
+    return mock_lf
+
+
+def _mock_supervisor_result(**overrides):
+    """Create a standard supervisor graph result dict."""
+    base = {
+        "messages": [MagicMock(content="Supervisor response")],
+        "agent_used": "rag_search",
+        "latency_stages": {"supervisor": 0.1},
+    }
+    base.update(overrides)
+    return base
+
+
+async def _run_handle_query_supervisor(mock_config, mock_lf_client, *, history_service=None):
+    """Run handle_query through supervisor path with mocked supervisor graph."""
     bot = _create_bot(mock_config)
     if history_service is not None:
         bot._history_service = history_service
 
     mock_graph = AsyncMock()
-    mock_graph.ainvoke = AsyncMock(return_value=graph_result)
+    mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
 
     with (
-        patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+        patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
         patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
-        patch("telegram_bot.bot.propagate_attributes") as mock_prop,
-        patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        patch("telegram_bot.bot.propagate_attributes"),
     ):
-        mock_cas.typing.return_value = _make_typing_cm()
-        mock_prop.return_value.__enter__ = MagicMock()
-        mock_prop.return_value.__exit__ = MagicMock()
-
-        await bot.handle_query(_make_message())
+        message = _make_message()
+        with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
 
     return mock_lf_client, bot
 
@@ -211,22 +228,18 @@ CHITCHAT_RESULT = {
 
 
 class TestScoreWriting:
-    """Test that Langfuse scores are written after graph.ainvoke."""
+    """Test that write_langfuse_scores writes correct scores from result state."""
 
-    async def test_scores_written_full_pipeline(self, mock_config):
-        """All scores should be written after a full pipeline run."""
+    def test_scores_written_full_pipeline(self):
+        """All scores should be written for a full pipeline result."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
+        result = {**FULL_PIPELINE_RESULT, "checkpointer_overhead_proxy_ms": 39.0}
+        _run_score_writer(result, mock_lf)
 
-        await _run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
-
-        # Extract all score names from calls
         score_calls = mock_lf.score_current_trace.call_args_list
         score_names = [call.kwargs["name"] for call in score_calls]
 
         expected_names = [
-            # Original 14
             "query_type",
             "latency_total_ms",
             "semantic_cache_hit",
@@ -241,21 +254,17 @@ class TestScoreWriting:
             "hyde_used",
             "llm_ttft_ms",
             "llm_response_duration_ms",
-            # Latency breakdown (#147): streaming path
             "streaming_enabled",
             "llm_timeout",
             "llm_stream_recovery",
             "llm_decode_ms",
             "llm_tps",
             "llm_queue_unavailable",
-            # Response length control (#129)
             "answer_words",
             "answer_chars",
             "answer_to_question_ratio",
             "response_style_applied",
-            # Voice transcription (#151)
             "input_type",
-            # Embedding resilience (#210)
             "bge_embed_error",
             "bge_embed_latency_ms",
             # Source attribution (#225)
@@ -269,40 +278,29 @@ class TestScoreWriting:
         assert sorted(score_names) == sorted(expected_names)
         assert mock_lf.score_current_trace.call_count == 32
 
-    async def test_score_values_full_pipeline(self, mock_config):
+    def test_score_values_full_pipeline(self):
         """Score values should match the graph result state."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        await _run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+        _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
 
         scores = {
             call.kwargs["name"]: call.kwargs["value"]
             for call in mock_lf.score_current_trace.call_args_list
         }
-        # query_type: STRUCTURED → 2
         assert scores["query_type"] == 2.0
-        # cache miss
         assert scores["semantic_cache_hit"] == 0.0
-        # rerank applied
         assert scores["rerank_applied"] == 1.0
-        # 5 results
         assert scores["results_count"] == 5.0
-        # not empty
         assert scores["no_results"] == 0.0
-        # generate in latency_stages → LLM used
         assert scores["llm_used"] == 1.0
-        # latency_total_ms = pipeline_wall_ms (wall-time, not sum of stages)
         assert abs(scores["latency_total_ms"] - FULL_PIPELINE_RESULT["pipeline_wall_ms"]) < 0.01
-        # embeddings/search cache misses, confidence from grade
         assert scores["embeddings_cache_hit"] == 0.0
         assert scores["search_cache_hit"] == 0.0
         assert scores["confidence_score"] == 0.85
         assert scores["answer_words"] == 12.0
         assert scores["answer_chars"] == 65.0
         assert scores["answer_to_question_ratio"] == 2.4
-        assert scores["response_style_applied"] == 1.0  # balanced
+        assert scores["response_style_applied"] == 1.0
 
     @pytest.mark.parametrize(
         ("result_fixture", "expected_scores"),
@@ -323,16 +321,13 @@ class TestScoreWriting:
         ],
         ids=["cache_hit", "chitchat"],
     )
-    async def test_score_values_by_result_type(self, mock_config, result_fixture, expected_scores):
+    def test_score_values_by_result_type(self, result_fixture, expected_scores):
         """Score values should match per result type (cache hit, chitchat)."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
         result_data = {"CACHE_HIT_RESULT": CACHE_HIT_RESULT, "CHITCHAT_RESULT": CHITCHAT_RESULT}[
             result_fixture
         ]
-        await _run_handle_query(mock_config, result_data, mock_lf)
+        _run_score_writer(result_data, mock_lf)
 
         scores = {
             call.kwargs["name"]: call.kwargs["value"]
@@ -349,92 +344,68 @@ class TestScoreWriting:
         ],
         ids=["shadow_mode", "empty_style_no_policy"],
     )
-    async def test_style_applied_not_emitted(self, mock_config, result_override, test_id):
-        """response_style_applied must NOT be emitted in shadow/legacy paths."""
+    def test_style_applied_not_emitted(self, result_override, test_id):
+        """response_style_applied must NOT be emitted in shadow/non-enforced paths."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
         base = FULL_PIPELINE_RESULT if "shadow" in test_id else CACHE_HIT_RESULT
         result = {**base, **result_override}
-        await _run_handle_query(mock_config, result, mock_lf)
+        _run_score_writer(result, mock_lf)
 
         score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
         assert "response_style_applied" not in score_names
 
-    async def test_scores_written_even_on_null_client(self, mock_config):
+    def test_scores_written_even_on_null_client(self):
         """When Langfuse disabled, _NullLangfuseClient.score_current_trace is called (no-op)."""
         from telegram_bot.observability import _NullLangfuseClient
 
         mock_lf = _NullLangfuseClient()
-        # Should not raise — NullClient silently ignores
-        await _run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+        _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
 
 
 class TestLatencyBreakdownScores:
     """Test latency breakdown score writing (#147)."""
 
-    async def test_streaming_path_writes_numeric_and_boolean_scores(self, mock_config):
+    def test_streaming_path_writes_numeric_and_boolean_scores(self):
         """Streaming: writes llm_decode_ms, llm_tps as NUMERIC; boolean flags."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        await _run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+        _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
 
         calls = mock_lf.score_current_trace.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs for c in calls}
 
-        # NUMERIC scores written
         assert score_map["llm_decode_ms"]["value"] == 300.0
         assert score_map["llm_tps"]["value"] == 42.5
-
-        # BOOLEAN flags
         assert score_map["streaming_enabled"]["value"] == 1
         assert score_map["streaming_enabled"]["data_type"] == "BOOLEAN"
         assert score_map["llm_timeout"]["value"] == 0
         assert score_map["llm_timeout"]["data_type"] == "BOOLEAN"
         assert score_map["llm_stream_recovery"]["value"] == 0
         assert score_map["llm_stream_recovery"]["data_type"] == "BOOLEAN"
-
-        # queue_unavailable because queue_ms is None
         assert score_map["llm_queue_unavailable"]["value"] == 1
         assert score_map["llm_queue_unavailable"]["data_type"] == "BOOLEAN"
-        # No llm_decode_unavailable (decode_ms was written)
         assert "llm_decode_unavailable" not in score_map
 
-    async def test_non_streaming_writes_unavailable_flags(self, mock_config):
+    def test_non_streaming_writes_unavailable_flags(self):
         """Non-streaming: writes *_unavailable BOOLEAN flags, skips NUMERIC decode/tps."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        await _run_handle_query(mock_config, CACHE_HIT_RESULT, mock_lf)
+        _run_score_writer(CACHE_HIT_RESULT, mock_lf)
 
         calls = mock_lf.score_current_trace.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs for c in calls}
 
-        # NUMERIC scores NOT written
         assert "llm_decode_ms" not in score_map
         assert "llm_tps" not in score_map
         assert "llm_queue_ms" not in score_map
-
-        # Unavailable flags written
         assert score_map["llm_decode_unavailable"]["value"] == 1
         assert score_map["llm_decode_unavailable"]["data_type"] == "BOOLEAN"
         assert score_map["llm_tps_unavailable"]["value"] == 1
         assert score_map["llm_queue_unavailable"]["value"] == 1
-
-        # streaming_enabled = False
         assert score_map["streaming_enabled"]["value"] == 0
         assert score_map["streaming_enabled"]["data_type"] == "BOOLEAN"
 
-    async def test_hard_fail_writes_timeout_true(self, mock_config):
+    def test_hard_fail_writes_timeout_true(self):
         """Hard LLM failure: llm_timeout=1 BOOLEAN."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
         timeout_result = {
             **CHITCHAT_RESULT,
             "llm_timeout": True,
@@ -444,8 +415,7 @@ class TestLatencyBreakdownScores:
             "llm_tps": None,
             "llm_queue_ms": None,
         }
-
-        await _run_handle_query(mock_config, timeout_result, mock_lf)
+        _run_score_writer(timeout_result, mock_lf)
 
         calls = mock_lf.score_current_trace.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs for c in calls}
@@ -528,10 +498,11 @@ class TestVoiceTraceMetadata:
 
         result = {
             **FULL_PIPELINE_RESULT,
+            "stt_text": "тест",
             "messages": [{"role": "user"}, {"role": "assistant"}],
             "checkpointer_overhead_proxy_ms": 39.0,
         }
-        await _run_handle_query(mock_config, result, mock_lf)
+        await _run_handle_voice(mock_config, result, mock_lf)
 
         metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
         assert metadata["memory_messages_count"] == 2
@@ -550,41 +521,30 @@ VOICE_PIPELINE_RESULT = {
 class TestVoiceScores:
     """Test voice-specific Langfuse scores (#158)."""
 
-    async def test_voice_scores_written(self, mock_config):
+    def test_voice_scores_written(self):
         """Voice result should emit stt_duration_ms and voice_duration_s scores."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        await _run_handle_query(mock_config, VOICE_PIPELINE_RESULT, mock_lf)
+        _run_score_writer(VOICE_PIPELINE_RESULT, mock_lf)
 
         score_calls = mock_lf.score_current_trace.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs for c in score_calls}
 
-        # Voice-specific scores must be present
         assert "stt_duration_ms" in score_map
         assert score_map["stt_duration_ms"]["value"] == 250.0
-
         assert "voice_duration_s" in score_map
         assert score_map["voice_duration_s"]["value"] == 5.0
-
         assert "input_type" in score_map
         assert score_map["input_type"]["value"] == "voice"
         assert score_map["input_type"]["data_type"] == "CATEGORICAL"
 
-    async def test_text_scores_omit_voice_metrics(self, mock_config):
+    def test_text_scores_omit_voice_metrics(self):
         """Text result should NOT emit stt_duration_ms or voice_duration_s scores."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        await _run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+        _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
 
         score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
 
-        # input_type always written (as "text")
         assert "input_type" in score_names
-        # Voice-only scores NOT written for text input
         assert "stt_duration_ms" not in score_names
         assert "voice_duration_s" not in score_names
 
@@ -603,19 +563,16 @@ class TestMemoryScores:
         ],
         ids=["three_messages", "no_messages_key"],
     )
-    async def test_memory_messages_count(self, mock_config, result_override, expected_count):
+    def test_memory_messages_count(self, result_override, expected_count):
         """memory_messages_count tracks message count (0 when absent)."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
         if result_override is None:
             result = {**CHITCHAT_RESULT}
             result.pop("messages", None)
         else:
             result = {**FULL_PIPELINE_RESULT, **result_override}
 
-        await _run_handle_query(mock_config, result, mock_lf)
+        _run_score_writer(result, mock_lf)
 
         scores = {
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
@@ -627,12 +584,9 @@ class TestMemoryScores:
         [(True, 1), (False, 0)],
         ids=["with_summarize_stage", "without_summarize_stage"],
     )
-    async def test_summarization_triggered(self, mock_config, has_summarize, expected_value):
+    def test_summarization_triggered(self, has_summarize, expected_value):
         """summarization_triggered reflects presence of summarize stage."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
         if has_summarize:
             result = {
                 **FULL_PIPELINE_RESULT,
@@ -644,7 +598,7 @@ class TestMemoryScores:
         else:
             result = CACHE_HIT_RESULT
 
-        await _run_handle_query(mock_config, result, mock_lf)
+        _run_score_writer(result, mock_lf)
 
         scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
         assert scores["summarization_triggered"]["value"] == expected_value
@@ -652,18 +606,16 @@ class TestMemoryScores:
 
 
 def test_compute_checkpointer_overhead_proxy_ms():
-    """Unit test for _compute_checkpointer_overhead_proxy_ms helper."""
-    from telegram_bot.bot import _compute_checkpointer_overhead_proxy_ms
-
+    """Unit test for compute_checkpointer_overhead_proxy_ms helper."""
     result = {"latency_stages": {"classify": 0.001, "generate": 0.100}}
     # stages = 101ms, ainvoke wall = 140ms -> proxy overhead = 39ms
-    assert _compute_checkpointer_overhead_proxy_ms(result, 140.0) == pytest.approx(39.0, abs=0.1)
+    assert compute_checkpointer_overhead_proxy_ms(result, 140.0) == pytest.approx(39.0, abs=0.1)
     # clamp at zero
-    assert _compute_checkpointer_overhead_proxy_ms(result, 50.0) == 0.0
+    assert compute_checkpointer_overhead_proxy_ms(result, 50.0) == 0.0
 
 
 class TestHistoryScores:
-    """Test history-related Langfuse scores (#239)."""
+    """Test history-related Langfuse scores (#239, #310 supervisor path)."""
 
     @pytest.mark.parametrize(
         ("save_result", "expected_value"),
@@ -678,8 +630,8 @@ class TestHistoryScores:
 
         history_svc = AsyncMock()
         history_svc.save_turn = AsyncMock(return_value=save_result)
-        mock_lf, _bot = await _run_handle_query(
-            mock_config, FULL_PIPELINE_RESULT, mock_lf, history_service=history_svc
+        mock_lf, _bot = await _run_handle_query_supervisor(
+            mock_config, mock_lf, history_service=history_svc
         )
 
         scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
@@ -694,8 +646,8 @@ class TestHistoryScores:
 
         history_svc = AsyncMock()
         history_svc.save_turn = AsyncMock(return_value=True)
-        mock_lf, _ = await _run_handle_query(
-            mock_config, FULL_PIPELINE_RESULT, mock_lf, history_service=history_svc
+        mock_lf, _ = await _run_handle_query_supervisor(
+            mock_config, mock_lf, history_service=history_svc
         )
 
         scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
@@ -707,24 +659,17 @@ class TestHistoryScores:
 class TestCheckpointerOverheadScore:
     """Test checkpointer_overhead_proxy_ms score (#159)."""
 
-    async def test_checkpointer_overhead_proxy_score_written(self, mock_config):
-        """checkpointer_overhead_proxy_ms computed from ainvoke wall-time minus stages."""
+    def test_checkpointer_overhead_proxy_score_written(self):
+        """checkpointer_overhead_proxy_ms written when present in result."""
         mock_lf = MagicMock()
-        mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
-
-        # FULL_PIPELINE_RESULT stages sum to 862ms (0.862s)
-        # Simulate ainvoke taking 0.901s (901ms) → overhead proxy = 39ms
-        perf_values = iter(
-            [
-                0.0,  # pipeline_start
-                1.0,  # invoke_start
-                1.901,  # after ainvoke → ainvoke_wall_ms = 901ms
-                2.0,  # pipeline_wall_ms
-            ]
-        )
-        with patch("telegram_bot.bot.time.perf_counter", side_effect=perf_values):
-            await _run_handle_query(mock_config, FULL_PIPELINE_RESULT, mock_lf)
+        # Simulate rag_agent computing overhead: stages = 862ms, ainvoke = 901ms → 39ms
+        result = {
+            **FULL_PIPELINE_RESULT,
+            "checkpointer_overhead_proxy_ms": compute_checkpointer_overhead_proxy_ms(
+                FULL_PIPELINE_RESULT, 901.0
+            ),
+        }
+        _run_score_writer(result, mock_lf)
 
         scores = {
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
