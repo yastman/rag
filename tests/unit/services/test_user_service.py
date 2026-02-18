@@ -84,6 +84,9 @@ async def test_set_locale(service, mock_pool):
     mock_pool.execute.return_value = "UPDATE 1"
     await service.set_locale(telegram_id=123, locale="en")
     mock_pool.execute.assert_called_once()
+    sql = mock_pool.execute.call_args.args[0]
+    assert "INSERT INTO users" in sql
+    assert "ON CONFLICT (telegram_id)" in sql
 
 
 @pytest.mark.asyncio
