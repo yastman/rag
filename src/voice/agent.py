@@ -290,18 +290,16 @@ async def entrypoint(ctx: agents.JobContext):
     # Register cleanup callback to finalize the call when the session ends
     async def _finalize() -> None:
         try:
-            if not store or not call_id:
-                return
-            duration_sec = int(time.monotonic() - call_start)
-            try:
+            if store and call_id:
+                duration_sec = int(time.monotonic() - call_start)
                 await store.finalize_call(
                     call_id=call_id,
                     duration_sec=duration_sec,
                     langfuse_trace_id=langfuse_trace_id,
                 )
                 logger.info("Call %s finalized: duration=%ds", call_id, duration_sec)
-            except Exception:
-                logger.exception("Failed to finalize call %s", call_id)
+        except Exception:
+            logger.exception("Failed to finalize call %s", call_id)
         finally:
             await _mark_job_finished()
 
