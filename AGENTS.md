@@ -21,9 +21,11 @@
 - Run pytest in parallel mode (`-n auto --dist=worksteal`) unless explicitly told otherwise.
 
 ## Required Verification
-- Minimum gate before completion:
+- Minimum gate before completion for code/runtime changes:
   - `make check`
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
+- For docs/plan-only changes (no runtime/test/infra code changes), skip full test gate and run documentation validation from:
+  - `docs/agent-rules/testing-and-validation.md`
 - For infra/integration/runtime-sensitive changes, run targeted checks from:
   - `docs/agent-rules/testing-and-validation.md`
 

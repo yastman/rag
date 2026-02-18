@@ -1,5 +1,5 @@
 ---
-paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**"
+paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, telegram_bot/agents/**"
 ---
 
 # Telegram Bot
@@ -16,10 +16,10 @@ Telegram interface for domain-configurable search (default: Bulgarian property) 
 Text:  User Message → ThrottlingMiddleware → ErrorMiddleware
                    → PropertyBot.handle_query()
                    → _handle_query_supervisor()
-                   → build_supervisor_graph(supervisor_llm, tools)
-                   → Supervisor LLM → tool_choice (rag_search | history_search | direct_response)
-                   → tool executes → respond
-                   → Langfuse: agent_used + supervisor_latency_ms + supervisor_model scores
+                   → create_bot_agent(model, tools, context_schema=BotContext)
+                   → Agent LLM → tool_choice (rag_search | history_search | 8 CRM tools | direct)
+                   → tool executes (deps via BotContext DI) → respond
+                   → Langfuse: CallbackHandler + @observe spans
 
 Voice: Voice Message → PropertyBot.handle_voice()
                     → download .ogg → make_initial_state(voice_audio=bytes)
@@ -31,21 +31,22 @@ Voice: Voice Message → PropertyBot.handle_voice()
 
 | File | Description |
 |------|-------------|
-| `telegram_bot/bot.py` | PropertyBot class (~300 LOC, supervisor orchestrator + voice handler) |
-| `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` (extracted #310) |
+| `telegram_bot/bot.py` | PropertyBot class (agent orchestrator + voice handler) |
+| `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` |
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
-| `telegram_bot/graph/graph.py` | `build_graph()` — assembles 10-node StateGraph |
+| `telegram_bot/graph/graph.py` | `build_graph()` — assembles 11-node StateGraph (RAG pipeline) |
 | `telegram_bot/graph/state.py` | RAGState TypedDict (25 fields incl. voice_audio, stt_text, input_type) + `make_initial_state()` |
 | `telegram_bot/graph/edges.py` | 4 routing functions (`route_start` voice→transcribe/classify, `route_grade` checks `grade_confidence`) |
 | `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `show_transcription`, `voice_language`, `stt_model`, `streaming_enabled`) |
 | `telegram_bot/graph/nodes/` | 9 node modules (transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
-| `telegram_bot/agents/supervisor.py` | `build_supervisor_graph()` — supervisor LLM + ToolNode loop |
-| `telegram_bot/agents/rag_agent.py` | `create_rag_agent()` — wraps existing RAG graph as tool |
-| `telegram_bot/agents/history_agent.py` | `create_history_agent()` — wraps HistoryService as tool |
-| `telegram_bot/agents/tools.py` | `create_rag_search_tool()`, `create_history_search_tool()`, `direct_response` |
-| `telegram_bot/graph/supervisor_state.py` | `SupervisorState` TypedDict + `make_supervisor_state()` factory |
-| `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, PII masking |
+| `telegram_bot/agents/agent.py` | `create_bot_agent()` — wraps `langchain.agents.create_agent` SDK (#413) |
+| `telegram_bot/agents/context.py` | `BotContext` dataclass (13 fields) — DI via `context_schema` into tools |
+| `telegram_bot/agents/rag_tool.py` | `rag_search` @tool — wraps 11-node RAG pipeline via `build_graph().ainvoke()` |
+| `telegram_bot/agents/history_tool.py` | `history_search` @tool — wraps 4-node history sub-graph |
+| `telegram_bot/agents/crm_tools.py` | 8 CRM @tools for Kommo API (get/create/update deals, contacts, notes, tasks) |
+| `telegram_bot/agents/history_graph/` | History sub-graph: retrieve → grade → rewrite → summarize (4 nodes) |
+| `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, `create_callback_handler`, PII masking |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 
@@ -115,7 +116,8 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `domain_language` | `BOT_LANGUAGE` | `ru` | Response language |
 | `rerank_provider` | `RERANK_PROVIDER` | `voyage` | colbert / none / voyage |
 | `admin_ids` | `ADMIN_IDS` | [] | Comma-separated Telegram IDs |
-| `supervisor_model` | `SUPERVISOR_MODEL` | `gpt-4o-mini` | Model for supervisor routing decisions (#310: supervisor-only since v3.3) |
+| `supervisor_model` | `SUPERVISOR_MODEL` | `gpt-4o-mini` | Model for agent routing decisions (#413: create_agent SDK) |
+| `kommo_enabled` | `KOMMO_ENABLED` | `false` | Enable Kommo CRM tools in agent |
 | `streaming_enabled` | `STREAMING_ENABLED` | `true` | Stream LLM output to Telegram via edit_text |
 | `show_transcription` | `SHOW_TRANSCRIPTION` | `true` | Show transcribed text before RAG response |
 | `voice_language` | `VOICE_LANGUAGE` | `ru` | Whisper language hint (ISO code) |
@@ -167,32 +169,37 @@ state["input_type"] = "voice"
 
 **Langfuse scores:** `input_type` (CATEGORICAL), `stt_duration_ms` (NUMERIC), `voice_duration_s` (NUMERIC)
 
-## handle_query Flow (supervisor-only since #310)
+## handle_query Flow (create_agent SDK since #413)
 
 ```python
 # handle_query always delegates to _handle_query_supervisor
-# 1. Build tools (rag_search wraps existing RAG graph, direct_response, optionally history_search)
-tools = [create_rag_agent(...), direct_response]
-if history_service: tools.append(create_history_search_tool(history_service))
+# 1. Build tools list
+tools = [rag_search]  # @tool from agents/rag_tool.py
+if history_service: tools.append(history_search)  # @tool from agents/history_tool.py
+if kommo_enabled: tools.extend(get_crm_tools())   # 8 @tools from agents/crm_tools.py
 
-# 2. Supervisor LLM routes to appropriate tool
-graph = build_supervisor_graph(supervisor_llm=llm, tools=tools)
-result = await graph.ainvoke(state, config={"configurable": {"user_id": ..., "session_id": ...}})
+# 2. Create agent via SDK
+agent = create_bot_agent(model=config.supervisor_model, tools=tools, checkpointer=...)
 
-# 3. Langfuse trace + scores
-lf = get_client()
-lf.update_current_trace(input=..., output=..., metadata=...)
-# Scores: agent_used (CATEGORICAL), supervisor_latency_ms (NUMERIC), supervisor_model (CATEGORICAL)
+# 3. Build BotContext for DI (injected into tools via context_schema)
+ctx = BotContext(telegram_user_id=..., session_id=..., kommo_client=..., embeddings=..., ...)
+
+# 4. Invoke with CallbackHandler for Langfuse
+langfuse_handler = create_callback_handler()
+result = await agent.ainvoke(
+    {"messages": [HumanMessage(content=query)]},
+    config={"configurable": {"bot_context": ctx}, "callbacks": [langfuse_handler]},
+)
 ```
 
-**Tools:**
-- `rag_search` — wraps `build_graph().ainvoke()` (existing 11-node RAG pipeline) + `write_langfuse_scores()`
-- `history_search` — wraps `HistoryService.search_user_history()` (Qdrant + BGE-M3)
-- `direct_response` — returns message as-is (for greetings, chitchat)
+**Tools (all @tool decorated, deps via BotContext):**
+- `rag_search` — wraps `build_graph().ainvoke()` (11-node RAG pipeline), @observe("tool-rag-search")
+- `history_search` — wraps `build_history_graph().ainvoke()` (4-node sub-graph), @observe("tool-history-search")
+- 8 CRM tools — `crm_get_deal`, `crm_create_lead`, `crm_update_lead`, `crm_upsert_contact`, `crm_add_note`, `crm_create_task`, `crm_link_contact_to_deal`, `crm_get_contacts`
 
-**Runtime context:** Tools receive `user_id`/`session_id` via `RunnableConfig.configurable`.
+**Runtime context:** Tools receive `BotContext` via `config["configurable"]["bot_context"]` (context_schema DI).
 
-**Score writing:** RAG pipeline scores (14 metrics) are written by `rag_agent.py` via `write_langfuse_scores()` from `telegram_bot/scoring.py`.
+**Score writing:** RAG pipeline scores (14 metrics) are written inside `rag_search` tool via `write_langfuse_scores()` from `telegram_bot/scoring.py`.
 
 ## Streaming Delivery
 
@@ -230,7 +237,7 @@ Catches all exceptions, logs with `exc_info=True`, returns user-friendly message
 pytest tests/unit/test_bot_handlers.py -v
 pytest tests/unit/test_middlewares.py -v
 pytest tests/unit/graph/ -v                              # All graph tests (incl. test_transcribe_node.py)
-pytest tests/unit/agents/ -v                             # Supervisor tests (state, tools, routing, observability)
+pytest tests/unit/agents/ -v                             # Agent tests (factory, context, tools, CRM, history, streaming)
 pytest tests/integration/test_graph_paths.py -v          # Graph path tests incl. voice flow (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 ```
@@ -244,6 +251,62 @@ pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 | Bot not responding | Check `docker logs dev-bot` |
 | `TELEGRAM_BOT_TOKEN` invalid | Get new token from @BotFather |
 | Services unhealthy | Run preflight: `from telegram_bot.preflight import check_dependencies` |
+
+## CRM Integration (#384, #390, #402, #413)
+
+### Agent CRM Tools (8 @tool, Kommo API v4)
+
+| Tool | Span Name | Description |
+|------|-----------|-------------|
+| `crm_get_deal` | `crm-get-deal` | GET lead by ID |
+| `crm_get_contacts` | `crm-get-contacts` | Search contacts by name/phone |
+| `crm_create_lead` | `crm-create-lead` | POST new lead (name, budget, pipeline) |
+| `crm_update_lead` | `crm-update-lead` | PATCH lead (name, budget, status) |
+| `crm_upsert_contact` | `crm-upsert-contact` | Find by phone or create contact |
+| `crm_add_note` | `crm-add-note` | POST note to lead/contact |
+| `crm_create_task` | `crm-create-task` | POST follow-up task |
+| `crm_link_contact_to_deal` | `crm-link-contact-to-deal` | Link contact to lead |
+
+All tools check `ctx.kommo_client is not None` before proceeding. Enabled via `config.kommo_enabled`.
+
+### Kommo Infrastructure (#413)
+
+- **Client:** `telegram_bot/services/kommo_client.py` — `KommoClient` (async httpx, OAuth2 auto-refresh on 401)
+- **Token store:** `telegram_bot/services/kommo_token_store.py` — `KommoTokenStore` (Redis hash, 5-min refresh buffer)
+- **Models:** `telegram_bot/services/kommo_models.py` — Pydantic v2 (Lead, Contact, Note, Task, Pipeline, *Create, *Update)
+
+### Lead Scoring
+
+- **Store:** `telegram_bot/services/lead_scoring_store.py` — `LeadScoringStore` (asyncpg upsert, pending sync queue)
+- **Models:** `telegram_bot/services/lead_scoring_models.py` — `LeadScoreRecord`, `LeadScoreSyncPayload`
+- **DB tables:** `lead_scores` (with `sync_status`), `lead_score_sync_audit`
+- **Lifecycle:** `HotLeadNotifier` wired in bot startup (#402)
+
+### Nurturing & Funnel Analytics
+
+- **Nurturing:** `telegram_bot/services/nurturing_service.py` — `NurturingService`
+- **Scheduler:** `telegram_bot/services/nurturing_scheduler.py` — `NurturingScheduler` (APScheduler v3)
+- **Funnel:** `telegram_bot/services/funnel_analytics_store.py` + `funnel_analytics_service.py`
+- **DB tables:** `nurturing_jobs`, `funnel_metrics_daily`, `scheduler_leases` (distributed lock)
+
+### CRM Config
+
+| Parameter | Env Var | Default | Description |
+|-----------|---------|---------|-------------|
+| — | `KOMMO_LEAD_SCORE_FIELD_ID` | — | Kommo custom field for lead score |
+| — | `KOMMO_LEAD_BAND_FIELD_ID` | — | Kommo custom field for lead band |
+| — | `NURTURING_ENABLED` | `false` | Enable nurturing scheduler |
+| — | `NURTURING_INTERVAL_MINUTES` | — | Batch interval |
+| — | `FUNNEL_ROLLUP_CRON` | — | Daily funnel metrics rollup |
+
+### Langfuse Scores (CRM)
+
+| Score | Type | Purpose |
+|-------|------|---------|
+| `nurturing_batch_size` | NUMERIC | Total leads in nurturing batch |
+| `nurturing_sent_count` | NUMERIC | Successfully sent nurturing messages |
+| `funnel_conversion_rate` | NUMERIC | Stage conversion rate |
+| `funnel_dropoff_rate` | NUMERIC | Stage dropoff rate |
 
 ## Development Guide
 

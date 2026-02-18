@@ -11,6 +11,16 @@
 **Design doc:** `docs/plans/2026-02-18-kommo-crm-tool-design.md`
 **Issue:** #312 | **Epic:** #263
 
+> **Review note (2026-02-18, plan-review):** The points below are mandatory corrections and override conflicting snippets in this file.
+> - Use `history_service.get_session_turns(user_id, session_id, limit=...)` (existing service API), not `get_recent_messages(...)`.
+> - Use `self._cache.redis` (not `self._cache._redis`) and guard for `None` before creating `KommoTokenStore`.
+> - Add notes via `POST /api/v4/{entity_type}/notes` with `entity_id` in payload, not `/{entity_type}/{id}/notes`.
+> - For `custom_fields_values`, pass `field_id` or `field_code` (not `field_name`); add explicit `KOMMO_SESSION_FIELD_ID`.
+> - Implement idempotency in `crm_finalize_deal` using Redis `SET key NX EX`, plus `crm_deal_idempotent_skip` score.
+> - Retry policy must include HTTP 429/5xx handling (backoff/jitter + `Retry-After` support), not only transport errors.
+> - In `PropertyBot.stop()`, close `self._kommo_client` if initialized.
+> - Final required gate is: `make check` and `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`.
+
 ---
 
 ## Task 1: Pydantic Models (`kommo_models.py`)
@@ -247,6 +257,7 @@ class LeadCreate(BaseModel):
     status_id: int | None = None
     responsible_user_id: int | None = None
     session_id: str | None = None
+    session_field_id: int | None = None
     tags: list[str] = Field(default_factory=list)
 
     def to_kommo_payload(self) -> dict:
@@ -262,9 +273,9 @@ class LeadCreate(BaseModel):
             payload["responsible_user_id"] = self.responsible_user_id
 
         custom_fields: list[dict] = []
-        if self.session_id:
+        if self.session_id and self.session_field_id:
             custom_fields.append(
-                {"field_name": "session_id", "values": [{"value": self.session_id}]}
+                {"field_id": self.session_field_id, "values": [{"value": self.session_id}]}
             )
         if custom_fields:
             payload["custom_fields_values"] = custom_fields
@@ -349,12 +360,12 @@ git commit -m "feat(crm): add Pydantic models for Kommo CRM API (#312)"
 
 **Files:**
 - Modify: `telegram_bot/config.py:331-346` (extend existing kommo fields)
-- Test: `tests/unit/test_config_kommo.py`
+- Test: `tests/unit/config/test_bot_config_kommo.py`
 
 **Step 1: Write the failing test**
 
 ```python
-# tests/unit/test_config_kommo.py
+# tests/unit/config/test_bot_config_kommo.py
 """Tests for Kommo CRM config fields."""
 
 from __future__ import annotations
@@ -398,11 +409,17 @@ class TestKommoConfig:
 
         config = BotConfig(telegram_token="test", llm_api_key="test")
         assert config.kommo_responsible_user_id is None
+
+    def test_kommo_session_field_id_default(self):
+        from telegram_bot.config import BotConfig
+
+        config = BotConfig(telegram_token="test", llm_api_key="test")
+        assert config.kommo_session_field_id == 0
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/unit/test_config_kommo.py -v`
+Run: `uv run pytest tests/unit/config/test_bot_config_kommo.py -v`
 Expected: FAIL — `kommo_client_id` field not found
 
 **Step 3: Modify config.py — add new fields after existing kommo_telegram_field_id**
@@ -434,17 +451,21 @@ In `telegram_bot/config.py`, after line 346 (`kommo_telegram_field_id`), add:
         default=None,
         validation_alias=AliasChoices("kommo_responsible_user_id", "KOMMO_RESPONSIBLE_USER_ID"),
     )
+    kommo_session_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_session_field_id", "KOMMO_SESSION_FIELD_ID"),
+    )
 ```
 
 **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/unit/test_config_kommo.py -v`
+Run: `uv run pytest tests/unit/config/test_bot_config_kommo.py -v`
 Expected: All PASS
 
 **Step 5: Commit**
 
 ```bash
-git add telegram_bot/config.py tests/unit/test_config_kommo.py
+git add telegram_bot/config.py tests/unit/config/test_bot_config_kommo.py
 git commit -m "feat(crm): add Kommo OAuth2 config fields (#312)"
 ```
 
@@ -801,6 +822,22 @@ class TestKommoClientRequest:
             assert result == {"ok": True}
             mock_token_store.force_refresh.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_request_retries_on_429(self, kommo_client):
+        req = httpx.Request("GET", "https://testcompany.kommo.com/api/v4/leads")
+        resp_429 = httpx.Response(429, headers={"Retry-After": "1"}, request=req)
+        resp_200 = httpx.Response(200, json={"ok": True}, request=req)
+        with patch.object(kommo_client._client, "request", side_effect=[resp_429, resp_200]):
+            assert await kommo_client._request("GET", "/leads") == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_request_retries_on_5xx(self, kommo_client):
+        req = httpx.Request("GET", "https://testcompany.kommo.com/api/v4/leads")
+        resp_503 = httpx.Response(503, request=req)
+        resp_200 = httpx.Response(200, json={"ok": True}, request=req)
+        with patch.object(kommo_client._client, "request", side_effect=[resp_503, resp_200]):
+            assert await kommo_client._request("GET", "/leads") == {"ok": True}
+
 
 class TestKommoClientLeads:
     @pytest.mark.asyncio
@@ -929,6 +966,7 @@ import httpx
 from tenacity import (
     before_sleep_log,
     retry,
+    retry_if_exception,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential_jitter,
@@ -952,8 +990,15 @@ logger = logging.getLogger(__name__)
 
 RETRYABLE = (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout)
 
+
+def _retryable_http_status(exc: BaseException) -> bool:
+    if not isinstance(exc, httpx.HTTPStatusError):
+        return False
+    return exc.response.status_code in {429, 500, 502, 503, 504}
+
+
 _kommo_retry = retry(
-    retry=retry_if_exception_type(RETRYABLE),
+    retry=retry_if_exception_type(RETRYABLE) | retry_if_exception(_retryable_http_status),
     wait=wait_exponential_jitter(initial=1, max=8, jitter=2),
     stop=stop_after_attempt(3),
     before_sleep=before_sleep_log(logger, logging.WARNING),
@@ -990,6 +1035,9 @@ class KommoClient:
 
         if response.status_code == 204:
             return {}
+        if response.status_code == 429:
+            # Optional: honor Retry-After for rate limits before raising.
+            ...
         response.raise_for_status()
         return response.json()
 
@@ -1035,10 +1083,10 @@ class KommoClient:
     # --- Notes ---
 
     async def add_note(self, entity_type: str, entity_id: int, text: str) -> NoteResponse:
-        """POST /{entity_type}/{id}/notes — add a text note."""
-        payload = [{"note_type": "common", "params": {"text": text}}]
+        """POST /{entity_type}/notes — add a text note."""
+        payload = [{"entity_id": entity_id, "note_type": "common", "params": {"text": text}}]
         resp = await self._request(
-            "POST", f"/{entity_type}/{entity_id}/notes", json=payload
+            "POST", f"/{entity_type}/notes", json=payload
         )
         note = resp["_embedded"]["notes"][0]
         return NoteResponse(id=note["id"])
@@ -1120,7 +1168,7 @@ def mock_llm():
 @pytest.fixture
 def mock_history():
     svc = AsyncMock()
-    svc.get_recent_messages = AsyncMock(return_value=[
+    svc.get_session_turns = AsyncMock(return_value=[
         {"role": "user", "content": "Ищу квартиру в Несебре, бюджет 50000"},
         {"role": "assistant", "content": "Могу предложить 2-комнатную..."},
         {"role": "user", "content": "Отлично! Меня зовут Иван, телефон +380501234567"},
@@ -1139,7 +1187,7 @@ class TestCreateCrmTools:
 
         tools = create_crm_tools(
             kommo=mock_kommo, llm=mock_llm, history_service=mock_history,
-            default_pipeline_id=1, responsible_user_id=None,
+            default_pipeline_id=1, responsible_user_id=None, session_field_id=123,
         )
         assert len(tools) == 7
         tool_names = [t.name for t in tools]
@@ -1159,7 +1207,7 @@ class TestCrmUpsertContact:
 
         tools = create_crm_tools(
             kommo=mock_kommo, llm=mock_llm, history_service=mock_history,
-            default_pipeline_id=1, responsible_user_id=None,
+            default_pipeline_id=1, responsible_user_id=None, session_field_id=123,
         )
         upsert_tool = next(t for t in tools if t.name == "crm_upsert_contact")
         result = await upsert_tool.ainvoke(
@@ -1177,7 +1225,7 @@ class TestCrmCreateDeal:
 
         tools = create_crm_tools(
             kommo=mock_kommo, llm=mock_llm, history_service=mock_history,
-            default_pipeline_id=1, responsible_user_id=None,
+            default_pipeline_id=1, responsible_user_id=None, session_field_id=123,
         )
         deal_tool = next(t for t in tools if t.name == "crm_create_deal")
         result = await deal_tool.ainvoke(
@@ -1195,7 +1243,7 @@ class TestCrmAddNote:
 
         tools = create_crm_tools(
             kommo=mock_kommo, llm=mock_llm, history_service=mock_history,
-            default_pipeline_id=1, responsible_user_id=None,
+            default_pipeline_id=1, responsible_user_id=None, session_field_id=123,
         )
         note_tool = next(t for t in tools if t.name == "crm_add_note")
         result = await note_tool.ainvoke(
@@ -1230,7 +1278,7 @@ class TestCrmFinalizeDeal:
 
         tools = create_crm_tools(
             kommo=mock_kommo, llm=mock_llm, history_service=mock_history,
-            default_pipeline_id=1, responsible_user_id=None,
+            default_pipeline_id=1, responsible_user_id=None, session_field_id=123,
         )
         finalize_tool = next(t for t in tools if t.name == "crm_finalize_deal")
         result = await finalize_tool.ainvoke(
@@ -1245,6 +1293,31 @@ class TestCrmFinalizeDeal:
         mock_kommo.add_note.assert_called_once()
         mock_kommo.create_task.assert_called_once()
         assert "100" in result  # lead ID in response
+
+    @pytest.mark.asyncio
+    async def test_finalize_deal_idempotent_skip(
+        self, mock_kommo, mock_llm, mock_history, runnable_config
+    ):
+        from telegram_bot.agents.crm_tools import create_crm_tools
+
+        # redis-like idempotency store: first call sets key, second call sees duplicate
+        idem_store = AsyncMock()
+        idem_store.set = AsyncMock(side_effect=[True, False])
+
+        tools = create_crm_tools(
+            kommo=mock_kommo,
+            llm=mock_llm,
+            history_service=mock_history,
+            default_pipeline_id=1,
+            responsible_user_id=None,
+            session_field_id=123,
+            idempotency_store=idem_store,
+        )
+        finalize_tool = next(t for t in tools if t.name == "crm_finalize_deal")
+        await finalize_tool.ainvoke({"query": "создай сделку"}, config=runnable_config)
+        second = await finalize_tool.ainvoke({"query": "создай сделку"}, config=runnable_config)
+
+        assert "idempotent" in second.lower() or "already" in second.lower()
 ```
 
 **Step 2: Run test to verify it fails**
@@ -1311,6 +1384,8 @@ def create_crm_tools(
     history_service: Any,
     default_pipeline_id: int,
     responsible_user_id: int | None,
+    session_field_id: int,
+    idempotency_store: Any,
 ) -> list[Any]:
     """Create all CRM supervisor tools with injected dependencies."""
 
@@ -1326,7 +1401,7 @@ def create_crm_tools(
         if not user_id:
             return "Error: user context not available."
 
-        messages = await history_service.get_recent_messages(user_id, session_id)
+        messages = await history_service.get_session_turns(user_id, session_id, limit=40)
         chat_text = "\n".join(
             f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages
         )
@@ -1391,6 +1466,7 @@ def create_crm_tools(
             pipeline_id=default_pipeline_id or None,
             responsible_user_id=responsible_user_id,
             session_id=session_id,
+            session_field_id=session_field_id or None,
             tags=["telegram_bot"],
         )
         start = time.perf_counter()
@@ -1474,10 +1550,21 @@ def create_crm_tools(
 
         start = time.perf_counter()
         lf = get_client()
+        idempotency_key = f"kommo:deal:{user_id}:{session_id}"
+
+        was_set = await idempotency_store.set(
+            idempotency_key,
+            "1",
+            ex=24 * 3600,
+            nx=True,
+        )
+        if not was_set:
+            lf.score_current_trace(name="crm_deal_idempotent_skip", value=1, data_type="BOOLEAN")
+            return "Idempotent skip: deal for this session is already processed."
 
         try:
             # Step 1: Extract deal data from chat history
-            messages = await history_service.get_recent_messages(user_id, session_id)
+            messages = await history_service.get_session_turns(user_id, session_id, limit=40)
             chat_text = "\n".join(
                 f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages
             )
@@ -1522,6 +1609,7 @@ def create_crm_tools(
                 pipeline_id=default_pipeline_id or None,
                 responsible_user_id=responsible_user_id,
                 session_id=session_id,
+                session_field_id=session_field_id or None,
                 tags=["telegram_bot"],
             )
             lead = await kommo.create_lead(lead_data)
@@ -1644,10 +1732,14 @@ class TestBotKommoToolsRegistration:
         assert config.kommo_default_pipeline_id == 100
 ```
 
+Also add a focused unit test for supervisor tool registration in `PropertyBot._handle_query_supervisor()`:
+- when `kommo_enabled=False`, `create_crm_tools` is not called;
+- when `kommo_enabled=True` and `_kommo_client` is set, `create_crm_tools` is called and 7 tools are appended.
+
 **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/unit/test_bot_kommo_integration.py -v`
-Expected: FAIL — `kommo_client_id` not found (should pass after Task 2)
+Expected: FAIL — supervisor registration assertions for CRM tools fail before `bot.py` integration changes.
 
 **Step 3: Modify bot.py**
 
@@ -1667,8 +1759,11 @@ In `start()` method, add initialization block (after history service init):
                 from .services.kommo_client import KommoClient
                 from .services.kommo_tokens import KommoTokenStore
 
+                if self._cache.redis is None:
+                    raise RuntimeError("Cache redis client is not initialized")
+
                 token_store = KommoTokenStore(
-                    redis=self._cache._redis,  # reuse existing Redis connection
+                    redis=self._cache.redis,  # reuse existing Redis connection
                     client_id=self.config.kommo_client_id,
                     client_secret=self.config.kommo_client_secret.get_secret_value(),
                     subdomain=self.config.kommo_subdomain,
@@ -1688,6 +1783,14 @@ In `start()` method, add initialization block (after history service init):
                 self._kommo_client = None
 ```
 
+In `stop()` method, add Kommo client cleanup:
+
+```python
+        if self._kommo_client is not None:
+            await self._kommo_client.close()
+            self._kommo_client = None
+```
+
 In `_handle_query_supervisor()`, after `tools.append(create_history_search_tool(...))` (around line 537):
 
 ```python
@@ -1702,6 +1805,8 @@ In `_handle_query_supervisor()`, after `tools.append(create_history_search_tool(
                     history_service=self._history_service,
                     default_pipeline_id=self.config.kommo_default_pipeline_id,
                     responsible_user_id=self.config.kommo_responsible_user_id,
+                    session_field_id=self.config.kommo_session_field_id,
+                    idempotency_store=self._cache.redis,
                 )
             )
 ```
@@ -1713,7 +1818,7 @@ Expected: All PASS
 
 **Step 5: Run full unit test suite to check no regressions**
 
-Run: `uv run pytest tests/unit/ -n auto --timeout=60`
+Run: `uv run pytest tests/unit/ -n auto --dist=worksteal --timeout=60`
 Expected: All existing tests PASS
 
 **Step 6: Commit**
@@ -1736,7 +1841,7 @@ Expected: PASS. If failures, fix and re-run.
 
 **Step 2: Run full unit tests in parallel**
 
-Run: `uv run pytest tests/unit/ -n auto`
+Run: `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 Expected: All PASS
 
 **Step 3: Final commit (if any fixes)**
@@ -1753,11 +1858,162 @@ git commit -m "fix(crm): lint and type fixes for Kommo integration (#312)"
 | Task | Files | Tests | Commit |
 |------|-------|-------|--------|
 | 1. Models | `services/kommo_models.py` | `test_kommo_models.py` | `feat(crm): add Pydantic models` |
-| 2. Config | `config.py` | `test_config_kommo.py` | `feat(crm): add OAuth2 config fields` |
+| 2. Config | `config.py` | `test_bot_config_kommo.py` | `feat(crm): add OAuth2 config fields` |
 | 3. Token Store | `services/kommo_tokens.py` | `test_kommo_tokens.py` | `feat(crm): add token store` |
 | 4. KommoClient | `services/kommo_client.py` | `test_kommo_client.py` | `feat(crm): add KommoClient` |
 | 5. CRM Tools | `agents/crm_tools.py` | `test_crm_tools.py` | `feat(crm): add 7 supervisor tools` |
 | 6. Bot Integration | `bot.py` | `test_bot_kommo_integration.py` | `feat(crm): integrate into supervisor` |
 | 7. Quality Gate | — | Full suite | `fix(crm): lint/type fixes` |
 
-**Total:** 7 new files, 2 modified files, ~7 commits, ~1200 LOC implementation + ~600 LOC tests.
+**Total:** file/LOC totals must be recalculated from actual diff at execution time (do not hardcode).
+
+---
+
+## Research Validation (2026-02-18)
+
+> Validated via Context7 MCP (httpx, tenacity, pydantic v2, redis-py) and Exa MCP (OAuth2 patterns, Kommo rate limiting, Redis token storage best practices).
+
+### Libraries Checked
+
+| Library | Current Version | Plan Version/Usage |
+|---------|----------------|-------------------|
+| httpx | Latest (docs: `/encode/httpx`) | `httpx.AsyncClient` + `Timeout` + `Limits` |
+| tenacity | Latest (docs: readthedocs) | `wait_exponential_jitter`, `retry_if_exception` |
+| pydantic | v2.12+ | `BaseModel`, `model_dump_json`, `AliasChoices` |
+| redis-py | v6.4.0 | `hset(mapping=...)`, `set(nx=True, ex=...)` |
+
+---
+
+### Confirmed Correct
+
+1. **httpx `AsyncClient` lifecycle** — long-lived client in `__init__`, `aclose()` in `close()`. Matches docs best practice (don't create per-request).
+2. **`httpx.Timeout(30.0, connect=10.0)`** — valid 4-axis timeout API, positional arg sets the default. Confirmed.
+3. **`httpx.Limits(max_keepalive_connections=5, max_connections=10)`** — valid API, confirmed.
+4. **tenacity `wait_exponential_jitter(initial=1, max=8, jitter=2)`** — dedicated class, additive jitter on top of exponential. API is current and stable.
+5. **tenacity `|` operator** — `retry_if_exception_type(...) | retry_if_exception(...)` is stable API.
+6. **tenacity `before_sleep_log`** — correct current API, no deprecation.
+7. **pydantic `BaseModel`, `Field`, `AliasChoices`, `SecretStr`** — all v2 stable API; `model_dump_json()` / `model_validate_json()` are correct v2 methods (v1 `.json()` / `parse_obj()` deprecated but not used here).
+8. **redis-py `hset(key, mapping={...})`** — correct; `hmset()` is deprecated since v4.0. Plan uses correct API.
+9. **redis-py `set(key, value, nx=True, ex=...)`** — confirmed atomic NX+EX pattern for idempotency. Returns `True` if set, `None` if already existed.
+10. **Notes endpoint** — `POST /{entity_type}/notes` with `entity_id` in payload (not `/{entity_type}/{id}/notes`). Already corrected in review note at top of plan. Confirmed correct.
+11. **`custom_fields_values` with `field_code`** — using `"PHONE"` / `"EMAIL"` field codes is correct Kommo API pattern.
+
+---
+
+### Issues Found — Require Fixes Before Implementing
+
+#### CRITICAL: Retry-After placeholder is a no-op ellipsis
+
+In Task 4 `kommo_client.py`, the `_request` method has:
+
+```python
+if response.status_code == 429:
+    # Optional: honor Retry-After for rate limits before raising.
+    ...
+response.raise_for_status()
+```
+
+The `...` (ellipsis literal) does nothing. Kommo docs confirm 7 req/s limit with 429 on violation. Since Kommo does NOT reliably send `Retry-After` headers, the implementation must honor it defensively when present and fall back to backoff otherwise. **Replace `...` with:**
+
+```python
+if response.status_code == 429:
+    retry_after_raw = response.headers.get("Retry-After")
+    if retry_after_raw:
+        try:
+            import asyncio
+            await asyncio.sleep(float(retry_after_raw))
+        except (ValueError, TypeError):
+            pass  # non-numeric Retry-After — let tenacity backoff handle it
+    response.raise_for_status()
+```
+
+> Note: `_request` is a `@_kommo_retry`-decorated coroutine; `raise_for_status()` on 429 will trigger tenacity retry with exponential jitter. The sleep above adds a Retry-After-aware delay before tenacity fires.
+
+#### IMPORTANT: Missing `asyncio.Lock` in `KommoTokenStore.get_valid_token()`
+
+If two concurrent requests check token expiry simultaneously, both will enter `_refresh_tokens()` — a stampede/thundering herd. The Exa research confirms this is the #1 pitfall. **Add a lock:**
+
+```python
+import asyncio
+
+class KommoTokenStore:
+    def __init__(self, ...):
+        ...
+        self._refresh_lock = asyncio.Lock()
+
+    async def get_valid_token(self) -> str:
+        data = await self._load_tokens()
+        if not data:
+            raise RuntimeError("No Kommo tokens found in Redis. Call initialize() first.")
+        access_token = data.get("access_token", "")
+        refresh_token = data.get("refresh_token", "")
+        expires_at = int(data.get("expires_at", 0))
+
+        if time.time() + REFRESH_BUFFER_SEC >= expires_at:
+            async with self._refresh_lock:
+                # Double-check after acquiring lock
+                data = await self._load_tokens()
+                expires_at = int(data.get("expires_at", 0))
+                if time.time() + REFRESH_BUFFER_SEC >= expires_at:
+                    logger.info("Kommo token near expiry, refreshing")
+                    return await self._refresh_tokens(data["refresh_token"])
+                return data["access_token"]
+
+        return access_token
+```
+
+#### MODERATE: `create_crm_tools` — `idempotency_store` has no default
+
+```python
+def create_crm_tools(*, ..., idempotency_store: Any) -> list[Any]:
+```
+
+If `idempotency_store=None` is passed (e.g., when `self._cache.redis` is `None`), the `crm_finalize_deal` tool will crash with `AttributeError` on `await idempotency_store.set(...)`. **Add guard:**
+
+```python
+def create_crm_tools(*, ..., idempotency_store: Any | None = None) -> list[Any]:
+    ...
+    async def crm_finalize_deal(query: str, config: RunnableConfig) -> str:
+        ...
+        if idempotency_store is not None:
+            was_set = await idempotency_store.set(idempotency_key, "1", ex=24 * 3600, nx=True)
+            if not was_set:
+                lf.score_current_trace(name="crm_deal_idempotent_skip", value=1, data_type="BOOLEAN")
+                return "Idempotent skip: deal for this session is already processed."
+```
+
+#### MINOR: `pool` timeout not set in `httpx.Limits`
+
+Plan uses `httpx.Timeout(30.0, connect=10.0)` but does not set `pool` timeout. Under high concurrency, requests waiting for a pool slot will block indefinitely until the `connect` timeout fires. **Add:**
+
+```python
+timeout=httpx.Timeout(30.0, connect=10.0, pool=10.0),
+```
+
+---
+
+### Suggestions (Non-Blocking)
+
+1. **`keepalive_expiry`** — Default is 5s (very short). For a low-traffic CRM integration, consider `keepalive_expiry=30` in `httpx.Limits` to reduce TCP reconnect overhead.
+
+2. **Kommo IP blocking on 403 after repeated 429s** — Kommo docs state repeated violations cause IP-level 403 blocks. Consider differentiating 403 responses: only retry 403 if there was no prior 429 in the same session; otherwise surface as a hard error.
+
+3. **`stop_after_attempt(3)` may be low for 429** — With Kommo's 7 req/s limit in production, transient 429s during bursts may need up to 5 retries with backoff. Consider `stop_after_attempt(5)` for `_kommo_retry`.
+
+4. **Token encryption at rest** — Exa research recommends `cryptography.fernet.Fernet` for access/refresh tokens stored in Redis. Not required for #312 (internal Redis, threat model is low), but worth a follow-up issue.
+
+5. **`asyncio.Lock` vs Redis SET NX for concurrent workers** — Plan uses `asyncio.Lock` (single-process app — correct). If the bot is ever horizontally scaled (multiple pods), switch to Redis `SET lock_key NX EX 30` pattern. The `KommoTokenStore` interface allows this without API change.
+
+---
+
+### Verdict
+
+**Plan is architecturally sound. Three mandatory fixes required before implementation begins:**
+
+| Priority | Fix | Task affected |
+|----------|-----|--------------|
+| CRITICAL | Replace `...` no-op with actual Retry-After sleep in `_request` | Task 4 |
+| IMPORTANT | Add `asyncio.Lock` double-check in `get_valid_token()` | Task 3 |
+| MODERATE | Guard `idempotency_store is None` in `crm_finalize_deal` | Task 5 |
+
+The TDD approach (test first, then implement) will naturally surface the lock and idempotency-store-None issues at test-writing time if tests cover concurrent and None-store scenarios.

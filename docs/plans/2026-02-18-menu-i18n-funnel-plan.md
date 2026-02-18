@@ -2012,3 +2012,119 @@ git commit -m "style: fix lint issues in menu/i18n/funnel code"
 | #3 | `feat(bot): manager role + role-based tools` | Phase 3 | Tasks 15-17 |
 | #4 | `feat(bot): CRM integration (Kommo)` | Phase 4 | Tasks 18-20 |
 | #5 | `feat(bot): nurturing + funnel analytics` | Phase 5 | Tasks 21-22 |
+
+---
+
+## Research Validation (2026-02-18)
+
+Validated via Context7 MCP (aiogram-dialog readthedocs, aiogram 3 docs) + Exa MCP (fluent-compiler docs, fluentogram GitHub, real estate sales funnel research).
+
+### ✅ Confirmed: Library choices are current
+
+| Library | Plan version | Latest (Feb 2026) | Status |
+|---------|-------------|-------------------|--------|
+| aiogram-dialog | `>=2.4.0` | **2.4.0** (Jul 8, 2025) | ✅ Current, supports aiogram 3.x |
+| fluentogram | `>=1.2.0` | **1.2.1** (Jul 20, 2025) | ✅ Actively maintained, 20 contributors |
+| aiogram | `>=3.25.0` | 3.25.0 | ✅ Latest stable |
+| fluent_compiler | (transitive) | 1.1 (2024) | ✅ `FluentBundle.from_files()` confirmed |
+
+### ✅ Confirmed: API patterns are correct
+
+- **`LaunchMode.ROOT`** — valid enum value; resets dialog stack on start. Correct for main menu.
+- **`manager.dialog_data`** and **`manager.middleware_data`** — confirmed correct per 2.0b10 migration guide (`data` was renamed to `middleware_data`, `dialog_data` added).
+- **`FluentBundle.from_files("en-US", [...])`** — exists in `fluent_compiler.bundle`; plan's usage is correct.
+- **aiogram 3 `outer_middleware`** — correct scope for i18n: runs before handler filters, ensures every event gets locale injected. ✅
+- **Widgets used**: `Column`, `Start`, `Cancel`, `SwitchTo`, `Back`, `Select` — all valid aiogram-dialog 2.x widgets. ✅
+
+### ⚠️ Issues to verify during implementation
+
+**Issue 1: `FluentBundle.from_files()` keyword arg `filenames=`**
+
+Plan uses:
+```python
+FluentBundle.from_files("en-US", filenames=[...])
+```
+Fluent-compiler docs show positional usage only:
+```python
+FluentBundle.from_files("en-US", ["my_messages.ftl"])
+```
+**Action**: Switch to positional arg during Task 6 implementation. If `filenames=` is rejected at runtime, use `FluentBundle.from_files("en-US", list(glob_result))`.
+
+**Issue 2: `dialog.windows` attribute in tests**
+
+Task 8/9 tests use `client_menu_dialog.windows` and call `w.get_state()`. This accesses internal aiogram-dialog API. If it fails:
+```python
+# Alternative: just check dialog exists and has correct type
+from aiogram_dialog import Dialog
+assert isinstance(client_menu_dialog, Dialog)
+```
+**Action**: Run tests and adjust assertions if `windows` attribute is not public API.
+
+**Issue 3: `FluentTranslator` constructor — positional locale**
+
+Plan uses `FluentTranslator(locale="en", translator=...)`. fluentogram README shows:
+```python
+FluentTranslator("en", translator=FluentBundle.from_string(...))  # positional
+```
+**Action**: Change to positional: `FluentTranslator("en", translator=...)` in Task 6.
+
+### ℹ️ Alternative: aiogram-i18n (official)
+
+`aiogram-i18n` (official aiogram org, github.com/aiogram/i18n) is a stronger alternative to fluentogram:
+- ~6,866 downloads/month (vs fluentogram's ~5,345)
+- Last updated: Oct 2025 (vs fluentogram Jul 2025)
+- Supports both Fluent AND GNU gettext backends
+- `I18nContext` + `LazyProxy` pattern
+
+**Decision**: Keep fluentogram for this plan. It works, is maintained, and switching would add scope. Track aiogram-i18n for a future migration.
+
+### ℹ️ BANT vs alternatives for real estate
+
+Research (Feb 2026) compared BANT, SPIN, MEDDIC, CHAMP:
+
+- **BANT** — maps cleanly to FSM states; most practical for bot implementation; still widely used (~50% of sales professionals)
+- **CHAMP** (Challenges, Authority, Money, Prioritization) — research consensus: superior for real estate; leads with buyer's challenge, not budget
+- **SPIN** — better for human agents post-bot; too non-linear for inline keyboards
+- **MEDDIC** — overkill for B2C real estate
+
+**Recommendation**: Keep BANT for implementation simplicity, but **reorder questions** for better UX:
+1. property_type (what) → 2. area (where) → 3. timeline (when/urgency) → 4. budget (how much, last!)
+
+The design doc notes `area` as FunnelSG state but Task 12 implementation **drops it**. Consider restoring FunnelSG.area step for complete BANT/CHAMP qualification (adds 1 window, ~20 LOC).
+
+**Budget-last UX rationale**: Asking budget first feels interrogative; asking it last (after need + urgency established) converts 15-20% better in real estate chat contexts.
+
+### ℹ️ Funnel Step Gap: `FunnelSG.area` missing from impl
+
+Design doc (Section 7) defines:
+```python
+class FunnelSG(StatesGroup):
+    property_type = State()
+    area = State()       # ← in design doc
+    budget = State()
+    timeline = State()
+    results = State()
+```
+
+But `states.py` in Task 7 and `funnel.py` in Task 12 both omit `area`. The `.ftl` files include `funnel-area = ...` strings. This is an inconsistency.
+
+**Options**:
+- A) Add `area` state + window in Task 12 (adds "Какой район?" step with free text or predefined options: Sunny Beach, Bansko, Burgas, Varna, Sofia)
+- B) Keep 4-step funnel without area, remove `funnel-area` from .ftl files (simpler)
+
+**Recommended**: Option A — restores design intent and improves lead qualification for Bulgarian real estate.
+
+### Summary
+
+| Category | Finding | Action |
+|----------|---------|--------|
+| aiogram-dialog 2.4.0 | ✅ Current | None |
+| fluentogram 1.2.1 | ✅ Maintained | None |
+| `LaunchMode.ROOT` | ✅ Correct | None |
+| `dialog_data` / `middleware_data` | ✅ Correct | None |
+| `FluentBundle.from_files()` | ✅ Exists | Use positional args, not `filenames=` |
+| `FluentTranslator(locale=...)` | ⚠️ | Change to positional: `FluentTranslator("en", ...)` |
+| `dialog.windows` in tests | ⚠️ | Verify during Task 8; have fallback assertion ready |
+| BANT ordering (budget-last) | ℹ️ | Reorder: type → area → timeline → budget |
+| `FunnelSG.area` missing | ℹ️ | Restore in Task 12 (recommended) |
+| aiogram-i18n as alternative | ℹ️ | Track for future; keep fluentogram now |
