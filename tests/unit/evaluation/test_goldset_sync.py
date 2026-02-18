@@ -32,7 +32,7 @@ def test_sync_creates_dataset_when_not_exists():
     count = sync_to_langfuse(mock_langfuse, "test-dataset", samples)
 
     mock_langfuse.create_dataset.assert_called_once_with(name="test-dataset")
-    mock_dataset.create_item.assert_called_once()
+    mock_langfuse.create_dataset_item.assert_called_once()
     assert count == 1
 
 
@@ -48,5 +48,5 @@ def test_sync_uses_existing_dataset():
     count = sync_to_langfuse(mock_langfuse, "existing-dataset", samples)
 
     mock_langfuse.create_dataset.assert_not_called()
-    assert mock_dataset.create_item.call_count == 2
+    assert mock_langfuse.create_dataset_item.call_count == 2
     assert count == 2
