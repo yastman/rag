@@ -28,6 +28,7 @@ from .scoring import (
     write_langfuse_scores,
 )
 from .services.history_service import HistoryService
+from .services.manager_menu import render_start_menu
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 
@@ -253,6 +254,25 @@ class PropertyBot:
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
 
+    async def _resolve_user_role(self, user_id: int) -> str:
+        """Resolve user role from DB or config fallback (#388)."""
+        db_role: str | None = None
+        user_service = getattr(self, "_user_service", None)
+        if user_service is not None and hasattr(user_service, "get_role"):
+            try:
+                resolved = await user_service.get_role(telegram_id=user_id)
+                if isinstance(resolved, str):
+                    normalized = resolved.strip().lower()
+                    if normalized in {"manager", "client"}:
+                        db_role = normalized
+            except Exception:
+                logger.warning("Role lookup failed", exc_info=True)
+
+        # Config manager_ids should still elevate known managers even if DB is stale.
+        if user_id in self.config.manager_ids:
+            return "manager"
+        return db_role or "client"
+
     async def cmd_start(self, message: Message, dialog_manager: Any = None):
         """Handle /start command — launch menu dialog."""
         if dialog_manager is not None:
@@ -263,10 +283,9 @@ class PropertyBot:
             await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Fallback (dialog not initialized)
-            domain = self.config.domain
-            await message.answer(
-                f"Привет! Я бот-помощник по теме: {domain}.\nИспользуй /help для помощи."
-            )
+            assert message.from_user is not None
+            role = await self._resolve_user_role(message.from_user.id)
+            await message.answer(render_start_menu(role=role, domain=self.config.domain))
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -534,8 +553,9 @@ class PropertyBot:
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
         """Handle query via supervisor graph (#240, #310 — primary query path)."""
+        from .agents.manager_tools import create_manager_tools
         from .agents.rag_agent import create_rag_agent
-        from .agents.tools import create_history_search_tool, direct_response
+        from .agents.tools import build_tools_for_role, create_history_search_tool, direct_response
         from .graph.supervisor_state import make_supervisor_state
 
         assert message.bot is not None
@@ -544,8 +564,11 @@ class PropertyBot:
         user_id = message.from_user.id
         session_id = make_session_id("chat", message.chat.id)
 
-        # Build supervisor tools
-        tools = [
+        # Resolve user role (#388)
+        role = await self._resolve_user_role(user_id)
+
+        # Build supervisor tools (base + role-specific)
+        base_tools = [
             create_rag_agent(
                 cache=self._cache,
                 embeddings=self._embeddings,
@@ -564,7 +587,14 @@ class PropertyBot:
             direct_response,
         ]
         if self._history_service is not None:
-            tools.append(create_history_search_tool(history_service=self._history_service))
+            base_tools.append(create_history_search_tool(history_service=self._history_service))
+
+        # Manager tools (#388) — activated when lead_service is available (#387)
+        manager_tools: list[Any] = []
+        _lead_svc = getattr(self, "_lead_service", None)
+        if _lead_svc is not None:
+            manager_tools = create_manager_tools(lead_service=_lead_svc)
+        tools = build_tools_for_role(role=role, base_tools=base_tools, manager_tools=manager_tools)
 
         # Build supervisor LLM (cheap model for routing)
         supervisor_llm = self._graph_config.create_supervisor_llm(
@@ -633,6 +663,8 @@ class PropertyBot:
             lf.score_current_trace(
                 name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
             )
+            # User role score (#388)
+            lf.score_current_trace(name="user_role", value=role, data_type="CATEGORICAL")
             # Tool call count (#374)
             tool_calls = result.get("tool_call_count", 0)
             if tool_calls > 0:
