@@ -681,6 +681,8 @@ class PropertyBot:
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
                 content_filter_enabled=self.config.content_filter_enabled,
+                guard_mode=self.config.guard_mode,
+                guard_ml_enabled=self.config.guard_ml_enabled,
             )
 
             invoke_config = {
