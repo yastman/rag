@@ -71,7 +71,8 @@ class KommoClient:
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
         """Execute authenticated request with auto-refresh on 401."""
         token = await self._token_store.get_valid_token()
-        headers = {"Authorization": f"Bearer {token}"}
+        extra_headers = kwargs.pop("headers", None) or {}
+        headers = {"Authorization": f"Bearer {token}", **extra_headers}
         response = await self._client.request(method, path, headers=headers, **kwargs)
 
         # Retry once on 401 with refreshed token
@@ -146,6 +147,21 @@ class KommoClient:
         resp = await self._request("POST", "/tasks", json=[payload])
         t = resp["_embedded"]["tasks"][0]
         return TaskResponse(id=t["id"], text=task.text)
+
+    # --- Lead Scores (#384) ---
+
+    async def update_lead_score(self, *, lead_id: int, payload: dict, idempotency_key: str) -> dict:
+        """PATCH /leads/{id} — update lead custom fields with score data.
+
+        Idempotency key prevents duplicate writes on retries.
+        Retries are handled by _request's existing retry policy.
+        """
+        return await self._request(
+            "PATCH",
+            f"/leads/{lead_id}",
+            json=payload,
+            headers={"X-Idempotency-Key": idempotency_key},
+        )
 
     # --- Lifecycle ---
 
