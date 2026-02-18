@@ -259,18 +259,20 @@ async def entrypoint(ctx: agents.JobContext):
 
     # Register cleanup callback to finalize the call when the session ends
     async def _finalize() -> None:
-        if not store or not call_id:
-            return
-        duration_sec = int(time.monotonic() - call_start)
         try:
-            await store.finalize_call(
-                call_id=call_id,
-                duration_sec=duration_sec,
-                langfuse_trace_id=langfuse_trace_id,
-            )
-            logger.info("Call %s finalized: duration=%ds", call_id, duration_sec)
+            if store and call_id:
+                duration_sec = int(time.monotonic() - call_start)
+                await store.finalize_call(
+                    call_id=call_id,
+                    duration_sec=duration_sec,
+                    langfuse_trace_id=langfuse_trace_id,
+                )
+                logger.info("Call %s finalized: duration=%ds", call_id, duration_sec)
         except Exception:
             logger.exception("Failed to finalize call %s", call_id)
+        finally:
+            # Keep pooled connections from lingering across long-lived worker process restarts.
+            await _close_http_client()
 
     ctx.add_shutdown_callback(_finalize)
 
