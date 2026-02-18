@@ -381,6 +381,20 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("kommo_lead_band_field_id", "KOMMO_LEAD_BAND_FIELD_ID"),
     )
 
+    # Nurturing + funnel analytics (#390)
+    nurturing_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("nurturing_enabled", "NURTURING_ENABLED"),
+    )
+    nurturing_interval_minutes: int = Field(
+        default=60,
+        validation_alias=AliasChoices("nurturing_interval_minutes", "NURTURING_INTERVAL_MINUTES"),
+    )
+    funnel_rollup_cron: str = Field(
+        default="15 * * * *",
+        validation_alias=AliasChoices("funnel_rollup_cron", "FUNNEL_ROLLUP_CRON"),
+    )
+
     # Call limits (#374)
     max_llm_calls: int = Field(
         default=5,
