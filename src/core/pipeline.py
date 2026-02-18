@@ -224,6 +224,14 @@ class RAGPipeline:
         Returns:
             Evaluation metrics
         """
+        if not queries:
+            return {
+                "total_queries": 0,
+                "average_latency": 0.0,
+                "results": [],
+                "metrics": {},
+            }
+
         results = []
         for query in queries:
             result = await self.search(query)

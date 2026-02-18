@@ -368,3 +368,12 @@ class TestRAGPipelineEvaluate:
         assert "average_latency" in results
         assert "metrics" in results
         assert "recall_at_1" in results["metrics"]
+
+    async def test_evaluate_empty_queries(self, mock_pipeline):
+        """Test evaluate handles empty queries without ZeroDivisionError."""
+        results = await mock_pipeline.evaluate([])
+
+        assert results["total_queries"] == 0
+        assert results["average_latency"] == 0.0
+        assert results["results"] == []
+        assert results["metrics"] == {}
