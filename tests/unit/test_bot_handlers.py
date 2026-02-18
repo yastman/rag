@@ -114,6 +114,24 @@ class TestPropertyBotInit:
 
         assert mock_qdrant.call_args.kwargs["timeout"] == 7
 
+    def test_init_creates_llm_guard_client_when_enabled(self, mock_config):
+        """PropertyBot initializes LLMGuardClient when ML guard is enabled."""
+        mock_config.guard_ml_enabled = True
+        mock_config.llm_guard_url = "http://guard:8100"
+        with (
+            patch("telegram_bot.bot.Bot"),
+            patch("telegram_bot.integrations.cache.CacheLayerManager"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("telegram_bot.services.llm_guard_client.LLMGuardClient") as mock_guard_client,
+        ):
+            bot = PropertyBot(mock_config)
+
+        mock_guard_client.assert_called_once_with(base_url="http://guard:8100")
+        assert bot._llm_guard_client is mock_guard_client.return_value
+
 
 class TestCommandHandlers:
     """Test command handlers."""
@@ -363,6 +381,37 @@ class TestHandleQuery:
 
             config_arg = mock_graph.ainvoke.call_args[1]["config"]
             assert config_arg["configurable"]["judge_sample_rate"] == 0.5
+
+    async def test_handle_query_passes_guard_config_to_rag_agent(self, mock_config):
+        """Supervisor path forwards guard settings into create_rag_agent."""
+        mock_config.content_filter_enabled = False
+        mock_config.guard_mode = "soft"
+        mock_config.guard_ml_enabled = True
+        bot, _ = _create_bot(mock_config)
+        bot._llm_guard_client = MagicMock()
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch(
+                "telegram_bot.agents.rag_agent.create_rag_agent",
+                return_value=MagicMock(),
+            ) as mock_create_rag_agent,
+            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        kwargs = mock_create_rag_agent.call_args.kwargs
+        assert kwargs["content_filter_enabled"] is False
+        assert kwargs["guard_mode"] == "soft"
+        assert kwargs["guard_ml_enabled"] is True
+        assert kwargs["llm_guard_client"] is bot._llm_guard_client
 
 
 class TestHistorySaveOnResponse:
@@ -711,6 +760,7 @@ class TestCheckpointNamespace:
     async def test_handle_voice_passes_voice_checkpoint_ns(self, mock_config):
         """handle_voice passes checkpoint_ns='tg:voice:v1' in invoke_config."""
         bot, _ = _create_bot(mock_config)
+        bot._llm_guard_client = MagicMock()
 
         mock_graph = AsyncMock()
         mock_graph.ainvoke = AsyncMock(
@@ -723,7 +773,7 @@ class TestCheckpointNamespace:
         )
 
         with (
-            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph) as mock_build_graph,
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.write_langfuse_scores"),
             patch("telegram_bot.bot.propagate_attributes"),
@@ -749,6 +799,8 @@ class TestCheckpointNamespace:
             cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
             assert cfg["thread_id"] == "12345"
             assert cfg["checkpoint_ns"] == "tg:voice:v1"
+            graph_kwargs = mock_build_graph.call_args.kwargs
+            assert graph_kwargs["llm_guard_client"] is bot._llm_guard_client
 
 
 class TestHandleVoiceExceptionHandling:
@@ -992,6 +1044,8 @@ class TestBotLifecycle:
         bot._sparse = MagicMock()
         bot._sparse.aclose = AsyncMock()
         bot._reranker = None
+        bot._llm_guard_client = MagicMock()
+        bot._llm_guard_client.aclose = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.session = MagicMock()
         bot.bot.session.close = AsyncMock()
@@ -1004,6 +1058,7 @@ class TestBotLifecycle:
         bot._qdrant.close.assert_called_once()
         bot._embeddings.aclose.assert_awaited_once()
         bot._sparse.aclose.assert_awaited_once()
+        bot._llm_guard_client.aclose.assert_awaited_once()
 
     async def test_stop_closes_checkpointer_context(self, mock_config):
         """stop() should close async checkpointer context when available."""
