@@ -557,6 +557,9 @@ class PropertyBot:
                 guard_mode=self.config.guard_mode,
                 guard_ml_enabled=self.config.guard_ml_enabled,
                 llm_guard_client=self._llm_guard_client,
+                max_rewrite_attempts=self._graph_config.max_rewrite_attempts,
+                show_sources=self._graph_config.show_sources,
+                max_llm_calls=self.config.max_llm_calls,
             ),
             direct_response,
         ]
@@ -578,6 +581,7 @@ class PropertyBot:
             session_id=session_id,
             query=message.text or "",
         )
+        state["max_tool_calls"] = self.config.max_tool_calls
         config = {
             "configurable": {
                 "user_id": user_id,
@@ -688,6 +692,7 @@ class PropertyBot:
         state["input_type"] = "voice"
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
         state["show_sources"] = self._graph_config.show_sources
+        state["max_llm_calls"] = self.config.max_llm_calls
 
         with propagate_attributes(
             session_id=state["session_id"],
