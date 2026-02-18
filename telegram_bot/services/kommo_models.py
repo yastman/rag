@@ -1,12 +1,13 @@
 """Pydantic v2 models for Kommo CRM API (#413).
 
 Models match Kommo API v4 payloads.
+Kommo API uses "price" for deal value; Python code uses "budget" for readability.
 Ref: https://www.kommo.com/developers/content/api/
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # --- Request models (Create/Update) ---
@@ -15,8 +16,10 @@ from pydantic import BaseModel
 class LeadCreate(BaseModel):
     """POST /api/v4/leads payload."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
-    budget: int | None = None
+    budget: int | None = Field(None, serialization_alias="price", validation_alias="price")
     pipeline_id: int | None = None
     status_id: int | None = None
     custom_fields_values: list[dict] | None = None
@@ -25,8 +28,10 @@ class LeadCreate(BaseModel):
 class LeadUpdate(BaseModel):
     """PATCH /api/v4/leads/{id} payload."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str | None = None
-    budget: int | None = None
+    budget: int | None = Field(None, serialization_alias="price", validation_alias="price")
     status_id: int | None = None
     custom_fields_values: list[dict] | None = None
 
@@ -55,11 +60,18 @@ class TaskCreate(BaseModel):
 
 
 class Lead(BaseModel):
-    """Lead from Kommo API response."""
+    """Lead from Kommo API response.
+
+    Note: POST /leads returns minimal response (id only).
+    Full fields available via GET /leads/{id}.
+    Kommo API field "price" maps to "budget" in Python.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
 
     id: int
-    name: str
-    budget: int | None = None
+    name: str | None = None
+    budget: int | None = Field(None, validation_alias="price")
     status_id: int | None = None
     pipeline_id: int | None = None
     created_at: int | None = None
