@@ -12,12 +12,12 @@ if TYPE_CHECKING:
     from .bge_m3_client import BGEM3Client, BGEM3SyncClient
     from .colbert_reranker import ColbertRerankerService
     from .history_service import HistoryService
+    from .lead_scoring_store import LeadScoringStore
     from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
     from .metrics import PipelineMetrics
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
     from .query_preprocessor import HyDEGenerator, QueryPreprocessor
-    from .retriever import RetrieverService
     from .session_summary import (
         SessionSummary,
         check_responses_parse_compat,
@@ -39,11 +39,11 @@ __all__ = [
     "HistoryService",
     "HyDEGenerator",
     "LLMService",
+    "LeadScoringStore",
     "PipelineMetrics",
     "QdrantService",
     "QueryAnalyzer",
     "QueryPreprocessor",
-    "RetrieverService",
     "SessionSummary",
     "SmallToBigService",
     "UserBaseVectorizer",
@@ -62,6 +62,7 @@ _IMPORT_MAP = {
     "ExpandedChunk": ".small_to_big",
     "HistoryService": ".history_service",
     "HyDEGenerator": ".query_preprocessor",
+    "LeadScoringStore": ".lead_scoring_store",
     "SessionSummary": ".session_summary",
     "check_responses_parse_compat": ".session_summary",
     "LLMService": ".llm",
@@ -70,7 +71,6 @@ _IMPORT_MAP = {
     "QdrantService": ".qdrant",
     "QueryAnalyzer": ".query_analyzer",
     "QueryPreprocessor": ".query_preprocessor",
-    "RetrieverService": ".retriever",
     "SmallToBigService": ".small_to_big",
     "UserBaseVectorizer": ".vectorizers",
     "VoyageService": ".voyage",

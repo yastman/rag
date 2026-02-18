@@ -201,6 +201,27 @@ class TestComputeAggregates:
         agg = compute_aggregates([])
         assert agg == {}
 
+    def test_judge_score_aggregation(self):
+        """Judge scores from managed evaluators are aggregated (#386)."""
+        results = [
+            _make_result(scores={"judge_faithfulness": 0.9, "judge_answer_relevance": 0.8}),
+            _make_result(scores={"judge_faithfulness": 0.7, "judge_answer_relevance": 0.6}),
+            _make_result(scores={"judge_faithfulness": 0.8}),
+        ]
+        agg = compute_aggregates(results)
+
+        assert agg["judge_faithfulness_mean"] == pytest.approx(0.8, abs=0.01)
+        assert agg["judge_faithfulness_count"] == 3
+        assert agg["judge_answer_relevance_mean"] == pytest.approx(0.7, abs=0.01)
+        assert agg["judge_answer_relevance_count"] == 2
+        assert "judge_context_relevance_mean" not in agg  # no data
+
+    def test_judge_scores_absent_no_keys(self):
+        """No judge scores -> no judge keys in aggregates."""
+        results = [_make_result(scores={"cache_hit": 1.0})]
+        agg = compute_aggregates(results)
+        assert "judge_faithfulness_mean" not in agg
+
     def test_cold_aggregates_include_p90(self):
         """Aggregates should expose p90 explicitly for Go/No-Go checks."""
         results = [
@@ -378,6 +399,49 @@ class TestEvaluateGoNoGo:
         result = evaluate_go_no_go(agg, [])
         # Should use yaml default (5000), so 4000 passes
         assert result["cold_p50_lt_5s"]["passed"] is True
+
+    def test_judge_criteria_pass_above_threshold(self):
+        """Judge criteria pass when mean >= threshold (#386)."""
+        agg = {
+            "cold": {"latency_p50": 3000, "latency_p90": 5000, "node_p50": {"generate": 1500}},
+            "cache_hit": {"latency_p50": 500},
+            "judge_faithfulness_mean": 0.80,
+            "judge_faithfulness_count": 10,
+            "judge_answer_relevance_mean": 0.75,
+            "judge_answer_relevance_count": 10,
+            "judge_context_relevance_mean": 0.70,
+            "judge_context_relevance_count": 10,
+        }
+        results = [_make_result(phase="cold", latency=3000)]
+        criteria = evaluate_go_no_go(agg, results, orphan_rate=0.0)
+
+        assert criteria["judge_faithfulness_gte"]["passed"] is True
+        assert criteria["judge_answer_relevance_gte"]["passed"] is True
+        assert criteria["judge_context_relevance_gte"]["passed"] is True
+        assert criteria["judge_faithfulness_gte"]["skipped"] is False
+
+    def test_judge_criteria_fail_below_threshold(self):
+        """Judge criteria fail when mean < threshold (#386)."""
+        agg = {
+            "cold": {},
+            "cache_hit": {},
+            "judge_faithfulness_mean": 0.50,
+            "judge_faithfulness_count": 10,
+        }
+        criteria = evaluate_go_no_go(agg, [], orphan_rate=0.0)
+
+        assert criteria["judge_faithfulness_gte"]["passed"] is False
+        assert "0.500" in criteria["judge_faithfulness_gte"]["actual"]
+
+    def test_judge_criteria_skipped_when_no_data(self):
+        """Judge criteria skipped when no judge scores available (#386)."""
+        agg = {"cold": {}, "cache_hit": {}}
+        criteria = evaluate_go_no_go(agg, [], orphan_rate=0.0)
+
+        assert criteria["judge_faithfulness_gte"]["skipped"] is True
+        assert criteria["judge_faithfulness_gte"]["passed"] is True
+        assert criteria["judge_answer_relevance_gte"]["skipped"] is True
+        assert criteria["judge_context_relevance_gte"]["skipped"] is True
 
 
 class TestLangfusePreflight:

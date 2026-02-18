@@ -454,6 +454,14 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
 
     elapsed = time.monotonic() - t0
 
+    # Build eval context for managed evaluators (#386)
+    retrieved_context = state.get("retrieved_context", [])
+    eval_context = "\n\n".join(
+        f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
+        for d in retrieved_context[:5]
+        if isinstance(d, dict)
+    )
+
     span_output: dict[str, Any] = {
         "response_length": len(answer),
         "llm_provider_model": actual_model,
@@ -461,6 +469,10 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         "llm_response_duration_ms": round(elapsed * 1000, 1),
         "fallback_used": actual_model == "fallback",
         "response_sent": response_sent,
+        # Full data for Langfuse managed evaluators (#386)
+        "eval_query": query[:2000],
+        "eval_answer": answer[:3000],
+        "eval_context": eval_context,
     }
     if response_obj is not None:
         usage = getattr(response_obj, "usage", None)
@@ -504,6 +516,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         "llm_provider_model": actual_model,
         "llm_ttft_ms": ttft_ms,
         "llm_response_duration_ms": elapsed * 1000,
+        "llm_call_count": state.get("llm_call_count", 0) + 1,
         "latency_stages": {**state.get("latency_stages", {}), "generate": elapsed},
         # Latency breakdown (#147)
         "llm_decode_ms": llm_decode_ms,
