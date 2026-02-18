@@ -245,6 +245,50 @@ pytest tests/smoke/test_langgraph_pipeline.py -v         ***REMOVED*** Smoke tes
 | `TELEGRAM_BOT_TOKEN` invalid | Get new token from @BotFather |
 | Services unhealthy | Run preflight: `from telegram_bot.preflight import check_dependencies` |
 
+***REMOVED******REMOVED*** CRM Integration (***REMOVED***384, ***REMOVED***390, ***REMOVED***402)
+
+***REMOVED******REMOVED******REMOVED*** Supervisor CRM Tools
+
+| Tool | Gate | Description |
+|------|------|-------------|
+| `crm_sync_lead_score` | — | Sync pending lead scores to Kommo custom fields |
+| `manager_get_funnel_analytics` | role-gated (manager) | Funnel analytics: conversion/dropoff rates |
+| `manager_run_nurturing_batch` | role-gated (manager) | Trigger nurturing batch send |
+
+***REMOVED******REMOVED******REMOVED*** Lead Scoring
+
+- **Store:** `telegram_bot/services/lead_scoring_store.py` — `LeadScoringStore` (asyncpg upsert, pending sync queue)
+- **Models:** `telegram_bot/services/lead_scoring_models.py` — `LeadScoreRecord`, `LeadScoreSyncPayload`
+- **Kommo sync:** `telegram_bot/services/kommo_tokens.py` — `KommoTokenStoreProtocol`
+- **DB tables:** `lead_scores` (with `sync_status`), `lead_score_sync_audit`
+- **Lifecycle:** `HotLeadNotifier` wired in bot startup (***REMOVED***402)
+
+***REMOVED******REMOVED******REMOVED*** Nurturing & Funnel Analytics
+
+- **Nurturing:** `telegram_bot/services/nurturing_service.py` — `NurturingService`
+- **Scheduler:** `telegram_bot/services/nurturing_scheduler.py` — `NurturingScheduler` (APScheduler v3)
+- **Funnel:** `telegram_bot/services/funnel_analytics_store.py` + `funnel_analytics_service.py`
+- **DB tables:** `nurturing_jobs`, `funnel_metrics_daily`, `scheduler_leases` (distributed lock)
+
+***REMOVED******REMOVED******REMOVED*** CRM Config
+
+| Parameter | Env Var | Default | Description |
+|-----------|---------|---------|-------------|
+| — | `KOMMO_LEAD_SCORE_FIELD_ID` | — | Kommo custom field for lead score |
+| — | `KOMMO_LEAD_BAND_FIELD_ID` | — | Kommo custom field for lead band |
+| — | `NURTURING_ENABLED` | `false` | Enable nurturing scheduler |
+| — | `NURTURING_INTERVAL_MINUTES` | — | Batch interval |
+| — | `FUNNEL_ROLLUP_CRON` | — | Daily funnel metrics rollup |
+
+***REMOVED******REMOVED******REMOVED*** Langfuse Scores (CRM)
+
+| Score | Type | Purpose |
+|-------|------|---------|
+| `nurturing_batch_size` | NUMERIC | Total leads in nurturing batch |
+| `nurturing_sent_count` | NUMERIC | Successfully sent nurturing messages |
+| `funnel_conversion_rate` | NUMERIC | Stage conversion rate |
+| `funnel_dropoff_rate` | NUMERIC | Stage dropoff rate |
+
 ***REMOVED******REMOVED*** Development Guide
 
 ***REMOVED******REMOVED******REMOVED*** Adding new command
