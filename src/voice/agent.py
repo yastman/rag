@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import contextlib
 import json
@@ -35,6 +36,8 @@ RAG_API_URL = os.getenv("RAG_API_URL", "http://rag-api:8080")
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("VOICE_DATABASE_URL", "")
 _transcript_store: TranscriptStore | None = None
 _http_client: httpx.AsyncClient | None = None
+_active_jobs = 0
+_jobs_lock: asyncio.Lock | None = None
 
 
 def _get_http_client() -> httpx.AsyncClient:
@@ -54,6 +57,32 @@ async def _close_http_client() -> None:
     if _http_client is not None:
         await _http_client.aclose()
         _http_client = None
+
+
+def _get_jobs_lock() -> asyncio.Lock:
+    """Lazy-init lock for shared job counters."""
+    global _jobs_lock
+    if _jobs_lock is None:
+        _jobs_lock = asyncio.Lock()
+    return _jobs_lock
+
+
+async def _mark_job_started() -> None:
+    """Increment active job counter for this process."""
+    global _active_jobs
+    async with _get_jobs_lock():
+        _active_jobs += 1
+
+
+async def _mark_job_finished() -> None:
+    """Decrement active job counter and close shared HTTP client when idle."""
+    global _active_jobs
+    should_close = False
+    async with _get_jobs_lock():
+        _active_jobs = max(0, _active_jobs - 1)
+        should_close = _active_jobs == 0
+    if should_close:
+        await _close_http_client()
 
 
 async def _get_transcript_store() -> TranscriptStore | None:
@@ -206,6 +235,7 @@ server = AgentServer(
 @server.rtc_session(agent_name="voice-bot")
 async def entrypoint(ctx: agents.JobContext):
     """Entry point for voice bot agent."""
+    await _mark_job_started()
     # Parse call metadata
     metadata: dict = {}
     if ctx.job.metadata:
@@ -259,18 +289,21 @@ async def entrypoint(ctx: agents.JobContext):
 
     # Register cleanup callback to finalize the call when the session ends
     async def _finalize() -> None:
-        if not store or not call_id:
-            return
-        duration_sec = int(time.monotonic() - call_start)
         try:
-            await store.finalize_call(
-                call_id=call_id,
-                duration_sec=duration_sec,
-                langfuse_trace_id=langfuse_trace_id,
-            )
-            logger.info("Call %s finalized: duration=%ds", call_id, duration_sec)
-        except Exception:
-            logger.exception("Failed to finalize call %s", call_id)
+            if not store or not call_id:
+                return
+            duration_sec = int(time.monotonic() - call_start)
+            try:
+                await store.finalize_call(
+                    call_id=call_id,
+                    duration_sec=duration_sec,
+                    langfuse_trace_id=langfuse_trace_id,
+                )
+                logger.info("Call %s finalized: duration=%ds", call_id, duration_sec)
+            except Exception:
+                logger.exception("Failed to finalize call %s", call_id)
+        finally:
+            await _mark_job_finished()
 
     ctx.add_shutdown_callback(_finalize)
 
