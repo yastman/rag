@@ -80,7 +80,7 @@ uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 
 ## 6. Minimal Stack (Fast Iteration)
 
-Use `docker-compose.local.yml` when full dev stack is unnecessary:
+Use the `local-*` shortcuts (they now run a minimal subset from `docker-compose.dev.yml`) when full dev stack is unnecessary:
 
 ```bash
 make local-up
