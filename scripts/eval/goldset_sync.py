@@ -45,7 +45,9 @@ def sync_to_langfuse(
 
     created = 0
     for sample in samples:
+        item_id = f"{dataset_name}-{sample.get('id', created)}"
         dataset.create_item(
+            id=item_id,
             input={"question": sample["question"]},
             expected_output={"answer": sample["ground_truth"]},
             metadata={
