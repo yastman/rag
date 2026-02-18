@@ -216,6 +216,16 @@ class TestPrintStatistics:
         assert "Sample articles" in captured.out
         assert "Article 1" in captured.out
 
+    def test_print_statistics_empty_dataset(self, capsys):
+        """Test print_statistics handles empty dataset without crashing."""
+        from src.evaluation.extract_ground_truth import print_statistics
+
+        print_statistics({})
+
+        captured = capsys.readouterr()
+        assert "Total articles: 0" in captured.out
+        assert "No articles to analyze" in captured.out
+
 
 class TestMain:
     """Tests for main function."""
@@ -223,7 +233,8 @@ class TestMain:
     @patch("src.evaluation.extract_ground_truth.extract_articles")
     @patch("src.evaluation.extract_ground_truth.print_statistics")
     @patch("builtins.open", new_callable=mock_open)
-    def test_main_extracts_and_saves(self, mock_file, mock_stats, mock_extract):
+    @patch("os.makedirs")
+    def test_main_extracts_and_saves(self, mock_makedirs, mock_file, mock_stats, mock_extract):
         """Test main extracts articles and saves to files."""
         mock_extract.return_value = {
             "121": [{"chunk_id": "c1", "point_id": "p1", "text_preview": "text"}],
@@ -238,18 +249,18 @@ class TestMain:
         mock_stats.assert_called_once()
 
         opened_paths = [call.args[0] for call in mock_file.call_args_list]
-        assert (
-            "/home/admin/contextual_rag/evaluation/data/ground_truth_articles.json" in opened_paths
-        )
-        assert (
-            "/home/admin/contextual_rag/evaluation/data/article_to_chunk_mapping.json"
-            in opened_paths
-        )
+        assert any("ground_truth_articles.json" in p for p in opened_paths)
+        assert any("article_to_chunk_mapping.json" in p for p in opened_paths)
+        # Verify no hardcoded /home/admin paths
+        assert all("/home/admin" not in p for p in opened_paths)
 
     @patch("src.evaluation.extract_ground_truth.extract_articles")
     @patch("src.evaluation.extract_ground_truth.print_statistics")
     @patch("builtins.open", new_callable=mock_open)
-    def test_main_creates_simplified_mapping(self, mock_file, mock_stats, mock_extract):
+    @patch("os.makedirs")
+    def test_main_creates_simplified_mapping(
+        self, mock_makedirs, mock_file, mock_stats, mock_extract
+    ):
         """Test main creates simplified article-to-chunk mapping."""
         mock_extract.return_value = {
             "121": [
@@ -271,7 +282,10 @@ class TestMain:
     @patch("src.evaluation.extract_ground_truth.extract_articles")
     @patch("src.evaluation.extract_ground_truth.print_statistics")
     @patch("builtins.open", new_callable=mock_open)
-    def test_main_prints_completion_message(self, mock_file, mock_stats, mock_extract, capsys):
+    @patch("os.makedirs")
+    def test_main_prints_completion_message(
+        self, mock_makedirs, mock_file, mock_stats, mock_extract, capsys
+    ):
         """Test main prints completion message."""
         mock_extract.return_value = {"121": [{"point_id": "p1"}]}
 
@@ -285,7 +299,8 @@ class TestMain:
     @patch("src.evaluation.extract_ground_truth.extract_articles")
     @patch("src.evaluation.extract_ground_truth.print_statistics")
     @patch("builtins.open", new_callable=mock_open)
-    def test_main_uses_correct_collection(self, mock_file, mock_stats, mock_extract):
+    @patch("os.makedirs")
+    def test_main_uses_correct_collection(self, mock_makedirs, mock_file, mock_stats, mock_extract):
         """Test main uses correct collection name."""
         mock_extract.return_value = {}
 
