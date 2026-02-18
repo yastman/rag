@@ -235,6 +235,9 @@ class PropertyBot:
         # Nurturing scheduler (initialized in start() if enabled)
         self._nurturing_scheduler: Any | None = None
 
+        # Hot lead notifier (initialized in start() when manager_ids configured)
+        self._hot_lead_notifier: Any | None = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -1082,6 +1085,21 @@ class PropertyBot:
 
             self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
             logger.info("Lead scoring store ready")
+
+            # Initialize hot lead notifier (#402)
+            if self.config.manager_ids and self._cache.redis is not None:
+                try:
+                    from .services.hot_lead_notifier import HotLeadNotifier
+
+                    self._hot_lead_notifier = HotLeadNotifier(
+                        bot=self.bot,
+                        cache=self._cache,
+                        manager_ids=self.config.manager_ids,
+                        dedupe_ttl_sec=self.config.manager_hot_lead_dedupe_sec,
+                    )
+                    logger.info("Hot lead notifier ready (managers=%s)", self.config.manager_ids)
+                except Exception:
+                    logger.exception("Failed to initialize hot lead notifier")
 
             # Initialize nurturing scheduler (#390)
             if self.config.nurturing_enabled:
