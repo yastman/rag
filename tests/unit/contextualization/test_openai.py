@@ -377,6 +377,10 @@ class TestOpenAIContextualizerGetStats:
     def test_get_stats_values(self):
         """Test stats reporting."""
         with (
+            patch.dict(
+                "os.environ",
+                {"API_PROVIDER": "openai", "OPENAI_API_KEY": "test-key"},
+            ),
             patch("src.contextualization.openai.AsyncOpenAI"),
             patch("src.contextualization.openai.OpenAI"),
         ):
