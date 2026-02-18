@@ -1,7 +1,8 @@
 """guard_node — prompt injection detection for the RAG pipeline.
 
-Phase 1: Regex heuristics (~20 patterns, EN+RU) with configurable guard mode.
-Detects common injection techniques and sets state flags for downstream routing.
+Phase 1: Regex heuristics (~21 patterns, EN+RU) with configurable guard mode.
+Phase 2: llm-guard ML classifier (opt-in, DeBERTa v3, ~100-200ms CPU).
+Combined risk score: max(regex_score, ml_score).
 
 Guard modes:
 - "hard": block injection, set response, route to respond
@@ -112,6 +113,12 @@ _BLOCKED_RESPONSE = (
     "домах или другой недвижимости."
 )
 
+# Threshold above which regex is confident enough to skip ML layer
+_REGEX_SKIP_ML_THRESHOLD = 0.9
+
+# Threshold above which combined score counts as injection
+_INJECTION_THRESHOLD = 0.5
+
 
 def detect_injection(text: str) -> tuple[bool, float, str | None]:
     """Scan text for prompt injection patterns.
@@ -136,15 +143,22 @@ def detect_injection(text: str) -> tuple[bool, float, str | None]:
 
 
 @observe(name="node-guard")
-async def guard_node(state: dict[str, Any], *, guard_mode: str = "hard") -> dict[str, Any]:
+async def guard_node(
+    state: dict[str, Any],
+    *,
+    guard_mode: str = "hard",
+    guard_ml_enabled: bool = False,
+) -> dict[str, Any]:
     """LangGraph node: detect prompt injection attempts.
 
-    Scans user query for injection patterns. Behavior depends on guard_mode:
+    Layer 1: Regex heuristics (<1ms, 21 patterns).
+    Layer 2: llm-guard ML classifier (~100-200ms CPU, opt-in via guard_ml_enabled).
+    Combined risk = max(regex_score, ml_score).
+
+    Behavior depends on guard_mode:
     - "hard": sets response to blocked message, injection_detected=True
     - "soft": sets injection_detected=True, logs, continues to classify
     - "log": logs only, continues to classify
-
-    Returns partial state update with injection fields and latency.
     """
     t0 = time.perf_counter()
     lf = get_client()
@@ -152,20 +166,53 @@ async def guard_node(state: dict[str, Any], *, guard_mode: str = "hard") -> dict
     messages = state["messages"]
     query = messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
 
-    detected, risk_score, pattern = detect_injection(query)
+    # --- Layer 1: Regex ---
+    _detected, risk_score, pattern = detect_injection(query)
+
+    ml_score = 0.0
+    ml_latency_ms = 0.0
+
+    # --- Layer 2: ML classifier (opt-in) ---
+    if guard_ml_enabled and risk_score < _REGEX_SKIP_ML_THRESHOLD:
+        ml_t0 = time.perf_counter()
+        try:
+            from telegram_bot.services.ml_guard import scan_prompt_injection
+
+            ml_detected, ml_score = scan_prompt_injection(query)
+            ml_latency_ms = (time.perf_counter() - ml_t0) * 1000
+            logger.info(
+                "ML guard: detected=%s, score=%.3f, latency=%.1fms",
+                ml_detected,
+                ml_score,
+                ml_latency_ms,
+            )
+        except Exception:
+            ml_latency_ms = (time.perf_counter() - ml_t0) * 1000
+            logger.exception("ML guard scanner failed (latency=%.1fms)", ml_latency_ms)
+
+    # --- Combined score ---
+    combined_score = max(risk_score, ml_score)
+    combined_detected = combined_score >= _INJECTION_THRESHOLD
+    # Update pattern if ML raised the score
+    if ml_score > risk_score and ml_score >= _INJECTION_THRESHOLD:
+        pattern = pattern or "ml_classifier"
 
     result: dict[str, Any] = {
-        "injection_detected": detected,
-        "injection_risk_score": risk_score,
+        "injection_detected": combined_detected,
+        "injection_risk_score": combined_score,
         "injection_pattern": pattern,
+        "guard_ml_score": ml_score,
+        "guard_ml_latency_ms": ml_latency_ms,
         "latency_stages": {**state.get("latency_stages", {}), "guard": time.perf_counter() - t0},
     }
 
-    if detected:
+    if combined_detected:
         logger.warning(
-            "Injection detected (mode=%s, score=%.2f, pattern=%s): %.80s",
+            "Injection detected (mode=%s, score=%.2f, regex=%.2f, ml=%.2f, pattern=%s): %.80s",
             guard_mode,
+            combined_score,
             risk_score,
+            ml_score,
             pattern,
             query,
         )
@@ -173,15 +220,25 @@ async def guard_node(state: dict[str, Any], *, guard_mode: str = "hard") -> dict
         lf.update_current_span(
             output={
                 "injection_detected": True,
-                "risk_score": risk_score,
+                "risk_score": combined_score,
+                "regex_score": risk_score,
+                "ml_score": ml_score,
                 "pattern": pattern,
                 "guard_mode": guard_mode,
+                "ml_latency_ms": ml_latency_ms,
             }
         )
 
         if guard_mode == "hard":
             result["response"] = _BLOCKED_RESPONSE
     else:
-        lf.update_current_span(output={"injection_detected": False, "risk_score": 0.0})
+        lf.update_current_span(
+            output={
+                "injection_detected": False,
+                "risk_score": 0.0,
+                "ml_score": ml_score,
+                "ml_latency_ms": ml_latency_ms,
+            }
+        )
 
     return result

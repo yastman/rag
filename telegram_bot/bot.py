@@ -185,6 +185,13 @@ def _write_langfuse_scores(lf: Any, result: dict) -> None:
         lf.score_current_trace(
             name="injection_pattern", value=injection_pattern, data_type="CATEGORICAL"
         )
+    # Guard ML classifier (#226 Phase 2)
+    guard_ml_score = result.get("guard_ml_score", 0.0)
+    if guard_ml_score > 0:
+        lf.score_current_trace(name="guard_ml_score", value=float(guard_ml_score))
+    guard_ml_latency = result.get("guard_ml_latency_ms", 0.0)
+    if guard_ml_latency > 0:
+        lf.score_current_trace(name="guard_ml_latency_ms", value=float(guard_ml_latency))
 
     # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
@@ -707,6 +714,7 @@ class PropertyBot:
                 message=message,
                 checkpointer=self._checkpointer,
                 guard_mode=self.config.guard_mode,
+                guard_ml_enabled=self.config.guard_ml_enabled,
             )
 
             invoke_config = {
@@ -934,6 +942,7 @@ class PropertyBot:
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
                 guard_mode=self.config.guard_mode,
+                guard_ml_enabled=self.config.guard_ml_enabled,
             )
 
             invoke_config = {

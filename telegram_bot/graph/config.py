@@ -50,6 +50,7 @@ class GraphConfig:
     stt_model: str = "whisper"
     # Prompt injection defense (#226)
     guard_mode: str = "hard"  # "hard" = block, "soft" = flag + continue, "log" = log only
+    guard_ml_enabled: bool = False  # opt-in ML classifier layer (llm-guard)
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -102,6 +103,7 @@ class GraphConfig:
             voice_language=os.getenv("VOICE_LANGUAGE", "ru"),
             stt_model=os.getenv("STT_MODEL", "whisper"),
             guard_mode=os.getenv("GUARD_MODE", "hard"),
+            guard_ml_enabled=os.getenv("GUARD_ML_ENABLED", "false").lower() == "true",
         )
 
     def create_llm(self, model_override: str | None = None) -> Any:

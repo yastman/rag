@@ -40,6 +40,7 @@ def build_graph(
     voice_language: str = "ru",
     stt_model: str = "whisper",
     guard_mode: str = "hard",
+    guard_ml_enabled: bool = False,
 ) -> Any:
     """Build and compile the RAG StateGraph.
 
@@ -69,7 +70,7 @@ def build_graph(
     # Add nodes — wrap those that need injected deps via functools.partial
     workflow.add_node(
         "guard",
-        functools.partial(guard_node, guard_mode=guard_mode),
+        functools.partial(guard_node, guard_mode=guard_mode, guard_ml_enabled=guard_ml_enabled),
     )
 
     workflow.add_node("classify", classify_node)  # type: ignore[type-var]

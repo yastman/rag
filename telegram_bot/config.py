@@ -264,6 +264,11 @@ class BotConfig(BaseSettings):
         default="hard",
         validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),
     )
+    # Guard ML classifier (llm-guard, #226 Phase 2)
+    guard_ml_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("guard_ml_enabled", "GUARD_ML_ENABLED"),
+    )
 
     # Guardrails
     enable_confidence_scoring: bool = Field(
