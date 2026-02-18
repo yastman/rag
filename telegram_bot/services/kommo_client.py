@@ -35,6 +35,7 @@ class KommoClient:
     """Async Kommo CRM API adapter with auto-refresh OAuth2."""
 
     def __init__(self, *, subdomain: str, token_store: KommoTokenStore):
+        subdomain = subdomain.removesuffix(".kommo.com")
         self._base_url = f"https://{subdomain}.kommo.com/api/v4"
         self._token_store = token_store
         self._client = httpx.AsyncClient(
@@ -56,6 +57,9 @@ class KommoClient:
             response = await self._client.request(method, path, headers=headers, **kwargs)
 
         response.raise_for_status()
+        # Kommo returns 204/empty body for some endpoints (e.g. GET /contacts with no results)
+        if response.status_code == 204 or not response.content:
+            return {}
         return response.json()
 
     # --- Leads ---
@@ -63,7 +67,9 @@ class KommoClient:
     @observe(name="kommo-create-lead")
     async def create_lead(self, lead: LeadCreate) -> Lead:
         """POST /api/v4/leads."""
-        data = await self._request("POST", "/leads", json=[lead.model_dump(exclude_none=True)])
+        data = await self._request(
+            "POST", "/leads", json=[lead.model_dump(exclude_none=True, by_alias=True)]
+        )
         item = data["_embedded"]["leads"][0]
         return Lead(**item)
 
@@ -77,7 +83,7 @@ class KommoClient:
     async def update_lead(self, lead_id: int, update: LeadUpdate) -> Lead:
         """PATCH /api/v4/leads/{id}."""
         data = await self._request(
-            "PATCH", f"/leads/{lead_id}", json=update.model_dump(exclude_none=True)
+            "PATCH", f"/leads/{lead_id}", json=update.model_dump(exclude_none=True, by_alias=True)
         )
         return Lead(**data)
 
