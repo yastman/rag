@@ -93,3 +93,19 @@ class TestRAGState:
         state = make_initial_state(user_id=123, session_id="s-test", query="hello")
         assert "sent_message" in state
         assert state["sent_message"] is None
+
+    def test_has_injection_fields(self):
+        from telegram_bot.graph.state import make_initial_state
+
+        state = make_initial_state(user_id=123, session_id="s-test", query="hello")
+        assert state["injection_detected"] is False
+        assert state["injection_risk_score"] == 0.0
+        assert state["injection_pattern"] is None
+
+    def test_rag_state_has_injection_annotations(self):
+        from telegram_bot.graph.state import RAGState
+
+        annotations = RAGState.__annotations__
+        assert "injection_detected" in annotations
+        assert "injection_risk_score" in annotations
+        assert "injection_pattern" in annotations

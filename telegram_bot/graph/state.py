@@ -76,6 +76,13 @@ class RAGState(TypedDict):
     ***REMOVED*** User feedback (***REMOVED***229)
     trace_id: str
     sent_message: dict[str, int] | None  ***REMOVED*** {"chat_id": int, "message_id": int}
+    ***REMOVED*** Prompt injection defense (***REMOVED***226)
+    injection_detected: bool
+    injection_risk_score: float
+    injection_pattern: str | None
+    ***REMOVED*** Guard ML classifier (***REMOVED***226 Phase 2)
+    guard_ml_score: float
+    guard_ml_latency_ms: float
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -144,4 +151,11 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         ***REMOVED*** User feedback (***REMOVED***229)
         "trace_id": "",
         "sent_message": None,
+        ***REMOVED*** Prompt injection defense (***REMOVED***226)
+        "injection_detected": False,
+        "injection_risk_score": 0.0,
+        "injection_pattern": None,
+        ***REMOVED*** Guard ML classifier (***REMOVED***226 Phase 2)
+        "guard_ml_score": 0.0,
+        "guard_ml_latency_ms": 0.0,
     }
