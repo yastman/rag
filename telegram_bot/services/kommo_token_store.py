@@ -44,16 +44,16 @@ class KommoTokenStore:
         if not data:
             raise ValueError(f"No token stored for {self._subdomain}")
 
-        expires_at = int(data.get(b"expires_at", 0))
+        expires_at = self._to_int(data.get(b"expires_at", b"0"), default=0)
         if time.time() < expires_at - TOKEN_REFRESH_BUFFER_S:
-            return data[b"access_token"].decode()
+            return self._to_str_token(data.get(b"access_token"), field="access_token")
 
         return await self.force_refresh()
 
     async def force_refresh(self) -> str:
         """Force token refresh via Kommo OAuth2."""
         data = await self._redis.hgetall(self._key)
-        refresh_token = data.get(b"refresh_token", b"").decode()
+        refresh_token = self._to_str_token(data.get(b"refresh_token", b""), field="refresh_token")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -67,14 +67,20 @@ class KommoTokenStore:
                 },
             )
             response.raise_for_status()
-            tokens = response.json()
+            tokens_raw = response.json()
+
+        if not isinstance(tokens_raw, dict):
+            raise ValueError("Invalid token response from Kommo")
+        access_token = self._to_str_token(tokens_raw.get("access_token"), field="access_token")
+        refreshed_token = self._to_str_token(tokens_raw.get("refresh_token"), field="refresh_token")
+        expires_in = self._to_int(tokens_raw.get("expires_in", 86400), default=86400)
 
         await self._store_tokens(
-            tokens["access_token"],
-            tokens["refresh_token"],
-            tokens.get("expires_in", 86400),
+            access_token,
+            refreshed_token,
+            expires_in,
         )
-        return tokens["access_token"]
+        return access_token
 
     async def store_initial(
         self,
@@ -103,3 +109,22 @@ class KommoTokenStore:
             },
         )
         logger.info("Stored Kommo tokens for %s (expires_in=%ds)", self._subdomain, expires_in)
+
+    @staticmethod
+    def _to_int(value: Any, *, default: int) -> int:
+        """Convert token fields to int with safe fallback."""
+        if isinstance(value, bytes):
+            value = value.decode()
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _to_str_token(value: Any, *, field: str) -> str:
+        """Normalize token values to string or fail fast on invalid payload."""
+        if isinstance(value, bytes):
+            return value.decode()
+        if isinstance(value, str):
+            return value
+        raise ValueError(f"Invalid {field} value in token payload")
