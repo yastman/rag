@@ -6,6 +6,8 @@
 **Branch:** `feat/kommo-crm-tool`
 **Status:** Approved
 
+> **Review note (2026-02-18, plan-review):** corrected API/path details and runtime assumptions to match current repo and official Kommo references.
+
 ## Summary
 
 Реализация полного Kommo CRM deal lifecycle через supervisor tools. Включает async HTTP adapter (`KommoClient`), OAuth2 token management (Redis), 7 supervisor tools и LLM-based deal draft extraction.
@@ -110,7 +112,7 @@ class KommoClient:
 | Create contact | POST | `/contacts` |
 | Search contact | GET | `/contacts?query={phone}` |
 | Link contact | POST | `/leads/{id}/link` |
-| Add note | POST | `/leads/{id}/notes` |
+| Add note | POST | `/{entity_type}/notes` (with `entity_id` in payload) |
 | Create task | POST | `/tasks` |
 | List pipelines | GET | `/leads/pipelines` |
 | Token refresh | POST | `/oauth2/access_token` |
@@ -161,7 +163,7 @@ kommo:oauth:tokens → {
 | 2 | `crm_upsert_contact` | Find/create contact by phone | GET+POST /contacts | Phone dedup |
 | 3 | `crm_create_deal` | Create lead in pipeline | POST /leads | session_id field |
 | 4 | `crm_link_contact_to_deal` | Bind contact ↔ lead | POST /leads/{id}/link | Kommo dedup |
-| 5 | `crm_add_note` | Attach chat summary as note | POST /leads/{id}/notes | — |
+| 5 | `crm_add_note` | Attach chat summary as note | POST /{entity_type}/notes | — |
 | 6 | `crm_create_followup_task` | Create follow-up task | POST /tasks | — |
 | 7 | `crm_finalize_deal` | Orchestrator: steps 1-6 in sequence | All above | idempotency_key |
 
@@ -173,7 +175,7 @@ def create_crm_tools(*, kommo: KommoClient, llm: Any, history_service: Any) -> l
     async def crm_generate_deal_draft(query: str, config: RunnableConfig) -> str:
         """Generate a structured deal draft from chat history using LLM extraction."""
         user_id, session_id = _get_user_context(config)
-        history = await history_service.get_recent(user_id, session_id)
+        history = await history_service.get_session_turns(user_id, session_id, limit=40)
         draft = await _extract_deal_data(llm, history)
         return draft.model_dump_json()
 
@@ -214,7 +216,7 @@ Supervisor (LLM) → selects crm_finalize_deal
   ▼
 crm_finalize_deal(config: {user_id, session_id})
   │
-  ├─1. history_service.get_recent(user_id, session_id) → chat messages
+  ├─1. history_service.get_session_turns(user_id, session_id, limit=40) → chat messages
   ├─2. LLM extraction → DealDraft(name, phone, budget, property_type)
   ├─3. kommo.upsert_contact(phone, ContactCreate(...)) → contact_id
   ├─4. kommo.create_lead(LeadCreate(name, budget, pipeline_id, custom: {session_id})) → lead_id
@@ -239,6 +241,7 @@ Return: "Сделка #12345 создана в pipeline 'Недвижимост�
 | `KOMMO_AUTH_CODE` | — | One-time | Initial authorization code (exchanged on first boot) |
 | `KOMMO_DEFAULT_PIPELINE_ID` | — | Yes* | Default pipeline ID for new leads |
 | `KOMMO_RESPONSIBLE_USER_ID` | — | No | Default responsible user for tasks |
+| `KOMMO_SESSION_FIELD_ID` | `0` | Yes* | Lead custom field ID for `session_id` idempotency trace |
 
 *Required when `KOMMO_ENABLED=true`
 
@@ -260,7 +263,7 @@ All CRM tools decorated with `@observe(name="crm-*")` for Langfuse span hierarch
 ## Idempotency & Safety
 
 1. **Contact upsert:** search by phone before creating → dedup
-2. **Deal creation:** `session_id` stored in Kommo custom field → check before creating
+2. **Deal creation:** `session_id` stored in Kommo custom field (`field_id`/`field_code`) → check before creating
 3. **Finalize orchestrator:** `idempotency_key = f"{user_id}:{session_id}"` stored in Redis → skip on repeat
 4. **Fail-soft:** CRM errors don't break main RAG pipeline (logged, scored, user notified)
 5. **Rollback:** `KOMMO_ENABLED=false` disables all CRM tools, zero impact on query availability
@@ -270,8 +273,8 @@ All CRM tools decorated with `@observe(name="crm-*")` for Langfuse span hierarch
 | Error | Action |
 |-------|--------|
 | Kommo API 401 | Auto-refresh token, retry once |
-| Kommo API 429 | Exponential backoff (tenacity) |
-| Kommo API 5xx | Retry 3x with backoff, then fail-soft |
+| Kommo API 429 | Exponential backoff with jitter; honor `Retry-After` if present |
+| Kommo API 5xx | Retry 3x with backoff + jitter, then fail-soft |
 | Token refresh fails | Log error, disable CRM tools for session, alert |
 | Network timeout | httpx timeout (30s), retry once |
 | Invalid DealDraft (LLM) | Return partial draft, ask user to confirm/complete |
