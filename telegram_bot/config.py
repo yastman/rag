@@ -345,6 +345,18 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("kommo_telegram_field_id", "KOMMO_TELEGRAM_FIELD_ID"),
     )
 
+    # Call limits (#374)
+    max_llm_calls: int = Field(
+        default=5,
+        ge=1,
+        validation_alias=AliasChoices("max_llm_calls", "MAX_LLM_CALLS"),
+    )
+    max_tool_calls: int = Field(
+        default=5,
+        ge=1,
+        validation_alias=AliasChoices("max_tool_calls", "MAX_TOOL_CALLS"),
+    )
+
     # LLM-as-a-Judge online sampling
     judge_sample_rate: float = Field(
         default=0.0,
