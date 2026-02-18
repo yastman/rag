@@ -25,7 +25,14 @@ telegram_bot/
 │   ├── voyage.py          # VoyageService (embeddings + rerank API)
 │   ├── vectorizers.py     # UserBaseVectorizer + BgeM3CacheVectorizer (uses BGEM3Client)
 │   ├── metrics.py         # PipelineMetrics (p50/p95 tracking)
-│   └── redis_monitor.py   # RedisHealthMonitor (background task)
+│   ├── redis_monitor.py   # RedisHealthMonitor (background task)
+│   ├── lead_scoring_models.py  # LeadScoreRecord, LeadScoreSyncPayload
+│   ├── lead_scoring_store.py   # LeadScoringStore (asyncpg upsert, pending sync queue)
+│   ├── kommo_tokens.py         # KommoTokenStoreProtocol
+│   ├── funnel_analytics_store.py   # FunnelAnalyticsStore (daily metrics)
+│   ├── funnel_analytics_service.py # FunnelAnalyticsService
+│   ├── nurturing_service.py    # NurturingService
+│   └── nurturing_scheduler.py  # NurturingScheduler (APScheduler v3)
 ├── integrations/          # LangGraph-compatible wrappers
 │   ├── cache.py           # CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
 │   ├── embeddings.py      # BGEM3HybridEmbeddings (uses BGEM3Client) + legacy wrappers
@@ -135,6 +142,28 @@ sparse = gc.create_sparse_embeddings()   # BGEM3SparseEmbeddings
 | `conversation:{user_id}` | Chat history |
 
 Bump version when changing models. Old keys expire naturally.
+
+### CRM Services (#384, #390)
+
+```python
+from telegram_bot.services.lead_scoring_store import LeadScoringStore
+from telegram_bot.services.nurturing_service import NurturingService
+from telegram_bot.services.funnel_analytics_service import FunnelAnalyticsService
+
+# Lead scoring — asyncpg, upsert with sync_status tracking
+store = LeadScoringStore(pool=asyncpg_pool)
+await store.upsert_score(user_id, score_record)
+pending = await store.get_pending_sync()  # for Kommo sync
+
+# Nurturing — APScheduler v3 for batch scheduling
+nurturing = NurturingService(...)
+scheduler = NurturingScheduler(nurturing, interval_minutes=config.nurturing_interval)
+
+# Funnel — daily conversion/dropoff snapshots
+funnel = FunnelAnalyticsService(store=FunnelAnalyticsStore(pool))
+```
+
+**DB tables:** `lead_scores`, `lead_score_sync_audit`, `nurturing_jobs`, `funnel_metrics_daily`, `scheduler_leases`
 
 ## I/O Patterns
 
