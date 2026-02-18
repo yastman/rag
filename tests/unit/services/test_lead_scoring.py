@@ -30,7 +30,7 @@ def test_warm_lead():
         budget="high",
         timeline="3months",
     )
-    assert 30 <= score < 60 or score >= 60  ***REMOVED*** warm or hot
+    assert score == 55  ***REMOVED*** house(10) + high budget(20) + 3months(25)
 
 
 def test_classify_hot():
