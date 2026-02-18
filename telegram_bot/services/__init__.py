@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
     from .query_preprocessor import HyDEGenerator, QueryPreprocessor
-    from .retriever import RetrieverService
     from .session_summary import (
         SessionSummary,
         check_responses_parse_compat,
@@ -43,7 +42,6 @@ __all__ = [
     "QdrantService",
     "QueryAnalyzer",
     "QueryPreprocessor",
-    "RetrieverService",
     "SessionSummary",
     "SmallToBigService",
     "UserBaseVectorizer",
@@ -70,7 +68,6 @@ _IMPORT_MAP = {
     "QdrantService": ".qdrant",
     "QueryAnalyzer": ".query_analyzer",
     "QueryPreprocessor": ".query_preprocessor",
-    "RetrieverService": ".retriever",
     "SmallToBigService": ".small_to_big",
     "UserBaseVectorizer": ".vectorizers",
     "VoyageService": ".voyage",
