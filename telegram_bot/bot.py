@@ -674,6 +674,7 @@ class PropertyBot:
             "configurable": {
                 "user_id": user_id,
                 "session_id": session_id,
+                "role": role,
                 "llm_base_url": self.config.llm_base_url,
             }
         }
