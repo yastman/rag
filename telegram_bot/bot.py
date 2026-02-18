@@ -343,12 +343,26 @@ class PropertyBot:
         user_id = message.from_user.id
         checkpointer_cleared = True
         thread_id = _supervisor_thread_id(message.chat.id)
-
-        if self._checkpointer is not None:
+        seen_checkpointers: set[int] = set()
+        for cp_name, checkpointer in (
+            ("conversation", self._checkpointer),
+            ("agent", self._agent_checkpointer),
+        ):
+            if checkpointer is None:
+                continue
+            cp_id = id(checkpointer)
+            if cp_id in seen_checkpointers:
+                continue
+            seen_checkpointers.add(cp_id)
             try:
-                await self._checkpointer.adelete_thread(thread_id)
+                await checkpointer.adelete_thread(thread_id)
             except Exception:
-                logger.warning("Failed to clear checkpointer thread %s", thread_id, exc_info=True)
+                logger.warning(
+                    "Failed to clear %s checkpointer thread %s",
+                    cp_name,
+                    thread_id,
+                    exc_info=True,
+                )
                 checkpointer_cleared = False
 
         await self._cache.clear_conversation(user_id)
