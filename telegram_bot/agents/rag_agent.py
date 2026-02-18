@@ -33,6 +33,10 @@ def create_rag_agent(
     qdrant: Any,
     reranker: Any | None = None,
     llm: Any | None = None,
+    content_filter_enabled: bool = True,
+    guard_mode: str = "hard",
+    guard_ml_enabled: bool = False,
+    llm_guard_client: Any | None = None,
 ) -> Any:
     """Create RAG agent tool wrapping the existing LangGraph pipeline.
 
@@ -68,6 +72,10 @@ def create_rag_agent(
                 qdrant=qdrant,
                 reranker=reranker,
                 llm=llm,
+                content_filter_enabled=content_filter_enabled,
+                guard_mode=guard_mode,
+                guard_ml_enabled=guard_ml_enabled,
+                llm_guard_client=llm_guard_client,
             )
             state = make_initial_state(
                 user_id=user_id,
