@@ -50,6 +50,9 @@ def build_graph(
     voice_language: str = "ru",
     stt_model: str = "whisper",
     content_filter_enabled: bool = True,
+    guard_mode: str = "hard",
+    guard_ml_enabled: bool = False,
+    llm_guard_client: Any | None = None,
 ) -> Any:
     """Build and compile the RAG StateGraph.
 
@@ -91,7 +94,15 @@ def build_graph(
     )
 
     if content_filter_enabled:
-        workflow.add_node("guard", guard_node)  # type: ignore[type-var]
+        workflow.add_node(
+            "guard",
+            functools.partial(
+                guard_node,
+                guard_mode=guard_mode,
+                guard_ml_enabled=guard_ml_enabled,
+                llm_guard_client=llm_guard_client,
+            ),
+        )
 
     workflow.add_node(
         "cache_check",
