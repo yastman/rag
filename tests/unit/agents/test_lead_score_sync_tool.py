@@ -127,4 +127,4 @@ class TestCrmSyncLeadScoreTool:
 
         call_kwargs = mock_kommo_client.update_lead_score.call_args[1]
         key = call_kwargs["idempotency_key"]
-        assert key == "lead-score:11:chat-1:74"
+        assert key == "lead-score:11:chat-1:74:hot"
