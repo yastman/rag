@@ -488,6 +488,32 @@ class TestHandleQuery:
         assert ctx.content_filter_enabled is False
         assert ctx.guard_mode == "soft"
 
+    async def test_handle_query_splits_long_response_for_telegram_limit(self, mock_config):
+        """Long supervisor responses are split into <=4096-char Telegram-safe chunks."""
+        bot, _ = _create_bot(mock_config)
+        long_response = "x" * 10050
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(
+            return_value=_mock_agent_result(messages=[MagicMock(content=long_response)])
+        )
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("длинный ответ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        chunks = [call.args[0] for call in message.answer.await_args_list]
+        assert len(chunks) == 3
+        assert all(len(chunk) <= 4096 for chunk in chunks)
+        assert "".join(chunks) == long_response
+
 
 class TestHistorySaveOnResponse:
     """Test Q&A history persistence after successful responses."""
@@ -839,6 +865,8 @@ class TestCheckpointNamespace:
         """handle_voice passes checkpoint_ns='tg:voice:v1' in invoke_config."""
         bot, _ = _create_bot(mock_config)
         bot._llm_guard_client = MagicMock()
+        bot._checkpointer = object()
+        bot._agent_checkpointer = object()
 
         mock_graph = AsyncMock()
         mock_graph.ainvoke = AsyncMock(
@@ -879,6 +907,7 @@ class TestCheckpointNamespace:
             assert cfg["checkpoint_ns"] == "tg:voice:v1"
             graph_kwargs = mock_build_graph.call_args.kwargs
             assert graph_kwargs["llm_guard_client"] is bot._llm_guard_client
+            assert graph_kwargs["checkpointer"] is bot._agent_checkpointer
 
 
 class TestHandleVoiceExceptionHandling:

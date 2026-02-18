@@ -62,6 +62,33 @@ class TestBotConfigIsPydanticSettings:
         assert cfg.manager_hot_lead_threshold == 60
         assert cfg.manager_hot_lead_dedupe_sec == 3600
 
+    def test_manager_ids_empty_env_does_not_crash(self, monkeypatch):
+        """Empty MANAGER_IDS should be treated as no managers, not JSON parse error."""
+        monkeypatch.setenv("MANAGER_IDS", "")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None, telegram_token="test-token", llm_api_key="test-key")
+        assert cfg.manager_ids == []
+
+    def test_manager_ids_csv_env_is_parsed(self, monkeypatch):
+        """MANAGER_IDS supports comma-separated Telegram IDs."""
+        monkeypatch.setenv("MANAGER_IDS", "123, 456,not_a_number, 789")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None, telegram_token="test-token", llm_api_key="test-key")
+        assert cfg.manager_ids == [123, 456, 789]
+
+    def test_admin_ids_empty_env_does_not_crash(self, monkeypatch):
+        """Empty ADMIN_IDS should be treated as no admins, not JSON parse error."""
+        monkeypatch.setenv("ADMIN_IDS", "")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None, telegram_token="test-token", llm_api_key="test-key")
+        assert cfg.admin_ids == []
+
     def test_config_get_collection_name(self):
         """get_collection_name() still works after migration."""
         from telegram_bot.config import BotConfig
