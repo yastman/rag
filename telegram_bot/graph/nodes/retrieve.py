@@ -31,10 +31,12 @@ def _build_retrieved_context(
         if not isinstance(doc, dict):
             continue
         text = doc.get("text", "")
+        meta = doc.get("metadata", {})
         ctx.append(
             {
                 "content": text[:_MAX_CONTEXT_SNIPPET],
                 "score": doc.get("score", 0),
+                "chunk_location": meta.get("chunk_location", ""),
             }
         )
     return ctx
