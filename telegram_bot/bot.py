@@ -226,6 +226,10 @@ class PropertyBot:
         # Conversation memory checkpointer (initialized in start())
         self._checkpointer: Any = None
 
+        # Agent checkpointer — MemorySaver to avoid Redis JSON serialization
+        # issues with LangChain Message objects (#420)
+        self._agent_checkpointer: Any = None
+
         # History service (initialized in start())
         self._history_service: HistoryService | None = None
 
@@ -339,12 +343,26 @@ class PropertyBot:
         user_id = message.from_user.id
         checkpointer_cleared = True
         thread_id = _supervisor_thread_id(message.chat.id)
-
-        if self._checkpointer is not None:
+        seen_checkpointers: set[int] = set()
+        for cp_name, checkpointer in (
+            ("conversation", self._checkpointer),
+            ("agent", self._agent_checkpointer),
+        ):
+            if checkpointer is None:
+                continue
+            cp_id = id(checkpointer)
+            if cp_id in seen_checkpointers:
+                continue
+            seen_checkpointers.add(cp_id)
             try:
-                await self._checkpointer.adelete_thread(thread_id)
+                await checkpointer.adelete_thread(thread_id)
             except Exception:
-                logger.warning("Failed to clear checkpointer thread %s", thread_id, exc_info=True)
+                logger.warning(
+                    "Failed to clear %s checkpointer thread %s",
+                    cp_name,
+                    thread_id,
+                    exc_info=True,
+                )
                 checkpointer_cleared = False
 
         await self._cache.clear_conversation(user_id)
@@ -603,12 +621,14 @@ class PropertyBot:
 
             tools.extend(get_crm_tools())
 
-        # Create agent via SDK
+        # Create agent via SDK — route through LiteLLM proxy (#420)
         agent = create_bot_agent(
             model=self.config.supervisor_model,
             tools=tools,
-            checkpointer=self._checkpointer,
+            checkpointer=self._agent_checkpointer,
             language=self.config.domain_language,
+            base_url=self.config.llm_base_url,
+            api_key=self.config.llm_api_key,
         )
 
         # Build context for tool DI
@@ -966,6 +986,11 @@ class PropertyBot:
             logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
             self._checkpointer = create_fallback_checkpointer()
 
+        # Agent checkpointer — MemorySaver avoids redisvl JSON serialization
+        # errors with LangChain Message objects (HumanMessage, AIMessage) (#420).
+        # Voice pipeline keeps AsyncRedisSaver (graph state uses simple dicts).
+        self._agent_checkpointer = create_fallback_checkpointer()
+
         # Initialize history service (Qdrant-backed Q&A history)
         try:
             self._history_service = HistoryService(
@@ -979,35 +1004,36 @@ class PropertyBot:
             logger.warning("History service init failed, /history disabled", exc_info=True)
             self._history_service = None
 
-        # Initialize Kommo CRM client if enabled
+        # Initialize Kommo CRM client if enabled (#420: fail-safe, must not block startup)
         if self.config.kommo_enabled and self.config.kommo_subdomain:
             try:
                 from .services.kommo_client import KommoClient
                 from .services.kommo_tokens import KommoTokenStore
 
                 if self._cache.redis is None:
-                    raise RuntimeError("Cache redis client is not initialized")
+                    logger.warning("Kommo CRM skipped: Redis client not initialized")
+                    self._kommo_client = None
+                else:
+                    token_store = KommoTokenStore(
+                        redis=self._cache.redis,
+                        client_id=self.config.kommo_client_id,
+                        client_secret=self.config.kommo_client_secret.get_secret_value(),
+                        subdomain=self.config.kommo_subdomain,
+                        redirect_uri=self.config.kommo_redirect_uri,
+                    )
+                    auth_code = self.config.kommo_auth_code or None
+                    await token_store.initialize(authorization_code=auth_code)
 
-                token_store = KommoTokenStore(
-                    redis=self._cache.redis,
-                    client_id=self.config.kommo_client_id,
-                    client_secret=self.config.kommo_client_secret.get_secret_value(),
-                    subdomain=self.config.kommo_subdomain,
-                    redirect_uri=self.config.kommo_redirect_uri,
-                )
-                auth_code = self.config.kommo_auth_code or None
-                await token_store.initialize(authorization_code=auth_code)
-
-                self._kommo_client = KommoClient(
-                    subdomain=self.config.kommo_subdomain,
-                    token_store=token_store,
-                )
-                logger.info(
-                    "Kommo CRM client initialized (subdomain=%s)",
-                    self.config.kommo_subdomain,
-                )
+                    self._kommo_client = KommoClient(
+                        subdomain=self.config.kommo_subdomain,
+                        token_store=token_store,
+                    )
+                    logger.info(
+                        "Kommo CRM client initialized (subdomain=%s)",
+                        self.config.kommo_subdomain,
+                    )
             except Exception:
-                logger.exception("Failed to initialize Kommo CRM client")
+                logger.warning("Kommo CRM init failed — CRM features disabled", exc_info=True)
                 self._kommo_client = None
 
         # Initialize PostgreSQL pool for realestate DB
@@ -1138,6 +1164,7 @@ class PropertyBot:
                 logger.warning("Failed to close checkpointer cleanly", exc_info=True)
             finally:
                 self._checkpointer = None
+        self._agent_checkpointer = None
         if self._nurturing_scheduler is not None:
             await self._nurturing_scheduler.stop()
             self._nurturing_scheduler = None
