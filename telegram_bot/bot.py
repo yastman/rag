@@ -216,6 +216,15 @@ class PropertyBot:
         # History service (initialized in start())
         self._history_service: HistoryService | None = None
 
+        # i18n hub (fluentogram) — initialized in start()
+        self._i18n_hub: Any = None
+
+        # User service (asyncpg) — initialized in start()
+        self._user_service: Any = None
+
+        # PostgreSQL pool — initialized in start()
+        self._pg_pool: Any = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -244,17 +253,20 @@ class PropertyBot:
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
 
-    async def cmd_start(self, message: Message):
-        """Handle /start command."""
-        domain = self.config.domain
-        await message.answer(
-            f"Привет! Я бот-помощник по теме: {domain}.\n\n"
-            "Задавай вопросы вроде:\n"
-            "- Покажи квартиры дешевле 100 000 евро\n"
-            "- 3-комнатные в Солнечный берег\n"
-            "- Студии до 350м от моря\n\n"
-            "Используй /help для помощи."
-        )
+    async def cmd_start(self, message: Message, dialog_manager: Any = None):
+        """Handle /start command — launch menu dialog."""
+        if dialog_manager is not None:
+            from aiogram_dialog import StartMode
+
+            from .dialogs.states import ClientMenuSG
+
+            await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+        else:
+            # Fallback (dialog not initialized)
+            domain = self.config.domain
+            await message.answer(
+                f"Привет! Я бот-помощник по теме: {domain}.\nИспользуй /help для помощи."
+            )
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -552,7 +564,9 @@ class PropertyBot:
             tools.append(create_history_search_tool(history_service=self._history_service))
 
         # Build supervisor LLM (cheap model for routing)
-        supervisor_llm = self._graph_config.create_llm()
+        supervisor_llm = self._graph_config.create_supervisor_llm(
+            model_override=self.config.supervisor_model
+        )
 
         supervisor_graph = build_supervisor_graph(
             supervisor_llm=supervisor_llm,
@@ -618,6 +632,10 @@ class PropertyBot:
             lf.score_current_trace(
                 name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
             )
+            # Tool call count (#374)
+            tool_calls = result.get("tool_call_count", 0)
+            if tool_calls > 0:
+                lf.score_current_trace(name="tool_calls_total", value=float(tool_calls))
 
             # Persist Q&A to history (#310 — ported from monolith path)
             if self._history_service and response_text:
@@ -916,6 +934,46 @@ class PropertyBot:
             logger.warning("History service init failed, /history disabled", exc_info=True)
             self._history_service = None
 
+        # Initialize PostgreSQL pool for realestate DB
+        try:
+            import asyncpg
+
+            self._pg_pool = await asyncpg.create_pool(
+                self.config.realestate_database_url,
+                min_size=0,
+                max_size=5,
+                timeout=5,
+            )
+            logger.info("PostgreSQL pool ready (realestate)")
+
+            from .services.user_service import UserService
+
+            self._user_service = UserService(pool=self._pg_pool)
+        except Exception:
+            logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
+
+        # Initialize i18n (fluentogram)
+        from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
+
+        self._i18n_hub = create_translator_hub()
+        setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
+        logger.info("i18n middleware ready")
+
+        # Setup aiogram-dialog
+        from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
+
+        from .dialogs.client_menu import client_menu_dialog
+        from .dialogs.faq import faq_dialog
+        from .dialogs.funnel import funnel_dialog
+        from .dialogs.settings import settings_dialog
+
+        self.dp.include_router(client_menu_dialog)
+        self.dp.include_router(settings_dialog)
+        self.dp.include_router(funnel_dialog)
+        self.dp.include_router(faq_dialog)
+        aiogram_setup_dialogs(self.dp)
+        logger.info("aiogram-dialog setup complete")
+
         # Preflight dependency checks
         from .preflight import check_dependencies
 
@@ -960,4 +1018,7 @@ class PropertyBot:
                 logger.warning("Failed to close checkpointer cleanly", exc_info=True)
             finally:
                 self._checkpointer = None
+        if self._pg_pool is not None:
+            await self._pg_pool.close()
+            logger.info("PostgreSQL pool closed")
         await self.bot.session.close()
