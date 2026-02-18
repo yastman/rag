@@ -641,9 +641,12 @@ class PropertyBot:
         # Lead score sync tool (#384) — available when scoring store is initialized
         _scoring_store = getattr(self, "_lead_scoring_store", None)
         if (
-            self.config.kommo_enabled
+            role == "manager"
+            and self.config.kommo_enabled
             and self._kommo_client is not None
             and _scoring_store is not None
+            and self.config.kommo_lead_score_field_id > 0
+            and self.config.kommo_lead_band_field_id > 0
         ):
             tools.append(
                 create_crm_score_sync_tool(
