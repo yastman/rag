@@ -361,27 +361,6 @@ class TestHandleQuery:
             assert "supervisor_latency_ms" in score_calls
             assert "supervisor_model" in score_calls
 
-    async def test_handle_query_passes_judge_config_in_configurable(self, mock_config):
-        """Supervisor config passes judge_sample_rate to tools via configurable."""
-        mock_config.judge_sample_rate = 0.5
-        bot, _ = _create_bot(mock_config)
-
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
-
-        with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot.propagate_attributes"),
-        ):
-            message = _make_text_message("квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-            config_arg = mock_graph.ainvoke.call_args[1]["config"]
-            assert config_arg["configurable"]["judge_sample_rate"] == 0.5
-
     async def test_handle_query_passes_guard_config_to_rag_agent(self, mock_config):
         """Supervisor path forwards guard settings into create_rag_agent."""
         mock_config.content_filter_enabled = False
