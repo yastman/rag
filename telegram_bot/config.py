@@ -1,7 +1,9 @@
 """Bot configuration."""
 
+from typing import Annotated
+
 from pydantic import AliasChoices, Field, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class BotConfig(BaseSettings):
@@ -210,7 +212,7 @@ class BotConfig(BaseSettings):
     )
 
     # Admin user IDs (comma-separated Telegram user IDs)
-    admin_ids: list[int] = Field(
+    admin_ids: Annotated[list[int], NoDecode] = Field(
         default_factory=list, validation_alias=AliasChoices("admin_ids", "ADMIN_IDS")
     )
 
@@ -436,7 +438,7 @@ class BotConfig(BaseSettings):
     )
 
     # Manager IDs (comma-separated Telegram user IDs)
-    manager_ids: list[int] = Field(
+    manager_ids: Annotated[list[int], NoDecode] = Field(
         default_factory=list,
         validation_alias=AliasChoices("manager_ids", "MANAGER_IDS"),
     )
