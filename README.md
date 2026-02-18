@@ -35,7 +35,7 @@ PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 ## Main Commands
 
 - `make docker-up` / `make docker-down` / `make docker-ps`
-- `make local-up` / `make local-down` (minimal `docker-compose.local.yml`)
+- `make local-up` / `make local-down` (minimal subset from `docker-compose.dev.yml`)
 - `make ingest-unified`, `make ingest-unified-watch`, `make ingest-unified-status`
 - `make k3s-core`, `make k3s-bot`, `make k3s-ingest`, `make k3s-full`
 
