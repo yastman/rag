@@ -501,6 +501,105 @@ class TestHandleQuery:
         tools_passed = build_graph.call_args.kwargs["tools"]
         assert crm_tool in tools_passed
 
+    async def test_handle_query_skips_score_sync_tool_for_client_role(self, mock_config):
+        """Lead score sync tool is manager-only (#384)."""
+        mock_config.kommo_enabled = True
+        mock_config.kommo_lead_score_field_id = 701
+        mock_config.kommo_lead_band_field_id = 702
+        bot, _ = _create_bot(mock_config)
+        bot._kommo_client = AsyncMock()
+        bot._lead_scoring_store = AsyncMock()
+        bot._resolve_user_role = AsyncMock(return_value="client")
+
+        score_tool = MagicMock()
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch(
+                "telegram_bot.agents.tools.create_crm_score_sync_tool", return_value=score_tool
+            ) as score_factory,
+            patch(
+                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
+            ) as build_graph,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        score_factory.assert_not_called()
+        tools_passed = build_graph.call_args.kwargs["tools"]
+        assert score_tool not in tools_passed
+
+    async def test_handle_query_adds_score_sync_tool_for_manager_with_fields(self, mock_config):
+        """Lead score sync tool is added for manager when Kommo field ids are configured."""
+        mock_config.kommo_enabled = True
+        mock_config.kommo_lead_score_field_id = 701
+        mock_config.kommo_lead_band_field_id = 702
+        bot, _ = _create_bot(mock_config)
+        bot._kommo_client = AsyncMock()
+        bot._lead_scoring_store = AsyncMock()
+        bot._resolve_user_role = AsyncMock(return_value="manager")
+
+        score_tool = MagicMock()
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch(
+                "telegram_bot.agents.tools.create_crm_score_sync_tool", return_value=score_tool
+            ) as score_factory,
+            patch(
+                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
+            ) as build_graph,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        score_factory.assert_called_once()
+        tools_passed = build_graph.call_args.kwargs["tools"]
+        assert score_tool in tools_passed
+
+    async def test_handle_query_skips_score_sync_tool_when_field_ids_missing(self, mock_config):
+        """Lead score sync tool is not added when Kommo field ids are unset."""
+        mock_config.kommo_enabled = True
+        mock_config.kommo_lead_score_field_id = 0
+        mock_config.kommo_lead_band_field_id = 0
+        bot, _ = _create_bot(mock_config)
+        bot._kommo_client = AsyncMock()
+        bot._lead_scoring_store = AsyncMock()
+        bot._resolve_user_role = AsyncMock(return_value="manager")
+
+        score_tool = MagicMock()
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch(
+                "telegram_bot.agents.tools.create_crm_score_sync_tool", return_value=score_tool
+            ) as score_factory,
+            patch(
+                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
+            ) as build_graph,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        score_factory.assert_not_called()
+        tools_passed = build_graph.call_args.kwargs["tools"]
+        assert score_tool not in tools_passed
+
 
 class TestHistorySaveOnResponse:
     """Test Q&A history persistence after successful responses."""
