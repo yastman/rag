@@ -344,6 +344,42 @@ class BotConfig(BaseSettings):
         default=0,
         validation_alias=AliasChoices("kommo_telegram_field_id", "KOMMO_TELEGRAM_FIELD_ID"),
     )
+    kommo_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("kommo_client_id", "KOMMO_CLIENT_ID"),
+    )
+    kommo_client_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("kommo_client_secret", "KOMMO_CLIENT_SECRET"),
+    )
+    kommo_redirect_uri: str = Field(
+        default="",
+        validation_alias=AliasChoices("kommo_redirect_uri", "KOMMO_REDIRECT_URI"),
+    )
+    kommo_auth_code: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("kommo_auth_code", "KOMMO_AUTH_CODE"),
+    )
+    kommo_default_pipeline_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_default_pipeline_id", "KOMMO_DEFAULT_PIPELINE_ID"),
+    )
+    kommo_responsible_user_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("kommo_responsible_user_id", "KOMMO_RESPONSIBLE_USER_ID"),
+    )
+    kommo_session_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_session_field_id", "KOMMO_SESSION_FIELD_ID"),
+    )
+    kommo_rate_limit_rps: int = Field(
+        default=7,
+        validation_alias=AliasChoices("kommo_rate_limit_rps", "KOMMO_RATE_LIMIT_RPS"),
+    )
+    kommo_max_retries: int = Field(
+        default=3,
+        validation_alias=AliasChoices("kommo_max_retries", "KOMMO_MAX_RETRIES"),
+    )
 
     # Call limits (#374)
     max_llm_calls: int = Field(
