@@ -16,15 +16,11 @@ Steps:
 """
 
 import json
-import sys
 import time
 from datetime import datetime
 
-
-sys.path.append("/home/admin/contextual_rag")
-
-from evaluator import SearchEvaluator
-from search_engines import create_search_engine
+from src.evaluation.evaluator import SearchEvaluator
+from src.evaluation.search_engines import create_search_engine
 
 
 # MLflow integration (optional - gracefully handles if not available)
@@ -62,6 +58,11 @@ def run_ab_test(
     with open(queries_file, encoding="utf-8") as f:
         queries = json.load(f)
     print(f"   Loaded {len(queries)} test queries")
+
+    if not queries:
+        print("⚠️  No queries found. Aborting A/B test.")
+        return {"baseline": {}, "hybrid": {}, "dbsf_colbert": {}, "comparisons": {}, "reports": {}}
+
     print()
 
     # Initialize embedding model
