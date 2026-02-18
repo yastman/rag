@@ -61,6 +61,11 @@ def make_session_id(session_type: str, identifier: int | str) -> str:
     return f"{session_type}-{id_hash}-{date_str}"
 
 
+def _supervisor_thread_id(chat_id: int | str) -> str:
+    """Build checkpointer thread id for text-agent conversations."""
+    return f"tg_{chat_id}"
+
+
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     """Build shared metadata dict for Langfuse trace (text + voice handlers)."""
     return {
@@ -290,12 +295,13 @@ class PropertyBot:
         assert message.from_user is not None
         user_id = message.from_user.id
         checkpointer_cleared = True
+        thread_id = _supervisor_thread_id(message.chat.id)
 
         if self._checkpointer is not None:
             try:
-                await self._checkpointer.adelete_thread(str(user_id))
+                await self._checkpointer.adelete_thread(thread_id)
             except Exception:
-                logger.warning("Failed to clear checkpointer thread %s", user_id, exc_info=True)
+                logger.warning("Failed to clear checkpointer thread %s", thread_id, exc_info=True)
                 checkpointer_cleared = False
 
         await self._cache.clear_conversation(user_id)
@@ -574,22 +580,21 @@ class PropertyBot:
             guard_mode=self.config.guard_mode,
         )
 
-        # Langfuse handler (new per request)
-        langfuse_handler = create_callback_handler()
-        callbacks = [langfuse_handler] if langfuse_handler else []
-
         with propagate_attributes(
             session_id=session_id,
             user_id=str(user_id),
             tags=["telegram", "rag", "agent"],
         ):
+            # Initialize handler inside propagation context so it inherits session/user/tags.
+            langfuse_handler = create_callback_handler()
+            callbacks = [langfuse_handler] if langfuse_handler else []
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                 result = await agent.ainvoke(
                     {"messages": [{"role": "user", "content": message.text or ""}]},
                     config={
                         "callbacks": callbacks,
                         "configurable": {
-                            "thread_id": f"tg_{message.chat.id}",
+                            "thread_id": _supervisor_thread_id(message.chat.id),
                             "bot_context": ctx,
                         },
                     },

@@ -86,27 +86,36 @@ Config: `tests/baseline/thresholds.yaml` (includes `go_no_go` section for valida
 | `bot.py` handle_query | `telegram-rag-query` | Root span, session_id, user_id, tags |
 | `bot.py` _handle_query_supervisor | `telegram-rag-supervisor` | Supervisor root span (always-on since #310) |
 
-### Supervisor Spans (#242, #310)
+### Agent Spans (#413, replaces #242/#310)
 
-Supervisor is the only query path (monolith removed in #310). Trace tree:
+Agent uses `create_agent` SDK with `CallbackHandler` for automatic tracing. Trace tree:
 ```
-telegram-rag-supervisor → supervisor-routing → tool-rag-search → [existing graph nodes]
-                                             → tool-history-search
-                                             → tool-direct-response
+telegram-rag-supervisor → [CallbackHandler auto-traces agent LLM calls + tool calls]
+                        → tool-rag-search → [existing graph nodes]
+                        → tool-history-search → [history sub-graph nodes]
+                        → crm-* spans (8 CRM tools)
 ```
 
 | Component | Span Name | capture_input/output | Curated Metadata |
 |-----------|-----------|---------------------|------------------|
-| `supervisor.py` supervisor_node | `supervisor-routing` | disabled | input: message_count; output: tool_selected, latency_ms |
-| `rag_agent.py` rag_search | `tool-rag-search` | disabled | input: query_preview; output: response_length |
-| `history_agent.py` history_search | `tool-history-search` | auto | — |
-| `tools.py` direct_response | `tool-direct-response` | auto | — |
+| `rag_tool.py` rag_search | `tool-rag-search` | disabled | input: query_preview; output: response_length |
+| `history_tool.py` history_search | `tool-history-search` | disabled | input: query_preview, deal_id; output: summary_length |
+| `crm_tools.py` crm_get_deal | `crm-get-deal` | auto | — |
+| `crm_tools.py` crm_create_lead | `crm-create-lead` | auto | — |
+| `crm_tools.py` crm_update_lead | `crm-update-lead` | auto | — |
+| `crm_tools.py` crm_upsert_contact | `crm-upsert-contact` | auto | — |
+| `crm_tools.py` crm_add_note | `crm-add-note` | auto | — |
+| `crm_tools.py` crm_create_task | `crm-create-task` | auto | — |
+| `crm_tools.py` crm_link_contact_to_deal | `crm-link-contact-to-deal` | auto | — |
+| `crm_tools.py` crm_get_contacts | `crm-get-contacts` | auto | — |
 
-Supervisor-specific scores (written by `_handle_query_supervisor` in `bot.py`):
+**CallbackHandler:** Created per request via `create_callback_handler()` in `observability.py`. Inherits session_id/user_id from `propagate_attributes()` context (Langfuse SDK v3). Noop stub when Langfuse disabled.
+
+Agent-specific scores (written by `_handle_query_supervisor` in `bot.py`):
 
 | Score | Type | Purpose |
 |-------|------|---------|
-| `agent_used` | CATEGORICAL | Which tool was selected (rag_search, history_search, direct_response) |
+| `agent_used` | CATEGORICAL | Which tool was selected (rag_search, history_search, crm_*, direct) |
 | `supervisor_latency_ms` | NUMERIC | Routing decision time (ms) |
 | `supervisor_model` | CATEGORICAL | Model used for routing |
 
@@ -224,6 +233,7 @@ except Exception as e:
 | QdrantService.batch_search_rrf | `qdrant-batch-search-rrf` | span |
 | QdrantService.search_with_score_boosting | `qdrant-search-score-boosting` | span |
 | VoyageService (5 methods) | `voyage-*` | generation |
+| KommoClient (9 methods) | `kommo-*` (create-lead, get-lead, update-lead, upsert-contact, get-contacts, add-note, create-task, link-contact, list-pipelines) | span |
 
 ### LLM Calls (auto-traced via langfuse.openai.AsyncOpenAI)
 
@@ -244,7 +254,7 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 
 ## Langfuse Scores (All Exit Paths)
 
-14 RAG scores written via `write_langfuse_scores(lf, result)` (from `telegram_bot/scoring.py`) + 4 CRM scores + 3 judge scores (async). Called by `rag_agent.py` (supervisor path) and `handle_voice` (voice path):
+14 RAG scores written via `write_langfuse_scores(lf, result)` (from `telegram_bot/scoring.py`) + 4 CRM scores + 3 judge scores (async). Called by `rag_tool.py` (agent path) and `handle_voice` (voice path):
 
 **Latency convention:** `latency_total_ms` is **wall-time** measured via `time.perf_counter` in `handle_query` (pipeline_wall_ms), NOT sum of stages. All `latency_stages` values are in **seconds** (float) for per-stage breakdown only.
 
