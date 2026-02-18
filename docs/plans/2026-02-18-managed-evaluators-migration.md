@@ -21,13 +21,13 @@
 **Шаги:**
 1. Настроить LLM Connection в Langfuse (модель с structured output, напр. `gpt-4o-mini`)
 2. Создать 3 Custom evaluator templates (русскоязычные промты из `prompts.py`):
-   - **faithfulness** → target: observation `node-generate` (type=GENERATION)
+   - **faithfulness** → target: observation `node-generate` (type=SPAN)
    - **context_relevance** → target: observation `node-retrieve` (type=SPAN)
    - **answer_relevance** → target: trace level (нужен input + output)
 3. Настроить variable mapping через JSONPath:
    - `{{input}}` → `observation.input` / `trace.input`
    - `{{output}}` → `observation.output` / `trace.output`
-   - `{{context}}` → `observation.output.documents` (для retrieve)
+   - `{{context}}` → `observation.output.eval_docs` (или эквивалентное curated поле)
 4. Установить sampling: 10% для production, 100% для `validation` tag
 5. Добавить `propagate_attributes()` в instrumentation code (уже есть в `observability.py`)
 
@@ -59,16 +59,19 @@
 
 **SDK код:**
 ```python
+from langfuse import get_client
+
+langfuse = get_client()
 dataset = langfuse.get_dataset("rag-gold-set")
 
-def rag_task(*, item, **kwargs):
-    result = await rag_graph.ainvoke({"query": item.input["question"]})
+async def rag_task(*, item, **kwargs):
+    question = item.input["question"] if isinstance(item.input, dict) else str(item.input)
+    result = await rag_graph.ainvoke({"query": question})
     return {"answer": result["response"], "context": result["context"]}
 
 result = dataset.run_experiment(
     name=f"rag-experiment-{datetime.now():%Y%m%d}",
     task=rag_task,
-    evaluators=[],  # managed evaluators запускаются автоматически
 )
 ```
 
@@ -77,9 +80,9 @@ result = dataset.run_experiment(
 **Цель:** Блокировать deploy если качество ниже порога.
 
 **Шаги:**
-1. Добавить `judge_gate` в `tests/baseline/thresholds.yaml`:
+1. Добавить (или обновить) секцию `judge` в `tests/baseline/thresholds.yaml`:
    ```yaml
-   judge_gate:
+   judge:
      faithfulness_mean_gte: 0.75
      answer_relevance_mean_gte: 0.70
      context_relevance_mean_gte: 0.65

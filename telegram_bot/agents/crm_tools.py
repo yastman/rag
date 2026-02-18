@@ -1,350 +1,276 @@
-"""Kommo CRM supervisor tools (#312).
+"""CRM tools for Kommo API — 8 tools with config-based context DI (#413).
 
-7 tools for deal lifecycle: draft, upsert_contact, create_deal,
-link_contact, add_note, create_task, finalize_deal.
-
-Pattern: factory function with dependency injection (same as tools.py).
+All tools check ctx.kommo_client is not None before proceeding.
+Dependencies injected via config["configurable"]["bot_context"].
 """
 
 from __future__ import annotations
 
-import json
 import logging
-import time
-from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from telegram_bot.observability import get_client, observe
+from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import (
     ContactCreate,
-    DealDraft,
     LeadCreate,
+    LeadUpdate,
     TaskCreate,
 )
 
 
 logger = logging.getLogger(__name__)
 
-DEAL_DRAFT_SYSTEM_PROMPT = """\
-Extract structured deal information from chat history.
-Return ONLY a JSON object with these fields (null if not found):
-- client_name: full name
-- phone: phone number with country code
-- email: email address
-- budget: numeric budget in local currency
-- property_type: type of property
-- location: location/city
-- notes: brief summary of requirements
-- source: always "telegram_bot"
-"""
+_CRM_UNAVAILABLE = "CRM недоступен. Обратитесь к администратору."
 
 
-def _get_user_context(config: RunnableConfig | None) -> tuple[int | None, str | None]:
-    configurable = (config or {}).get("configurable", {})
-    return configurable.get("user_id"), configurable.get("session_id")
+def _get_kommo(config: RunnableConfig):
+    """Get KommoClient from config context."""
+    ctx = config.get("configurable", {}).get("bot_context")
+    if ctx and ctx.kommo_client:
+        return ctx.kommo_client
+    return None
 
 
-def create_crm_tools(
-    *,
-    kommo: Any,
-    llm: Any,
-    history_service: Any,
-    default_pipeline_id: int,
-    responsible_user_id: int | None,
-    session_field_id: int,
-    idempotency_store: Any | None = None,
-) -> list[Any]:
-    """Create all CRM supervisor tools with injected dependencies."""
+# --- READ tools ---
 
-    @tool
-    @observe(name="crm-generate-deal-draft")
-    async def crm_generate_deal_draft(query: str, config: RunnableConfig) -> str:
-        """Generate a structured deal draft by extracting data from chat history using LLM.
 
-        Use this when you need to prepare deal data before creating it in CRM.
-        Returns JSON with extracted client info (name, phone, budget, property type).
-        """
-        user_id, session_id = _get_user_context(config)
-        if not user_id:
-            return "Error: user context not available."
-        if history_service is None:
-            return "Error: history service unavailable."
+@tool
+@observe(name="crm-get-deal")
+async def crm_get_deal(deal_id: int, config: RunnableConfig) -> str:
+    """Get deal details from CRM by deal ID.
 
-        messages = await history_service.get_session_turns(user_id, session_id, limit=40)
-        chat_text = "\n".join(f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages)
+    Args:
+        deal_id: The Kommo lead/deal ID.
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
 
-        response = await llm.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": DEAL_DRAFT_SYSTEM_PROMPT},
-                {"role": "user", "content": f"Chat history:\n{chat_text}"},
-            ],
-            name="crm-deal-draft-extraction",
+    try:
+        lead = await kommo.get_lead(deal_id)
+        return lead.model_dump_json()
+    except Exception as e:
+        logger.exception("crm_get_deal failed")
+        return f"Ошибка при получении сделки: {e}"
+
+
+@tool
+@observe(name="crm-get-contacts")
+async def crm_get_contacts(query: str, config: RunnableConfig) -> str:
+    """Search contacts in CRM by name or phone.
+
+    Args:
+        query: Search query (name, phone, email).
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
+
+    try:
+        contacts = await kommo.get_contacts(query)
+        if not contacts:
+            return f"Контакты по запросу «{query}» не найдены."
+        lines = [f"- {c.first_name or ''} {c.last_name or ''} (ID: {c.id})" for c in contacts[:10]]
+        return "\n".join(lines)
+    except Exception as e:
+        logger.exception("crm_get_contacts failed")
+        return f"Ошибка при поиске контактов: {e}"
+
+
+# --- WRITE tools ---
+
+
+@tool
+@observe(name="crm-create-lead")
+async def crm_create_lead(
+    name: str,
+    config: RunnableConfig,
+    budget: int | None = None,
+    pipeline_id: int | None = None,
+) -> str:
+    """Create a new deal/lead in CRM.
+
+    Args:
+        name: Deal name.
+        budget: Optional budget in local currency.
+        pipeline_id: Optional pipeline ID.
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
+
+    try:
+        lead = await kommo.create_lead(
+            LeadCreate(name=name, budget=budget, pipeline_id=pipeline_id)
         )
-        draft_json = response.choices[0].message.content or ""
-        try:
-            draft = DealDraft.model_validate_json(draft_json)
-        except Exception:
-            logger.warning("Failed to parse DealDraft, returning raw: %s", draft_json[:200])
-            return draft_json or "Failed to generate deal draft."
+        return f"Сделка создана: ID {lead.id}, {lead.name}"
+    except Exception as e:
+        logger.exception("crm_create_lead failed")
+        return f"Ошибка при создании сделки: {e}"
 
-        return draft.model_dump_json()
 
-    @tool
-    @observe(name="crm-upsert-contact")
-    async def crm_upsert_contact(
-        phone: str,
-        first_name: str = "",
-        last_name: str = "",
-        email: str = "",
-        config: RunnableConfig = None,  # type: ignore[assignment]
-    ) -> str:
-        """Find or create a contact in Kommo CRM by phone number.
+@tool
+@observe(name="crm-update-lead")
+async def crm_update_lead(
+    deal_id: int,
+    config: RunnableConfig,
+    name: str | None = None,
+    budget: int | None = None,
+    status_id: int | None = None,
+) -> str:
+    """Update an existing deal/lead in CRM.
 
-        Use this to ensure the client exists in CRM before creating a deal.
-        Returns the contact ID and name.
-        """
-        data = ContactCreate(
-            first_name=first_name,
-            last_name=last_name,
-            phone=phone,
-            email=email or None,
-            responsible_user_id=responsible_user_id,
+    Args:
+        deal_id: The deal ID to update.
+        name: New name (optional).
+        budget: New budget (optional).
+        status_id: New status (optional).
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
+
+    try:
+        lead = await kommo.update_lead(
+            deal_id, LeadUpdate(name=name, budget=budget, status_id=status_id)
         )
-        contact = await kommo.upsert_contact(phone=phone, data=data)
-        return json.dumps({"contact_id": contact.id, "name": contact.name})
+        return f"Сделка обновлена: ID {lead.id}"
+    except Exception as e:
+        logger.exception("crm_update_lead failed")
+        return f"Ошибка при обновлении сделки: {e}"
 
-    @tool
-    @observe(name="crm-create-deal")
-    async def crm_create_deal(
-        name: str,
-        price: int = 0,
-        config: RunnableConfig = None,  # type: ignore[assignment]
-    ) -> str:
-        """Create a new deal (lead) in Kommo CRM pipeline.
 
-        Use this to register a new sales opportunity.
-        Returns the deal ID.
-        """
-        _user_id, session_id = _get_user_context(config)
-        lead_data = LeadCreate(
-            name=name,
-            price=price or None,
-            pipeline_id=default_pipeline_id or None,
-            responsible_user_id=responsible_user_id,
-            session_id=session_id,
-            session_field_id=session_field_id or None,
-            tags=["telegram_bot"],
+@tool
+@observe(name="crm-upsert-contact")
+async def crm_upsert_contact(
+    phone: str,
+    first_name: str,
+    config: RunnableConfig,
+    last_name: str | None = None,
+    email: str | None = None,
+) -> str:
+    """Find or create a contact by phone number.
+
+    Args:
+        phone: Phone number (used for dedup search).
+        first_name: Contact first name.
+        last_name: Optional last name.
+        email: Optional email.
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
+
+    try:
+        contact = await kommo.upsert_contact(
+            phone,
+            ContactCreate(first_name=first_name, last_name=last_name, phone=phone, email=email),
         )
-        start = time.perf_counter()
-        lead = await kommo.create_lead(lead_data)
-        latency_ms = (time.perf_counter() - start) * 1000
+        return f"Контакт: ID {contact.id}, {contact.first_name}"
+    except Exception as e:
+        logger.exception("crm_upsert_contact failed")
+        return f"Ошибка при работе с контактом: {e}"
 
-        lf = get_client()
-        lf.score_current_trace(name="crm_deal_created", value=1, data_type="NUMERIC")
-        lf.score_current_trace(
-            name="crm_deal_create_latency_ms", value=latency_ms, data_type="NUMERIC"
-        )
 
-        return json.dumps({"deal_id": lead.id, "name": lead.name})
+@tool
+@observe(name="crm-add-note")
+async def crm_add_note(
+    entity_type: str,
+    entity_id: int,
+    text: str,
+    config: RunnableConfig,
+) -> str:
+    """Add a note to a deal or contact in CRM.
 
-    @tool
-    @observe(name="crm-link-contact-to-deal")
-    async def crm_link_contact_to_deal(
-        deal_id: int,
-        contact_id: int,
-        config: RunnableConfig = None,  # type: ignore[assignment]
-    ) -> str:
-        """Link a contact to a deal in Kommo CRM.
+    Args:
+        entity_type: 'leads' or 'contacts'.
+        entity_id: Entity ID.
+        text: Note text.
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
 
-        Use this after creating both contact and deal to bind them together.
-        """
-        await kommo.link_contact_to_lead(lead_id=deal_id, contact_id=contact_id)
-        return json.dumps({"linked": True, "deal_id": deal_id, "contact_id": contact_id})
+    try:
+        note = await kommo.add_note(entity_type, entity_id, text)
+        return f"Заметка добавлена: ID {note.id}"
+    except Exception as e:
+        logger.exception("crm_add_note failed")
+        return f"Ошибка при добавлении заметки: {e}"
 
-    @tool
-    @observe(name="crm-add-note")
-    async def crm_add_note(
-        deal_id: int,
-        text: str,
-        config: RunnableConfig = None,  # type: ignore[assignment]
-    ) -> str:
-        """Add a text note to a deal in Kommo CRM.
 
-        Use this to attach chat summaries or important information to deals.
-        """
-        note = await kommo.add_note(entity_type="leads", entity_id=deal_id, text=text)
-        return json.dumps({"note_id": note.id, "deal_id": deal_id})
+@tool
+@observe(name="crm-create-task")
+async def crm_create_task(
+    text: str,
+    entity_id: int,
+    complete_till: int,
+    config: RunnableConfig,
+    entity_type: str = "leads",
+) -> str:
+    """Create a follow-up task in CRM.
 
-    @tool
-    @observe(name="crm-create-followup-task")
-    async def crm_create_followup_task(
-        deal_id: int,
-        text: str = "Follow up with client",
-        due_hours: int = 24,
-        config: RunnableConfig = None,  # type: ignore[assignment]
-    ) -> str:
-        """Create a follow-up task linked to a deal in Kommo CRM.
+    Args:
+        text: Task description.
+        entity_id: Linked entity ID.
+        complete_till: Due date as Unix timestamp.
+        entity_type: 'leads' or 'contacts'.
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
 
-        Use this to schedule reminders for the responsible user.
-        """
-        complete_till = int(time.time()) + (due_hours * 3600)
-        task_data = TaskCreate(
-            text=text,
-            entity_id=deal_id,
-            entity_type="leads",
-            complete_till=complete_till,
-            responsible_user_id=responsible_user_id,
-        )
-        task = await kommo.create_task(task_data)
-
-        lf = get_client()
-        lf.score_current_trace(name="crm_task_created", value=1, data_type="NUMERIC")
-
-        return json.dumps({"task_id": task.id, "deal_id": deal_id})
-
-    @tool
-    @observe(name="crm-finalize-deal")
-    async def crm_finalize_deal(query: str, config: RunnableConfig) -> str:
-        """End-to-end deal creation: extract data from chat, create contact, deal, link, note, task.
-
-        Use this when the user asks to create a deal based on the conversation.
-        Orchestrates all CRM steps in sequence with idempotency checks.
-        """
-        user_id, session_id = _get_user_context(config)
-        if not user_id:
-            return "Error: user context not available."
-        if history_service is None:
-            return "Error: history service unavailable."
-
-        start = time.perf_counter()
-        lf = get_client()
-        idempotency_key: str | None = None
-        idempotency_acquired = False
-
-        # Idempotency check
-        if idempotency_store is not None:
-            idempotency_key = f"kommo:deal:{user_id}:{session_id}"
-            was_set = await idempotency_store.set(
-                idempotency_key,
-                "1",
-                ex=24 * 3600,
-                nx=True,
-            )
-            if not was_set:
-                lf.score_current_trace(
-                    name="crm_deal_idempotent_skip", value=1, data_type="BOOLEAN"
-                )
-                return "Idempotent skip: deal for this session is already processed."
-            idempotency_acquired = True
-
-        try:
-            # Step 1: Extract deal data from chat history
-            messages = await history_service.get_session_turns(user_id, session_id, limit=40)
-            chat_text = "\n".join(
-                f"{m.get('role', 'user')}: {m.get('content', '')}" for m in messages
-            )
-            response = await llm.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": DEAL_DRAFT_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Chat history:\n{chat_text}"},
-                ],
-                name="crm-finalize-draft-extraction",
-            )
-            draft_json = response.choices[0].message.content or ""
-            try:
-                draft = DealDraft.model_validate_json(draft_json)
-            except Exception:
-                if idempotency_acquired and idempotency_store is not None and idempotency_key:
-                    await idempotency_store.delete(idempotency_key)
-                return f"Failed to extract deal data from chat. Raw: {draft_json[:200]}"
-
-            # Step 2: Upsert contact
-            contact = None
-            if draft.phone:
-                contact_data = ContactCreate(
-                    first_name=draft.client_name or "",
-                    phone=draft.phone,
-                    email=draft.email or None,
-                    responsible_user_id=responsible_user_id,
-                )
-                contact = await kommo.upsert_contact(phone=draft.phone, data=contact_data)
-                lf.score_current_trace(name="crm_contact_upserted", value=1, data_type="NUMERIC")
-
-            # Step 3: Create deal
-            deal_name = f"{draft.property_type or 'Сделка'}"
-            if draft.location:
-                deal_name += f" — {draft.location}"
-            if draft.client_name:
-                deal_name += f" ({draft.client_name})"
-
-            lead_data = LeadCreate(
-                name=deal_name,
-                price=draft.budget,
-                pipeline_id=default_pipeline_id or None,
-                responsible_user_id=responsible_user_id,
-                session_id=session_id,
-                session_field_id=session_field_id or None,
-                tags=["telegram_bot"],
-            )
-            lead = await kommo.create_lead(lead_data)
-
-            # Step 4: Link contact to deal
-            if contact:
-                await kommo.link_contact_to_lead(lead_id=lead.id, contact_id=contact.id)
-
-            # Step 5: Add note with chat summary
-            note_text = "Источник: Telegram Bot\n"
-            if draft.notes:
-                note_text += f"Запрос: {draft.notes}\n"
-            note_text += f"Session: {session_id}"
-            await kommo.add_note(entity_type="leads", entity_id=lead.id, text=note_text)
-
-            # Step 6: Create follow-up task
-            complete_till = int(time.time()) + 24 * 3600
-            task = TaskCreate(
-                text=f"Связаться с {draft.client_name or 'клиентом'} по запросу из Telegram",
-                entity_id=lead.id,
-                entity_type="leads",
+    try:
+        task = await kommo.create_task(
+            TaskCreate(
+                text=text,
+                entity_id=entity_id,
+                entity_type=entity_type,
                 complete_till=complete_till,
-                responsible_user_id=responsible_user_id,
             )
-            await kommo.create_task(task)
+        )
+        return f"Задача создана: ID {task.id}"
+    except Exception as e:
+        logger.exception("crm_create_task failed")
+        return f"Ошибка при создании задачи: {e}"
 
-            latency_ms = (time.perf_counter() - start) * 1000
-            lf.score_current_trace(name="crm_deal_created", value=1, data_type="NUMERIC")
-            lf.score_current_trace(
-                name="crm_deal_create_latency_ms", value=latency_ms, data_type="NUMERIC"
-            )
-            lf.score_current_trace(name="crm_write_success", value=1, data_type="NUMERIC")
-            lf.score_current_trace(name="crm_task_created", value=1, data_type="NUMERIC")
 
-            result_parts = [f"Сделка #{lead.id} создана: {deal_name}."]
-            if contact:
-                result_parts.append(f"Контакт: {contact.name} (#{contact.id}).")
-            result_parts.append("Задача follow-up назначена.")
+@tool
+@observe(name="crm-link-contact-to-deal")
+async def crm_link_contact_to_deal(
+    lead_id: int,
+    contact_id: int,
+    config: RunnableConfig,
+) -> str:
+    """Link a contact to a deal in CRM.
 
-            return " ".join(result_parts)
+    Args:
+        lead_id: Deal ID.
+        contact_id: Contact ID.
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
 
-        except Exception:
-            logger.exception("CRM finalize_deal failed")
-            if idempotency_acquired and idempotency_store is not None and idempotency_key:
-                try:
-                    await idempotency_store.delete(idempotency_key)
-                except Exception:
-                    logger.warning("Failed to clear CRM idempotency key", exc_info=True)
-            lf.score_current_trace(name="crm_write_success", value=0, data_type="NUMERIC")
-            return "Ошибка при создании сделки в CRM. Попробуйте позже."
+    try:
+        await kommo.link_contact_to_lead(lead_id, contact_id)
+        return f"Контакт {contact_id} привязан к сделке {lead_id}"
+    except Exception as e:
+        logger.exception("crm_link_contact_to_deal failed")
+        return f"Ошибка при привязке контакта: {e}"
 
+
+def get_crm_tools() -> list:
+    """Return all CRM tools for agent registration."""
     return [
-        crm_generate_deal_draft,
+        crm_get_deal,
+        crm_create_lead,
+        crm_update_lead,
         crm_upsert_contact,
-        crm_create_deal,
-        crm_link_contact_to_deal,
         crm_add_note,
-        crm_create_followup_task,
-        crm_finalize_deal,
+        crm_create_task,
+        crm_link_contact_to_deal,
+        crm_get_contacts,
     ]

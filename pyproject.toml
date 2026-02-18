@@ -396,6 +396,7 @@ markers = [
     "benchmark: Benchmark tests (parser/reranker comparisons)",
     "legacy_api: tests for pre-LangGraph API (may need rewrite)",
     "requires_extras: Tests needing optional deps (voice/ingest/eval); skipped in core tier",
+    "kommo: Live Kommo CRM API tests (requires KOMMO_ACCESS_TOKEN)",
     "xdist_group: Group tests onto same xdist worker (prevents global registry collisions)",
 ]
 filterwarnings = [
