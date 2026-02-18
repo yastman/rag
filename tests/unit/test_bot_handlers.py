@@ -196,11 +196,13 @@ class TestCommandHandlers:
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         bot._checkpointer = AsyncMock()
+        bot._agent_checkpointer = AsyncMock()
         message = _make_text_message()
 
         await bot.cmd_clear(message)
 
         bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
+        bot._agent_checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
 
     async def test_cmd_clear_uses_chat_id_for_thread_namespace(self, mock_config):
@@ -209,11 +211,13 @@ class TestCommandHandlers:
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         bot._checkpointer = AsyncMock()
+        bot._agent_checkpointer = AsyncMock()
         message = _make_text_message(user_id=777, chat_id=42)
 
         await bot.cmd_clear(message)
 
         bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_42")
+        bot._agent_checkpointer.adelete_thread.assert_awaited_once_with("tg_42")
         bot._cache.clear_conversation.assert_awaited_once_with(777)
 
     async def test_cmd_clear_handles_no_checkpointer(self, mock_config):
@@ -222,6 +226,7 @@ class TestCommandHandlers:
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
         bot._checkpointer = None
+        bot._agent_checkpointer = None
         message = _make_text_message()
 
         await bot.cmd_clear(message)
@@ -236,15 +241,32 @@ class TestCommandHandlers:
         bot._cache.clear_conversation = AsyncMock()
         bot._checkpointer = AsyncMock()
         bot._checkpointer.adelete_thread = AsyncMock(side_effect=RuntimeError("redis down"))
+        bot._agent_checkpointer = AsyncMock()
         message = _make_text_message()
 
         await bot.cmd_clear(message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
         bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
+        bot._agent_checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
         message.answer.assert_awaited_once()
         answer_text = message.answer.await_args.args[0]
         assert "частично" in answer_text.lower()
+
+    async def test_cmd_clear_deduplicates_same_checkpointer_instance(self, mock_config):
+        """When both checkpointer refs point to one object, thread delete is called once."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        shared_cp = AsyncMock()
+        bot._checkpointer = shared_cp
+        bot._agent_checkpointer = shared_cp
+        message = _make_text_message()
+
+        await bot.cmd_clear(message)
+
+        shared_cp.adelete_thread.assert_awaited_once_with("tg_12345")
+        bot._cache.clear_conversation.assert_awaited_once_with(12345)
 
     async def test_cmd_stats(self, mock_config):
         """Test /stats command handler."""
