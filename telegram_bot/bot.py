@@ -229,6 +229,9 @@ class PropertyBot:
         # Kommo CRM client (initialized in start() if enabled)
         self._kommo_client: Any | None = None
 
+        # Lead scoring store (initialized in start() with pg_pool)
+        self._lead_scoring_store: Any | None = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -558,7 +561,12 @@ class PropertyBot:
         """Handle query via supervisor graph (#240, #310 — primary query path)."""
         from .agents.manager_tools import create_manager_tools
         from .agents.rag_agent import create_rag_agent
-        from .agents.tools import build_tools_for_role, create_history_search_tool, direct_response
+        from .agents.tools import (
+            build_tools_for_role,
+            create_crm_score_sync_tool,
+            create_history_search_tool,
+            direct_response,
+        )
         from .graph.supervisor_state import make_supervisor_state
 
         assert message.bot is not None
@@ -612,6 +620,22 @@ class PropertyBot:
                     responsible_user_id=self.config.kommo_responsible_user_id,
                     session_field_id=self.config.kommo_session_field_id,
                     idempotency_store=self._cache.redis,
+                )
+            )
+
+        # Lead score sync tool (#384) — available when scoring store is initialized
+        _scoring_store = getattr(self, "_lead_scoring_store", None)
+        if (
+            self.config.kommo_enabled
+            and self._kommo_client is not None
+            and _scoring_store is not None
+        ):
+            tools.append(
+                create_crm_score_sync_tool(
+                    scoring_store=_scoring_store,
+                    kommo_client=self._kommo_client,
+                    score_field_id=self.config.kommo_lead_score_field_id,
+                    band_field_id=self.config.kommo_lead_band_field_id,
                 )
             )
 
@@ -1033,6 +1057,12 @@ class PropertyBot:
             from .services.user_service import UserService
 
             self._user_service = UserService(pool=self._pg_pool)
+
+            # Initialize lead scoring store (#384)
+            from .services.lead_scoring_store import LeadScoringStore
+
+            self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
+            logger.info("Lead scoring store ready")
         except Exception:
             logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
 
