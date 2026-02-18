@@ -8,6 +8,13 @@ Run these for most code changes:
 Run full test suite when touching cross-cutting logic:
 - `make test-full`
 
+## Docs-Only Changes
+- If change scope is only documentation/plans (no runtime/test/infra code changes), full test gates are not required.
+- Required checks for docs-only changes:
+  - Ensure commands in docs match `Makefile` or real CLI modules.
+  - Ensure referenced files/paths exist.
+  - Ensure date/version-sensitive SDK/API claims are verified against primary sources.
+
 ## Bot And Graph Changes
 - Always run:
   - `uv run pytest tests/integration/test_graph_paths.py -v`
