@@ -345,6 +345,18 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("kommo_telegram_field_id", "KOMMO_TELEGRAM_FIELD_ID"),
     )
 
+    # Call limits (#374)
+    max_llm_calls: int = Field(
+        default=5,
+        ge=1,
+        validation_alias=AliasChoices("max_llm_calls", "MAX_LLM_CALLS"),
+    )
+    max_tool_calls: int = Field(
+        default=5,
+        ge=1,
+        validation_alias=AliasChoices("max_tool_calls", "MAX_TOOL_CALLS"),
+    )
+
     # LLM-as-a-Judge online sampling
     judge_sample_rate: float = Field(
         default=0.0,
@@ -356,6 +368,37 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("JUDGE_MODEL", "judge_model"),
         description="LLM model for judge evaluation",
     )
+
+    # Real Estate Database (realestate DB in shared Postgres)
+    realestate_database_url: str = Field(
+        default="postgresql://postgres:postgres@postgres:5432/realestate",
+        validation_alias=AliasChoices("realestate_database_url", "REALESTATE_DATABASE_URL"),
+    )
+
+    # i18n
+    supported_locales: list[str] = Field(
+        default=["ru", "en", "uk"],
+        validation_alias=AliasChoices("supported_locales", "SUPPORTED_LOCALES"),
+    )
+    default_locale: str = Field(
+        default="ru",
+        validation_alias=AliasChoices("default_locale", "DEFAULT_LOCALE"),
+    )
+
+    # Manager IDs (comma-separated Telegram user IDs)
+    manager_ids: list[int] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("manager_ids", "MANAGER_IDS"),
+    )
+
+    @field_validator("manager_ids", mode="before")
+    @classmethod
+    def parse_manager_ids(cls, v: object) -> list[int]:
+        if isinstance(v, str):
+            return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        return []
 
     def get_collection_name(self) -> str:
         """Get collection name based on quantization mode.
