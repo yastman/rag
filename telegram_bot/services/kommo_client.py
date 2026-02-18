@@ -7,7 +7,7 @@ All methods auto-inject OAuth2 bearer token from KommoTokenStore.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from tenacity import (
@@ -86,7 +86,11 @@ class KommoClient:
 
         # Raise for 429/5xx so tenacity can retry
         response.raise_for_status()
-        return response.json()
+        response_json = response.json()
+        if not isinstance(response_json, dict):
+            msg = "Unexpected Kommo API response shape."
+            raise RuntimeError(msg)
+        return cast(dict[str, Any], response_json)
 
     # --- Leads ---
 
