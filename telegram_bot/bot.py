@@ -5,7 +5,6 @@ import hashlib
 import io
 import json
 import logging
-import random
 import re
 import time
 import uuid
@@ -24,6 +23,10 @@ from .graph.graph import build_graph
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import get_client, get_langfuse_client, observe, propagate_attributes
+from .scoring import (
+    compute_checkpointer_overhead_proxy_ms,
+    write_langfuse_scores,
+)
 from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
@@ -32,175 +35,8 @@ from .services.redis_monitor import RedisHealthMonitor
 logger = logging.getLogger(__name__)
 
 # --- Checkpoint namespace constants (versioned for safe migration) ---
-_CHECKPOINT_NS_TEXT = "tg:text:v1"
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
-
-# --- Query type mapping for scores ---
-_QUERY_TYPE_SCORE = {
-    "CHITCHAT": 0.0,
-    "OFF_TOPIC": 0.0,
-    "SIMPLE": 1.0,
-    "GENERAL": 1.0,
-    "FAQ": 1.0,
-    "ENTITY": 1.0,
-    "STRUCTURED": 2.0,
-    "COMPLEX": 2.0,
-}
-
-
-def _compute_checkpointer_overhead_proxy_ms(
-    result: dict[str, Any], ainvoke_wall_ms: float
-) -> float:
-    """Compute proxy for checkpointer overhead: ainvoke wall-time minus sum of stage latencies.
-
-    Returns max(0, delta) to clamp negative values from timing jitter.
-    """
-    stages_ms = sum(float(v) * 1000 for v in result.get("latency_stages", {}).values())
-    return max(0.0, ainvoke_wall_ms - stages_ms)
-
-
-def _write_langfuse_scores(lf: Any, result: dict) -> None:
-    """Write Langfuse scores (14 + latency breakdown + 4 response length) from graph result state.
-
-    Args:
-        lf: Langfuse client (from get_client(), may be _NullLangfuseClient).
-        result: State dict returned by graph.ainvoke().
-    """
-    latency_stages = result.get("latency_stages", {})
-    total_ms = result.get("pipeline_wall_ms", 0.0)
-
-    scores = {
-        "query_type": _QUERY_TYPE_SCORE.get(result.get("query_type", ""), 1.0),
-        "latency_total_ms": result.get("user_perceived_wall_ms", total_ms),
-        "semantic_cache_hit": 1.0 if result.get("cache_hit") else 0.0,
-        "embeddings_cache_hit": 1.0 if result.get("embeddings_cache_hit") else 0.0,
-        "search_cache_hit": 1.0 if result.get("search_cache_hit") else 0.0,
-        "rerank_applied": 1.0 if result.get("rerank_applied") else 0.0,
-        "rerank_cache_hit": 0.0,  # Tracked when rerank cache implemented
-        "results_count": float(result.get("search_results_count", 0)),
-        "no_results": 1.0 if result.get("search_results_count", 0) == 0 else 0.0,
-        "llm_used": 1.0 if "generate" in latency_stages else 0.0,
-        "confidence_score": float(result.get("grade_confidence", 0.0)),
-        "hyde_used": 0.0,  # HyDE not implemented in current pipeline
-        "llm_ttft_ms": float(result.get("llm_ttft_ms", 0.0)),
-        "llm_response_duration_ms": float(result.get("llm_response_duration_ms", 0.0)),
-    }
-
-    for name, value in scores.items():
-        lf.score_current_trace(name=name, value=value)
-
-    # --- Latency breakdown (#147) ---
-    # Always-written BOOLEAN flags
-    lf.score_current_trace(
-        name="streaming_enabled",
-        value=1 if result.get("streaming_enabled") else 0,
-        data_type="BOOLEAN",
-    )
-    lf.score_current_trace(
-        name="llm_timeout",
-        value=1 if result.get("llm_timeout") else 0,
-        data_type="BOOLEAN",
-    )
-    lf.score_current_trace(
-        name="llm_stream_recovery",
-        value=1 if result.get("llm_stream_recovery") else 0,
-        data_type="BOOLEAN",
-    )
-
-    # Conditional NUMERIC + paired unavailable BOOLEAN flags
-    decode_ms = result.get("llm_decode_ms")
-    if decode_ms is not None:
-        lf.score_current_trace(name="llm_decode_ms", value=float(decode_ms))
-    else:
-        lf.score_current_trace(name="llm_decode_unavailable", value=1, data_type="BOOLEAN")
-
-    tps = result.get("llm_tps")
-    if tps is not None:
-        lf.score_current_trace(name="llm_tps", value=float(tps))
-    else:
-        lf.score_current_trace(name="llm_tps_unavailable", value=1, data_type="BOOLEAN")
-
-    queue_ms = result.get("llm_queue_ms")
-    if queue_ms is not None:
-        lf.score_current_trace(name="llm_queue_ms", value=float(queue_ms))
-    else:
-        lf.score_current_trace(name="llm_queue_unavailable", value=1, data_type="BOOLEAN")
-
-    # --- Response length control (#129) ---
-    if "answer_words" in result:
-        lf.score_current_trace(name="answer_words", value=float(result["answer_words"]))
-    if "answer_chars" in result:
-        lf.score_current_trace(name="answer_chars", value=float(result["answer_chars"]))
-    if "answer_to_question_ratio" in result:
-        lf.score_current_trace(
-            name="answer_to_question_ratio",
-            value=float(result["answer_to_question_ratio"]),
-        )
-    policy_mode = str(result.get("response_policy_mode", "disabled"))
-    response_style = str(result.get("response_style", "")).strip()
-    if response_style and policy_mode == "enforced":
-        style_map = {"short": 0, "balanced": 1, "detailed": 2}
-        lf.score_current_trace(
-            name="response_style_applied",
-            value=float(style_map.get(response_style, 1)),
-        )
-
-    # --- Voice transcription scores (#151) ---
-    input_type = result.get("input_type", "text")
-    lf.score_current_trace(name="input_type", value=input_type, data_type="CATEGORICAL")
-
-    stt_ms = result.get("stt_duration_ms")
-    if stt_ms is not None:
-        lf.score_current_trace(name="stt_duration_ms", value=float(stt_ms))
-
-    voice_dur = result.get("voice_duration_s")
-    if voice_dur is not None:
-        lf.score_current_trace(name="voice_duration_s", value=float(voice_dur))
-
-    # --- Embedding resilience (#210) ---
-    lf.score_current_trace(
-        name="bge_embed_error",
-        value=1 if result.get("embedding_error") else 0,
-        data_type="BOOLEAN",
-    )
-    cache_check_s = result.get("latency_stages", {}).get("cache_check")
-    if cache_check_s is not None:
-        lf.score_current_trace(
-            name="bge_embed_latency_ms",
-            value=round(cache_check_s * 1000, 1),
-        )
-
-    # --- Conversation memory (#154, #159) ---
-    summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
-    if summarize_ms > 0:
-        lf.score_current_trace(name="summarize_ms", value=summarize_ms)
-
-    # Memory scores (#159)
-    messages = result.get("messages", [])
-    lf.score_current_trace(name="memory_messages_count", value=float(len(messages)))
-    lf.score_current_trace(
-        name="summarization_triggered",
-        value=1 if summarize_ms > 0 else 0,
-        data_type="BOOLEAN",
-    )
-
-    # Checkpointer overhead proxy (#159)
-    if "checkpointer_overhead_proxy_ms" in result:
-        lf.score_current_trace(
-            name="checkpointer_overhead_proxy_ms",
-            value=float(result["checkpointer_overhead_proxy_ms"]),
-        )
-
-    # --- Source attribution (#225) ---
-    sources_count = result.get("sources_count", 0)
-    lf.score_current_trace(
-        name="sources_shown",
-        value=1 if sources_count > 0 else 0,
-        data_type="BOOLEAN",
-    )
-    if sources_count > 0:
-        lf.score_current_trace(name="sources_count", value=float(sources_count))
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -663,134 +499,18 @@ class PropertyBot:
 
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message):
-        """Handle user query via LangGraph RAG pipeline."""
+        """Handle user query via supervisor graph (#310: supervisor-only)."""
         pipeline_start = time.perf_counter()
-        # Early typing ACK — user sees "typing..." immediately
         assert message.bot is not None
         assert message.from_user is not None
         bot = message.bot
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        # --- Supervisor path (#240) ---
-        if self.config.use_supervisor:
-            await self._handle_query_supervisor(message, pipeline_start)
-            return
-
-        state = make_initial_state(
-            user_id=message.from_user.id,
-            session_id=make_session_id("chat", message.chat.id),
-            query=message.text or "",
-        )
-        state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
-        state["show_sources"] = self._graph_config.show_sources
-
-        with propagate_attributes(
-            session_id=state["session_id"],
-            user_id=str(state["user_id"]),
-            tags=["telegram", "rag"],
-        ):
-            # Inject Langfuse trace_id INSIDE propagate_attributes (#277)
-            lf_pre = get_client()
-            state["trace_id"] = lf_pre.get_current_trace_id() or ""
-
-            graph = build_graph(
-                cache=self._cache,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                reranker=self._reranker,
-                llm=self._llm,
-                message=message,
-                checkpointer=self._checkpointer,
-                content_filter_enabled=self.config.content_filter_enabled,
-            )
-
-            invoke_config = {
-                "configurable": {
-                    "thread_id": str(message.from_user.id),
-                    "checkpoint_ns": _CHECKPOINT_NS_TEXT,
-                }
-            }
-            async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                invoke_start = time.perf_counter()
-                result = await graph.ainvoke(state, config=invoke_config)
-                ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
-                result["checkpointer_overhead_proxy_ms"] = _compute_checkpointer_overhead_proxy_ms(
-                    result, ainvoke_wall_ms
-                )
-
-            # Wall-time for accurate latency_total_ms
-            result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
-            # User-perceived latency excludes post-respond summarization
-            summarize_s = result.get("latency_stages", {}).get("summarize", 0)
-            result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
-
-            # Update trace with input/output and metadata
-            lf = get_client()
-            lf.update_current_trace(
-                input={"query": message.text},
-                output={"response": result.get("response", "")},
-                metadata=_build_trace_metadata(result),
-            )
-
-            # Write Langfuse scores (14 + latency + response length #129)
-            _write_langfuse_scores(lf, result)
-
-            # Online LLM-as-a-Judge sampling
-            if (
-                self.config.judge_sample_rate > 0
-                and not result.get("cache_hit")
-                and result.get("retrieved_context")
-                and random.random() < self.config.judge_sample_rate
-            ):
-                from .evaluation.runner import run_online_judge
-
-                trace_id = lf.get_current_trace_id() if hasattr(lf, "get_current_trace_id") else ""
-                if trace_id:
-                    context_text = "\n\n".join(
-                        f"[{d.get('score', 0):.2f}] {d.get('content', '')}"
-                        for d in result.get("retrieved_context", [])
-                    )
-                    _judge_task = asyncio.create_task(
-                        run_online_judge(
-                            langfuse=lf,
-                            trace_id=trace_id,
-                            query=message.text or "",
-                            answer=result.get("response", ""),
-                            context=context_text,
-                            model=self.config.judge_model,
-                            llm_base_url=self.config.llm_base_url,
-                        )
-                    )
-                    _judge_task.add_done_callback(
-                        lambda t: t.result() if not t.cancelled() else None
-                    )
-
-            # Persist Q&A to history (fail-soft)
-            if self._history_service and result.get("response"):
-                try:
-                    saved = await self._history_service.save_turn(
-                        user_id=message.from_user.id,
-                        session_id=state["session_id"],
-                        query=message.text or "",
-                        response=result["response"],
-                        input_type="text",
-                        query_embedding=result.get("query_embedding"),
-                    )
-                    lf.score_current_trace(
-                        name="history_save_success",
-                        value=1 if saved else 0,
-                        data_type="BOOLEAN",
-                    )
-                    lf.score_current_trace(
-                        name="history_backend", value="qdrant", data_type="CATEGORICAL"
-                    )
-                except Exception:
-                    logger.warning("Failed to save history turn", exc_info=True)
+        await self._handle_query_supervisor(message, pipeline_start)
 
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
-        """Handle query via supervisor graph (feature flag: USE_SUPERVISOR=true, #240)."""
+        """Handle query via supervisor graph (#240, #310 — primary query path)."""
         from .agents.rag_agent import create_rag_agent
         from .agents.tools import create_history_search_tool, direct_response
         from .graph.supervisor_state import make_supervisor_state
@@ -833,6 +553,10 @@ class PropertyBot:
             "configurable": {
                 "user_id": user_id,
                 "session_id": session_id,
+                # Judge sampling config passed to rag_search tool (#310)
+                "judge_sample_rate": self.config.judge_sample_rate,
+                "judge_model": self.config.judge_model,
+                "llm_base_url": self.config.llm_base_url,
             }
         }
 
@@ -855,6 +579,9 @@ class PropertyBot:
             if response_text and not result.get("response_sent"):
                 await message.answer(response_text)
 
+            # Wall-time for the full supervisor pipeline
+            wall_ms = (time.perf_counter() - pipeline_start) * 1000
+
             # Write Langfuse trace metadata
             lf = get_client()
             lf.update_current_trace(
@@ -864,8 +591,10 @@ class PropertyBot:
                     "agent_used": result.get("agent_used", ""),
                     "supervisor_latency": result.get("latency_stages", {}).get("supervisor", 0),
                     "pipeline_mode": "supervisor",
+                    "pipeline_wall_ms": wall_ms,
                 },
             )
+            # Supervisor-specific scores
             lf.score_current_trace(
                 name="agent_used", value=result.get("agent_used", ""), data_type="CATEGORICAL"
             )
@@ -874,6 +603,27 @@ class PropertyBot:
             lf.score_current_trace(
                 name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
             )
+
+            # Persist Q&A to history (#310 — ported from monolith path)
+            if self._history_service and response_text:
+                try:
+                    saved = await self._history_service.save_turn(
+                        user_id=user_id,
+                        session_id=session_id,
+                        query=message.text or "",
+                        response=response_text,
+                        input_type="text",
+                    )
+                    lf.score_current_trace(
+                        name="history_save_success",
+                        value=1 if saved else 0,
+                        data_type="BOOLEAN",
+                    )
+                    lf.score_current_trace(
+                        name="history_backend", value="qdrant", data_type="CATEGORICAL"
+                    )
+                except Exception:
+                    logger.warning("Failed to save history turn", exc_info=True)
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
@@ -946,7 +696,7 @@ class PropertyBot:
                     result = await graph.ainvoke(state, config=invoke_config)
                     ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
                     result["checkpointer_overhead_proxy_ms"] = (
-                        _compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
+                        compute_checkpointer_overhead_proxy_ms(result, ainvoke_wall_ms)
                     )
             except ValueError as e:
                 if "Empty transcription" in str(e):
@@ -1023,7 +773,7 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to update Langfuse voice trace metadata", exc_info=True)
             try:
-                _write_langfuse_scores(lf, result)
+                write_langfuse_scores(lf, result)
             except Exception:
                 logger.warning("Failed to write Langfuse voice scores", exc_info=True)
 

@@ -50,7 +50,7 @@ async def test_query_applies_max_rewrite_attempts_from_app_state() -> None:
 
 
 async def test_query_writes_langfuse_scores() -> None:
-    """POST /query must call _write_langfuse_scores for score parity with bot."""
+    """POST /query must call write_langfuse_scores for score parity with bot."""
     graph = _DummyGraph()
     app.state.graph = graph
     app.state.max_rewrite_attempts = 1
@@ -62,11 +62,11 @@ async def test_query_writes_langfuse_scores() -> None:
     with (
         patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
         patch("telegram_bot.observability.get_client", return_value=lf),
-        patch("telegram_bot.bot._write_langfuse_scores") as mock_write_scores,
+        patch("telegram_bot.scoring.write_langfuse_scores") as mock_write_scores,
     ):
         await query(QueryRequest(query="test", user_id=1))
 
-    # _write_langfuse_scores must be called with (lf_client, result_state)
+    # write_langfuse_scores must be called with (lf_client, result_state)
     mock_write_scores.assert_called_once()
     call_args = mock_write_scores.call_args
     assert call_args[0][0] is lf  # first arg: langfuse client
