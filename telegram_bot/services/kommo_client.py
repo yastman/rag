@@ -7,9 +7,17 @@ Pattern: BGEM3Client (same project).
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import (
@@ -30,6 +38,23 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+RETRYABLE = (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout, httpx.PoolTimeout)
+
+
+def _retryable_http_status(exc: BaseException) -> bool:
+    if not isinstance(exc, httpx.HTTPStatusError):
+        return False
+    return exc.response.status_code in {429, 500, 502, 503, 504}
+
+
+_kommo_retry = retry(
+    retry=retry_if_exception_type(RETRYABLE) | retry_if_exception(_retryable_http_status),
+    wait=wait_exponential_jitter(initial=1, max=8, jitter=2),
+    stop=stop_after_attempt(3),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
+
 
 class KommoClient:
     """Async Kommo CRM API adapter with auto-refresh OAuth2."""
@@ -41,13 +66,16 @@ class KommoClient:
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=httpx.Timeout(30.0, connect=10.0),
-            limits=httpx.Limits(max_keepalive_connections=5),
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            headers={"Content-Type": "application/json"},
         )
 
+    @_kommo_retry
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict:
         """Execute request with auto-refresh on 401."""
         token = await self._token_store.get_valid_token()
-        headers = {"Authorization": f"Bearer {token}"}
+        extra_headers = kwargs.pop("headers", None) or {}
+        headers = {"Authorization": f"Bearer {token}", **extra_headers}
 
         response = await self._client.request(method, path, headers=headers, **kwargs)
 
@@ -56,11 +84,21 @@ class KommoClient:
             headers["Authorization"] = f"Bearer {token}"
             response = await self._client.request(method, path, headers=headers, **kwargs)
 
-        response.raise_for_status()
-        # Kommo returns 204/empty body for some endpoints (e.g. GET /contacts with no results)
-        if response.status_code == 204 or not response.content:
+        if response.status_code == 204:
             return {}
-        return response.json()
+
+        # Raises for 429/5xx so tenacity can retry.
+        response.raise_for_status()
+
+        # Kommo can return empty body on some successful endpoints.
+        if not response.content:
+            return {}
+
+        response_json = response.json()
+        if not isinstance(response_json, dict):
+            msg = "Unexpected Kommo API response shape."
+            raise RuntimeError(msg)
+        return cast(dict[str, Any], response_json)
 
     # --- Leads ---
 
@@ -151,6 +189,18 @@ class KommoClient:
         data = await self._request("GET", "/leads/pipelines")
         items = data.get("_embedded", {}).get("pipelines", [])
         return [Pipeline(**p) for p in items]
+
+    # --- Lead Scores (compatibility path for supervisor tools/tests) ---
+
+    @observe(name="kommo-update-lead-score")
+    async def update_lead_score(self, *, lead_id: int, payload: dict, idempotency_key: str) -> dict:
+        """PATCH /api/v4/leads/{id} with score custom fields."""
+        return await self._request(
+            "PATCH",
+            f"/leads/{lead_id}",
+            json=payload,
+            headers={"X-Idempotency-Key": idempotency_key},
+        )
 
     async def close(self) -> None:
         """Close httpx client."""

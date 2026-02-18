@@ -169,6 +169,11 @@ def write_langfuse_scores(lf: Any, result: dict) -> None:
         data_type="BOOLEAN",
     )
 
+    # --- Call limits (#374) ---
+    llm_calls = result.get("llm_call_count", 0)
+    if llm_calls > 0:
+        lf.score_current_trace(name="llm_calls_total", value=float(llm_calls))
+
     # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:
@@ -188,6 +193,24 @@ def write_langfuse_scores(lf: Any, result: dict) -> None:
         lf.score_current_trace(
             name="checkpointer_overhead_proxy_ms",
             value=float(result["checkpointer_overhead_proxy_ms"]),
+        )
+
+    # --- Nurturing + funnel analytics (#390) ---
+    if "nurturing_batch_size" in result:
+        lf.score_current_trace(
+            name="nurturing_batch_size", value=float(result["nurturing_batch_size"])
+        )
+    if "nurturing_sent_count" in result:
+        lf.score_current_trace(
+            name="nurturing_sent_count", value=float(result["nurturing_sent_count"])
+        )
+    if "funnel_conversion_rate" in result:
+        lf.score_current_trace(
+            name="funnel_conversion_rate", value=float(result["funnel_conversion_rate"])
+        )
+    if "funnel_dropoff_rate" in result:
+        lf.score_current_trace(
+            name="funnel_dropoff_rate", value=float(result["funnel_dropoff_rate"])
         )
 
     # --- Source attribution (#225) ---
