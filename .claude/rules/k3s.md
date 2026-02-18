@@ -163,6 +163,10 @@ make k3s-bot
 make k3s-status
 ```
 
+## CRM Env Vars (bot deployment)
+
+Added in #384/#390/#402: `KOMMO_LEAD_SCORE_FIELD_ID`, `KOMMO_LEAD_BAND_FIELD_ID`, `NURTURING_ENABLED`, `NURTURING_INTERVAL_MINUTES`, `FUNNEL_ROLLUP_CRON`. Add to `k8s/secrets/.env` before deploying.
+
 ## Troubleshooting
 
 | Issue | Fix |

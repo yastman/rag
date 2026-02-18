@@ -4,6 +4,11 @@
 **Статус:** Draft
 **Scope:** Обновление существующего PropertyBot — добавление меню, мультиязычности, продающей воронки и CRM-интеграции
 
+> **Review note (2026-02-18):**
+> 1. Для BANT-воронки сохраняем шаг `area` (Need), иначе скоринг/аналитика и `preferences` расходятся с дизайном.
+> 2. Для всех pytest-команд используем `-n auto --dist=worksteal` (по AGENTS), а финальный gate включает `make check` и `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`.
+> 3. Скрипты `/docker-entrypoint-initdb.d` выполняются только на пустом PGDATA; для существующего volume схема накатывается отдельным SQL-шагом/миграцией, не через повторный init.
+
 ---
 
 ## 1. Обзор
@@ -589,15 +594,19 @@ class PropertyBot:
 
 ```bash
 # Unit: меню, i18n, user service
-uv run pytest tests/unit/dialogs/ -n auto
-uv run pytest tests/unit/services/test_user_service.py -n auto
-uv run pytest tests/unit/middlewares/test_i18n.py -n auto
+uv run pytest tests/unit/dialogs/ -n auto --dist=worksteal
+uv run pytest tests/unit/services/test_user_service.py -n auto --dist=worksteal
+uv run pytest tests/unit/middlewares/test_i18n.py -n auto --dist=worksteal
 
 # Integration: PG writes, locale switching
-uv run pytest tests/integration/test_user_flow.py -v
+uv run pytest tests/integration/test_user_flow.py -n auto --dist=worksteal -v
 
 # Existing tests: НЕ ломаются (RAG pipeline без изменений)
-uv run pytest tests/unit/ -n auto
+uv run pytest tests/unit/ -n auto --dist=worksteal
+
+# Required repo gates
+make check
+PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 ```
 
 ---
