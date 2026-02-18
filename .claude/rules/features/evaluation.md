@@ -1,5 +1,5 @@
 ---
-paths: "src/evaluation/**, telegram_bot/evaluation/**, tests/baseline/**, scripts/evaluate_judge.py"
+paths: "src/evaluation/**, telegram_bot/evaluation/**, tests/baseline/**, scripts/eval/**"
 ---
 
 # Evaluation & Experiments
@@ -28,10 +28,9 @@ Queries + Ground Truth → SearchEvaluator → Metrics
 | `src/evaluation/run_ab_test.py` | - | A/B test runner |
 | `tests/baseline/collector.py` | - | LangfuseMetricsCollector |
 | `tests/baseline/thresholds.yaml` | - | Regression thresholds (incl. judge quality) |
-| `telegram_bot/evaluation/judges.py` | - | LLM-as-a-Judge evaluators (RAG Triad) |
-| `telegram_bot/evaluation/prompts.py` | - | Judge prompts (faithfulness, relevance, context) |
-| `telegram_bot/evaluation/runner.py` | - | Batch runner + online sampling |
-| `scripts/evaluate_judge.py` | - | CLI entry point for batch judge |
+| `scripts/eval/goldset_sync.py` | - | Gold set sync to Langfuse dataset |
+| `scripts/eval/run_experiment.py` | - | Experiment runner (dataset.run_experiment) |
+| `docs/eval/managed-evaluator-templates.json` | - | Managed evaluator prompt templates |
 
 ## Metrics
 
@@ -155,11 +154,10 @@ uv run python scripts/validate_traces.py --collection gdrive_documents_bge --rep
 
 **Baseline (2026-02-10):** cold p50=2480ms, p95=5585ms. generate node = 97% of latency.
 
-## LLM-as-a-Judge (#230)
+## LLM-as-a-Judge — Langfuse Managed Evaluators (#386)
 
-Automated quality scoring via RAG Triad: faithfulness, answer relevance, context relevance.
-
-**Judge model:** GLM-4.7 via LiteLLM (Cerebras free tier), `temperature=0`, JSON mode.
+Quality scoring via RAG Triad using **Langfuse managed evaluators** (observation-level).
+Evaluators run automatically on span ingestion — no custom judge code needed.
 
 | Metric | Score Name | Threshold | What it measures |
 |--------|-----------|-----------|------------------|
@@ -167,39 +165,36 @@ Automated quality scoring via RAG Triad: faithfulness, answer relevance, context
 | Answer Relevance | `judge_answer_relevance` | ≥0.70 | Answer useful and relevant to question |
 | Context Relevance | `judge_context_relevance` | ≥0.65 | Retrieved docs relevant to question |
 
-### Modes
+### How it works
 
-| Mode | Command | Description |
-|------|---------|-------------|
-| Batch | `make eval-judge` | 24h traces, all without judge scores |
-| Sample | `make eval-judge-sample` | 48h traces, 50% sample |
-| Online | `JUDGE_SAMPLE_RATE=0.2` | Fire-and-forget on live queries |
+Managed evaluators are configured in Langfuse UI. They auto-evaluate observations (spans) on ingestion using variable mappings to curated span fields:
 
-### Data flow
+| Variable | JSONPath | Source span |
+|----------|----------|-------------|
+| `query` | `$.output.eval_query` | node-generate, node-retrieve |
+| `answer` | `$.output.eval_answer` | node-generate |
+| `context` | `$.output.eval_context` | node-generate |
+| `documents` | `$.output.eval_docs` | node-retrieve |
 
+Templates: `docs/eval/managed-evaluator-templates.json`
+
+### Gold Set Experiments
+
+```bash
+make eval-goldset-sync    # Sync ground truth to Langfuse dataset
+make eval-experiment      # Run RAG experiment on gold set
 ```
-Langfuse traces → fetch (API) → extract query/answer/context
-  → 3 judge LLM calls (parallel) → write scores back to Langfuse
-```
 
-Context extracted from `node-retrieve` span output field `retrieved_context` (curated: top-5 docs, 500 chars each).
+### Go/No-Go Integration
 
-### Online sampling config
-
-| Env Var | Default | Description |
-|---------|---------|-------------|
-| `JUDGE_SAMPLE_RATE` | `0.0` | Fraction of queries (0.0=off, 0.2=20%) |
-| `JUDGE_MODEL` | `gpt-4o-mini-cerebras-glm` | Judge LLM model |
-
-Online judge is semaphore-bounded (max 2 concurrent) with 25s timeout. Errors logged, never affect user response.
+Judge scores are aggregated in `validate_traces.py` and checked against thresholds from `tests/baseline/thresholds.yaml` `judge` section. Criteria skip gracefully when no judge data available.
 
 ## Testing
 
 ```bash
 pytest tests/unit/test_evaluator.py -v
-pytest tests/unit/evaluation/test_judges.py -v     # Judge parser + LLM mock
-pytest tests/unit/evaluation/test_runner.py -v      # Trace extraction
-pytest tests/unit/evaluation/test_online_sampling.py -v
+pytest tests/unit/evaluation/ -v              # Gold set sync + experiment runner
+pytest tests/unit/test_validate_aggregates.py -v  # Judge aggregation + Go/No-Go
 pytest tests/baseline/ -v
 make baseline-smoke
 ```
