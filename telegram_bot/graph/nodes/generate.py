@@ -516,6 +516,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         "llm_provider_model": actual_model,
         "llm_ttft_ms": ttft_ms,
         "llm_response_duration_ms": elapsed * 1000,
+        "llm_call_count": state.get("llm_call_count", 0) + 1,
         "latency_stages": {**state.get("latency_stages", {}), "generate": elapsed},
         # Latency breakdown (#147)
         "llm_decode_ms": llm_decode_ms,
