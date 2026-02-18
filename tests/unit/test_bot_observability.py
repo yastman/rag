@@ -51,11 +51,10 @@ def mock_message() -> MagicMock:
     return message
 
 
-def _mock_supervisor_result(**overrides):
+def _mock_agent_result(**overrides):
+    """Create a standard SDK agent result dict (#413)."""
     base = {
         "messages": [MagicMock(content="ok")],
-        "agent_used": "rag_search",
-        "latency_stages": {"supervisor": 0.1},
     }
     base.update(overrides)
     return base
@@ -67,14 +66,15 @@ class TestHandleQueryObservability:
     ):
         bot = _create_bot(mock_config)
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
         mock_lf = MagicMock()
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cm = AsyncMock()
@@ -96,16 +96,15 @@ class TestHandleQueryObservability:
     ):
         bot = _create_bot(mock_config)
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(
-            return_value=_mock_supervisor_result(agent_used="rag_search")
-        )
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
         mock_lf = MagicMock()
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
             patch("telegram_bot.bot.ChatActionSender") as mock_cas,
         ):
             mock_cm = AsyncMock()
@@ -116,6 +115,5 @@ class TestHandleQueryObservability:
             await bot.handle_query(mock_message)
 
         metadata = mock_lf.update_current_trace.call_args.kwargs["metadata"]
-        assert metadata["pipeline_mode"] == "supervisor"
-        assert metadata["agent_used"] == "rag_search"
+        assert metadata["pipeline_mode"] == "sdk_agent"
         assert "pipeline_wall_ms" in metadata

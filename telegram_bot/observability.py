@@ -123,6 +123,23 @@ if LANGFUSE_ENABLED:
             flush_interval=5,
         )
 
+    def create_callback_handler(
+        *,
+        trace_context: Any | None = None,
+        update_trace: bool = False,
+    ):
+        """Create a Langfuse CallbackHandler for create_agent integration.
+
+        Returns a NEW handler per invocation. Use inside propagate_attributes()
+        context to inherit session_id, user_id, tags automatically (SDK v3).
+        """
+        from langfuse.langchain import CallbackHandler
+
+        return CallbackHandler(
+            trace_context=trace_context,
+            update_trace=update_trace,
+        )
+
     logger.info("Langfuse observability ENABLED")
 else:
     from contextlib import contextmanager
@@ -138,6 +155,10 @@ else:
 
     def get_langfuse_client() -> None:  # type: ignore[misc]  # conditional return type
         """Langfuse disabled — return None."""
+        return
+
+    def create_callback_handler(**kwargs: Any):  # type: ignore[misc]  # noop stub
+        """Noop when Langfuse disabled."""
         return
 
     logger.info("Langfuse observability DISABLED (LANGFUSE_SECRET_KEY not set)")
