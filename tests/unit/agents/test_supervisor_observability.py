@@ -205,11 +205,12 @@ def test_rag_agent_tool_has_observe_decorator():
     assert hasattr(rag_mod, "get_client"), "rag_agent module must import get_client"
 
 
-def test_history_agent_tool_has_observe_decorator():
-    """history_search tool is decorated with @observe (#242)."""
-    import telegram_bot.agents.history_agent as hist_mod
+def test_history_tool_has_observe_decorator():
+    """history_search tool uses @observe via tools module (#408)."""
+    import telegram_bot.agents.tools as tools_mod
 
-    assert hasattr(hist_mod, "observe"), "history_agent module must import observe"
+    assert hasattr(tools_mod, "observe"), "tools module must import observe"
+    assert hasattr(tools_mod, "get_client"), "tools module must import get_client"
 
 
 def test_direct_response_tool_has_observe_decorator():

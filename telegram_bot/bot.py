@@ -549,7 +549,9 @@ class PropertyBot:
             direct_response,
         ]
         if self._history_service is not None:
-            tools.append(create_history_search_tool(history_service=self._history_service))
+            tools.append(
+                create_history_search_tool(history_service=self._history_service, llm=self._llm)
+            )
 
         # Build supervisor LLM (cheap model for routing)
         supervisor_llm = self._graph_config.create_supervisor_llm(
