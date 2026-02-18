@@ -5,22 +5,7 @@ Search engine with reranker for 2-stage retrieval:
 2. Reranker reranks to top-K final results
 """
 
-import sys
-
-
-sys.path.append("/srv/rag-fresh")
-
-***REMOVED*** Import from same directory
-import importlib.util
-import os
-
-
-spec = importlib.util.spec_from_file_location(
-    "search_engines", os.path.join(os.path.dirname(__file__), "search_engines.py")
-)
-search_engines = importlib.util.module_from_spec(spec)  ***REMOVED*** type: ignore[arg-type]
-spec.loader.exec_module(search_engines)  ***REMOVED*** type: ignore[union-attr]
-BaselineSearchEngine = search_engines.BaselineSearchEngine
+from src.evaluation.search_engines import BaselineSearchEngine
 
 
 class RerankSearchEngine:
