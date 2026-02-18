@@ -139,7 +139,7 @@ class TestCommandHandlers:
     @pytest.mark.parametrize(
         ("handler_name", "expected_fragments"),
         [
-            ("cmd_start", ["Привет", "недвижимость"]),
+            ("cmd_start", ["assistant", "недвижимость"]),
             ("cmd_help", ["Примеры запросов", "/clear", "/stats"]),
         ],
     )
@@ -154,6 +154,28 @@ class TestCommandHandlers:
         call_args = message.answer.call_args[0][0]
         for fragment in expected_fragments:
             assert fragment in call_args
+
+    async def test_cmd_start_manager_receives_manager_menu(self, mock_config):
+        """Manager user receives manager-specific start menu (#388)."""
+        mock_config.manager_ids = [12345]
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message(user_id=12345)
+
+        await bot.cmd_start(message)
+
+        sent = message.answer.call_args[0][0]
+        assert "Manager menu" in sent
+
+    async def test_resolve_user_role_prefers_config_manager_ids_on_db_client(self, mock_config):
+        """manager_ids fallback should elevate manager even when DB returns client (#388)."""
+        mock_config.manager_ids = [12345]
+        bot, _ = _create_bot(mock_config)
+        bot._user_service = AsyncMock()
+        bot._user_service.get_role = AsyncMock(return_value="client")
+
+        role = await bot._resolve_user_role(12345)
+
+        assert role == "manager"
 
     async def test_cmd_clear(self, mock_config):
         """Test /clear command handler."""
