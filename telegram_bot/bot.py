@@ -225,6 +225,27 @@ class PropertyBot:
         # PostgreSQL pool — initialized in start()
         self._pg_pool: Any = None
 
+        # Kommo CRM client (initialized when kommo_enabled=True)
+        self._kommo_client: Any | None = None
+        if config.kommo_enabled and config.kommo_subdomain:
+            from .services.kommo_client import KommoClient
+            from .services.kommo_tokens import KommoTokenStore
+
+            token_store = KommoTokenStore(
+                redis=self._cache.redis,
+                client_id=config.kommo_client_id,
+                client_secret=config.kommo_client_secret.get_secret_value(),
+                redirect_uri=config.kommo_redirect_uri,
+                subdomain=config.kommo_subdomain,
+            )
+            self._kommo_client = KommoClient(
+                subdomain=config.kommo_subdomain,
+                token_store=token_store,
+                rate_limit_rps=config.kommo_rate_limit_rps,
+                max_retries=config.kommo_max_retries,
+            )
+            logger.info("Kommo CRM client initialized (subdomain=%s)", config.kommo_subdomain)
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -327,6 +348,10 @@ class PropertyBot:
     def _is_admin(self, user_id: int) -> bool:
         """Check if user is an admin."""
         return user_id in self.config.admin_ids
+
+    def _is_manager(self, user_id: int) -> bool:
+        """Check if user is a manager (has access to CRM tools)."""
+        return user_id in self.config.manager_ids
 
     async def cmd_metrics(self, message: Message):
         """Handle /metrics command - show pipeline p50/p95 timing stats."""
@@ -565,6 +590,21 @@ class PropertyBot:
         ]
         if self._history_service is not None:
             tools.append(create_history_search_tool(history_service=self._history_service))
+
+        # CRM tools for manager users (#389)
+        if (
+            self._is_manager(user_id)
+            and self.config.kommo_enabled
+            and self._kommo_client is not None
+        ):
+            from .agents.crm_tools import create_crm_tools
+
+            crm_tools = create_crm_tools(
+                kommo=self._kommo_client,
+                history_service=self._history_service,
+                llm=self._llm,
+            )
+            tools.extend(crm_tools)
 
         # Build supervisor LLM (cheap model for routing)
         supervisor_llm = self._graph_config.create_supervisor_llm(
@@ -1012,6 +1052,9 @@ class PropertyBot:
             await self._reranker.close()
         if self._llm_guard_client is not None and hasattr(self._llm_guard_client, "aclose"):
             await self._llm_guard_client.aclose()
+        if self._kommo_client is not None:
+            await self._kommo_client.close()
+            logger.info("Kommo CRM client closed")
         if self._checkpointer is not None:
             try:
                 if hasattr(self._checkpointer, "__aexit__"):
