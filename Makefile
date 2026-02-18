@@ -138,6 +138,7 @@ test: ## Run fast deterministic PR/local gate (unit + critical graph paths)
 
 test-full: ## Run full test suite (all tiers)
 	@echo "$(BLUE)Running full test suite...$(NC)"
+	uv sync --all-extras --all-groups
 	uv run pytest tests/
 	@echo "$(GREEN)✓ Full test suite complete$(NC)"
 
