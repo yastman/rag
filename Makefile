@@ -634,6 +634,24 @@ eval-experiment: ***REMOVED******REMOVED*** Run RAG experiment on gold set
 	uv run python scripts/eval/run_experiment.py
 	@echo "$(GREEN)✓ Experiment complete$(NC)"
 
+.PHONY: eval-gold-gen eval-gold-gen-dry eval-sdk-experiment eval-sdk-experiment-named
+
+eval-gold-gen: ***REMOVED******REMOVED*** Generate gold set from Qdrant → Langfuse Dataset + JSONL
+	@echo "$(BLUE)Generating gold set from Qdrant...$(NC)"
+	uv run python scripts/generate_gold_set.py --collection gdrive_documents_bge
+
+eval-gold-gen-dry: ***REMOVED******REMOVED*** Dry-run gold set generation (JSONL only, no Langfuse)
+	@echo "$(BLUE)Generating gold set (dry-run)...$(NC)"
+	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
+
+eval-sdk-experiment: ***REMOVED******REMOVED*** Run SDK experiment on gold set (DATASET=name required)
+	@echo "$(BLUE)Running SDK experiment on gold set...$(NC)"
+	uv run python scripts/run_experiment.py --dataset $(DATASET)
+
+eval-sdk-experiment-named: ***REMOVED******REMOVED*** Run named SDK experiment (DATASET=name NAME=label required)
+	@echo "$(BLUE)Running SDK experiment '$(NAME)'...$(NC)"
+	uv run python scripts/run_experiment.py --dataset $(DATASET) --name $(NAME)
+
 ***REMOVED*** =============================================================================
 ***REMOVED*** MONITORING & ALERTING
 ***REMOVED*** =============================================================================
