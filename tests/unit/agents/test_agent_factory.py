@@ -54,7 +54,10 @@ def test_create_bot_agent_interpolates_language_in_default_prompt():
     """Default prompt must interpolate {language} placeholder."""
     from telegram_bot.agents.agent import create_bot_agent
 
-    with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
+    with (
+        patch("telegram_bot.agents.agent.create_agent") as mock_ca,
+        patch("telegram_bot.agents.agent.get_prompt", return_value="Prompt on английском языке"),
+    ):
         create_bot_agent(
             model="openai/gpt-oss-120b",
             tools=[],
@@ -63,7 +66,7 @@ def test_create_bot_agent_interpolates_language_in_default_prompt():
         )
         prompt = mock_ca.call_args[1]["system_prompt"]
         assert "английском языке" in prompt
-        assert "{language}" not in prompt
+        assert "{{language}}" not in prompt
 
 
 def test_create_bot_agent_passes_checkpointer():
@@ -79,3 +82,43 @@ def test_create_bot_agent_passes_checkpointer():
         )
         call_kwargs = mock_ca.call_args[1]
         assert call_kwargs["checkpointer"] is mock_cp
+
+
+def test_create_bot_agent_uses_langfuse_prompt_manager_by_default():
+    """Default system prompt should be resolved via prompt manager."""
+    from telegram_bot.agents.agent import create_bot_agent
+
+    with (
+        patch("telegram_bot.agents.agent.create_agent"),
+        patch("telegram_bot.agents.agent.get_prompt", return_value="resolved prompt") as mock_get,
+    ):
+        create_bot_agent(
+            model="openai/gpt-oss-120b",
+            tools=[],
+            checkpointer=None,
+            language="русском языке",
+        )
+
+    mock_get.assert_called_once()
+    call_kwargs = mock_get.call_args.kwargs
+    assert mock_get.call_args.args[0] == "supervisor_agent"
+    assert call_kwargs["variables"] == {"language": "русском языке"}
+    assert "Отвечай кратко" in call_kwargs["fallback"]
+
+
+def test_create_bot_agent_custom_prompt_bypasses_prompt_manager():
+    """Explicit system_prompt should skip prompt manager lookup."""
+    from telegram_bot.agents.agent import create_bot_agent
+
+    with (
+        patch("telegram_bot.agents.agent.create_agent"),
+        patch("telegram_bot.agents.agent.get_prompt") as mock_get,
+    ):
+        create_bot_agent(
+            model="openai/gpt-oss-120b",
+            tools=[],
+            checkpointer=None,
+            system_prompt="Manual prompt",
+        )
+
+    mock_get.assert_not_called()

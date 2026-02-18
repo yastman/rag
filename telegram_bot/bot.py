@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 # --- Checkpoint namespace constants (versioned for safe migration) ---
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
+_TELEGRAM_MESSAGE_LIMIT = 4096
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -65,6 +66,18 @@ def make_session_id(session_type: str, identifier: int | str) -> str:
 def _supervisor_thread_id(chat_id: int | str) -> str:
     """Build checkpointer thread id for text-agent conversations."""
     return f"tg_{chat_id}"
+
+
+def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
+    """Split a long text into Telegram-safe chunks.
+
+    Telegram rejects outgoing messages over 4096 characters.
+    """
+    if not text:
+        return []
+    if len(text) <= limit:
+        return [text]
+    return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
@@ -677,7 +690,8 @@ class PropertyBot:
 
             # Send response to user
             if response_text:
-                await message.answer(response_text)
+                for chunk in _split_telegram_response(response_text):
+                    await message.answer(chunk)
 
             # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
@@ -774,7 +788,7 @@ class PropertyBot:
                 reranker=self._reranker,
                 llm=self._llm,
                 message=message,
-                checkpointer=self._checkpointer,
+                checkpointer=self._agent_checkpointer,
                 show_transcription=self.config.show_transcription,
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
@@ -986,9 +1000,8 @@ class PropertyBot:
             logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
             self._checkpointer = create_fallback_checkpointer()
 
-        # Agent checkpointer — MemorySaver avoids redisvl JSON serialization
+        # Agent/voice checkpointer — MemorySaver avoids redisvl JSON serialization
         # errors with LangChain Message objects (HumanMessage, AIMessage) (#420).
-        # Voice pipeline keeps AsyncRedisSaver (graph state uses simple dicts).
         self._agent_checkpointer = create_fallback_checkpointer()
 
         # Initialize history service (Qdrant-backed Q&A history)
