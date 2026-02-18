@@ -620,6 +620,10 @@ class PropertyBot:
             lf.score_current_trace(
                 name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
             )
+            # Tool call count (#374)
+            tool_calls = result.get("tool_call_count", 0)
+            if tool_calls > 0:
+                lf.score_current_trace(name="tool_calls_total", value=float(tool_calls))
 
             # Persist Q&A to history (#310 — ported from monolith path)
             if self._history_service and response_text:

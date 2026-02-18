@@ -38,11 +38,14 @@ async def rerank_node(
     t0 = time.perf_counter()
 
     documents = state.get("documents", [])
+    llm_call_count = state.get("llm_call_count", 0) + 1
+
     if not documents:
         elapsed = time.perf_counter() - t0
         return {
             "documents": [],
             "rerank_applied": False,
+            "llm_call_count": llm_call_count,
             "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
         }
 
@@ -74,6 +77,7 @@ async def rerank_node(
             return {
                 "documents": reranked,
                 "rerank_applied": True,
+                "llm_call_count": llm_call_count,
                 "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
             }
         except Exception as e:
@@ -96,5 +100,6 @@ async def rerank_node(
     return {
         "documents": sorted_docs,
         "rerank_applied": False,
+        "llm_call_count": llm_call_count,
         "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
     }
