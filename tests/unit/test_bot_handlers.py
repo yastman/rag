@@ -441,6 +441,66 @@ class TestHandleQuery:
         state_arg = mock_graph.ainvoke.call_args.args[0]
         assert state_arg["max_tool_calls"] == 9
 
+    async def test_handle_query_skips_crm_tools_for_client_role(self, mock_config):
+        """CRM tools are not injected for non-manager users (#389)."""
+        mock_config.kommo_enabled = True
+        bot, _ = _create_bot(mock_config)
+        bot._kommo_client = AsyncMock()
+        bot._resolve_user_role = AsyncMock(return_value="client")
+
+        crm_tool = MagicMock()
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch(
+                "telegram_bot.agents.crm_tools.create_crm_tools", return_value=[crm_tool]
+            ) as crm_factory,
+            patch(
+                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
+            ) as build_graph,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        crm_factory.assert_not_called()
+        tools_passed = build_graph.call_args.kwargs["tools"]
+        assert crm_tool not in tools_passed
+
+    async def test_handle_query_adds_crm_tools_for_manager_role(self, mock_config):
+        """CRM tools are injected for manager users when Kommo is enabled (#389)."""
+        mock_config.kommo_enabled = True
+        bot, _ = _create_bot(mock_config)
+        bot._kommo_client = AsyncMock()
+        bot._resolve_user_role = AsyncMock(return_value="manager")
+
+        crm_tool = MagicMock()
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch(
+                "telegram_bot.agents.crm_tools.create_crm_tools", return_value=[crm_tool]
+            ) as crm_factory,
+            patch(
+                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
+            ) as build_graph,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        crm_factory.assert_called_once()
+        tools_passed = build_graph.call_args.kwargs["tools"]
+        assert crm_tool in tools_passed
+
 
 class TestHistorySaveOnResponse:
     """Test Q&A history persistence after successful responses."""
