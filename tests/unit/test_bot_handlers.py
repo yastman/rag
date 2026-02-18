@@ -200,8 +200,21 @@ class TestCommandHandlers:
 
         await bot.cmd_clear(message)
 
-        bot._checkpointer.adelete_thread.assert_awaited_once_with("12345")
+        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
+
+    async def test_cmd_clear_uses_chat_id_for_thread_namespace(self, mock_config):
+        """Thread cleanup must target chat-scoped SDK thread_id."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        bot._checkpointer = AsyncMock()
+        message = _make_text_message(user_id=777, chat_id=42)
+
+        await bot.cmd_clear(message)
+
+        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_42")
+        bot._cache.clear_conversation.assert_awaited_once_with(777)
 
     async def test_cmd_clear_handles_no_checkpointer(self, mock_config):
         """Test /clear works when checkpointer is None (fallback)."""
@@ -228,7 +241,7 @@ class TestCommandHandlers:
         await bot.cmd_clear(message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
-        bot._checkpointer.adelete_thread.assert_awaited_once_with("12345")
+        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
         message.answer.assert_awaited_once()
         answer_text = message.answer.await_args.args[0]
         assert "частично" in answer_text.lower()
@@ -283,12 +296,10 @@ class TestCommandHandlers:
         assert "p50" in call_args
 
 
-def _mock_supervisor_result(**overrides):
-    """Create a standard supervisor graph result dict."""
+def _mock_agent_result(**overrides):
+    """Create a standard SDK agent result dict (#413)."""
     base = {
         "messages": [MagicMock(content="Supervisor response")],
-        "agent_used": "rag_search",
-        "latency_stages": {"supervisor": 0.1},
     }
     base.update(overrides)
     return base
@@ -297,36 +308,38 @@ def _mock_supervisor_result(**overrides):
 class TestHandleQuery:
     """Test handle_query method — supervisor-only path (#310)."""
 
-    async def test_handle_query_invokes_supervisor_graph(self, mock_config):
-        """handle_query invokes supervisor graph (default path)."""
+    async def test_handle_query_invokes_agent(self, mock_config):
+        """handle_query invokes SDK agent (#413)."""
         bot, _ = _create_bot(mock_config)
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message("квартиры в Несебр")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-            mock_graph.ainvoke.assert_called_once()
+            mock_agent.ainvoke.assert_called_once()
 
     async def test_handle_query_sends_typing(self, mock_config):
         """Typing action is sent early."""
         bot, _ = _create_bot(mock_config)
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -336,17 +349,18 @@ class TestHandleQuery:
             message.bot.send_chat_action.assert_called_once_with(chat_id=12345, action="typing")
 
     async def test_handle_query_writes_langfuse_trace(self, mock_config):
-        """handle_query updates Langfuse trace with supervisor metadata."""
+        """handle_query updates Langfuse trace with sdk_agent metadata (#413)."""
         bot, _ = _create_bot(mock_config)
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
         mock_lf = MagicMock()
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -355,20 +369,21 @@ class TestHandleQuery:
 
             mock_lf.update_current_trace.assert_called_once()
             trace_kwargs = mock_lf.update_current_trace.call_args.kwargs
-            assert trace_kwargs["metadata"]["pipeline_mode"] == "supervisor"
+            assert trace_kwargs["metadata"]["pipeline_mode"] == "sdk_agent"
 
-    async def test_handle_query_writes_supervisor_scores(self, mock_config):
-        """handle_query writes agent_used, supervisor_latency_ms, supervisor_model scores."""
+    async def test_handle_query_writes_supervisor_model_score(self, mock_config):
+        """handle_query writes supervisor_model score (#413: agent_used/latency removed)."""
         bot, _ = _create_bot(mock_config)
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
         mock_lf = MagicMock()
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=mock_lf),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -379,269 +394,100 @@ class TestHandleQuery:
                 c.kwargs["name"]: c.kwargs.get("value")
                 for c in mock_lf.score_current_trace.call_args_list
             }
-            assert "agent_used" in score_calls
-            assert "supervisor_latency_ms" in score_calls
             assert "supervisor_model" in score_calls
+            # SDK agent handles routing internally — no agent_used/supervisor_latency_ms
+            assert "agent_used" not in score_calls
+            assert "supervisor_latency_ms" not in score_calls
 
-    async def test_handle_query_passes_guard_config_to_rag_agent(self, mock_config):
-        """Supervisor path forwards guard settings into create_rag_agent."""
+    async def test_handle_query_passes_bot_context_in_configurable(self, mock_config):
+        """SDK agent config passes bot_context to tools via configurable (#413)."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+            config_arg = mock_agent.ainvoke.call_args[1]["config"]
+            assert "bot_context" in config_arg["configurable"]
+
+    async def test_handle_query_uses_chat_scoped_thread_id(self, mock_config):
+        """SDK agent checkpointer thread_id uses chat namespace prefix."""
+        bot, _ = _create_bot(mock_config)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры", user_id=777, chat_id=42)
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        config_arg = mock_agent.ainvoke.call_args[1]["config"]
+        assert config_arg["configurable"]["thread_id"] == "tg_42"
+
+    async def test_handle_query_passes_guard_config_in_bot_context(self, mock_config):
+        """SDK agent path forwards guard settings via BotContext (#413)."""
         mock_config.content_filter_enabled = False
         mock_config.guard_mode = "soft"
-        mock_config.guard_ml_enabled = True
-        mock_config.max_llm_calls = 11
         bot, _ = _create_bot(mock_config)
-        bot._llm_guard_client = MagicMock()
-        bot._graph_config.max_rewrite_attempts = 4
-        bot._graph_config.show_sources = False
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
         with (
-            patch(
-                "telegram_bot.agents.rag_agent.create_rag_agent",
-                return_value=MagicMock(),
-            ) as mock_create_rag_agent,
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message("квартиры")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        kwargs = mock_create_rag_agent.call_args.kwargs
-        assert kwargs["content_filter_enabled"] is False
-        assert kwargs["guard_mode"] == "soft"
-        assert kwargs["guard_ml_enabled"] is True
-        assert kwargs["llm_guard_client"] is bot._llm_guard_client
-        assert kwargs["max_rewrite_attempts"] == 4
-        assert kwargs["show_sources"] is False
-        assert kwargs["max_llm_calls"] == 11
-
-    async def test_handle_query_passes_max_tool_calls_to_supervisor_state(self, mock_config):
-        """Supervisor invocation state uses configured max_tool_calls."""
-        mock_config.max_tool_calls = 9
-        bot, _ = _create_bot(mock_config)
-
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
-
-        with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot.propagate_attributes"),
-        ):
-            message = _make_text_message("квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        state_arg = mock_graph.ainvoke.call_args.args[0]
-        assert state_arg["max_tool_calls"] == 9
-
-    async def test_handle_query_passes_role_in_configurable(self, mock_config):
-        """Supervisor config should include resolved role for role-aware tools (#390)."""
-        bot, _ = _create_bot(mock_config)
-        bot._resolve_user_role = AsyncMock(return_value="manager")
-
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
-
-        with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot.propagate_attributes"),
-        ):
-            message = _make_text_message("квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
-        assert cfg["role"] == "manager"
-
-    async def test_handle_query_skips_crm_tools_for_client_role(self, mock_config):
-        """CRM tools are not injected for non-manager users (#389)."""
-        mock_config.kommo_enabled = True
-        bot, _ = _create_bot(mock_config)
-        bot._kommo_client = AsyncMock()
-        bot._resolve_user_role = AsyncMock(return_value="client")
-
-        crm_tool = MagicMock()
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
-
-        with (
-            patch(
-                "telegram_bot.agents.crm_tools.create_crm_tools", return_value=[crm_tool]
-            ) as crm_factory,
-            patch(
-                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
-            ) as build_graph,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot.propagate_attributes"),
-        ):
-            message = _make_text_message("квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        crm_factory.assert_not_called()
-        tools_passed = build_graph.call_args.kwargs["tools"]
-        assert crm_tool not in tools_passed
-
-    async def test_handle_query_adds_crm_tools_for_manager_role(self, mock_config):
-        """CRM tools are injected for manager users when Kommo is enabled (#389)."""
-        mock_config.kommo_enabled = True
-        bot, _ = _create_bot(mock_config)
-        bot._kommo_client = AsyncMock()
-        bot._resolve_user_role = AsyncMock(return_value="manager")
-
-        crm_tool = MagicMock()
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
-
-        with (
-            patch(
-                "telegram_bot.agents.crm_tools.create_crm_tools", return_value=[crm_tool]
-            ) as crm_factory,
-            patch(
-                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
-            ) as build_graph,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot.propagate_attributes"),
-        ):
-            message = _make_text_message("квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        crm_factory.assert_called_once()
-        tools_passed = build_graph.call_args.kwargs["tools"]
-        assert crm_tool in tools_passed
-
-    async def test_handle_query_skips_score_sync_tool_for_client_role(self, mock_config):
-        """Lead score sync tool is manager-only (#384)."""
-        mock_config.kommo_enabled = True
-        mock_config.kommo_lead_score_field_id = 701
-        mock_config.kommo_lead_band_field_id = 702
-        bot, _ = _create_bot(mock_config)
-        bot._kommo_client = AsyncMock()
-        bot._lead_scoring_store = AsyncMock()
-        bot._resolve_user_role = AsyncMock(return_value="client")
-
-        score_tool = MagicMock()
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
-
-        with (
-            patch(
-                "telegram_bot.agents.tools.create_crm_score_sync_tool", return_value=score_tool
-            ) as score_factory,
-            patch(
-                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
-            ) as build_graph,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot.propagate_attributes"),
-        ):
-            message = _make_text_message("квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        score_factory.assert_not_called()
-        tools_passed = build_graph.call_args.kwargs["tools"]
-        assert score_tool not in tools_passed
-
-    async def test_handle_query_adds_score_sync_tool_for_manager_with_fields(self, mock_config):
-        """Lead score sync tool is added for manager when Kommo field ids are configured."""
-        mock_config.kommo_enabled = True
-        mock_config.kommo_lead_score_field_id = 701
-        mock_config.kommo_lead_band_field_id = 702
-        bot, _ = _create_bot(mock_config)
-        bot._kommo_client = AsyncMock()
-        bot._lead_scoring_store = AsyncMock()
-        bot._resolve_user_role = AsyncMock(return_value="manager")
-
-        score_tool = MagicMock()
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
-
-        with (
-            patch(
-                "telegram_bot.agents.tools.create_crm_score_sync_tool", return_value=score_tool
-            ) as score_factory,
-            patch(
-                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
-            ) as build_graph,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot.propagate_attributes"),
-        ):
-            message = _make_text_message("квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        score_factory.assert_called_once()
-        tools_passed = build_graph.call_args.kwargs["tools"]
-        assert score_tool in tools_passed
-
-    async def test_handle_query_skips_score_sync_tool_when_field_ids_missing(self, mock_config):
-        """Lead score sync tool is not added when Kommo field ids are unset."""
-        mock_config.kommo_enabled = True
-        mock_config.kommo_lead_score_field_id = 0
-        mock_config.kommo_lead_band_field_id = 0
-        bot, _ = _create_bot(mock_config)
-        bot._kommo_client = AsyncMock()
-        bot._lead_scoring_store = AsyncMock()
-        bot._resolve_user_role = AsyncMock(return_value="manager")
-
-        score_tool = MagicMock()
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
-
-        with (
-            patch(
-                "telegram_bot.agents.tools.create_crm_score_sync_tool", return_value=score_tool
-            ) as score_factory,
-            patch(
-                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
-            ) as build_graph,
-            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
-            patch("telegram_bot.bot.propagate_attributes"),
-        ):
-            message = _make_text_message("квартиры")
-            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
-                mock_cas.typing.return_value = _make_typing_cm()
-                await bot.handle_query(message)
-
-        score_factory.assert_not_called()
-        tools_passed = build_graph.call_args.kwargs["tools"]
-        assert score_tool not in tools_passed
+        config_arg = mock_agent.ainvoke.call_args[1]["config"]
+        ctx = config_arg["configurable"]["bot_context"]
+        assert ctx.content_filter_enabled is False
+        assert ctx.guard_mode == "soft"
 
 
 class TestHistorySaveOnResponse:
     """Test Q&A history persistence after successful responses."""
 
     async def test_handle_query_saves_history(self, mock_config):
-        """handle_query (supervisor) stores history record when response exists."""
+        """handle_query (sdk_agent) stores history record when response exists (#413)."""
         bot, _ = _create_bot(mock_config)
         bot._history_service = AsyncMock()
         bot._history_service.save_turn = AsyncMock(return_value=True)
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(
-            return_value=_mock_supervisor_result(
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(
+            return_value=_mock_agent_result(
                 messages=[MagicMock(content="Вот квартиры...")],
             )
         )
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message("квартиры в Несебр")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -703,17 +549,18 @@ class TestHistorySaveOnResponse:
         assert call_kwargs["query"] == "распознанный текст"
 
     async def test_handle_query_skips_history_when_no_service(self, mock_config):
-        """handle_query (supervisor) skips history save when service is None."""
+        """handle_query (sdk_agent) skips history save when service is None (#413)."""
         bot, _ = _create_bot(mock_config)
         bot._history_service = None
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -722,18 +569,19 @@ class TestHistorySaveOnResponse:
                 await bot.handle_query(message)
 
     async def test_handle_query_history_save_failure_does_not_break_response(self, mock_config):
-        """History save failure should not break user response flow (supervisor)."""
+        """History save failure should not break user response flow (sdk_agent, #413)."""
         bot, _ = _create_bot(mock_config)
         bot._history_service = AsyncMock()
         bot._history_service.save_turn = AsyncMock(side_effect=RuntimeError("save failed"))
 
-        mock_graph = AsyncMock()
-        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
         with (
-            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message()
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -1546,27 +1394,25 @@ class TestMakeSessionId:
         assert make_session_id("chat", id_a) != make_session_id("chat", id_b)
 
 
-class TestSupervisorIntegration:
-    """Test supervisor-only query path (#310)."""
+class TestSdkAgentIntegration:
+    """Test SDK agent query path (#413, replaces #310 supervisor)."""
 
-    async def test_handle_query_always_uses_supervisor(self, mock_config):
-        """handle_query always uses supervisor graph (default since #310)."""
+    async def test_handle_query_always_uses_sdk_agent(self, mock_config):
+        """handle_query always uses SDK agent (#413)."""
         bot, _ = _create_bot(mock_config)
 
-        mock_supervisor_graph = AsyncMock()
-        mock_supervisor_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
         with (
-            patch(
-                "telegram_bot.bot.build_supervisor_graph",
-                return_value=mock_supervisor_graph,
-            ),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
         ):
             message = _make_text_message("цены на квартиры")
             with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-            mock_supervisor_graph.ainvoke.assert_called_once()
+            mock_agent.ainvoke.assert_called_once()
