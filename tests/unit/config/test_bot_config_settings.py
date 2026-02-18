@@ -54,6 +54,14 @@ class TestBotConfigIsPydanticSettings:
         assert config.use_hyde is True
         assert config.mmr_enabled is False
 
+    def test_manager_hot_lead_defaults(self):
+        """Manager hot-lead config fields have sane defaults (#388)."""
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig()
+        assert cfg.manager_hot_lead_threshold == 60
+        assert cfg.manager_hot_lead_dedupe_sec == 3600
+
     def test_config_get_collection_name(self):
         """get_collection_name() still works after migration."""
         from telegram_bot.config import BotConfig

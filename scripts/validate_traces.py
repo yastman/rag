@@ -85,7 +85,9 @@ def _load_go_no_go_thresholds(
 ) -> dict[str, Any]:
     """Load Go/No-Go thresholds from YAML, with optional overrides."""
     with open(GO_NO_GO_THRESHOLDS_PATH) as f:
-        defaults = yaml.safe_load(f).get("go_no_go", {})
+        all_cfg = yaml.safe_load(f)
+    defaults = all_cfg.get("go_no_go", {})
+    defaults["judge"] = all_cfg.get("judge", {})
     if custom:
         defaults.update(custom)
     return defaults
@@ -899,6 +901,34 @@ def evaluate_go_no_go(
             "stddev": "\u2014",
         }
 
+    # 11. Judge quality scores (#386) — from Langfuse managed evaluators
+    judge_thresholds = t.get("judge", {})
+    for metric, key, label in [
+        ("judge_faithfulness_mean", "faithfulness_mean_gte", "faithfulness"),
+        ("judge_answer_relevance_mean", "answer_relevance_mean_gte", "answer_relevance"),
+        ("judge_context_relevance_mean", "context_relevance_mean_gte", "context_relevance"),
+    ]:
+        threshold = judge_thresholds.get(key)
+        value = aggregates.get(metric)
+        count = aggregates.get(f"{metric.replace('_mean', '')}_count", 0)
+        criterion_key = f"judge_{label}_gte"
+        if threshold is None or value is None:
+            criteria[criterion_key] = {
+                "target": f">= {threshold}" if threshold else "N/A",
+                "actual": f"N/A (n={count})",
+                "passed": True,
+                "skipped": True,
+                "stddev": "\u2014",
+            }
+        else:
+            criteria[criterion_key] = {
+                "target": f">= {threshold}",
+                "actual": f"{value:.3f} (n={count})",
+                "passed": value >= threshold,
+                "skipped": False,
+                "stddev": "\u2014",
+            }
+
     # Override cold-dependent criteria when cold phase was skipped
     cold_skipped = all(r.state.get("cold_skipped") for r in cold_results) if cold_results else False
     if cold_skipped:
@@ -1018,6 +1048,14 @@ def compute_aggregates(results: list[TraceResult]) -> dict[str, Any]:
             "ttft_mean": float(np.mean(ttft_values)),
             "ttft_max": float(np.max(ttft_values)),
         }
+
+    # Judge score aggregation (#386) — from Langfuse managed evaluators
+    judge_metrics = ("judge_faithfulness", "judge_answer_relevance", "judge_context_relevance")
+    for judge_name in judge_metrics:
+        vals = [r.scores.get(judge_name) for r in results if r.scores.get(judge_name) is not None]
+        if vals:
+            aggregates[f"{judge_name}_mean"] = round(float(np.mean(vals)), 3)
+            aggregates[f"{judge_name}_count"] = len(vals)
 
     return aggregates
 

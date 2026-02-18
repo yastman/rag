@@ -35,6 +35,7 @@ from .scoring import (
     write_langfuse_scores,
 )
 from .services.history_service import HistoryService
+from .services.manager_menu import render_start_menu
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 
@@ -228,6 +229,27 @@ class PropertyBot:
         # History service (initialized in start())
         self._history_service: HistoryService | None = None
 
+        # i18n hub (fluentogram) — initialized in start()
+        self._i18n_hub: Any = None
+
+        # User service (asyncpg) — initialized in start()
+        self._user_service: Any = None
+
+        # PostgreSQL pool — initialized in start()
+        self._pg_pool: Any = None
+
+        # Kommo CRM client (initialized in start() if enabled)
+        self._kommo_client: Any | None = None
+
+        # Lead scoring store (initialized in start() with pg_pool)
+        self._lead_scoring_store: Any | None = None
+
+        # Nurturing scheduler (initialized in start() if enabled)
+        self._nurturing_scheduler: Any | None = None
+
+        # Hot lead notifier (initialized in start() when manager_ids configured)
+        self._hot_lead_notifier: Any | None = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -256,17 +278,38 @@ class PropertyBot:
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
 
-    async def cmd_start(self, message: Message):
-        """Handle /start command."""
-        domain = self.config.domain
-        await message.answer(
-            f"Привет! Я бот-помощник по теме: {domain}.\n\n"
-            "Задавай вопросы вроде:\n"
-            "- Покажи квартиры дешевле 100 000 евро\n"
-            "- 3-комнатные в Солнечный берег\n"
-            "- Студии до 350м от моря\n\n"
-            "Используй /help для помощи."
-        )
+    async def _resolve_user_role(self, user_id: int) -> str:
+        """Resolve user role from DB or config fallback (#388)."""
+        db_role: str | None = None
+        user_service = getattr(self, "_user_service", None)
+        if user_service is not None and hasattr(user_service, "get_role"):
+            try:
+                resolved = await user_service.get_role(telegram_id=user_id)
+                if isinstance(resolved, str):
+                    normalized = resolved.strip().lower()
+                    if normalized in {"manager", "client"}:
+                        db_role = normalized
+            except Exception:
+                logger.warning("Role lookup failed", exc_info=True)
+
+        # Config manager_ids should still elevate known managers even if DB is stale.
+        if user_id in self.config.manager_ids:
+            return "manager"
+        return db_role or "client"
+
+    async def cmd_start(self, message: Message, dialog_manager: Any = None):
+        """Handle /start command — launch menu dialog."""
+        if dialog_manager is not None:
+            from aiogram_dialog import StartMode
+
+            from .dialogs.states import ClientMenuSG
+
+            await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+        else:
+            # Fallback (dialog not initialized)
+            assert message.from_user is not None
+            role = await self._resolve_user_role(message.from_user.id)
+            await message.answer(render_start_menu(role=role, domain=self.config.domain))
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -543,6 +586,7 @@ class PropertyBot:
         bot = message.bot
         user_id = message.from_user.id
         session_id = make_session_id("chat", message.chat.id)
+        role = await self._resolve_user_role(user_id)
 
         # Build tools list
         tools: list[Any] = [rag_search]
@@ -550,7 +594,11 @@ class PropertyBot:
             tools.append(history_search)
 
         # Add CRM tools conditionally
-        if getattr(self.config, "kommo_enabled", False) and getattr(self, "_kommo_client", None):
+        if (
+            role == "manager"
+            and getattr(self.config, "kommo_enabled", False)
+            and getattr(self, "_kommo_client", None)
+        ):
             from .agents.crm_tools import get_crm_tools
 
             tools.extend(get_crm_tools())
@@ -629,6 +677,12 @@ class PropertyBot:
                 value=self.config.supervisor_model,
                 data_type="CATEGORICAL",
             )
+            # User role score (#388)
+            lf.score_current_trace(name="user_role", value=role, data_type="CATEGORICAL")
+            # Tool call count (#374)
+            tool_calls = result.get("tool_call_count", 0)
+            if tool_calls > 0:
+                lf.score_current_trace(name="tool_calls_total", value=float(tool_calls))
 
             # Persist Q&A to history
             if self._history_service and response_text:
@@ -681,6 +735,7 @@ class PropertyBot:
         state["input_type"] = "voice"
         state["max_rewrite_attempts"] = self._graph_config.max_rewrite_attempts
         state["show_sources"] = self._graph_config.show_sources
+        state["max_llm_calls"] = self.config.max_llm_calls
 
         with propagate_attributes(
             session_id=state["session_id"],
@@ -924,6 +979,118 @@ class PropertyBot:
             logger.warning("History service init failed, /history disabled", exc_info=True)
             self._history_service = None
 
+        # Initialize Kommo CRM client if enabled
+        if self.config.kommo_enabled and self.config.kommo_subdomain:
+            try:
+                from .services.kommo_client import KommoClient
+                from .services.kommo_tokens import KommoTokenStore
+
+                if self._cache.redis is None:
+                    raise RuntimeError("Cache redis client is not initialized")
+
+                token_store = KommoTokenStore(
+                    redis=self._cache.redis,
+                    client_id=self.config.kommo_client_id,
+                    client_secret=self.config.kommo_client_secret.get_secret_value(),
+                    subdomain=self.config.kommo_subdomain,
+                    redirect_uri=self.config.kommo_redirect_uri,
+                )
+                auth_code = self.config.kommo_auth_code or None
+                await token_store.initialize(authorization_code=auth_code)
+
+                self._kommo_client = KommoClient(
+                    subdomain=self.config.kommo_subdomain,
+                    token_store=token_store,
+                )
+                logger.info(
+                    "Kommo CRM client initialized (subdomain=%s)",
+                    self.config.kommo_subdomain,
+                )
+            except Exception:
+                logger.exception("Failed to initialize Kommo CRM client")
+                self._kommo_client = None
+
+        # Initialize PostgreSQL pool for realestate DB
+        try:
+            import asyncpg
+
+            self._pg_pool = await asyncpg.create_pool(
+                self.config.realestate_database_url,
+                min_size=0,
+                max_size=5,
+                timeout=5,
+            )
+            logger.info("PostgreSQL pool ready (realestate)")
+
+            from .services.user_service import UserService
+
+            self._user_service = UserService(pool=self._pg_pool)
+
+            # Initialize lead scoring store (#384)
+            from .services.lead_scoring_store import LeadScoringStore
+
+            self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
+            logger.info("Lead scoring store ready")
+
+            # Initialize hot lead notifier (#402)
+            if self.config.manager_ids and self._cache.redis is not None:
+                try:
+                    from .services.hot_lead_notifier import HotLeadNotifier
+
+                    self._hot_lead_notifier = HotLeadNotifier(
+                        bot=self.bot,
+                        cache=self._cache,
+                        manager_ids=self.config.manager_ids,
+                        dedupe_ttl_sec=self.config.manager_hot_lead_dedupe_sec,
+                    )
+                    logger.info("Hot lead notifier ready (managers=%s)", self.config.manager_ids)
+                except Exception:
+                    logger.exception("Failed to initialize hot lead notifier")
+
+            # Initialize nurturing scheduler (#390)
+            if self.config.nurturing_enabled:
+                try:
+                    from .services.funnel_analytics_service import FunnelAnalyticsService
+                    from .services.nurturing_scheduler import NurturingScheduler
+                    from .services.nurturing_service import NurturingService
+
+                    nurturing_svc = NurturingService(pool=self._pg_pool)
+                    analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
+                    self._nurturing_scheduler = NurturingScheduler(
+                        nurturing_service=nurturing_svc,
+                        analytics_service=analytics_svc,
+                        lease_store=None,
+                        config=self.config,
+                    )
+                    await self._nurturing_scheduler.start()
+                    logger.info("Nurturing scheduler started")
+                except Exception:
+                    logger.exception("Failed to start nurturing scheduler")
+        except Exception:
+            logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
+
+        # Initialize i18n (fluentogram)
+        from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
+
+        self._i18n_hub = create_translator_hub()
+        setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
+        logger.info("i18n middleware ready")
+
+        # Setup aiogram-dialog
+        from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
+
+        from .dialogs.client_menu import client_menu_dialog
+        from .dialogs.faq import faq_dialog
+        from .dialogs.funnel import funnel_dialog
+        from .dialogs.settings import settings_dialog
+
+        self.dp.include_router(client_menu_dialog)
+        self.dp.include_router(settings_dialog)
+        self.dp.include_router(funnel_dialog)
+        self.dp.include_router(faq_dialog)
+        aiogram_setup_dialogs(self.dp)
+        logger.info("aiogram-dialog setup complete")
+
         # Preflight dependency checks
         from .preflight import check_dependencies
 
@@ -958,6 +1125,9 @@ class PropertyBot:
             await self._sparse.aclose()
         if self._reranker and hasattr(self._reranker, "close"):
             await self._reranker.close()
+        if self._kommo_client is not None:
+            await self._kommo_client.close()
+            self._kommo_client = None
         if self._llm_guard_client is not None and hasattr(self._llm_guard_client, "aclose"):
             await self._llm_guard_client.aclose()
         if self._checkpointer is not None:
@@ -968,4 +1138,10 @@ class PropertyBot:
                 logger.warning("Failed to close checkpointer cleanly", exc_info=True)
             finally:
                 self._checkpointer = None
+        if self._nurturing_scheduler is not None:
+            await self._nurturing_scheduler.stop()
+            self._nurturing_scheduler = None
+        if self._pg_pool is not None:
+            await self._pg_pool.close()
+            logger.info("PostgreSQL pool closed")
         await self.bot.session.close()

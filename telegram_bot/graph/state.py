@@ -83,6 +83,9 @@ class RAGState(TypedDict):
     # Guard ML classifier (#226 Phase 2)
     guard_ml_score: float
     guard_ml_latency_ms: float
+    # Call limits (#374)
+    llm_call_count: int
+    max_llm_calls: int
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -158,4 +161,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         # Guard ML classifier (#226 Phase 2)
         "guard_ml_score": 0.0,
         "guard_ml_latency_ms": 0.0,
+        # Call limits (#374)
+        "llm_call_count": 0,
+        "max_llm_calls": 5,
     }
