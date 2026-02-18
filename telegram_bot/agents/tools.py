@@ -12,7 +12,7 @@ from typing import Any, cast
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -81,53 +81,53 @@ def create_rag_search_tool(
     return rag_search
 
 
-def create_history_search_tool(*, history_service: Any) -> Any:
-    """Create history_search tool with injected HistoryService."""
+def create_history_search_tool(
+    *,
+    history_service: Any,
+    llm: Any | None = None,
+) -> Any:
+    """Create history_search tool wrapping the history sub-graph (#408).
+
+    The tool delegates to build_history_graph().ainvoke() which runs a
+    4-node pipeline: retrieve → grade → [rewrite] → summarize.
+    """
+    from telegram_bot.agents.history_graph.graph import build_history_graph
+    from telegram_bot.agents.history_graph.nodes import write_history_scores
+
+    graph = build_history_graph(history_service=history_service, llm=llm)
 
     @tool
+    @observe(name="tool-history-search", capture_input=False, capture_output=False)
     async def history_search(query: str, config: RunnableConfig) -> str:
         """Search conversation history for past interactions.
 
         Use this tool when the user asks about their previous questions,
         past conversations, or wants to find something discussed earlier.
+        Returns an LLM-generated summary of relevant past conversations.
         """
+        lf = get_client()
+        lf.update_current_span(input={"query_preview": query[:120]})
+
         user_id, _session_id = _get_user_context(config)
         if user_id is None:
             return "Error: user context not available. Cannot search history."
 
         try:
-            results = await history_service.search_user_history(
-                user_id=user_id,
-                query=query,
-                limit=5,
-            )
+            from telegram_bot.agents.history_graph.state import make_history_state
+
+            state = make_history_state(user_id=user_id, query=query)
+            result = await graph.ainvoke(state)
+
+            if isinstance(result, dict):
+                write_history_scores(lf, result)
+                summary = result.get("summary", "")
+                lf.update_current_span(output={"summary_length": len(summary)})
+                return summary or f"По запросу «{query}» ничего не найдено в истории диалогов."
+            return f"По запросу «{query}» ничего не найдено в истории диалогов."
         except Exception:
-            logger.exception("History search failed")
+            logger.exception("History search sub-graph failed")
+            lf.update_current_span(level="ERROR", status_message="History sub-graph failed")
             return "Произошла ошибка при поиске в истории. Попробуйте позже."
-
-        if not results:
-            return f"По запросу «{query}» ничего не найдено в истории диалогов."
-
-        lines = []
-        item_no = 0
-        for r in results:
-            q = r.get("query")
-            resp = r.get("response")
-            if not isinstance(q, str) or not isinstance(resp, str):
-                continue
-
-            item_no += 1
-            ts = str(r.get("timestamp", ""))[:16].replace("T", " ")
-            lines.append(f"{item_no}. [{ts}] Q: {q}")
-            resp_preview = resp[:150]
-            if len(resp) > 150:
-                resp_preview += "..."
-            lines.append(f"   A: {resp_preview}")
-
-        if not lines:
-            return f"По запросу «{query}» ничего не найдено в истории диалогов."
-
-        return "\n".join(lines)
 
     return history_search
 
