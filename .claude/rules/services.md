@@ -25,7 +25,14 @@ telegram_bot/
 │   ├── voyage.py          ***REMOVED*** VoyageService (embeddings + rerank API)
 │   ├── vectorizers.py     ***REMOVED*** UserBaseVectorizer + BgeM3CacheVectorizer (uses BGEM3Client)
 │   ├── metrics.py         ***REMOVED*** PipelineMetrics (p50/p95 tracking)
-│   └── redis_monitor.py   ***REMOVED*** RedisHealthMonitor (background task)
+│   ├── redis_monitor.py   ***REMOVED*** RedisHealthMonitor (background task)
+│   ├── lead_scoring_models.py  ***REMOVED*** LeadScoreRecord, LeadScoreSyncPayload
+│   ├── lead_scoring_store.py   ***REMOVED*** LeadScoringStore (asyncpg upsert, pending sync queue)
+│   ├── kommo_tokens.py         ***REMOVED*** KommoTokenStoreProtocol
+│   ├── funnel_analytics_store.py   ***REMOVED*** FunnelAnalyticsStore (daily metrics)
+│   ├── funnel_analytics_service.py ***REMOVED*** FunnelAnalyticsService
+│   ├── nurturing_service.py    ***REMOVED*** NurturingService
+│   └── nurturing_scheduler.py  ***REMOVED*** NurturingScheduler (APScheduler v3)
 ├── integrations/          ***REMOVED*** LangGraph-compatible wrappers
 │   ├── cache.py           ***REMOVED*** CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
 │   ├── embeddings.py      ***REMOVED*** BGEM3HybridEmbeddings (uses BGEM3Client) + legacy wrappers
@@ -135,6 +142,28 @@ sparse = gc.create_sparse_embeddings()   ***REMOVED*** BGEM3SparseEmbeddings
 | `conversation:{user_id}` | Chat history |
 
 Bump version when changing models. Old keys expire naturally.
+
+***REMOVED******REMOVED******REMOVED*** CRM Services (***REMOVED***384, ***REMOVED***390)
+
+```python
+from telegram_bot.services.lead_scoring_store import LeadScoringStore
+from telegram_bot.services.nurturing_service import NurturingService
+from telegram_bot.services.funnel_analytics_service import FunnelAnalyticsService
+
+***REMOVED*** Lead scoring — asyncpg, upsert with sync_status tracking
+store = LeadScoringStore(pool=asyncpg_pool)
+await store.upsert_score(user_id, score_record)
+pending = await store.get_pending_sync()  ***REMOVED*** for Kommo sync
+
+***REMOVED*** Nurturing — APScheduler v3 for batch scheduling
+nurturing = NurturingService(...)
+scheduler = NurturingScheduler(nurturing, interval_minutes=config.nurturing_interval)
+
+***REMOVED*** Funnel — daily conversion/dropoff snapshots
+funnel = FunnelAnalyticsService(store=FunnelAnalyticsStore(pool))
+```
+
+**DB tables:** `lead_scores`, `lead_score_sync_audit`, `nurturing_jobs`, `funnel_metrics_daily`, `scheduler_leases`
 
 ***REMOVED******REMOVED*** I/O Patterns
 
