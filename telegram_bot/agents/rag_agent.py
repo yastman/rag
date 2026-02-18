@@ -9,9 +9,7 @@ scores that were previously written by the monolith handler.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import random
 import time
 from typing import Any, cast
 
@@ -99,42 +97,6 @@ def create_rag_agent(
 
                 # Write full pipeline scores to Langfuse trace (#310)
                 write_langfuse_scores(lf, result)
-
-                # Online LLM-as-a-Judge sampling (#310)
-                configurable = (config or {}).get("configurable", {})
-                judge_rate = configurable.get("judge_sample_rate", 0)
-                if (
-                    judge_rate > 0
-                    and not result.get("cache_hit")
-                    and result.get("retrieved_context")
-                    and random.random() < judge_rate
-                ):
-                    from telegram_bot.evaluation.runner import run_online_judge
-
-                    trace_id = (
-                        lf.get_current_trace_id() if hasattr(lf, "get_current_trace_id") else ""
-                    )
-                    if trace_id:
-                        context_text = "\n\n".join(
-                            f"[{d.get('score', 0):.2f}] {d.get('content', '')}"
-                            for d in result.get("retrieved_context", [])
-                        )
-                        judge_model = configurable.get("judge_model", "gpt-4o-mini-cerebras-glm")
-                        llm_base_url = configurable.get("llm_base_url", "http://localhost:4000")
-                        _judge_task = asyncio.create_task(
-                            run_online_judge(
-                                langfuse=lf,
-                                trace_id=trace_id,
-                                query=query,
-                                answer=result.get("response", ""),
-                                context=context_text,
-                                model=judge_model,
-                                llm_base_url=llm_base_url,
-                            )
-                        )
-                        _judge_task.add_done_callback(
-                            lambda t: t.result() if not t.cancelled() else None
-                        )
 
                 response = result.get("response", "No response generated.")
                 lf.update_current_span(output={"response_length": len(str(response))})
