@@ -29,7 +29,7 @@ Current stack snapshot for this repository as of 2026-02-18.
 | Service | Purpose |
 | --- | --- |
 | Qdrant | Hybrid dense+sparse retrieval storage |
-| Redis | Cache and runtime state |
+| Redis | Cache and runtime state (`REDIS_PASSWORD` is required in compose/k8s deployments) |
 | PostgreSQL (pgvector image) | App/ingestion/observability state |
 | BGE-M3 API | Local dense/sparse embeddings and rerank endpoint |
 | Docling | Document parsing/chunk extraction |
