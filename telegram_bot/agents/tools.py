@@ -198,6 +198,38 @@ def create_crm_score_sync_tool(
     return crm_sync_lead_score
 
 
+def create_manager_nurturing_tools(*, analytics_service: Any, nurturing_service: Any) -> list[Any]:
+    """Create manager-only nurturing + analytics tools (#390)."""
+
+    @tool
+    async def manager_get_funnel_analytics(query: str, config: RunnableConfig) -> str:
+        """Get funnel conversion analytics for manager review.
+
+        Returns the latest daily funnel metrics including conversion rates,
+        dropoff counts, and stage-level performance data.
+        """
+        role = (config or {}).get("configurable", {}).get("role", "client")
+        if role not in {"manager", "admin"}:
+            return "Access denied"
+        report = await analytics_service.get_latest_summary()
+        return str(report)
+
+    @tool
+    async def manager_run_nurturing_batch(query: str, config: RunnableConfig) -> str:
+        """Execute an on-demand nurturing batch for warm/cold leads.
+
+        Selects eligible leads and enqueues nurturing messages.
+        Manager-only operation.
+        """
+        role = (config or {}).get("configurable", {}).get("role", "client")
+        if role not in {"manager", "admin"}:
+            return "Access denied"
+        count = await nurturing_service.run_once(limit=100)
+        return f"Nurturing batch executed: {count} leads"
+
+    return [manager_get_funnel_analytics, manager_run_nurturing_batch]
+
+
 @tool
 @observe(name="tool-direct-response")
 async def direct_response(message: str) -> str:
