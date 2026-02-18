@@ -12,12 +12,14 @@
 
 ## Documentation Strategy
 - Canonical operational docs:
+  - `DOCKER.md`
   - `docs/PROJECT_STACK.md`
   - `docs/PIPELINE_OVERVIEW.md`
   - `docs/LOCAL-DEVELOPMENT.md`
   - `docs/QDRANT_STACK.md`
   - `docs/INGESTION.md`
   - `docs/ALERTING.md`
+  - dated audits such as `docs/2026-02-18-docs-docker-audit.md`
 - Agent-facing runbooks:
   - `docs/agent-rules/*.md`
 
