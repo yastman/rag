@@ -275,7 +275,7 @@ Claude понимает: прочитать план, запустить `spawn-
 | Profile | Required |
 |---------|----------|
 | core | None (dev defaults) |
-| bot | `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY` + 1 LLM provider (dev also needs `VOYAGE_API_KEY`) |
+| bot | `TELEGRAM_BOT_TOKEN`, `LITELLM_MASTER_KEY` + 1 LLM provider (dev also needs `VOYAGE_API_KEY`) | CRM (optional): `KOMMO_LEAD_SCORE_FIELD_ID`, `KOMMO_LEAD_BAND_FIELD_ID`, `NURTURING_ENABLED`, `NURTURING_INTERVAL_MINUTES`, `FUNNEL_ROLLUP_CRON` |
 | ml | `NEXTAUTH_SECRET`, `SALT`, `ENCRYPTION_KEY` |
 
 **Verification:**

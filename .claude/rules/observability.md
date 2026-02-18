@@ -244,7 +244,7 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 
 ## Langfuse Scores (All Exit Paths)
 
-14 scores written via `write_langfuse_scores(lf, result)` (from `telegram_bot/scoring.py`) + 3 judge scores (async). Called by `rag_agent.py` (supervisor path) and `handle_voice` (voice path):
+14 RAG scores written via `write_langfuse_scores(lf, result)` (from `telegram_bot/scoring.py`) + 4 CRM scores + 3 judge scores (async). Called by `rag_agent.py` (supervisor path) and `handle_voice` (voice path):
 
 **Latency convention:** `latency_total_ms` is **wall-time** measured via `time.perf_counter` in `handle_query` (pipeline_wall_ms), NOT sum of stages. All `latency_stages` values are in **seconds** (float) for per-stage breakdown only.
 
@@ -278,6 +278,15 @@ Written by `run_online_judge()` via `asyncio.create_task()` — fire-and-forget,
 | `judge_*_error` | CATEGORICAL | Written on judge failure (instead of 0.0) |
 
 Controlled by `JUDGE_SAMPLE_RATE` (default 0.0 = off). Batch mode: `make eval-judge`.
+
+### CRM Scores (#384, #390)
+
+| Score | Type | Purpose |
+|-------|------|---------|
+| `nurturing_batch_size` | NUMERIC | Total leads in nurturing batch |
+| `nurturing_sent_count` | NUMERIC | Successfully sent nurturing messages |
+| `funnel_conversion_rate` | NUMERIC | Stage conversion rate |
+| `funnel_dropoff_rate` | NUMERIC | Stage dropoff rate |
 
 **Implementation:** `get_client().score_current_trace(name=..., value=...)` (Langfuse SDK v3), `user_feedback` via `create_score(trace_id=...)` in callback handler
 

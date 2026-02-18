@@ -1,278 +1,95 @@
-# Local Development Guide
+# Local Development
 
-Complete guide for running the RAG bot development environment locally.
+Canonical local setup and verification flow.
 
-## Requirements
+## Prerequisites
 
-- Docker 24+
-- Docker Compose v2
-- OpenAI API key (for LLM and embeddings)
-- ~8GB RAM (BGE-M3 and Docling are memory-intensive)
+- Python `3.12` recommended (`>=3.11` supported)
+- `uv`
+- Docker + Docker Compose v2
 
-## Quick Start
-
-### 1. Clone and setup
+## 1. Bootstrap Workspace
 
 ```bash
-git clone https://github.com/yastman/rag.git
-cd rag
+uv sync
 cp .env.example .env
 ```
 
-### 2. Configure API keys
+Minimum env for bot profile:
+- `TELEGRAM_BOT_TOKEN`
+- `LITELLM_MASTER_KEY`
+- at least one provider key: `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
 
-Edit `.env` and set:
+## 2. Start Services
 
 ```bash
-OPENAI_API_KEY=sk-your-openai-key
-TELEGRAM_BOT_TOKEN=your-telegram-bot-token  # optional
+# Core services (default compose set)
+make docker-up
+
+# Bot runtime
+make docker-bot-up
+
+# Optional profiles
+make docker-ml-up
+make docker-ingest-up
+make docker-voice-up
+make monitoring-up
 ```
 
-### 3. Start dev stack
+## 3. Validate Runtime
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+make docker-ps
+curl -fsS http://localhost:6333/readyz
+curl -fsS http://localhost:8000/health
+curl -fsS http://localhost:5001/health
 ```
 
-First start takes 5-10 minutes (downloading images, loading models).
-
-### 4. Verify services
+Bot preflight:
 
 ```bash
-docker compose -f docker-compose.dev.yml ps
+make test-bot-health
 ```
 
-All services should show "healthy" status.
-
-## Services
-
-| Service          | URL                             | Purpose                                   |
-| ---------------- | ------------------------------- | ----------------------------------------- |
-| PostgreSQL       | localhost:5432                  | Database (user: postgres, pass: postgres) |
-| Redis            | localhost:6379                  | Cache                                     |
-| Qdrant           | http://localhost:6333           | Vector database                           |
-| Qdrant Dashboard | http://localhost:6333/dashboard | Qdrant UI                                 |
-| BGE-M3           | http://localhost:8000           | Embeddings API                            |
-| Docling          | http://localhost:5001           | PDF parser                                |
-| LightRAG         | http://localhost:9621           | RAG API                                   |
-| Langfuse         | http://localhost:3001           | LLM tracing UI                            |
-| MLflow           | http://localhost:5000           | ML experiments UI                         |
-
-## Common Commands
-
-### View logs
+## 4. Development Gates
 
 ```bash
-# All services
-docker compose -f docker-compose.dev.yml logs -f
-
-# Specific service
-docker compose -f docker-compose.dev.yml logs -f langfuse
+make check
+PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 ```
 
-### Restart service
+Optional broader gates:
 
 ```bash
-docker compose -f docker-compose.dev.yml restart langfuse
+make test
+make test-full
 ```
 
-### Stop all services
+## 5. Running Components Without Docker Wrapper
 
 ```bash
-docker compose -f docker-compose.dev.yml down
-```
-
-### Reset all data (clean start)
-
-```bash
-docker compose -f docker-compose.dev.yml down -v
-docker compose -f docker-compose.dev.yml up -d
-```
-
-## Running the Bot
-
-### Option 1: Local Python (recommended for development)
-
-```bash
-# Install dependencies (uv-first standard)
-uv sync
-
-# Run bot
+# Telegram bot
 uv run python -m telegram_bot.main
+
+# Unified ingestion
+uv run python -m src.ingestion.unified.cli run --watch
+
+# RAG API
+uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080
 ```
 
-### Option 2: Docker container
+## 6. Minimal Stack (Fast Iteration)
 
-Uncomment the `bot` service in `docker-compose.dev.yml` and run:
+Use `docker-compose.local.yml` when full dev stack is unnecessary:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d bot
+make local-up
+make local-ps
+make local-down
 ```
 
-## Setting Up Qdrant Collection
+## 7. Common Issues
 
-The project uses a multi-vector Qdrant collection with 3 vector types for hybrid search.
-
-### Vector Types
-
-| Vector      | Dimensions | Purpose                        |
-| ----------- | ---------- | ------------------------------ |
-| **dense**   | 1024       | Semantic search (BGE-M3)       |
-| **colbert** | 1024 × N   | MaxSim reranking (multivector) |
-| **bm42**    | sparse     | Keyword matching (IDF)         |
-
-### Create Collection
-
-```bash
-# Basic setup (creates 'legal_documents' collection)
-python scripts/setup_qdrant_collection.py
-
-# Force recreate if exists
-python scripts/setup_qdrant_collection.py --force
-
-# Custom collection name
-python scripts/setup_qdrant_collection.py --collection my_collection --force
-```
-
-### What Gets Created
-
-- **Collection** with 3 vector types (dense, colbert, bm42)
-- **Payload indexes** for fast filtering:
-  - Keyword: `document_name`, `article_number`, `city`, `source_type`
-  - Integer: `price`, `rooms`, `area`, `floor`, `floors`, `distance_to_sea`, `bathrooms`
-  - Boolean: `furnished`, `year_round`
-- **Optimizations**: INT8 scalar quantization, HNSW config
-
-### Verify Collection
-
-```bash
-# Check via API
-curl http://localhost:6333/collections/legal_documents
-
-# Or use Qdrant Dashboard
-open http://localhost:6333/dashboard
-```
-
----
-
-## Setting Up Redis Cache Indexes
-
-The project uses Redis with vector search for semantic caching.
-
-### Cache Tiers
-
-| Cache              | TTL | Purpose                           |
-| ------------------ | --- | --------------------------------- |
-| **Semantic LLM**   | 48h | Cache answers by query similarity |
-| **Embeddings**     | 7d  | Cache BGE-M3 vectors              |
-| **Query Analysis** | 24h | Cache parsed queries              |
-| **Search Results** | 2h  | Cache Qdrant results              |
-| **Conversation**   | 1h  | Multi-turn dialogue history       |
-
-### Create Vector Index
-
-```bash
-# Basic setup
-python scripts/setup_redis_indexes.py
-
-# Force recreate if exists
-python scripts/setup_redis_indexes.py --force
-
-# Dry run (check config only)
-python scripts/setup_redis_indexes.py --dry-run
-```
-
-### Requirements
-
-Vector search requires **Redis Stack** (includes RediSearch module).
-The default `redis:8-alpine` image does NOT include RediSearch.
-
-To use semantic caching, update `docker-compose.dev.yml`:
-
-```yaml
-redis:
-  image: redis/redis-stack:latest # Instead of redis:8-alpine
-  container_name: dev-redis
-  ports:
-    - "6379:6379"
-    - "8001:8001" # RedisInsight UI
-```
-
-### Verify Index
-
-```bash
-# Check index info
-docker compose -f docker-compose.dev.yml exec redis redis-cli FT.INFO idx:rag:semantic_cache
-```
-
----
-
-## Using Langfuse for LLM Tracing
-
-1. Open http://localhost:3001
-2. Create account (first user becomes admin)
-3. Create project and get API keys
-4. Add to your code:
-
-```python
-from langfuse import Langfuse
-
-langfuse = Langfuse(
-    public_key="pk-lf-...",
-    secret_key="sk-lf-...",
-    host="http://localhost:3001"
-)
-```
-
-## Using MLflow for Experiments
-
-1. Open http://localhost:5000
-2. Create experiment in UI or code:
-
-```python
-import mlflow
-
-mlflow.set_tracking_uri("http://localhost:5000")
-mlflow.set_experiment("my-experiment")
-
-with mlflow.start_run():
-    mlflow.log_param("model", "gpt-4o-mini")
-    mlflow.log_metric("accuracy", 0.95)
-```
-
-## Troubleshooting
-
-### Service won't start
-
-```bash
-# Check logs
-docker compose -f docker-compose.dev.yml logs <service-name>
-
-# Check resources
-docker stats
-```
-
-### BGE-M3 slow to start
-
-First start downloads ~2GB model. Check progress:
-
-```bash
-docker compose -f docker-compose.dev.yml logs -f bge-m3
-```
-
-### Database connection issues
-
-Verify PostgreSQL is healthy:
-
-```bash
-docker compose -f docker-compose.dev.yml exec postgres pg_isready
-```
-
-### Port conflicts
-
-If ports are in use, modify `docker-compose.dev.yml` port mappings:
-
-```yaml
-ports:
-  - "5433:5432" # Change left side (host port)
-```
+- `docker-bot-up` fails immediately: missing required env variables in `.env`.
+- Slow first startup: BGE-M3 and Docling warm up and cache models.
+- Ingestion status empty: verify `GDRIVE_SYNC_DIR` and collection bootstrap.
