@@ -44,3 +44,11 @@ judge:
   faithfulness_mean_gte: 0.75
   answer_relevance_mean_gte: 0.70
   context_relevance_mean_gte: 0.65
+
+# Experiment quality thresholds (run_experiment evaluators)
+experiment:
+  faithfulness_mean_gte: 0.75
+  answer_relevance_mean_gte: 0.70
+  context_relevance_mean_gte: 0.65
+  retrieval_recall_mean_gte: 0.60
+  composite_score_gte: 0.65
