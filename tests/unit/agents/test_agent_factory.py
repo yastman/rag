@@ -50,6 +50,22 @@ def test_create_bot_agent_passes_system_prompt():
         assert "Custom prompt" in call_kwargs["system_prompt"]
 
 
+def test_create_bot_agent_interpolates_language_in_default_prompt():
+    """Default prompt must interpolate {language} placeholder."""
+    from telegram_bot.agents.agent import create_bot_agent
+
+    with patch("telegram_bot.agents.agent.create_agent") as mock_ca:
+        create_bot_agent(
+            model="openai/gpt-oss-120b",
+            tools=[],
+            checkpointer=None,
+            language="английском языке",
+        )
+        prompt = mock_ca.call_args[1]["system_prompt"]
+        assert "английском языке" in prompt
+        assert "{language}" not in prompt
+
+
 def test_create_bot_agent_passes_checkpointer():
     """create_bot_agent passes checkpointer for conversation persistence."""
     from telegram_bot.agents.agent import create_bot_agent
