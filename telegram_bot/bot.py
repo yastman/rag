@@ -232,6 +232,9 @@ class PropertyBot:
         # Lead scoring store (initialized in start() with pg_pool)
         self._lead_scoring_store: Any | None = None
 
+        # Nurturing scheduler (initialized in start() if enabled)
+        self._nurturing_scheduler: Any | None = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -565,6 +568,7 @@ class PropertyBot:
             build_tools_for_role,
             create_crm_score_sync_tool,
             create_history_search_tool,
+            create_manager_nurturing_tools,
             direct_response,
         )
         from .graph.supervisor_state import make_supervisor_state
@@ -605,6 +609,17 @@ class PropertyBot:
         _lead_svc = getattr(self, "_lead_service", None)
         if _lead_svc is not None:
             manager_tools = create_manager_tools(lead_service=_lead_svc)
+        # Nurturing + analytics tools (#390) — manager-only
+        if self.config.nurturing_enabled and self._pg_pool is not None:
+            from .services.funnel_analytics_service import FunnelAnalyticsService
+            from .services.nurturing_service import NurturingService
+
+            manager_tools.extend(
+                create_manager_nurturing_tools(
+                    analytics_service=FunnelAnalyticsService(pool=self._pg_pool),
+                    nurturing_service=NurturingService(pool=self._pg_pool),
+                )
+            )
         tools = build_tools_for_role(role=role, base_tools=base_tools, manager_tools=manager_tools)
 
         # CRM tools are manager-only (issue #389).
@@ -662,6 +677,7 @@ class PropertyBot:
             "configurable": {
                 "user_id": user_id,
                 "session_id": session_id,
+                "role": role,
                 "llm_base_url": self.config.llm_base_url,
             }
         }
@@ -1066,6 +1082,26 @@ class PropertyBot:
 
             self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
             logger.info("Lead scoring store ready")
+
+            # Initialize nurturing scheduler (#390)
+            if self.config.nurturing_enabled:
+                try:
+                    from .services.funnel_analytics_service import FunnelAnalyticsService
+                    from .services.nurturing_scheduler import NurturingScheduler
+                    from .services.nurturing_service import NurturingService
+
+                    nurturing_svc = NurturingService(pool=self._pg_pool)
+                    analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
+                    self._nurturing_scheduler = NurturingScheduler(
+                        nurturing_service=nurturing_svc,
+                        analytics_service=analytics_svc,
+                        lease_store=None,
+                        config=self.config,
+                    )
+                    await self._nurturing_scheduler.start()
+                    logger.info("Nurturing scheduler started")
+                except Exception:
+                    logger.exception("Failed to start nurturing scheduler")
         except Exception:
             logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
 
@@ -1138,6 +1174,9 @@ class PropertyBot:
                 logger.warning("Failed to close checkpointer cleanly", exc_info=True)
             finally:
                 self._checkpointer = None
+        if self._nurturing_scheduler is not None:
+            await self._nurturing_scheduler.stop()
+            self._nurturing_scheduler = None
         if self._pg_pool is not None:
             await self._pg_pool.close()
             logger.info("PostgreSQL pool closed")
