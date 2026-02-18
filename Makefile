@@ -622,17 +622,35 @@ eval-rag-full: ***REMOVED******REMOVED*** Full RAG evaluation with all metrics
 	uv run python -m src.evaluation.ragas_evaluation
 	@echo "$(GREEN)✓ Full evaluation complete$(NC)"
 
-.PHONY: eval-judge eval-judge-sample
+.PHONY: eval-goldset-sync eval-experiment
 
-eval-judge: ***REMOVED******REMOVED*** LLM-as-a-Judge: batch evaluation (24h traces)
-	@echo "$(BLUE)Running LLM-as-a-Judge evaluation...$(NC)"
-	uv run python scripts/evaluate_judge.py --hours 24 --tag rag
-	@echo "$(GREEN)✓ Judge evaluation complete$(NC)"
+eval-goldset-sync: ***REMOVED******REMOVED*** Sync gold set to Langfuse dataset
+	@echo "$(BLUE)Syncing gold set to Langfuse...$(NC)"
+	uv run python scripts/eval/goldset_sync.py
+	@echo "$(GREEN)✓ Gold set synced$(NC)"
 
-eval-judge-sample: ***REMOVED******REMOVED*** LLM-as-a-Judge: 50% sample of 48h traces
-	@echo "$(BLUE)Running LLM-as-a-Judge sample evaluation...$(NC)"
-	uv run python scripts/evaluate_judge.py --hours 48 --tag rag --sample-rate 0.5
-	@echo "$(GREEN)✓ Judge sample evaluation complete$(NC)"
+eval-experiment: ***REMOVED******REMOVED*** Run RAG experiment on gold set
+	@echo "$(BLUE)Running RAG experiment...$(NC)"
+	uv run python scripts/eval/run_experiment.py
+	@echo "$(GREEN)✓ Experiment complete$(NC)"
+
+.PHONY: eval-gold-gen eval-gold-gen-dry eval-sdk-experiment eval-sdk-experiment-named
+
+eval-gold-gen: ***REMOVED******REMOVED*** Generate gold set from Qdrant → Langfuse Dataset + JSONL
+	@echo "$(BLUE)Generating gold set from Qdrant...$(NC)"
+	uv run python scripts/generate_gold_set.py --collection gdrive_documents_bge
+
+eval-gold-gen-dry: ***REMOVED******REMOVED*** Dry-run gold set generation (JSONL only, no Langfuse)
+	@echo "$(BLUE)Generating gold set (dry-run)...$(NC)"
+	uv run python scripts/generate_gold_set.py --dry-run --output data/gold_set.jsonl
+
+eval-sdk-experiment: ***REMOVED******REMOVED*** Run SDK experiment on gold set (DATASET=name required)
+	@echo "$(BLUE)Running SDK experiment on gold set...$(NC)"
+	uv run python scripts/run_experiment.py --dataset $(DATASET)
+
+eval-sdk-experiment-named: ***REMOVED******REMOVED*** Run named SDK experiment (DATASET=name NAME=label required)
+	@echo "$(BLUE)Running SDK experiment '$(NAME)'...$(NC)"
+	uv run python scripts/run_experiment.py --dataset $(DATASET) --name $(NAME)
 
 ***REMOVED*** =============================================================================
 ***REMOVED*** MONITORING & ALERTING
