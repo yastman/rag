@@ -161,3 +161,13 @@ def write_langfuse_scores(lf: Any, result: dict) -> None:
             name="checkpointer_overhead_proxy_ms",
             value=float(result["checkpointer_overhead_proxy_ms"]),
         )
+
+    # --- Source attribution (#225) ---
+    sources_count = int(result.get("sources_count", 0) or 0)
+    lf.score_current_trace(
+        name="sources_shown",
+        value=1 if sources_count > 0 else 0,
+        data_type="BOOLEAN",
+    )
+    if sources_count > 0:
+        lf.score_current_trace(name="sources_count", value=float(sources_count))
