@@ -100,3 +100,10 @@ async def test_get_locale_default(service, mock_pool):
     mock_pool.fetchval.return_value = None
     locale = await service.get_locale(telegram_id=999)
     assert locale == "ru"
+
+
+@pytest.mark.asyncio
+async def test_set_locale_rejects_unsupported(service):
+    """set_locale raises ValueError for unsupported locale."""
+    with pytest.raises(ValueError, match="Unsupported locale"):
+        await service.set_locale(telegram_id=123, locale="fr")

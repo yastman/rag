@@ -21,6 +21,7 @@ _LOCALE_MAP = {
     "be": "ru",  # Belarusian → Russian fallback
 }
 _DEFAULT_LOCALE = "ru"
+_SUPPORTED_LOCALES = frozenset({"ru", "en", "uk"})
 
 
 def detect_locale(language_code: str | None) -> str:
@@ -84,6 +85,9 @@ class UserService:
 
     async def set_locale(self, *, telegram_id: int, locale: str) -> None:
         """Update user locale."""
+        if locale not in _SUPPORTED_LOCALES:
+            msg = f"Unsupported locale: {locale}"
+            raise ValueError(msg)
         await self._pool.execute(
             "UPDATE users SET locale = $1, updated_at = NOW() WHERE telegram_id = $2",
             locale,
