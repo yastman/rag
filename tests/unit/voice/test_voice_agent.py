@@ -197,3 +197,62 @@ async def test_close_http_client():
         assert mod._http_client is None
     finally:
         mod._http_client = original
+
+
+async def test_mark_job_finished_closes_http_client_when_last_job():
+    """Last finished job should close shared HTTP client."""
+    import src.voice.agent as mod
+
+    original_client = mod._http_client
+    original_jobs = mod._active_jobs
+    original_lock = mod._jobs_lock
+    try:
+        mod._http_client = None
+        mod._active_jobs = 0
+        mod._jobs_lock = None
+        mod._get_http_client()
+        await mod._mark_job_started()
+        assert mod._active_jobs == 1
+
+        await mod._mark_job_finished()
+
+        assert mod._active_jobs == 0
+        assert mod._http_client is None
+    finally:
+        if mod._http_client is not None:
+            await mod._close_http_client()
+        mod._http_client = original_client
+        mod._active_jobs = original_jobs
+        mod._jobs_lock = original_lock
+
+
+async def test_mark_job_finished_keeps_client_while_other_jobs_active():
+    """Shared HTTP client stays open until the last active job finishes."""
+    import src.voice.agent as mod
+
+    original_client = mod._http_client
+    original_jobs = mod._active_jobs
+    original_lock = mod._jobs_lock
+    try:
+        mod._http_client = None
+        mod._active_jobs = 0
+        mod._jobs_lock = None
+        mod._get_http_client()
+        await mod._mark_job_started()
+        await mod._mark_job_started()
+        assert mod._active_jobs == 2
+
+        await mod._mark_job_finished()
+
+        assert mod._active_jobs == 1
+        assert mod._http_client is not None
+
+        await mod._mark_job_finished()
+        assert mod._active_jobs == 0
+        assert mod._http_client is None
+    finally:
+        if mod._http_client is not None:
+            await mod._close_http_client()
+        mod._http_client = original_client
+        mod._active_jobs = original_jobs
+        mod._jobs_lock = original_lock
