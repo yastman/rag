@@ -106,30 +106,29 @@ def _run_score_writer(result, mock_lf):
     return mock_lf
 
 
-def _mock_supervisor_result(**overrides):
-    """Create a standard supervisor graph result dict."""
+def _mock_agent_result(**overrides):
+    """Create a standard SDK agent result dict (#413)."""
     base = {
         "messages": [MagicMock(content="Supervisor response")],
-        "agent_used": "rag_search",
-        "latency_stages": {"supervisor": 0.1},
     }
     base.update(overrides)
     return base
 
 
 async def _run_handle_query_supervisor(mock_config, mock_lf_client, *, history_service=None):
-    """Run handle_query through supervisor path with mocked supervisor graph."""
+    """Run handle_query through SDK agent path with mocked agent (#413)."""
     bot = _create_bot(mock_config)
     if history_service is not None:
         bot._history_service = history_service
 
-    mock_graph = AsyncMock()
-    mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+    mock_agent = AsyncMock()
+    mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
     with (
-        patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+        patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
         patch("telegram_bot.bot.get_client", return_value=mock_lf_client),
         patch("telegram_bot.bot.propagate_attributes"),
+        patch("telegram_bot.bot.create_callback_handler", return_value=None),
     ):
         message = _make_message()
         with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
@@ -642,8 +641,8 @@ class TestHistoryScores:
         assert scores["history_save_success"]["value"] == expected_value
         assert scores["history_save_success"]["data_type"] == "BOOLEAN"
 
-    async def test_history_backend_score(self, mock_config):
-        """history_backend=qdrant CATEGORICAL score when service available."""
+    async def test_supervisor_model_score(self, mock_config):
+        """supervisor_model CATEGORICAL score always written (#413)."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
         mock_lf.score_current_trace = MagicMock()
@@ -655,9 +654,9 @@ class TestHistoryScores:
         )
 
         scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
-        assert "history_backend" in scores
-        assert scores["history_backend"]["value"] == "qdrant"
-        assert scores["history_backend"]["data_type"] == "CATEGORICAL"
+        assert "supervisor_model" in scores
+        assert scores["supervisor_model"]["value"] == "gpt-4o-mini"
+        assert scores["supervisor_model"]["data_type"] == "CATEGORICAL"
 
 
 class TestCheckpointerOverheadScore:
