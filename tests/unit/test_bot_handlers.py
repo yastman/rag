@@ -139,7 +139,7 @@ class TestCommandHandlers:
     @pytest.mark.parametrize(
         ("handler_name", "expected_fragments"),
         [
-            ("cmd_start", ["Привет", "недвижимость"]),
+            ("cmd_start", ["assistant", "недвижимость"]),
             ("cmd_help", ["Примеры запросов", "/clear", "/stats"]),
         ],
     )
@@ -154,6 +154,28 @@ class TestCommandHandlers:
         call_args = message.answer.call_args[0][0]
         for fragment in expected_fragments:
             assert fragment in call_args
+
+    async def test_cmd_start_manager_receives_manager_menu(self, mock_config):
+        """Manager user receives manager-specific start menu (#388)."""
+        mock_config.manager_ids = [12345]
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message(user_id=12345)
+
+        await bot.cmd_start(message)
+
+        sent = message.answer.call_args[0][0]
+        assert "Manager menu" in sent
+
+    async def test_resolve_user_role_prefers_config_manager_ids_on_db_client(self, mock_config):
+        """manager_ids fallback should elevate manager even when DB returns client (#388)."""
+        mock_config.manager_ids = [12345]
+        bot, _ = _create_bot(mock_config)
+        bot._user_service = AsyncMock()
+        bot._user_service.get_role = AsyncMock(return_value="client")
+
+        role = await bot._resolve_user_role(12345)
+
+        assert role == "manager"
 
     async def test_cmd_clear(self, mock_config):
         """Test /clear command handler."""
@@ -418,6 +440,66 @@ class TestHandleQuery:
 
         state_arg = mock_graph.ainvoke.call_args.args[0]
         assert state_arg["max_tool_calls"] == 9
+
+    async def test_handle_query_skips_crm_tools_for_client_role(self, mock_config):
+        """CRM tools are not injected for non-manager users (#389)."""
+        mock_config.kommo_enabled = True
+        bot, _ = _create_bot(mock_config)
+        bot._kommo_client = AsyncMock()
+        bot._resolve_user_role = AsyncMock(return_value="client")
+
+        crm_tool = MagicMock()
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch(
+                "telegram_bot.agents.crm_tools.create_crm_tools", return_value=[crm_tool]
+            ) as crm_factory,
+            patch(
+                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
+            ) as build_graph,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        crm_factory.assert_not_called()
+        tools_passed = build_graph.call_args.kwargs["tools"]
+        assert crm_tool not in tools_passed
+
+    async def test_handle_query_adds_crm_tools_for_manager_role(self, mock_config):
+        """CRM tools are injected for manager users when Kommo is enabled (#389)."""
+        mock_config.kommo_enabled = True
+        bot, _ = _create_bot(mock_config)
+        bot._kommo_client = AsyncMock()
+        bot._resolve_user_role = AsyncMock(return_value="manager")
+
+        crm_tool = MagicMock()
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch(
+                "telegram_bot.agents.crm_tools.create_crm_tools", return_value=[crm_tool]
+            ) as crm_factory,
+            patch(
+                "telegram_bot.bot.build_supervisor_graph", return_value=mock_graph
+            ) as build_graph,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        crm_factory.assert_called_once()
+        tools_passed = build_graph.call_args.kwargs["tools"]
+        assert crm_tool in tools_passed
 
 
 class TestHistorySaveOnResponse:
