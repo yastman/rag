@@ -28,7 +28,11 @@ class TestRAGPipelineInit:
         mock_embedding,
     ):
         """Test that pipeline initializes all components."""
-        _pipeline = RAGPipeline()
+        with patch.dict(
+            "os.environ",
+            {"API_PROVIDER": "claude", "ANTHROPIC_API_KEY": "test-key"},
+        ):
+            _pipeline = RAGPipeline()
 
         mock_embedding.assert_called_once_with("BAAI/bge-m3")
         mock_search_engine.assert_called_once()
