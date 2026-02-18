@@ -384,10 +384,10 @@ async def run_single_query(
     message: Any | None = None,
 ) -> TraceResult:
     """Execute a single query through LangGraph pipeline with Langfuse tracing."""
-    from telegram_bot.bot import _write_langfuse_scores
     from telegram_bot.graph.graph import build_graph
     from telegram_bot.graph.state import make_initial_state
     from telegram_bot.observability import get_client, observe, propagate_attributes
+    from telegram_bot.scoring import write_langfuse_scores
 
     config = services["config"]
     session_id = f"validate-{run_meta['run_id'][:8]}"
@@ -444,7 +444,7 @@ async def run_single_query(
                         "relevance_threshold_rrf": config.relevance_threshold_rrf,
                     },
                 )
-                _write_langfuse_scores(lf, result)
+                write_langfuse_scores(lf, result)
                 return result
             finally:
                 config.streaming_enabled = orig_streaming
