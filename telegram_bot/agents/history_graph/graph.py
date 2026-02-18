@@ -6,7 +6,7 @@ Builds and compiles a LangGraph StateGraph for agentic history search.
 from __future__ import annotations
 
 import functools
-from typing import Any
+from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
 
@@ -41,10 +41,10 @@ def build_history_graph(
     rewrite = functools.partial(history_rewrite_node, llm=llm)
     summarize = functools.partial(history_summarize_node, llm=llm)
 
-    workflow.add_node("retrieve", retrieve)
-    workflow.add_node("grade", history_grade_node)
-    workflow.add_node("rewrite", rewrite)
-    workflow.add_node("summarize", summarize)
+    workflow.add_node("retrieve", cast(Any, retrieve))
+    workflow.add_node("grade", cast(Any, history_grade_node))
+    workflow.add_node("rewrite", cast(Any, rewrite))
+    workflow.add_node("summarize", cast(Any, summarize))
 
     # Edges
     workflow.add_edge(START, "retrieve")

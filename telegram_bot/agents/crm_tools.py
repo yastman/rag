@@ -50,7 +50,7 @@ async def crm_get_deal(deal_id: int, config: RunnableConfig) -> str:
 
     try:
         lead = await kommo.get_lead(deal_id)
-        return lead.model_dump_json()
+        return str(lead.model_dump_json())
     except Exception as e:
         logger.exception("crm_get_deal failed")
         return f"Ошибка при получении сделки: {e}"

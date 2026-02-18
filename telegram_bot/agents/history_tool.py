@@ -7,6 +7,7 @@ Dependencies injected via config["configurable"]["bot_context"].
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -46,7 +47,7 @@ async def history_search(
             history_service=ctx.history_service if ctx else None,
             llm=ctx.llm if ctx else None,
         )
-        state = {
+        state: dict[str, Any] = {
             "query": query,
             "user_id": ctx.telegram_user_id if ctx else 0,
             "results": [],
