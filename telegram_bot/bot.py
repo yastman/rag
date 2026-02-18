@@ -16,13 +16,20 @@ from aiogram.filters import Command
 from aiogram.types import BotCommand, CallbackQuery, Message
 from aiogram.utils.chat_action import ChatActionSender
 
-from .agents.supervisor import build_supervisor_graph
+from .agents.agent import create_bot_agent
+from .agents.context import BotContext
 from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
-from .observability import get_client, get_langfuse_client, observe, propagate_attributes
+from .observability import (
+    create_callback_handler,
+    get_client,
+    get_langfuse_client,
+    observe,
+    propagate_attributes,
+)
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     write_langfuse_scores,
@@ -53,6 +60,11 @@ def make_session_id(session_type: str, identifier: int | str) -> str:
     id_hash = hashlib.sha256(str(identifier).encode()).hexdigest()[:8]
     date_str = datetime.now(UTC).strftime("%Y%m%d")
     return f"{session_type}-{id_hash}-{date_str}"
+
+
+def _supervisor_thread_id(chat_id: int | str) -> str:
+    """Build checkpointer thread id for text-agent conversations."""
+    return f"tg_{chat_id}"
 
 
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
@@ -326,12 +338,13 @@ class PropertyBot:
         assert message.from_user is not None
         user_id = message.from_user.id
         checkpointer_cleared = True
+        thread_id = _supervisor_thread_id(message.chat.id)
 
         if self._checkpointer is not None:
             try:
-                await self._checkpointer.adelete_thread(str(user_id))
+                await self._checkpointer.adelete_thread(thread_id)
             except Exception:
-                logger.warning("Failed to clear checkpointer thread %s", user_id, exc_info=True)
+                logger.warning("Failed to clear checkpointer thread %s", thread_id, exc_info=True)
                 checkpointer_cleared = False
 
         await self._cache.clear_conversation(user_id)
@@ -564,134 +577,76 @@ class PropertyBot:
 
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
-        """Handle query via supervisor graph (#240, #310 — primary query path)."""
-        from .agents.manager_tools import create_manager_tools
-        from .agents.rag_agent import create_rag_agent
-        from .agents.tools import (
-            build_tools_for_role,
-            create_crm_score_sync_tool,
-            create_history_search_tool,
-            create_manager_nurturing_tools,
-            direct_response,
-        )
-        from .graph.supervisor_state import make_supervisor_state
+        """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
+        from .agents.history_tool import history_search
+        from .agents.rag_tool import rag_search
 
         assert message.bot is not None
         assert message.from_user is not None
         bot = message.bot
         user_id = message.from_user.id
         session_id = make_session_id("chat", message.chat.id)
-
-        # Resolve user role (#388)
         role = await self._resolve_user_role(user_id)
 
-        # Build supervisor tools (base + role-specific)
-        base_tools = [
-            create_rag_agent(
-                cache=self._cache,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                reranker=self._reranker,
-                llm=self._llm,
-                content_filter_enabled=self.config.content_filter_enabled,
-                guard_mode=self.config.guard_mode,
-                guard_ml_enabled=self.config.guard_ml_enabled,
-                llm_guard_client=self._llm_guard_client,
-                max_rewrite_attempts=self._graph_config.max_rewrite_attempts,
-                show_sources=self._graph_config.show_sources,
-                max_llm_calls=self.config.max_llm_calls,
-            ),
-            direct_response,
-        ]
+        # Build tools list
+        tools: list[Any] = [rag_search]
         if self._history_service is not None:
-            base_tools.append(create_history_search_tool(history_service=self._history_service))
+            tools.append(history_search)
 
-        # Manager tools (#388) — activated when lead_service is available (#387)
-        manager_tools: list[Any] = []
-        _lead_svc = getattr(self, "_lead_service", None)
-        if _lead_svc is not None:
-            manager_tools = create_manager_tools(lead_service=_lead_svc)
-        # Nurturing + analytics tools (#390) — manager-only
-        if self.config.nurturing_enabled and self._pg_pool is not None:
-            from .services.funnel_analytics_service import FunnelAnalyticsService
-            from .services.nurturing_service import NurturingService
-
-            manager_tools.extend(
-                create_manager_nurturing_tools(
-                    analytics_service=FunnelAnalyticsService(pool=self._pg_pool),
-                    nurturing_service=NurturingService(pool=self._pg_pool),
-                )
-            )
-        tools = build_tools_for_role(role=role, base_tools=base_tools, manager_tools=manager_tools)
-
-        # CRM tools are manager-only (issue #389).
-        if role == "manager" and self.config.kommo_enabled and self._kommo_client is not None:
-            from .agents.crm_tools import create_crm_tools
-
-            tools.extend(
-                create_crm_tools(
-                    kommo=self._kommo_client,
-                    llm=self._llm,
-                    history_service=self._history_service,
-                    default_pipeline_id=self.config.kommo_default_pipeline_id,
-                    responsible_user_id=self.config.kommo_responsible_user_id,
-                    session_field_id=self.config.kommo_session_field_id,
-                    idempotency_store=self._cache.redis,
-                )
-            )
-
-        # Lead score sync tool (#384) — available when scoring store is initialized
-        _scoring_store = getattr(self, "_lead_scoring_store", None)
+        # Add CRM tools conditionally
         if (
             role == "manager"
-            and self.config.kommo_enabled
-            and self._kommo_client is not None
-            and _scoring_store is not None
-            and self.config.kommo_lead_score_field_id > 0
-            and self.config.kommo_lead_band_field_id > 0
+            and getattr(self.config, "kommo_enabled", False)
+            and getattr(self, "_kommo_client", None)
         ):
-            tools.append(
-                create_crm_score_sync_tool(
-                    scoring_store=_scoring_store,
-                    kommo_client=self._kommo_client,
-                    score_field_id=self.config.kommo_lead_score_field_id,
-                    band_field_id=self.config.kommo_lead_band_field_id,
-                )
-            )
+            from .agents.crm_tools import get_crm_tools
 
-        # Build supervisor LLM (cheap model for routing)
-        supervisor_llm = self._graph_config.create_supervisor_llm(
-            model_override=self.config.supervisor_model
-        )
+            tools.extend(get_crm_tools())
 
-        supervisor_graph = build_supervisor_graph(
-            supervisor_llm=supervisor_llm,
+        # Create agent via SDK
+        agent = create_bot_agent(
+            model=self.config.supervisor_model,
             tools=tools,
+            checkpointer=self._checkpointer,
+            language=self.config.domain_language,
         )
 
-        state = make_supervisor_state(
-            user_id=user_id,
+        # Build context for tool DI
+        ctx = BotContext(
+            telegram_user_id=user_id,
             session_id=session_id,
-            query=message.text or "",
+            language=self.config.domain_language,
+            kommo_client=getattr(self, "_kommo_client", None),
+            history_service=self._history_service,
+            embeddings=self._embeddings,
+            sparse_embeddings=self._sparse,
+            qdrant=self._qdrant,
+            cache=self._cache,
+            reranker=self._reranker,
+            llm=self._llm,
+            content_filter_enabled=self.config.content_filter_enabled,
+            guard_mode=self.config.guard_mode,
         )
-        state["max_tool_calls"] = self.config.max_tool_calls
-        config = {
-            "configurable": {
-                "user_id": user_id,
-                "session_id": session_id,
-                "role": role,
-                "llm_base_url": self.config.llm_base_url,
-            }
-        }
 
         with propagate_attributes(
             session_id=session_id,
             user_id=str(user_id),
-            tags=["telegram", "rag", "supervisor"],
+            tags=["telegram", "rag", "agent"],
         ):
+            # Initialize handler inside propagation context so it inherits session/user/tags.
+            langfuse_handler = create_callback_handler()
+            callbacks = [langfuse_handler] if langfuse_handler else []
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                result = await supervisor_graph.ainvoke(state, config=config)
+                result = await agent.ainvoke(
+                    {"messages": [{"role": "user", "content": message.text or ""}]},
+                    config={
+                        "callbacks": callbacks,
+                        "configurable": {
+                            "thread_id": _supervisor_thread_id(message.chat.id),
+                            "bot_context": ctx,
+                        },
+                    },
+                )
 
             # Extract response from final message
             messages = result.get("messages", [])
@@ -701,10 +656,10 @@ class PropertyBot:
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
             # Send response to user
-            if response_text and not result.get("response_sent"):
+            if response_text:
                 await message.answer(response_text)
 
-            # Wall-time for the full supervisor pipeline
+            # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
 
             # Write Langfuse trace metadata
@@ -713,20 +668,14 @@ class PropertyBot:
                 input={"query": message.text},
                 output={"response": response_text},
                 metadata={
-                    "agent_used": result.get("agent_used", ""),
-                    "supervisor_latency": result.get("latency_stages", {}).get("supervisor", 0),
-                    "pipeline_mode": "supervisor",
+                    "pipeline_mode": "sdk_agent",
                     "pipeline_wall_ms": wall_ms,
                 },
             )
-            # Supervisor-specific scores
             lf.score_current_trace(
-                name="agent_used", value=result.get("agent_used", ""), data_type="CATEGORICAL"
-            )
-            supervisor_ms = result.get("latency_stages", {}).get("supervisor", 0) * 1000
-            lf.score_current_trace(name="supervisor_latency_ms", value=supervisor_ms)
-            lf.score_current_trace(
-                name="supervisor_model", value=self.config.supervisor_model, data_type="CATEGORICAL"
+                name="supervisor_model",
+                value=self.config.supervisor_model,
+                data_type="CATEGORICAL",
             )
             # User role score (#388)
             lf.score_current_trace(name="user_role", value=role, data_type="CATEGORICAL")
@@ -735,7 +684,7 @@ class PropertyBot:
             if tool_calls > 0:
                 lf.score_current_trace(name="tool_calls_total", value=float(tool_calls))
 
-            # Persist Q&A to history (#310 — ported from monolith path)
+            # Persist Q&A to history
             if self._history_service and response_text:
                 try:
                     saved = await self._history_service.save_turn(
@@ -749,9 +698,6 @@ class PropertyBot:
                         name="history_save_success",
                         value=1 if saved else 0,
                         data_type="BOOLEAN",
-                    )
-                    lf.score_current_trace(
-                        name="history_backend", value="qdrant", data_type="CATEGORICAL"
                     )
                 except Exception:
                     logger.warning("Failed to save history turn", exc_info=True)
