@@ -254,7 +254,8 @@ def build_graph(
     else:
         workflow.add_edge("respond", END)
 
-    return workflow.compile(checkpointer=checkpointer)
+    compiled = workflow.compile(checkpointer=checkpointer)
+    return compiled.with_config(recursion_limit=15)
 
 
 async def retrieve_node_wrapper(
