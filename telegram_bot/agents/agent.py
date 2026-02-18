@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain_openai import ChatOpenAI
 
 from telegram_bot.agents.context import BotContext
 
@@ -47,6 +48,8 @@ def create_bot_agent(
     checkpointer: Any | None = None,
     system_prompt: str | None = None,
     language: str = "русском языке",
+    base_url: str | None = None,
+    api_key: str | None = None,
 ) -> Any:
     """Create the bot agent using langchain create_agent SDK.
 
@@ -55,14 +58,31 @@ def create_bot_agent(
         tools: List of @tool decorated functions.
         checkpointer: AsyncRedisSaver or None.
         system_prompt: Override default system prompt.
+        language: Response language.
+        base_url: OpenAI-compatible API base URL (e.g. LiteLLM proxy).
+        api_key: API key for the LLM provider.
 
     Returns:
         Compiled agent graph ready for .ainvoke() / .astream().
     """
     prompt = system_prompt or DEFAULT_SYSTEM_PROMPT.format(language=language)
 
+    # Build a ChatOpenAI instance routed through LiteLLM proxy (#420).
+    # Passing a string model name to create_agent triggers init_chat_model()
+    # which defaults to OpenAI and requires OPENAI_API_KEY.
+    model_kwargs: dict[str, Any] = {"model": model}
+    if base_url:
+        model_kwargs["base_url"] = base_url
+    if api_key:
+        model_kwargs["api_key"] = api_key
+    else:
+        # Dummy key — LiteLLM proxy doesn't need a real OpenAI key
+        model_kwargs["api_key"] = "sk-not-needed"
+
+    llm = ChatOpenAI(**model_kwargs)
+
     agent = create_agent(
-        model=model,
+        model=llm,
         tools=tools,
         system_prompt=prompt,
         context_schema=BotContext,
@@ -70,8 +90,9 @@ def create_bot_agent(
     )
 
     logger.info(
-        "Created bot agent: model=%s, tools=%d, checkpointer=%s",
+        "Created bot agent: model=%s, base_url=%s, tools=%d, checkpointer=%s",
         model,
+        base_url or "default",
         len(tools),
         type(checkpointer).__name__ if checkpointer else "None",
     )
