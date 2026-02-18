@@ -441,6 +441,27 @@ class TestHandleQuery:
         state_arg = mock_graph.ainvoke.call_args.args[0]
         assert state_arg["max_tool_calls"] == 9
 
+    async def test_handle_query_passes_role_in_configurable(self, mock_config):
+        """Supervisor config should include resolved role for role-aware tools (#390)."""
+        bot, _ = _create_bot(mock_config)
+        bot._resolve_user_role = AsyncMock(return_value="manager")
+
+        mock_graph = AsyncMock()
+        mock_graph.ainvoke = AsyncMock(return_value=_mock_supervisor_result())
+
+        with (
+            patch("telegram_bot.bot.build_supervisor_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+        ):
+            message = _make_text_message("квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
+        assert cfg["role"] == "manager"
+
     async def test_handle_query_skips_crm_tools_for_client_role(self, mock_config):
         """CRM tools are not injected for non-manager users (#389)."""
         mock_config.kommo_enabled = True
