@@ -9,15 +9,26 @@ Creates 3 types of queries for each article:
 
 import asyncio
 import json
-import sys
+from typing import Protocol, cast
 
 from qdrant_client import QdrantClient, models
 
-
-sys.path.append("/srv/contextual_rag")
-from contextualize_groq_async import ContextualRetrievalGroqAsync
-
 from src.config import Settings
+
+
+class ContextualRetrievalGroqAsyncProtocol(Protocol):
+    api_url: str
+    api_key: str
+    model: str
+    max_tokens: int
+
+    def print_stats(self) -> None: ...
+
+
+class ContextualRetrievalGroqAsyncFactoryProtocol(Protocol):
+    def __call__(
+        self, *, model: str, max_concurrent: int
+    ) -> ContextualRetrievalGroqAsyncProtocol: ...
 
 
 # Load settings
@@ -81,7 +92,7 @@ def fetch_article_texts(collection_name: str, article_numbers: list[str]) -> dic
 
 
 async def generate_queries_for_article(
-    llm: ContextualRetrievalGroqAsync, article_num: str, article_text: str
+    llm: ContextualRetrievalGroqAsyncProtocol, article_num: str, article_text: str
 ) -> list[dict]:
     """
     Generate 3 types of queries for a single article.
@@ -189,8 +200,25 @@ async def generate_all_queries(
     print(f"   Max concurrent: {max_concurrent}")
     print(f"   Total articles: {len(article_texts)}\n")
 
-    # Initialize LLM
-    llm = ContextualRetrievalGroqAsync(model=model, max_concurrent=max_concurrent)
+    # Lazy import — legacy module not on sys.path by default
+    import importlib.util
+    import os
+
+    _spec = importlib.util.spec_from_file_location(
+        "contextualize_groq_async",
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "legacy", "contextualize_groq_async.py"
+        ),
+    )
+    if _spec is None or _spec.loader is None:
+        raise ImportError("legacy/contextualize_groq_async.py not found")
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+
+    llm_factory = cast(
+        ContextualRetrievalGroqAsyncFactoryProtocol, _mod.ContextualRetrievalGroqAsync
+    )
+    llm = llm_factory(model=model, max_concurrent=max_concurrent)
 
     all_queries = []
     completed = 0
