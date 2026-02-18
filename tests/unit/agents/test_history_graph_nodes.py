@@ -355,3 +355,29 @@ async def test_summarize_node_llm_failure_returns_raw(_patch_observe):
     assert len(result["summary"]) > 0
     # Falls back to raw format
     assert "цены" in result["summary"]
+
+
+# --- Langfuse scores ---
+
+
+def test_write_history_scores():
+    """write_history_scores writes 4 scores to Langfuse trace."""
+    from unittest.mock import MagicMock
+
+    from telegram_bot.agents.history_graph.nodes import write_history_scores
+
+    mock_lf = MagicMock()
+
+    result = {
+        "results": [{"score": 0.9}],
+        "results_relevant": True,
+        "rewrite_count": 1,
+        "latency_stages": {"retrieve": 0.1, "grade": 0.01, "summarize": 0.3},
+    }
+    write_history_scores(mock_lf, result)
+
+    score_names = {c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list}
+    assert "history_results_count" in score_names
+    assert "history_relevance" in score_names
+    assert "history_rewrite_count" in score_names
+    assert "history_latency_ms" in score_names
