@@ -356,8 +356,8 @@ class BotConfig(BaseSettings):
         default="",
         validation_alias=AliasChoices("kommo_redirect_uri", "KOMMO_REDIRECT_URI"),
     )
-    kommo_auth_code: SecretStr = Field(
-        default=SecretStr(""),
+    kommo_auth_code: str = Field(
+        default="",
         validation_alias=AliasChoices("kommo_auth_code", "KOMMO_AUTH_CODE"),
     )
     kommo_default_pipeline_id: int = Field(
@@ -371,14 +371,6 @@ class BotConfig(BaseSettings):
     kommo_session_field_id: int = Field(
         default=0,
         validation_alias=AliasChoices("kommo_session_field_id", "KOMMO_SESSION_FIELD_ID"),
-    )
-    kommo_rate_limit_rps: int = Field(
-        default=7,
-        validation_alias=AliasChoices("kommo_rate_limit_rps", "KOMMO_RATE_LIMIT_RPS"),
-    )
-    kommo_max_retries: int = Field(
-        default=3,
-        validation_alias=AliasChoices("kommo_max_retries", "KOMMO_MAX_RETRIES"),
     )
 
     # Call limits (#374)
@@ -425,6 +417,14 @@ class BotConfig(BaseSettings):
     manager_ids: list[int] = Field(
         default_factory=list,
         validation_alias=AliasChoices("manager_ids", "MANAGER_IDS"),
+    )
+    manager_hot_lead_threshold: int = Field(
+        default=60,
+        validation_alias=AliasChoices("manager_hot_lead_threshold", "MANAGER_HOT_LEAD_THRESHOLD"),
+    )
+    manager_hot_lead_dedupe_sec: int = Field(
+        default=3600,
+        validation_alias=AliasChoices("manager_hot_lead_dedupe_sec", "MANAGER_HOT_LEAD_DEDUPE_SEC"),
     )
 
     @field_validator("manager_ids", mode="before")
