@@ -21,6 +21,8 @@ dependencies = [
     "redis>=7.1.0",
     "redisvl>=0.13.2",
     "aiogram>=3.25.0",
+    "aiogram-dialog>=2.4.0",            # Dialog framework (menus, navigation, widgets)
+    "fluentogram>=1.2.0",               # i18n (Fluent .ftl files, stub generator)
     "asyncpg>=0.31.0",
     # Performance (2026-02-06)
     "uvloop>=0.21.0",                     # 2-4x faster asyncio event loop
@@ -31,6 +33,8 @@ dependencies = [
     # Conversation memory (#154)
     "langgraph-checkpoint-redis>=0.2.0",  # Redis checkpointer for LangGraph
     "langmem>=0.0.30",                    # SummarizationNode for conversation compression
+    # Scheduled nurturing + analytics (#390)
+    "apscheduler>=3.11.2,<4.0",           # Async job scheduling (v3 API)
 ]
 
 [project.optional-dependencies]

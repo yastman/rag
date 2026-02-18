@@ -75,3 +75,17 @@ class TestQueryResponse:
     def test_response_required(self):
         with pytest.raises(ValidationError):
             QueryResponse()  # type: ignore[call-arg]
+
+
+class TestQueryResponseContext:
+    """Test that QueryResponse includes retrieved context."""
+
+    def test_context_field_default_empty(self):
+        resp = QueryResponse(response="answer")
+        assert resp.context == []
+
+    def test_context_field_with_data(self):
+        ctx = [{"content": "text", "score": 0.5, "chunk_location": "seq_3"}]
+        resp = QueryResponse(response="answer", context=ctx)
+        assert len(resp.context) == 1
+        assert resp.context[0]["chunk_location"] == "seq_3"
