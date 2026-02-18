@@ -197,3 +197,34 @@ async def test_close_http_client():
         assert mod._http_client is None
     finally:
         mod._http_client = original
+
+
+async def test_entrypoint_shutdown_callback_closes_http_client():
+    """entrypoint shutdown callback closes shared HTTP client."""
+    import src.voice.agent as mod
+
+    ctx = MagicMock()
+    ctx.job = MagicMock(metadata="")
+    ctx.proc = MagicMock(userdata={"vad": "fake-vad"})
+    ctx.room = MagicMock()
+
+    callbacks = []
+    ctx.add_shutdown_callback = MagicMock(side_effect=lambda cb: callbacks.append(cb))
+
+    session = MagicMock()
+    session.start = AsyncMock()
+    session.generate_reply = AsyncMock()
+
+    with (
+        patch("src.voice.agent._get_transcript_store", AsyncMock(return_value=None)),
+        patch("src.voice.agent.AgentSession", return_value=session),
+        patch("src.voice.agent.elevenlabs.STT", return_value=MagicMock()),
+        patch("src.voice.agent.elevenlabs.TTS", return_value=MagicMock()),
+        patch("src.voice.agent.openai.LLM", return_value=MagicMock()),
+        patch("src.voice.agent.VoiceBot", return_value=MagicMock()),
+        patch("src.voice.agent._close_http_client", AsyncMock()) as mock_close_http_client,
+    ):
+        await mod.entrypoint(ctx)
+        assert len(callbacks) == 1
+        await callbacks[0]()
+        mock_close_http_client.assert_awaited_once()
