@@ -169,6 +169,11 @@ def write_langfuse_scores(lf: Any, result: dict) -> None:
         data_type="BOOLEAN",
     )
 
+    # --- Call limits (#374) ---
+    llm_calls = result.get("llm_call_count", 0)
+    if llm_calls > 0:
+        lf.score_current_trace(name="llm_calls_total", value=float(llm_calls))
+
     # --- Conversation memory (#154, #159) ---
     summarize_ms = result.get("latency_stages", {}).get("summarize", 0) * 1000
     if summarize_ms > 0:
