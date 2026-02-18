@@ -344,6 +344,68 @@ class BotConfig(BaseSettings):
         default=0,
         validation_alias=AliasChoices("kommo_telegram_field_id", "KOMMO_TELEGRAM_FIELD_ID"),
     )
+    kommo_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("kommo_client_id", "KOMMO_CLIENT_ID"),
+    )
+    kommo_client_secret: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("kommo_client_secret", "KOMMO_CLIENT_SECRET"),
+    )
+    kommo_redirect_uri: str = Field(
+        default="",
+        validation_alias=AliasChoices("kommo_redirect_uri", "KOMMO_REDIRECT_URI"),
+    )
+    kommo_auth_code: str = Field(
+        default="",
+        validation_alias=AliasChoices("kommo_auth_code", "KOMMO_AUTH_CODE"),
+    )
+    kommo_default_pipeline_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_default_pipeline_id", "KOMMO_DEFAULT_PIPELINE_ID"),
+    )
+    kommo_responsible_user_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("kommo_responsible_user_id", "KOMMO_RESPONSIBLE_USER_ID"),
+    )
+    kommo_session_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_session_field_id", "KOMMO_SESSION_FIELD_ID"),
+    )
+    kommo_lead_score_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_lead_score_field_id", "KOMMO_LEAD_SCORE_FIELD_ID"),
+    )
+    kommo_lead_band_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_lead_band_field_id", "KOMMO_LEAD_BAND_FIELD_ID"),
+    )
+
+    # Nurturing + funnel analytics (#390)
+    nurturing_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("nurturing_enabled", "NURTURING_ENABLED"),
+    )
+    nurturing_interval_minutes: int = Field(
+        default=60,
+        validation_alias=AliasChoices("nurturing_interval_minutes", "NURTURING_INTERVAL_MINUTES"),
+    )
+    funnel_rollup_cron: str = Field(
+        default="15 * * * *",
+        validation_alias=AliasChoices("funnel_rollup_cron", "FUNNEL_ROLLUP_CRON"),
+    )
+
+    # Call limits (#374)
+    max_llm_calls: int = Field(
+        default=5,
+        ge=1,
+        validation_alias=AliasChoices("max_llm_calls", "MAX_LLM_CALLS"),
+    )
+    max_tool_calls: int = Field(
+        default=5,
+        ge=1,
+        validation_alias=AliasChoices("max_tool_calls", "MAX_TOOL_CALLS"),
+    )
 
     # LLM-as-a-Judge online sampling
     judge_sample_rate: float = Field(
@@ -356,6 +418,45 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("JUDGE_MODEL", "judge_model"),
         description="LLM model for judge evaluation",
     )
+
+    # Real Estate Database (realestate DB in shared Postgres)
+    realestate_database_url: str = Field(
+        default="postgresql://postgres:postgres@postgres:5432/realestate",
+        validation_alias=AliasChoices("realestate_database_url", "REALESTATE_DATABASE_URL"),
+    )
+
+    # i18n
+    supported_locales: list[str] = Field(
+        default=["ru", "en", "uk"],
+        validation_alias=AliasChoices("supported_locales", "SUPPORTED_LOCALES"),
+    )
+    default_locale: str = Field(
+        default="ru",
+        validation_alias=AliasChoices("default_locale", "DEFAULT_LOCALE"),
+    )
+
+    # Manager IDs (comma-separated Telegram user IDs)
+    manager_ids: list[int] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("manager_ids", "MANAGER_IDS"),
+    )
+    manager_hot_lead_threshold: int = Field(
+        default=60,
+        validation_alias=AliasChoices("manager_hot_lead_threshold", "MANAGER_HOT_LEAD_THRESHOLD"),
+    )
+    manager_hot_lead_dedupe_sec: int = Field(
+        default=3600,
+        validation_alias=AliasChoices("manager_hot_lead_dedupe_sec", "MANAGER_HOT_LEAD_DEDUPE_SEC"),
+    )
+
+    @field_validator("manager_ids", mode="before")
+    @classmethod
+    def parse_manager_ids(cls, v: object) -> list[int]:
+        if isinstance(v, str):
+            return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        return []
 
     def get_collection_name(self) -> str:
         """Get collection name based on quantization mode.

@@ -276,18 +276,17 @@ OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
 | `llm_response_duration_ms` | float | Full LLM response wall-time (ms) |
 | `user_feedback` | 0.0/1.0 | User like/dislike via inline button (#229) |
 
-### LLM-as-a-Judge Scores (async, online sampling)
+### LLM-as-a-Judge Scores (Langfuse managed evaluators, #386)
 
-Written by `run_online_judge()` via `asyncio.create_task()` — fire-and-forget, never blocks response.
+Written by Langfuse managed evaluators (observation-level) — auto-evaluate spans on ingestion. No custom code needed.
 
 | Score | Values | Purpose |
 |-------|--------|---------|
 | `judge_faithfulness` | 0.0–1.0 | Answer grounded in context (no hallucinations) |
 | `judge_answer_relevance` | 0.0–1.0 | Answer useful for the question |
 | `judge_context_relevance` | 0.0–1.0 | Retrieved docs relevant to question |
-| `judge_*_error` | CATEGORICAL | Written on judge failure (instead of 0.0) |
 
-Controlled by `JUDGE_SAMPLE_RATE` (default 0.0 = off). Batch mode: `make eval-judge`.
+Evaluators read from curated span fields (`eval_query`, `eval_answer`, `eval_context`, `eval_docs`) exposed on `node-generate` and `node-retrieve` spans. Templates: `docs/eval/managed-evaluator-templates.json`.
 
 ### CRM Scores (#384, #390)
 

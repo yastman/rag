@@ -110,3 +110,42 @@ class Pipeline(BaseModel):
     id: int
     name: str
     is_main: bool = False
+
+
+# --- Lead Score Sync (compatibility with existing tools/tests) ---
+
+
+class LeadScoreSyncPayload(BaseModel):
+    """Payload for syncing a lead score to Kommo custom fields."""
+
+    kommo_lead_id: int
+    score_value: int
+    score_band: str
+    score_field_id: int
+    band_field_id: int
+
+    @classmethod
+    def from_record(
+        cls,
+        rec: object,
+        *,
+        score_field_id: int,
+        band_field_id: int,
+    ) -> LeadScoreSyncPayload:
+        """Build from a LeadScoreRecord while avoiding circular imports."""
+        return cls(
+            kommo_lead_id=int(getattr(rec, "kommo_lead_id", 0) or 0),
+            score_value=int(getattr(rec, "score_value", 0)),
+            score_band=str(getattr(rec, "score_band", "")),
+            score_field_id=score_field_id,
+            band_field_id=band_field_id,
+        )
+
+    def to_kommo_payload(self) -> dict:
+        """Convert to Kommo API PATCH body for custom fields."""
+        return {
+            "custom_fields_values": [
+                {"field_id": self.score_field_id, "values": [{"value": self.score_value}]},
+                {"field_id": self.band_field_id, "values": [{"value": self.score_band}]},
+            ]
+        }
