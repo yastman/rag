@@ -5,6 +5,7 @@ description = "RAG Telegram Bot with hybrid search"
 requires-python = ">=3.12"
 dependencies = [
     "aiogram>=3.15.0",
+    "aiogram-dialog>=2.4.0",
     "httpx>=0.28.0",
     "qdrant-client>=1.14.0",  # v1.14+ for FormulaQuery score boosting
     "grpcio>=1.60.0",
