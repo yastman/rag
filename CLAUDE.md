@@ -18,6 +18,8 @@ make docker-full-up        # All services (17 containers)
 make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
 make eval-goldset-sync     # Sync gold set to Langfuse dataset
 make eval-experiment       # Run RAG experiment on gold set
+make eval-gold-gen         # Generate gold set from Qdrant → Langfuse + JSONL
+make eval-sdk-experiment   # Run SDK experiment on gold set (DATASET=name)
 make validate-traces-fast  # Trace validation (cold+cache, Langfuse report)
 make monitoring-up         # Start alerting stack
 make ingest-unified        # Unified ingestion (CocoIndex v3.2.1); also: -watch, -status
