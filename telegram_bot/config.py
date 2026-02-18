@@ -372,6 +372,14 @@ class BotConfig(BaseSettings):
         default=0,
         validation_alias=AliasChoices("kommo_session_field_id", "KOMMO_SESSION_FIELD_ID"),
     )
+    kommo_lead_score_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_lead_score_field_id", "KOMMO_LEAD_SCORE_FIELD_ID"),
+    )
+    kommo_lead_band_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_lead_band_field_id", "KOMMO_LEAD_BAND_FIELD_ID"),
+    )
 
     # Call limits (#374)
     max_llm_calls: int = Field(
