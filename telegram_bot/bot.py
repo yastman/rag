@@ -256,13 +256,22 @@ class PropertyBot:
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
+        db_role: str | None = None
         user_service = getattr(self, "_user_service", None)
         if user_service is not None and hasattr(user_service, "get_role"):
             try:
-                return await user_service.get_role(telegram_id=user_id)
+                resolved = await user_service.get_role(telegram_id=user_id)
+                if isinstance(resolved, str):
+                    normalized = resolved.strip().lower()
+                    if normalized in {"manager", "client"}:
+                        db_role = normalized
             except Exception:
                 logger.warning("Role lookup failed", exc_info=True)
-        return "manager" if user_id in self.config.manager_ids else "client"
+
+        # Config manager_ids should still elevate known managers even if DB is stale.
+        if user_id in self.config.manager_ids:
+            return "manager"
+        return db_role or "client"
 
     async def cmd_start(self, message: Message, dialog_manager: Any = None):
         """Handle /start command — launch menu dialog."""
