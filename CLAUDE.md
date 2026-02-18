@@ -40,9 +40,10 @@ make export-dataset        # Export low-scoring Langfuse traces to evaluation da
 
 ```
 Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Bot:        Query → Supervisor LLM → tool choice (rag_search | history_search | direct_response)
-            → rag_search wraps LangGraph 11-node pipeline (with guard node) → respond
-            (#310: supervisor-only, monolith path removed)
+Bot:        Query → create_agent SDK (langchain.agents) → tool choice
+            → rag_search (11-node LangGraph pipeline) | history_search (4-node sub-graph)
+            → 8 CRM tools (Kommo API) | direct response
+            (#413: create_agent SDK + BotContext DI, replaces build_supervisor_graph)
 Voice STT:  Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API (FastAPI)
 ```
@@ -53,12 +54,15 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 | `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` (#310) |
 | `telegram_bot/graph/` | LangGraph 11-node RAG pipeline (guard, transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, cache_store, respond) |
 | `telegram_bot/graph/nodes/guard.py` | Content filtering: toxicity, prompt injection, topic guardrails (regex, configurable via GUARD_MODE) |
-| `telegram_bot/agents/` | Supervisor architecture (#240): tools (rag, history, CRM sync/nurturing/funnel), supervisor |
+| `telegram_bot/agents/` | create_agent SDK (#413): agent.py (factory), context.py (BotContext DI), rag_tool.py, history_tool.py, crm_tools.py (8 Kommo tools) |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/bge_m3_client.py` | Unified BGE-M3 SDK (BGEM3Client async + BGEM3SyncClient) — replaces separate wrappers |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
 | `telegram_bot/services/{lead_scoring,nurturing,funnel}*.py` | CRM: lead scoring + Kommo sync, nurturing scheduler, funnel analytics (#384, #390) |
-| `telegram_bot/observability.py` | Langfuse init, @observe decorator, PII masking |
+| `telegram_bot/services/kommo_client.py` | KommoClient (async httpx, OAuth2 auto-refresh via KommoTokenStore) |
+| `telegram_bot/services/kommo_token_store.py` | Redis-backed OAuth2 token store for Kommo |
+| `telegram_bot/services/kommo_models.py` | Pydantic v2 models for Kommo API v4 (Lead, Contact, Task, Note, Pipeline) |
+| `telegram_bot/observability.py` | Langfuse init, @observe, PII masking, `create_callback_handler` (for create_agent) |
 | `src/api/` | RAG API (FastAPI wrapper around LangGraph, POST /query) |
 | `src/voice/` | Voice Bot (LiveKit Agent + ElevenLabs + SIP trunk + transcripts) |
 | `src/retrieval/search_engines.py` | 4 search variants (evaluation) |
