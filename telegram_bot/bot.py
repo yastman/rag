@@ -28,6 +28,7 @@ from .scoring import (
     write_langfuse_scores,
 )
 from .services.history_service import HistoryService
+from .services.manager_menu import render_start_menu
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 
@@ -253,6 +254,16 @@ class PropertyBot:
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
 
+    async def _resolve_user_role(self, user_id: int) -> str:
+        """Resolve user role from DB or config fallback (#388)."""
+        user_service = getattr(self, "_user_service", None)
+        if user_service is not None and hasattr(user_service, "get_role"):
+            try:
+                return await user_service.get_role(telegram_id=user_id)
+            except Exception:
+                logger.warning("Role lookup failed", exc_info=True)
+        return "manager" if user_id in self.config.manager_ids else "client"
+
     async def cmd_start(self, message: Message, dialog_manager: Any = None):
         """Handle /start command — launch menu dialog."""
         if dialog_manager is not None:
@@ -263,10 +274,9 @@ class PropertyBot:
             await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Fallback (dialog not initialized)
-            domain = self.config.domain
-            await message.answer(
-                f"Привет! Я бот-помощник по теме: {domain}.\nИспользуй /help для помощи."
-            )
+            assert message.from_user is not None
+            role = await self._resolve_user_role(message.from_user.id)
+            await message.answer(render_start_menu(role=role, domain=self.config.domain))
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
