@@ -95,3 +95,30 @@ async def test_upsert_contact_find_existing(kommo_client, httpx_mock):
         ContactCreate(first_name="Иван", phone="+359888123456"),
     )
     assert contact.id == 456
+
+
+# --- URL normalization (#411) ---
+
+
+def test_subdomain_plain(mock_token_store):
+    """Plain subdomain builds correct base URL."""
+    from telegram_bot.services.kommo_client import KommoClient
+
+    client = KommoClient(subdomain="linhminhphung1", token_store=mock_token_store)
+    assert client._base_url == "https://linhminhphung1.kommo.com/api/v4"
+
+
+def test_subdomain_with_kommo_suffix(mock_token_store):
+    """Subdomain with .kommo.com suffix doesn't produce double domain (#411)."""
+    from telegram_bot.services.kommo_client import KommoClient
+
+    client = KommoClient(subdomain="linhminhphung1.kommo.com", token_store=mock_token_store)
+    assert client._base_url == "https://linhminhphung1.kommo.com/api/v4"
+
+
+def test_subdomain_with_dots(mock_token_store):
+    """Subdomain containing dots (but not .kommo.com) works correctly."""
+    from telegram_bot.services.kommo_client import KommoClient
+
+    client = KommoClient(subdomain="api-c", token_store=mock_token_store)
+    assert client._base_url == "https://api-c.kommo.com/api/v4"
