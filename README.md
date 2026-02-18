@@ -1,48 +1,61 @@
 # Contextual RAG Pipeline
 
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Ruff](https://img.shields.io/badge/linter-ruff-green.svg)](https://github.com/astral-sh/ruff)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+Production RAG system with a LangGraph Telegram bot, hybrid retrieval in Qdrant, unified CocoIndex ingestion, optional voice agent (LiveKit), CRM integration (Kommo lead scoring, nurturing, funnel analytics), and Docker/k3s deployment paths.
 
-Production RAG system with hybrid search (RRF + ColBERT rerank), BGE-M3 embeddings (local CPU), multi-level caching, and Telegram bot.
+## Runtime Snapshot
 
-## Prerequisites
-
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) package manager
+- Python: `>=3.11` (recommended `3.12`)
+- Package manager: `uv`
+- Current project version: `2.14.0` (`pyproject.toml`)
+- Primary local orchestration: `docker-compose.dev.yml` + `Makefile`
 
 ## Quick Start
 
 ```bash
-# Install uv (if not installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install dependencies
 uv sync
+cp .env.example .env
 
-# Start services and run
-make docker-up          # Start core (5 services, ~17s)
-make docker-full-up     # Start all (20 services)
-make check              # Lint + type check
-make test               # Fast deterministic gate
-make test-full          # Full test suite (all tiers)
+# Core runtime: postgres, redis, qdrant, bge-m3, user-base, docling
+make docker-up
+
+# Bot path (adds litellm + telegram bot)
+make docker-bot-up
+
+# Optional stacks
+make docker-ml-up       # langfuse + mlflow + clickhouse + minio
+make monitoring-up      # loki + promtail + alertmanager
+make docker-ingest-up   # unified ingestion service
+make docker-voice-up    # rag-api + livekit + sip + voice-agent
+
+# Validation gate
+make check
+PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 ```
+
+## Main Commands
+
+- `make docker-up` / `make docker-down` / `make docker-ps`
+- `make local-up` / `make local-down` (minimal `docker-compose.local.yml`)
+- `make ingest-unified`, `make ingest-unified-watch`, `make ingest-unified-status`
+- `make k3s-core`, `make k3s-bot`, `make k3s-ingest`, `make k3s-full`
+
+## Entry Points
+
+- Telegram bot: `uv run python -m telegram_bot.main`
+- RAG API: `uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8080`
+- Unified ingestion CLI: `uv run python -m src.ingestion.unified.cli --help`
+- Voice agent: `uv run python -m src.voice.agent`
 
 ## Documentation
 
-| File | Purpose |
-|------|---------|
-| **[AGENTS.md](AGENTS.md)** | Codex workflow and repository-wide agent rules |
-| **[docs/agent-rules/workflow.md](docs/agent-rules/workflow.md)** | Development loop and command map |
-| **[CHANGELOG.md](CHANGELOG.md)** | Version history (auto-generated) |
-| **[TODO.md](TODO.md)** | Current tasks |
+- `DOCKER.md` - Docker compose files, profiles, service map, env requirements
+- `docs/PROJECT_STACK.md` - current architecture and subsystem map
+- `docs/PIPELINE_OVERVIEW.md` - ingestion/query/voice runtime flows
+- `docs/LOCAL-DEVELOPMENT.md` - local setup and validation flow
+- `docs/QDRANT_STACK.md` - Qdrant collections, vector schema, operations
+- `docs/INGESTION.md` - unified ingestion runbook and troubleshooting
+- `docs/ALERTING.md` - Loki/Alertmanager setup and test flow
 
-## Key Links
+## Agent Instructions
 
-- [docs/PIPELINE_OVERVIEW.md](docs/PIPELINE_OVERVIEW.md) - Architecture deep dive
-- [docs/QDRANT_STACK.md](docs/QDRANT_STACK.md) - Vector DB configuration
-- [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md) - Dev environment setup
-
----
-
-**Version:** See [CHANGELOG.md](CHANGELOG.md) | **Details:** See [AGENTS.md](AGENTS.md)
+Repository-level agent workflow and validation rules live in `AGENTS.md` and scoped `AGENTS.override.md` files.
