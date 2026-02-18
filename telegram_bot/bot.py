@@ -599,8 +599,8 @@ class PropertyBot:
             manager_tools = create_manager_tools(lead_service=_lead_svc)
         tools = build_tools_for_role(role=role, base_tools=base_tools, manager_tools=manager_tools)
 
-        # CRM tools (conditional on KOMMO_ENABLED + initialized client)
-        if self.config.kommo_enabled and self._kommo_client is not None:
+        # CRM tools are manager-only (issue #389).
+        if role == "manager" and self.config.kommo_enabled and self._kommo_client is not None:
             from .agents.crm_tools import create_crm_tools
 
             tools.extend(
