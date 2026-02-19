@@ -687,10 +687,8 @@ class PropertyBot:
         session_id = make_session_id("chat", message.chat.id)
         role = await self._resolve_user_role(user_id)
 
-        # Build base tools list
+        # Build base tools list (client-only: rag_search)
         base_tools: list[Any] = [rag_search]
-        if self._history_service is not None:
-            base_tools.append(history_search)
 
         manager_tools: list[Any] = []
         if role == "manager":
@@ -699,6 +697,10 @@ class PropertyBot:
                 create_crm_score_sync_tool,
                 create_manager_nurturing_tools,
             )
+
+            # history_search is manager-only: search past conversations with clients/deals
+            if self._history_service is not None:
+                manager_tools.append(history_search)
 
             manager_tools.extend(
                 create_manager_nurturing_tools(
@@ -741,6 +743,7 @@ class PropertyBot:
             language=self.config.domain_language,
             base_url=self.config.llm_base_url,
             api_key=self.config.llm_api_key,
+            role=role,
             max_history_messages=self.config.agent_max_history_messages,
         )
 
