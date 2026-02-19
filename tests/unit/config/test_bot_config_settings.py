@@ -89,6 +89,22 @@ class TestBotConfigIsPydanticSettings:
         cfg = BotConfig(_env_file=None, telegram_token="test-token", llm_api_key="test-key")
         assert cfg.admin_ids == []
 
+    def test_agent_checkpointer_ttl_default(self):
+        """agent_checkpointer_ttl_minutes defaults to 120 (#424)."""
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig()
+        assert cfg.agent_checkpointer_ttl_minutes == 120
+
+    def test_agent_checkpointer_ttl_env_var(self, monkeypatch):
+        """AGENT_CHECKPOINTER_TTL_MINUTES overrides default (#424)."""
+        monkeypatch.setenv("AGENT_CHECKPOINTER_TTL_MINUTES", "60")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        assert cfg.agent_checkpointer_ttl_minutes == 60
+
     def test_config_get_collection_name(self):
         """get_collection_name() still works after migration."""
         from telegram_bot.config import BotConfig
