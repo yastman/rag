@@ -1191,6 +1191,130 @@ class TestBotLifecycle:
 
         checkpointer.__aexit__.assert_awaited_once_with(None, None, None)
 
+    async def test_stop_closes_agent_checkpointer_context(self, mock_config):
+        """stop() should close async agent checkpointer context when available (#424)."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.close = AsyncMock()
+        bot._qdrant = MagicMock()
+        bot._qdrant.close = AsyncMock()
+        bot._embeddings = MagicMock()
+        bot._embeddings.aclose = AsyncMock()
+        bot._sparse = MagicMock()
+        bot._sparse.aclose = AsyncMock()
+        bot._reranker = None
+        bot.bot = MagicMock()
+        bot.bot.session = MagicMock()
+        bot.bot.session.close = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.stop = AsyncMock()
+        bot._agent_checkpointer = MagicMock()
+        bot._agent_checkpointer.__aexit__ = AsyncMock()
+        agent_cp = bot._agent_checkpointer
+
+        await bot.stop()
+
+        agent_cp.__aexit__.assert_awaited_once_with(None, None, None)
+        assert bot._agent_checkpointer is None
+
+    async def test_stop_agent_checkpointer_none_safe(self, mock_config):
+        """stop() works fine when agent checkpointer is None (#424)."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.close = AsyncMock()
+        bot._qdrant = MagicMock()
+        bot._qdrant.close = AsyncMock()
+        bot._embeddings = MagicMock()
+        bot._embeddings.aclose = AsyncMock()
+        bot._sparse = MagicMock()
+        bot._sparse.aclose = AsyncMock()
+        bot._reranker = None
+        bot.bot = MagicMock()
+        bot.bot.session = MagicMock()
+        bot.bot.session.close = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.stop = AsyncMock()
+        bot._agent_checkpointer = None
+
+        # Should not raise
+        await bot.stop()
+
+
+class TestAgentCheckpointerLifecycle:
+    """Test agent checkpointer Redis init with TTL and fallback (#424)."""
+
+    def _make_start_mocks(self, bot):
+        """Set up minimal mocks for bot.start()."""
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot._cache.redis = MagicMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+
+    async def test_start_creates_redis_agent_checkpointer(self, mock_config):
+        """start() creates Redis agent checkpointer with configured TTL (#424)."""
+        mock_config.agent_checkpointer_ttl_minutes = 120
+        bot, _ = _create_bot(mock_config)
+        self._make_start_mocks(bot)
+
+        mock_redis_cp = AsyncMock()
+
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch(
+                "telegram_bot.integrations.memory.create_redis_checkpointer",
+                return_value=mock_redis_cp,
+            ) as mock_create,
+        ):
+            await bot.start()
+
+        # Should have been called twice: conversation + agent checkpointers
+        calls = mock_create.call_args_list
+        agent_call = next((c for c in calls if c.kwargs.get("ttl_minutes") == 120), None)
+        assert agent_call is not None, "create_redis_checkpointer not called with ttl_minutes=120"
+        mock_redis_cp.asetup.assert_awaited()
+
+    async def test_start_fallback_to_memory_when_redis_fails(self, mock_config):
+        """start() falls back to MemorySaver for agent when Redis init fails (#424)."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        bot, _ = _create_bot(mock_config)
+        self._make_start_mocks(bot)
+
+        call_count = 0
+
+        def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call (conversation checkpointer) — succeeds
+                cp = AsyncMock()
+                cp.asetup = AsyncMock()
+                return cp
+            # Second call (agent checkpointer) — raises
+            raise ConnectionError("Redis unavailable")
+
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch(
+                "telegram_bot.integrations.memory.create_redis_checkpointer",
+                side_effect=side_effect,
+            ),
+            patch(
+                "telegram_bot.integrations.memory.create_fallback_checkpointer",
+                return_value=MemorySaver(),
+            ) as mock_fallback,
+        ):
+            await bot.start()
+
+        # Fallback must have been called (at least once for agent cp)
+        mock_fallback.assert_called()
+        assert isinstance(bot._agent_checkpointer, MemorySaver)
+
 
 class TestHistoryServiceLifecycle:
     """Test history service initialization in bot lifecycle."""
