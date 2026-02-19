@@ -248,6 +248,31 @@ class TestCommandHandlers:
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
 
+    async def test_cmd_clear_falls_back_to_sync_delete_thread(self, mock_config):
+        """Test /clear supports sync checkpointers exposing delete_thread only."""
+
+        class SyncCheckpointer:
+            def __init__(self):
+                self.calls = []
+
+            def delete_thread(self, thread_id):
+                self.calls.append(thread_id)
+
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        bot._checkpointer = SyncCheckpointer()
+        bot._agent_checkpointer = SyncCheckpointer()
+        message = _make_text_message()
+
+        await bot.cmd_clear(message)
+
+        assert set(bot._checkpointer.calls) == {"tg_12345", "12345"}
+        assert set(bot._agent_checkpointer.calls) == {"tg_12345", "12345"}
+        bot._cache.clear_conversation.assert_awaited_once_with(12345)
+        message.answer.assert_awaited_once()
+        assert "очищена" in message.answer.await_args.args[0].lower()
+
     async def test_cmd_clear_uses_chat_id_for_thread_namespace(self, mock_config):
         """Thread cleanup targets chat-scoped text thread and user-scoped voice thread."""
         bot, _ = _create_bot(mock_config)
