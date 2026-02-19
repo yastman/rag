@@ -229,7 +229,7 @@ class CacheLayerManager:
         try:
             from redisvl.query.filter import Tag
 
-            filter_expr = Tag("language") == language
+            filter_expr = (Tag("language") == language) & (Tag("query_type") == query_type)
             if user_id is not None:
                 filter_expr = filter_expr & (Tag("user_id") == str(user_id))
             if cache_scope is not None:
