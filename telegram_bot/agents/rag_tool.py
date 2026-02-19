@@ -76,8 +76,11 @@ async def rag_search(
             summarize_s = result.get("latency_stages", {}).get("summarize", 0)
             result["user_perceived_wall_ms"] = ainvoke_wall_ms - (summarize_s * 1000)
 
-            ***REMOVED*** Write full pipeline scores to Langfuse trace (***REMOVED***425)
-            write_langfuse_scores(lf, result)
+            ***REMOVED*** Observability must stay fail-soft: scoring errors must not break user response.
+            try:
+                write_langfuse_scores(lf, result)
+            except Exception:
+                logger.warning("Failed to write Langfuse scores in rag_search", exc_info=True)
 
             ***REMOVED*** Store full result for caller via side-channel (***REMOVED***426)
             result_store = configurable.get("rag_result_store")
