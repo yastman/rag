@@ -52,8 +52,8 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 | Module | Purpose |
 |--------|---------|
-| `telegram_bot/bot.py` | PropertyBot (~300 LOC, supervisor orchestrator + voice handler) |
-| `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` (#310) |
+| `telegram_bot/bot.py` | PropertyBot (~300 LOC, agent orchestrator + voice handler) |
+| `telegram_bot/scoring.py` | `score()`, `write_langfuse_scores()`, `write_history_scores()`, `write_crm_scores()` (#310, #451, #452) |
 | `telegram_bot/graph/` | LangGraph 11-node RAG pipeline (guard, transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, cache_store, respond) |
 | `telegram_bot/graph/nodes/guard.py` | Content filtering: toxicity, prompt injection, topic guardrails (regex, configurable via GUARD_MODE) |
 | `telegram_bot/agents/` | create_agent SDK (#413): agent.py (factory), context.py (BotContext DI), rag_tool.py, history_tool.py, crm_tools.py (8 Kommo tools) |
@@ -191,7 +191,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/embeddings.md` | BGE-M3 (/encode/hybrid, dense, sparse), Voyage | `**/embed*.py` |
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
-| `features/telegram-bot.md` | LangGraph pipeline, bot, supervisor, middlewares | `telegram_bot/*.py` |
+| `features/telegram-bot.md` | LangGraph pipeline, bot, agent SDK, middlewares | `telegram_bot/*.py` |
 | `features/voice-bot.md` | LiveKit Agent, SIP, RAG API, /call | `src/voice/**, src/api/**` |
 | `features/user-personalization.md` | CESC, user context, preferences | `**/user_context*.py` |
 | `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
