@@ -850,8 +850,12 @@ class PropertyBot:
                     data_type="CATEGORICAL",
                     id=f"{tid}-user_role",
                 )
-                # Tool call count (#374)
-                tool_calls = result.get("tool_call_count", 0)
+                # Tool call count (#374): count actual tool calls, not just messages.
+                tool_calls = sum(
+                    len(m.tool_calls)
+                    for m in result.get("messages", [])
+                    if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+                )
                 if tool_calls > 0:
                     lf.create_score(
                         trace_id=tid,
