@@ -141,7 +141,7 @@ class TestSmokeServices:
 
         # If custom model but no custom base_url, skip (misconfigured)
         if model and not model.startswith("gpt") and not base_url:
-            pytest.skip(f"Custom model '{model}' requires OPENAI_BASE_URL")
+            pytest.skip(f"Custom model '{model}' requires LLM_BASE_URL or OPENAI_BASE_URL")
 
         # Use defaults if not set
         if not base_url:
