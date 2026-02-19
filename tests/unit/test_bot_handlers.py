@@ -191,7 +191,7 @@ class TestCommandHandlers:
         assert "очищена" in message.answer.call_args[0][0].lower()
 
     async def test_cmd_clear_uses_checkpointer_delete_thread(self, mock_config):
-        """Test /clear calls checkpointer.adelete_thread for SDK-native cleanup."""
+        """Test /clear calls checkpointer.adelete_thread for text and voice threads."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
@@ -201,12 +201,23 @@ class TestCommandHandlers:
 
         await bot.cmd_clear(message)
 
-        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
-        bot._agent_checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
+        # Both text thread (tg_12345) and voice thread (12345) must be deleted
+        cp_calls = bot._checkpointer.adelete_thread.call_args_list
+        assert len(cp_calls) == 2
+        called_ids = {c.args[0] for c in cp_calls}
+        assert "tg_12345" in called_ids
+        assert "12345" in called_ids
+
+        agent_calls = bot._agent_checkpointer.adelete_thread.call_args_list
+        assert len(agent_calls) == 2
+        called_ids = {c.args[0] for c in agent_calls}
+        assert "tg_12345" in called_ids
+        assert "12345" in called_ids
+
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
 
     async def test_cmd_clear_uses_chat_id_for_thread_namespace(self, mock_config):
-        """Thread cleanup must target chat-scoped SDK thread_id."""
+        """Thread cleanup targets chat-scoped text thread and user-scoped voice thread."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
@@ -216,8 +227,16 @@ class TestCommandHandlers:
 
         await bot.cmd_clear(message)
 
-        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_42")
-        bot._agent_checkpointer.adelete_thread.assert_awaited_once_with("tg_42")
+        cp_calls = bot._checkpointer.adelete_thread.call_args_list
+        called_ids = {c.args[0] for c in cp_calls}
+        assert "tg_42" in called_ids  # text thread uses chat_id
+        assert "777" in called_ids  # voice thread uses user_id
+
+        agent_calls = bot._agent_checkpointer.adelete_thread.call_args_list
+        called_ids = {c.args[0] for c in agent_calls}
+        assert "tg_42" in called_ids
+        assert "777" in called_ids
+
         bot._cache.clear_conversation.assert_awaited_once_with(777)
 
     async def test_cmd_clear_handles_no_checkpointer(self, mock_config):
@@ -247,14 +266,17 @@ class TestCommandHandlers:
         await bot.cmd_clear(message)
 
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
-        bot._checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
-        bot._agent_checkpointer.adelete_thread.assert_awaited_once_with("tg_12345")
+        # Both text and voice thread deletions are attempted for the failing checkpointer
+        assert bot._checkpointer.adelete_thread.await_count == 2
+        called_ids = {c.args[0] for c in bot._checkpointer.adelete_thread.call_args_list}
+        assert "tg_12345" in called_ids
+        assert "12345" in called_ids
         message.answer.assert_awaited_once()
         answer_text = message.answer.await_args.args[0]
         assert "частично" in answer_text.lower()
 
     async def test_cmd_clear_deduplicates_same_checkpointer_instance(self, mock_config):
-        """When both checkpointer refs point to one object, thread delete is called once."""
+        """Same checkpointer instance only processes once, deleting both text and voice threads."""
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
         bot._cache.clear_conversation = AsyncMock()
@@ -265,7 +287,11 @@ class TestCommandHandlers:
 
         await bot.cmd_clear(message)
 
-        shared_cp.adelete_thread.assert_awaited_once_with("tg_12345")
+        # Deduplicated to 1 instance, but that instance deletes both text and voice threads
+        assert shared_cp.adelete_thread.await_count == 2
+        called_ids = {c.args[0] for c in shared_cp.adelete_thread.call_args_list}
+        assert "tg_12345" in called_ids
+        assert "12345" in called_ids
         bot._cache.clear_conversation.assert_awaited_once_with(12345)
 
     async def test_cmd_stats(self, mock_config):
