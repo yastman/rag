@@ -927,7 +927,7 @@ class TestTextPathSemanticCacheStore:
         assert kwargs["query_type"] == "FAQ"
         assert kwargs["user_id"] == message.from_user.id
 
-    async def test_skips_semantic_cache_for_non_cacheable_type(self, mock_config):
+    async def test_stores_semantic_cache_for_general_type(self, mock_config):
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
         mock_lf.create_score = MagicMock()
@@ -965,4 +965,6 @@ class TestTextPathSemanticCacheStore:
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
 
-        bot._cache.store_semantic.assert_not_called()
+        bot._cache.store_semantic.assert_called_once()
+        kwargs = bot._cache.store_semantic.call_args.kwargs
+        assert kwargs["query_type"] == "GENERAL"
