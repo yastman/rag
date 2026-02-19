@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationError
 
 
 @pytest.fixture(autouse=True)
@@ -336,3 +337,70 @@ class TestCacheCheckEmbeddingError:
         assert result["embedding_error"] is False
         assert result["cache_hit"] is False
         embeddings.aembed_hybrid.assert_not_awaited()
+
+
+class TestCacheStoreNodeRedisVLErrorHandling:
+    """Test cache_store_node graceful degradation when RedisVL errors escape store_semantic.
+
+    Scenario: store_semantic's internal try/except is bypassed (e.g., via @observe decorator
+    cleanup, BaseException subclass, or future code changes). The node must always return
+    the response so the voice pipeline doesn't lose its output (#524).
+    """
+
+    async def test_store_node_preserves_response_on_redisvl_error(self):
+        """Response is returned even when store_semantic raises RedisVLError (#524)."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated voice response"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock(side_effect=RedisVLError("index not found"))
+
+        result = await cache_store_node(state, cache=cache)
+
+        assert result["response"] == "generated voice response"
+
+    async def test_store_node_preserves_response_on_redis_search_error(self):
+        """Response is returned even when store_semantic raises RedisSearchError (#524)."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "rag answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock(side_effect=RedisSearchError("module not loaded"))
+
+        result = await cache_store_node(state, cache=cache)
+
+        assert result["response"] == "rag answer"
+
+    async def test_store_node_preserves_response_on_schema_validation_error(self):
+        """Response returned even when index schema mismatch causes SchemaValidationError (#524)."""
+        state = make_initial_state(user_id=1, session_id="s1", query="query")
+        state["query_type"] = "ENTITY"
+        state["query_embedding"] = [0.2] * 1024
+        state["response"] = "entity answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock(
+            side_effect=SchemaValidationError("Schema validation failed: field mismatch")
+        )
+
+        result = await cache_store_node(state, cache=cache)
+
+        assert result["response"] == "entity answer"
+
+    async def test_store_node_preserves_response_on_generic_runtime_error(self):
+        """Response preserved for any unexpected store_semantic failure."""
+        state = make_initial_state(user_id=1, session_id="s1", query="query")
+        state["query_type"] = "STRUCTURED"
+        state["query_embedding"] = [0.3] * 1024
+        state["response"] = "structured answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock(side_effect=RuntimeError("unexpected"))
+
+        result = await cache_store_node(state, cache=cache)
+
+        assert result["response"] == "structured answer"
