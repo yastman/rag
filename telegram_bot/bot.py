@@ -1512,8 +1512,11 @@ class PropertyBot:
             for chunk in _split_telegram_response(response_text):
                 await bot.send_message(chat_id=chat_id, text=chunk)
 
-        lf = get_client()
-        lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
+        try:
+            lf = get_client()
+            lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
+        except Exception:
+            logger.warning("Failed to write hitl_action score to Langfuse", exc_info=True)
 
     async def handle_feedback(self, callback: CallbackQuery):
         """Handle feedback button callback (#229)."""

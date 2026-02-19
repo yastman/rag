@@ -2293,3 +2293,46 @@ class TestHITLBotHandler:
         callback.answer.assert_called_once_with("Отменено")
         command = mock_agent.ainvoke.call_args[0][0]
         assert command.resume == {"action": "cancel"}
+
+    async def test_handle_hitl_callback_stale_trace(self, mock_config):
+        """Langfuse score_current_trace failure (stale trace_id) does not crash callback (#545)."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = None
+        callback = _make_callback_query("hitl:approve", user_id=12345, chat_id=12345)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        lf_client = MagicMock()
+        lf_client.score_current_trace.side_effect = Exception("Langfuse trace expired")
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=lf_client),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
+        ):
+            await bot.handle_hitl_callback(callback)
+
+        callback.answer.assert_called_once_with("Принято")
+        lf_client.score_current_trace.assert_called_once()
+
+
+class TestHandleFeedback:
+    """Tests for handle_feedback callback handler (#539)."""
+
+    async def test_handle_feedback_langfuse_failure(self, mock_config):
+        """Langfuse create_score failure does not crash handle_feedback (#539)."""
+        bot, _ = _create_bot(mock_config)
+        trace_id = "trace-abc-123"
+        callback = _make_callback_query(f"fb:1:{trace_id}", user_id=12345, chat_id=12345)
+
+        lf_client = MagicMock()
+        lf_client.create_score.side_effect = Exception("Langfuse unavailable")
+
+        with patch("telegram_bot.bot.get_langfuse_client", return_value=lf_client):
+            await bot.handle_feedback(callback)
+
+        callback.answer.assert_called_once_with("Спасибо за отзыв!")
+        callback.message.edit_reply_markup.assert_called_once()
