@@ -190,6 +190,63 @@ async def test_grade_node_filters_low_scores(_patch_observe):
     assert len(result["results"]) == 1
 
 
+async def test_grade_node_custom_threshold_lower(_patch_observe):
+    """Lower custom threshold accepts results that default 0.7 would reject (#433)."""
+    from telegram_bot.agents.history_graph.nodes import history_grade_node
+
+    state = {
+        **_GRADE_STATE_BASE,
+        "results": [
+            {
+                "query": "цены",
+                "response": "...",
+                "score": 0.5,  # below default 0.7, above custom 0.4
+                "timestamp": "2026-02-13T10:00",
+            },
+        ],
+    }
+    result = await history_grade_node(state, threshold=0.4)
+    assert result["results_relevant"] is True
+    assert len(result["results"]) == 1
+
+
+async def test_grade_node_custom_threshold_higher(_patch_observe):
+    """Higher custom threshold rejects results that default 0.7 would accept (#433)."""
+    from telegram_bot.agents.history_graph.nodes import history_grade_node
+
+    state = {
+        **_GRADE_STATE_BASE,
+        "results": [
+            {
+                "query": "цены",
+                "response": "...",
+                "score": 0.75,  # above default 0.7, below custom 0.9
+                "timestamp": "2026-02-13T10:00",
+            },
+        ],
+    }
+    result = await history_grade_node(state, threshold=0.9)
+    assert result["results_relevant"] is False
+    assert len(result["results"]) == 0
+
+
+async def test_grade_node_no_fallback_top3_on_miss(_patch_observe):
+    """When no results pass threshold, returns empty list (not top-3 fallback) (#433)."""
+    from telegram_bot.agents.history_graph.nodes import history_grade_node
+
+    state = {
+        **_GRADE_STATE_BASE,
+        "results": [
+            {"query": "a", "response": "...", "score": 0.2, "timestamp": ""},
+            {"query": "b", "response": "...", "score": 0.1, "timestamp": ""},
+            {"query": "c", "response": "...", "score": 0.3, "timestamp": ""},
+        ],
+    }
+    result = await history_grade_node(state, threshold=0.7)
+    assert result["results_relevant"] is False
+    assert result["results"] == []  # empty — no irrelevant top-3 fallback
+
+
 # --- rewrite node ---
 
 

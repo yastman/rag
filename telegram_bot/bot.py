@@ -22,6 +22,7 @@ from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
 from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
+from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import (
@@ -661,7 +662,9 @@ class PropertyBot:
             llm=self._llm,
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
+            history_relevance_threshold=self.config.history_relevance_threshold,
             original_query=message.text or "",
+            original_user_query=message.text or "",
         )
 
         rag_result_store: dict[str, Any] = {}
@@ -671,12 +674,64 @@ class PropertyBot:
             user_id=str(user_id),
             tags=["telegram", "rag", "agent"],
         ):
+            # --- Pre-agent content filter (#439) ---
+            # Text path must run guard BEFORE agent.ainvoke() so that
+            # injection attempts never reach the LLM at all.
+            user_text = message.text or ""
+            if self.config.content_filter_enabled:
+                detected, risk_score, pattern = detect_injection(user_text)
+                if detected:
+                    if self.config.guard_mode == "hard":
+                        logger.warning(
+                            "Pre-agent guard blocked (score=%.2f, pattern=%s): %.80s",
+                            risk_score,
+                            pattern,
+                            user_text,
+                        )
+                        await message.answer(_BLOCKED_RESPONSE)
+                        lf = get_client()
+                        tid = lf.get_current_trace_id() or ""
+                        lf.update_current_trace(
+                            input={"query": user_text},
+                            output={"response": _BLOCKED_RESPONSE},
+                            metadata={
+                                "pipeline_mode": "sdk_agent",
+                                "guard_blocked": True,
+                                "injection_pattern": pattern,
+                                "injection_risk_score": risk_score,
+                            },
+                        )
+                        if tid:
+                            score(
+                                lf,
+                                tid,
+                                name="guard_blocked",
+                                value=1,
+                                data_type="BOOLEAN",
+                            )
+                            score(
+                                lf,
+                                tid,
+                                name="injection_pattern",
+                                value=pattern or "unknown",
+                                data_type="CATEGORICAL",
+                            )
+                        return
+                    # soft/log mode: log but don't block
+                    logger.warning(
+                        "Pre-agent guard detected (mode=%s, score=%.2f, pattern=%s): %.80s",
+                        self.config.guard_mode,
+                        risk_score,
+                        pattern,
+                        user_text,
+                    )
+
             # Initialize handler inside propagation context so it inherits session/user/tags.
             langfuse_handler = create_callback_handler()
             callbacks = [langfuse_handler] if langfuse_handler else []
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                 result = await agent.ainvoke(
-                    {"messages": [{"role": "user", "content": message.text or ""}]},
+                    {"messages": [{"role": "user", "content": user_text}]},
                     config={
                         "callbacks": callbacks,
                         "configurable": {
@@ -694,8 +749,9 @@ class PropertyBot:
                 last_msg = messages[-1]
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
-            # Send response with feedback buttons, sources, and Markdown (#426)
-            if response_text:
+            # Send response with feedback buttons, sources, and Markdown (#426).
+            # Skip if a tool already delivered the response via streaming (#428).
+            if response_text and not ctx.response_sent:
                 lf = get_client()
                 trace_id = lf.get_current_trace_id() or ""
                 query_type = rag_result_store.get("query_type", "")
@@ -706,6 +762,10 @@ class PropertyBot:
                     from telegram_bot.feedback import build_feedback_keyboard
 
                     reply_markup = build_feedback_keyboard(trace_id)
+
+                # Fallback: history_search stores keyboard in BotContext side-channel (#434)
+                if reply_markup is None and ctx.history_reply_markup is not None:
+                    reply_markup = ctx.history_reply_markup
 
                 # Build source attribution
                 sources_text = ""
@@ -791,8 +851,12 @@ class PropertyBot:
                     data_type="CATEGORICAL",
                     id=f"{tid}-user_role",
                 )
-                # Tool call count (#374)
-                tool_calls = result.get("tool_call_count", 0)
+                # Tool call count (#374): count actual tool calls, not just messages.
+                tool_calls = sum(
+                    len(m.tool_calls)
+                    for m in result.get("messages", [])
+                    if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+                )
                 if tool_calls > 0:
                     lf.create_score(
                         trace_id=tid,
