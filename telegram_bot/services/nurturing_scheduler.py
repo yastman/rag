@@ -64,6 +64,15 @@ class NurturingScheduler:
             id="funnel-analytics-rollup",
             replace_existing=True,
         )
+        if getattr(self._config, "nurturing_dispatch_enabled", False):
+            self._scheduler.add_job(
+                self.run_nurturing_dispatch,
+                trigger=CronTrigger.from_crontab(
+                    getattr(self._config, "nurturing_dispatch_cron", "0 10 * * *")
+                ),
+                id="nurturing-dispatch",
+                replace_existing=True,
+            )
         self._scheduler.start()
         self._started = True
         logger.info("NurturingScheduler started")
@@ -87,6 +96,15 @@ class NurturingScheduler:
             logger.info("Nurturing batch completed: %d candidates", count)
         except Exception:
             logger.exception("Nurturing batch failed")
+
+    async def run_nurturing_dispatch(self) -> None:
+        """Dispatch pending nurturing messages (called by scheduler)."""
+        try:
+            batch = getattr(self._config, "nurturing_dispatch_batch", 20)
+            count = await self._nurturing.dispatch_pending(batch_size=batch)
+            logger.info("Nurturing dispatch completed: %d messages sent", count)
+        except Exception:
+            logger.exception("Nurturing dispatch failed")
 
     async def run_funnel_rollup(self) -> None:
         """Compute and persist daily funnel metrics (called by scheduler)."""
