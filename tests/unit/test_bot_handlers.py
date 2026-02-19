@@ -1470,7 +1470,9 @@ class TestToolCallsCount:
         ai_msg.tool_calls = [{"name": "rag_search", "args": {}}]
         result = {"messages": [ai_msg]}
         tool_calls = sum(
-            1 for m in result.get("messages", []) if hasattr(m, "tool_calls") and m.tool_calls
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
         )
         assert tool_calls == 1
 
@@ -1484,7 +1486,24 @@ class TestToolCallsCount:
         m3.tool_calls = []  # empty — not counted
         result = {"messages": [m1, m2, m3]}
         tool_calls = sum(
-            1 for m in result.get("messages", []) if hasattr(m, "tool_calls") and m.tool_calls
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+        )
+        assert tool_calls == 2
+
+    def test_count_tool_calls_multiple_calls_in_single_message(self):
+        """Multiple tool calls in one AI message are counted individually."""
+        msg = MagicMock()
+        msg.tool_calls = [
+            {"name": "rag_search", "args": {}},
+            {"name": "history_search", "args": {}},
+        ]
+        result = {"messages": [msg]}
+        tool_calls = sum(
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
         )
         assert tool_calls == 2
 
@@ -1493,7 +1512,9 @@ class TestToolCallsCount:
         msg = MagicMock(spec=["content"])  # no tool_calls attr
         result = {"messages": [msg]}
         tool_calls = sum(
-            1 for m in result.get("messages", []) if hasattr(m, "tool_calls") and m.tool_calls
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
         )
         assert tool_calls == 0
 
@@ -1501,7 +1522,9 @@ class TestToolCallsCount:
         """Empty messages list returns 0."""
         result = {"messages": []}
         tool_calls = sum(
-            1 for m in result.get("messages", []) if hasattr(m, "tool_calls") and m.tool_calls
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
         )
         assert tool_calls == 0
 
@@ -1509,7 +1532,9 @@ class TestToolCallsCount:
         """Missing messages key returns 0 (no KeyError)."""
         result = {}
         tool_calls = sum(
-            1 for m in result.get("messages", []) if hasattr(m, "tool_calls") and m.tool_calls
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
         )
         assert tool_calls == 0
 
@@ -1519,7 +1544,10 @@ class TestToolCallsCount:
         mock_lf = MagicMock()
 
         ai_with_tool = MagicMock()
-        ai_with_tool.tool_calls = [{"name": "rag_search", "args": {}}]
+        ai_with_tool.tool_calls = [
+            {"name": "rag_search", "args": {}},
+            {"name": "history_search", "args": {}},
+        ]
         ai_with_tool.content = ""
 
         final_ai = MagicMock()
@@ -1544,7 +1572,7 @@ class TestToolCallsCount:
             c.kwargs["name"]: c.kwargs.get("value") for c in mock_lf.create_score.call_args_list
         }
         assert "tool_calls_total" in score_calls
-        assert score_calls["tool_calls_total"] == 1.0
+        assert score_calls["tool_calls_total"] == 2.0
 
     async def test_handle_query_skips_tool_calls_score_when_no_tools_used(self, mock_config):
         """tool_calls_total score NOT written when agent uses no tools (#437)."""
