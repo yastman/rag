@@ -693,8 +693,9 @@ class PropertyBot:
                 last_msg = messages[-1]
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
-            ***REMOVED*** Send response with feedback buttons, sources, and Markdown (***REMOVED***426)
-            if response_text:
+            ***REMOVED*** Send response with feedback buttons, sources, and Markdown (***REMOVED***426).
+            ***REMOVED*** Skip if a tool already delivered the response via streaming (***REMOVED***428).
+            if response_text and not ctx.response_sent:
                 lf = get_client()
                 trace_id = lf.get_current_trace_id() or ""
                 query_type = rag_result_store.get("query_type", "")
