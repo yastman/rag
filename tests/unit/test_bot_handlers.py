@@ -190,6 +190,38 @@ class TestCommandHandlers:
         message.answer.assert_called_once()
         assert "очищена" in message.answer.call_args[0][0].lower()
 
+    async def test_cmd_clear_deletes_qdrant_history_when_service_available(self, mock_config):
+        """Test /clear also deletes persisted Qdrant history when service is ready."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        bot._history_service = AsyncMock()
+        bot._history_service.delete_user_history = AsyncMock(return_value=True)
+        message = _make_text_message()
+
+        await bot.cmd_clear(message)
+
+        bot._cache.clear_conversation.assert_awaited_once_with(12345)
+        bot._history_service.delete_user_history.assert_awaited_once_with(12345)
+        message.answer.assert_awaited_once()
+        assert "очищена" in message.answer.await_args.args[0].lower()
+
+    async def test_cmd_clear_reports_partial_failure_when_history_delete_fails(self, mock_config):
+        """When Qdrant history delete fails, /clear should report partial success."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.clear_conversation = AsyncMock()
+        bot._history_service = AsyncMock()
+        bot._history_service.delete_user_history = AsyncMock(return_value=False)
+        message = _make_text_message()
+
+        await bot.cmd_clear(message)
+
+        bot._cache.clear_conversation.assert_awaited_once_with(12345)
+        bot._history_service.delete_user_history.assert_awaited_once_with(12345)
+        message.answer.assert_awaited_once()
+        assert "частично" in message.answer.await_args.args[0].lower()
+
     async def test_cmd_clear_uses_checkpointer_delete_thread(self, mock_config):
         """Test /clear calls checkpointer.adelete_thread for text and voice threads."""
         bot, _ = _create_bot(mock_config)
