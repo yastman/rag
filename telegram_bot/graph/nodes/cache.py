@@ -115,7 +115,6 @@ async def cache_check_node(
             query=query,
             vector=embedding,
             query_type=query_type,
-            user_id=state.get("user_id"),
         )
 
     latency = time.perf_counter() - start
@@ -216,7 +215,6 @@ async def cache_store_node(
                 response=response,
                 vector=embedding,
                 query_type=query_type,
-                user_id=user_id,
             )
             stored_semantic = True
 
