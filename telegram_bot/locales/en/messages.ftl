@@ -50,3 +50,29 @@ funnel-subscribe = Subscribe to updates
 # Commands
 cmd-help = Ask questions about real estate or use the menu.
 cmd-clear-done = Chat history cleared.
+
+# Client menu (new buttons)
+menu-catalog = Property catalog
+menu-booking = Book a viewing
+menu-mortgage = Calculate mortgage
+menu-my-leads = My applications
+
+# Manager menu
+mgr-hello = Hi, { $name }! Manager dashboard.
+mgr-deals = My deals
+mgr-contacts = Search contacts
+mgr-new-deal = New deal
+mgr-funnel-stats = Sales funnel
+mgr-hot-leads = Hot leads
+mgr-tasks = Tasks
+mgr-crm-submenu = CRM
+mgr-search = Search knowledge base
+mgr-settings = Settings
+
+# CRM submenu
+crm-title = CRM
+crm-create-deal = Create deal
+crm-create-contact = Create contact
+crm-add-note = Add note
+crm-create-task = Create task
+crm-pipelines = Pipelines
