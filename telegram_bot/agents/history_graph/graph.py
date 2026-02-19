@@ -28,6 +28,7 @@ def build_history_graph(
     llm: Any | None = None,
     guard_mode: str = "hard",
     content_filter_enabled: bool = True,
+    relevance_threshold: float = 0.7,
 ) -> Any:
     """Build and compile the history search sub-graph.
 
@@ -36,6 +37,7 @@ def build_history_graph(
         llm: LLM instance (langfuse.openai.AsyncOpenAI). Falls back to GraphConfig.create_llm().
         guard_mode: Content filter mode — "hard" (block), "soft" (flag), "log" (log only).
         content_filter_enabled: If False, skip guard node entirely (#432).
+        relevance_threshold: Min similarity score to consider a result relevant (default 0.7; #433).
 
     Returns:
         Compiled StateGraph ready for .ainvoke().
@@ -44,11 +46,12 @@ def build_history_graph(
 
     # Bind dependencies via functools.partial
     retrieve = functools.partial(history_retrieve_node, history_service=history_service)
+    grade = functools.partial(history_grade_node, threshold=relevance_threshold)
     rewrite = functools.partial(history_rewrite_node, llm=llm)
     summarize = functools.partial(history_summarize_node, llm=llm)
 
     workflow.add_node("retrieve", cast(Any, retrieve))
-    workflow.add_node("grade", cast(Any, history_grade_node))
+    workflow.add_node("grade", cast(Any, grade))
     workflow.add_node("rewrite", cast(Any, rewrite))
     workflow.add_node("summarize", cast(Any, summarize))
 
