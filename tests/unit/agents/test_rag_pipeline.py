@@ -450,6 +450,136 @@ async def test_pipeline_rewrite_loop(
     assert len(result["documents"]) > 0
 
 
+# ---------------------------------------------------------------------------
+# original_query cache key tests (#430)
+# ---------------------------------------------------------------------------
+
+
+async def test_pipeline_cache_hit_via_original_query(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """Cache hit when original_query matches stored key, even with different reformulated query.
+
+    Scenario: user sends "квартиры в Несебре до 80000", agent reformulates to
+    "apartments in Nesebar under 80000 EUR". The cache was keyed on the original
+    Russian text. After the fix, the pipeline checks the cache with original_query
+    and returns the cached response without going to retrieval.
+    """
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    # Cache has an entry stored under the original query
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
+    mock_cache.check_semantic = AsyncMock(return_value="Cached answer about Nesebar apartments")
+
+    result = await rag_pipeline(
+        "apartments in Nesebar under 80000 EUR",  # agent-reformulated query
+        original_query="квартиры в Несебре до 80000",  # original user query
+        user_id=42,
+        session_id="test",
+        query_type="FAQ",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+    )
+
+    assert result["cache_hit"] is True
+    assert result["response"] == "Cached answer about Nesebar apartments"
+    # Retrieval must NOT be called when cache hits
+    mock_qdrant.hybrid_search_rrf.assert_not_called()
+    # Cache was checked with the ORIGINAL query (not the reformulated one)
+    check_call = mock_cache.check_semantic.call_args
+    assert check_call.kwargs["query"] == "квартиры в Несебре до 80000"
+
+
+async def test_pipeline_cache_uses_original_query_as_key(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """_cache_check is invoked with original_query as the cache key.
+
+    When original_query is provided, the semantic cache lookup must use it
+    (not the reformulated query) so the hit rate is consistent regardless of
+    how the agent chose to reformulate the user's question.
+    """
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    # Cache miss — proceed to retrieval
+    mock_cache.get_embedding = AsyncMock(return_value=None)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    await rag_pipeline(
+        "apartments in Nesebar",  # reformulated
+        original_query="квартиры в Несебре",  # original
+        user_id=42,
+        session_id="test",
+        query_type="FAQ",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+    )
+
+    # Embedding was computed for the ORIGINAL query
+    embed_call_args = [str(c) for c in mock_embeddings.aembed_hybrid.call_args_list]
+    assert any("квартиры в Несебре" in a for a in embed_call_args)
+    # Semantic check was done with the original query key
+    check_call = mock_cache.check_semantic.call_args
+    assert check_call.kwargs["query"] == "квартиры в Несебре"
+
+
+async def test_pipeline_fallback_to_query_when_original_query_empty(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """When original_query is empty (voice path / direct call), cache key falls back to query."""
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    mock_cache.get_embedding = AsyncMock(return_value=None)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    await rag_pipeline(
+        "квартиры в Несебре",
+        original_query="",  # empty — backward compat mode
+        user_id=42,
+        session_id="test",
+        query_type="FAQ",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+    )
+
+    # Fallback: cache was checked with the query itself
+    check_call = mock_cache.check_semantic.call_args
+    assert check_call.kwargs["query"] == "квартиры в Несебре"
+
+
+async def test_pipeline_cache_miss_when_different_original_query(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """Cache miss when a different original_query doesn't match the stored key."""
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    # Cache returns None (miss) regardless of which key we check
+    mock_cache.get_embedding = AsyncMock(return_value=None)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    result = await rag_pipeline(
+        "apartments in Varna",
+        original_query="квартиры в Варне",  # different from any stored key
+        user_id=42,
+        session_id="test",
+        query_type="FAQ",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+    )
+
+    assert result["cache_hit"] is False
+    # Retrieval was executed after the miss
+    mock_qdrant.hybrid_search_rrf.assert_called_once()
+
+
 async def test_pipeline_embedding_error(mock_cache, mock_sparse, mock_qdrant):
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
