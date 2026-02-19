@@ -198,3 +198,38 @@ class ClaudeJudge:
             )
 
         return JudgeResult.from_dict(data)
+
+
+class PassthroughJudge:
+    """Simple judge that passes any non-empty bot response (no LLM needed)."""
+
+    def __init__(self, config: E2EConfig):
+        self.config = config
+
+    async def evaluate(
+        self,
+        scenario: TestScenario,
+        bot_response: str,
+    ) -> JudgeResult:
+        """Pass if bot returned a non-empty response."""
+        if bot_response and len(bot_response.strip()) > 10:
+            return JudgeResult(
+                relevance=CriterionScore(8, "Response received"),
+                completeness=CriterionScore(8, "Response received"),
+                filter_accuracy=CriterionScore(8, "Response received"),
+                tone_format=CriterionScore(8, "Response received"),
+                no_hallucination=CriterionScore(8, "Response received"),
+                total_score=8.0,
+                passed=True,
+                summary="Bot responded (no-judge mode)",
+            )
+        return JudgeResult(
+            relevance=CriterionScore(0, "Empty response"),
+            completeness=CriterionScore(0, "Empty response"),
+            filter_accuracy=CriterionScore(0, "Empty response"),
+            tone_format=CriterionScore(0, "Empty response"),
+            no_hallucination=CriterionScore(0, "Empty response"),
+            total_score=0.0,
+            passed=False,
+            summary="Bot returned empty response",
+        )

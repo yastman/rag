@@ -17,7 +17,7 @@ from rich.table import Table
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from scripts.e2e.claude_judge import ClaudeJudge, CriterionScore, JudgeResult
+from scripts.e2e.claude_judge import ClaudeJudge, CriterionScore, JudgeResult, PassthroughJudge
 from scripts.e2e.config import E2EConfig
 from scripts.e2e.langfuse_trace_validator import (
     is_validation_enabled,
@@ -56,7 +56,7 @@ async def run_single_test(
         # Send message and get response
         response = await client.send_and_wait(
             query=scenario.query,
-            timeout=scenario.timeout,
+            response_timeout=scenario.timeout,
         )
 
         # Validate Langfuse trace if enabled
@@ -145,6 +145,7 @@ async def run_tests(
     config: E2EConfig,
     scenarios: list,
     validate_traces: bool = False,
+    no_judge: bool = False,
 ) -> TestReport:
     """Run all test scenarios."""
     results = []
@@ -152,9 +153,11 @@ async def run_tests(
 
     if validate_traces:
         console.print("[yellow]Langfuse trace validation enabled[/]")
+    if no_judge:
+        console.print("[yellow]No-judge mode: skipping LLM evaluation[/]")
 
     async with E2ETelegramClient(config) as client:
-        judge = ClaudeJudge(config)
+        judge = PassthroughJudge(config) if no_judge else ClaudeJudge(config)
 
         with Progress(
             SpinnerColumn(),
@@ -228,11 +231,18 @@ def main():
         type=str,
         help="Run only specific scenario by ID (e.g., 3.1)",
     )
+    parser.add_argument(
+        "--no-judge",
+        action="store_true",
+        help="Skip LLM judge — pass any non-empty bot response (no ANTHROPIC_API_KEY needed)",
+    )
     args = parser.parse_args()
 
     # Load config
     config = E2EConfig()
     errors = config.validate()
+    if args.no_judge:
+        errors = [e for e in errors if "ANTHROPIC_API_KEY" not in e]
     if errors:
         console.print("[red]Configuration errors:[/]")
         for e in errors:
@@ -258,7 +268,9 @@ def main():
     validate_traces = is_validation_enabled()
 
     # Run tests
-    report = asyncio.run(run_tests(config, scenarios, validate_traces=validate_traces))
+    report = asyncio.run(
+        run_tests(config, scenarios, validate_traces=validate_traces, no_judge=args.no_judge)
+    )
 
     # Generate reports
     generator = ReportGenerator(config.reports_dir)
