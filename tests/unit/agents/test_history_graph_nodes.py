@@ -59,6 +59,8 @@ async def test_retrieve_node_calls_service(mock_history_service, _patch_observe)
         user_id=42,
         query="цены на квартиры",
         limit=10,
+        deal_id=None,
+        scope="all",
     )
     assert len(result["results"]) == 1
     assert "retrieve" in result["latency_stages"]
