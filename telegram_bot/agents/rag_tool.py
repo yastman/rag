@@ -15,6 +15,8 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from telegram_bot.agents.rag_pipeline import rag_pipeline
+from telegram_bot.graph.nodes.classify import classify_query
+from telegram_bot.graph.nodes.guard import guard_node
 from telegram_bot.observability import get_client, observe
 from telegram_bot.scoring import write_langfuse_scores
 
@@ -24,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def _format_context(result: dict) -> str:
     """Format pipeline result as context string for agent LLM."""
-    if result.get("cache_hit") and result.get("response"):
+    if result.get("response"):
         return result["response"]
 
     documents = result.get("documents", [])
@@ -72,11 +74,62 @@ async def rag_search(
     lf.update_current_span(input={"query_preview": query[:120]})
 
     try:
+        query_type = classify_query(query)
+        guard_result: dict = {}
+        guard_mode = ctx.guard_mode if ctx else "hard"
+        content_filter_enabled = ctx.content_filter_enabled if ctx else True
+
+        if content_filter_enabled:
+            guard_result = await guard_node(
+                {"messages": [{"content": query}], "latency_stages": {}},
+                guard_mode=guard_mode,
+            )
+            if guard_result.get("guard_blocked"):
+                pipeline_wall_ms = 0.0
+                result = {
+                    "response": guard_result.get(
+                        "response",
+                        "Извините, ваш запрос не может быть обработан.",
+                    ),
+                    "cache_hit": False,
+                    "documents": [],
+                    "search_results_count": 0,
+                    "rerank_applied": False,
+                    "grade_confidence": 0.0,
+                    "embeddings_cache_hit": False,
+                    "embedding_error": False,
+                    "embedding_error_type": None,
+                    "latency_stages": guard_result.get("latency_stages", {}),
+                    "rewrite_count": 0,
+                    "query_type": query_type,
+                    "query_embedding": None,
+                    "retrieved_context": [],
+                    "injection_detected": guard_result.get("injection_detected", False),
+                    "injection_risk_score": guard_result.get("injection_risk_score", 0.0),
+                    "injection_pattern": guard_result.get("injection_pattern"),
+                }
+                result["pipeline_wall_ms"] = pipeline_wall_ms
+                result["user_perceived_wall_ms"] = pipeline_wall_ms
+
+                try:
+                    write_langfuse_scores(lf, result)
+                except Exception:
+                    logger.warning("Failed to write Langfuse scores in rag_search", exc_info=True)
+
+                result_store = configurable.get("rag_result_store")
+                if isinstance(result_store, dict):
+                    result_store.update(result)
+
+                context = _format_context(result)
+                lf.update_current_span(output={"response_length": len(context)})
+                return context
+
         invoke_start = time.perf_counter()
         result = await rag_pipeline(
             query,
             user_id=ctx.telegram_user_id if ctx else 0,
             session_id=ctx.session_id if ctx else "",
+            query_type=query_type,
             cache=ctx.cache if ctx else None,
             embeddings=ctx.embeddings if ctx else None,
             sparse_embeddings=ctx.sparse_embeddings if ctx else None,
@@ -85,6 +138,18 @@ async def rag_search(
             llm=ctx.llm if ctx else None,
         )
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
+
+        if guard_result:
+            if guard_result.get("injection_detected"):
+                result["injection_detected"] = True
+                result["injection_risk_score"] = guard_result.get("injection_risk_score", 0.0)
+                result["injection_pattern"] = guard_result.get("injection_pattern")
+            guard_latency = guard_result.get("latency_stages", {}).get("guard")
+            if guard_latency is not None:
+                result["latency_stages"] = {
+                    **result.get("latency_stages", {}),
+                    "guard": guard_latency,
+                }
 
         result["pipeline_wall_ms"] = pipeline_wall_ms
         summarize_s = result.get("latency_stages", {}).get("summarize", 0)
