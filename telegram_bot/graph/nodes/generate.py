@@ -23,6 +23,7 @@ from telegram_bot.integrations.prompt_templates import (
     get_token_limit,
 )
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.metrics import PipelineMetrics
 from telegram_bot.services.response_style_detector import ResponseStyleDetector
 
 
@@ -453,6 +454,7 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
         stream_recovery = False
 
     elapsed = time.monotonic() - t0
+    PipelineMetrics.get().record("generate", elapsed * 1000)
 
     # Build eval context for managed evaluators (#386)
     retrieved_context = state.get("retrieved_context", [])

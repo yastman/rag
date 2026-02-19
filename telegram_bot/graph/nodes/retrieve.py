@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.metrics import PipelineMetrics
 
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,7 @@ async def retrieve_node(
     cached_results = await cache.get_search_results(dense_vector)
     if cached_results is not None:
         latency = time.perf_counter() - start
+        PipelineMetrics.get().record("retrieve", latency * 1000)
         logger.info("retrieve HIT search cache (%.3fs, %d docs)", latency, len(cached_results))
         cached_ctx = _build_retrieved_context(cached_results)
         lf.update_current_span(
@@ -186,6 +188,7 @@ async def retrieve_node(
         await cache.store_search_results(dense_vector, None, results)
 
     latency = time.perf_counter() - start
+    PipelineMetrics.get().record("retrieve", latency * 1000)
     logger.info("retrieve done (%.3fs, %d docs)", latency, len(results))
 
     scores = [d.get("score", 0) for d in results if isinstance(d, dict)]
