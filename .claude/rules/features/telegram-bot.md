@@ -32,7 +32,7 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | File | Description |
 |------|-------------|
 | `telegram_bot/bot.py` | PropertyBot class (agent orchestrator + voice handler) |
-| `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` |
+| `telegram_bot/scoring.py` | `score()`, `write_langfuse_scores()`, `write_history_scores()`, `write_crm_scores()` (#310, #451, #452) |
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
 | `telegram_bot/graph/graph.py` | `build_graph()` — assembles 11-node StateGraph (RAG pipeline) |
