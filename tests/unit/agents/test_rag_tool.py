@@ -264,3 +264,62 @@ async def test_rag_search_passes_classified_query_type(bot_context):
 
     assert mock_pipeline.call_count == 1
     assert mock_pipeline.call_args.kwargs["query_type"] == "FAQ"
+
+
+async def test_rag_search_passes_original_query_from_context(bot_context):
+    """rag_search passes ctx.original_query into rag_pipeline (#430).
+
+    The agent may reformulate the query before calling rag_search.
+    BotContext.original_query holds the user's raw text so the semantic
+    cache key stays stable across reformulations.
+    """
+    from telegram_bot.agents.context import BotContext
+    from telegram_bot.agents.rag_tool import rag_search
+
+    ctx_with_original = BotContext(
+        telegram_user_id=42,
+        session_id="test-session",
+        language="ru",
+        kommo_client=None,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        content_filter_enabled=True,
+        guard_mode="hard",
+        original_query="квартиры в Несебре до 80000",
+    )
+
+    with patch(
+        "telegram_bot.agents.rag_tool.rag_pipeline",
+        new_callable=AsyncMock,
+        return_value=_pipeline_result(),
+    ) as mock_pipeline:
+        await rag_search.ainvoke(
+            # Agent reformulated the query:
+            {"query": "apartments in Nesebar under 80000 EUR"},
+            config=_make_config(ctx_with_original),
+        )
+
+    assert mock_pipeline.call_count == 1
+    assert mock_pipeline.call_args.kwargs["original_query"] == "квартиры в Несебре до 80000"
+
+
+async def test_rag_search_original_query_empty_by_default(bot_context):
+    """rag_search passes empty original_query when BotContext.original_query is not set."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    with patch(
+        "telegram_bot.agents.rag_tool.rag_pipeline",
+        new_callable=AsyncMock,
+        return_value=_pipeline_result(),
+    ) as mock_pipeline:
+        await rag_search.ainvoke(
+            {"query": "тест"},
+            config=_make_config(bot_context),
+        )
+
+    assert mock_pipeline.call_args.kwargs["original_query"] == ""

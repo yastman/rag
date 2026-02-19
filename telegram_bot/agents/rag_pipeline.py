@@ -640,6 +640,7 @@ async def rag_pipeline(
     user_id: int,
     session_id: str,
     query_type: str = "GENERAL",
+    original_query: str = "",
     cache: Any,
     embeddings: Any,
     sparse_embeddings: Any,
@@ -651,15 +652,27 @@ async def rag_pipeline(
 
     Returns context dict with documents, scores, latency_stages, and pipeline metadata.
     The caller (agent) is responsible for generating the final answer from documents.
+
+    Args:
+        query: The (possibly reformulated) query used for retrieval.
+        original_query: The original user query before agent reformulation.
+            Used as the semantic cache key so repeated user queries hit the cache
+            even when the agent reformulates them differently. Falls back to query
+            when empty (voice path, direct calls).
     """
     from telegram_bot.graph.config import GraphConfig
 
     config = GraphConfig.from_env()
 
+    # cache_key: use original user query for semantic cache so repeated queries hit
+    # even when the agent reformulates them. Falls back to query when not provided.
+    cache_key = original_query or query
+
     lf = get_client()
     lf.update_current_span(
         input={
             "query_preview": query[:120],
+            "original_query_preview": cache_key[:120] if cache_key != query else None,
             "user_id": user_id,
             "session_id": session_id,
             "query_type": query_type,
@@ -673,15 +686,17 @@ async def rag_pipeline(
     current_query = query
     query_embedding: list[float] | None = None
 
-    # Step 1: Cache check
+    # Step 1: Cache check (use cache_key = original user query)
     cache_result = await _cache_check(
-        current_query,
+        cache_key,
         query_type,
         user_id,
         cache=cache,
         embeddings=embeddings,
         latency_stages=latency_stages,
     )
+    # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
+    cache_embedding: list[float] | None = cache_result.get("query_embedding")
     latency_stages = cache_result["latency_stages"]
 
     if cache_result.get("embedding_error"):
@@ -718,7 +733,10 @@ async def rag_pipeline(
             "retrieved_context": [],
         }
 
-    query_embedding = cache_result["query_embedding"]
+    # For retrieval, use reformulated query embedding.
+    # If cache_key differs from query (agent reformulated), we must re-embed query
+    # so retrieval uses the reformulated form (better recall).
+    query_embedding = None if cache_key != query else cache_embedding
 
     # Retrieve → grade → (rerank | rewrite loop)
     for _attempt in range(config.max_rewrite_attempts + 1):
