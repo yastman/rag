@@ -85,7 +85,7 @@ def test_create_bot_agent_passes_checkpointer():
 
 
 def test_create_bot_agent_uses_langfuse_prompt_manager_by_default():
-    """Default system prompt should be resolved via prompt manager."""
+    """Default client role should be resolved via prompt manager with client_agent name."""
     from telegram_bot.agents.agent import create_bot_agent
 
     with (
@@ -101,7 +101,7 @@ def test_create_bot_agent_uses_langfuse_prompt_manager_by_default():
 
     mock_get.assert_called_once()
     call_kwargs = mock_get.call_args.kwargs
-    assert mock_get.call_args.args[0] == "supervisor_agent"
+    assert mock_get.call_args.args[0] == "client_agent"
     assert call_kwargs["variables"] == {"language": "русском языке"}
     assert "rag_search" in call_kwargs["fallback"]
 
@@ -125,17 +125,17 @@ def test_create_bot_agent_custom_prompt_bypasses_prompt_manager():
 
 
 def test_default_system_prompt_contains_safety_instructions():
-    """DEFAULT_SYSTEM_PROMPT must include safety/refusal instructions (#439)."""
-    from telegram_bot.agents.agent import DEFAULT_SYSTEM_PROMPT
+    """CLIENT_SYSTEM_PROMPT must include safety/refusal instructions (#439)."""
+    from telegram_bot.agents.agent import CLIENT_SYSTEM_PROMPT
 
     # Must refuse prompt injection attempts
-    assert "НЕ выполняй" in DEFAULT_SYSTEM_PROMPT
+    assert "НЕ выполняй" in CLIENT_SYSTEM_PROMPT
     # Must refuse system prompt leaks
-    assert "НЕ раскрывай" in DEFAULT_SYSTEM_PROMPT
+    assert "НЕ раскрывай" in CLIENT_SYSTEM_PROMPT
     # Must have a safety section
-    assert "Безопасность" in DEFAULT_SYSTEM_PROMPT
+    assert "Безопасность" in CLIENT_SYSTEM_PROMPT
     # Must enforce rag_search for property questions
-    assert "rag_search" in DEFAULT_SYSTEM_PROMPT
+    assert "rag_search" in CLIENT_SYSTEM_PROMPT
 
 
 # --- #519: Sliding-window history trimmer ---
@@ -311,3 +311,103 @@ def test_history_trimmer_handles_messages_without_ids():
     assert isinstance(updates[0], RemoveMessage)
     assert updates[0].id == REMOVE_ALL_MESSAGES
     assert len(updates[1:]) <= 3
+
+
+def test_create_bot_agent_client_role_uses_client_prompt():
+    """role='client' resolves prompt name 'client_agent' with CLIENT_SYSTEM_PROMPT fallback."""
+    from telegram_bot.agents.agent import CLIENT_SYSTEM_PROMPT, create_bot_agent
+
+    with (
+        patch("telegram_bot.agents.agent.create_agent"),
+        patch("telegram_bot.agents.agent.get_prompt", return_value="client prompt") as mock_get,
+    ):
+        create_bot_agent(
+            model="openai/gpt-oss-120b",
+            tools=[],
+            checkpointer=None,
+            role="client",
+        )
+
+    mock_get.assert_called_once()
+    assert mock_get.call_args.args[0] == "client_agent"
+    assert mock_get.call_args.kwargs["fallback"] is CLIENT_SYSTEM_PROMPT
+
+
+def test_create_bot_agent_manager_role_uses_manager_prompt():
+    """role='manager' resolves prompt name 'manager_agent' with MANAGER_SYSTEM_PROMPT fallback."""
+    from telegram_bot.agents.agent import MANAGER_SYSTEM_PROMPT, create_bot_agent
+
+    with (
+        patch("telegram_bot.agents.agent.create_agent"),
+        patch("telegram_bot.agents.agent.get_prompt", return_value="manager prompt") as mock_get,
+    ):
+        create_bot_agent(
+            model="openai/gpt-oss-120b",
+            tools=[],
+            checkpointer=None,
+            role="manager",
+        )
+
+    mock_get.assert_called_once()
+    assert mock_get.call_args.args[0] == "manager_agent"
+    assert mock_get.call_args.kwargs["fallback"] is MANAGER_SYSTEM_PROMPT
+
+
+def test_create_bot_agent_default_role_is_client():
+    """create_bot_agent defaults to role='client' when role is omitted."""
+    from telegram_bot.agents.agent import CLIENT_SYSTEM_PROMPT, create_bot_agent
+
+    with (
+        patch("telegram_bot.agents.agent.create_agent"),
+        patch("telegram_bot.agents.agent.get_prompt", return_value="default prompt") as mock_get,
+    ):
+        create_bot_agent(
+            model="openai/gpt-oss-120b",
+            tools=[],
+            checkpointer=None,
+        )
+
+    mock_get.assert_called_once()
+    assert mock_get.call_args.args[0] == "client_agent"
+    assert mock_get.call_args.kwargs["fallback"] is CLIENT_SYSTEM_PROMPT
+
+
+def test_client_prompt_has_no_crm_instructions():
+    """CLIENT_SYSTEM_PROMPT must not contain CRM tool references."""
+    from telegram_bot.agents.agent import CLIENT_SYSTEM_PROMPT
+
+    crm_tools = [
+        "crm_get_deal",
+        "crm_create_lead",
+        "crm_update_lead",
+        "crm_get_contacts",
+        "crm_upsert_contact",
+        "crm_add_note",
+        "crm_create_task",
+        "crm_link_contact_to_deal",
+    ]
+    for tool in crm_tools:
+        assert tool not in CLIENT_SYSTEM_PROMPT, f"CLIENT_SYSTEM_PROMPT must not mention {tool}"
+
+
+def test_manager_prompt_has_crm_instructions():
+    """MANAGER_SYSTEM_PROMPT must contain CRM tool references and HITL confirmation."""
+    from telegram_bot.agents.agent import MANAGER_SYSTEM_PROMPT
+
+    crm_tools = [
+        "crm_get_deal",
+        "crm_create_lead",
+        "crm_update_lead",
+        "crm_get_contacts",
+        "crm_upsert_contact",
+        "crm_add_note",
+        "crm_create_task",
+        "crm_link_contact_to_deal",
+    ]
+    for tool in crm_tools:
+        assert tool in MANAGER_SYSTEM_PROMPT, f"MANAGER_SYSTEM_PROMPT must mention {tool}"
+    # HITL confirmation instructions must be present
+    assert (
+        "подтвердите" in MANAGER_SYSTEM_PROMPT.lower()
+        or "подтверждение" in MANAGER_SYSTEM_PROMPT.lower()
+    )
