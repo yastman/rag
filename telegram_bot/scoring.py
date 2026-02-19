@@ -299,8 +299,22 @@ def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
             continue
 
         crm_total += 1
+        status = str(getattr(msg, "status", "") or "").lower()
+        if status == "error":
+            crm_error += 1
+            continue
+        if status == "success":
+            crm_success += 1
+            continue
+
+        # Fallback for legacy/adapter messages where status is absent.
         content = getattr(msg, "content", "") or ""
-        if "Ошибка при" in content or content == "CRM недоступен. Обратитесь к администратору.":
+        content_text = content if isinstance(content, str) else str(content)
+        if (
+            content_text.startswith("Ошибка")
+            or "Ошибка при" in content_text
+            or content_text == "CRM недоступен. Обратитесь к администратору."
+        ):
             crm_error += 1
         else:
             crm_success += 1
