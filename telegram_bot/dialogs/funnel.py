@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import operator
 from typing import Any
@@ -15,6 +16,25 @@ from .states import FunnelSG
 
 
 logger = logging.getLogger(__name__)
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+
+
+async def _persist_funnel_lead_score_safe(**kwargs: Any) -> None:
+    """Persist/sync funnel score without breaking callback flow."""
+    try:
+        from telegram_bot.services.funnel_lead_scoring import persist_and_sync_funnel_lead_score
+
+        await persist_and_sync_funnel_lead_score(**kwargs)
+    except Exception:
+        logger.exception("Failed to persist/sync funnel lead score")
+
+
+def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
+    """Run heavy side effects in the background to keep callback responsive."""
+    task = asyncio.create_task(_persist_funnel_lead_score_safe(**kwargs))
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+
 
 # --- Getters (provide data to windows) ---
 
@@ -139,14 +159,13 @@ async def on_timeline_selected(
     """Save timeline and show results."""
     manager.dialog_data["timeline"] = item_id
 
-    # Persist scoring + CRM sync on completed funnel answers.
+    # Persist scoring + CRM sync asynchronously on completed funnel answers.
     try:
         from telegram_bot.bot import make_session_id
-        from telegram_bot.services.funnel_lead_scoring import persist_and_sync_funnel_lead_score
 
         if callback.from_user is not None:
             data = manager.dialog_data
-            await persist_and_sync_funnel_lead_score(
+            _spawn_persist_funnel_lead_score(
                 telegram_user_id=callback.from_user.id,
                 session_id=make_session_id("chat", callback.message.chat.id)
                 if callback.message is not None
@@ -162,7 +181,7 @@ async def on_timeline_selected(
                 config=manager.middleware_data.get("bot_config"),
             )
     except Exception:
-        logger.exception("Failed to persist/sync funnel lead score")
+        logger.exception("Failed to schedule funnel lead score persistence")
 
     await manager.switch_to(FunnelSG.results)
 
