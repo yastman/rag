@@ -389,6 +389,7 @@ def write_history_scores(lf: Any, result: dict[str, Any], *, trace_id: str = "")
         history_relevance (NUMERIC): 1.0 if relevant, 0.0 if not.
         history_rewrite_count (NUMERIC): Number of query rewrites.
         history_latency_ms (NUMERIC): Total sub-graph wall time (ms).
+        history_cache_hit (NUMERIC): 1.0 if semantic cache was hit, 0.0 if not (#464).
     """
     if not trace_id:
         trace_id = lf.get_current_trace_id()
@@ -422,4 +423,10 @@ def write_history_scores(lf: Any, result: dict[str, Any], *, trace_id: str = "")
         name="history_latency_ms",
         value=round(total_ms, 1),
         id=f"{trace_id}-history_latency_ms",
+    )
+    lf.create_score(
+        trace_id=trace_id,
+        name="history_cache_hit",
+        value=1.0 if result.get("history_cache_hit") else 0.0,
+        id=f"{trace_id}-history_cache_hit",
     )
