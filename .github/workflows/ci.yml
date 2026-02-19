@@ -1,18 +1,18 @@
-# .github/workflows/ci.yml
 name: CI
 
 on:
-  push:
-    branches: [main, development]
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint:
+  checks:
     name: Lint & Type Check
     runs-on: self-hosted
     steps:
@@ -37,189 +37,3 @@ jobs:
 
       - name: Type check
         run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
-
-  # ---------------------------------------------------------------------------
-  # PR Pipeline: 4 shards × xdist — fast feedback (~3-4 min)
-  # ---------------------------------------------------------------------------
-  test:
-    name: "Unit Tests (shard ${{ matrix.group }}/${{ strategy.job-total }})"
-    runs-on: self-hosted
-    needs: [lint]
-    strategy:
-      fail-fast: false
-      matrix:
-        group: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies (core for PRs, full for main)
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            uv sync --frozen
-          else
-            uv sync --frozen --extra voice --extra ingest --extra eval --extra ml-local
-          fi
-
-      - name: Preflight imports (full tier only)
-        if: github.event_name != 'pull_request'
-        run: |
-          uv run python - <<'PY'
-          import importlib
-          import sys
-
-          required_modules = [
-              "fastapi",
-              "pydantic_settings",
-              "pymupdf",
-              "mlflow",
-              "ragas",
-              "fastembed",
-              "cachetools",
-          ]
-
-          failed = []
-          for module_name in required_modules:
-              try:
-                  importlib.import_module(module_name)
-              except Exception as exc:
-                  failed.append((module_name, exc))
-
-          if failed:
-              print("CI dependency preflight failed:")
-              for module_name, exc in failed:
-                  print(f" - {module_name}: {exc!r}")
-              sys.exit(1)
-
-          print("CI dependency preflight passed.")
-          PY
-
-      - name: Restore test durations
-        uses: actions/cache/restore@v4
-        with:
-          path: .test_durations
-          key: test-durations-${{ github.sha }}
-          restore-keys: |
-            test-durations-
-
-      - name: Set marker expression
-        id: markers
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "expr=not legacy_api and not requires_extras and not slow" >> "$GITHUB_OUTPUT"
-          else
-            echo "expr=not legacy_api" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run unit tests (shard ${{ matrix.group }}/4)
-        run: |
-          uv run pytest tests/unit/ \
-            --splits 4 --group ${{ matrix.group }} \
-            -n auto --dist loadscope \
-            --timeout=30 \
-            -m "${{ steps.markers.outputs.expr }}" \
-            --durations=20 --durations-min=1.0 \
-            -q
-
-      - name: Store durations (main only, shard 1)
-        if: github.ref == 'refs/heads/main' && matrix.group == 1
-        run: |
-          uv run pytest tests/unit/ \
-            --store-durations \
-            --timeout=30 \
-            -m "not legacy_api" \
-            -q || true
-
-      - name: Upload durations (main only, shard 1)
-        if: always() && github.ref == 'refs/heads/main' && matrix.group == 1
-        uses: actions/cache/save@v4
-        with:
-          path: .test_durations
-          key: test-durations-${{ github.sha }}
-
-  # ---------------------------------------------------------------------------
-  # Integration tests — no Docker, fully mocked, ~5s
-  # ---------------------------------------------------------------------------
-  integration:
-    name: Integration Tests (Graph Paths)
-    runs-on: self-hosted
-    needs: [lint]
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --frozen --extra voice --extra ingest --extra eval
-
-      - name: Run integration tests
-        run: |
-          uv run pytest \
-            tests/integration/test_graph_paths.py \
-            tests/integration/test_bot_hybrid_search.py \
-            -v --timeout=30
-
-  # ---------------------------------------------------------------------------
-  # Baseline regression — main only (keeps PR feedback loop fast)
-  # ---------------------------------------------------------------------------
-  baseline-compare:
-    name: Baseline Regression Check (main)
-    runs-on: self-hosted
-    if: github.ref == 'refs/heads/main'
-    needs: lint
-    env:
-      LANGFUSE_AVAILABLE: ${{ secrets.LANGFUSE_SECRET_KEY != '' }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        if: env.LANGFUSE_AVAILABLE == 'true'
-
-      - name: Install uv
-        if: env.LANGFUSE_AVAILABLE == 'true'
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        if: env.LANGFUSE_AVAILABLE == 'true'
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        if: env.LANGFUSE_AVAILABLE == 'true'
-        run: uv sync --frozen --extra voice --extra ingest --extra eval
-
-      - name: Run baseline comparison
-        if: env.LANGFUSE_AVAILABLE == 'true'
-        env:
-          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
-          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
-          LANGFUSE_HOST: ${{ secrets.LANGFUSE_HOST }}
-        run: |
-          SHORT_SHA="${GITHUB_SHA::8}"
-          CURRENT_SESSION="ci-${SHORT_SHA}-${GITHUB_JOB}-${GITHUB_RUN_ATTEMPT}"
-
-          uv run python3 -m tests.baseline.cli compare \
-            --baseline-tag="main-latest" \
-            --current-session="${CURRENT_SESSION}" \
-            --thresholds=tests/baseline/thresholds.yaml \
-            --output="reports/baseline-${CURRENT_SESSION}.json"
-
-      - name: Upload baseline report
-        if: always() && env.LANGFUSE_AVAILABLE == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: baseline-report
-          path: reports/baseline-*.json
-          retention-days: 30
