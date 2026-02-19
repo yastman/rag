@@ -13,6 +13,7 @@ from langchain.agents.middleware import AgentState, before_model
 from langchain_core.messages import RemoveMessage
 from langchain_core.messages.utils import trim_messages
 from langchain_openai import ChatOpenAI
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
 from telegram_bot.agents.context import BotContext
 from telegram_bot.integrations.prompt_manager import get_prompt
@@ -56,20 +57,18 @@ def _create_history_trimmer(max_messages: int) -> Any:
         if not to_keep:
             return None
 
-        keep_ids = {m.id for m in to_keep if m.id is not None}
-        # Only remove messages with a known id; id=None messages can't be targeted.
-        to_remove = [m for m in messages if m.id is not None and m.id not in keep_ids]
-        if not to_remove:
+        # No-op when trim result is effectively the same as input.
+        if len(to_keep) == len(messages):
             return None
 
         logger.debug(
-            "history_trimmer: removed %d messages (kept %d of %d, max=%d)",
-            len(to_remove),
+            "history_trimmer: trimmed history (kept %d of %d, max=%d)",
             len(to_keep),
             len(messages),
             max_messages,
         )
-        return {"messages": [RemoveMessage(id=m.id) for m in to_remove]}
+        # Reset message list and re-add only the kept window.
+        return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *to_keep]}
 
     return _trim_history
 
