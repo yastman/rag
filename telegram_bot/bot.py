@@ -662,6 +662,7 @@ class PropertyBot:
             llm=self._llm,
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
+            history_relevance_threshold=self.config.history_relevance_threshold,
             original_user_query=message.text or "",
         )
 
@@ -760,6 +761,10 @@ class PropertyBot:
                     from telegram_bot.feedback import build_feedback_keyboard
 
                     reply_markup = build_feedback_keyboard(trace_id)
+
+                # Fallback: history_search stores keyboard in BotContext side-channel (#434)
+                if reply_markup is None and ctx.history_reply_markup is not None:
+                    reply_markup = ctx.history_reply_markup
 
                 # Build source attribution
                 sources_text = ""
