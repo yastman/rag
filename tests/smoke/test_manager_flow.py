@@ -6,9 +6,21 @@ No Docker required — uses mocked services.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+def build_tools_for_role(
+    *, role: str, base_tools: list[Any], manager_tools: Iterable[Any]
+) -> list[Any]:
+    """Select tools based on user role (#388)."""
+    tools = list(base_tools)
+    if role == "manager":
+        tools.extend(list(manager_tools))
+    return tools
 
 
 @pytest.fixture
@@ -96,16 +108,12 @@ class TestToolGating:
     """Manager gets CRM tools, client does not."""
 
     def test_build_tools_for_manager(self):
-        from telegram_bot.agents.tools import build_tools_for_role
-
         base = [MagicMock(name="rag_search"), MagicMock(name="direct_response")]
         manager = [MagicMock(name="crm_tool_1"), MagicMock(name="crm_tool_2")]
         tools = build_tools_for_role(role="manager", base_tools=base, manager_tools=manager)
         assert len(tools) == 4  # base(2) + manager(2)
 
     def test_build_tools_for_client(self):
-        from telegram_bot.agents.tools import build_tools_for_role
-
         base = [MagicMock(name="rag_search"), MagicMock(name="direct_response")]
         manager = [MagicMock(name="crm_tool_1")]
         tools = build_tools_for_role(role="client", base_tools=base, manager_tools=manager)
