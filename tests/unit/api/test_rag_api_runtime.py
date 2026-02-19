@@ -73,6 +73,31 @@ async def test_query_writes_langfuse_scores() -> None:
     assert isinstance(call_args[0][1], dict)  # second arg: result dict
 
 
+async def test_query_observe_trace_sets_api_tags_and_ids() -> None:
+    """POST /query must set trace tags ["api", "rag", channel] and session/user IDs."""
+    graph = _DummyGraph()
+    app.state.graph = graph
+    app.state.max_rewrite_attempts = 1
+
+    lf = MagicMock()
+    lf.update_current_trace = MagicMock()
+
+    with (
+        patch("telegram_bot.observability.propagate_attributes", return_value=nullcontext()),
+        patch("telegram_bot.observability.get_client", return_value=lf),
+    ):
+        await query(QueryRequest(query="test", user_id=42, session_id="sess-1", channel="voice"))
+
+    lf.update_current_trace.assert_called_once()
+    call_kwargs = lf.update_current_trace.call_args.kwargs
+    assert "tags" in call_kwargs
+    assert "api" in call_kwargs["tags"]
+    assert "rag" in call_kwargs["tags"]
+    assert "voice" in call_kwargs["tags"]
+    assert call_kwargs["session_id"] == "sess-1"
+    assert call_kwargs["user_id"] == "42"
+
+
 async def test_lifespan_respects_rerank_provider_none() -> None:
     fake_cfg = SimpleNamespace(
         redis_url="redis://localhost:6379",
