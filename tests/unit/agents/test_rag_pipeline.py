@@ -145,6 +145,27 @@ async def test_cache_check_uses_semantic_for_general(mock_cache, mock_embeddings
     call_kwargs = mock_cache.check_semantic.call_args.kwargs
     assert call_kwargs["query_type"] == "GENERAL"
     assert "user_id" not in call_kwargs
+    assert call_kwargs.get("cache_scope") == "rag"
+
+
+async def test_cache_check_passes_rag_scope(mock_cache, mock_embeddings):
+    """_cache_check passes cache_scope='rag' to check_semantic."""
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    await _cache_check(
+        "query",
+        "FAQ",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    call_kwargs = mock_cache.check_semantic.call_args.kwargs
+    assert call_kwargs.get("cache_scope") == "rag"
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +354,8 @@ async def test_cache_store_semantic(mock_cache):
 
     assert result["stored_semantic"] is True
     mock_cache.store_semantic.assert_called_once()
+    call_kwargs = mock_cache.store_semantic.call_args[1]
+    assert call_kwargs.get("cache_scope") == "rag"
 
 
 async def test_cache_store_skips_non_cacheable(mock_cache):

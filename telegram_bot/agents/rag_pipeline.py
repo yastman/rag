@@ -53,6 +53,7 @@ async def _cache_check(
     cache: Any,
     embeddings: Any,
     latency_stages: dict[str, float],
+    agent_role: str | None = None,
 ) -> dict[str, Any]:
     """Compute embedding and check semantic cache.
 
@@ -120,6 +121,8 @@ async def _cache_check(
             query=query,
             vector=embedding,
             query_type=query_type,
+            cache_scope="rag",
+            agent_role=agent_role,
         )
 
     latency = time.perf_counter() - start
@@ -580,6 +583,7 @@ async def _cache_store(
     cache: Any,
     search_results_count: int = 0,
     latency_stages: dict[str, float],
+    agent_role: str | None = None,
 ) -> dict[str, Any]:
     """Store response in semantic cache (allowlisted types only).
 
@@ -605,6 +609,8 @@ async def _cache_store(
                 response=response,
                 vector=query_embedding,
                 query_type=query_type,
+                cache_scope="rag",
+                agent_role=agent_role,
             )
             stored_semantic = True
 
@@ -645,6 +651,7 @@ async def rag_pipeline(
     qdrant: Any,
     reranker: Any | None = None,
     llm: Any | None = None,
+    agent_role: str | None = None,
 ) -> dict[str, Any]:
     """Execute RAG pipeline: cache → retrieve → grade → rerank → rewrite loop → cache_store.
 
@@ -692,6 +699,7 @@ async def rag_pipeline(
         cache=cache,
         embeddings=embeddings,
         latency_stages=latency_stages,
+        agent_role=agent_role,
     )
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
     cache_embedding: list[float] | None = cache_result.get("query_embedding")
