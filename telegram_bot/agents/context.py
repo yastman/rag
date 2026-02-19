@@ -33,6 +33,9 @@ class BotContext:
     ***REMOVED*** Set to True by tools that deliver response directly (e.g. streaming) to prevent
     ***REMOVED*** bot.py from sending the message a second time (***REMOVED***428).
     response_sent: bool = False
+    ***REMOVED*** Raw user query before any agent/tool reformulation (***REMOVED***430).
+    original_query: str = ""
+    ***REMOVED*** Raw user query for pre-agent/tool guard checks (***REMOVED***439).
     original_user_query: str = ""
     history_relevance_threshold: float = 0.7
     history_reply_markup: Any | None = None  ***REMOVED*** side-channel for ***REMOVED***434
