@@ -678,3 +678,114 @@ class TestCheckpointerOverheadScore:
             c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
         }
         assert scores["checkpointer_overhead_proxy_ms"] == pytest.approx(39.0, abs=0.1)
+
+
+class TestTextPathFeedbackButtons:
+    """Test feedback buttons and source attribution in text path (#426)."""
+
+    async def test_text_response_has_feedback_keyboard(self, mock_config):
+        """Text response should include feedback inline keyboard."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        bot = _create_bot(mock_config)
+        message = _make_message()
+
+        # Mock agent that populates rag_result_store via side-channel
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update({"query_type": "FAQ", "documents": [], "response": "Answer"})
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+        # Verify message.answer was called with reply_markup
+        answer_calls = message.answer.call_args_list
+        assert len(answer_calls) > 0
+        last_call = answer_calls[-1]
+        assert last_call.kwargs.get("reply_markup") is not None
+
+    async def test_text_response_has_markdown_parse_mode(self, mock_config):
+        """Text response should use Markdown parse_mode."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        bot = _create_bot(mock_config)
+        message = _make_message()
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update({"query_type": "FAQ", "documents": [], "response": "Answer"})
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+        answer_calls = message.answer.call_args_list
+        assert len(answer_calls) > 0
+        last_call = answer_calls[-1]
+        assert last_call.kwargs.get("parse_mode") == "Markdown"
+
+    async def test_chitchat_response_no_feedback_keyboard(self, mock_config):
+        """CHITCHAT response should NOT include feedback keyboard."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        bot = _create_bot(mock_config)
+        message = _make_message()
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update({"query_type": "CHITCHAT", "documents": [], "response": "Привет!"})
+            return _mock_agent_result(messages=[MagicMock(content="Привет!")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+        answer_calls = message.answer.call_args_list
+        assert len(answer_calls) > 0
+        last_call = answer_calls[-1]
+        assert last_call.kwargs.get("reply_markup") is None
