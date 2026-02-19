@@ -233,7 +233,7 @@ Examples:
     parser.add_argument(
         "--source",
         "-s",
-        default=os.getenv("COLLECTION_NAME", "contextual_bulgaria_voyage"),
+        default=os.getenv("COLLECTION_NAME", "gdrive_documents_bge"),
         help="Source collection name (scalar quantized)",
     )
 

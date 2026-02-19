@@ -77,7 +77,7 @@ async def qdrant_service():
     """QdrantService for search."""
     url = os.getenv("QDRANT_URL", "http://localhost:6333")
     api_key = os.getenv("QDRANT_API_KEY", "")
-    collection = os.getenv("QDRANT_COLLECTION", "contextual_bulgaria_voyage4")
+    collection = os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge")
 
     service = QdrantService(
         url=url,

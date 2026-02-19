@@ -35,7 +35,7 @@ class BotConfig(BaseSettings):
         default=None, validation_alias=AliasChoices("qdrant_api_key", "QDRANT_API_KEY")
     )
     qdrant_collection: str = Field(
-        default="contextual_bulgaria_voyage4",
+        default="gdrive_documents_bge",
         validation_alias=AliasChoices("qdrant_collection", "QDRANT_COLLECTION"),
     )
     qdrant_history_collection: str = Field(
@@ -122,13 +122,13 @@ class BotConfig(BaseSettings):
 
     # Retrieval provider (bge_m3_api | voyage)
     retrieval_dense_provider: str = Field(
-        default="voyage",
+        default="bge_m3_api",
         validation_alias=AliasChoices("retrieval_dense_provider", "RETRIEVAL_DENSE_PROVIDER"),
     )
 
     # Rerank provider (colbert | none | voyage)
     rerank_provider: str = Field(
-        default="voyage", validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER")
+        default="colbert", validation_alias=AliasChoices("rerank_provider", "RERANK_PROVIDER")
     )
 
     # Hybrid Search Configuration
