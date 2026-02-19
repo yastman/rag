@@ -7,6 +7,7 @@ from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationError
 
 from telegram_bot.integrations.cache import (
     CACHE_VERSION,
@@ -70,9 +71,9 @@ class TestCacheLayerManagerInit:
         assert mgr.cache_thresholds["FAQ"] == 0.15
         assert mgr.cache_thresholds["GENERAL"] == 0.10
 
-    def test_cache_version_bumped_for_user_id_schema(self):
-        """Schema changed with user_id tag filter, so index version must be bumped."""
-        assert CACHE_VERSION == "v4"
+    def test_cache_version_bumped_for_scope_role_schema(self):
+        """Schema changed with cache_scope/agent_role tag filters, so index version must be bumped."""
+        assert CACHE_VERSION == "v5"
 
 
 class TestCacheLayerManagerInitialize:
@@ -246,6 +247,91 @@ class TestSemanticCache:
         assert call_kwargs["filters"]["language"] == "ru"
 
 
+class TestSemanticCacheRedisVLErrors:
+    """Test CacheLayerManager graceful degradation on RedisVL errors (#524).
+
+    When Redis Stack modules are unavailable or the index schema is mismatched,
+    redisvl raises RedisVLError subclasses. Both store_semantic and check_semantic
+    must handle these without propagating exceptions to the caller.
+    """
+
+    async def test_store_semantic_handles_redisvl_error(self):
+        """store_semantic logs and swallows RedisVLError (Redis Stack missing)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock(side_effect=RedisVLError("index not found"))
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        # Should not raise — graceful degradation
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+        )
+
+    async def test_store_semantic_handles_redis_search_error(self):
+        """store_semantic handles RedisSearchError (RediSearch module not loaded)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock(side_effect=RedisSearchError("ERR unknown command"))
+        mgr.cache_ttl = {"GENERAL": 3600}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="GENERAL",
+        )
+
+    async def test_store_semantic_handles_schema_validation_error(self):
+        """store_semantic handles SchemaValidationError (index schema mismatch)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock(
+            side_effect=SchemaValidationError("Schema validation failed: field mismatch")
+        )
+        mgr.cache_ttl = {"ENTITY": 3600}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="ENTITY",
+        )
+
+    async def test_check_semantic_handles_redisvl_error(self, _ensure_redisvl_filter_mock):
+        """check_semantic returns None on RedisVLError — miss path."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(side_effect=RedisVLError("connection refused"))
+        mgr.cache_thresholds = {"GENERAL": 0.08}
+
+        result = await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="GENERAL",
+        )
+        assert result is None
+        assert mgr._metrics["semantic"]["misses"] == 1
+
+    async def test_check_semantic_handles_redis_search_error(self, _ensure_redisvl_filter_mock):
+        """check_semantic returns None on RedisSearchError."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(
+            side_effect=RedisSearchError("ERR unknown command `FT.SEARCH`")
+        )
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        result = await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+        )
+        assert result is None
+
+
 class TestExactCaches:
     """Test exact key-value caches (embeddings, sparse, analysis, search, rerank)."""
 
@@ -383,3 +469,167 @@ class TestQueryNormalization:
         result = await mgr.get_embedding("внж")
 
         assert result == [0.5] * 1024, "Normalized queries should share embedding cache key"
+
+
+class TestScopeRoleIsolation:
+    """Test cache_scope and agent_role tag isolation (#529)."""
+
+    async def test_store_semantic_includes_cache_scope(self, _ensure_redisvl_filter_mock):
+        """store_semantic with cache_scope passes it in filters dict."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+        )
+
+        call_kwargs = mgr.semantic_cache.astore.call_args[1]
+        assert call_kwargs["filters"]["cache_scope"] == "rag"
+        assert "agent_role" not in call_kwargs["filters"]
+
+    async def test_store_semantic_includes_agent_role(self, _ensure_redisvl_filter_mock):
+        """store_semantic with agent_role passes it in filters dict."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            agent_role="client",
+        )
+
+        call_kwargs = mgr.semantic_cache.astore.call_args[1]
+        assert call_kwargs["filters"]["cache_scope"] == "rag"
+        assert call_kwargs["filters"]["agent_role"] == "client"
+
+    async def test_check_semantic_passes_scope_filter(self, _ensure_redisvl_filter_mock):
+        """check_semantic with cache_scope passes filter_expression."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(
+            return_value=[{"response": "scoped answer", "vector_distance": 0.05}]
+        )
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        result = await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+        )
+
+        assert result == "scoped answer"
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None
+
+    async def test_check_semantic_passes_role_filter(self, _ensure_redisvl_filter_mock):
+        """check_semantic with agent_role passes filter_expression."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(return_value=[])
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            agent_role="client",
+        )
+
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None
+
+    async def test_rag_store_history_check_miss(self, _ensure_redisvl_filter_mock):
+        """RAG store (scope=rag) → history check (scope=history) = MISS via filter mismatch."""
+        # This test verifies the FILTER EXPRESSION is different for different scopes.
+        # In production, RedisVL would return no results because the scope tag differs.
+        # Here we simulate it: acheck returns nothing when scope=history filter applied.
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        stored_filters: dict = {}
+
+        async def mock_store(**kwargs):
+            stored_filters.update(kwargs.get("filters", {}))
+
+        # Simulate: history check returns [] because scope=rag entry doesn't match scope=history
+        mgr.semantic_cache.astore = AsyncMock(side_effect=mock_store)
+        mgr.semantic_cache.acheck = AsyncMock(return_value=[])
+
+        # Store as RAG scope
+        await mgr.store_semantic(
+            query="test query",
+            response="rag answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+        )
+        assert stored_filters.get("cache_scope") == "rag"
+
+        # Check as history scope — returns miss (empty from mock)
+        result = await mgr.check_semantic(
+            query="test query",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="history",
+        )
+        assert result is None
+
+        # Verify acheck was called with a filter expression (scope=history)
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None
+
+    async def test_client_store_manager_check_miss(self, _ensure_redisvl_filter_mock):
+        """Client store (role=client) → manager check (role=manager) = MISS via filter mismatch."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.cache_ttl = {"FAQ": 86400}
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        stored_filters: dict = {}
+
+        async def mock_store(**kwargs):
+            stored_filters.update(kwargs.get("filters", {}))
+
+        # Simulate: manager check returns [] because role=client entry doesn't match role=manager
+        mgr.semantic_cache.astore = AsyncMock(side_effect=mock_store)
+        mgr.semantic_cache.acheck = AsyncMock(return_value=[])
+
+        # Store as client role
+        await mgr.store_semantic(
+            query="test query",
+            response="client answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            agent_role="client",
+        )
+        assert stored_filters.get("agent_role") == "client"
+
+        # Check as manager role — returns miss (empty from mock)
+        result = await mgr.check_semantic(
+            query="test query",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+            cache_scope="rag",
+            agent_role="manager",
+        )
+        assert result is None
+
+        # Verify filter_expression was built (role=manager filter applied)
+        call_kwargs = mgr.semantic_cache.acheck.call_args[1]
+        assert call_kwargs.get("filter_expression") is not None

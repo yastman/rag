@@ -143,6 +143,27 @@ async def test_history_search_semantic_cache_miss_calls_graph_and_stores(bot_con
     call_kwargs = bot_context.cache.store_semantic.call_args
     assert call_kwargs.args[0] == "цены"
     assert call_kwargs.kwargs["query_type"] == "ENTITY"
+    assert call_kwargs.kwargs.get("cache_scope") == "history"
+
+
+async def test_history_search_check_semantic_passes_history_scope(bot_context):
+    """check_semantic is called with cache_scope='history' to isolate from RAG cache."""
+    from telegram_bot.agents.history_tool import history_search
+
+    bot_context.cache.get_embedding = AsyncMock(return_value=[0.1] * 10)
+    bot_context.cache.check_semantic = AsyncMock(return_value=None)
+
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(return_value={"summary": ""})
+
+    with patch("telegram_bot.agents.history_tool.build_history_graph", return_value=mock_graph):
+        await history_search.ainvoke(
+            {"query": "история запросов"},
+            config=_make_config(bot_context),
+        )
+
+    call_kwargs = bot_context.cache.check_semantic.call_args[1]
+    assert call_kwargs.get("cache_scope") == "history"
 
 
 async def test_history_search_embedding_computed_on_cache_miss(bot_context):

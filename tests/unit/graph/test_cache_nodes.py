@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationError
 
 
 @pytest.fixture(autouse=True)
@@ -109,8 +110,8 @@ class TestCacheCheckNode:
         # Should use cached embedding, not recompute
         embeddings.aembed_query.assert_not_awaited()
 
-    async def test_check_passes_user_id_to_cache(self):
-        """cache_check_node passes state['user_id'] to check_semantic."""
+    async def test_check_does_not_pass_user_id_to_cache(self):
+        """cache_check_node does NOT pass user_id to check_semantic (global cache)."""
         state = make_initial_state(user_id=99, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
 
@@ -123,7 +124,23 @@ class TestCacheCheckNode:
         await cache_check_node(state, cache=cache, embeddings=embeddings)
 
         call_kwargs = cache.check_semantic.call_args[1]
-        assert call_kwargs["user_id"] == 99
+        assert "user_id" not in call_kwargs
+
+    async def test_check_passes_rag_scope(self):
+        """cache_check_node passes cache_scope='rag' to check_semantic."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.2] * 1024)
+        cache.check_semantic = AsyncMock(return_value=None)
+
+        embeddings = AsyncMock()
+
+        await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        call_kwargs = cache.check_semantic.call_args[1]
+        assert call_kwargs.get("cache_scope") == "rag"
 
     async def test_stores_new_embedding_in_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="new query")
@@ -167,7 +184,7 @@ class TestCacheStoreNode:
     """Test cache_store_node."""
 
     async def test_stores_response_in_semantic_cache(self):
-        """FAQ (allowlisted) stores to semantic cache with user_id."""
+        """FAQ (allowlisted) stores to semantic cache with cache_scope='rag' (global)."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
@@ -183,7 +200,7 @@ class TestCacheStoreNode:
             response="generated answer",
             vector=[0.1] * 1024,
             query_type="FAQ",
-            user_id=1,
+            cache_scope="rag",
         )
         assert result["response"] == "generated answer"
 
@@ -203,7 +220,7 @@ class TestCacheStoreNode:
         assert result["response"] == "generated answer"
 
     async def test_store_passes_user_id_to_cache(self):
-        """cache_store_node passes state['user_id'] to store_semantic."""
+        """cache_store_node does NOT pass user_id to store_semantic (global cache)."""
         state = make_initial_state(user_id=99, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
@@ -215,7 +232,22 @@ class TestCacheStoreNode:
         await cache_store_node(state, cache=cache)
 
         call_kwargs = cache.store_semantic.call_args[1]
-        assert call_kwargs["user_id"] == 99
+        assert "user_id" not in call_kwargs
+
+    async def test_store_passes_rag_scope(self):
+        """cache_store_node passes cache_scope='rag' to store_semantic."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+
+        await cache_store_node(state, cache=cache)
+
+        call_kwargs = cache.store_semantic.call_args[1]
+        assert call_kwargs.get("cache_scope") == "rag"
 
     async def test_skips_store_if_no_response(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
@@ -337,3 +369,70 @@ class TestCacheCheckEmbeddingError:
         assert result["embedding_error"] is False
         assert result["cache_hit"] is False
         embeddings.aembed_hybrid.assert_not_awaited()
+
+
+class TestCacheStoreNodeRedisVLErrorHandling:
+    """Test cache_store_node graceful degradation when RedisVL errors escape store_semantic.
+
+    Scenario: store_semantic's internal try/except is bypassed (e.g., via @observe decorator
+    cleanup, BaseException subclass, or future code changes). The node must always return
+    the response so the voice pipeline doesn't lose its output (#524).
+    """
+
+    async def test_store_node_preserves_response_on_redisvl_error(self):
+        """Response is returned even when store_semantic raises RedisVLError (#524)."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated voice response"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock(side_effect=RedisVLError("index not found"))
+
+        result = await cache_store_node(state, cache=cache)
+
+        assert result["response"] == "generated voice response"
+
+    async def test_store_node_preserves_response_on_redis_search_error(self):
+        """Response is returned even when store_semantic raises RedisSearchError (#524)."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "rag answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock(side_effect=RedisSearchError("module not loaded"))
+
+        result = await cache_store_node(state, cache=cache)
+
+        assert result["response"] == "rag answer"
+
+    async def test_store_node_preserves_response_on_schema_validation_error(self):
+        """Response returned even when index schema mismatch causes SchemaValidationError (#524)."""
+        state = make_initial_state(user_id=1, session_id="s1", query="query")
+        state["query_type"] = "ENTITY"
+        state["query_embedding"] = [0.2] * 1024
+        state["response"] = "entity answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock(
+            side_effect=SchemaValidationError("Schema validation failed: field mismatch")
+        )
+
+        result = await cache_store_node(state, cache=cache)
+
+        assert result["response"] == "entity answer"
+
+    async def test_store_node_preserves_response_on_generic_runtime_error(self):
+        """Response preserved for any unexpected store_semantic failure."""
+        state = make_initial_state(user_id=1, session_id="s1", query="query")
+        state["query_type"] = "STRUCTURED"
+        state["query_embedding"] = [0.3] * 1024
+        state["response"] = "structured answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock(side_effect=RuntimeError("unexpected"))
+
+        result = await cache_store_node(state, cache=cache)
+
+        assert result["response"] == "structured answer"

@@ -191,6 +191,12 @@ def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
         "consuming input failed",
         "connection lost",
         "connection closed",
+        # RedisVL semantic cache errors (#524): index missing, schema mismatch,
+        # RediSearch module not loaded on plain Redis instance
+        "redisvlerror",
+        "redissearcherror",
+        "schemavalidationerror",
+        "redisvl",
     )
 
     if any(m in message for m in cleanup_markers) and any(m in message for m in storage_markers):
@@ -980,7 +986,8 @@ class PropertyBot:
                             response=response_text,
                             vector=store_vector,
                             query_type=query_type,
-                            user_id=user_id,
+                            cache_scope="rag",
+                            agent_role=role,
                         )
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
