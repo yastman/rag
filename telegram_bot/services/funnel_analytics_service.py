@@ -6,6 +6,7 @@ import datetime as dt
 import logging
 from typing import Any
 
+from telegram_bot.observability import observe
 from telegram_bot.services.funnel_analytics_store import FunnelAnalyticsStore
 
 
@@ -19,6 +20,7 @@ class FunnelAnalyticsService:
         self._store = FunnelAnalyticsStore(pool=pool)
         self._pool = pool
 
+    @observe(name="funnel-rollup")
     async def build_daily_snapshot(self, *, metric_date: dt.date) -> list[dict[str, Any]]:
         """Compute conversion/dropoff for each stage on the given date."""
         rows = await self._store.fetch_stage_counts(metric_date)
@@ -40,6 +42,7 @@ class FunnelAnalyticsService:
             )
         return snapshots
 
+    @observe(name="funnel-store-upsert")
     async def persist_snapshots(self, *, snapshots: list[dict[str, Any]]) -> None:
         """Upsert daily snapshot rows via executemany."""
         records = [
