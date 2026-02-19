@@ -42,28 +42,25 @@ make export-dataset        # Export low-scoring Langfuse traces to evaluation da
 
 ```
 Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Bot:        Query → create_agent SDK (langchain.agents) → tool choice
-            → rag_search (11-node LangGraph pipeline) | history_search (4-node sub-graph)
+Text:       Query → create_agent SDK → tool choice
+            → rag_search (6-step async pipeline) | history_search (4-node LangGraph)
             → 8 CRM tools (Kommo API) | direct response
-            (#413: create_agent SDK + BotContext DI, replaces build_supervisor_graph)
-Voice STT:  Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
-Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API (FastAPI)
+Voice STT:  Voice (.ogg) → build_graph() (11-node LangGraph) → transcribe → RAG pipeline
+Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API
 ```
 
 | Module | Purpose |
 |--------|---------|
 | `telegram_bot/bot.py` | PropertyBot (~300 LOC, agent orchestrator + voice handler) |
-| `telegram_bot/scoring.py` | `score()`, `write_langfuse_scores()`, `write_history_scores()`, `write_crm_scores()` (#310, #451, #452) |
-| `telegram_bot/graph/` | LangGraph 11-node RAG pipeline (guard, transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, cache_store, respond) |
-| `telegram_bot/graph/nodes/guard.py` | Content filtering: toxicity, prompt injection, topic guardrails (regex, configurable via GUARD_MODE) |
-| `telegram_bot/agents/` | create_agent SDK (#413): agent.py (factory), context.py (BotContext DI), rag_tool.py, history_tool.py, crm_tools.py (8 Kommo tools) |
+| `telegram_bot/scoring.py` | `score()`, `write_langfuse_scores()` (14 RAG), `write_history_scores()` (4), `write_crm_scores()` (4 CRM) |
+| `telegram_bot/agents/rag_pipeline.py` | 6-step async RAG pipeline: cache_check → retrieve → grade → rerank → rewrite loop → cache_store (#442) |
+| `telegram_bot/agents/` | create_agent SDK: agent.py (factory), context.py (BotContext DI), rag_tool.py, history_tool.py, crm_tools.py (8 Kommo tools) |
+| `telegram_bot/graph/` | LangGraph 11-node pipeline — **voice path only** (transcribe, guard, classify, cache, retrieve, grade, rerank, generate, respond) |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/bge_m3_client.py` | Unified BGE-M3 SDK (BGEM3Client async + BGEM3SyncClient) — replaces separate wrappers |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
 | `telegram_bot/services/{lead_scoring,nurturing,funnel}*.py` | CRM: lead scoring + Kommo sync, nurturing scheduler, funnel analytics (#384, #390) |
-| `telegram_bot/services/kommo_client.py` | KommoClient (async httpx, OAuth2 auto-refresh via KommoTokenStore) |
-| `telegram_bot/services/kommo_token_store.py` | Redis-backed OAuth2 token store for Kommo |
-| `telegram_bot/services/kommo_models.py` | Pydantic v2 models for Kommo API v4 (Lead, Contact, Task, Note, Pipeline) |
+| `telegram_bot/services/kommo_*.py` | KommoClient (async httpx, OAuth2), KommoTokenStore (Redis), Pydantic v2 models |
 | `telegram_bot/observability.py` | Langfuse init, @observe, PII masking, `create_callback_handler` (for create_agent) |
 | `src/api/` | RAG API (FastAPI wrapper around LangGraph, POST /query) |
 | `src/voice/` | Voice Bot (LiveKit Agent + ElevenLabs + SIP trunk + transcripts) |
@@ -191,7 +188,7 @@ See `.claude/rules/` for domain-specific documentation:
 | `features/embeddings.md` | BGE-M3 (/encode/hybrid, dense, sparse), Voyage | `**/embed*.py` |
 | `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
 | `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
-| `features/telegram-bot.md` | LangGraph pipeline, bot, agent SDK, middlewares | `telegram_bot/*.py` |
+| `features/telegram-bot.md` | Async RAG pipeline, voice LangGraph, agent SDK, middlewares | `telegram_bot/*.py` |
 | `features/voice-bot.md` | LiveKit Agent, SIP, RAG API, /call | `src/voice/**, src/api/**` |
 | `features/user-personalization.md` | CESC, user context, preferences | `**/user_context*.py` |
 | `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
