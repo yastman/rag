@@ -80,7 +80,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 - **Linter/Formatter:** Ruff | **Types:** MyPy (strict in CI) | **Line length:** 100 | **Docstrings:** Google style
 - **Pre-commit:** ruff-check (--fix) → ruff-format → trailing-whitespace → check-yaml/toml/json
-- **CI:** lint (ruff + mypy) → test-fast (PR gate, 4 shards) → test-nightly (chaos/load/E2E) → baseline-compare (PR only)
+- **CI:** Self-hosted runner (WSL2, `~/actions-runner`) | lint (ruff + mypy) → test-fast (PR gate, 4 shards) → integration → baseline-compare (main only)
 - **Commits:** `feat(scope): message` | `fix(scope): message` | `docs(scope): message`
 
 ## Dependency Management
