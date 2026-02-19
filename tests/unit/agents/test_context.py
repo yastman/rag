@@ -25,6 +25,7 @@ def test_bot_context_fields():
         "llm",
         "content_filter_enabled",
         "guard_mode",
+        "role",
         "original_query",
         "original_user_query",
     }
