@@ -680,6 +680,37 @@ class TestCheckpointerOverheadScore:
         assert scores["checkpointer_overhead_proxy_ms"] == pytest.approx(39.0, abs=0.1)
 
 
+class TestScoreIsolation:
+    """Verify scores are written to specific trace, not session-wide (#435)."""
+
+    def test_write_langfuse_scores_uses_score_current_trace(self):
+        """All scores go through score_current_trace (trace-scoped via @observe context)."""
+        mock_lf = MagicMock()
+        _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
+
+        # Verify score_current_trace is used (NOT create_score with session-level scope)
+        assert mock_lf.score_current_trace.call_count > 0
+        # Verify create_score is NOT called (would bypass trace context)
+        assert mock_lf.create_score.call_count == 0
+
+    async def test_supervisor_scores_use_score_current_trace(self, mock_config):
+        """Supervisor-specific scores also use score_current_trace."""
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.score_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-xyz")
+
+        await _run_handle_query_supervisor(mock_config, mock_lf)
+
+        # All supervisor scores via score_current_trace
+        score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
+        assert "supervisor_model" in score_names
+        assert "user_role" in score_names
+        # No session-level create_score
+        assert mock_lf.create_score.call_count == 0
+
+
 class TestTextPathFeedbackButtons:
     """Test feedback buttons and source attribution in text path (#426)."""
 
