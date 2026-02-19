@@ -783,6 +783,7 @@ class PropertyBot:
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
             role=role,
+            manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
             history_relevance_threshold=self.config.history_relevance_threshold,
             original_query=message.text or "",
             original_user_query=message.text or "",
