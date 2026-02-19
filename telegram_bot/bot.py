@@ -1100,9 +1100,21 @@ class PropertyBot:
             logger.warning("Redis checkpointer init failed, using in-memory", exc_info=True)
             self._checkpointer = create_fallback_checkpointer()
 
-        # Agent/voice checkpointer — MemorySaver avoids redisvl JSON serialization
-        # errors with LangChain Message objects (HumanMessage, AIMessage) (#420).
-        self._agent_checkpointer = create_fallback_checkpointer()
+        # Agent/voice checkpointer — Redis with TTL for bounded retention (#424).
+        try:
+            self._agent_checkpointer = create_redis_checkpointer(
+                self.config.redis_url,
+                ttl_minutes=self.config.agent_checkpointer_ttl_minutes,
+                refresh_on_read=True,
+            )
+            await self._agent_checkpointer.asetup()
+            logger.info(
+                "Agent checkpointer ready (Redis, ttl=%s min)",
+                self.config.agent_checkpointer_ttl_minutes,
+            )
+        except Exception:
+            logger.warning("Agent Redis checkpointer init failed, using in-memory", exc_info=True)
+            self._agent_checkpointer = create_fallback_checkpointer()
 
         # Initialize history service (Qdrant-backed Q&A history)
         try:
@@ -1277,7 +1289,14 @@ class PropertyBot:
                 logger.warning("Failed to close checkpointer cleanly", exc_info=True)
             finally:
                 self._checkpointer = None
-        self._agent_checkpointer = None
+        if self._agent_checkpointer is not None:
+            try:
+                if hasattr(self._agent_checkpointer, "__aexit__"):
+                    await self._agent_checkpointer.__aexit__(None, None, None)
+            except Exception:
+                logger.warning("Failed to close agent checkpointer cleanly", exc_info=True)
+            finally:
+                self._agent_checkpointer = None
         if self._nurturing_scheduler is not None:
             await self._nurturing_scheduler.stop()
             self._nurturing_scheduler = None
