@@ -84,23 +84,6 @@ def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) ->
     return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
-def _extract_current_turn(messages: list[Any]) -> list[Any]:
-    """Extract only current-turn messages from checkpointer history (#507).
-
-    The agent checkpointer returns ALL messages across turns. For scoring,
-    we need only the messages from the current turn (after the last HumanMessage).
-    """
-    last_human_idx = -1
-    for i in range(len(messages) - 1, -1, -1):
-        msg_type = getattr(messages[i], "type", None)
-        if msg_type == "human":
-            last_human_idx = i
-            break
-    if last_human_idx < 0:
-        return messages  # No HumanMessage found — return all (shouldn't happen)
-    return messages[last_human_idx:]
-
-
 def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     """Build shared metadata dict for Langfuse trace (text + voice handlers)."""
     return {
@@ -934,15 +917,10 @@ class PropertyBot:
                     data_type="CATEGORICAL",
                     score_id=f"{tid}-user_role",
                 )
-                # Extract current-turn messages only (#507): checkpointer returns
-                # ALL history; we need only messages from the current turn
-                # (everything after the last HumanMessage we sent).
-                current_turn_msgs = _extract_current_turn(messages)
-
                 # Tool call count (#374): count actual tool calls, not just messages.
                 tool_calls = sum(
                     len(m.tool_calls)
-                    for m in current_turn_msgs
+                    for m in result.get("messages", [])
                     if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
                 )
                 if tool_calls > 0:
@@ -956,7 +934,7 @@ class PropertyBot:
                 # CRM tool usage scores (#440)
                 from telegram_bot.scoring import write_crm_scores
 
-                write_crm_scores(lf, current_turn_msgs, trace_id=tid)
+                write_crm_scores(lf, messages, trace_id=tid)
 
             # Persist Q&A to history
             if self._history_service and response_text:
