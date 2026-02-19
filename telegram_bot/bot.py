@@ -770,6 +770,11 @@ class PropertyBot:
         else:
             tools = base_tools
 
+        # Add utility tools for all roles (#445)
+        from .agents.utility_tools import get_utility_tools
+
+        tools.extend(get_utility_tools())
+
         # Create agent via SDK — route through LiteLLM proxy (#420)
         agent = create_bot_agent(
             model=self.config.supervisor_model,
@@ -802,6 +807,8 @@ class PropertyBot:
             history_relevance_threshold=self.config.history_relevance_threshold,
             original_query=message.text or "",
             original_user_query=message.text or "",
+            bot=bot,
+            manager_ids=list(self.config.manager_ids),
         )
 
         rag_result_store: dict[str, Any] = {}
@@ -1580,6 +1587,11 @@ class PropertyBot:
         else:
             tools = base_tools
 
+        # Add utility tools for all roles (#445)
+        from .agents.utility_tools import get_utility_tools
+
+        tools.extend(get_utility_tools())
+
         agent = create_bot_agent(
             model=self.config.supervisor_model,
             tools=tools,
@@ -1609,6 +1621,8 @@ class PropertyBot:
             manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
             original_query=query_text,
             original_user_query=query_text,
+            bot=bot,
+            manager_ids=list(self.config.manager_ids),
         )
 
         rag_result_store: dict[str, Any] = {}
