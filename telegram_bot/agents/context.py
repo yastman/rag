@@ -34,3 +34,5 @@ class BotContext:
     # bot.py from sending the message a second time (#428).
     response_sent: bool = False
     original_user_query: str = ""
+    history_relevance_threshold: float = 0.7
+    history_reply_markup: Any | None = None  # side-channel for #434
