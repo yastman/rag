@@ -465,7 +465,7 @@ def test_route_history_guard_soft_not_blocked():
 
 
 def test_write_history_scores():
-    """write_history_scores writes 4 scores with explicit trace_id (#435)."""
+    """write_history_scores writes 5 scores with explicit trace_id (#435, #464)."""
     from unittest.mock import MagicMock
 
     from telegram_bot.agents.history_graph.nodes import write_history_scores
@@ -485,6 +485,50 @@ def test_write_history_scores():
     assert "history_relevance" in score_names
     assert "history_rewrite_count" in score_names
     assert "history_latency_ms" in score_names
+    assert "history_cache_hit" in score_names
     # All scores use explicit trace_id
     for call in mock_lf.create_score.call_args_list:
         assert call.kwargs["trace_id"] == "test-trace-id"
+
+
+def test_write_history_scores_cache_hit_true():
+    """history_cache_hit score is 1.0 when cache hit (#464)."""
+    from unittest.mock import MagicMock
+
+    from telegram_bot.agents.history_graph.nodes import write_history_scores
+
+    mock_lf = MagicMock()
+    result = {
+        "results": [],
+        "results_relevant": True,
+        "rewrite_count": 0,
+        "latency_stages": {},
+        "history_cache_hit": True,
+    }
+    write_history_scores(mock_lf, result, trace_id="trace-cache-hit")
+
+    cache_hit_call = next(
+        c for c in mock_lf.create_score.call_args_list if c.kwargs["name"] == "history_cache_hit"
+    )
+    assert cache_hit_call.kwargs["value"] == 1.0
+
+
+def test_write_history_scores_cache_hit_false():
+    """history_cache_hit score is 0.0 when no cache hit (#464)."""
+    from unittest.mock import MagicMock
+
+    from telegram_bot.agents.history_graph.nodes import write_history_scores
+
+    mock_lf = MagicMock()
+    result = {
+        "results": [{"score": 0.9}],
+        "results_relevant": True,
+        "rewrite_count": 0,
+        "latency_stages": {"retrieve": 0.1},
+    }
+    write_history_scores(mock_lf, result, trace_id="trace-no-hit")
+
+    cache_hit_call = next(
+        c for c in mock_lf.create_score.call_args_list if c.kwargs["name"] == "history_cache_hit"
+    )
+    assert cache_hit_call.kwargs["value"] == 0.0
