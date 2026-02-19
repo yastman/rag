@@ -19,6 +19,8 @@ from typing import Any
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +79,7 @@ class NurturingScheduler:
         """Check if a job is registered."""
         return self._scheduler.get_job(job_id) is not None
 
+    @observe(name="nurturing-scheduler-tick")
     async def run_nurturing_batch(self) -> None:
         """Execute a single nurturing batch (called by scheduler)."""
         try:
