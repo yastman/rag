@@ -429,6 +429,13 @@ class BotConfig(BaseSettings):
         ),
     )
 
+    # Sliding window for agent history (#519)
+    agent_max_history_messages: int = Field(
+        default=15,
+        ge=1,
+        validation_alias=AliasChoices("agent_max_history_messages", "AGENT_MAX_HISTORY_MESSAGES"),
+    )
+
     # Real Estate Database (realestate DB in shared Postgres)
     realestate_database_url: str = Field(
         default="postgresql://postgres:postgres@postgres:5432/realestate",
