@@ -9,6 +9,9 @@ import logging
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentState, before_model
+from langchain_core.messages import RemoveMessage
+from langchain_core.messages.utils import trim_messages
 from langchain_openai import ChatOpenAI
 
 from telegram_bot.agents.context import BotContext
@@ -16,6 +19,60 @@ from telegram_bot.integrations.prompt_manager import get_prompt
 
 
 logger = logging.getLogger(__name__)
+
+
+def _create_history_trimmer(max_messages: int) -> Any:
+    """Return a before_model middleware that enforces a sliding-window history.
+
+    Removes oldest messages from checkpointed state so the LLM never sees more
+    than *max_messages* turns.  Uses RemoveMessage so the add_messages reducer
+    actually deletes them (not just hides them).  trim_messages with
+    start_on="human" ensures the remaining window starts on a clean turn
+    boundary (no orphaned ToolMessages).
+
+    Args:
+        max_messages: Maximum number of messages kept in state.
+
+    Returns:
+        A before_model middleware callable.
+    """
+
+    @before_model
+    def _trim_history(state: AgentState, runtime: Any) -> dict[str, Any] | None:
+        messages = state.get("messages", [])
+        if len(messages) <= max_messages:
+            return None
+
+        to_keep = trim_messages(
+            messages,
+            strategy="last",
+            max_tokens=max_messages,
+            token_counter=len,
+            start_on="human",
+        )
+
+        # Guard: if trim_messages returns nothing (e.g. no HumanMessage fits the
+        # window), skip the trim entirely rather than wiping the whole history.
+        if not to_keep:
+            return None
+
+        keep_ids = {m.id for m in to_keep if m.id is not None}
+        # Only remove messages with a known id; id=None messages can't be targeted.
+        to_remove = [m for m in messages if m.id is not None and m.id not in keep_ids]
+        if not to_remove:
+            return None
+
+        logger.debug(
+            "history_trimmer: removed %d messages (kept %d of %d, max=%d)",
+            len(to_remove),
+            len(to_keep),
+            len(messages),
+            max_messages,
+        )
+        return {"messages": [RemoveMessage(id=m.id) for m in to_remove]}
+
+    return _trim_history
+
 
 DEFAULT_SYSTEM_PROMPT = """Ты — AI-ассистент агентства недвижимости в Болгарии.
 Работаешь в Telegram. Отвечай на {{language}}.
@@ -90,6 +147,7 @@ def create_bot_agent(
     language: str = "русском языке",
     base_url: str | None = None,
     api_key: str | None = None,
+    max_history_messages: int = 15,
 ) -> Any:
     """Create the bot agent using langchain create_agent SDK.
 
@@ -101,6 +159,9 @@ def create_bot_agent(
         language: Response language.
         base_url: OpenAI-compatible API base URL (e.g. LiteLLM proxy).
         api_key: API key for the LLM provider.
+        max_history_messages: Sliding-window cap on checkpointed message count.
+            Old messages beyond this limit are removed from state via
+            RemoveMessage before each LLM call (#519).
 
     Returns:
         Compiled agent graph ready for .ainvoke() / .astream().
@@ -125,20 +186,28 @@ def create_bot_agent(
 
     llm = ChatOpenAI(**model_kwargs)
 
+    # Only install the trimmer when a checkpointer is active; without one the
+    # agent starts each invoke with a single message (no accumulated history).
+    middleware: list[Any] = []
+    if checkpointer is not None:
+        middleware.append(_create_history_trimmer(max_history_messages))
+
     agent = create_agent(
         model=llm,
         tools=tools,
         system_prompt=prompt,
         context_schema=BotContext,
         checkpointer=checkpointer,
+        middleware=middleware,
     )
 
     logger.info(
-        "Created bot agent: model=%s, base_url=%s, tools=%d, checkpointer=%s",
+        "Created bot agent: model=%s, base_url=%s, tools=%d, checkpointer=%s, max_history=%d",
         model,
         base_url or "default",
         len(tools),
         type(checkpointer).__name__ if checkpointer else "None",
+        max_history_messages,
     )
 
     return agent
