@@ -14,6 +14,8 @@ class HistoryState(TypedDict):
     Fields:
         query: Current search query (may be rewritten).
         user_id: Telegram user ID for isolation.
+        deal_id: Optional CRM deal ID to scope results.
+        scope: Filter scope — 'all' | 'deal' | 'chat'.
         results: Retrieved history items from HistoryService.
         results_relevant: Whether retrieved results pass relevance threshold.
         rewrite_count: Number of query rewrites performed.
@@ -26,6 +28,8 @@ class HistoryState(TypedDict):
 
     query: str
     user_id: int
+    deal_id: int | None
+    scope: str
     results: list[dict[str, Any]]
     results_relevant: bool
     rewrite_count: int
@@ -41,11 +45,15 @@ def make_history_state(
     user_id: int,
     query: str,
     max_rewrite_attempts: int = 1,
+    deal_id: int | None = None,
+    scope: str = "all",
 ) -> dict[str, Any]:
     """Create initial state for a history sub-graph invocation."""
     return {
         "query": query,
         "user_id": user_id,
+        "deal_id": deal_id,
+        "scope": scope,
         "results": [],
         "results_relevant": False,
         "rewrite_count": 0,
