@@ -14,7 +14,7 @@ concurrency:
 jobs:
   lint:
     name: Lint & Type Check
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -43,7 +43,7 @@ jobs:
   # ---------------------------------------------------------------------------
   test:
     name: "Unit Tests (shard ${{ matrix.group }}/${{ strategy.job-total }})"
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [lint]
     strategy:
       fail-fast: false
@@ -149,7 +149,7 @@ jobs:
   # ---------------------------------------------------------------------------
   integration:
     name: Integration Tests (Graph Paths)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [lint]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -177,7 +177,7 @@ jobs:
   # ---------------------------------------------------------------------------
   baseline-compare:
     name: Baseline Regression Check (main)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.ref == 'refs/heads/main'
     needs: lint
     env:
