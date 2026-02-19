@@ -212,7 +212,7 @@ class PassthroughJudge:
         bot_response: str,
     ) -> JudgeResult:
         """Pass if bot returned a non-empty response."""
-        if bot_response and len(bot_response.strip()) > 10:
+        if bot_response and bot_response.strip():
             return JudgeResult(
                 relevance=CriterionScore(8, "Response received"),
                 completeness=CriterionScore(8, "Response received"),
