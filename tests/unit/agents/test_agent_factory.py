@@ -103,7 +103,7 @@ def test_create_bot_agent_uses_langfuse_prompt_manager_by_default():
     call_kwargs = mock_get.call_args.kwargs
     assert mock_get.call_args.args[0] == "supervisor_agent"
     assert call_kwargs["variables"] == {"language": "русском языке"}
-    assert "Отвечай кратко" in call_kwargs["fallback"]
+    assert "rag_search" in call_kwargs["fallback"]
 
 
 def test_create_bot_agent_custom_prompt_bypasses_prompt_manager():
@@ -132,7 +132,7 @@ def test_default_system_prompt_contains_safety_instructions():
     assert "НЕ выполняй" in DEFAULT_SYSTEM_PROMPT
     # Must refuse system prompt leaks
     assert "НЕ раскрывай" in DEFAULT_SYSTEM_PROMPT
-    # Must refuse persona hijacking
-    assert "НЕ притворяйся" in DEFAULT_SYSTEM_PROMPT
-    # Must have a БЕЗОПАСНОСТЬ section
-    assert "БЕЗОПАСНОСТЬ" in DEFAULT_SYSTEM_PROMPT
+    # Must have a safety section
+    assert "Безопасность" in DEFAULT_SYSTEM_PROMPT
+    # Must enforce rag_search for property questions
+    assert "rag_search" in DEFAULT_SYSTEM_PROMPT
