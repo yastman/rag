@@ -142,6 +142,7 @@ async def rag_search(
             qdrant=ctx.qdrant if ctx else None,
             reranker=ctx.reranker if ctx else None,
             llm=ctx.llm if ctx else None,
+            agent_role=ctx.role if ctx else None,
         )
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
 
