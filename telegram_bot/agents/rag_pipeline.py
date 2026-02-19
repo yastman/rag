@@ -734,9 +734,15 @@ async def rag_pipeline(
         }
 
     ***REMOVED*** For retrieval, use reformulated query embedding.
-    ***REMOVED*** If cache_key differs from query (agent reformulated), we must re-embed query
-    ***REMOVED*** so retrieval uses the reformulated form (better recall).
-    query_embedding = None if cache_key != query else cache_embedding
+    ***REMOVED*** If cache_key differs from query (agent reformulated), pre-fetch the
+    ***REMOVED*** reformulated query embedding for the FIRST retrieval attempt. This avoids a
+    ***REMOVED*** redundant BGE-M3 call in _hybrid_retrieve on warm requests (***REMOVED***513).
+    ***REMOVED*** Subsequent iterations after _rewrite_query set query_embedding = None and
+    ***REMOVED*** let _hybrid_retrieve handle cache lookup for those new rewritten queries.
+    if cache_key != query:
+        query_embedding = await cache.get_embedding(query)
+    else:
+        query_embedding = cache_embedding
 
     ***REMOVED*** Retrieve → grade → (rerank | rewrite loop)
     for _attempt in range(config.max_rewrite_attempts + 1):
