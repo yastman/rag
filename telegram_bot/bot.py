@@ -983,7 +983,8 @@ class PropertyBot:
             },
         }
         try:
-            return await agent.ainvoke(payload, config=config)
+            result: dict[str, Any] = await agent.ainvoke(payload, config=config)
+            return result
         except Exception as exc:
             if not _is_checkpointer_runtime_error(exc):
                 raise
@@ -1012,7 +1013,8 @@ class PropertyBot:
             base_url=self.config.llm_base_url,
             api_key=self.config.llm_api_key,
         )
-        return await fallback_agent.ainvoke(payload, config=config)
+        fallback_result: dict[str, Any] = await fallback_agent.ainvoke(payload, config=config)
+        return fallback_result
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
