@@ -831,13 +831,10 @@ class TestCollectionDiscovery:
 
         assert result == []
 
-    async def test_skips_voyage_collection_without_api_key(self):
-        """BGE-M3 collection is discovered regardless of VOYAGE_API_KEY."""
+    async def test_discovers_bge_collection_without_voyage_key(self):
+        """BGE-M3 collection discovery does not depend on VOYAGE_API_KEY."""
         mock_client = _make_mock_qdrant_client(["gdrive_documents_bge"])
-        with (
-            patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
-            patch("scripts.validate_traces.check_voyage_available", return_value=False),
-        ):
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections("http://localhost:6333")
 
         assert "gdrive_documents_bge" in result
