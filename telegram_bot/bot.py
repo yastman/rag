@@ -274,6 +274,10 @@ class PropertyBot:
         # Nurturing scheduler (initialized in start() if enabled)
         self._nurturing_scheduler: Any | None = None
 
+        # Manager runtime services (initialized in start() if enabled)
+        self._nurturing_service: Any | None = None
+        self._funnel_analytics_service: Any | None = None
+
         # Hot lead notifier (initialized in start() when manager_ids configured)
         self._hot_lead_notifier: Any | None = None
 
@@ -622,20 +626,51 @@ class PropertyBot:
         session_id = make_session_id("chat", message.chat.id)
         role = await self._resolve_user_role(user_id)
 
-        # Build tools list
-        tools: list[Any] = [rag_search]
+        # Build base tools list
+        base_tools: list[Any] = [rag_search]
         if self._history_service is not None:
-            tools.append(history_search)
+            base_tools.append(history_search)
 
-        # Add CRM tools conditionally
-        if (
-            role == "manager"
-            and getattr(self.config, "kommo_enabled", False)
-            and getattr(self, "_kommo_client", None)
-        ):
-            from .agents.crm_tools import get_crm_tools
+        manager_tools: list[Any] = []
+        if role == "manager":
+            from .agents.manager_tools import (
+                build_tools_for_role,
+                create_crm_score_sync_tool,
+                create_manager_nurturing_tools,
+            )
 
-            tools.extend(get_crm_tools())
+            manager_tools.extend(
+                create_manager_nurturing_tools(
+                    analytics_service=self._funnel_analytics_service,
+                    nurturing_service=self._nurturing_service,
+                )
+            )
+
+            if self._lead_scoring_store is not None:
+                manager_tools.append(
+                    create_crm_score_sync_tool(
+                        scoring_store=self._lead_scoring_store,
+                        kommo_client=getattr(self, "_kommo_client", None),
+                        score_field_id=self.config.kommo_lead_score_field_id,
+                        band_field_id=self.config.kommo_lead_band_field_id,
+                    )
+                )
+
+            # Add direct CRM tools conditionally
+            if getattr(self.config, "kommo_enabled", False) and getattr(
+                self, "_kommo_client", None
+            ):
+                from .agents.crm_tools import get_crm_tools
+
+                manager_tools.extend(get_crm_tools())
+
+            tools = build_tools_for_role(
+                role=role,
+                base_tools=base_tools,
+                manager_tools=manager_tools,
+            )
+        else:
+            tools = base_tools
 
         # Create agent via SDK — route through LiteLLM proxy (#420)
         agent = create_bot_agent(
@@ -1272,6 +1307,8 @@ class PropertyBot:
 
                     nurturing_svc = NurturingService(pool=self._pg_pool)
                     analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
+                    self._nurturing_service = nurturing_svc
+                    self._funnel_analytics_service = analytics_svc
                     self._nurturing_scheduler = NurturingScheduler(
                         nurturing_service=nurturing_svc,
                         analytics_service=analytics_svc,
@@ -1289,7 +1326,16 @@ class PropertyBot:
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
 
         self._i18n_hub = create_translator_hub()
-        setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
+        setup_i18n_middleware(
+            self.dp,
+            self._i18n_hub,
+            self._user_service,
+            lead_scoring_store=self._lead_scoring_store,
+            hot_lead_notifier=self._hot_lead_notifier,
+            kommo_client=self._kommo_client,
+            pg_pool=self._pg_pool,
+            bot_config=self.config,
+        )
         logger.info("i18n middleware ready")
 
         # Setup aiogram-dialog
@@ -1365,6 +1411,8 @@ class PropertyBot:
         if self._nurturing_scheduler is not None:
             await self._nurturing_scheduler.stop()
             self._nurturing_scheduler = None
+        self._nurturing_service = None
+        self._funnel_analytics_service = None
         if self._pg_pool is not None:
             await self._pg_pool.close()
             logger.info("PostgreSQL pool closed")
