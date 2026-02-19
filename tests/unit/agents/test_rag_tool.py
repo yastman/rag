@@ -161,3 +161,22 @@ async def test_rag_search_writes_input_type_text(bot_context):
     result_dict = mock_write.call_args[0][1]
     # input_type defaults to "text" in write_langfuse_scores when not in result
     assert result_dict.get("input_type", "text") == "text"
+
+
+async def test_rag_search_returns_response_when_score_write_fails(bot_context):
+    """Langfuse scoring failure must not fail rag_search response path."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(return_value={"response": "OK", "latency_stages": {}})
+
+    with (
+        patch("telegram_bot.agents.rag_tool.build_graph", return_value=mock_graph),
+        patch(
+            "telegram_bot.agents.rag_tool.write_langfuse_scores",
+            side_effect=RuntimeError("lf down"),
+        ),
+    ):
+        result = await rag_search.ainvoke({"query": "test"}, config=_make_config(bot_context))
+
+    assert result == "OK"
