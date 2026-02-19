@@ -271,8 +271,8 @@ def _get_cache_version() -> str:
 
         return str(CACHE_VERSION)
     except Exception as e:
-        logger.warning("Failed to resolve CACHE_VERSION, fallback to v4: %s", e)
-        return "v4"
+        logger.warning("Failed to resolve CACHE_VERSION, fallback to v5: %s", e)
+        return "v5"
 
 
 def check_voyage_available() -> bool:
