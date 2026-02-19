@@ -972,6 +972,8 @@ class PropertyBot:
                             response=response_text,
                             vector=store_vector,
                             query_type=query_type,
+                            cache_scope="rag",
+                            agent_role=role,
                         )
                     except Exception:
                         logger.warning("Failed to store semantic cache in text path", exc_info=True)
