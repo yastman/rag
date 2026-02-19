@@ -271,3 +271,55 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     )
     if sources_count > 0:
         _score(lf, trace_id, name="sources_count", value=float(sources_count))
+
+
+def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
+    """Write CRM tool usage scores from agent result messages (#440).
+
+    Inspects ToolMessage objects for CRM tool calls (name starts with ``crm_``),
+    counts successes vs errors, and writes 4 Langfuse scores.
+
+    Args:
+        lf: Langfuse client.
+        messages: Agent result message list (HumanMessage, AIMessage, ToolMessage, ...).
+        trace_id: Explicit trace ID for score isolation.
+    """
+    if not trace_id:
+        return
+
+    crm_total = 0
+    crm_success = 0
+    crm_error = 0
+
+    for msg in messages:
+        if getattr(msg, "type", None) != "tool":
+            continue
+        name = getattr(msg, "name", "") or ""
+        if not name.startswith("crm_"):
+            continue
+
+        crm_total += 1
+        status = str(getattr(msg, "status", "") or "").lower()
+        if status == "error":
+            crm_error += 1
+            continue
+        if status == "success":
+            crm_success += 1
+            continue
+
+        # Fallback for legacy/adapter messages where status is absent.
+        content = getattr(msg, "content", "") or ""
+        content_text = content if isinstance(content, str) else str(content)
+        if (
+            content_text.startswith("Ошибка")
+            or "Ошибка при" in content_text
+            or content_text == "CRM недоступен. Обратитесь к администратору."
+        ):
+            crm_error += 1
+        else:
+            crm_success += 1
+
+    _score(lf, trace_id, name="crm_tool_used", value=1 if crm_total > 0 else 0, data_type="BOOLEAN")
+    _score(lf, trace_id, name="crm_tools_count", value=float(crm_total))
+    _score(lf, trace_id, name="crm_tools_success", value=float(crm_success))
+    _score(lf, trace_id, name="crm_tools_error", value=float(crm_error))
