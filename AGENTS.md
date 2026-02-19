@@ -17,6 +17,7 @@
   - `README.md`
   - nearest `AGENTS*.md`
   - relevant `docs/agent-rules/*.md`
+- Before PR review/diff analysis, refresh remote refs (`git fetch --prune`) and compare against `origin/main` (not stale local `main`).
 - For behavior changes, add or update tests in the nearest `tests/` scope.
 - Run pytest in parallel mode (`-n auto --dist=worksteal`) unless explicitly told otherwise.
 
