@@ -771,7 +771,7 @@ class TestCollectionResolution:
     """Report collections must reflect actually validated collections only."""
 
     def test_uses_only_collections_present_in_results(self):
-        discovered = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+        discovered = ["gdrive_documents_bge"]
         results = [
             TraceResult(
                 trace_id="t1",
@@ -786,7 +786,7 @@ class TestCollectionResolution:
         assert resolve_report_collections(discovered, results) == ["gdrive_documents_bge"]
 
     def test_falls_back_to_discovered_if_results_empty(self):
-        discovered = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+        discovered = ["gdrive_documents_bge"]
         assert resolve_report_collections(discovered, []) == discovered
 
 
@@ -802,18 +802,12 @@ class TestCollectionDiscovery:
         assert "gdrive_documents_bge" in result
 
     async def test_discovers_collection_with_quantization_suffix(self):
-        """Finds base collection even when stored with _scalar or _binary suffix."""
-        mock_client = _make_mock_qdrant_client(
-            ["gdrive_documents_bge_scalar", "contextual_bulgaria_voyage_binary"]
-        )
-        with (
-            patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
-            patch("scripts.validate_traces.check_voyage_available", return_value=True),
-        ):
+        """Finds base collection even when stored with _scalar suffix."""
+        mock_client = _make_mock_qdrant_client(["gdrive_documents_bge_scalar"])
+        with patch("qdrant_client.AsyncQdrantClient", return_value=mock_client):
             result = await discover_collections("http://localhost:6333")
 
         assert "gdrive_documents_bge_scalar" in result
-        assert "contextual_bulgaria_voyage_binary" in result
 
     async def test_prefers_exact_match_over_suffixed(self):
         """If both base and suffixed exist, prefer exact match."""
@@ -838,10 +832,8 @@ class TestCollectionDiscovery:
         assert result == []
 
     async def test_skips_voyage_collection_without_api_key(self):
-        """Voyage collections discovered but skipped if VOYAGE_API_KEY missing."""
-        mock_client = _make_mock_qdrant_client(
-            ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
-        )
+        """BGE-M3 collection is discovered regardless of VOYAGE_API_KEY."""
+        mock_client = _make_mock_qdrant_client(["gdrive_documents_bge"])
         with (
             patch("qdrant_client.AsyncQdrantClient", return_value=mock_client),
             patch("scripts.validate_traces.check_voyage_available", return_value=False),
@@ -849,7 +841,6 @@ class TestCollectionDiscovery:
             result = await discover_collections("http://localhost:6333")
 
         assert "gdrive_documents_bge" in result
-        assert "contextual_bulgaria_voyage" not in result
 
     async def test_prefers_mode_suffix_when_quantization_enabled(self):
         """Quantization mode must influence discovered collection choice."""
