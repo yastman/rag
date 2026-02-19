@@ -80,8 +80,11 @@ async def rag_search(
         content_filter_enabled = ctx.content_filter_enabled if ctx else True
 
         if content_filter_enabled:
+            # Guard the original user text when available (#439), not the agent-reformulated query.
+            # Agent reformulation can sanitize malicious queries, bypassing guard detection.
+            original_text = ctx.original_user_query if ctx and ctx.original_user_query else query
             guard_result = await guard_node(
-                {"messages": [{"content": query}], "latency_stages": {}},
+                {"messages": [{"content": original_text}], "latency_stages": {}},
                 guard_mode=guard_mode,
             )
             if guard_result.get("guard_blocked"):
@@ -140,6 +143,13 @@ async def rag_search(
             llm=ctx.llm if ctx else None,
         )
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
+
+        # Streaming hook (#428): when streaming is restored for the agent text path
+        # (i.e. the pipeline delivers the final answer directly to Telegram via
+        # generate_node with a live message object), set ctx.response_sent = True here
+        # so that _handle_query_supervisor in bot.py does not send the message again.
+        # Example: if result.get("response_sent") and ctx is not None:
+        #              ctx.response_sent = True
 
         if guard_result:
             if guard_result.get("injection_detected"):

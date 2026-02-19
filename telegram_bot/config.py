@@ -435,6 +435,14 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("realestate_database_url", "REALESTATE_DATABASE_URL"),
     )
 
+    # History search (#433)
+    history_relevance_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        validation_alias=AliasChoices("history_relevance_threshold", "HISTORY_RELEVANCE_THRESHOLD"),
+    )
+
     # i18n
     supported_locales: list[str] = Field(
         default=["ru", "en", "uk"],
