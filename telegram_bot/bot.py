@@ -728,6 +728,7 @@ class PropertyBot:
             llm=self._llm,
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
+            role=role,
             history_relevance_threshold=self.config.history_relevance_threshold,
             original_query=message.text or "",
             original_user_query=message.text or "",
@@ -976,6 +977,9 @@ class PropertyBot:
                 "thread_id": _supervisor_thread_id(chat_id),
                 "bot_context": bot_context,
                 "rag_result_store": rag_result_store,
+                "role": role,
+                "user_id": bot_context.telegram_user_id,
+                "session_id": bot_context.session_id,
             },
         }
         try:
