@@ -36,3 +36,9 @@ class FaqSG(StatesGroup):
     """FAQ submenu."""
 
     main = State()
+
+
+class CrmSubmenuSG(StatesGroup):
+    """CRM submenu (manager only)."""
+
+    main = State()
