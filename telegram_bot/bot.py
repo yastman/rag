@@ -784,9 +784,9 @@ class PropertyBot:
                         "OFF_TOPIC",
                     }
                 ):
-                    from telegram_bot.graph.nodes.respond import _format_sources
+                    from telegram_bot.graph.nodes.respond import format_sources
 
-                    sources_text = _format_sources(documents)
+                    sources_text = format_sources(documents)
 
                 full_response = response_text + sources_text if sources_text else response_text
 
