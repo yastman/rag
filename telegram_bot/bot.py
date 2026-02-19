@@ -21,6 +21,7 @@ from .agents.context import BotContext
 from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
+from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import (
@@ -803,6 +804,27 @@ class PropertyBot:
                         except Exception:
                             logger.exception("Failed to send text response chunk")
                             await message.answer(chunk)
+
+            # Store final agent response in semantic cache for cacheable query types.
+            if self._cache and response_text:
+                query_type = str(rag_result_store.get("query_type", "") or "")
+                query_embedding = rag_result_store.get("query_embedding")
+                if (
+                    query_type in CACHEABLE_QUERY_TYPES
+                    and not rag_result_store.get("cache_hit", False)
+                    and isinstance(query_embedding, list)
+                    and bool(query_embedding)
+                ):
+                    try:
+                        await self._cache.store_semantic(
+                            query=message.text or "",
+                            response=response_text,
+                            vector=query_embedding,
+                            query_type=query_type,
+                            user_id=user_id,
+                        )
+                    except Exception:
+                        logger.warning("Failed to store semantic cache in text path", exc_info=True)
 
             # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
