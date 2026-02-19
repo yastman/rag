@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import (
     ContactCreate,
+    ContactUpdate,
     LeadCreate,
     LeadUpdate,
     TaskCreate,
@@ -31,6 +32,11 @@ def _get_kommo(config: RunnableConfig):
     if ctx and ctx.kommo_client:
         return ctx.kommo_client
     return None
+
+
+def _get_ctx(config: RunnableConfig):
+    """Get BotContext from config."""
+    return config.get("configurable", {}).get("bot_context")
 
 
 # --- READ tools ---
@@ -262,6 +268,136 @@ async def crm_link_contact_to_deal(
         return f"Ошибка при привязке контакта: {e}"
 
 
+@tool
+@observe(name="crm-search-leads")
+async def crm_search_leads(query: str, config: RunnableConfig) -> str:
+    """Search deals/leads in CRM by name, keywords, or phone.
+
+    Args:
+        query: Search query (name, keywords, phone number).
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
+
+    try:
+        leads = await kommo.search_leads(query=query, limit=10)
+        if not leads:
+            return f"Сделки по запросу «{query}» не найдены."
+        lines = []
+        for lead in leads:
+            budget_str = f", бюджет: {lead.budget}" if lead.budget else ""
+            lines.append(f"- {lead.name or 'Без названия'} (ID: {lead.id}{budget_str})")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.exception("crm_search_leads failed")
+        return f"Ошибка при поиске сделок: {e}"
+
+
+@tool
+@observe(name="crm-get-my-leads")
+async def crm_get_my_leads(config: RunnableConfig) -> str:
+    """Get leads assigned to the current manager."""
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
+
+    ctx = _get_ctx(config)
+    manager_id = getattr(ctx, "manager_id", None) if ctx else None
+    if manager_id is None:
+        return "manager_id не настроен. Обратитесь к администратору."
+
+    try:
+        leads = await kommo.search_leads(responsible_user_id=manager_id, limit=20)
+        if not leads:
+            return "У вас нет активных сделок."
+        lines = []
+        for lead in leads:
+            budget_str = f", бюджет: {lead.budget}" if lead.budget else ""
+            lines.append(f"- {lead.name or 'Без названия'} (ID: {lead.id}{budget_str})")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.exception("crm_get_my_leads failed")
+        return f"Ошибка при получении сделок: {e}"
+
+
+@tool
+@observe(name="crm-get-my-tasks")
+async def crm_get_my_tasks(
+    config: RunnableConfig,
+    include_completed: bool = False,
+) -> str:
+    """Get tasks assigned to the current manager (overdue tasks highlighted).
+
+    Args:
+        include_completed: Include completed tasks (default: False).
+    """
+    import time
+
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
+
+    ctx = _get_ctx(config)
+    manager_id = getattr(ctx, "manager_id", None) if ctx else None
+    if manager_id is None:
+        return "manager_id не настроен. Обратитесь к администратору."
+
+    try:
+        is_completed = None if include_completed else False
+        tasks = await kommo.get_tasks(responsible_user_id=manager_id, is_completed=is_completed)
+        if not tasks:
+            return "У вас нет активных задач."
+        now = int(time.time())
+        lines = []
+        for task in tasks:
+            overdue = ""
+            if task.complete_till and task.complete_till < now and not task.is_completed:
+                overdue = " ⚠️ ПРОСРОЧЕНО"
+            lines.append(f"- {task.text or '(без текста)'} (ID: {task.id}){overdue}")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.exception("crm_get_my_tasks failed")
+        return f"Ошибка при получении задач: {e}"
+
+
+@tool
+@observe(name="crm-update-contact")
+async def crm_update_contact(
+    contact_id: int,
+    config: RunnableConfig,
+    phone: str | None = None,
+    email: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> str:
+    """Update contact fields in CRM (phone, email, name). Requires confirmation.
+
+    Args:
+        contact_id: The Kommo contact ID.
+        phone: New phone number (optional).
+        email: New email address (optional).
+        first_name: New first name (optional).
+        last_name: New last name (optional).
+    """
+    kommo = _get_kommo(config)
+    if not kommo:
+        return _CRM_UNAVAILABLE
+
+    try:
+        custom_fields = ContactUpdate.build_contact_fields(phone=phone, email=email)
+        update = ContactUpdate(
+            first_name=first_name,
+            last_name=last_name,
+            custom_fields_values=custom_fields or None,
+        )
+        contact = await kommo.update_contact(contact_id, update)
+        return f"Контакт обновлен: ID {contact.id}, {contact.first_name or ''}"
+    except Exception as e:
+        logger.exception("crm_update_contact failed")
+        return f"Ошибка при обновлении контакта: {e}"
+
+
 def get_crm_tools() -> list:
     """Return all CRM tools for agent registration."""
     return [
@@ -273,4 +409,8 @@ def get_crm_tools() -> list:
         crm_create_task,
         crm_link_contact_to_deal,
         crm_get_contacts,
+        crm_search_leads,
+        crm_get_my_leads,
+        crm_get_my_tasks,
+        crm_update_contact,
     ]
