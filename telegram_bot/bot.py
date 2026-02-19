@@ -661,6 +661,7 @@ class PropertyBot:
             llm=self._llm,
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
+            original_query=message.text or "",
         )
 
         rag_result_store: dict[str, Any] = {}
