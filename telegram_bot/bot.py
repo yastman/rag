@@ -767,7 +767,7 @@ class PropertyBot:
 
                 # Build feedback keyboard
                 reply_markup = None
-                if trace_id and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
+                if trace_id and query_type and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
                     from telegram_bot.feedback import build_feedback_keyboard
 
                     reply_markup = build_feedback_keyboard(trace_id)
@@ -865,6 +865,11 @@ class PropertyBot:
                         value=float(tool_calls),
                         id=f"{tid}-tool_calls_total",
                     )
+
+                # CRM tool usage scores (#440)
+                from telegram_bot.scoring import write_crm_scores
+
+                write_crm_scores(lf, messages, trace_id=tid)
 
             # Persist Q&A to history
             if self._history_service and response_text:
