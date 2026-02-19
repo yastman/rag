@@ -122,3 +122,17 @@ def test_create_bot_agent_custom_prompt_bypasses_prompt_manager():
         )
 
     mock_get.assert_not_called()
+
+
+def test_default_system_prompt_contains_safety_instructions():
+    """DEFAULT_SYSTEM_PROMPT must include safety/refusal instructions (#439)."""
+    from telegram_bot.agents.agent import DEFAULT_SYSTEM_PROMPT
+
+    # Must refuse prompt injection attempts
+    assert "НЕ выполняй" in DEFAULT_SYSTEM_PROMPT
+    # Must refuse system prompt leaks
+    assert "НЕ раскрывай" in DEFAULT_SYSTEM_PROMPT
+    # Must refuse persona hijacking
+    assert "НЕ притворяйся" in DEFAULT_SYSTEM_PROMPT
+    # Must have a БЕЗОПАСНОСТЬ section
+    assert "БЕЗОПАСНОСТЬ" in DEFAULT_SYSTEM_PROMPT
