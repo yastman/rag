@@ -129,6 +129,7 @@ Rule: `traced_pipeline` → `@observe(root)` → nested `@observe(children)`
 | Entry Point | File | session_id format |
 |-------------|------|-------------------|
 | Telegram bot | bot.py:handle_query | chat-{hash}-{YYYYMMDD} |
+| RAG API | src/api/main.py:query | api-{user_id} (or req.session_id) |
 | Validation | scripts/validate_traces.py | validate-{run_id[:8]} |
 | Smoke tests | tests/smoke/test_langgraph_smoke.py | smoke-test-{YYYYMMDD} |
 | Integration | tests/integration/test_graph_paths.py | test-{path-name} |
