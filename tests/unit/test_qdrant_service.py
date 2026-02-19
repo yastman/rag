@@ -1,6 +1,5 @@
 """Tests for QdrantService quantization parameters."""
 
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,20 +7,7 @@ import pytest
 from telegram_bot.services.qdrant import QdrantService
 
 
-@pytest.fixture(autouse=True, scope="module")
-def reset_qdrant_modules():
-    """Clear qdrant module cache to ensure fresh import with mocks."""
-    # Clear before test
-    modules_to_clear = [k for k in sys.modules if "qdrant" in k.lower()]
-    for mod in modules_to_clear:
-        sys.modules.pop(mod, None)
-
-    yield
-
-    # Clear after test
-    modules_to_clear = [k for k in sys.modules if "qdrant" in k.lower()]
-    for mod in modules_to_clear:
-        sys.modules.pop(mod, None)
+pytestmark = pytest.mark.xdist_group("qdrant_service")
 
 
 def _make_service(*, validated: bool = False) -> QdrantService:
