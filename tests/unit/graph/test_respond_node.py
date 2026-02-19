@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from telegram_bot.graph.nodes.respond import _format_sources, respond_node
+from telegram_bot.graph.nodes.respond import format_sources, respond_node
 from telegram_bot.graph.state import make_initial_state
 
 
@@ -196,10 +196,10 @@ class TestRespondNodeFeedbackButtons:
 
 
 class TestFormatSources:
-    """Test _format_sources() output format (#225)."""
+    """Test format_sources() output format (#225)."""
 
     def test_formats_sources_with_city(self):
-        result = _format_sources(_SAMPLE_DOCS)
+        result = format_sources(_SAMPLE_DOCS)
         assert "*Источники:*" in result
         assert "`[1]` Апартамент Несебр — Несебр" in result
         assert "`[2]` Студия с видом — Равда" in result
@@ -207,19 +207,19 @@ class TestFormatSources:
         assert "0.87" in result
 
     def test_empty_documents(self):
-        assert _format_sources([]) == ""
+        assert format_sources([]) == ""
 
     def test_max_sources_cap(self):
         docs = [
             {"text": f"Doc {i}", "score": 0.5, "metadata": {"title": f"Doc {i}"}} for i in range(10)
         ]
-        result = _format_sources(docs, max_sources=3)
+        result = format_sources(docs, max_sources=3)
         assert "`[3]`" in result
         assert "`[4]`" not in result
 
     def test_missing_city(self):
         docs = [{"text": "t", "score": 0.5, "metadata": {"title": "NoCity"}}]
-        result = _format_sources(docs)
+        result = format_sources(docs)
         assert "NoCity" in result
         assert " — " not in result  # no city separator
 
