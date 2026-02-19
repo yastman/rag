@@ -120,7 +120,6 @@ async def _cache_check(
             query=query,
             vector=embedding,
             query_type=query_type,
-            user_id=user_id,
         )
 
     latency = time.perf_counter() - start
@@ -606,7 +605,6 @@ async def _cache_store(
                 response=response,
                 vector=query_embedding,
                 query_type=query_type,
-                user_id=user_id,
             )
             stored_semantic = True
 

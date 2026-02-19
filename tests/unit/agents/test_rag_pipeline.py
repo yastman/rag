@@ -144,7 +144,7 @@ async def test_cache_check_uses_semantic_for_general(mock_cache, mock_embeddings
     mock_cache.check_semantic.assert_awaited_once()
     call_kwargs = mock_cache.check_semantic.call_args.kwargs
     assert call_kwargs["query_type"] == "GENERAL"
-    assert call_kwargs["user_id"] == 42
+    assert "user_id" not in call_kwargs
 
 
 # ---------------------------------------------------------------------------
