@@ -13,6 +13,7 @@ import time
 from typing import Any
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.metrics import PipelineMetrics
 
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,7 @@ async def cache_check_node(
     latency = time.perf_counter() - start
 
     if cached:
+        PipelineMetrics.get().inc("cache_hit")
         logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
         lf.update_current_span(
             output={
@@ -140,6 +142,7 @@ async def cache_check_node(
             "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
         }
 
+    PipelineMetrics.get().inc("cache_miss")
     logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
     lf.update_current_span(
         output={
