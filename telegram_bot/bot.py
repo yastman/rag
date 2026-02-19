@@ -33,6 +33,8 @@ from .observability import (
 )
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
+    score,
+    write_history_scores,
     write_langfuse_scores,
 )
 from .services.history_service import HistoryService
@@ -128,27 +130,10 @@ def _write_voice_error_scores(
         trace_id = lf.get_current_trace_id()
     if not trace_id:
         return
-    lf.create_score(
-        trace_id=trace_id,
-        name="input_type",
-        value="voice",
-        data_type="CATEGORICAL",
-        id=f"{trace_id}-input_type",
-    )
-    lf.create_score(
-        trace_id=trace_id,
-        name="voice_error_reason",
-        value=error_reason,
-        data_type="CATEGORICAL",
-        id=f"{trace_id}-voice_error_reason",
-    )
+    score(lf, trace_id, name="input_type", value="voice", data_type="CATEGORICAL")
+    score(lf, trace_id, name="voice_error_reason", value=error_reason, data_type="CATEGORICAL")
     if voice_duration_s is not None:
-        lf.create_score(
-            trace_id=trace_id,
-            name="voice_duration_s",
-            value=float(voice_duration_s),
-            id=f"{trace_id}-voice_duration_s",
-        )
+        score(lf, trace_id, name="voice_duration_s", value=float(voice_duration_s))
 
 
 def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
@@ -550,21 +535,7 @@ class PropertyBot:
                     output={"error": "service_unavailable"},
                     metadata={"user_id": user_id},
                 )
-                if tid:
-                    lf.create_score(
-                        trace_id=tid,
-                        name="history_search_count",
-                        value=0,
-                        data_type="NUMERIC",
-                        id=f"{tid}-history_search_count",
-                    )
-                    lf.create_score(
-                        trace_id=tid,
-                        name="history_search_empty",
-                        value=1.0,
-                        data_type="NUMERIC",
-                        id=f"{tid}-history_search_empty",
-                    )
+                write_history_scores(lf, tid, count=0)
                 await message.answer("История диалогов временно недоступна.")
                 return
 
@@ -581,21 +552,7 @@ class PropertyBot:
                     output={"error": "backend_exception"},
                     metadata={"user_id": user_id},
                 )
-                if tid:
-                    lf.create_score(
-                        trace_id=tid,
-                        name="history_search_count",
-                        value=0,
-                        data_type="NUMERIC",
-                        id=f"{tid}-history_search_count",
-                    )
-                    lf.create_score(
-                        trace_id=tid,
-                        name="history_search_empty",
-                        value=1.0,
-                        data_type="NUMERIC",
-                        id=f"{tid}-history_search_empty",
-                    )
+                write_history_scores(lf, tid, count=0)
                 await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
                 return
 
@@ -616,35 +573,12 @@ class PropertyBot:
                 output={"results_count": len(results), "valid_count": len(valid)},
                 metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
             )
-            if tid:
-                lf.create_score(
-                    trace_id=tid,
-                    name="history_search_count",
-                    value=len(valid),
-                    data_type="NUMERIC",
-                    id=f"{tid}-history_search_count",
-                )
-                lf.create_score(
-                    trace_id=tid,
-                    name="history_search_latency_ms",
-                    value=search_ms,
-                    data_type="NUMERIC",
-                    id=f"{tid}-history_search_latency_ms",
-                )
-                lf.create_score(
-                    trace_id=tid,
-                    name="history_search_empty",
-                    value=1.0 if not valid else 0.0,
-                    data_type="NUMERIC",
-                    id=f"{tid}-history_search_empty",
-                )
-                lf.create_score(
-                    trace_id=tid,
-                    name="history_backend",
-                    value="qdrant",
-                    data_type="CATEGORICAL",
-                    id=f"{tid}-history_backend",
-                )
+            write_history_scores(
+                lf,
+                tid,
+                count=len(valid),
+                latency_ms=search_ms,
+            )
 
             if not valid:
                 await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
