@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import operator
 from typing import Any
 
@@ -12,6 +13,8 @@ from aiogram_dialog.widgets.text import Format
 
 from .states import FunnelSG
 
+
+logger = logging.getLogger(__name__)
 
 # --- Getters (provide data to windows) ---
 
@@ -135,6 +138,32 @@ async def on_timeline_selected(
 ) -> None:
     """Save timeline and show results."""
     manager.dialog_data["timeline"] = item_id
+
+    # Persist scoring + CRM sync on completed funnel answers.
+    try:
+        from telegram_bot.bot import make_session_id
+        from telegram_bot.services.funnel_lead_scoring import persist_and_sync_funnel_lead_score
+
+        if callback.from_user is not None:
+            data = manager.dialog_data
+            await persist_and_sync_funnel_lead_score(
+                telegram_user_id=callback.from_user.id,
+                session_id=make_session_id("chat", callback.message.chat.id)
+                if callback.message is not None
+                else make_session_id("chat", callback.from_user.id),
+                property_type=data.get("property_type"),
+                budget=data.get("budget"),
+                timeline=data.get("timeline"),
+                user_service=manager.middleware_data.get("user_service"),
+                pg_pool=manager.middleware_data.get("pg_pool"),
+                lead_scoring_store=manager.middleware_data.get("lead_scoring_store"),
+                kommo_client=manager.middleware_data.get("kommo_client"),
+                hot_lead_notifier=manager.middleware_data.get("hot_lead_notifier"),
+                config=manager.middleware_data.get("bot_config"),
+            )
+    except Exception:
+        logger.exception("Failed to persist/sync funnel lead score")
+
     await manager.switch_to(FunnelSG.results)
 
 
