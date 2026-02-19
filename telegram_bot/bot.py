@@ -705,6 +705,17 @@ class PropertyBot:
         response_text = await self._handle_query_supervisor(message, pipeline_start, locale=locale)
         get_client().update_current_trace(output={"response": response_text or ""})
 
+        # Update session last_active for idle detection (#445)
+        if self._cache.redis is not None:
+            try:
+                await self._cache.redis.set(
+                    f"session:last_active:{message.from_user.id}",
+                    str(time.time()),
+                    ex=7200,  # 2h TTL
+                )
+            except Exception:
+                logger.debug("Failed to update session last_active", exc_info=True)
+
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(
         self, message: Message, pipeline_start: float, locale: str = "ru"
@@ -770,6 +781,11 @@ class PropertyBot:
         else:
             tools = base_tools
 
+        # Add utility tools for all roles (#445)
+        from .agents.utility_tools import get_utility_tools
+
+        tools.extend(get_utility_tools())
+
         # Create agent via SDK — route through LiteLLM proxy (#420)
         agent = create_bot_agent(
             model=self.config.supervisor_model,
@@ -802,6 +818,8 @@ class PropertyBot:
             history_relevance_threshold=self.config.history_relevance_threshold,
             original_query=message.text or "",
             original_user_query=message.text or "",
+            bot=bot,
+            manager_ids=list(self.config.manager_ids),
         )
 
         rag_result_store: dict[str, Any] = {}
@@ -1326,6 +1344,17 @@ class PropertyBot:
                 except Exception:
                     logger.warning("Failed to save voice history turn", exc_info=True)
 
+            # Update session last_active for idle detection (#445)
+            if self._cache.redis is not None:
+                try:
+                    await self._cache.redis.set(
+                        f"session:last_active:{message.from_user.id}",
+                        str(time.time()),
+                        ex=7200,  # 2h TTL
+                    )
+                except Exception:
+                    logger.debug("Failed to update session last_active", exc_info=True)
+
     async def _send_hitl_confirmation(
         self,
         message: Message,
@@ -1369,24 +1398,58 @@ class PropertyBot:
         with contextlib.suppress(Exception):
             await callback.message.edit_reply_markup(reply_markup=None)
 
-        # Rebuild agent with same tools and checkpointer
-        from .agents.history_tool import history_search
+        # Rebuild agent with same tools and checkpointer (mirrors _handle_query_supervisor)
         from .agents.rag_tool import rag_search
+        from .agents.utility_tools import get_utility_tools
 
         role = await self._resolve_user_role(user_id)
         session_id = make_session_id("chat", chat_id)
 
-        tools: list[Any] = [rag_search]
-        if self._history_service is not None:
-            tools.append(history_search)
-        if (
-            role == "manager"
-            and getattr(self.config, "kommo_enabled", False)
-            and getattr(self, "_kommo_client", None)
-        ):
-            from .agents.crm_tools import get_crm_tools
+        base_tools: list[Any] = [rag_search]
+        manager_tools: list[Any] = []
+        if role == "manager":
+            from .agents.manager_tools import (
+                build_tools_for_role,
+                create_crm_score_sync_tool,
+                create_manager_nurturing_tools,
+            )
 
-            tools.extend(get_crm_tools())
+            if self._history_service is not None:
+                from .agents.history_tool import history_search
+
+                manager_tools.append(history_search)
+
+            manager_tools.extend(
+                create_manager_nurturing_tools(
+                    analytics_service=self._funnel_analytics_service,
+                    nurturing_service=self._nurturing_service,
+                )
+            )
+
+            if self._lead_scoring_store is not None:
+                manager_tools.append(
+                    create_crm_score_sync_tool(
+                        scoring_store=self._lead_scoring_store,
+                        kommo_client=getattr(self, "_kommo_client", None),
+                        score_field_id=self.config.kommo_lead_score_field_id,
+                        band_field_id=self.config.kommo_lead_band_field_id,
+                    )
+                )
+
+            if getattr(self.config, "kommo_enabled", False) and getattr(
+                self, "_kommo_client", None
+            ):
+                from .agents.crm_tools import get_crm_tools
+
+                manager_tools.extend(get_crm_tools())
+
+            tools = build_tools_for_role(
+                role=role, base_tools=base_tools, manager_tools=manager_tools
+            )
+        else:
+            tools = base_tools
+
+        tools.extend(get_utility_tools())
 
         agent = create_bot_agent(
             model=self.config.supervisor_model,
@@ -1580,6 +1643,11 @@ class PropertyBot:
         else:
             tools = base_tools
 
+        # Add utility tools for all roles (#445)
+        from .agents.utility_tools import get_utility_tools
+
+        tools.extend(get_utility_tools())
+
         agent = create_bot_agent(
             model=self.config.supervisor_model,
             tools=tools,
@@ -1609,6 +1677,8 @@ class PropertyBot:
             manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
             original_query=query_text,
             original_user_query=query_text,
+            bot=bot,
+            manager_ids=list(self.config.manager_ids),
         )
 
         rag_result_store: dict[str, Any] = {}
@@ -1780,7 +1850,12 @@ class PropertyBot:
                     from .services.nurturing_scheduler import NurturingScheduler
                     from .services.nurturing_service import NurturingService
 
-                    nurturing_svc = NurturingService(pool=self._pg_pool)
+                    nurturing_svc = NurturingService(
+                        pool=self._pg_pool,
+                        bot=self.bot if self.config.nurturing_dispatch_enabled else None,
+                        qdrant=self._qdrant if self.config.nurturing_dispatch_enabled else None,
+                        llm=self._llm if self.config.nurturing_dispatch_enabled else None,
+                    )
                     analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
                     self._nurturing_service = nurturing_svc
                     self._funnel_analytics_service = analytics_svc
@@ -1796,6 +1871,25 @@ class PropertyBot:
                     logger.exception("Failed to start nurturing scheduler")
         except Exception:
             logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
+
+        # Initialize session summary worker (#445)
+        self._session_summary_worker: Any | None = None
+        if self.config.session_summary_enabled and self._cache.redis is not None:
+            try:
+                from .services.session_summary_worker import SessionSummaryWorker
+
+                self._session_summary_worker = SessionSummaryWorker(
+                    redis=self._cache.redis,
+                    llm=self._llm,
+                    kommo_client=self._kommo_client,
+                    idle_timeout_min=self.config.session_idle_timeout_min,
+                    poll_interval_sec=self.config.session_summary_poll_sec,
+                    summary_model=self.config.session_summary_model,
+                )
+                await self._session_summary_worker.start()
+                logger.info("SessionSummaryWorker started")
+            except Exception:
+                logger.exception("Failed to start SessionSummaryWorker")
 
         # Initialize i18n (fluentogram)
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
@@ -1888,6 +1982,9 @@ class PropertyBot:
                 logger.warning("Failed to close agent checkpointer cleanly", exc_info=True)
             finally:
                 self._agent_checkpointer = None
+        if getattr(self, "_session_summary_worker", None) is not None:
+            await self._session_summary_worker.stop()
+            self._session_summary_worker = None
         if self._nurturing_scheduler is not None:
             await self._nurturing_scheduler.stop()
             self._nurturing_scheduler = None
