@@ -212,10 +212,11 @@ def test_history_trimmer_noop_when_within_limit():
 
 
 def test_history_trimmer_removes_old_messages_when_over_limit():
-    """_create_history_trimmer returns RemoveMessage for oldest messages (#519)."""
+    """_create_history_trimmer resets state and re-adds trimmed window (#519)."""
     from unittest.mock import MagicMock
 
     from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+    from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
     from telegram_bot.agents.agent import _create_history_trimmer
 
@@ -235,24 +236,18 @@ def test_history_trimmer_removes_old_messages_when_over_limit():
 
     assert result is not None, "Should return a state update"
     assert "messages" in result
-    remove_msgs = result["messages"]
-    assert all(isinstance(m, RemoveMessage) for m in remove_msgs)
-
-    # Oldest 2 messages should be removed (keep last 4 starting on human)
-    removed_ids = {m.id for m in remove_msgs}
-    assert "h1" in removed_ids
-    assert "a1" in removed_ids
-    # Kept messages should not be in remove list
-    assert "h2" not in removed_ids
-    assert "h3" not in removed_ids
-    assert "a3" not in removed_ids
+    updates = result["messages"]
+    assert isinstance(updates[0], RemoveMessage)
+    assert updates[0].id == REMOVE_ALL_MESSAGES
+    kept_ids = [m.id for m in updates[1:]]
+    assert kept_ids == ["h2", "a2", "h3", "a3"]
 
 
 def test_history_trimmer_respects_start_on_human():
     """Trimmer never starts window on a non-human message (#519)."""
     from unittest.mock import MagicMock
 
-    from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+    from langchain_core.messages import AIMessage, HumanMessage
 
     from telegram_bot.agents.agent import _create_history_trimmer
 
@@ -270,12 +265,10 @@ def test_history_trimmer_respects_start_on_human():
     result = trimmer.before_model(state, MagicMock())
 
     assert result is not None
-    removed_ids = {m.id for m in result["messages"] if isinstance(m, RemoveMessage)}
-    # Window must start on h2 or later — both h2, a2, h3 should be kept
-    assert "h2" not in removed_ids and "a2" not in removed_ids and "h3" not in removed_ids
-    # First kept message must be a HumanMessage (start_on constraint)
-    kept = [m for m in messages if m.id not in removed_ids]
+    kept = result["messages"][1:]  # first element is RemoveMessage(REMOVE_ALL_MESSAGES)
+    assert kept, "Expected non-empty kept window"
     assert isinstance(kept[0], HumanMessage), f"Window starts on {type(kept[0])}"
+    assert [m.id for m in kept] == ["h2", "a2", "h3"]
 
 
 def test_history_trimmer_noop_when_no_human_message_fits_window():
@@ -293,3 +286,28 @@ def test_history_trimmer_noop_when_no_human_message_fits_window():
     state = {"messages": messages}
     result = trimmer.before_model(state, MagicMock())
     assert result is None, "Should be a no-op rather than wiping all messages"
+
+
+def test_history_trimmer_handles_messages_without_ids():
+    """Trimmer still works when messages have id=None by resetting full state."""
+    from unittest.mock import MagicMock
+
+    from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+    from langgraph.graph.message import REMOVE_ALL_MESSAGES
+
+    from telegram_bot.agents.agent import _create_history_trimmer
+
+    trimmer = _create_history_trimmer(max_messages=3)
+    messages = [
+        HumanMessage(content="q1"),  # id=None
+        AIMessage(content="a1"),  # id=None
+        HumanMessage(content="q2"),  # id=None
+        AIMessage(content="a2"),  # id=None
+    ]
+    result = trimmer.before_model({"messages": messages}, MagicMock())
+
+    assert result is not None
+    updates = result["messages"]
+    assert isinstance(updates[0], RemoveMessage)
+    assert updates[0].id == REMOVE_ALL_MESSAGES
+    assert len(updates[1:]) <= 3
