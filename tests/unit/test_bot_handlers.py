@@ -350,6 +350,96 @@ class TestHandleQuery:
 
             mock_agent.ainvoke.assert_called_once()
 
+    async def test_handle_query_retries_with_memory_on_checkpointer_runtime_error(
+        self, mock_config
+    ):
+        """Text path retries once with MemorySaver when checkpointer write fails (#466)."""
+        bot, _ = _create_bot(mock_config)
+
+        failing_agent = AsyncMock()
+        failing_agent.ainvoke = AsyncMock(
+            side_effect=RuntimeError("checkpointer aput not JSON serializable")
+        )
+        fallback_agent = AsyncMock()
+        fallback_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+        fallback_cp = MagicMock(name="memory-saver-fallback")
+
+        with (
+            patch(
+                "telegram_bot.bot.create_bot_agent",
+                side_effect=[failing_agent, fallback_agent],
+            ) as mock_factory,
+            patch(
+                "telegram_bot.integrations.memory.create_fallback_checkpointer",
+                return_value=fallback_cp,
+            ) as mock_create_fallback_cp,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры в Несебр")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        assert failing_agent.ainvoke.await_count == 1
+        assert fallback_agent.ainvoke.await_count == 1
+        assert mock_factory.call_count == 2
+        assert mock_factory.call_args_list[1].kwargs["checkpointer"] is fallback_cp
+        assert bot._agent_checkpointer is fallback_cp
+        assert mock_create_fallback_cp.call_count == 1
+
+    async def test_handle_query_does_not_retry_on_non_checkpointer_error(self, mock_config):
+        """Non-checkpointer failures should bubble up without fallback retry."""
+        bot, _ = _create_bot(mock_config)
+
+        failing_agent = AsyncMock()
+        failing_agent.ainvoke = AsyncMock(side_effect=RuntimeError("upstream llm timeout"))
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=failing_agent) as mock_factory,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры в Несебр")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                with pytest.raises(RuntimeError, match="upstream llm timeout"):
+                    await bot.handle_query(message)
+
+        assert failing_agent.ainvoke.await_count == 1
+        assert mock_factory.call_count == 1
+
+    async def test_handle_query_manager_skips_retry_on_checkpointer_error(self, mock_config):
+        """Manager path should not retry to avoid duplicate write-side effects."""
+        mock_config.manager_ids = [12345]
+        bot, _ = _create_bot(mock_config)
+
+        failing_agent = AsyncMock()
+        failing_agent.ainvoke = AsyncMock(
+            side_effect=RuntimeError("checkpointer aput not JSON serializable")
+        )
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=failing_agent) as mock_factory,
+            patch(
+                "telegram_bot.integrations.memory.create_fallback_checkpointer"
+            ) as mock_create_fallback_cp,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры в Несебр", user_id=12345)
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                with pytest.raises(RuntimeError, match="checkpointer aput"):
+                    await bot.handle_query(message)
+
+        assert failing_agent.ainvoke.await_count == 1
+        assert mock_factory.call_count == 1
+        assert mock_create_fallback_cp.call_count == 0
+
     async def test_handle_query_sends_typing(self, mock_config):
         """Typing action is sent early."""
         bot, _ = _create_bot(mock_config)
