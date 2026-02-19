@@ -66,7 +66,7 @@ async def test_get_crm_tools_returns_list():
 
     tools = get_crm_tools()
     assert isinstance(tools, list)
-    assert len(tools) == 8
+    assert len(tools) == 12
     names = {t.name for t in tools}
     assert "crm_get_deal" in names
     assert "crm_create_lead" in names
