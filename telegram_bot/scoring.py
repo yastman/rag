@@ -38,7 +38,7 @@ def score(lf: Any, trace_id: str, *, name: str, value: Any, **kwargs: Any) -> No
         trace_id=trace_id,
         name=name,
         value=value,
-        id=f"{trace_id}-{name}",
+        score_id=f"{trace_id}-{name}",
         **kwargs,
     )
 
