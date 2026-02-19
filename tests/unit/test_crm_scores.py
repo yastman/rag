@@ -123,7 +123,7 @@ class TestWriteCrmScores:
         write_crm_scores(lf, [], trace_id="abc-123")
 
         for call in lf.create_score.call_args_list:
-            score_id = call.kwargs["id"]
+            score_id = call.kwargs["score_id"]
             score_name = call.kwargs["name"]
             assert score_id == f"abc-123-{score_name}"
 
