@@ -114,14 +114,21 @@ async def history_retrieve_node(
     query = state["query"]
     user_id = state["user_id"]
 
+    deal_id = state.get("deal_id")
+    scope = state.get("scope", "all")
+
     lf = get_client()
-    lf.update_current_span(input={"query_preview": query[:120], "user_id": user_id})
+    lf.update_current_span(
+        input={"query_preview": query[:120], "user_id": user_id, "deal_id": deal_id, "scope": scope}
+    )
 
     try:
         results = await history_service.search_user_history(
             user_id=user_id,
             query=query,
             limit=_HISTORY_RETRIEVE_LIMIT,
+            deal_id=deal_id,
+            scope=scope,
         )
     except Exception as e:
         logger.exception("history_retrieve_node: search failed")
