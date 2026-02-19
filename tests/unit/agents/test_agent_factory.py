@@ -102,7 +102,8 @@ def test_create_bot_agent_uses_langfuse_prompt_manager_by_default():
     mock_get.assert_called_once()
     call_kwargs = mock_get.call_args.kwargs
     assert mock_get.call_args.args[0] == "client_agent"
-    assert call_kwargs["variables"] == {"language": "русском языке"}
+    assert call_kwargs["variables"]["language"] == "русском языке"
+    assert "role_context" in call_kwargs["variables"]
     assert "rag_search" in call_kwargs["fallback"]
 
 

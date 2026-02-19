@@ -76,6 +76,7 @@ class I18nMiddleware(BaseMiddleware):
         kommo_client: Any | None = None,
         pg_pool: Any | None = None,
         bot_config: Any | None = None,
+        property_bot: Any | None = None,
         default_locale: str = "ru",
     ) -> None:
         super().__init__()
@@ -86,6 +87,7 @@ class I18nMiddleware(BaseMiddleware):
         self._kommo_client = kommo_client
         self._pg_pool = pg_pool
         self._bot_config = bot_config
+        self._property_bot = property_bot
         self._default_locale = default_locale
 
     async def __call__(
@@ -119,6 +121,7 @@ class I18nMiddleware(BaseMiddleware):
         data["kommo_client"] = self._kommo_client
         data["pg_pool"] = self._pg_pool
         data["bot_config"] = self._bot_config
+        data["property_bot"] = self._property_bot
         return await handler(event, data)
 
 
@@ -131,6 +134,7 @@ def setup_i18n_middleware(
     kommo_client: Any | None = None,
     pg_pool: Any | None = None,
     bot_config: Any | None = None,
+    property_bot: Any | None = None,
 ) -> None:
     """Register i18n middleware on all routers."""
     middleware = I18nMiddleware(
@@ -141,6 +145,7 @@ def setup_i18n_middleware(
         kommo_client=kommo_client,
         pg_pool=pg_pool,
         bot_config=bot_config,
+        property_bot=property_bot,
     )
     dp.message.outer_middleware(middleware)
     dp.callback_query.outer_middleware(middleware)
