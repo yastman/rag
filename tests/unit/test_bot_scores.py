@@ -953,7 +953,7 @@ class TestTextPathSemanticCacheStore:
         assert kwargs["query"] == message.text
         assert kwargs["response"] == "Ответ агентом"
         assert kwargs["query_type"] == "FAQ"
-        assert kwargs["user_id"] == message.from_user.id
+        assert "user_id" not in kwargs
 
     async def test_stores_semantic_cache_for_general_type(self, mock_config):
         mock_lf = MagicMock()
