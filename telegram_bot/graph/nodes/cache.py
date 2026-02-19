@@ -108,13 +108,16 @@ async def cache_check_node(
                 },
             }
 
-    # Step 2: Check semantic cache with query-type threshold (allowlisted types only)
+    # Step 2: Check semantic cache with query-type threshold (allowlisted types only).
+    # Voice path has no user role — agent_role is intentionally omitted so that
+    # voice responses are shared across roles within the same cache_scope="rag" bucket.
     cached = None
     if query_type in CACHEABLE_QUERY_TYPES:
         cached = await cache.check_semantic(
             query=query,
             vector=embedding,
             query_type=query_type,
+            cache_scope="rag",
         )
 
     latency = time.perf_counter() - start
@@ -211,11 +214,13 @@ async def cache_store_node(
     if response and embedding:
         if query_type in CACHEABLE_QUERY_TYPES:
             try:
+                # Voice path: agent_role intentionally omitted (no role context in graph state).
                 await cache.store_semantic(
                     query=query,
                     response=response,
                     vector=embedding,
                     query_type=query_type,
+                    cache_scope="rag",
                 )
                 stored_semantic = True
             except Exception as exc:
