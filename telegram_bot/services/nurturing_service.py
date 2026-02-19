@@ -50,11 +50,13 @@ class NurturingService:
         bot: Any | None = None,
         qdrant: Any | None = None,
         llm: Any | None = None,
+        model: str = "claude-haiku-4-5",
     ) -> None:
         self._pool = pool
         self._bot = bot
         self._qdrant = qdrant
         self._llm = llm
+        self._model = model
 
     async def _assert_384_contract(self) -> None:
         """Fail fast if lead_scores table is missing #384 columns."""
@@ -178,7 +180,7 @@ class NurturingService:
             )
         try:
             response = await self._llm.chat.completions.create(
-                model="claude-haiku-4-5",
+                model=self._model,
                 messages=[
                     {
                         "role": "system",

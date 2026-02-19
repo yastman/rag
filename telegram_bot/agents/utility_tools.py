@@ -7,6 +7,7 @@ Dependencies injected via config["configurable"]["bot_context"].
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -14,9 +15,12 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.kommo_models import TaskCreate
 
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_SUMMARY_MODEL = "claude-haiku-4-5"
 
 
 def _get_ctx(config: RunnableConfig) -> Any | None:
@@ -54,6 +58,15 @@ async def mortgage_calculator(
     if loan_amount <= 0 or term_years <= 0:
         return "Некорректные параметры: сумма и срок должны быть положительными."
 
+    if annual_rate < 0:
+        return "Некорректная ставка: значение не может быть отрицательным."
+
+    if annual_rate > 100:
+        return (
+            "Предупреждение: ставка превышает 100%. "
+            "Убедитесь, что вы передали значение в процентах (например, 3.5 для 3.5%), а не в долях."
+        )
+
     principal = loan_amount - down_payment
     if principal <= 0:
         return "Первоначальный взнос превышает сумму кредита."
@@ -89,10 +102,10 @@ async def mortgage_calculator(
 # ---------------------------------------------------------------------------
 
 
-async def _summarize_with_llm(data: str, llm: Any) -> str:
+async def _summarize_with_llm(data: str, llm: Any, model: str = _DEFAULT_SUMMARY_MODEL) -> str:
     """Call LLM to summarize CRM activity."""
     response = await llm.chat.completions.create(
-        model="claude-haiku-4-5",
+        model=model,
         messages=[
             {
                 "role": "system",
@@ -141,14 +154,17 @@ async def daily_summary(
             return "Некорректный формат даты. Используйте YYYY-MM-DD."
 
     try:
-        leads = await ctx.kommo_client.get_leads_by_date(target)
-        tasks = await ctx.kommo_client.get_tasks_due(target)
+        # NOTE: KommoClient does not support date-range filtering; fetches latest 50 records.
+        # The date parameter is used only for the summary header, not for actual filtering.
+        # TODO: add date-range filter when Kommo API supports it (#445)
+        leads = await ctx.kommo_client.search_leads(query="", limit=50)
+        tasks = await ctx.kommo_client.get_tasks(limit=50)
     except Exception as e:
         logger.exception("daily_summary CRM query failed")
         return f"Ошибка при запросе CRM: {e}"
 
     # Build data string for summarization
-    lines = [f"CRM Activity for {target.isoformat()}:"]
+    lines = [f"CRM Activity for {target.isoformat()} (latest 50 records):"]
     lines.append(f"Leads: {len(leads)}")
     for lead in leads[:10]:
         name = getattr(lead, "name", "—")
@@ -211,23 +227,25 @@ async def handoff(
             logger.warning("Failed to notify manager %s", mid, exc_info=True)
 
     # Create Kommo task if available
+    # TODO: resolve lead_id from telegram_user_id via lead scoring store
     kommo = getattr(ctx, "kommo_client", None)
-    if kommo:
+    lead_id: int | None = None  # lead_id resolution not yet implemented
+    if kommo and lead_id:
         try:
-            import time
-
-            from telegram_bot.services.kommo_models import TaskCreate
-
             await kommo.create_task(
                 TaskCreate(
                     text=f"Handoff: {reason}",
-                    entity_id=0,
+                    entity_id=lead_id,
                     entity_type="leads",
                     complete_till=int(time.time()) + 3600,
                 )
             )
         except Exception:
             logger.warning("Failed to create Kommo handoff task", exc_info=True)
+    elif kommo:
+        logger.debug(
+            "Skipping Kommo handoff task: lead_id not resolved for user %s", ctx.telegram_user_id
+        )
 
     lf = get_client()
     lf.score_current_trace(name="handoff_triggered", value=1, data_type="BOOLEAN")

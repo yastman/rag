@@ -94,15 +94,24 @@ class SessionSummaryWorker:
         Returns:
             Number of sessions summarized.
         """
-        keys = await self._redis.keys("session:last_active:*")
-        if not keys:
-            return 0
-
         now = time.time()
         threshold = self._idle_timeout_min * 60
         count = 0
+        cursor: int = 0
+        keys_to_process: list = []
 
-        for key in keys:
+        while True:
+            cursor, batch = await self._redis.scan(
+                cursor=cursor, match="session:last_active:*", count=100
+            )
+            keys_to_process.extend(batch)
+            if cursor == 0:
+                break
+
+        if not keys_to_process:
+            return 0
+
+        for key in keys_to_process:
             raw = await self._redis.get(key)
             if raw is None:
                 continue
@@ -162,11 +171,16 @@ class SessionSummaryWorker:
         """Log the summary and write to Kommo if available."""
         logger.info("Session summary for user %s: %s", user_id, summary[:100])
         if self._kommo:
-            try:
-                await self._kommo.add_note(
-                    entity_type="leads",
-                    entity_id=0,  # TODO: resolve lead_id from user_id (#445)
-                    text=f"[Auto-summary]\n{summary}",
-                )
-            except Exception:
-                logger.warning("Failed to write summary to Kommo", exc_info=True)
+            # TODO: resolve lead_id from user_id via lead scoring store (#445)
+            lead_id: int | None = None
+            if lead_id:
+                try:
+                    await self._kommo.add_note(
+                        entity_type="leads",
+                        entity_id=lead_id,
+                        text=f"[Auto-summary]\n{summary}",
+                    )
+                except Exception:
+                    logger.warning("Failed to write summary to Kommo", exc_info=True)
+            else:
+                logger.debug("Skipping Kommo note for user %s: lead_id not yet resolved", user_id)

@@ -58,8 +58,8 @@ def bot_context_no_kommo():
 @pytest.fixture
 def mock_kommo():
     kommo = AsyncMock()
-    kommo.get_leads_by_date = AsyncMock(return_value=[])
-    kommo.get_tasks_due = AsyncMock(return_value=[])
+    kommo.search_leads = AsyncMock(return_value=[])
+    kommo.get_tasks = AsyncMock(return_value=[])
     return kommo
 
 
@@ -162,6 +162,30 @@ async def test_mortgage_down_payment_exceeds_loan(bot_context):
         config=_make_config(bot_context),
     )
     assert "взнос" in result.lower() or "превышает" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_mortgage_negative_rate(bot_context):
+    """Negative annual_rate returns validation error (M1)."""
+    from telegram_bot.agents.utility_tools import mortgage_calculator
+
+    result = await mortgage_calculator.ainvoke(
+        {"loan_amount": 100000, "annual_rate": -1.0, "term_years": 20},
+        config=_make_config(bot_context),
+    )
+    assert "ставка" in result.lower() or "некорректн" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_mortgage_rate_over_100_warning(bot_context):
+    """annual_rate > 100 returns percentage-format warning (M1)."""
+    from telegram_bot.agents.utility_tools import mortgage_calculator
+
+    result = await mortgage_calculator.ainvoke(
+        {"loan_amount": 100000, "annual_rate": 150.0, "term_years": 20},
+        config=_make_config(bot_context),
+    )
+    assert "100%" in result or "предупреждение" in result.lower() or "процент" in result.lower()
 
 
 # ---------------------------------------------------------------------------

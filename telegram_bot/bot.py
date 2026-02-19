@@ -1398,24 +1398,58 @@ class PropertyBot:
         with contextlib.suppress(Exception):
             await callback.message.edit_reply_markup(reply_markup=None)
 
-        # Rebuild agent with same tools and checkpointer
-        from .agents.history_tool import history_search
+        # Rebuild agent with same tools and checkpointer (mirrors _handle_query_supervisor)
         from .agents.rag_tool import rag_search
+        from .agents.utility_tools import get_utility_tools
 
         role = await self._resolve_user_role(user_id)
         session_id = make_session_id("chat", chat_id)
 
-        tools: list[Any] = [rag_search]
-        if self._history_service is not None:
-            tools.append(history_search)
-        if (
-            role == "manager"
-            and getattr(self.config, "kommo_enabled", False)
-            and getattr(self, "_kommo_client", None)
-        ):
-            from .agents.crm_tools import get_crm_tools
+        base_tools: list[Any] = [rag_search]
+        manager_tools: list[Any] = []
+        if role == "manager":
+            from .agents.manager_tools import (
+                build_tools_for_role,
+                create_crm_score_sync_tool,
+                create_manager_nurturing_tools,
+            )
 
-            tools.extend(get_crm_tools())
+            if self._history_service is not None:
+                from .agents.history_tool import history_search
+
+                manager_tools.append(history_search)
+
+            manager_tools.extend(
+                create_manager_nurturing_tools(
+                    analytics_service=self._funnel_analytics_service,
+                    nurturing_service=self._nurturing_service,
+                )
+            )
+
+            if self._lead_scoring_store is not None:
+                manager_tools.append(
+                    create_crm_score_sync_tool(
+                        scoring_store=self._lead_scoring_store,
+                        kommo_client=getattr(self, "_kommo_client", None),
+                        score_field_id=self.config.kommo_lead_score_field_id,
+                        band_field_id=self.config.kommo_lead_band_field_id,
+                    )
+                )
+
+            if getattr(self.config, "kommo_enabled", False) and getattr(
+                self, "_kommo_client", None
+            ):
+                from .agents.crm_tools import get_crm_tools
+
+                manager_tools.extend(get_crm_tools())
+
+            tools = build_tools_for_role(
+                role=role, base_tools=base_tools, manager_tools=manager_tools
+            )
+        else:
+            tools = base_tools
+
+        tools.extend(get_utility_tools())
 
         agent = create_bot_agent(
             model=self.config.supervisor_model,
