@@ -1,4 +1,4 @@
-"""History sub-graph nodes — retrieve, grade, rewrite, summarize (#408).
+"""History sub-graph nodes — guard, retrieve, grade, rewrite, summarize (#408, #432).
 
 Each node follows the LangGraph pattern: async function(state, **deps) → partial state update.
 All nodes decorated with @observe() for Langfuse tracing.
@@ -10,10 +10,90 @@ import logging
 import time
 from typing import Any
 
+from telegram_bot.graph.nodes.guard import detect_injection
 from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
+
+# --- Blocked response for history guard ---
+
+_HISTORY_BLOCKED_RESPONSE = (
+    "Извините, ваш запрос не может быть обработан.\n\n"
+    "Я помощник по недвижимости. Пожалуйста, задайте вопрос о вашей истории диалогов."
+)
+
+
+# --- Guard ---
+
+
+@observe(name="history-guard")
+async def history_guard_node(
+    state: dict[str, Any],
+    *,
+    guard_mode: str = "hard",
+) -> dict[str, Any]:
+    """LangGraph node: detect prompt injection in history search queries (#432).
+
+    Reuses detect_injection() regex heuristics from the main RAG guard.
+    Adapts HistoryState (query field) instead of RAGState (messages field).
+
+    Behavior depends on guard_mode:
+    - "hard": blocks query, sets guard_blocked=True, fills summary with blocked message
+    - "soft": sets guard_blocked=True, logs, continues to retrieve
+    - "log": logs only, continues to retrieve
+    """
+    t0 = time.perf_counter()
+    lf = get_client()
+    query = state["query"]
+
+    detected, risk_score, pattern = detect_injection(query)
+
+    result: dict[str, Any] = {
+        "guard_blocked": False,
+        "guard_reason": None,
+    }
+
+    if detected:
+        logger.warning(
+            "History guard: injection detected (mode=%s, score=%.2f, pattern=%s): %.80s",
+            guard_mode,
+            risk_score,
+            pattern,
+            query,
+        )
+        lf.update_current_span(
+            output={
+                "injection_detected": True,
+                "risk_score": risk_score,
+                "pattern": pattern,
+                "guard_mode": guard_mode,
+            }
+        )
+
+        if guard_mode == "hard":
+            result["guard_blocked"] = True
+            result["guard_reason"] = "injection"
+            result["summary"] = _HISTORY_BLOCKED_RESPONSE
+        elif guard_mode == "soft":
+            # Flag but don't block — continue to retrieve (matches main guard behavior)
+            result["guard_reason"] = "injection"
+    else:
+        lf.update_current_span(output={"injection_detected": False, "risk_score": 0.0})
+
+    result["latency_stages"] = {
+        **state.get("latency_stages", {}),
+        "guard": time.perf_counter() - t0,
+    }
+    return result
+
+
+def route_history_guard(state: dict[str, Any]) -> str:
+    """Route after guard: END if blocked in hard mode, else retrieve."""
+    if state.get("guard_blocked") and state.get("guard_reason") == "injection":
+        return "__end__"
+    return "retrieve"
+
 
 # --- Retrieve ---
 
