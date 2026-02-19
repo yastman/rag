@@ -172,6 +172,37 @@ def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
     return False
 
 
+def _is_checkpointer_runtime_error(exc: Exception) -> bool:
+    """Detect runtime checkpointer/storage failures in text agent path."""
+    message = str(exc).lower()
+    checkpointer_markers = (
+        "checkpointer",
+        "checkpoint",
+        "aput",
+        "pregelloop.__aexit__",
+        "asyncpregelloop.__aexit__",
+    )
+    storage_markers = (
+        "serializ",
+        "json",
+        "msgpack",
+        "redis",
+        "connection",
+    )
+    if any(m in message for m in checkpointer_markers) and any(
+        m in message for m in storage_markers
+    ):
+        return True
+
+    tb = exc.__traceback__
+    while tb is not None:
+        filename = tb.tb_frame.f_code.co_filename.lower()
+        if "langgraph" in filename and "checkpoint" in filename:
+            return True
+        tb = tb.tb_next
+    return False
+
+
 class PropertyBot:
     """Telegram bot for domain-specific search (configurable via BOT_DOMAIN)."""
 
@@ -730,16 +761,14 @@ class PropertyBot:
             langfuse_handler = create_callback_handler()
             callbacks = [langfuse_handler] if langfuse_handler else []
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                result = await agent.ainvoke(
-                    {"messages": [{"role": "user", "content": user_text}]},
-                    config={
-                        "callbacks": callbacks,
-                        "configurable": {
-                            "thread_id": _supervisor_thread_id(message.chat.id),
-                            "bot_context": ctx,
-                            "rag_result_store": rag_result_store,
-                        },
-                    },
+                result = await self._ainvoke_supervisor_with_recovery(
+                    agent=agent,
+                    tools=tools,
+                    user_text=user_text,
+                    chat_id=message.chat.id,
+                    callbacks=callbacks,
+                    bot_context=ctx,
+                    rag_result_store=rag_result_store,
                 )
 
             # Extract response from final message
@@ -890,6 +919,50 @@ class PropertyBot:
                         )
                 except Exception:
                     logger.warning("Failed to save history turn", exc_info=True)
+
+    async def _ainvoke_supervisor_with_recovery(
+        self,
+        *,
+        agent: Any,
+        tools: list[Any],
+        user_text: str,
+        chat_id: int,
+        callbacks: list[Any],
+        bot_context: BotContext,
+        rag_result_store: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures."""
+        payload = {"messages": [{"role": "user", "content": user_text}]}
+        config = {
+            "callbacks": callbacks,
+            "configurable": {
+                "thread_id": _supervisor_thread_id(chat_id),
+                "bot_context": bot_context,
+                "rag_result_store": rag_result_store,
+            },
+        }
+        try:
+            return await agent.ainvoke(payload, config=config)
+        except Exception as exc:
+            if not _is_checkpointer_runtime_error(exc):
+                raise
+            logger.exception(
+                "Supervisor ainvoke failed due to checkpointer runtime error; "
+                "retrying once with MemorySaver"
+            )
+
+        from .integrations.memory import create_fallback_checkpointer
+
+        self._agent_checkpointer = create_fallback_checkpointer()
+        fallback_agent = create_bot_agent(
+            model=self.config.supervisor_model,
+            tools=tools,
+            checkpointer=self._agent_checkpointer,
+            language=self.config.domain_language,
+            base_url=self.config.llm_base_url,
+            api_key=self.config.llm_api_key,
+        )
+        return await fallback_agent.ainvoke(payload, config=config)
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
