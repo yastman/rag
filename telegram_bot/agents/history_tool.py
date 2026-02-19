@@ -75,7 +75,11 @@ async def history_search(
             # Step 2: Check semantic cache (ENTITY type — history queries are specific)
             if embedding is not None:
                 cached_summary = await cache.check_semantic(
-                    query, vector=embedding, query_type="ENTITY", user_id=user_id_val
+                    query,
+                    vector=embedding,
+                    query_type="ENTITY",
+                    user_id=user_id_val,
+                    cache_scope="history",
                 )
                 if cached_summary:
                     history_cache_hit = True
@@ -133,7 +137,12 @@ async def history_search(
             # Step 3: Store summary in semantic cache for future hits
             if cache is not None and embedding is not None and summary:
                 await cache.store_semantic(
-                    query, summary, vector=embedding, query_type="ENTITY", user_id=user_id_val
+                    query,
+                    summary,
+                    vector=embedding,
+                    query_type="ENTITY",
+                    user_id=user_id_val,
+                    cache_scope="history",
                 )
 
             lf.update_current_span(
