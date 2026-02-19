@@ -22,6 +22,8 @@ def _patch_observe():
             mock_lf.return_value = AsyncMock(
                 update_current_span=lambda **_kw: None,
                 score_current_trace=lambda **_kw: None,
+                create_score=lambda **_kw: None,
+                get_current_trace_id=lambda: "test-trace",
             )
             yield mock_lf
 
@@ -361,7 +363,7 @@ async def test_summarize_node_llm_failure_returns_raw(_patch_observe):
 
 
 def test_write_history_scores():
-    """write_history_scores writes 4 scores to Langfuse trace."""
+    """write_history_scores writes 4 scores with explicit trace_id (#435)."""
     from unittest.mock import MagicMock
 
     from telegram_bot.agents.history_graph.nodes import write_history_scores
@@ -374,10 +376,13 @@ def test_write_history_scores():
         "rewrite_count": 1,
         "latency_stages": {"retrieve": 0.1, "grade": 0.01, "summarize": 0.3},
     }
-    write_history_scores(mock_lf, result)
+    write_history_scores(mock_lf, result, trace_id="test-trace-id")
 
-    score_names = {c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list}
+    score_names = {c.kwargs["name"] for c in mock_lf.create_score.call_args_list}
     assert "history_results_count" in score_names
     assert "history_relevance" in score_names
     assert "history_rewrite_count" in score_names
     assert "history_latency_ms" in score_names
+    # All scores use explicit trace_id
+    for call in mock_lf.create_score.call_args_list:
+        assert call.kwargs["trace_id"] == "test-trace-id"

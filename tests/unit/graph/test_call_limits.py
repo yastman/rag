@@ -260,11 +260,10 @@ class TestScoringCallLimits:
             "latency_stages": {},
             "llm_call_count": 3,
         }
-        write_langfuse_scores(mock_lf, result)
+        write_langfuse_scores(mock_lf, result, trace_id="test-trace")
 
-        # Find call with name="llm_calls_total"
+        # Find call with name="llm_calls_total" (#435: uses create_score)
         found = any(
-            c.kwargs.get("name") == "llm_calls_total" or (c.args and c.args[0] == "llm_calls_total")
-            for c in mock_lf.score_current_trace.call_args_list
+            c.kwargs.get("name") == "llm_calls_total" for c in mock_lf.create_score.call_args_list
         )
         assert found, "write_langfuse_scores must write llm_calls_total score"
