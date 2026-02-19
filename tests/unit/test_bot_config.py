@@ -167,3 +167,28 @@ class TestBotConfigQuantization:
             assert config.qdrant_quantization_rescore is False
             assert config.qdrant_quantization_oversampling == 1.5
             assert config.qdrant_quantization_always_ram is True
+
+
+class TestBotConfigHistory:
+    """Tests for BotConfig history search settings (#433)."""
+
+    def test_history_relevance_threshold_default(self):
+        """Default history_relevance_threshold is 0.7."""
+        env = {k: v for k, v in os.environ.items() if k != "HISTORY_RELEVANCE_THRESHOLD"}
+        with patch.dict(os.environ, env, clear=True):
+            import telegram_bot.config as config_module
+
+            importlib.reload(config_module)
+            config = config_module.BotConfig()
+            assert config.history_relevance_threshold == 0.7
+
+    def test_history_relevance_threshold_from_env(self):
+        """HISTORY_RELEVANCE_THRESHOLD env var is parsed as float."""
+        test_env = os.environ.copy()
+        test_env["HISTORY_RELEVANCE_THRESHOLD"] = "0.5"
+        with patch.dict(os.environ, test_env, clear=True):
+            import telegram_bot.config as config_module
+
+            importlib.reload(config_module)
+            config = config_module.BotConfig()
+            assert config.history_relevance_threshold == 0.5
