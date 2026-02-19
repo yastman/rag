@@ -146,7 +146,7 @@ def main():
     )
     parser.add_argument(
         "--collection",
-        default="contextual_bulgaria_voyage",
+        default="gdrive_documents_bge",
         help="Collection name to benchmark",
     )
     parser.add_argument(
