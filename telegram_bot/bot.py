@@ -416,7 +416,8 @@ class PropertyBot:
         assert message.from_user is not None
         user_id = message.from_user.id
         checkpointer_cleared = True
-        thread_id = _supervisor_thread_id(message.chat.id)
+        text_thread_id = _supervisor_thread_id(message.chat.id)
+        voice_thread_id = str(user_id)
         seen_checkpointers: set[int] = set()
         for cp_name, checkpointer in (
             ("conversation", self._checkpointer),
@@ -428,18 +429,23 @@ class PropertyBot:
             if cp_id in seen_checkpointers:
                 continue
             seen_checkpointers.add(cp_id)
-            try:
-                await checkpointer.adelete_thread(thread_id)
-            except Exception:
-                logger.warning(
-                    "Failed to clear %s checkpointer thread %s",
-                    cp_name,
-                    thread_id,
-                    exc_info=True,
-                )
-                checkpointer_cleared = False
+            for thread_id in (text_thread_id, voice_thread_id):
+                try:
+                    await checkpointer.adelete_thread(thread_id)
+                except Exception:
+                    logger.warning(
+                        "Failed to clear %s checkpointer thread %s",
+                        cp_name,
+                        thread_id,
+                        exc_info=True,
+                    )
+                    checkpointer_cleared = False
 
         await self._cache.clear_conversation(user_id)
+
+        if self._history_service is not None:
+            await self._history_service.delete_user_history(user_id)
+
         if checkpointer_cleared:
             await message.answer("✅ История диалога очищена.")
         else:
@@ -883,20 +889,27 @@ class PropertyBot:
                             await message.answer(chunk)
 
             # Store final agent response in semantic cache for cacheable query types.
+            # Use cache_key_embedding (original query embedding) so that future
+            # check_semantic calls with the same user text can hit the cache
+            # even when the agent reformulated the query for retrieval (#504).
             if self._cache and response_text:
                 query_type = str(rag_result_store.get("query_type", "") or "")
-                query_embedding = rag_result_store.get("query_embedding")
+                # Prefer cache_key_embedding (original query vector) over query_embedding
+                # (retrieval/rewritten vector) to avoid check/store vector mismatch.
+                store_vector = rag_result_store.get("cache_key_embedding") or rag_result_store.get(
+                    "query_embedding"
+                )
                 if (
                     query_type in CACHEABLE_QUERY_TYPES
                     and not rag_result_store.get("cache_hit", False)
-                    and isinstance(query_embedding, list)
-                    and bool(query_embedding)
+                    and isinstance(store_vector, list)
+                    and bool(store_vector)
                 ):
                     try:
                         await self._cache.store_semantic(
                             query=message.text or "",
                             response=response_text,
-                            vector=query_embedding,
+                            vector=store_vector,
                             query_type=query_type,
                             user_id=user_id,
                         )
