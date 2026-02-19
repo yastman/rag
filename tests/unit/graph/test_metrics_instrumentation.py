@@ -243,10 +243,10 @@ class TestCacheCheckNodeMetrics:
         assert stats["counters"].get("cache_miss", 0) == 1
         assert stats["counters"].get("cache_hit", 0) == 0
 
-    async def test_general_query_type_always_misses(self):
-        """GENERAL query type bypasses semantic cache — always increments cache_miss."""
+    async def test_general_query_type_misses_when_no_cached_response(self):
+        """GENERAL query type checks semantic cache and increments cache_miss on MISS (#477)."""
         state = make_initial_state(user_id=1, session_id="s1", query="general question")
-        state["query_type"] = "GENERAL"  # not in CACHEABLE_QUERY_TYPES
+        state["query_type"] = "GENERAL"  # now in CACHEABLE_QUERY_TYPES (threshold 0.08)
 
         embedding = [0.3] * 1024
 
