@@ -46,6 +46,8 @@ async def history_search(
         graph = build_history_graph(
             history_service=ctx.history_service if ctx else None,
             llm=ctx.llm if ctx else None,
+            guard_mode=ctx.guard_mode if ctx else "hard",
+            content_filter_enabled=ctx.content_filter_enabled if ctx else True,
         )
         state: dict[str, Any] = {
             "query": query,
