@@ -30,3 +30,9 @@ class BotContext:
     llm: Any  ***REMOVED*** AsyncOpenAI
     content_filter_enabled: bool = True
     guard_mode: str = "hard"
+    ***REMOVED*** Set to True by tools that deliver response directly (e.g. streaming) to prevent
+    ***REMOVED*** bot.py from sending the message a second time (***REMOVED***428).
+    response_sent: bool = False
+    original_user_query: str = ""
+    history_relevance_threshold: float = 0.7
+    history_reply_markup: Any | None = None  ***REMOVED*** side-channel for ***REMOVED***434
