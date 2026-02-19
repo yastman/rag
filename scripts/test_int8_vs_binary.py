@@ -389,7 +389,7 @@ Examples:
     parser.add_argument(
         "--base",
         "-b",
-        default=os.getenv("COLLECTION_NAME", "contextual_bulgaria_voyage"),
+        default=os.getenv("COLLECTION_NAME", "gdrive_documents_bge"),
         help="Base collection name (without _scalar/_binary suffix)",
     )
 
