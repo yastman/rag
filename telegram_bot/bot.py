@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import inspect
 import io
 import json
 import logging
@@ -70,6 +71,23 @@ def make_session_id(session_type: str, identifier: int | str) -> str:
 def _supervisor_thread_id(chat_id: int | str) -> str:
     """Build checkpointer thread id for text-agent conversations."""
     return f"tg_{chat_id}"
+
+
+async def _delete_checkpointer_thread(checkpointer: Any, thread_id: str) -> None:
+    """Delete checkpointer thread via async or sync SDK API."""
+    adelete_thread = getattr(checkpointer, "adelete_thread", None)
+    if callable(adelete_thread):
+        await adelete_thread(thread_id)
+        return
+
+    delete_thread = getattr(checkpointer, "delete_thread", None)
+    if callable(delete_thread):
+        result = delete_thread(thread_id)
+        if inspect.isawaitable(result):
+            await result
+        return
+
+    raise AttributeError("checkpointer does not expose delete_thread/adelete_thread")
 
 
 def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
@@ -432,7 +450,7 @@ class PropertyBot:
             seen_checkpointers.add(cp_id)
             for thread_id in (text_thread_id, voice_thread_id):
                 try:
-                    await checkpointer.adelete_thread(thread_id)
+                    await _delete_checkpointer_thread(checkpointer, thread_id)
                 except Exception:
                     logger.warning(
                         "Failed to clear %s checkpointer thread %s",
