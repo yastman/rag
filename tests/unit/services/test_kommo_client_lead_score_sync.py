@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
+from tenacity import wait_none
 
 
 _DUMMY_REQ = httpx.Request("PATCH", "https://testcompany.kommo.com/api/v4/leads/5001")
@@ -54,7 +55,10 @@ class TestUpdateLeadScore:
         """429 should be retried via existing _request retry policy."""
         resp_429 = httpx.Response(429, headers={"Retry-After": "1"}, request=_DUMMY_REQ)
         resp_200 = httpx.Response(200, json={"id": 5001}, request=_DUMMY_REQ)
-        with patch.object(kommo_client._client, "request", side_effect=[resp_429, resp_200]):
+        with (
+            patch.object(kommo_client._request.retry, "wait", wait_none()),
+            patch.object(kommo_client._client, "request", side_effect=[resp_429, resp_200]),
+        ):
             result = await kommo_client.update_lead_score(
                 lead_id=5001,
                 payload={"custom_fields_values": []},
@@ -65,7 +69,10 @@ class TestUpdateLeadScore:
     async def test_update_lead_score_retries_on_5xx(self, kommo_client):
         resp_503 = httpx.Response(503, request=_DUMMY_REQ)
         resp_200 = httpx.Response(200, json={"id": 5001}, request=_DUMMY_REQ)
-        with patch.object(kommo_client._client, "request", side_effect=[resp_503, resp_200]):
+        with (
+            patch.object(kommo_client._request.retry, "wait", wait_none()),
+            patch.object(kommo_client._client, "request", side_effect=[resp_503, resp_200]),
+        ):
             result = await kommo_client.update_lead_score(
                 lead_id=5001,
                 payload={"custom_fields_values": []},
