@@ -2254,7 +2254,7 @@ class TestHITLBotHandler:
         mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
 
         with (
-            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
             patch("telegram_bot.bot.get_client", return_value=MagicMock()),
             patch("telegram_bot.bot.propagate_attributes"),
             patch("telegram_bot.bot.create_callback_handler", return_value=None),
@@ -2264,6 +2264,9 @@ class TestHITLBotHandler:
 
         callback.answer.assert_called_once_with("Принято")
         mock_agent.ainvoke.assert_called_once()
+        create_kwargs = mock_factory.call_args.kwargs
+        assert create_kwargs["role"] == "manager"
+        assert create_kwargs["max_history_messages"] == mock_config.agent_max_history_messages
         command = mock_agent.ainvoke.call_args[0][0]
         assert command.resume == {"action": "approve"}
         config = mock_agent.ainvoke.call_args[1]["config"]
