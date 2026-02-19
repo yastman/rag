@@ -303,16 +303,16 @@ async def test_path_cache_hit():
 
 
 # ---------------------------------------------------------------------------
-# Path 2b: classify(GENERAL) → cache_check(MISS, allowlist bypass) → retrieve
-#          Semantic cache skipped for non-allowlisted types (#163)
+# Path 2b: classify(GENERAL) → cache_check(MISS) → retrieve → generate
+#          GENERAL is in CACHEABLE_QUERY_TYPES (threshold 0.08, #477)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
-async def test_path_general_bypasses_semantic_cache():
-    """GENERAL query type bypasses semantic cache check and store (#163)."""
+async def test_path_general_uses_semantic_cache():
+    """GENERAL query type uses semantic cache (threshold 0.08, #477)."""
     mocks = _make_graph_mocks(
-        cache_semantic="should not be used",  # would be a hit if checked
+        cache_semantic=None,  # cache miss — pipeline continues to retrieve/generate
         llm_response="Ответ на общий вопрос.",
     )
     mock_gc = _make_mock_graph_config(mocks["llm"])
@@ -328,21 +328,21 @@ async def test_path_general_bypasses_semantic_cache():
             message=mocks["message"],
         )
 
-    # GENERAL query — not in CACHEABLE_QUERY_TYPES
+    # GENERAL query — now in CACHEABLE_QUERY_TYPES (#477)
     state = make_initial_state(
-        user_id=10, session_id="test-general-bypass", query="уютная квартира с видом на море"
+        user_id=10, session_id="test-general-cache", query="уютная квартира с видом на море"
     )
 
-    with traced_pipeline(session_id="test-general-bypass", user_id="integration"):
+    with traced_pipeline(session_id="test-general-cache", user_id="integration"):
         with _patch_graph_configs(mock_gc):
             result = await graph.ainvoke(state)
 
     assert result["query_type"] == "GENERAL"
     assert result["cache_hit"] is False
-    # Semantic cache NOT checked (allowlist guard)
-    mocks["cache"].check_semantic.assert_not_awaited()
-    # Semantic cache NOT stored after generate
-    mocks["cache"].store_semantic.assert_not_awaited()
+    # Semantic cache IS checked (GENERAL now in allowlist)
+    mocks["cache"].check_semantic.assert_awaited_once()
+    # Semantic cache IS stored after generate
+    mocks["cache"].store_semantic.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

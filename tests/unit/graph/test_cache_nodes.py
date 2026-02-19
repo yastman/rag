@@ -74,13 +74,13 @@ class TestCacheCheckNode:
         assert result["query_embedding"] == [0.1] * 1024
         embeddings.aembed_query.assert_awaited_once_with("test query")
 
-    async def test_general_skips_semantic_check(self):
-        """GENERAL query type should NOT call check_semantic (allowlist guard)."""
+    async def test_general_uses_semantic_cache(self):
+        """GENERAL query type should call check_semantic (now in allowlist, threshold 0.08)."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "GENERAL"
 
         cache = AsyncMock()
-        cache.check_semantic = AsyncMock(return_value="should not be used")
+        cache.check_semantic = AsyncMock(return_value=None)
         cache.get_embedding = AsyncMock(return_value=None)
 
         embeddings = AsyncMock(spec=["aembed_query"])
@@ -89,7 +89,7 @@ class TestCacheCheckNode:
         result = await cache_check_node(state, cache=cache, embeddings=embeddings)
 
         assert result["cache_hit"] is False
-        cache.check_semantic.assert_not_awaited()
+        cache.check_semantic.assert_awaited_once()
 
     async def test_hit_path_returns_cached(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
@@ -187,8 +187,8 @@ class TestCacheStoreNode:
         )
         assert result["response"] == "generated answer"
 
-    async def test_general_skips_semantic_store(self):
-        """GENERAL query type should NOT call store_semantic (allowlist guard)."""
+    async def test_general_stores_to_semantic_cache(self):
+        """GENERAL query type should call store_semantic (now in allowlist, threshold 0.08)."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "GENERAL"
         state["query_embedding"] = [0.1] * 1024
@@ -199,7 +199,7 @@ class TestCacheStoreNode:
 
         result = await cache_store_node(state, cache=cache)
 
-        cache.store_semantic.assert_not_awaited()
+        cache.store_semantic.assert_awaited_once()
         assert result["response"] == "generated answer"
 
     async def test_store_passes_user_id_to_cache(self):
@@ -253,10 +253,30 @@ class TestCacheableQueryTypes:
         assert "ENTITY" in CACHEABLE_QUERY_TYPES
         assert "STRUCTURED" in CACHEABLE_QUERY_TYPES
 
-    def test_allowlist_excludes_general(self):
-        assert "GENERAL" not in CACHEABLE_QUERY_TYPES
+    def test_allowlist_includes_general(self):
+        """GENERAL is now cacheable with threshold 0.08 (#477)."""
+        assert "GENERAL" in CACHEABLE_QUERY_TYPES
+
+    def test_allowlist_excludes_non_rag_types(self):
         assert "CHITCHAT" not in CACHEABLE_QUERY_TYPES
         assert "OFF_TOPIC" not in CACHEABLE_QUERY_TYPES
+
+    async def test_general_cache_hit_returns_cached_response(self):
+        """GENERAL query returns cached response on semantic hit."""
+        state = make_initial_state(user_id=1, session_id="s1", query="уютная квартира с видом")
+        state["query_type"] = "GENERAL"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.2] * 1024)
+        cache.check_semantic = AsyncMock(return_value="Найдены подходящие варианты...")
+
+        embeddings = AsyncMock()
+
+        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        assert result["cache_hit"] is True
+        assert result["cached_response"] == "Найдены подходящие варианты..."
+        cache.check_semantic.assert_awaited_once()
 
 
 class TestCacheCheckEmbeddingError:
