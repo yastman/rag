@@ -2,46 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
 from unittest.mock import AsyncMock
 
-from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-
-def build_tools_for_role(
-    *, role: str, base_tools: list[Any], manager_tools: Iterable[Any]
-) -> list[Any]:
-    """Select tools based on user role (#388)."""
-    tools = list(base_tools)
-    if role == "manager":
-        tools.extend(list(manager_tools))
-    return tools
-
-
-def create_manager_nurturing_tools(*, analytics_service: Any, nurturing_service: Any) -> list[Any]:
-    """Create manager-only nurturing + analytics tools (#390)."""
-
-    @tool
-    async def manager_get_funnel_analytics(query: str, config: RunnableConfig) -> str:
-        """Get funnel conversion analytics for manager review."""
-        role = (config or {}).get("configurable", {}).get("role", "client")
-        if role not in {"manager", "admin"}:
-            return "Access denied"
-        report = await analytics_service.get_latest_summary()
-        return str(report)
-
-    @tool
-    async def manager_run_nurturing_batch(query: str, config: RunnableConfig) -> str:
-        """Execute an on-demand nurturing batch for warm/cold leads."""
-        role = (config or {}).get("configurable", {}).get("role", "client")
-        if role not in {"manager", "admin"}:
-            return "Access denied"
-        count = await nurturing_service.run_once(limit=100)
-        return f"Nurturing batch executed: {count} leads"
-
-    return [manager_get_funnel_analytics, manager_run_nurturing_batch]
+from telegram_bot.agents.manager_tools import build_tools_for_role, create_manager_nurturing_tools
 
 
 @tool
