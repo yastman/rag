@@ -410,29 +410,29 @@ def write_history_scores(lf: Any, result: dict[str, Any], *, trace_id: str = "")
         trace_id=trace_id,
         name="history_results_count",
         value=len(results),
-        id=f"{trace_id}-history_results_count",
+        score_id=f"{trace_id}-history_results_count",
     )
     lf.create_score(
         trace_id=trace_id,
         name="history_relevance",
         value=1.0 if result.get("results_relevant") else 0.0,
-        id=f"{trace_id}-history_relevance",
+        score_id=f"{trace_id}-history_relevance",
     )
     lf.create_score(
         trace_id=trace_id,
         name="history_rewrite_count",
         value=result.get("rewrite_count", 0),
-        id=f"{trace_id}-history_rewrite_count",
+        score_id=f"{trace_id}-history_rewrite_count",
     )
     lf.create_score(
         trace_id=trace_id,
         name="history_latency_ms",
         value=round(total_ms, 1),
-        id=f"{trace_id}-history_latency_ms",
+        score_id=f"{trace_id}-history_latency_ms",
     )
     lf.create_score(
         trace_id=trace_id,
         name="history_cache_hit",
         value=1.0 if result.get("history_cache_hit") else 0.0,
-        id=f"{trace_id}-history_cache_hit",
+        score_id=f"{trace_id}-history_cache_hit",
     )
