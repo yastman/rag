@@ -11,6 +11,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +103,7 @@ class NurturingService:
             records,
         )
 
+    @observe(name="nurturing-batch-run")
     async def run_once(self, *, limit: int = 100) -> int:
         """Select candidates, enqueue, return count."""
         candidates = await self.select_candidates(limit=limit)
