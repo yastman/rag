@@ -842,3 +842,92 @@ class TestTextPathFeedbackButtons:
         assert len(answer_calls) > 0
         last_call = answer_calls[-1]
         assert last_call.kwargs.get("reply_markup") is None
+
+
+class TestTextPathSemanticCacheStore:
+    """Test semantic cache persistence in SDK text path."""
+
+    async def test_stores_semantic_cache_for_cacheable_query_type(self, mock_config):
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        bot = _create_bot(mock_config)
+        bot._cache = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        message = _make_message("какие документы нужны для покупки квартиры")
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update(
+                    {
+                        "query_type": "FAQ",
+                        "query_embedding": [0.1, 0.2, 0.3],
+                        "cache_hit": False,
+                        "documents": [],
+                    }
+                )
+            return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+        bot._cache.store_semantic.assert_called_once()
+        kwargs = bot._cache.store_semantic.call_args.kwargs
+        assert kwargs["query"] == message.text
+        assert kwargs["response"] == "Ответ агентом"
+        assert kwargs["query_type"] == "FAQ"
+        assert kwargs["user_id"] == message.from_user.id
+
+    async def test_skips_semantic_cache_for_non_cacheable_type(self, mock_config):
+        mock_lf = MagicMock()
+        mock_lf.update_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
+
+        bot = _create_bot(mock_config)
+        bot._cache = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        message = _make_message("расскажи в целом про рынок")
+
+        def _agent_side_effect(state, config=None, **kw):
+            cfg = config or kw.get("config", {})
+            store = cfg.get("configurable", {}).get("rag_result_store")
+            if isinstance(store, dict):
+                store.update(
+                    {
+                        "query_type": "GENERAL",
+                        "query_embedding": [0.1, 0.2, 0.3],
+                        "cache_hit": False,
+                        "documents": [],
+                    }
+                )
+            return _mock_agent_result(messages=[MagicMock(content="Ответ агентом")])
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=_agent_side_effect)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await bot.handle_query(message)
+
+        bot._cache.store_semantic.assert_not_called()
