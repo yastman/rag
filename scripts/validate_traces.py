@@ -52,7 +52,16 @@ from scripts.validate_queries import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-COLLECTIONS_TO_CHECK = ["gdrive_documents_bge", "contextual_bulgaria_voyage"]
+
+def _build_redis_url(redis_url: str) -> str:
+    """Inject REDIS_PASSWORD into URL if not already present."""
+    password = os.getenv("REDIS_PASSWORD", "")
+    if password and "@" not in redis_url:
+        redis_url = redis_url.replace("redis://", f"redis://:{password}@", 1)
+    return redis_url
+
+
+COLLECTIONS_TO_CHECK = ["gdrive_documents_bge"]
 # Base names used by discovery helper (kept as explicit alias for tests/backward compatibility).
 COLLECTION_BASE_NAMES = COLLECTIONS_TO_CHECK
 
@@ -352,7 +361,7 @@ async def init_services(collection: str) -> dict[str, Any]:
     # Override collection for this validation run
     config.qdrant_collection = collection
 
-    cache = CacheLayerManager(redis_url=config.redis_url)
+    cache = CacheLayerManager(redis_url=_build_redis_url(config.redis_url))
     await cache.initialize()
 
     hybrid = BGEM3HybridEmbeddings(base_url=config.bge_m3_url)

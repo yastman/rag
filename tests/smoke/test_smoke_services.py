@@ -132,12 +132,12 @@ class TestSmokeServices:
     @pytest.mark.asyncio
     async def test_llm_api_health(self):
         """LLM API responds (minimal completion call)."""
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        base_url = os.getenv("OPENAI_BASE_URL", "")
+        api_key = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+        base_url = os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", ""))
         model = os.getenv("LLM_MODEL", "")
 
         if not api_key:
-            pytest.skip("OPENAI_API_KEY not set")
+            pytest.skip("LLM_API_KEY not set")
 
         # If custom model but no custom base_url, skip (misconfigured)
         if model and not model.startswith("gpt") and not base_url:

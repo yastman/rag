@@ -27,7 +27,7 @@ load_dotenv()
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY", "")
-COLLECTION_NAME = "contextual_bulgaria_voyage4"  # Production collection!
+COLLECTION_NAME = "gdrive_documents_bge"  # Production collection!
 ID_OFFSET = 900000  # Start IDs from 900000 to avoid conflicts
 
 
