@@ -421,6 +421,14 @@ class BotConfig(BaseSettings):
         description="LLM model for judge evaluation",
     )
 
+    # Agent checkpointer TTL (#424)
+    agent_checkpointer_ttl_minutes: int = Field(
+        default=120,
+        validation_alias=AliasChoices(
+            "agent_checkpointer_ttl_minutes", "AGENT_CHECKPOINTER_TTL_MINUTES"
+        ),
+    )
+
     # Real Estate Database (realestate DB in shared Postgres)
     realestate_database_url: str = Field(
         default="postgresql://postgres:postgres@postgres:5432/realestate",
