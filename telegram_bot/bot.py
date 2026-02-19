@@ -766,7 +766,7 @@ class PropertyBot:
 
                 # Build feedback keyboard
                 reply_markup = None
-                if trace_id and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
+                if trace_id and query_type and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
                     from telegram_bot.feedback import build_feedback_keyboard
 
                     reply_markup = build_feedback_keyboard(trace_id)
