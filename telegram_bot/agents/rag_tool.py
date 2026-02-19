@@ -134,6 +134,7 @@ async def rag_search(
             user_id=ctx.telegram_user_id if ctx else 0,
             session_id=ctx.session_id if ctx else "",
             query_type=query_type,
+            original_query=ctx.original_query if ctx else "",
             cache=ctx.cache if ctx else None,
             embeddings=ctx.embeddings if ctx else None,
             sparse_embeddings=ctx.sparse_embeddings if ctx else None,
