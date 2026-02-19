@@ -61,7 +61,7 @@ async def history_search(
         if isinstance(result, dict):
             from telegram_bot.agents.history_graph.nodes import write_history_scores
 
-            write_history_scores(lf, result)
+            write_history_scores(lf, result, trace_id=lf.get_current_trace_id() or "")
             summary = result.get("summary", "")
             lf.update_current_span(output={"summary_length": len(summary)})
             return summary or f"По запросу «{query}» ничего не найдено в истории диалогов."
