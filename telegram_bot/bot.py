@@ -790,20 +790,19 @@ class PropertyBot:
                 full_response = response_text + sources_text if sources_text else response_text
 
                 # Send with Markdown, fallback to plain text
-                for chunk in _split_telegram_response(full_response):
+                chunks = list(_split_telegram_response(full_response))
+                for i, chunk in enumerate(chunks):
+                    is_last = i == len(chunks) - 1
+                    markup = reply_markup if is_last else None
                     try:
-                        await message.answer(
-                            chunk, parse_mode="Markdown", reply_markup=reply_markup
-                        )
+                        await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
                     except Exception:
                         logger.warning("Markdown parse failed in text path, falling back")
                         try:
-                            await message.answer(chunk, reply_markup=reply_markup)
+                            await message.answer(chunk, reply_markup=markup)
                         except Exception:
                             logger.exception("Failed to send text response chunk")
                             await message.answer(chunk)
-                    # Only attach reply_markup to the last chunk
-                    reply_markup = None
 
             # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
