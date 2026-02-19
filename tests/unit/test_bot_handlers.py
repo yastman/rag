@@ -1673,3 +1673,143 @@ class TestStreamingCoordination:
             llm=_MagicMock(),
         )
         assert ctx.response_sent is False
+
+
+class TestToolCallsCount:
+    """Tests for tool_calls counting from agent result messages (#437)."""
+
+    def test_count_tool_calls_from_messages_with_tool_calls(self):
+        """Messages with non-empty tool_calls are counted."""
+        ai_msg = MagicMock()
+        ai_msg.tool_calls = [{"name": "rag_search", "args": {}}]
+        result = {"messages": [ai_msg]}
+        tool_calls = sum(
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+        )
+        assert tool_calls == 1
+
+    def test_count_tool_calls_multiple_tool_messages(self):
+        """Multiple AI messages with tool_calls are all counted."""
+        m1 = MagicMock()
+        m1.tool_calls = [{"name": "rag_search", "args": {}}]
+        m2 = MagicMock()
+        m2.tool_calls = [{"name": "history_search", "args": {}}]
+        m3 = MagicMock()
+        m3.tool_calls = []  # empty — not counted
+        result = {"messages": [m1, m2, m3]}
+        tool_calls = sum(
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+        )
+        assert tool_calls == 2
+
+    def test_count_tool_calls_multiple_calls_in_single_message(self):
+        """Multiple tool calls in one AI message are counted individually."""
+        msg = MagicMock()
+        msg.tool_calls = [
+            {"name": "rag_search", "args": {}},
+            {"name": "history_search", "args": {}},
+        ]
+        result = {"messages": [msg]}
+        tool_calls = sum(
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+        )
+        assert tool_calls == 2
+
+    def test_count_tool_calls_no_tool_calls(self):
+        """Messages without tool_calls return 0."""
+        msg = MagicMock(spec=["content"])  # no tool_calls attr
+        result = {"messages": [msg]}
+        tool_calls = sum(
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+        )
+        assert tool_calls == 0
+
+    def test_count_tool_calls_empty_messages(self):
+        """Empty messages list returns 0."""
+        result = {"messages": []}
+        tool_calls = sum(
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+        )
+        assert tool_calls == 0
+
+    def test_count_tool_calls_missing_messages_key(self):
+        """Missing messages key returns 0 (no KeyError)."""
+        result = {}
+        tool_calls = sum(
+            len(m.tool_calls)
+            for m in result.get("messages", [])
+            if hasattr(m, "tool_calls") and isinstance(m.tool_calls, list) and m.tool_calls
+        )
+        assert tool_calls == 0
+
+    async def test_handle_query_writes_tool_calls_score_when_tools_used(self, mock_config):
+        """tool_calls_total score is written when agent uses tools (#437)."""
+        bot, _ = _create_bot(mock_config)
+        mock_lf = MagicMock()
+
+        ai_with_tool = MagicMock()
+        ai_with_tool.tool_calls = [
+            {"name": "rag_search", "args": {}},
+            {"name": "history_search", "args": {}},
+        ]
+        ai_with_tool.content = ""
+
+        final_ai = MagicMock()
+        final_ai.tool_calls = []
+        final_ai.content = "Ответ агента"
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [ai_with_tool, final_ai]})
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("найди квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        score_calls = {
+            c.kwargs["name"]: c.kwargs.get("value") for c in mock_lf.create_score.call_args_list
+        }
+        assert "tool_calls_total" in score_calls
+        assert score_calls["tool_calls_total"] == 2.0
+
+    async def test_handle_query_skips_tool_calls_score_when_no_tools_used(self, mock_config):
+        """tool_calls_total score NOT written when agent uses no tools (#437)."""
+        bot, _ = _create_bot(mock_config)
+        mock_lf = MagicMock()
+
+        final_msg = MagicMock()
+        final_msg.tool_calls = []
+        final_msg.content = "Прямой ответ без инструментов"
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [final_msg]})
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("привет")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        score_names = [c.kwargs["name"] for c in mock_lf.create_score.call_args_list]
+        assert "tool_calls_total" not in score_names
