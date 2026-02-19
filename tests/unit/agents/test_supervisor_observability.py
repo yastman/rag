@@ -111,10 +111,11 @@ async def test_supervisor_trace_has_pipeline_mode_metadata(supervisor_config):
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
 
-    trace_call = mock_lf.update_current_trace.call_args
-    assert trace_call is not None
-    metadata = trace_call[1]["metadata"]
-    assert metadata["pipeline_mode"] == "sdk_agent"
+    trace_calls = mock_lf.update_current_trace.call_args_list
+    assert trace_calls, "update_current_trace was never called"
+    meta_call = next((c for c in trace_calls if "metadata" in c[1]), None)
+    assert meta_call is not None, "no update_current_trace call contains metadata"
+    assert meta_call[1]["metadata"]["pipeline_mode"] == "sdk_agent"
 
 
 # --- #242: @observe decorator presence tests ---
@@ -219,9 +220,9 @@ async def test_supervisor_curated_span_metadata_on_routing(supervisor_config):
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
 
-    trace_call = mock_lf.update_current_trace.call_args
-    assert trace_call is not None
-    assert "input" in trace_call[1] or "metadata" in trace_call[1]
+    trace_calls = mock_lf.update_current_trace.call_args_list
+    assert trace_calls, "update_current_trace was never called"
+    assert any("input" in c[1] or "metadata" in c[1] for c in trace_calls)
 
 
 async def test_agent_ainvoke_receives_bot_context(supervisor_config):
