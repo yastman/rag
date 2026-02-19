@@ -282,7 +282,7 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.153.0@sha256:32e2fe1193c3703c44a85e00aac005690570a85a309f0202a51b72d432673e78
+    image: langfuse/langfuse-worker:3.150.0@sha256:e4c98263d86593e2ba76e104c7e62e1c0c306785b84d83e21f74ef9f2d9bd0c9
     container_name: dev-langfuse-worker
     profiles: ["ml", "full"]
     restart: always
@@ -339,7 +339,7 @@ services:
 
   # Langfuse v3 Web
   langfuse:
-    image: langfuse/langfuse:3.153.0@sha256:99eae0d0734a62e29378f038b84de9eed4ba8dbe69878f9b680351c2324a4949
+    image: langfuse/langfuse:3.150.0@sha256:7f47fd823a5d6f8b1195e0ca6830f8f99e78a659b150ccdb077d188674efb1b6
     container_name: dev-langfuse
     profiles: ["ml", "full"]
     restart: always
