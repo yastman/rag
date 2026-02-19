@@ -100,6 +100,8 @@ class HistoryService:
         user_id: int,
         query: str,
         limit: int = 5,
+        deal_id: int | None = None,
+        scope: str = "all",
     ) -> list[dict[str, Any]]:
         """Search user's conversation history by semantic similarity.
 
@@ -108,18 +110,25 @@ class HistoryService:
         try:
             query_embedding = await self._embeddings.aembed_query(query)
 
+            must_conditions: list[models.Condition] = [
+                models.FieldCondition(
+                    key="metadata.user_id",
+                    match=models.MatchValue(value=user_id),
+                )
+            ]
+            if scope == "deal" and deal_id is not None:
+                must_conditions.append(
+                    models.FieldCondition(
+                        key="metadata.deal_id",
+                        match=models.MatchValue(value=deal_id),
+                    )
+                )
+
             result = await self._client.query_points(
                 collection_name=self._collection_name,
                 query=query_embedding,
                 using=_DENSE_VECTOR_NAME,
-                query_filter=models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="metadata.user_id",
-                            match=models.MatchValue(value=user_id),
-                        )
-                    ]
-                ),
+                query_filter=models.Filter(must=must_conditions),
                 limit=limit,
                 with_payload=True,
             )
@@ -136,6 +145,31 @@ class HistoryService:
         except Exception:
             logger.warning("Failed to search history", exc_info=True)
             return []
+
+    async def delete_user_history(self, user_id: int) -> bool:
+        """Delete all history points for a given user (e.g. on /clear).
+
+        Returns True on success, False on failure.
+        """
+        try:
+            await self._client.delete(
+                collection_name=self._collection_name,
+                points_selector=models.FilterSelector(
+                    filter=models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="metadata.user_id",
+                                match=models.MatchValue(value=user_id),
+                            )
+                        ]
+                    )
+                ),
+            )
+            logger.info("Deleted Qdrant history for user_id=%s", user_id)
+            return True
+        except Exception:
+            logger.warning("Failed to delete Qdrant history for user_id=%s", user_id, exc_info=True)
+            return False
 
     async def get_session_turns(
         self,
