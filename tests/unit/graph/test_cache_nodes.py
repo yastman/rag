@@ -109,8 +109,8 @@ class TestCacheCheckNode:
         # Should use cached embedding, not recompute
         embeddings.aembed_query.assert_not_awaited()
 
-    async def test_check_passes_user_id_to_cache(self):
-        """cache_check_node passes state['user_id'] to check_semantic."""
+    async def test_check_does_not_pass_user_id_to_cache(self):
+        """cache_check_node does NOT pass user_id to check_semantic (global cache)."""
         state = make_initial_state(user_id=99, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
 
@@ -123,7 +123,7 @@ class TestCacheCheckNode:
         await cache_check_node(state, cache=cache, embeddings=embeddings)
 
         call_kwargs = cache.check_semantic.call_args[1]
-        assert call_kwargs["user_id"] == 99
+        assert "user_id" not in call_kwargs
 
     async def test_stores_new_embedding_in_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="new query")
@@ -167,7 +167,7 @@ class TestCacheStoreNode:
     """Test cache_store_node."""
 
     async def test_stores_response_in_semantic_cache(self):
-        """FAQ (allowlisted) stores to semantic cache with user_id."""
+        """FAQ (allowlisted) stores to semantic cache without user_id (global)."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
@@ -183,7 +183,6 @@ class TestCacheStoreNode:
             response="generated answer",
             vector=[0.1] * 1024,
             query_type="FAQ",
-            user_id=1,
         )
         assert result["response"] == "generated answer"
 
@@ -203,7 +202,7 @@ class TestCacheStoreNode:
         assert result["response"] == "generated answer"
 
     async def test_store_passes_user_id_to_cache(self):
-        """cache_store_node passes state['user_id'] to store_semantic."""
+        """cache_store_node does NOT pass user_id to store_semantic (global cache)."""
         state = make_initial_state(user_id=99, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
@@ -215,7 +214,7 @@ class TestCacheStoreNode:
         await cache_store_node(state, cache=cache)
 
         call_kwargs = cache.store_semantic.call_args[1]
-        assert call_kwargs["user_id"] == 99
+        assert "user_id" not in call_kwargs
 
     async def test_skips_store_if_no_response(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
