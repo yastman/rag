@@ -83,3 +83,77 @@ async def test_history_search_exception_returns_error(bot_context):
 
     assert isinstance(result, str)
     assert "ошибк" in result.lower() or "error" in result.lower()
+
+
+async def test_history_search_passes_threshold_to_graph(bot_context):
+    """history_search passes history_relevance_threshold from BotContext to build_history_graph (#433)."""
+    from telegram_bot.agents.history_tool import history_search
+
+    bot_context.history_relevance_threshold = 0.5
+
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(return_value={"summary": "test"})
+
+    with patch(
+        "telegram_bot.agents.history_tool.build_history_graph", return_value=mock_graph
+    ) as mock_build:
+        await history_search.ainvoke(
+            {"query": "test"},
+            config=_make_config(bot_context),
+        )
+
+    mock_build.assert_called_once()
+    _, kwargs = mock_build.call_args
+    assert kwargs.get("relevance_threshold") == 0.5
+
+
+async def test_history_search_sets_reply_markup_on_success(bot_context):
+    """history_search stores feedback keyboard in ctx.history_reply_markup on success (#434)."""
+    from aiogram.types import InlineKeyboardMarkup
+
+    from telegram_bot.agents.history_tool import history_search
+
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(return_value={"summary": "Вы спрашивали о ценах"})
+
+    with (
+        patch("telegram_bot.agents.history_tool.build_history_graph", return_value=mock_graph),
+        patch("telegram_bot.agents.history_tool.get_client") as mock_get_client,
+    ):
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id.return_value = "trace-abc-123"
+        mock_lf.update_current_span = MagicMock()
+        mock_get_client.return_value = mock_lf
+
+        await history_search.ainvoke(
+            {"query": "цены"},
+            config=_make_config(bot_context),
+        )
+
+    assert bot_context.history_reply_markup is not None
+    assert isinstance(bot_context.history_reply_markup, InlineKeyboardMarkup)
+
+
+async def test_history_search_no_reply_markup_on_empty_summary(bot_context):
+    """history_search does not set reply_markup when summary is empty (#434)."""
+    from telegram_bot.agents.history_tool import history_search
+
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(return_value={"summary": ""})
+
+    with (
+        patch("telegram_bot.agents.history_tool.build_history_graph", return_value=mock_graph),
+        patch("telegram_bot.agents.history_tool.get_client") as mock_get_client,
+    ):
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id.return_value = "trace-abc-123"
+        mock_lf.update_current_span = MagicMock()
+        mock_get_client.return_value = mock_lf
+
+        await history_search.ainvoke(
+            {"query": "несуществующий"},
+            config=_make_config(bot_context),
+        )
+
+    # No summary → no keyboard
+    assert bot_context.history_reply_markup is None
