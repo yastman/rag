@@ -30,3 +30,5 @@ class BotContext:
     llm: Any  # AsyncOpenAI
     content_filter_enabled: bool = True
     guard_mode: str = "hard"
+    history_relevance_threshold: float = 0.7
+    history_reply_markup: Any | None = None  # side-channel for #434
