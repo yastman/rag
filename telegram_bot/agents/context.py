@@ -30,3 +30,4 @@ class BotContext:
     llm: Any  # AsyncOpenAI
     content_filter_enabled: bool = True
     guard_mode: str = "hard"
+    original_user_query: str = ""
