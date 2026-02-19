@@ -98,7 +98,7 @@ async def history_search(
                             "history_cache_hit": True,
                         }
                     )
-                    return cached_summary
+                    return str(cached_summary)
 
         # --- Cache miss: run history sub-graph ---
         graph = build_history_graph(
