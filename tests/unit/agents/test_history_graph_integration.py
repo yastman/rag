@@ -15,6 +15,8 @@ def _patch_observe():
             mock_lf.return_value = AsyncMock(
                 update_current_span=lambda **_kw: None,
                 score_current_trace=lambda **_kw: None,
+                create_score=lambda **_kw: None,
+                get_current_trace_id=lambda: "test-trace",
             )
             yield mock_lf
 

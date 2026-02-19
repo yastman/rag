@@ -97,16 +97,16 @@ class TestLatencyUnitsConsistency:
             },
         }
 
-        _write_langfuse_scores(mock_lf, result)
+        _write_langfuse_scores(mock_lf, result, trace_id="test-trace")
 
         # latency_total_ms reads pipeline_wall_ms directly (wall-time)
         expected_ms = result["pipeline_wall_ms"]
 
-        # Verify the actual score value matches
-        calls = mock_lf.score_current_trace.call_args_list
+        # Verify the actual score value matches (#435: create_score with trace_id)
+        calls = mock_lf.create_score.call_args_list
         for call in calls:
-            name = call.kwargs.get("name", call.args[0] if call.args else "")
-            value = call.kwargs.get("value", call.args[1] if len(call.args) > 1 else 0)
+            name = call.kwargs.get("name", "")
+            value = call.kwargs.get("value", 0)
             if name == "latency_total_ms":
                 assert abs(value - expected_ms) < 1.0, (
                     f"latency_total_ms={value}, expected ~{expected_ms}"
