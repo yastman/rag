@@ -102,12 +102,15 @@ async def test_crm_get_deal(bot_context):
 
 async def test_crm_create_lead(bot_context):
     """crm_create_lead calls KommoClient.create_lead."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_create_lead
 
-    result = await crm_create_lead.ainvoke(
-        {"name": "New Lead", "budget": 100000},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_create_lead.ainvoke(
+            {"name": "New Lead", "budget": 100000},
+            config=_make_config(bot_context),
+        )
     assert isinstance(result, str)
     bot_context.kommo_client.create_lead.assert_called_once()
 
@@ -156,12 +159,15 @@ async def test_crm_tool_without_kommo_returns_error():
 
 async def test_crm_update_lead(bot_context, mock_kommo):
     """crm_update_lead calls KommoClient.update_lead with correct LeadUpdate."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_update_lead
 
-    result = await crm_update_lead.ainvoke(
-        {"deal_id": 1, "name": "Updated Deal", "budget": 75000},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_update_lead.ainvoke(
+            {"deal_id": 1, "name": "Updated Deal", "budget": 75000},
+            config=_make_config(bot_context),
+        )
     assert "обновлена" in result.lower()
     assert "1" in result
     mock_kommo.update_lead.assert_called_once()
@@ -174,12 +180,15 @@ async def test_crm_update_lead(bot_context, mock_kommo):
 
 async def test_crm_upsert_contact(bot_context, mock_kommo):
     """crm_upsert_contact calls KommoClient.upsert_contact with phone + ContactCreate."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_upsert_contact
 
-    result = await crm_upsert_contact.ainvoke(
-        {"phone": "+380501234567", "first_name": "Ivan", "last_name": "Petrov"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_upsert_contact.ainvoke(
+            {"phone": "+380501234567", "first_name": "Ivan", "last_name": "Petrov"},
+            config=_make_config(bot_context),
+        )
     assert "Контакт" in result
     assert "10" in result
     mock_kommo.upsert_contact.assert_called_once()
@@ -265,37 +274,46 @@ async def test_crm_get_deal_error(bot_context, mock_kommo):
 
 async def test_crm_create_lead_error(bot_context, mock_kommo):
     """crm_create_lead returns error string on exception."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_create_lead
 
     mock_kommo.create_lead.side_effect = RuntimeError("API error")
-    result = await crm_create_lead.ainvoke(
-        {"name": "Fail Lead"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_create_lead.ainvoke(
+            {"name": "Fail Lead"},
+            config=_make_config(bot_context),
+        )
     assert "Ошибка" in result
 
 
 async def test_crm_update_lead_error(bot_context, mock_kommo):
     """crm_update_lead returns error string on exception."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_update_lead
 
     mock_kommo.update_lead.side_effect = RuntimeError("API error")
-    result = await crm_update_lead.ainvoke(
-        {"deal_id": 1, "name": "Fail"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_update_lead.ainvoke(
+            {"deal_id": 1, "name": "Fail"},
+            config=_make_config(bot_context),
+        )
     assert "Ошибка" in result
 
 
 async def test_crm_upsert_contact_error(bot_context, mock_kommo):
     """crm_upsert_contact returns error string on exception."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_upsert_contact
 
     mock_kommo.upsert_contact.side_effect = RuntimeError("API error")
-    result = await crm_upsert_contact.ainvoke(
-        {"phone": "+380501234567", "first_name": "Ivan"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_upsert_contact.ainvoke(
+            {"phone": "+380501234567", "first_name": "Ivan"},
+            config=_make_config(bot_context),
+        )
     assert "Ошибка" in result
 
 
@@ -475,12 +493,15 @@ async def test_crm_get_my_tasks_empty(bot_context, mock_kommo):
 
 async def test_crm_update_contact(bot_context, mock_kommo):
     """crm_update_contact calls kommo.update_contact with correct ContactUpdate."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_update_contact
 
-    result = await crm_update_contact.ainvoke(
-        {"contact_id": 50, "phone": "+380991234567", "first_name": "Updated"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_update_contact.ainvoke(
+            {"contact_id": 50, "phone": "+380991234567", "first_name": "Updated"},
+            config=_make_config(bot_context),
+        )
     assert "Контакт обновлен" in result
     assert "50" in result
     mock_kommo.update_contact.assert_called_once()

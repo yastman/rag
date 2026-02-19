@@ -11,6 +11,7 @@ import logging
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
+from telegram_bot.agents.hitl import format_hitl_preview, hitl_guard
 from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import (
     ContactCreate,
@@ -96,7 +97,7 @@ async def crm_create_lead(
     budget: int | None = None,
     pipeline_id: int | None = None,
 ) -> str:
-    """Create a new deal/lead in CRM.
+    """Create a new deal/lead in CRM. Requires confirmation.
 
     Args:
         name: Deal name.
@@ -106,6 +107,13 @@ async def crm_create_lead(
     kommo = _get_kommo(config)
     if not kommo:
         return _CRM_UNAVAILABLE
+
+    args = {"name": name, "budget": budget, "pipeline_id": pipeline_id}
+    preview = format_hitl_preview("crm_create_lead", args)
+    response = hitl_guard("crm_create_lead", preview, args)
+
+    if response.get("action") != "approve":
+        return "Операция отменена пользователем."
 
     try:
         lead = await kommo.create_lead(
@@ -126,7 +134,7 @@ async def crm_update_lead(
     budget: int | None = None,
     status_id: int | None = None,
 ) -> str:
-    """Update an existing deal/lead in CRM.
+    """Update an existing deal/lead in CRM. Requires confirmation.
 
     Args:
         deal_id: The deal ID to update.
@@ -137,6 +145,13 @@ async def crm_update_lead(
     kommo = _get_kommo(config)
     if not kommo:
         return _CRM_UNAVAILABLE
+
+    args = {"deal_id": deal_id, "name": name, "budget": budget, "status_id": status_id}
+    preview = format_hitl_preview("crm_update_lead", args)
+    response = hitl_guard("crm_update_lead", preview, args)
+
+    if response.get("action") != "approve":
+        return "Операция отменена пользователем."
 
     try:
         lead = await kommo.update_lead(
@@ -157,7 +172,7 @@ async def crm_upsert_contact(
     last_name: str | None = None,
     email: str | None = None,
 ) -> str:
-    """Find or create a contact by phone number.
+    """Find or create a contact by phone number. Requires confirmation.
 
     Args:
         phone: Phone number (used for dedup search).
@@ -168,6 +183,13 @@ async def crm_upsert_contact(
     kommo = _get_kommo(config)
     if not kommo:
         return _CRM_UNAVAILABLE
+
+    args = {"phone": phone, "first_name": first_name, "last_name": last_name, "email": email}
+    preview = format_hitl_preview("crm_upsert_contact", args)
+    response = hitl_guard("crm_upsert_contact", preview, args)
+
+    if response.get("action") != "approve":
+        return "Операция отменена пользователем."
 
     try:
         contact = await kommo.upsert_contact(
@@ -383,6 +405,19 @@ async def crm_update_contact(
     kommo = _get_kommo(config)
     if not kommo:
         return _CRM_UNAVAILABLE
+
+    args = {
+        "contact_id": contact_id,
+        "phone": phone,
+        "email": email,
+        "first_name": first_name,
+        "last_name": last_name,
+    }
+    preview = format_hitl_preview("crm_update_contact", args)
+    response = hitl_guard("crm_update_contact", preview, args)
+
+    if response.get("action") != "approve":
+        return "Операция отменена пользователем."
 
     try:
         custom_fields = ContactUpdate.build_contact_fields(phone=phone, email=email)
