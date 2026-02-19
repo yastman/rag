@@ -190,6 +190,12 @@ def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
         "consuming input failed",
         "connection lost",
         "connection closed",
+        # RedisVL semantic cache errors (#524): index missing, schema mismatch,
+        # RediSearch module not loaded on plain Redis instance
+        "redisvlerror",
+        "redissearcherror",
+        "schemavalidationerror",
+        "redisvl",
     )
 
     if any(m in message for m in cleanup_markers) and any(m in message for m in storage_markers):

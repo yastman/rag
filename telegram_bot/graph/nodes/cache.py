@@ -210,13 +210,22 @@ async def cache_store_node(
     stored_semantic = False
     if response and embedding:
         if query_type in CACHEABLE_QUERY_TYPES:
-            await cache.store_semantic(
-                query=query,
-                response=response,
-                vector=embedding,
-                query_type=query_type,
-            )
-            stored_semantic = True
+            try:
+                await cache.store_semantic(
+                    query=query,
+                    response=response,
+                    vector=embedding,
+                    query_type=query_type,
+                )
+                stored_semantic = True
+            except Exception as exc:
+                # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
+                # error from store_semantic must never lose the response (#524).
+                logger.warning(
+                    "cache_store: semantic store failed, response preserved: %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
 
         if stored_semantic:
             logger.info("cache_store: stored=semantic (type=%s)", query_type)
@@ -229,19 +238,24 @@ async def cache_store_node(
                 if latency_stages
                 else 0
             )
-            await event_stream.log_event(
-                "pipeline_result",
-                {
-                    "query": query[:200],
-                    "query_type": query_type,
-                    "latency_ms": round(total_latency * 1000) if total_latency else 0,
-                    "cache_hit": state.get("cache_hit", False),
-                    "search_count": state.get("search_results_count", 0),
-                    "rerank_applied": state.get("rerank_applied", False),
-                    "node_name": "cache_store",
-                    "user_id": user_id,
-                },
-            )
+            try:
+                await event_stream.log_event(
+                    "pipeline_result",
+                    {
+                        "query": query[:200],
+                        "query_type": query_type,
+                        "latency_ms": round(total_latency * 1000) if total_latency else 0,
+                        "cache_hit": state.get("cache_hit", False),
+                        "search_count": state.get("search_results_count", 0),
+                        "rerank_applied": state.get("rerank_applied", False),
+                        "node_name": "cache_store",
+                        "user_id": user_id,
+                    },
+                )
+            except Exception as exc:
+                logger.warning(
+                    "cache_store: event_stream.log_event failed: %s: %s", type(exc).__name__, exc
+                )
 
     latency = time.perf_counter() - start
     lf.update_current_span(
