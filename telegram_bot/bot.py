@@ -764,6 +764,7 @@ class PropertyBot:
                 result = await self._ainvoke_supervisor_with_recovery(
                     agent=agent,
                     tools=tools,
+                    role=role,
                     user_text=user_text,
                     chat_id=message.chat.id,
                     callbacks=callbacks,
@@ -925,6 +926,7 @@ class PropertyBot:
         *,
         agent: Any,
         tools: list[Any],
+        role: str,
         user_text: str,
         chat_id: int,
         callbacks: list[Any],
@@ -945,6 +947,15 @@ class PropertyBot:
             return await agent.ainvoke(payload, config=config)
         except Exception as exc:
             if not _is_checkpointer_runtime_error(exc):
+                raise
+            if role in {"manager", "admin"}:
+                # Manager toolsets include write-side effects (CRM/nurturing).
+                # Retrying the full agent run can duplicate external actions.
+                logger.exception(
+                    "Supervisor ainvoke failed with checkpointer runtime error; "
+                    "skip retry for role=%s to avoid duplicate side effects",
+                    role,
+                )
                 raise
             logger.exception(
                 "Supervisor ainvoke failed due to checkpointer runtime error; "
