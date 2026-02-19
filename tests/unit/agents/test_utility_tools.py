@@ -50,6 +50,24 @@ def bot_context():
     return _make_bot_context()
 
 
+@pytest.fixture
+def bot_context_no_kommo():
+    return _make_bot_context(kommo_client=None)
+
+
+@pytest.fixture
+def mock_kommo():
+    kommo = AsyncMock()
+    kommo.get_leads_by_date = AsyncMock(return_value=[])
+    kommo.get_tasks_due = AsyncMock(return_value=[])
+    return kommo
+
+
+@pytest.fixture
+def bot_context_with_kommo(mock_kommo):
+    return _make_bot_context(kommo_client=mock_kommo)
+
+
 # ---------------------------------------------------------------------------
 # Task 1: mortgage_calculator
 # ---------------------------------------------------------------------------
@@ -127,3 +145,80 @@ async def test_mortgage_down_payment_exceeds_loan(bot_context):
         config=_make_config(bot_context),
     )
     assert "взнос" in result.lower() or "превышает" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# Task 2: daily_summary
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_no_kommo(bot_context_no_kommo):
+    """Returns CRM unavailable message when kommo_client is None."""
+    from telegram_bot.agents.utility_tools import daily_summary
+
+    result = await daily_summary.ainvoke(
+        {"date": "today"},
+        config=_make_config(bot_context_no_kommo),
+    )
+    assert "CRM недоступен" in result
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_invalid_date(bot_context_with_kommo):
+    """Returns error for invalid date format."""
+    from telegram_bot.agents.utility_tools import daily_summary
+
+    result = await daily_summary.ainvoke(
+        {"date": "not-a-date"},
+        config=_make_config(bot_context_with_kommo),
+    )
+    assert "формат" in result.lower() or "некорректн" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_success(bot_context_with_kommo):
+    """Returns LLM summary when CRM is available."""
+    from unittest.mock import patch
+
+    from telegram_bot.agents.utility_tools import daily_summary
+
+    with patch("telegram_bot.agents.utility_tools._summarize_with_llm") as mock_llm:
+        mock_llm.return_value = "Summary: 1 new deal, budget 50k"
+        result = await daily_summary.ainvoke(
+            {"date": "today"},
+            config=_make_config(bot_context_with_kommo),
+        )
+    assert "Summary" in result or "deal" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_yesterday(bot_context_with_kommo):
+    """Accepts 'yesterday' as a date string."""
+    from unittest.mock import patch
+
+    from telegram_bot.agents.utility_tools import daily_summary
+
+    with patch("telegram_bot.agents.utility_tools._summarize_with_llm") as mock_llm:
+        mock_llm.return_value = "Yesterday summary"
+        result = await daily_summary.ainvoke(
+            {"date": "yesterday"},
+            config=_make_config(bot_context_with_kommo),
+        )
+    assert "summary" in result.lower() or "yesterday" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_daily_summary_explicit_date(bot_context_with_kommo):
+    """Accepts explicit YYYY-MM-DD date."""
+    from unittest.mock import patch
+
+    from telegram_bot.agents.utility_tools import daily_summary
+
+    with patch("telegram_bot.agents.utility_tools._summarize_with_llm") as mock_llm:
+        mock_llm.return_value = "Date summary"
+        result = await daily_summary.ainvoke(
+            {"date": "2026-01-15"},
+            config=_make_config(bot_context_with_kommo),
+        )
+    assert "summary" in result.lower() or "date" in result.lower()
