@@ -42,7 +42,7 @@ def _extract_sent_message_ref(state: dict[str, Any]) -> tuple[int, int] | None:
     return None
 
 
-def _format_sources(documents: list[dict[str, Any]], max_sources: int = _MAX_SOURCES) -> str:
+def format_sources(documents: list[dict[str, Any]], max_sources: int = _MAX_SOURCES) -> str:
     """Format source documents as Telegram Markdown footnotes (#225)."""
     if not documents:
         return ""
@@ -91,7 +91,7 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
     sources_text = ""
     sources_count = 0
     if show_sources and documents and query_type not in _NO_SOURCES_TYPES:
-        sources_text = _format_sources(documents)
+        sources_text = format_sources(documents)
         sources_count = min(len(documents), _MAX_SOURCES)
 
     lf.update_current_span(
