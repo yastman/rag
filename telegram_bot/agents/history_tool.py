@@ -49,6 +49,7 @@ async def history_search(
 
     cache = ctx.cache if ctx else None
     embeddings_svc = ctx.embeddings if ctx else None
+    user_id_val = ctx.telegram_user_id if ctx else None
     embedding: list[float] | None = None
     history_cache_hit = False
 
@@ -74,7 +75,7 @@ async def history_search(
             # Step 2: Check semantic cache (ENTITY type — history queries are specific)
             if embedding is not None:
                 cached_summary = await cache.check_semantic(
-                    query, vector=embedding, query_type="ENTITY"
+                    query, vector=embedding, query_type="ENTITY", user_id=user_id_val
                 )
                 if cached_summary:
                     history_cache_hit = True
@@ -111,6 +112,8 @@ async def history_search(
         state: dict[str, Any] = {
             "query": query,
             "user_id": ctx.telegram_user_id if ctx else 0,
+            "deal_id": deal_id,
+            "scope": scope,
             "results": [],
             "results_relevant": False,
             "rewrite_count": 0,
@@ -129,7 +132,9 @@ async def history_search(
 
             # Step 3: Store summary in semantic cache for future hits
             if cache is not None and embedding is not None and summary:
-                await cache.store_semantic(query, summary, vector=embedding, query_type="ENTITY")
+                await cache.store_semantic(
+                    query, summary, vector=embedding, query_type="ENTITY", user_id=user_id_val
+                )
 
             lf.update_current_span(
                 output={"summary_length": len(summary), "history_cache_hit": False}
