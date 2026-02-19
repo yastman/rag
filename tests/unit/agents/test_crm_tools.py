@@ -537,3 +537,164 @@ async def test_get_crm_tools_count():
 
     tools = get_crm_tools()
     assert len(tools) == 12
+
+
+# --- Task 1: crm_get_my_leads manager_id resolution (#536) ---
+
+
+async def test_crm_get_my_leads_manager_context(mock_kommo):
+    """crm_get_my_leads uses manager_id=12345 from context and returns lead name."""
+    from telegram_bot.agents.crm_tools import crm_get_my_leads
+
+    mock_kommo.search_leads.return_value = [Lead(id=1, name="Test")]
+    ctx = BotContext(
+        telegram_user_id=99,
+        session_id="s-mgr",
+        language="ru",
+        kommo_client=mock_kommo,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        content_filter_enabled=True,
+        guard_mode="hard",
+        manager_id=12345,
+    )
+    result = await crm_get_my_leads.ainvoke({}, config=_make_config(ctx))
+    mock_kommo.search_leads.assert_called_once_with(responsible_user_id=12345, limit=20)
+    assert "Test" in result
+    assert "1" in result
+
+
+async def test_crm_get_my_leads_no_manager_id_explicit(mock_kommo):
+    """crm_get_my_leads returns error message when manager_id is None."""
+    from telegram_bot.agents.crm_tools import crm_get_my_leads
+
+    ctx = BotContext(
+        telegram_user_id=99,
+        session_id="s-no-mgr",
+        language="ru",
+        kommo_client=mock_kommo,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        content_filter_enabled=True,
+        guard_mode="hard",
+    )
+    result = await crm_get_my_leads.ainvoke({}, config=_make_config(ctx))
+    assert "manager_id" in result.lower()
+
+
+# --- Task 2: crm_get_my_tasks overdue flagging (#537) ---
+
+
+async def test_crm_get_my_tasks_overdue(mock_kommo):
+    """crm_get_my_tasks marks past-due incomplete tasks as ПРОСРОЧЕНО."""
+    import time
+
+    from telegram_bot.agents.crm_tools import crm_get_my_tasks
+
+    mock_kommo.get_tasks.return_value = [
+        Task(id=400, text="Overdue task", complete_till=int(time.time()) - 3600, is_completed=False)
+    ]
+    ctx = BotContext(
+        telegram_user_id=1,
+        session_id="s",
+        language="ru",
+        kommo_client=mock_kommo,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        manager_id=10,
+    )
+    result = await crm_get_my_tasks.ainvoke({}, config=_make_config(ctx))
+    assert "ПРОСРОЧЕНО" in result
+
+
+async def test_crm_get_my_tasks_not_overdue(mock_kommo):
+    """crm_get_my_tasks does NOT mark future tasks as ПРОСРОЧЕНО."""
+    import time
+
+    from telegram_bot.agents.crm_tools import crm_get_my_tasks
+
+    mock_kommo.get_tasks.return_value = [
+        Task(id=401, text="Future task", complete_till=int(time.time()) + 3600, is_completed=False)
+    ]
+    ctx = BotContext(
+        telegram_user_id=1,
+        session_id="s",
+        language="ru",
+        kommo_client=mock_kommo,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        manager_id=10,
+    )
+    result = await crm_get_my_tasks.ainvoke({}, config=_make_config(ctx))
+    assert "ПРОСРОЧЕНО" not in result
+
+
+async def test_crm_get_my_tasks_completed_not_flagged(mock_kommo):
+    """crm_get_my_tasks does NOT mark completed tasks as ПРОСРОЧЕНО even if past due."""
+    import time
+
+    from telegram_bot.agents.crm_tools import crm_get_my_tasks
+
+    mock_kommo.get_tasks.return_value = [
+        Task(
+            id=402,
+            text="Done task",
+            complete_till=int(time.time()) - 3600,
+            is_completed=True,
+        )
+    ]
+    ctx = BotContext(
+        telegram_user_id=1,
+        session_id="s",
+        language="ru",
+        kommo_client=mock_kommo,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        manager_id=10,
+    )
+    result = await crm_get_my_tasks.ainvoke({}, config=_make_config(ctx))
+    assert "ПРОСРОЧЕНО" not in result
+
+
+# --- Task 3: crm_search_leads truncation (#543) ---
+
+
+async def test_crm_search_leads_truncation(bot_context, mock_kommo):
+    """crm_search_leads shows only first 10 results when more are returned."""
+    from telegram_bot.agents.crm_tools import crm_search_leads
+
+    mock_kommo.search_leads.return_value = [Lead(id=i, name=f"Deal {i}") for i in range(15)]
+    result = await crm_search_leads.ainvoke(
+        {"query": "Deal"},
+        config=_make_config(bot_context),
+    )
+    lines = [line for line in result.split("\n") if line.strip().startswith("-")]
+    assert len(lines) == 10
+    assert "Deal 0" in result
+    assert "Deal 9" in result
+    assert "Deal 10" not in result

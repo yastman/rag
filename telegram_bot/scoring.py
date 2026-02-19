@@ -317,6 +317,7 @@ def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
     crm_total = 0
     crm_success = 0
     crm_error = 0
+    per_tool_results: list[tuple[str, str]] = []
 
     for msg in messages:
         if getattr(msg, "type", None) != "tool":
@@ -329,9 +330,11 @@ def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
         status = str(getattr(msg, "status", "") or "").lower()
         if status == "error":
             crm_error += 1
+            per_tool_results.append((name, "error"))
             continue
         if status == "success":
             crm_success += 1
+            per_tool_results.append((name, "success"))
             continue
 
         # Fallback for legacy/adapter messages where status is absent.
@@ -343,10 +346,16 @@ def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
             or content_text == "CRM недоступен. Обратитесь к администратору."
         ):
             crm_error += 1
+            per_tool_results.append((name, "error"))
         else:
             crm_success += 1
+            per_tool_results.append((name, "success"))
 
     score(lf, trace_id, name="crm_tool_used", value=1 if crm_total > 0 else 0, data_type="BOOLEAN")
     score(lf, trace_id, name="crm_tools_count", value=float(crm_total))
     score(lf, trace_id, name="crm_tools_success", value=float(crm_success))
     score(lf, trace_id, name="crm_tools_error", value=float(crm_error))
+
+    # Per-tool result scores (#541)
+    for tool_name, tool_result in per_tool_results:
+        score(lf, trace_id, name=f"{tool_name}_result", value=tool_result, data_type="CATEGORICAL")

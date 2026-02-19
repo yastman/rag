@@ -307,7 +307,7 @@ async def crm_search_leads(query: str, config: RunnableConfig) -> str:
         if not leads:
             return f"Сделки по запросу «{query}» не найдены."
         lines = []
-        for lead in leads:
+        for lead in leads[:10]:
             budget_str = f", бюджет: {lead.budget}" if lead.budget else ""
             lines.append(f"- {lead.name or 'Без названия'} (ID: {lead.id}{budget_str})")
         return "\n".join(lines)
