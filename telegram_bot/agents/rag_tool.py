@@ -57,10 +57,11 @@ async def rag_search(
     property_type: str | None = None,
     budget_range: str | None = None,
 ) -> str:
-    """Search real estate knowledge base for properties and information.
+    """Search real estate knowledge base — MUST be called for any property question.
 
-    Use this tool when the user asks about the domain topic (e.g., real estate,
-    legal documents). Returns relevant information from the document collection.
+    Use this tool for ALL questions about: properties, prices, districts, cities,
+    residence permits (ВНЖ), documents, FAQ, buying/renting process, mortgage,
+    company services, legal matters. NEVER answer these from your own knowledge.
 
     Args:
         query: The search query.
