@@ -9,6 +9,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from telegram_bot.observability import observe
 from telegram_bot.services.lead_scoring_models import LeadScoreRecord
 
 
@@ -24,6 +25,7 @@ class LeadScoringStore:
     def __init__(self, *, pool: Any) -> None:
         self._pool = pool
 
+    @observe(name="lead-score-upsert")
     async def upsert_score(self, rec: LeadScoreRecord) -> None:
         """Insert or update a lead score (resets sync_status to pending)."""
         await self._pool.execute(
