@@ -741,6 +741,7 @@ class PropertyBot:
             language=self.config.domain_language,
             base_url=self.config.llm_base_url,
             api_key=self.config.llm_api_key,
+            max_history_messages=self.config.agent_max_history_messages,
         )
 
         # Build context for tool DI
