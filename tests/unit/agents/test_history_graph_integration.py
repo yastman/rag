@@ -71,8 +71,10 @@ async def test_graph_rewrite_path(_patch_observe):
 
     call_count = 0
 
-    async def mock_search(user_id, query, limit):
+    async def mock_search(user_id, query, limit, deal_id=None, scope="all"):
         nonlocal call_count
+        assert deal_id is None
+        assert scope == "all"
         call_count += 1
         if call_count == 1:
             return [

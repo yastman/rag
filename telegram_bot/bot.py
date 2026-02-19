@@ -416,6 +416,7 @@ class PropertyBot:
         assert message.from_user is not None
         user_id = message.from_user.id
         checkpointer_cleared = True
+        history_cleared = True
         text_thread_id = _supervisor_thread_id(message.chat.id)
         voice_thread_id = str(user_id)
         seen_checkpointers: set[int] = set()
@@ -444,9 +445,15 @@ class PropertyBot:
         await self._cache.clear_conversation(user_id)
 
         if self._history_service is not None:
-            await self._history_service.delete_user_history(user_id)
+            try:
+                history_cleared = bool(await self._history_service.delete_user_history(user_id))
+            except Exception:
+                logger.warning(
+                    "Failed to clear Qdrant history for user_id=%s", user_id, exc_info=True
+                )
+                history_cleared = False
 
-        if checkpointer_cleared:
+        if checkpointer_cleared and history_cleared:
             await message.answer("✅ История диалога очищена.")
         else:
             await message.answer(
