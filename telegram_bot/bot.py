@@ -661,6 +661,8 @@ class PropertyBot:
             guard_mode=self.config.guard_mode,
         )
 
+        rag_result_store: dict[str, Any] = {}
+
         with propagate_attributes(
             session_id=session_id,
             user_id=str(user_id),
@@ -677,6 +679,7 @@ class PropertyBot:
                         "configurable": {
                             "thread_id": _supervisor_thread_id(message.chat.id),
                             "bot_context": ctx,
+                            "rag_result_store": rag_result_store,
                         },
                     },
                 )
@@ -688,10 +691,52 @@ class PropertyBot:
                 last_msg = messages[-1]
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
-            # Send response to user
+            # Send response with feedback buttons, sources, and Markdown (#426)
             if response_text:
-                for chunk in _split_telegram_response(response_text):
-                    await message.answer(chunk)
+                lf = get_client()
+                trace_id = lf.get_current_trace_id() or ""
+                query_type = rag_result_store.get("query_type", "")
+
+                # Build feedback keyboard
+                reply_markup = None
+                if trace_id and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
+                    from telegram_bot.feedback import build_feedback_keyboard
+
+                    reply_markup = build_feedback_keyboard(trace_id)
+
+                # Build source attribution
+                sources_text = ""
+                documents = rag_result_store.get("documents", [])
+                if (
+                    self._graph_config.show_sources
+                    and documents
+                    and query_type
+                    not in {
+                        "CHITCHAT",
+                        "OFF_TOPIC",
+                    }
+                ):
+                    from telegram_bot.graph.nodes.respond import _format_sources
+
+                    sources_text = _format_sources(documents)
+
+                full_response = response_text + sources_text if sources_text else response_text
+
+                # Send with Markdown, fallback to plain text
+                for chunk in _split_telegram_response(full_response):
+                    try:
+                        await message.answer(
+                            chunk, parse_mode="Markdown", reply_markup=reply_markup
+                        )
+                    except Exception:
+                        logger.warning("Markdown parse failed in text path, falling back")
+                        try:
+                            await message.answer(chunk, reply_markup=reply_markup)
+                        except Exception:
+                            logger.exception("Failed to send text response chunk")
+                            await message.answer(chunk)
+                    # Only attach reply_markup to the last chunk
+                    reply_markup = None
 
             # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
