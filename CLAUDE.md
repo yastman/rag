@@ -42,9 +42,10 @@ make export-dataset        # Export low-scoring Langfuse traces to evaluation da
 
 ```
 Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Bot:        Query → create_agent SDK → tool choice
-            → rag_search (6-step async pipeline #442) | history_search (5-node sub-graph #432)
+Bot:        Query → create_agent SDK (langchain.agents) → tool choice
+            → rag_search (11-node LangGraph pipeline) | history_search (4-node sub-graph)
             → 8 CRM tools (Kommo API) | direct response
+            (#413: create_agent SDK + BotContext DI, replaces build_supervisor_graph)
 Voice STT:  Voice (.ogg) → transcribe (Whisper via LiteLLM) → text → same pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API (FastAPI)
 ```
@@ -52,11 +53,10 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 | Module | Purpose |
 |--------|---------|
 | `telegram_bot/bot.py` | PropertyBot (~300 LOC, supervisor orchestrator + voice handler) |
-| `telegram_bot/scoring.py` | `write_langfuse_scores()` + `write_crm_scores()` (#440) |
-| `telegram_bot/agents/rag_pipeline.py` | 6-step async RAG pipeline: cache → retrieve → grade → rerank → rewrite → cache_store (#442) |
-| `telegram_bot/graph/` | LangGraph 11-node pipeline (legacy, used by voice path + API) |
+| `telegram_bot/scoring.py` | `write_langfuse_scores()` + `compute_checkpointer_overhead_proxy_ms()` (#310) |
+| `telegram_bot/graph/` | LangGraph 11-node RAG pipeline (guard, transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, cache_store, respond) |
 | `telegram_bot/graph/nodes/guard.py` | Content filtering: toxicity, prompt injection, topic guardrails (regex, configurable via GUARD_MODE) |
-| `telegram_bot/agents/` | create_agent SDK: agent.py, context.py (BotContext DI), rag_tool.py, history_tool.py, crm_tools.py (8 Kommo tools) |
+| `telegram_bot/agents/` | create_agent SDK (#413): agent.py (factory), context.py (BotContext DI), rag_tool.py, history_tool.py, crm_tools.py (8 Kommo tools) |
 | `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
 | `telegram_bot/services/bge_m3_client.py` | Unified BGE-M3 SDK (BGEM3Client async + BGEM3SyncClient) — replaces separate wrappers |
 | `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
@@ -75,7 +75,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 **Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
-**Observability:** Langfuse v3 — 35 observations/trace, 29 scores (14 RAG + 4 /history + 3 supervisor + 4 CRM pipeline + 4 CRM tools #440) + 3 judge scores → see `.claude/rules/observability.md`
+**Observability:** Langfuse v3 — 35 observations/trace, 25 scores (14 RAG + 4 /history + 3 supervisor + 4 CRM) + 3 judge scores, curated spans on 6 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
 
 **Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `eval` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
 
@@ -88,7 +88,13 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 ## Dependency Management
 
-**Mend Renovate** — auto-tracks Python, Docker, GH Actions, pre-commit. Config: `renovate.json` | Schedule: Mon <9:00 Kyiv | Skill: `/deps` | PR workflow: `.claude/rules/git-workflow.md`
+**Mend Renovate** tracks all deps automatically: Python, Docker, GH Actions, pre-commit hooks.
+
+- **Dashboard:** [developer.mend.io/github/yastman/rag](https://developer.mend.io/github/yastman/rag) | Issue #11
+- **Config:** `renovate.json` | Schedule: Monday before 9:00 Kyiv
+- **Skill:** `/deps` — review and merge updates
+- **Lock maintenance:** `uv.lock` refreshed weekly via Renovate
+- **PR workflow:** `.claude/rules/git-workflow.md` — PR size limits, merge discipline, Renovate batching
 
 ## Task Management
 
@@ -124,9 +130,18 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 ## Deployment
 
 ```bash
-make docker-up / docker-bot-up      # Dev: core (5 svc) / + bot
-docker buildx bake --load           # Build all 5 images (parallel)
-make k3s-secrets && make k3s-bot    # VPS: k3s deploy (local BGE-M3, no Voyage)
+# Dev (Docker Compose)
+make docker-up                      # Core services (5 svc, ~17s)
+make docker-bot-up                  # + bot
+
+# Build images (parallel via Docker Bake)
+docker buildx bake --load           # All 5 custom images
+docker buildx bake bot              # Single target
+
+# VPS k3s (local embeddings, no Voyage API)
+make k3s-secrets                    # Create k8s secrets
+make k3s-push-bot                   # Transfer image to VPS
+make k3s-bot                        # Deploy bot stack
 make k3s-status                     # Check pods
 ```
 
