@@ -6,21 +6,11 @@ No Docker required — uses mocked services.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-def build_tools_for_role(
-    *, role: str, base_tools: list[Any], manager_tools: Iterable[Any]
-) -> list[Any]:
-    """Select tools based on user role (#388)."""
-    tools = list(base_tools)
-    if role == "manager":
-        tools.extend(list(manager_tools))
-    return tools
+from telegram_bot.agents.manager_tools import build_tools_for_role
 
 
 @pytest.fixture
