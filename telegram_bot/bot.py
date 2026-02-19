@@ -705,6 +705,17 @@ class PropertyBot:
         response_text = await self._handle_query_supervisor(message, pipeline_start, locale=locale)
         get_client().update_current_trace(output={"response": response_text or ""})
 
+        # Update session last_active for idle detection (#445)
+        if self._cache.redis is not None:
+            try:
+                await self._cache.redis.set(
+                    f"session:last_active:{message.from_user.id}",
+                    str(time.time()),
+                    ex=7200,  # 2h TTL
+                )
+            except Exception:
+                logger.debug("Failed to update session last_active", exc_info=True)
+
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(
         self, message: Message, pipeline_start: float, locale: str = "ru"
@@ -1333,6 +1344,17 @@ class PropertyBot:
                 except Exception:
                     logger.warning("Failed to save voice history turn", exc_info=True)
 
+            # Update session last_active for idle detection (#445)
+            if self._cache.redis is not None:
+                try:
+                    await self._cache.redis.set(
+                        f"session:last_active:{message.from_user.id}",
+                        str(time.time()),
+                        ex=7200,  # 2h TTL
+                    )
+                except Exception:
+                    logger.debug("Failed to update session last_active", exc_info=True)
+
     async def _send_hitl_confirmation(
         self,
         message: Message,
@@ -1794,7 +1816,12 @@ class PropertyBot:
                     from .services.nurturing_scheduler import NurturingScheduler
                     from .services.nurturing_service import NurturingService
 
-                    nurturing_svc = NurturingService(pool=self._pg_pool)
+                    nurturing_svc = NurturingService(
+                        pool=self._pg_pool,
+                        bot=self.bot if self.config.nurturing_dispatch_enabled else None,
+                        qdrant=self._qdrant if self.config.nurturing_dispatch_enabled else None,
+                        llm=self._llm if self.config.nurturing_dispatch_enabled else None,
+                    )
                     analytics_svc = FunnelAnalyticsService(pool=self._pg_pool)
                     self._nurturing_service = nurturing_svc
                     self._funnel_analytics_service = analytics_svc
@@ -1810,6 +1837,25 @@ class PropertyBot:
                     logger.exception("Failed to start nurturing scheduler")
         except Exception:
             logger.warning("PostgreSQL pool init failed, user features disabled", exc_info=True)
+
+        # Initialize session summary worker (#445)
+        self._session_summary_worker: Any | None = None
+        if self.config.session_summary_enabled and self._cache.redis is not None:
+            try:
+                from .services.session_summary_worker import SessionSummaryWorker
+
+                self._session_summary_worker = SessionSummaryWorker(
+                    redis=self._cache.redis,
+                    llm=self._llm,
+                    kommo_client=self._kommo_client,
+                    idle_timeout_min=self.config.session_idle_timeout_min,
+                    poll_interval_sec=self.config.session_summary_poll_sec,
+                    summary_model=self.config.session_summary_model,
+                )
+                await self._session_summary_worker.start()
+                logger.info("SessionSummaryWorker started")
+            except Exception:
+                logger.exception("Failed to start SessionSummaryWorker")
 
         # Initialize i18n (fluentogram)
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
@@ -1902,6 +1948,9 @@ class PropertyBot:
                 logger.warning("Failed to close agent checkpointer cleanly", exc_info=True)
             finally:
                 self._agent_checkpointer = None
+        if getattr(self, "_session_summary_worker", None) is not None:
+            await self._session_summary_worker.stop()
+            self._session_summary_worker = None
         if self._nurturing_scheduler is not None:
             await self._nurturing_scheduler.stop()
             self._nurturing_scheduler = None
