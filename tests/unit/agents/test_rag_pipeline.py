@@ -583,6 +583,54 @@ async def test_pipeline_cache_miss_when_different_original_query(
     mock_qdrant.hybrid_search_rrf.assert_called_once()
 
 
+async def test_pipeline_reformulation_skips_embed_on_warm_cache(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """Reformulated query embedding in cache prevents a redundant BGE-M3 call (#513).
+
+    Scenario: embeddings_cache_hit=True for original query, but the agent reformulated.
+    On the second+ request the reformulated embedding is also cached — aembed_hybrid
+    must NOT be called (no 'bge-m3-hybrid-embed' span).
+    """
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    original_emb = [0.1] * 1024
+    reform_emb = [0.2] * 1024  # distinct embedding for reformulated query
+
+    def _get_embedding(text: str):
+        if "квартиры" in text:
+            return original_emb  # original query — warm
+        if "apartments" in text:
+            return reform_emb  # reformulated query — warm
+        return None
+
+    mock_cache.get_embedding = AsyncMock(side_effect=_get_embedding)
+    mock_cache.check_semantic = AsyncMock(return_value=None)  # semantic miss → full retrieval
+    mock_cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+
+    result = await rag_pipeline(
+        "apartments in Nesebar",  # agent-reformulated query
+        original_query="квартиры в Несебре",  # original user query
+        user_id=42,
+        session_id="test",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+    )
+
+    # Reformulated embedding was in cache — BGE-M3 must NOT be called
+    mock_embeddings.aembed_hybrid.assert_not_called()
+    mock_embeddings.aembed_query.assert_not_called()
+    assert result["cache_hit"] is False
+    mock_qdrant.hybrid_search_rrf.assert_called_once()
+    # Verify the orchestrator pre-fetched the reformulated query embedding from
+    # cache (the mechanism of the fix — not just the observable BGE-M3 side-effect).
+    get_embedding_calls = [str(c.args[0]) for c in mock_cache.get_embedding.call_args_list]
+    assert any("apartments" in c for c in get_embedding_calls)
+
+
 async def test_pipeline_embedding_error(mock_cache, mock_sparse, mock_qdrant):
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
