@@ -704,7 +704,7 @@ class TestScoreIsolation:
             assert call.kwargs["trace_id"] == _TEST_TRACE_ID
             # Idempotency key format: {trace_id}-{name}
             expected_id = f"{_TEST_TRACE_ID}-{call.kwargs['name']}"
-            assert call.kwargs["id"] == expected_id
+            assert call.kwargs["score_id"] == expected_id
 
         # score_current_trace must NOT be used
         assert mock_lf.score_current_trace.call_count == 0
@@ -724,10 +724,38 @@ class TestScoreIsolation:
         assert "user_role" in score_names
         for call in mock_lf.create_score.call_args_list:
             assert call.kwargs["trace_id"] == "trace-xyz"
-            assert "id" in call.kwargs  # idempotency key
+            assert "score_id" in call.kwargs  # idempotency key
 
         # score_current_trace must NOT be used
         assert mock_lf.score_current_trace.call_count == 0
+
+
+class TestCreateScoreNoBarId:
+    """Regression guard: create_score must use score_id=, never id= (#480)."""
+
+    def test_no_bare_id_kwarg_in_create_score_calls(self):
+        """All create_score() calls use score_id= for idempotency, not id=."""
+        import ast
+        from pathlib import Path
+
+        targets = [
+            Path("telegram_bot/scoring.py"),
+            Path("telegram_bot/bot.py"),
+            Path("telegram_bot/agents/history_graph/nodes.py"),
+        ]
+        violations = []
+        for path in targets:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                # Match *.create_score(...) calls
+                if isinstance(func, ast.Attribute) and func.attr == "create_score":
+                    for kw in node.keywords:
+                        if kw.arg == "id":
+                            violations.append(f"{path}:{node.lineno}")
+        assert not violations, f"create_score() uses bare id= (should be score_id=): {violations}"
 
 
 class TestTextPathFeedbackButtons:
