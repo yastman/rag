@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-CACHE_VERSION = "v4"
+CACHE_VERSION = "v5"
 
 # Default TTLs per exact-cache tier (seconds)
 DEFAULT_TTLS: dict[str, int] = {
@@ -87,6 +87,8 @@ def _create_semantic_cache(
                 {"name": "query_type", "type": "tag"},
                 {"name": "language", "type": "tag"},
                 {"name": "user_id", "type": "tag"},
+                {"name": "cache_scope", "type": "tag"},
+                {"name": "agent_role", "type": "tag"},
             ],
         )
         logger.info("SemanticCache initialized (threshold=%.2f, ttl=%ds)", distance_threshold, ttl)
@@ -200,6 +202,8 @@ class CacheLayerManager:
         query_type: str,
         language: str = "ru",
         user_id: int | None = None,
+        cache_scope: str | None = None,
+        agent_role: str | None = None,
         cache_timeout: float = 0.3,
     ) -> str | None:
         """Check semantic cache with query-type-specific threshold.
@@ -210,6 +214,8 @@ class CacheLayerManager:
             query_type: Query type for threshold selection
             language: Language filter
             user_id: User ID for per-user isolation (Tag filter)
+            cache_scope: Scope tag for isolation (e.g. "rag", "history")
+            agent_role: Role tag for isolation (e.g. "client", "manager")
             cache_timeout: Max wait time in seconds (default 0.3s)
 
         Returns:
@@ -226,6 +232,10 @@ class CacheLayerManager:
             filter_expr = Tag("language") == language
             if user_id is not None:
                 filter_expr = filter_expr & (Tag("user_id") == str(user_id))
+            if cache_scope is not None:
+                filter_expr = filter_expr & (Tag("cache_scope") == cache_scope)
+            if agent_role is not None:
+                filter_expr = filter_expr & (Tag("agent_role") == agent_role)
             start = time.time()
 
             try:
@@ -276,6 +286,8 @@ class CacheLayerManager:
         query_type: str,
         language: str = "ru",
         user_id: int | None = None,
+        cache_scope: str | None = None,
+        agent_role: str | None = None,
     ) -> None:
         """Store query-response pair in semantic cache."""
         if not self.semantic_cache:
@@ -285,6 +297,10 @@ class CacheLayerManager:
         filters: dict[str, str] = {"query_type": query_type, "language": language}
         if user_id is not None:
             filters["user_id"] = str(user_id)
+        if cache_scope is not None:
+            filters["cache_scope"] = cache_scope
+        if agent_role is not None:
+            filters["agent_role"] = agent_role
         try:
             await self.semantic_cache.astore(
                 prompt=query,
@@ -293,7 +309,14 @@ class CacheLayerManager:
                 filters=filters,
                 ttl=ttl,
             )
-            logger.debug("Stored semantic: %s... (type=%s, ttl=%ds)", query[:50], query_type, ttl)
+            logger.debug(
+                "Stored semantic: %s... (type=%s, scope=%s, role=%s, ttl=%ds)",
+                query[:50],
+                query_type,
+                cache_scope,
+                agent_role,
+                ttl,
+            )
         except Exception as e:
             logger.error("Semantic store error: %s: %s", type(e).__name__, e)
 
