@@ -28,12 +28,12 @@ LangGraph Pipeline:
 
 | Tier | Cache Type | TTL | Key Pattern |
 |------|------------|-----|-------------|
-| 1 | Semantic (LLM responses) | per query_type | `sem:v3:bge1024` |
-| 2 | Embeddings (dense) | 7d | `embeddings:v3:{hash}` |
-| 3 | Sparse embeddings | 7d | `sparse:v3:{hash}` |
-| 4 | Analysis results | 24h | `analysis:v3:{hash}` |
-| 5 | Search results | 2h | `search:v3:{hash}` |
-| 6 | Rerank results | 2h | `rerank:v3:{hash}` |
+| 1 | Semantic (LLM responses) | per query_type | `sem:v5:bge1024` |
+| 2 | Embeddings (dense) | 7d | `embeddings:v5:{hash}` |
+| 3 | Sparse embeddings | 7d | `sparse:v5:{hash}` |
+| 4 | Analysis results | 24h | `analysis:v5:{hash}` |
+| 5 | Search results | 2h | `search:v5:{hash}` |
+| 6 | Rerank results | 2h | `rerank:v5:{hash}` |
 | + | Conversation history | 2h | `conversation:{user_id}` (LIST, 20 msgs) |
 
 ## Semantic Cache Thresholds (per query_type)
@@ -128,7 +128,7 @@ result = await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdran
 
 - Container: `dev-redis` (6379)
 - Library: `redisvl` (lazy-loaded to avoid 7.5s import)
-- `CACHE_VERSION = "v3"` in `integrations/cache.py`
+- `CACHE_VERSION = "v5"` in `integrations/cache.py`
 - Vectorizer: `BgeM3CacheVectorizer` for semantic cache vectors
 
 ## Testing

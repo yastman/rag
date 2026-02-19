@@ -102,7 +102,7 @@ from telegram_bot.integrations.cache import CacheLayerManager
 
 cache = CacheLayerManager(redis_url="redis://redis:6379")
 await cache.initialize()
-# CACHE_VERSION = "v3", keys: {tier}:v3:{hash}
+# CACHE_VERSION = "v5", keys: {tier}:v5:{hash}
 # Uses async Redis pipelines for batch operations (1 round-trip)
 ```
 
@@ -133,14 +133,14 @@ sparse = gc.create_sparse_embeddings()   # BGEM3SparseEmbeddings
 
 ## Cache Key Versioning
 
-`CACHE_VERSION = "v3"` in `integrations/cache.py`. Key patterns:
+`CACHE_VERSION = "v5"` in `integrations/cache.py`. Key patterns:
 
 | Pattern | Tier |
 |---------|------|
-| `sem:v3:bge1024` | Semantic cache |
-| `embeddings:v3:{hash}` | Dense embeddings |
-| `sparse:v3:{hash}` | Sparse embeddings |
-| `search:v3:{hash}` | Search results |
+| `sem:v5:bge1024` | Semantic cache |
+| `embeddings:v5:{hash}` | Dense embeddings |
+| `sparse:v5:{hash}` | Sparse embeddings |
+| `search:v5:{hash}` | Search results |
 | `conversation:{user_id}` | Chat history |
 
 Bump version when changing models. Old keys expire naturally.
