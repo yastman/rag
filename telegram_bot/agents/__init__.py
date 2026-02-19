@@ -1,1 +1,1 @@
-"""Multi-agent supervisor architecture for RAG pipeline (#240)."""
+"""Agent tools and context for create_agent SDK (#413)."""
