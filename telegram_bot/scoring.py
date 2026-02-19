@@ -301,10 +301,10 @@ def write_history_scores(
 
 
 def write_crm_scores(lf: Any, messages: list, *, trace_id: str) -> None:
-    """Write CRM tool usage scores from agent result messages (#440).
+    """Write CRM tool usage scores from agent result messages (#440, #541).
 
     Inspects ToolMessage objects for CRM tool calls (name starts with ``crm_``),
-    counts successes vs errors, and writes 4 Langfuse scores.
+    counts successes vs errors, and writes 4 aggregate scores + per-tool result scores.
 
     Args:
         lf: Langfuse client.
