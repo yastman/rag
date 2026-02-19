@@ -21,6 +21,13 @@ from telegram_bot.integrations.prompt_manager import get_prompt
 
 logger = logging.getLogger(__name__)
 
+# Maps Fluent locale code -> language label used in system prompt {{language}} variable.
+LOCALE_TO_LANGUAGE: dict[str, str] = {
+    "ru": "русском языке",
+    "en": "English",
+    "uk": "українською мовою",
+}
+
 
 def _create_history_trimmer(max_messages: int) -> Any:
     """Return a before_model middleware that enforces a sliding-window history.
@@ -254,7 +261,16 @@ def create_bot_agent(
     else:
         prompt_name = "client_agent" if role == "client" else "manager_agent"
         fallback = CLIENT_SYSTEM_PROMPT if role == "client" else MANAGER_SYSTEM_PROMPT
-        prompt = get_prompt(prompt_name, fallback=fallback, variables={"language": language})
+        role_context = (
+            "Ты помогаешь клиенту искать недвижимость"
+            if role == "client"
+            else "Ты помогаешь менеджеру работать с CRM и клиентами"
+        )
+        prompt = get_prompt(
+            prompt_name,
+            fallback=fallback,
+            variables={"language": language, "role_context": role_context},
+        )
 
     # Build a ChatOpenAI instance routed through LiteLLM proxy (#420).
     # Passing a string model name to create_agent triggers init_chat_model()
