@@ -22,6 +22,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import re
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -54,6 +55,16 @@ _METRIC_TIERS = ("semantic", "embeddings", "sparse", "analysis", "search", "rera
 def _hash(data: str) -> str:
     """SHA256 hash truncated to 16 chars for cache keys."""
     return hashlib.sha256(data.encode()).hexdigest()[:16]
+
+
+def _normalize_query_for_cache(text: str) -> str:
+    """Normalize query for cache key: lowercase, strip whitespace and trailing punctuation.
+
+    Ensures 'ВНЖ?' and 'внж' produce the same embedding/sparse cache key,
+    avoiding duplicate API calls for semantically identical queries.
+    Applied ONLY to cache key generation, not to the query in the pipeline.
+    """
+    return re.sub(r"[^\w\s]+$", "", text.strip().lower()).strip()
 
 
 def _create_semantic_cache(
@@ -340,14 +351,18 @@ class CacheLayerManager:
     @observe(name="cache-embedding-get")
     async def get_embedding(self, text: str, model: str = "bge-m3") -> list[float] | None:
         """Get cached dense embedding."""
-        return await self.get_exact("embeddings", _hash(f"{model}:{text}"))
+        return await self.get_exact(
+            "embeddings", _hash(f"{model}:{_normalize_query_for_cache(text)}")
+        )
 
     @observe(name="cache-embedding-store")
     async def store_embedding(
         self, text: str, embedding: list[float], model: str = "bge-m3"
     ) -> None:
         """Store dense embedding."""
-        await self.store_exact("embeddings", _hash(f"{model}:{text}"), embedding)
+        await self.store_exact(
+            "embeddings", _hash(f"{model}:{_normalize_query_for_cache(text)}"), embedding
+        )
 
     # ========== Convenience: Sparse Embeddings ==========
 
@@ -355,13 +370,15 @@ class CacheLayerManager:
         self, text: str, model: str = "bge_m3_sparse"
     ) -> dict[str, Any] | None:
         """Get cached sparse embedding."""
-        return await self.get_exact("sparse", _hash(f"{model}:{text}"))
+        return await self.get_exact("sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}"))
 
     async def store_sparse_embedding(
         self, text: str, sparse_vector: dict[str, Any], model: str = "bge_m3_sparse"
     ) -> None:
         """Store sparse embedding."""
-        await self.store_exact("sparse", _hash(f"{model}:{text}"), sparse_vector)
+        await self.store_exact(
+            "sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}"), sparse_vector
+        )
 
     # ========== Convenience: Search Results ==========
 
