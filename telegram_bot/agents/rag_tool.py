@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def _format_context(result: dict) -> str:
     """Format pipeline result as context string for agent LLM."""
     if result.get("response"):
-        return result["response"]
+        return str(result["response"])
 
     documents = result.get("documents", [])
     if not documents:
