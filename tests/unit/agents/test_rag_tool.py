@@ -141,3 +141,23 @@ async def test_rag_search_writes_langfuse_scores(bot_context):
     assert result_dict["pipeline_wall_ms"] > 0
     assert "user_perceived_wall_ms" in result_dict
     assert "checkpointer_overhead_proxy_ms" in result_dict
+
+
+async def test_rag_search_writes_input_type_text(bot_context):
+    """rag_search result has input_type defaulting to 'text' for scoring (#425)."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(return_value={"response": "OK", "latency_stages": {}})
+
+    config = _make_config(bot_context)
+
+    with (
+        patch("telegram_bot.agents.rag_tool.build_graph", return_value=mock_graph),
+        patch("telegram_bot.agents.rag_tool.write_langfuse_scores") as mock_write,
+    ):
+        await rag_search.ainvoke({"query": "test"}, config=config)
+
+    result_dict = mock_write.call_args[0][1]
+    # input_type defaults to "text" in write_langfuse_scores when not in result
+    assert result_dict.get("input_type", "text") == "text"
