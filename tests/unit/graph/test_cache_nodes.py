@@ -126,6 +126,22 @@ class TestCacheCheckNode:
         call_kwargs = cache.check_semantic.call_args[1]
         assert "user_id" not in call_kwargs
 
+    async def test_check_passes_rag_scope(self):
+        """cache_check_node passes cache_scope='rag' to check_semantic."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.2] * 1024)
+        cache.check_semantic = AsyncMock(return_value=None)
+
+        embeddings = AsyncMock()
+
+        await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        call_kwargs = cache.check_semantic.call_args[1]
+        assert call_kwargs.get("cache_scope") == "rag"
+
     async def test_stores_new_embedding_in_cache(self):
         state = make_initial_state(user_id=1, session_id="s1", query="new query")
         state["query_type"] = "FAQ"
@@ -168,7 +184,7 @@ class TestCacheStoreNode:
     """Test cache_store_node."""
 
     async def test_stores_response_in_semantic_cache(self):
-        """FAQ (allowlisted) stores to semantic cache without user_id (global)."""
+        """FAQ (allowlisted) stores to semantic cache with cache_scope='rag' (global)."""
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
         state["query_type"] = "FAQ"
         state["query_embedding"] = [0.1] * 1024
@@ -184,6 +200,7 @@ class TestCacheStoreNode:
             response="generated answer",
             vector=[0.1] * 1024,
             query_type="FAQ",
+            cache_scope="rag",
         )
         assert result["response"] == "generated answer"
 
@@ -216,6 +233,21 @@ class TestCacheStoreNode:
 
         call_kwargs = cache.store_semantic.call_args[1]
         assert "user_id" not in call_kwargs
+
+    async def test_store_passes_rag_scope(self):
+        """cache_store_node passes cache_scope='rag' to store_semantic."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "FAQ"
+        state["query_embedding"] = [0.1] * 1024
+        state["response"] = "generated answer"
+
+        cache = AsyncMock()
+        cache.store_semantic = AsyncMock()
+
+        await cache_store_node(state, cache=cache)
+
+        call_kwargs = cache.store_semantic.call_args[1]
+        assert call_kwargs.get("cache_scope") == "rag"
 
     async def test_skips_store_if_no_response(self):
         state = make_initial_state(user_id=1, session_id="s1", query="test query")
