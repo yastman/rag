@@ -125,8 +125,8 @@ async def test_cache_check_embedding_error(mock_cache, mock_embeddings):
     assert result["query_embedding"] is None
 
 
-async def test_cache_check_skips_semantic_for_general(mock_cache, mock_embeddings):
-    """GENERAL query type bypasses semantic cache."""
+async def test_cache_check_uses_semantic_for_general(mock_cache, mock_embeddings):
+    """GENERAL query type participates in semantic cache lookup."""
     from telegram_bot.agents.rag_pipeline import _cache_check
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
@@ -141,7 +141,10 @@ async def test_cache_check_skips_semantic_for_general(mock_cache, mock_embedding
     )
 
     assert result["cache_hit"] is False
-    mock_cache.check_semantic.assert_not_called()
+    mock_cache.check_semantic.assert_awaited_once()
+    call_kwargs = mock_cache.check_semantic.call_args.kwargs
+    assert call_kwargs["query_type"] == "GENERAL"
+    assert call_kwargs["user_id"] == 42
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +342,7 @@ async def test_cache_store_skips_non_cacheable(mock_cache):
         "hi",
         "hello",
         [0.1] * 1024,
-        "GENERAL",
+        "CHITCHAT",
         42,
         cache=mock_cache,
         latency_stages={},
