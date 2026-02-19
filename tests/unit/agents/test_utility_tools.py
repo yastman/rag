@@ -68,6 +68,23 @@ def bot_context_with_kommo(mock_kommo):
     return _make_bot_context(kommo_client=mock_kommo)
 
 
+@pytest.fixture
+def mock_bot():
+    bot = AsyncMock()
+    bot.send_message = AsyncMock()
+    return bot
+
+
+@pytest.fixture
+def bot_context_with_bot(mock_bot):
+    return _make_bot_context(bot=mock_bot, manager_ids=[100, 200])
+
+
+@pytest.fixture
+def bot_context_no_managers():
+    return _make_bot_context(bot=AsyncMock(), manager_ids=[])
+
+
 # ---------------------------------------------------------------------------
 # Task 1: mortgage_calculator
 # ---------------------------------------------------------------------------
@@ -222,3 +239,75 @@ async def test_daily_summary_explicit_date(bot_context_with_kommo):
             config=_make_config(bot_context_with_kommo),
         )
     assert "summary" in result.lower() or "date" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# Task 3: handoff
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_handoff_sends_to_managers(bot_context_with_bot, mock_bot):
+    """Sends notification to each manager and returns confirmation."""
+    from telegram_bot.agents.utility_tools import handoff
+
+    result = await handoff.ainvoke(
+        {"reason": "Client wants to see property in person"},
+        config=_make_config(bot_context_with_bot),
+    )
+    assert "передан менеджеру" in result
+    assert mock_bot.send_message.called
+
+
+@pytest.mark.asyncio
+async def test_handoff_no_managers(bot_context_no_managers):
+    """Returns unavailable message when no managers configured."""
+    from telegram_bot.agents.utility_tools import handoff
+
+    result = await handoff.ainvoke(
+        {"reason": "Need human help"},
+        config=_make_config(bot_context_no_managers),
+    )
+    assert "менеджер" in result.lower() or "недоступн" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_handoff_no_bot(bot_context):
+    """Returns unavailable message when bot is not in context."""
+    from telegram_bot.agents.utility_tools import handoff
+
+    result = await handoff.ainvoke(
+        {"reason": "Need help"},
+        config=_make_config(bot_context),
+    )
+    assert "менеджер" in result.lower() or "недоступн" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_handoff_high_urgency(bot_context_with_bot, mock_bot):
+    """High urgency includes 'СРОЧНО' in manager notification."""
+    from telegram_bot.agents.utility_tools import handoff
+
+    await handoff.ainvoke(
+        {"reason": "Emergency", "urgency": "high"},
+        config=_make_config(bot_context_with_bot),
+    )
+    call_args = mock_bot.send_message.call_args_list
+    assert call_args
+    sent_text = call_args[0].kwargs.get("text", "") or str(call_args[0])
+    assert "СРОЧНО" in sent_text
+
+
+@pytest.mark.asyncio
+async def test_handoff_with_context_summary(bot_context_with_bot, mock_bot):
+    """Context summary is included in the notification."""
+    from telegram_bot.agents.utility_tools import handoff
+
+    await handoff.ainvoke(
+        {"reason": "Complex query", "context_summary": "Client prefers 2-room apartments"},
+        config=_make_config(bot_context_with_bot),
+    )
+    call_args = mock_bot.send_message.call_args_list
+    assert call_args
+    sent_text = call_args[0].kwargs.get("text", "") or str(call_args[0])
+    assert "2-room" in sent_text or "apartments" in sent_text or "Контекст" in sent_text
