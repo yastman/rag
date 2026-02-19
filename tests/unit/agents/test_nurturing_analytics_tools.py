@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 from langchain_core.tools import tool
 
+from telegram_bot.agents.context import BotContext
 from telegram_bot.agents.manager_tools import build_tools_for_role, create_manager_nurturing_tools
 
 
@@ -84,4 +85,76 @@ async def test_manager_run_nurturing_batch_returns_count():
     result = await batch_tool.ainvoke({"query": "run now"}, config=config)
 
     assert "15" in result
+    nurturing_service.run_once.assert_called_once()
+
+
+def _make_bot_context(role: str = "client") -> BotContext:
+    """Minimal BotContext for role-path tests (#479)."""
+    return BotContext(
+        telegram_user_id=1,
+        session_id="chat-test",
+        language="ru",
+        kommo_client=None,
+        history_service=None,
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=AsyncMock(),
+        role=role,
+    )
+
+
+async def test_manager_analytics_allows_manager_via_bot_context():
+    """Role read from ctx.role when configurable has no direct 'role' key (#479)."""
+    analytics_service = AsyncMock()
+    analytics_service.get_latest_summary = AsyncMock(
+        return_value=[{"stage": "inquiry", "rate": 0.4}]
+    )
+    tools = create_manager_nurturing_tools(
+        analytics_service=analytics_service,
+        nurturing_service=AsyncMock(),
+    )
+    analytics_tool = next(t for t in tools if t.name == "manager_get_funnel_analytics")
+
+    ctx = _make_bot_context(role="manager")
+    config = {"configurable": {"bot_context": ctx}}
+    result = await analytics_tool.ainvoke({"query": "show funnel"}, config=config)
+
+    assert "Access denied" not in result
+    analytics_service.get_latest_summary.assert_called_once()
+
+
+async def test_manager_analytics_denies_client_via_bot_context():
+    """Client role from ctx.role is denied (#479)."""
+    tools = create_manager_nurturing_tools(
+        analytics_service=AsyncMock(),
+        nurturing_service=AsyncMock(),
+    )
+    analytics_tool = next(t for t in tools if t.name == "manager_get_funnel_analytics")
+
+    ctx = _make_bot_context(role="client")
+    config = {"configurable": {"bot_context": ctx}}
+    result = await analytics_tool.ainvoke({"query": "show funnel"}, config=config)
+
+    assert "Access denied" in result
+
+
+async def test_nurturing_batch_allows_manager_via_bot_context():
+    """Role read from ctx.role for nurturing batch tool (#479)."""
+    nurturing_service = AsyncMock()
+    nurturing_service.run_once = AsyncMock(return_value=7)
+    tools = create_manager_nurturing_tools(
+        analytics_service=AsyncMock(),
+        nurturing_service=nurturing_service,
+    )
+    batch_tool = next(t for t in tools if t.name == "manager_run_nurturing_batch")
+
+    ctx = _make_bot_context(role="manager")
+    config = {"configurable": {"bot_context": ctx}}
+    result = await batch_tool.ainvoke({"query": "run now"}, config=config)
+
+    assert "Access denied" not in result
+    assert "7" in result
     nurturing_service.run_once.assert_called_once()
