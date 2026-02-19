@@ -138,9 +138,30 @@ async def test_rag_search_writes_langfuse_scores(bot_context):
     mock_write_scores.assert_called_once()
     call_args = mock_write_scores.call_args
     result_dict = call_args[0][1]  # second positional arg
+    assert "trace_id" in call_args.kwargs
     assert result_dict["pipeline_wall_ms"] > 0
     assert "user_perceived_wall_ms" in result_dict
     assert "checkpointer_overhead_proxy_ms" in result_dict
+
+
+async def test_rag_search_passes_explicit_trace_id_to_scores(bot_context):
+    """rag_search passes explicit trace_id to write_langfuse_scores (#435 hardening)."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(return_value={"response": "OK", "latency_stages": {}})
+    mock_lf = MagicMock()
+    mock_lf.get_current_trace_id = MagicMock(return_value="trace-explicit-123")
+
+    with (
+        patch("telegram_bot.agents.rag_tool.build_graph", return_value=mock_graph),
+        patch("telegram_bot.agents.rag_tool.get_client", return_value=mock_lf),
+        patch("telegram_bot.agents.rag_tool.write_langfuse_scores") as mock_write,
+    ):
+        await rag_search.ainvoke({"query": "test"}, config=_make_config(bot_context))
+
+    assert mock_write.call_count == 1
+    assert mock_write.call_args.kwargs["trace_id"] == "trace-explicit-123"
 
 
 async def test_rag_search_writes_input_type_text(bot_context):
