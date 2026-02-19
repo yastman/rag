@@ -111,8 +111,9 @@ async def rag_search(
                 result["pipeline_wall_ms"] = pipeline_wall_ms
                 result["user_perceived_wall_ms"] = pipeline_wall_ms
 
+                trace_id = lf.get_current_trace_id() or ""
                 try:
-                    write_langfuse_scores(lf, result)
+                    write_langfuse_scores(lf, result, trace_id=trace_id)
                 except Exception:
                     logger.warning("Failed to write Langfuse scores in rag_search", exc_info=True)
 
@@ -155,9 +156,11 @@ async def rag_search(
         summarize_s = result.get("latency_stages", {}).get("summarize", 0)
         result["user_perceived_wall_ms"] = pipeline_wall_ms - (summarize_s * 1000)
 
+        trace_id = lf.get_current_trace_id() or ""
+
         # Observability must stay fail-soft: scoring errors must not break user response.
         try:
-            write_langfuse_scores(lf, result)
+            write_langfuse_scores(lf, result, trace_id=trace_id)
         except Exception:
             logger.warning("Failed to write Langfuse scores in rag_search", exc_info=True)
 

@@ -20,6 +20,8 @@ class HistoryState(TypedDict):
         max_rewrite_attempts: Cap on rewrite iterations.
         summary: LLM-generated summary of relevant history.
         latency_stages: Per-node timing breakdown (seconds).
+        guard_blocked: Whether guard node blocked the query (#432).
+        guard_reason: Reason for blocking (e.g. "injection"), or None.
     """
 
     query: str
@@ -30,6 +32,8 @@ class HistoryState(TypedDict):
     max_rewrite_attempts: int
     summary: str
     latency_stages: dict[str, float]
+    guard_blocked: bool
+    guard_reason: str | None
 
 
 def make_history_state(
@@ -48,4 +52,6 @@ def make_history_state(
         "max_rewrite_attempts": max_rewrite_attempts,
         "summary": "",
         "latency_stages": {},
+        "guard_blocked": False,
+        "guard_reason": None,
     }
