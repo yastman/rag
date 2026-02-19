@@ -222,7 +222,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:26.1@sha256:be0cb54cf637cf6132081882bfdb33adc9826e4d87ec6fb65c8ab4e27fa91cbf
     container_name: dev-clickhouse
-    profiles: ["ml", "full"]
+    profiles: ["bot", "ml", "full"]
     restart: unless-stopped
     user: "101:101"
     environment:
@@ -246,7 +246,7 @@ services:
   minio:
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3
     container_name: dev-minio
-    profiles: ["ml", "full"]
+    profiles: ["bot", "ml", "full"]
     restart: unless-stopped
     entrypoint: sh
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
@@ -269,7 +269,7 @@ services:
   redis-langfuse:
     image: redis:8.6.0@sha256:7b6fb55d8b0adcd77269dc52b3cfffe5f59ca5d43dec3c90dbe18aacce7942e1
     container_name: dev-redis-langfuse
-    profiles: ["ml", "full"]
+    profiles: ["bot", "ml", "full"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:6380:6379"
@@ -284,7 +284,7 @@ services:
   langfuse-worker:
     image: langfuse/langfuse-worker:3.150.0@sha256:e4c98263d86593e2ba76e104c7e62e1c0c306785b84d83e21f74ef9f2d9bd0c9
     container_name: dev-langfuse-worker
-    profiles: ["ml", "full"]
+    profiles: ["bot", "ml", "full"]
     restart: always
     depends_on:
       postgres:
@@ -341,7 +341,7 @@ services:
   langfuse:
     image: langfuse/langfuse:3.150.0@sha256:7f47fd823a5d6f8b1195e0ca6830f8f99e78a659b150ccdb077d188674efb1b6
     container_name: dev-langfuse
-    profiles: ["ml", "full"]
+    profiles: ["bot", "ml", "full"]
     restart: always
     depends_on:
       postgres:

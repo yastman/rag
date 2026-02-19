@@ -136,14 +136,19 @@ async def history_search(
 
             # Step 3: Store summary in semantic cache for future hits
             if cache is not None and embedding is not None and summary:
-                await cache.store_semantic(
-                    query,
-                    summary,
-                    vector=embedding,
-                    query_type="ENTITY",
-                    user_id=user_id_val,
-                    cache_scope="history",
-                )
+                try:
+                    await cache.store_semantic(
+                        query,
+                        summary,
+                        vector=embedding,
+                        query_type="ENTITY",
+                        user_id=user_id_val,
+                        cache_scope="history",
+                    )
+                except Exception:
+                    logger.warning(
+                        "History cache: store_semantic failed, continuing without cache store"
+                    )
 
             lf.update_current_span(
                 output={"summary_length": len(summary), "history_cache_hit": False}

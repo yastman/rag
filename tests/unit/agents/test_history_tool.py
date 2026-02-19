@@ -250,6 +250,37 @@ async def test_history_search_sets_reply_markup_on_success(bot_context):
     assert isinstance(bot_context.history_reply_markup, InlineKeyboardMarkup)
 
 
+async def test_history_search_cache_store_semantic_error_returns_result(bot_context, caplog):
+    """cache.store_semantic failure is logged and does not prevent returning summary (#542)."""
+    import logging
+
+    from telegram_bot.agents.history_tool import history_search
+
+    mock_graph = AsyncMock()
+    mock_graph.ainvoke = AsyncMock(
+        return_value={
+            "summary": "Вы спрашивали о ценах",
+            "results": [],
+            "results_relevant": True,
+            "rewrite_count": 0,
+            "latency_stages": {},
+        }
+    )
+    bot_context.cache.get_embedding = AsyncMock(return_value=[0.1] * 10)
+    bot_context.cache.check_semantic = AsyncMock(return_value=None)
+    bot_context.cache.store_semantic = AsyncMock(side_effect=Exception("Redis connection error"))
+
+    with caplog.at_level(logging.WARNING, logger="telegram_bot.agents.history_tool"):
+        with patch("telegram_bot.agents.history_tool.build_history_graph", return_value=mock_graph):
+            result = await history_search.ainvoke(
+                {"query": "цены"},
+                config=_make_config(bot_context),
+            )
+
+    assert result == "Вы спрашивали о ценах"
+    assert any("store_semantic" in record.message for record in caplog.records)
+
+
 async def test_history_search_no_reply_markup_on_empty_summary(bot_context):
     """history_search does not set reply_markup when summary is empty (#434)."""
     from telegram_bot.agents.history_tool import history_search
