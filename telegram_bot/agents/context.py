@@ -30,6 +30,7 @@ class BotContext:
     llm: Any  ***REMOVED*** AsyncOpenAI
     content_filter_enabled: bool = True
     guard_mode: str = "hard"
+    role: str = "client"
     ***REMOVED*** Set to True by tools that deliver response directly (e.g. streaming) to prevent
     ***REMOVED*** bot.py from sending the message a second time (***REMOVED***428).
     response_sent: bool = False
