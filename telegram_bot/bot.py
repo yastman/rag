@@ -114,17 +114,40 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
 def _write_voice_error_scores(
     lf: Any,
     *,
+    trace_id: str = "",
     voice_duration_s: float | None = None,
     error_reason: str = "pipeline_error",
 ) -> None:
     """Write minimal Langfuse scores for voice traces that exit early (error paths).
 
     Ensures all voice traces have at least input_type and error context for dashboards.
+    Uses explicit trace_id for score isolation (#435).
     """
-    lf.score_current_trace(name="input_type", value="voice", data_type="CATEGORICAL")
-    lf.score_current_trace(name="voice_error_reason", value=error_reason, data_type="CATEGORICAL")
+    if not trace_id:
+        trace_id = lf.get_current_trace_id()
+    if not trace_id:
+        return
+    lf.create_score(
+        trace_id=trace_id,
+        name="input_type",
+        value="voice",
+        data_type="CATEGORICAL",
+        id=f"{trace_id}-input_type",
+    )
+    lf.create_score(
+        trace_id=trace_id,
+        name="voice_error_reason",
+        value=error_reason,
+        data_type="CATEGORICAL",
+        id=f"{trace_id}-voice_error_reason",
+    )
     if voice_duration_s is not None:
-        lf.score_current_trace(name="voice_duration_s", value=float(voice_duration_s))
+        lf.create_score(
+            trace_id=trace_id,
+            name="voice_duration_s",
+            value=float(voice_duration_s),
+            id=f"{trace_id}-voice_duration_s",
+        )
 
 
 def _is_post_pipeline_cleanup_error(exc: Exception) -> bool:
@@ -518,6 +541,7 @@ class PropertyBot:
             tags=["telegram", "history"],
         ):
             lf = get_client()
+            tid = lf.get_current_trace_id() or ""
 
             if self._history_service is None:
                 lf.update_current_trace(
@@ -525,8 +549,21 @@ class PropertyBot:
                     output={"error": "service_unavailable"},
                     metadata={"user_id": user_id},
                 )
-                lf.score_current_trace(name="history_search_count", value=0, data_type="NUMERIC")
-                lf.score_current_trace(name="history_search_empty", value=1.0, data_type="NUMERIC")
+                if tid:
+                    lf.create_score(
+                        trace_id=tid,
+                        name="history_search_count",
+                        value=0,
+                        data_type="NUMERIC",
+                        id=f"{tid}-history_search_count",
+                    )
+                    lf.create_score(
+                        trace_id=tid,
+                        name="history_search_empty",
+                        value=1.0,
+                        data_type="NUMERIC",
+                        id=f"{tid}-history_search_empty",
+                    )
                 await message.answer("История диалогов временно недоступна.")
                 return
 
@@ -543,8 +580,21 @@ class PropertyBot:
                     output={"error": "backend_exception"},
                     metadata={"user_id": user_id},
                 )
-                lf.score_current_trace(name="history_search_count", value=0, data_type="NUMERIC")
-                lf.score_current_trace(name="history_search_empty", value=1.0, data_type="NUMERIC")
+                if tid:
+                    lf.create_score(
+                        trace_id=tid,
+                        name="history_search_count",
+                        value=0,
+                        data_type="NUMERIC",
+                        id=f"{tid}-history_search_count",
+                    )
+                    lf.create_score(
+                        trace_id=tid,
+                        name="history_search_empty",
+                        value=1.0,
+                        data_type="NUMERIC",
+                        id=f"{tid}-history_search_empty",
+                    )
                 await message.answer("Произошла ошибка при поиске в истории. Попробуйте позже.")
                 return
 
@@ -565,18 +615,35 @@ class PropertyBot:
                 output={"results_count": len(results), "valid_count": len(valid)},
                 metadata={"user_id": user_id, "search_latency_ms": round(search_ms, 1)},
             )
-            lf.score_current_trace(
-                name="history_search_count", value=len(valid), data_type="NUMERIC"
-            )
-            lf.score_current_trace(
-                name="history_search_latency_ms", value=search_ms, data_type="NUMERIC"
-            )
-            lf.score_current_trace(
-                name="history_search_empty",
-                value=1.0 if not valid else 0.0,
-                data_type="NUMERIC",
-            )
-            lf.score_current_trace(name="history_backend", value="qdrant", data_type="CATEGORICAL")
+            if tid:
+                lf.create_score(
+                    trace_id=tid,
+                    name="history_search_count",
+                    value=len(valid),
+                    data_type="NUMERIC",
+                    id=f"{tid}-history_search_count",
+                )
+                lf.create_score(
+                    trace_id=tid,
+                    name="history_search_latency_ms",
+                    value=search_ms,
+                    data_type="NUMERIC",
+                    id=f"{tid}-history_search_latency_ms",
+                )
+                lf.create_score(
+                    trace_id=tid,
+                    name="history_search_empty",
+                    value=1.0 if not valid else 0.0,
+                    data_type="NUMERIC",
+                    id=f"{tid}-history_search_empty",
+                )
+                lf.create_score(
+                    trace_id=tid,
+                    name="history_backend",
+                    value="qdrant",
+                    data_type="CATEGORICAL",
+                    id=f"{tid}-history_backend",
+                )
 
             if not valid:
                 await message.answer(f"По запросу «{query}» ничего не найдено в истории.")
@@ -661,6 +728,8 @@ class PropertyBot:
             guard_mode=self.config.guard_mode,
         )
 
+        rag_result_store: dict[str, Any] = {}
+
         with propagate_attributes(
             session_id=session_id,
             user_id=str(user_id),
@@ -677,6 +746,7 @@ class PropertyBot:
                         "configurable": {
                             "thread_id": _supervisor_thread_id(message.chat.id),
                             "bot_context": ctx,
+                            "rag_result_store": rag_result_store,
                         },
                     },
                 )
@@ -688,10 +758,51 @@ class PropertyBot:
                 last_msg = messages[-1]
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
-            # Send response to user
+            # Send response with feedback buttons, sources, and Markdown (#426)
             if response_text:
-                for chunk in _split_telegram_response(response_text):
-                    await message.answer(chunk)
+                lf = get_client()
+                trace_id = lf.get_current_trace_id() or ""
+                query_type = rag_result_store.get("query_type", "")
+
+                # Build feedback keyboard
+                reply_markup = None
+                if trace_id and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
+                    from telegram_bot.feedback import build_feedback_keyboard
+
+                    reply_markup = build_feedback_keyboard(trace_id)
+
+                # Build source attribution
+                sources_text = ""
+                documents = rag_result_store.get("documents", [])
+                if (
+                    self._graph_config.show_sources
+                    and documents
+                    and query_type
+                    not in {
+                        "CHITCHAT",
+                        "OFF_TOPIC",
+                    }
+                ):
+                    from telegram_bot.graph.nodes.respond import _format_sources
+
+                    sources_text = _format_sources(documents)
+
+                full_response = response_text + sources_text if sources_text else response_text
+
+                # Send with Markdown, fallback to plain text
+                chunks = list(_split_telegram_response(full_response))
+                for i, chunk in enumerate(chunks):
+                    is_last = i == len(chunks) - 1
+                    markup = reply_markup if is_last else None
+                    try:
+                        await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
+                    except Exception:
+                        logger.warning("Markdown parse failed in text path, falling back")
+                        try:
+                            await message.answer(chunk, reply_markup=markup)
+                        except Exception:
+                            logger.exception("Failed to send text response chunk")
+                            await message.answer(chunk)
 
             # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
@@ -706,17 +817,32 @@ class PropertyBot:
                     "pipeline_wall_ms": wall_ms,
                 },
             )
-            lf.score_current_trace(
-                name="supervisor_model",
-                value=self.config.supervisor_model,
-                data_type="CATEGORICAL",
-            )
-            # User role score (#388)
-            lf.score_current_trace(name="user_role", value=role, data_type="CATEGORICAL")
-            # Tool call count (#374)
-            tool_calls = result.get("tool_call_count", 0)
-            if tool_calls > 0:
-                lf.score_current_trace(name="tool_calls_total", value=float(tool_calls))
+            tid = lf.get_current_trace_id() or ""
+            if tid:
+                lf.create_score(
+                    trace_id=tid,
+                    name="supervisor_model",
+                    value=self.config.supervisor_model,
+                    data_type="CATEGORICAL",
+                    id=f"{tid}-supervisor_model",
+                )
+                # User role score (#388)
+                lf.create_score(
+                    trace_id=tid,
+                    name="user_role",
+                    value=role,
+                    data_type="CATEGORICAL",
+                    id=f"{tid}-user_role",
+                )
+                # Tool call count (#374)
+                tool_calls = result.get("tool_call_count", 0)
+                if tool_calls > 0:
+                    lf.create_score(
+                        trace_id=tid,
+                        name="tool_calls_total",
+                        value=float(tool_calls),
+                        id=f"{tid}-tool_calls_total",
+                    )
 
             # Persist Q&A to history
             if self._history_service and response_text:
@@ -728,11 +854,14 @@ class PropertyBot:
                         response=response_text,
                         input_type="text",
                     )
-                    lf.score_current_trace(
-                        name="history_save_success",
-                        value=1 if saved else 0,
-                        data_type="BOOLEAN",
-                    )
+                    if tid:
+                        lf.create_score(
+                            trace_id=tid,
+                            name="history_save_success",
+                            value=1 if saved else 0,
+                            data_type="BOOLEAN",
+                            id=f"{tid}-history_save_success",
+                        )
                 except Exception:
                     logger.warning("Failed to save history turn", exc_info=True)
 
@@ -819,6 +948,7 @@ class PropertyBot:
                     try:
                         _write_voice_error_scores(
                             get_client(),
+                            trace_id=state.get("trace_id", ""),
                             voice_duration_s=voice.duration,
                             error_reason="empty_transcription",
                         )
@@ -856,6 +986,7 @@ class PropertyBot:
                         try:
                             _write_voice_error_scores(
                                 get_client(),
+                                trace_id=state.get("trace_id", ""),
                                 voice_duration_s=voice.duration,
                                 error_reason="pipeline_failure",
                             )
@@ -876,6 +1007,7 @@ class PropertyBot:
             result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
 
             lf = get_client()
+            tid = lf.get_current_trace_id() or ""
             try:
                 lf.update_current_trace(
                     input={
@@ -888,7 +1020,7 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to update Langfuse voice trace metadata", exc_info=True)
             try:
-                write_langfuse_scores(lf, result)
+                write_langfuse_scores(lf, result, trace_id=tid)
             except Exception:
                 logger.warning("Failed to write Langfuse voice scores", exc_info=True)
 
@@ -904,14 +1036,21 @@ class PropertyBot:
                         input_type=result.get("input_type", "voice"),
                         query_embedding=result.get("query_embedding"),
                     )
-                    lf.score_current_trace(
-                        name="history_save_success",
-                        value=1 if saved else 0,
-                        data_type="BOOLEAN",
-                    )
-                    lf.score_current_trace(
-                        name="history_backend", value="qdrant", data_type="CATEGORICAL"
-                    )
+                    if tid:
+                        lf.create_score(
+                            trace_id=tid,
+                            name="history_save_success",
+                            value=1 if saved else 0,
+                            data_type="BOOLEAN",
+                            id=f"{tid}-history_save_success",
+                        )
+                        lf.create_score(
+                            trace_id=tid,
+                            name="history_backend",
+                            value="qdrant",
+                            data_type="CATEGORICAL",
+                            id=f"{tid}-history_backend",
+                        )
                 except Exception:
                     logger.warning("Failed to save voice history turn", exc_info=True)
 

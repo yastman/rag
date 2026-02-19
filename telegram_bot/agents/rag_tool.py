@@ -9,6 +9,7 @@ Dependencies injected via config["configurable"]["bot_context"].
 from __future__ import annotations
 
 import logging
+import time
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -16,6 +17,7 @@ from langchain_core.tools import tool
 from telegram_bot.graph.graph import build_graph
 from telegram_bot.graph.state import make_initial_state
 from telegram_bot.observability import get_client, observe
+from telegram_bot.scoring import compute_checkpointer_overhead_proxy_ms, write_langfuse_scores
 
 
 logger = logging.getLogger(__name__)
@@ -39,7 +41,8 @@ async def rag_search(
         property_type: Optional filter by property type.
         budget_range: Optional filter by budget range.
     """
-    ctx = config.get("configurable", {}).get("bot_context")
+    configurable = config.get("configurable", {})
+    ctx = configurable.get("bot_context")
 
     lf = get_client()
     lf.update_current_span(input={"query_preview": query[:120]})
@@ -60,12 +63,35 @@ async def rag_search(
             content_filter_enabled=ctx.content_filter_enabled if ctx else True,
             guard_mode=ctx.guard_mode if ctx else "hard",
         )
+        invoke_start = time.perf_counter()
         result = await graph.ainvoke(state)
+        ainvoke_wall_ms = (time.perf_counter() - invoke_start) * 1000
 
-        response = result.get("response", "") if isinstance(result, dict) else ""
-        lf.update_current_span(output={"response_length": len(response)})
+        if isinstance(result, dict):
+            # Compute wall-time metrics (#425)
+            result["checkpointer_overhead_proxy_ms"] = compute_checkpointer_overhead_proxy_ms(
+                result, ainvoke_wall_ms
+            )
+            result["pipeline_wall_ms"] = ainvoke_wall_ms
+            summarize_s = result.get("latency_stages", {}).get("summarize", 0)
+            result["user_perceived_wall_ms"] = ainvoke_wall_ms - (summarize_s * 1000)
 
-        return response or "Ничего не найдено по вашему запросу."
+            # Observability must stay fail-soft: scoring errors must not break user response.
+            try:
+                write_langfuse_scores(lf, result)
+            except Exception:
+                logger.warning("Failed to write Langfuse scores in rag_search", exc_info=True)
+
+            # Store full result for caller via side-channel (#426)
+            result_store = configurable.get("rag_result_store")
+            if isinstance(result_store, dict):
+                result_store.update(result)
+
+            response = result.get("response", "")
+            lf.update_current_span(output={"response_length": len(response)})
+            return response or "Ничего не найдено по вашему запросу."
+
+        return "Ничего не найдено по вашему запросу."
     except Exception:
         logger.exception("RAG pipeline failed")
         lf.update_current_span(level="ERROR", status_message="RAG pipeline failed")
