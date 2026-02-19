@@ -907,7 +907,7 @@ class PropertyBot:
                     name="supervisor_model",
                     value=self.config.supervisor_model,
                     data_type="CATEGORICAL",
-                    id=f"{tid}-supervisor_model",
+                    score_id=f"{tid}-supervisor_model",
                 )
                 # User role score (#388)
                 lf.create_score(
@@ -915,7 +915,7 @@ class PropertyBot:
                     name="user_role",
                     value=role,
                     data_type="CATEGORICAL",
-                    id=f"{tid}-user_role",
+                    score_id=f"{tid}-user_role",
                 )
                 # Tool call count (#374): count actual tool calls, not just messages.
                 tool_calls = sum(
@@ -928,7 +928,7 @@ class PropertyBot:
                         trace_id=tid,
                         name="tool_calls_total",
                         value=float(tool_calls),
-                        id=f"{tid}-tool_calls_total",
+                        score_id=f"{tid}-tool_calls_total",
                     )
 
                 # CRM tool usage scores (#440)
@@ -952,7 +952,7 @@ class PropertyBot:
                             name="history_save_success",
                             value=1 if saved else 0,
                             data_type="BOOLEAN",
-                            id=f"{tid}-history_save_success",
+                            score_id=f"{tid}-history_save_success",
                         )
                 except Exception:
                     logger.warning("Failed to save history turn", exc_info=True)
@@ -1191,14 +1191,14 @@ class PropertyBot:
                             name="history_save_success",
                             value=1 if saved else 0,
                             data_type="BOOLEAN",
-                            id=f"{tid}-history_save_success",
+                            score_id=f"{tid}-history_save_success",
                         )
                         lf.create_score(
                             trace_id=tid,
                             name="history_backend",
                             value="qdrant",
                             data_type="CATEGORICAL",
-                            id=f"{tid}-history_backend",
+                            score_id=f"{tid}-history_backend",
                         )
                 except Exception:
                     logger.warning("Failed to save voice history turn", exc_info=True)
