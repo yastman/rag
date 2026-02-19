@@ -140,6 +140,13 @@ async def rag_search(
         )
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
 
+        # Streaming hook (#428): when streaming is restored for the agent text path
+        # (i.e. the pipeline delivers the final answer directly to Telegram via
+        # generate_node with a live message object), set ctx.response_sent = True here
+        # so that _handle_query_supervisor in bot.py does not send the message again.
+        # Example: if result.get("response_sent") and ctx is not None:
+        #              ctx.response_sent = True
+
         if guard_result:
             if guard_result.get("injection_detected"):
                 result["injection_detected"] = True
