@@ -402,17 +402,22 @@ class PropertyBot:
         return db_role or "client"
 
     async def cmd_start(self, message: Message, dialog_manager: Any = None):
-        """Handle /start command — launch menu dialog."""
+        """Handle /start command — launch menu dialog (role-aware routing)."""
+        assert message.from_user is not None
+        role = await self._resolve_user_role(message.from_user.id)
+
         if dialog_manager is not None:
             from aiogram_dialog import StartMode
 
-            from .dialogs.states import ClientMenuSG
+            from .dialogs.states import ClientMenuSG, ManagerMenuSG
 
-            await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+            kommo_enabled = getattr(self.config, "kommo_enabled", False)
+            if role == "manager" and kommo_enabled:
+                await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
+            else:
+                await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Fallback (dialog not initialized)
-            assert message.from_user is not None
-            role = await self._resolve_user_role(message.from_user.id)
             await message.answer(render_start_menu(role=role, domain=self.config.domain))
 
     async def cmd_help(self, message: Message):
@@ -689,7 +694,7 @@ class PropertyBot:
             await message.answer("\n".join(lines))
 
     @observe(name="telegram-rag-query")
-    async def handle_query(self, message: Message):
+    async def handle_query(self, message: Message, locale: str = "ru"):
         """Handle user query via supervisor graph (#310: supervisor-only)."""
         pipeline_start = time.perf_counter()
         assert message.bot is not None
@@ -697,12 +702,15 @@ class PropertyBot:
         bot = message.bot
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        response_text = await self._handle_query_supervisor(message, pipeline_start)
+        response_text = await self._handle_query_supervisor(message, pipeline_start, locale=locale)
         get_client().update_current_trace(output={"response": response_text or ""})
 
     @observe(name="telegram-rag-supervisor")
-    async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> str:
+    async def _handle_query_supervisor(
+        self, message: Message, pipeline_start: float, locale: str = "ru"
+    ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
+        from .agents.agent import LOCALE_TO_LANGUAGE
         from .agents.history_tool import history_search
         from .agents.rag_tool import rag_search
 
@@ -712,6 +720,7 @@ class PropertyBot:
         user_id = message.from_user.id
         session_id = make_session_id("chat", message.chat.id)
         role = await self._resolve_user_role(user_id)
+        language = LOCALE_TO_LANGUAGE.get(locale, self.config.domain_language)
 
         # Build base tools list (client-only: rag_search)
         base_tools: list[Any] = [rag_search]
@@ -766,7 +775,7 @@ class PropertyBot:
             model=self.config.supervisor_model,
             tools=tools,
             checkpointer=self._agent_checkpointer,
-            language=self.config.domain_language,
+            language=language,
             base_url=self.config.llm_base_url,
             api_key=self.config.llm_api_key,
             role=role,
@@ -777,7 +786,7 @@ class PropertyBot:
         ctx = BotContext(
             telegram_user_id=user_id,
             session_id=session_id,
-            language=self.config.domain_language,
+            language=language,
             kommo_client=getattr(self, "_kommo_client", None),
             history_service=self._history_service,
             embeddings=self._embeddings,
@@ -1502,6 +1511,144 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
+    async def handle_menu_action(
+        self, callback: CallbackQuery, query_text: str, locale: str = "ru"
+    ) -> None:
+        """Handle menu button click — dispatch query_text to agent pipeline.
+
+        Called by on_click handlers in dialog files after manager.done().
+        Reuses _ainvoke_supervisor_with_recovery for consistency with handle_query.
+        """
+        from .agents.agent import LOCALE_TO_LANGUAGE
+        from .agents.rag_tool import rag_search
+
+        if callback.from_user is None or callback.message is None:
+            return
+
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        bot = callback.message.bot
+
+        role = await self._resolve_user_role(user_id)
+        language = LOCALE_TO_LANGUAGE.get(locale, self.config.domain_language)
+        session_id = make_session_id("chat", chat_id)
+
+        # Build tools list (mirrors _handle_query_supervisor tool assembly)
+        base_tools: list[Any] = [rag_search]
+        manager_tools: list[Any] = []
+        if role == "manager":
+            from .agents.manager_tools import (
+                build_tools_for_role,
+                create_crm_score_sync_tool,
+                create_manager_nurturing_tools,
+            )
+
+            if self._history_service is not None:
+                from .agents.history_tool import history_search
+
+                manager_tools.append(history_search)
+
+            manager_tools.extend(
+                create_manager_nurturing_tools(
+                    analytics_service=self._funnel_analytics_service,
+                    nurturing_service=self._nurturing_service,
+                )
+            )
+
+            if self._lead_scoring_store is not None:
+                manager_tools.append(
+                    create_crm_score_sync_tool(
+                        scoring_store=self._lead_scoring_store,
+                        kommo_client=getattr(self, "_kommo_client", None),
+                        score_field_id=self.config.kommo_lead_score_field_id,
+                        band_field_id=self.config.kommo_lead_band_field_id,
+                    )
+                )
+
+            if getattr(self.config, "kommo_enabled", False) and getattr(
+                self, "_kommo_client", None
+            ):
+                from .agents.crm_tools import get_crm_tools
+
+                manager_tools.extend(get_crm_tools())
+
+            tools = build_tools_for_role(
+                role=role,
+                base_tools=base_tools,
+                manager_tools=manager_tools,
+            )
+        else:
+            tools = base_tools
+
+        agent = create_bot_agent(
+            model=self.config.supervisor_model,
+            tools=tools,
+            checkpointer=self._agent_checkpointer,
+            language=language,
+            base_url=self.config.llm_base_url,
+            api_key=self.config.llm_api_key,
+            role=role,
+            max_history_messages=self.config.agent_max_history_messages,
+        )
+
+        ctx = BotContext(
+            telegram_user_id=user_id,
+            session_id=session_id,
+            language=language,
+            kommo_client=getattr(self, "_kommo_client", None),
+            history_service=self._history_service,
+            embeddings=self._embeddings,
+            sparse_embeddings=self._sparse,
+            qdrant=self._qdrant,
+            cache=self._cache,
+            reranker=self._reranker,
+            llm=self._llm,
+            content_filter_enabled=self.config.content_filter_enabled,
+            guard_mode=self.config.guard_mode,
+            role=role,
+            manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
+            original_query=query_text,
+            original_user_query=query_text,
+        )
+
+        rag_result_store: dict[str, Any] = {}
+
+        with propagate_attributes(
+            session_id=session_id,
+            user_id=str(user_id),
+            tags=["telegram", "menu", "agent"],
+        ):
+            langfuse_handler = create_callback_handler()
+            callbacks = [langfuse_handler] if langfuse_handler else []
+            async with ChatActionSender.typing(bot=bot, chat_id=chat_id):
+                result = await self._ainvoke_supervisor_with_recovery(
+                    agent=agent,
+                    tools=tools,
+                    role=role,
+                    user_text=query_text,
+                    chat_id=chat_id,
+                    callbacks=callbacks,
+                    bot_context=ctx,
+                    rag_result_store=rag_result_store,
+                )
+
+        messages = result.get("messages", [])
+        response_text = ""
+        if messages:
+            last_msg = messages[-1]
+            response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+
+        if response_text and not ctx.response_sent:
+            for chunk in _split_telegram_response(response_text):
+                try:
+                    await callback.message.answer(chunk, parse_mode="Markdown")
+                except Exception:
+                    logger.warning("Markdown parse failed in menu action, falling back")
+                    try:
+                        await callback.message.answer(chunk)
+                    except Exception:
+                        logger.exception("Failed to send menu action response chunk")
+
     async def start(self):
         """Start bot polling."""
         logger.info("Starting bot...")
@@ -1663,6 +1810,7 @@ class PropertyBot:
             kommo_client=self._kommo_client,
             pg_pool=self._pg_pool,
             bot_config=self.config,
+            property_bot=self,
         )
         logger.info("i18n middleware ready")
 
@@ -1670,11 +1818,15 @@ class PropertyBot:
         from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
 
         from .dialogs.client_menu import client_menu_dialog
+        from .dialogs.crm_submenu import crm_submenu_dialog
         from .dialogs.faq import faq_dialog
         from .dialogs.funnel import funnel_dialog
+        from .dialogs.manager_menu import manager_menu_dialog
         from .dialogs.settings import settings_dialog
 
         self.dp.include_router(client_menu_dialog)
+        self.dp.include_router(manager_menu_dialog)
+        self.dp.include_router(crm_submenu_dialog)
         self.dp.include_router(settings_dialog)
         self.dp.include_router(funnel_dialog)
         self.dp.include_router(faq_dialog)
