@@ -122,3 +122,108 @@ def test_subdomain_with_dots(mock_token_store):
 
     client = KommoClient(subdomain="api-c", token_store=mock_token_store)
     assert client._base_url == "https://api-c.kommo.com/api/v4"
+
+
+# --- Phase 2: search_leads, get_tasks, update_contact (#443) ---
+
+
+async def test_search_leads_by_query(kommo_client, httpx_mock):
+    """search_leads sends GET /api/v4/leads?query=..."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/leads"),
+        json={"_embedded": {"leads": [{"id": 10, "name": "Test Deal"}]}},
+    )
+
+    leads = await kommo_client.search_leads(query="Test")
+    assert len(leads) == 1
+    assert leads[0].id == 10
+    assert leads[0].name == "Test Deal"
+
+
+async def test_search_leads_by_responsible_user_id(kommo_client, httpx_mock):
+    """search_leads sends GET /api/v4/leads with responsible_user_id filter."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/leads"),
+        json={"_embedded": {"leads": [{"id": 11, "name": "My Lead"}]}},
+    )
+
+    leads = await kommo_client.search_leads(responsible_user_id=42)
+    assert len(leads) == 1
+    assert leads[0].id == 11
+
+
+async def test_search_leads_empty_result(kommo_client, httpx_mock):
+    """search_leads returns empty list when no leads match."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/leads"),
+        json={},
+    )
+
+    leads = await kommo_client.search_leads(query="nonexistent")
+    assert leads == []
+
+
+async def test_get_tasks_by_responsible_user(kommo_client, httpx_mock):
+    """get_tasks sends GET /api/v4/tasks with responsible_user_id filter."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/tasks"),
+        json={"_embedded": {"tasks": [{"id": 200, "text": "Call client", "is_completed": False}]}},
+    )
+
+    tasks = await kommo_client.get_tasks(responsible_user_id=42)
+    assert len(tasks) == 1
+    assert tasks[0].id == 200
+    assert tasks[0].text == "Call client"
+
+
+async def test_get_tasks_with_is_completed_filter(kommo_client, httpx_mock):
+    """get_tasks sends is_completed=0 filter for active tasks."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/tasks"),
+        json={"_embedded": {"tasks": []}},
+    )
+
+    tasks = await kommo_client.get_tasks(is_completed=False)
+    assert tasks == []
+
+
+async def test_update_contact(kommo_client, httpx_mock):
+    """update_contact sends PATCH /api/v4/contacts/{id}."""
+    from telegram_bot.services.kommo_models import ContactUpdate
+
+    httpx_mock.add_response(
+        url="https://test-co.kommo.com/api/v4/contacts/456",
+        method="PATCH",
+        json={"id": 456, "first_name": "Updated"},
+    )
+
+    update = ContactUpdate(first_name="Updated")
+    contact = await kommo_client.update_contact(456, update)
+    assert contact.id == 456
+    assert contact.first_name == "Updated"
+
+
+async def test_update_contact_with_custom_fields(kommo_client, httpx_mock):
+    """update_contact sends phone/email in custom_fields_values."""
+    from telegram_bot.services.kommo_models import ContactUpdate
+
+    httpx_mock.add_response(
+        url="https://test-co.kommo.com/api/v4/contacts/789",
+        method="PATCH",
+        json={"id": 789, "first_name": "Ivan"},
+    )
+
+    fields = ContactUpdate.build_contact_fields(phone="+380991234567")
+    update = ContactUpdate(custom_fields_values=fields)
+    contact = await kommo_client.update_contact(789, update)
+    assert contact.id == 789

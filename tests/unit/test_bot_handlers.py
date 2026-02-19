@@ -2171,3 +2171,122 @@ class TestToolListByRole:
         tool_names = [t.name for t in tools]
         assert "rag_search" in tool_names
         assert "history_search" in tool_names
+
+
+def _make_callback_query(data="hitl:approve", user_id=12345, chat_id=12345):
+    """Create a mock CallbackQuery for HITL tests."""
+    callback = MagicMock()
+    callback.data = data
+    callback.from_user = MagicMock(id=user_id)
+    msg = MagicMock()
+    msg.chat = MagicMock(id=chat_id)
+    msg.edit_reply_markup = AsyncMock()
+    msg.bot = MagicMock()
+    msg.bot.send_message = AsyncMock()
+    callback.message = msg
+    callback.answer = AsyncMock()
+    return callback
+
+
+class TestHITLBotHandler:
+    """Tests for HITL interrupt detection and callback handling (#443)."""
+
+    async def test_handle_query_detects_interrupt_and_returns_early(self, mock_config):
+        """When agent returns __interrupt__, confirmation is sent and handler returns early."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = None
+
+        interrupt_obj = MagicMock()
+        interrupt_obj.value = {
+            "tool": "crm_create_lead",
+            "preview": "Создать сделку:\n  name: Test",
+            "args": {"name": "Test"},
+        }
+        interrupt_result = _mock_agent_result(__interrupt__=[interrupt_obj])
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=interrupt_result)
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
+            patch.object(bot, "_send_hitl_confirmation", new_callable=AsyncMock) as mock_hitl,
+        ):
+            message = _make_text_message("создай сделку")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_hitl.assert_called_once()
+        call_kwargs = mock_hitl.call_args.kwargs
+        assert call_kwargs["thread_id"] == "tg_12345"
+        assert call_kwargs["payload"]["tool"] == "crm_create_lead"
+
+    async def test_send_hitl_confirmation_sends_keyboard(self, mock_config):
+        """_send_hitl_confirmation sends message with approve/cancel inline keyboard."""
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message("test")
+        payload = {
+            "tool": "crm_create_lead",
+            "preview": "Создать сделку:\n  name: Test",
+        }
+
+        await bot._send_hitl_confirmation(message=message, payload=payload, thread_id="tg_12345")
+
+        message.answer.assert_called_once()
+        call_args = message.answer.call_args
+        text = call_args[0][0]
+        assert "Создать сделку" in text
+        markup = call_args.kwargs["reply_markup"]
+        button_texts = [b.text for row in markup.inline_keyboard for b in row]
+        assert "Подтвердить" in button_texts
+        assert "Отменить" in button_texts
+
+    async def test_handle_hitl_callback_approve_resumes_agent(self, mock_config):
+        """Approve callback resumes agent with action=approve and sends response."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = None
+        callback = _make_callback_query("hitl:approve", user_id=12345, chat_id=12345)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
+        ):
+            await bot.handle_hitl_callback(callback)
+
+        callback.answer.assert_called_once_with("Принято")
+        mock_agent.ainvoke.assert_called_once()
+        command = mock_agent.ainvoke.call_args[0][0]
+        assert command.resume == {"action": "approve"}
+        config = mock_agent.ainvoke.call_args[1]["config"]
+        assert config["configurable"]["thread_id"] == "tg_12345"
+
+    async def test_handle_hitl_callback_cancel_resumes_agent(self, mock_config):
+        """Cancel callback resumes agent with action=cancel."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = None
+        callback = _make_callback_query("hitl:cancel", user_id=12345, chat_id=12345)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
+        ):
+            await bot.handle_hitl_callback(callback)
+
+        callback.answer.assert_called_once_with("Отменено")
+        command = mock_agent.ainvoke.call_args[0][0]
+        assert command.resume == {"action": "cancel"}
