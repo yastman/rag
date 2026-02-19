@@ -658,10 +658,11 @@ class PropertyBot:
         bot = message.bot
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        await self._handle_query_supervisor(message, pipeline_start)
+        response_text = await self._handle_query_supervisor(message, pipeline_start)
+        get_client().update_current_trace(output={"response": response_text or ""})
 
     @observe(name="telegram-rag-supervisor")
-    async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> None:
+    async def _handle_query_supervisor(self, message: Message, pipeline_start: float) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
         from .agents.history_tool import history_search
         from .agents.rag_tool import rag_search
@@ -799,7 +800,7 @@ class PropertyBot:
                                 value=pattern or "unknown",
                                 data_type="CATEGORICAL",
                             )
-                        return
+                        return _BLOCKED_RESPONSE
                     # soft/log mode: log but don't block
                     logger.warning(
                         "Pre-agent guard detected (mode=%s, score=%.2f, pattern=%s): %.80s",
@@ -831,6 +832,30 @@ class PropertyBot:
                 last_msg = messages[-1]
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
+            # Extract LLM metrics from supervisor agent response (#515)
+            if messages:
+                last_ai = next(
+                    (
+                        m
+                        for m in reversed(messages)
+                        if hasattr(m, "response_metadata") and m.response_metadata
+                    ),
+                    None,
+                )
+                if last_ai:
+                    token_usage = last_ai.response_metadata.get("token_usage", {}) or {}
+                    decode_time = token_usage.get("completion_time")
+                    if decode_time is not None and float(decode_time) > 0:
+                        rag_result_store["llm_decode_ms"] = round(float(decode_time) * 1000, 1)
+                        completion_tokens = token_usage.get("completion_tokens")
+                        if completion_tokens and int(completion_tokens) > 0:
+                            rag_result_store["llm_tps"] = round(
+                                float(completion_tokens) / float(decode_time), 1
+                            )
+                    queue_time = token_usage.get("queue_time")
+                    if queue_time is not None:
+                        rag_result_store["llm_queue_ms"] = round(float(queue_time) * 1000, 1)
+
             # Send response with feedback buttons, sources, and Markdown (#426).
             # Skip if a tool already delivered the response via streaming (#428).
             if response_text and not ctx.response_sent:
@@ -861,9 +886,10 @@ class PropertyBot:
                         "OFF_TOPIC",
                     }
                 ):
-                    from telegram_bot.graph.nodes.respond import format_sources
+                    from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
 
                     sources_text = format_sources(documents)
+                    rag_result_store["sources_count"] = min(len(documents), _MAX_SOURCES)
 
                 full_response = response_text + sources_text if sources_text else response_text
 
@@ -910,7 +936,6 @@ class PropertyBot:
             lf = get_client()
             lf.update_current_trace(
                 input={"query": message.text},
-                output={"response": response_text},
                 metadata={
                     "pipeline_mode": "sdk_agent",
                     "pipeline_wall_ms": wall_ms,
@@ -952,6 +977,11 @@ class PropertyBot:
                 from telegram_bot.scoring import write_crm_scores
 
                 write_crm_scores(lf, current_turn_msgs, trace_id=tid)
+                # Overwrite sources_shown/sources_count with actual post-send values (#514)
+                sources_count_actual = int(rag_result_store.get("sources_count", 0) or 0)
+                if sources_count_actual > 0:
+                    score(lf, tid, name="sources_shown", value=1, data_type="BOOLEAN")
+                    score(lf, tid, name="sources_count", value=float(sources_count_actual))
 
             # Persist Q&A to history
             if self._history_service and response_text:
@@ -973,6 +1003,8 @@ class PropertyBot:
                         )
                 except Exception:
                     logger.warning("Failed to save history turn", exc_info=True)
+
+        return response_text
 
     async def _ainvoke_supervisor_with_recovery(
         self,
