@@ -8,7 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from telegram_bot.integrations.cache import CACHE_VERSION, CacheLayerManager
+from telegram_bot.integrations.cache import (
+    CACHE_VERSION,
+    CacheLayerManager,
+    _normalize_query_for_cache,
+)
 
 
 @pytest.fixture
@@ -319,3 +323,63 @@ class TestMetrics:
         metrics = mgr.get_metrics()
         assert metrics["embeddings"]["misses"] == 2
         assert metrics["total_requests"] == 2
+
+
+class TestQueryNormalization:
+    """Test _normalize_query_for_cache and embedding key consistency."""
+
+    def test_lowercase_normalization(self):
+        assert _normalize_query_for_cache("ВНЖ") == "внж"
+        assert _normalize_query_for_cache("FAQ") == "faq"
+
+    def test_strip_whitespace(self):
+        assert _normalize_query_for_cache("  внж  ") == "внж"
+        assert _normalize_query_for_cache("\tquery\n") == "query"
+
+    def test_remove_trailing_punctuation(self):
+        assert _normalize_query_for_cache("внж?") == "внж"
+        assert _normalize_query_for_cache("внж!") == "внж"
+        assert _normalize_query_for_cache("внж.") == "внж"
+        assert _normalize_query_for_cache("внж??") == "внж"
+
+    def test_case_and_punctuation_produce_same_key(self):
+        """'ВНЖ?' and 'внж' produce the same normalized form (#477)."""
+        assert _normalize_query_for_cache("ВНЖ?") == _normalize_query_for_cache("внж")
+
+    def test_mid_query_punctuation_preserved(self):
+        """Punctuation inside query text is NOT removed, only trailing."""
+        # Trailing ? is removed
+        result = _normalize_query_for_cache("как оформить внж?")
+        assert result == "как оформить внж"
+        # Internal dot (e.g. abbreviation) is preserved; trailing ? removed
+        result_with_dot = _normalize_query_for_cache("ул. Ленина?")
+        assert result_with_dot == "ул. ленина"
+        assert result_with_dot.endswith("а")  # dot in middle is kept, trailing ? removed
+
+    def test_empty_string(self):
+        assert _normalize_query_for_cache("") == ""
+
+    async def test_embedding_cache_shares_key_after_normalization(self):
+        """Storing 'ВНЖ?' and getting 'внж' should hit the same cache key."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        stored_keys: list[str] = []
+
+        async def mock_setex(key, ttl, value):
+            stored_keys.append(key)
+
+        async def mock_get(key):
+            if key in stored_keys:
+                return json.dumps([0.5] * 1024)
+            return None
+
+        mgr.redis = AsyncMock()
+        mgr.redis.setex = mock_setex
+        mgr.redis.get = mock_get
+
+        # Store with uppercase + trailing punctuation
+        await mgr.store_embedding("ВНЖ?", [0.5] * 1024)
+
+        # Get with lowercase, no punctuation
+        result = await mgr.get_embedding("внж")
+
+        assert result == [0.5] * 1024, "Normalized queries should share embedding cache key"
