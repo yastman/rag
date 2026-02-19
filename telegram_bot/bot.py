@@ -1,6 +1,7 @@
 """Main Telegram bot logic — LangGraph pipeline."""
 
 import asyncio
+import contextlib
 import hashlib
 import inspect
 import io
@@ -379,6 +380,7 @@ class PropertyBot:
         self.dp.message(F.voice)(self.handle_voice)
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
+        self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -787,6 +789,7 @@ class PropertyBot:
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
             role=role,
+            manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
             history_relevance_threshold=self.config.history_relevance_threshold,
             original_query=message.text or "",
             original_user_query=message.text or "",
@@ -865,6 +868,17 @@ class PropertyBot:
                     bot_context=ctx,
                     rag_result_store=rag_result_store,
                 )
+
+            # Check for HITL interrupt (#443)
+            interrupt_data = result.get("__interrupt__")
+            if interrupt_data:
+                interrupt_payload = interrupt_data[0].value
+                await self._send_hitl_confirmation(
+                    message=message,
+                    payload=interrupt_payload,
+                    thread_id=_supervisor_thread_id(message.chat.id),
+                )
+                return None
 
             # Extract response from final message
             messages = result.get("messages", [])
@@ -1302,6 +1316,130 @@ class PropertyBot:
                         )
                 except Exception:
                     logger.warning("Failed to save voice history turn", exc_info=True)
+
+    async def _send_hitl_confirmation(
+        self,
+        message: Message,
+        payload: dict,
+        thread_id: str,
+    ) -> None:
+        """Send inline keyboard for HITL confirmation (#443)."""
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        preview = payload.get("preview", "Подтвердите операцию")
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="Подтвердить", callback_data="hitl:approve"),
+                    InlineKeyboardButton(text="Отменить", callback_data="hitl:cancel"),
+                ]
+            ]
+        )
+
+        await message.answer(
+            f"Подтвердите действие:\n\n{preview}",
+            reply_markup=keyboard,
+        )
+
+    @observe(name="telegram-hitl-callback")
+    async def handle_hitl_callback(self, callback: CallbackQuery) -> None:
+        """Handle HITL approve/cancel button click (#443)."""
+        if callback.from_user is None or callback.message is None:
+            await callback.answer()
+            return
+
+        data = callback.data or ""
+        action = "approve" if data == "hitl:approve" else "cancel"
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
+        thread_id = _supervisor_thread_id(chat_id)
+
+        await callback.answer("Принято" if action == "approve" else "Отменено")
+
+        with contextlib.suppress(Exception):
+            await callback.message.edit_reply_markup(reply_markup=None)
+
+        # Rebuild agent with same tools and checkpointer
+        from .agents.history_tool import history_search
+        from .agents.rag_tool import rag_search
+
+        role = await self._resolve_user_role(user_id)
+        session_id = make_session_id("chat", chat_id)
+
+        tools: list[Any] = [rag_search]
+        if self._history_service is not None:
+            tools.append(history_search)
+        if (
+            role == "manager"
+            and getattr(self.config, "kommo_enabled", False)
+            and getattr(self, "_kommo_client", None)
+        ):
+            from .agents.crm_tools import get_crm_tools
+
+            tools.extend(get_crm_tools())
+
+        agent = create_bot_agent(
+            model=self.config.supervisor_model,
+            tools=tools,
+            checkpointer=self._agent_checkpointer,
+            language=self.config.domain_language,
+            base_url=self.config.llm_base_url,
+            api_key=self.config.llm_api_key,
+        )
+
+        ctx = BotContext(
+            telegram_user_id=user_id,
+            session_id=session_id,
+            language=self.config.domain_language,
+            kommo_client=getattr(self, "_kommo_client", None),
+            history_service=self._history_service,
+            embeddings=self._embeddings,
+            sparse_embeddings=self._sparse,
+            qdrant=self._qdrant,
+            cache=self._cache,
+            reranker=self._reranker,
+            llm=self._llm,
+            content_filter_enabled=self.config.content_filter_enabled,
+            guard_mode=self.config.guard_mode,
+            role=role,
+            manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
+        )
+
+        with propagate_attributes(
+            session_id=session_id,
+            user_id=str(user_id),
+            tags=["telegram", "hitl", "resume"],
+        ):
+            from langgraph.types import Command
+
+            langfuse_handler = create_callback_handler()
+            callbacks = [langfuse_handler] if langfuse_handler else []
+
+            result = await agent.ainvoke(
+                Command(resume={"action": action}),
+                config={
+                    "callbacks": callbacks,
+                    "configurable": {
+                        "thread_id": thread_id,
+                        "bot_context": ctx,
+                    },
+                },
+            )
+
+        messages = result.get("messages", [])
+        response_text = ""
+        if messages:
+            last_msg = messages[-1]
+            response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+
+        if response_text:
+            bot = callback.message.bot
+            for chunk in _split_telegram_response(response_text):
+                await bot.send_message(chat_id=chat_id, text=chunk)
+
+        lf = get_client()
+        lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
 
     async def handle_feedback(self, callback: CallbackQuery):
         """Handle feedback button callback (#229)."""

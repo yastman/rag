@@ -28,12 +28,46 @@ def mock_kommo():
             Contact(id=11, first_name="Anna", last_name="Sidorova"),
         ]
     )
+    kommo.search_leads = AsyncMock(
+        return_value=[
+            Lead(id=20, name="Deal Alpha", budget=100000),
+            Lead(id=21, name="Deal Beta"),
+        ]
+    )
+    kommo.get_tasks = AsyncMock(
+        return_value=[
+            Task(id=300, text="Call back client", complete_till=9999999999, is_completed=False),
+            Task(id=301, text="Send docs", complete_till=1000000000, is_completed=False),
+        ]
+    )
+    kommo.update_contact = AsyncMock(return_value=Contact(id=50, first_name="Updated"))
     return kommo
 
 
 @pytest.fixture
 def bot_context(mock_kommo):
     """BotContext with mock KommoClient."""
+    return BotContext(
+        telegram_user_id=42,
+        session_id="s-1",
+        language="ru",
+        kommo_client=mock_kommo,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        content_filter_enabled=True,
+        guard_mode="hard",
+        manager_id=42,
+    )
+
+
+@pytest.fixture
+def bot_context_no_manager(mock_kommo):
+    """BotContext without manager_id set."""
     return BotContext(
         telegram_user_id=42,
         session_id="s-1",
@@ -68,12 +102,15 @@ async def test_crm_get_deal(bot_context):
 
 async def test_crm_create_lead(bot_context):
     """crm_create_lead calls KommoClient.create_lead."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_create_lead
 
-    result = await crm_create_lead.ainvoke(
-        {"name": "New Lead", "budget": 100000},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_create_lead.ainvoke(
+            {"name": "New Lead", "budget": 100000},
+            config=_make_config(bot_context),
+        )
     assert isinstance(result, str)
     bot_context.kommo_client.create_lead.assert_called_once()
 
@@ -122,12 +159,15 @@ async def test_crm_tool_without_kommo_returns_error():
 
 async def test_crm_update_lead(bot_context, mock_kommo):
     """crm_update_lead calls KommoClient.update_lead with correct LeadUpdate."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_update_lead
 
-    result = await crm_update_lead.ainvoke(
-        {"deal_id": 1, "name": "Updated Deal", "budget": 75000},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_update_lead.ainvoke(
+            {"deal_id": 1, "name": "Updated Deal", "budget": 75000},
+            config=_make_config(bot_context),
+        )
     assert "обновлена" in result.lower()
     assert "1" in result
     mock_kommo.update_lead.assert_called_once()
@@ -140,12 +180,15 @@ async def test_crm_update_lead(bot_context, mock_kommo):
 
 async def test_crm_upsert_contact(bot_context, mock_kommo):
     """crm_upsert_contact calls KommoClient.upsert_contact with phone + ContactCreate."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_upsert_contact
 
-    result = await crm_upsert_contact.ainvoke(
-        {"phone": "+380501234567", "first_name": "Ivan", "last_name": "Petrov"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_upsert_contact.ainvoke(
+            {"phone": "+380501234567", "first_name": "Ivan", "last_name": "Petrov"},
+            config=_make_config(bot_context),
+        )
     assert "Контакт" in result
     assert "10" in result
     mock_kommo.upsert_contact.assert_called_once()
@@ -231,37 +274,46 @@ async def test_crm_get_deal_error(bot_context, mock_kommo):
 
 async def test_crm_create_lead_error(bot_context, mock_kommo):
     """crm_create_lead returns error string on exception."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_create_lead
 
     mock_kommo.create_lead.side_effect = RuntimeError("API error")
-    result = await crm_create_lead.ainvoke(
-        {"name": "Fail Lead"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_create_lead.ainvoke(
+            {"name": "Fail Lead"},
+            config=_make_config(bot_context),
+        )
     assert "Ошибка" in result
 
 
 async def test_crm_update_lead_error(bot_context, mock_kommo):
     """crm_update_lead returns error string on exception."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_update_lead
 
     mock_kommo.update_lead.side_effect = RuntimeError("API error")
-    result = await crm_update_lead.ainvoke(
-        {"deal_id": 1, "name": "Fail"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_update_lead.ainvoke(
+            {"deal_id": 1, "name": "Fail"},
+            config=_make_config(bot_context),
+        )
     assert "Ошибка" in result
 
 
 async def test_crm_upsert_contact_error(bot_context, mock_kommo):
     """crm_upsert_contact returns error string on exception."""
+    from unittest.mock import patch
+
     from telegram_bot.agents.crm_tools import crm_upsert_contact
 
     mock_kommo.upsert_contact.side_effect = RuntimeError("API error")
-    result = await crm_upsert_contact.ainvoke(
-        {"phone": "+380501234567", "first_name": "Ivan"},
-        config=_make_config(bot_context),
-    )
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_upsert_contact.ainvoke(
+            {"phone": "+380501234567", "first_name": "Ivan"},
+            config=_make_config(bot_context),
+        )
     assert "Ошибка" in result
 
 
@@ -341,3 +393,147 @@ async def test_crm_get_contacts_truncation(bot_context, mock_kommo):
     assert "User0" in result
     assert "User9" in result
     assert "User10" not in result
+
+
+# --- Phase 2: 4 new CRM tools (#443) ---
+
+
+async def test_crm_search_leads(bot_context, mock_kommo):
+    """crm_search_leads returns formatted lead list."""
+    from telegram_bot.agents.crm_tools import crm_search_leads
+
+    result = await crm_search_leads.ainvoke(
+        {"query": "Alpha"},
+        config=_make_config(bot_context),
+    )
+    assert "Deal Alpha" in result
+    assert "ID: 20" in result
+    assert "100000" in result
+    mock_kommo.search_leads.assert_called_once_with(query="Alpha", limit=10)
+
+
+async def test_crm_search_leads_empty(bot_context, mock_kommo):
+    """crm_search_leads returns not-found message when no results."""
+    from telegram_bot.agents.crm_tools import crm_search_leads
+
+    mock_kommo.search_leads.return_value = []
+    result = await crm_search_leads.ainvoke(
+        {"query": "Nobody"},
+        config=_make_config(bot_context),
+    )
+    assert "не найдены" in result.lower()
+
+
+async def test_crm_search_leads_no_kommo():
+    """crm_search_leads returns CRM_UNAVAILABLE when kommo_client is None."""
+    from telegram_bot.agents.crm_tools import crm_search_leads
+
+    ctx = BotContext(
+        telegram_user_id=1,
+        session_id="s",
+        language="ru",
+        kommo_client=None,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+    )
+    result = await crm_search_leads.ainvoke({"query": "test"}, config=_make_config(ctx))
+    assert "недоступен" in result.lower()
+
+
+async def test_crm_get_my_leads(bot_context, mock_kommo):
+    """crm_get_my_leads filters by manager_id."""
+    from telegram_bot.agents.crm_tools import crm_get_my_leads
+
+    result = await crm_get_my_leads.ainvoke({}, config=_make_config(bot_context))
+    assert "Deal Alpha" in result
+    mock_kommo.search_leads.assert_called_once_with(responsible_user_id=42, limit=20)
+
+
+async def test_crm_get_my_leads_no_manager_id(bot_context_no_manager):
+    """crm_get_my_leads returns error when manager_id is None."""
+    from telegram_bot.agents.crm_tools import crm_get_my_leads
+
+    result = await crm_get_my_leads.ainvoke({}, config=_make_config(bot_context_no_manager))
+    assert "manager_id" in result.lower()
+
+
+async def test_crm_get_my_tasks(bot_context, mock_kommo):
+    """crm_get_my_tasks returns tasks with overdue marker."""
+    from telegram_bot.agents.crm_tools import crm_get_my_tasks
+
+    result = await crm_get_my_tasks.ainvoke({}, config=_make_config(bot_context))
+    assert "Call back client" in result
+    assert "Send docs" in result
+    # task with complete_till=1000000000 (past) should be marked overdue
+    assert "ПРОСРОЧЕНО" in result
+    mock_kommo.get_tasks.assert_called_once_with(responsible_user_id=42, is_completed=False)
+
+
+async def test_crm_get_my_tasks_no_manager_id(bot_context_no_manager):
+    """crm_get_my_tasks returns error when manager_id is None."""
+    from telegram_bot.agents.crm_tools import crm_get_my_tasks
+
+    result = await crm_get_my_tasks.ainvoke({}, config=_make_config(bot_context_no_manager))
+    assert "manager_id" in result.lower()
+
+
+async def test_crm_get_my_tasks_empty(bot_context, mock_kommo):
+    """crm_get_my_tasks returns 'no tasks' message when list is empty."""
+    from telegram_bot.agents.crm_tools import crm_get_my_tasks
+
+    mock_kommo.get_tasks.return_value = []
+    result = await crm_get_my_tasks.ainvoke({}, config=_make_config(bot_context))
+    assert "нет" in result.lower()
+
+
+async def test_crm_update_contact(bot_context, mock_kommo):
+    """crm_update_contact calls kommo.update_contact with correct ContactUpdate."""
+    from unittest.mock import patch
+
+    from telegram_bot.agents.crm_tools import crm_update_contact
+
+    with patch("telegram_bot.agents.crm_tools.hitl_guard", return_value={"action": "approve"}):
+        result = await crm_update_contact.ainvoke(
+            {"contact_id": 50, "phone": "+380991234567", "first_name": "Updated"},
+            config=_make_config(bot_context),
+        )
+    assert "Контакт обновлен" in result
+    assert "50" in result
+    mock_kommo.update_contact.assert_called_once()
+
+
+async def test_crm_update_contact_no_kommo():
+    """crm_update_contact returns CRM_UNAVAILABLE when kommo_client is None."""
+    from telegram_bot.agents.crm_tools import crm_update_contact
+
+    ctx = BotContext(
+        telegram_user_id=1,
+        session_id="s",
+        language="ru",
+        kommo_client=None,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+    )
+    result = await crm_update_contact.ainvoke(
+        {"contact_id": 50, "phone": "+380991234567"},
+        config=_make_config(ctx),
+    )
+    assert "недоступен" in result.lower()
+
+
+async def test_get_crm_tools_count():
+    """get_crm_tools returns exactly 12 tools."""
+    from telegram_bot.agents.crm_tools import get_crm_tools
+
+    tools = get_crm_tools()
+    assert len(tools) == 12
