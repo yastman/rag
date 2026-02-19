@@ -41,10 +41,22 @@ class _Candidate:
 
 
 class NurturingService:
-    """Select warm/cold leads and enqueue nurturing jobs."""
+    """Select warm/cold leads, enqueue nurturing jobs, and dispatch messages."""
 
-    def __init__(self, *, pool: Any) -> None:
+    def __init__(
+        self,
+        *,
+        pool: Any,
+        bot: Any | None = None,
+        qdrant: Any | None = None,
+        llm: Any | None = None,
+        model: str = "claude-haiku-4-5",
+    ) -> None:
         self._pool = pool
+        self._bot = bot
+        self._qdrant = qdrant
+        self._llm = llm
+        self._model = model
 
     async def _assert_384_contract(self) -> None:
         """Fail fast if lead_scores table is missing #384 columns."""
@@ -113,3 +125,78 @@ class NurturingService:
         await self.enqueue_updates(candidates=candidates, scheduled_for=scheduled_for)
         logger.info("Nurturing batch enqueued: %d candidates", len(candidates))
         return len(candidates)
+
+    async def dispatch_pending(self, *, batch_size: int = 20) -> int:
+        """Pick up pending nurturing jobs and send messages via bot.
+
+        Returns:
+            Number of messages successfully sent.
+        """
+        if self._bot is None:
+            logger.warning("NurturingDispatch: bot not configured, skipping")
+            return 0
+
+        rows = await self._pool.fetch(
+            """
+            SELECT id, user_id, payload, status
+            FROM nurturing_jobs
+            WHERE status = 'pending'
+              AND scheduled_for <= now()
+            ORDER BY scheduled_for ASC
+            LIMIT $1
+            """,
+            batch_size,
+        )
+        if not rows:
+            return 0
+
+        sent = 0
+        for row in rows:
+            user_id = row["user_id"]
+            payload = (
+                json.loads(row["payload"]) if isinstance(row["payload"], str) else row["payload"]
+            )
+            try:
+                message = await self._generate_nurturing_message(payload.get("preferences", {}))
+                await self._bot.send_message(chat_id=user_id, text=message)
+                await self._pool.execute(
+                    "UPDATE nurturing_jobs SET status = 'sent' WHERE id = $1", row["id"]
+                )
+                sent += 1
+            except Exception:
+                logger.exception("Failed to dispatch nurturing job %d", row["id"])
+                await self._pool.execute(
+                    "UPDATE nurturing_jobs SET status = 'failed' WHERE id = $1", row["id"]
+                )
+        logger.info("NurturingDispatch: sent %d/%d", sent, len(rows))
+        return sent
+
+    async def _generate_nurturing_message(self, preferences: dict[str, Any]) -> str:
+        """Generate personalized nurturing message via LLM or template fallback."""
+        prefs_text = ", ".join(f"{k}: {v}" for k, v in preferences.items()) or "general interest"
+        if self._llm is None:
+            return (
+                f"Здравствуйте! У нас есть новые предложения по вашим предпочтениям: {prefs_text}"
+            )
+        try:
+            response = await self._llm.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Generate a short, friendly real estate nurturing message in Russian "
+                            "based on client preferences."
+                        ),
+                    },
+                    {"role": "user", "content": f"Client preferences: {prefs_text}"},
+                ],
+                max_tokens=200,
+                name="nurturing-message",
+            )
+            return response.choices[0].message.content or f"Новые предложения: {prefs_text}"
+        except Exception:
+            logger.warning("LLM nurturing message failed, using template", exc_info=True)
+            return (
+                f"Здравствуйте! У нас есть новые предложения по вашим предпочтениям: {prefs_text}"
+            )
