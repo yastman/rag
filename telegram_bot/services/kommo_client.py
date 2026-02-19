@@ -23,6 +23,7 @@ from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import (
     Contact,
     ContactCreate,
+    ContactUpdate,
     Lead,
     LeadCreate,
     LeadUpdate,
@@ -125,6 +126,40 @@ class KommoClient:
         )
         return Lead(**data)
 
+    @observe(name="kommo-search-leads")
+    async def search_leads(
+        self,
+        query: str | None = None,
+        responsible_user_id: int | None = None,
+        limit: int = 50,
+    ) -> list[Lead]:
+        """GET /api/v4/leads with optional query or responsible_user_id filter."""
+        params: dict[str, Any] = {"limit": limit}
+        if query is not None:
+            params["query"] = query
+        if responsible_user_id is not None:
+            params["filter[responsible_user_id][]"] = responsible_user_id
+        data = await self._request("GET", "/leads", params=params)
+        items = data.get("_embedded", {}).get("leads", [])
+        return [Lead(**item) for item in items]
+
+    @observe(name="kommo-get-tasks")
+    async def get_tasks(
+        self,
+        responsible_user_id: int | None = None,
+        is_completed: bool | None = None,
+        limit: int = 50,
+    ) -> list[Task]:
+        """GET /api/v4/tasks with optional filters."""
+        params: dict[str, Any] = {"limit": limit}
+        if responsible_user_id is not None:
+            params["filter[responsible_user_id][]"] = responsible_user_id
+        if is_completed is not None:
+            params["filter[is_completed]"] = int(is_completed)
+        data = await self._request("GET", "/tasks", params=params)
+        items = data.get("_embedded", {}).get("tasks", [])
+        return [Task(**item) for item in items]
+
     # --- Contacts ---
 
     @observe(name="kommo-upsert-contact")
@@ -147,6 +182,16 @@ class KommoClient:
         data = await self._request("GET", "/contacts", params={"query": query})
         items = data.get("_embedded", {}).get("contacts", [])
         return [Contact(**c) for c in items]
+
+    @observe(name="kommo-update-contact")
+    async def update_contact(self, contact_id: int, update: ContactUpdate) -> Contact:
+        """PATCH /api/v4/contacts/{id}."""
+        data = await self._request(
+            "PATCH",
+            f"/contacts/{contact_id}",
+            json=update.model_dump(exclude_none=True),
+        )
+        return Contact(**data)
 
     # --- Notes ---
 

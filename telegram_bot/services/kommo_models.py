@@ -46,6 +46,31 @@ class ContactCreate(BaseModel):
     custom_fields_values: list[dict] | None = None
 
 
+class ContactUpdate(BaseModel):
+    """PATCH /api/v4/contacts/{id} payload."""
+
+    first_name: str | None = None
+    last_name: str | None = None
+    custom_fields_values: list[dict] | None = None
+
+    @staticmethod
+    def build_contact_fields(
+        phone: str | None = None,
+        email: str | None = None,
+    ) -> list[dict]:
+        """Build custom_fields_values for phone/email updates."""
+        fields = []
+        if phone is not None:
+            fields.append(
+                {"field_code": "PHONE", "values": [{"value": phone, "enum_code": "WORK"}]}
+            )
+        if email is not None:
+            fields.append(
+                {"field_code": "EMAIL", "values": [{"value": email, "enum_code": "WORK"}]}
+            )
+        return fields
+
+
 class TaskCreate(BaseModel):
     """POST /api/v4/tasks payload."""
 
@@ -74,6 +99,8 @@ class Lead(BaseModel):
     budget: int | None = Field(None, validation_alias="price")
     status_id: int | None = None
     pipeline_id: int | None = None
+    responsible_user_id: int | None = None
+    loss_reason_id: int | None = None
     created_at: int | None = None
     updated_at: int | None = None
 
@@ -102,6 +129,12 @@ class Task(BaseModel):
     text: str | None = None
     complete_till: int | None = None
     entity_id: int | None = None
+    entity_type: str | None = None
+    responsible_user_id: int | None = None
+    is_completed: bool | None = None
+    result: dict | None = None
+    created_at: int | None = None
+    updated_at: int | None = None
 
 
 class Pipeline(BaseModel):

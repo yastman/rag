@@ -31,6 +31,7 @@ class BotContext:
     content_filter_enabled: bool = True
     guard_mode: str = "hard"
     role: str = "client"
+    manager_id: int | None = None  # Kommo responsible_user_id for manager-role flows
     # Set to True by tools that deliver response directly (e.g. streaming) to prevent
     # bot.py from sending the message a second time (#428).
     response_sent: bool = False
