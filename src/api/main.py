@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from src.api.schemas import QueryRequest, QueryResponse
+from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,7 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/query", response_model=QueryResponse)
+@observe(name="rag-api-query", capture_input=False, capture_output=False)
 async def query(req: QueryRequest) -> QueryResponse:
     """Run a RAG query through the LangGraph pipeline."""
     from telegram_bot.graph.state import make_initial_state
@@ -120,7 +122,7 @@ async def query(req: QueryRequest) -> QueryResponse:
     trace_kwargs: dict[str, Any] = {
         "session_id": session_id,
         "user_id": str(req.user_id),
-        "tags": [req.channel, "rag"],
+        "tags": ["api", "rag", req.channel],
     }
     if req.langfuse_trace_id:
         trace_kwargs["trace_id"] = req.langfuse_trace_id
@@ -128,9 +130,14 @@ async def query(req: QueryRequest) -> QueryResponse:
     with propagate_attributes(**trace_kwargs):
         result = await app.state.graph.ainvoke(state)
         lf = get_client()
+        # session_id/user_id/tags are also in propagate_attributes (for child spans);
+        # update_current_trace sets them on the root @observe trace itself.
         lf.update_current_trace(
             input=req.query,
             output=result.get("response", ""),
+            session_id=session_id,
+            user_id=str(req.user_id),
+            tags=["api", "rag", req.channel],
             metadata={
                 "source": req.channel,
                 "query_type": result.get("query_type", ""),
