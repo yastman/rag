@@ -22,6 +22,7 @@ from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
 from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
+from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import (
@@ -661,6 +662,7 @@ class PropertyBot:
             llm=self._llm,
             content_filter_enabled=self.config.content_filter_enabled,
             guard_mode=self.config.guard_mode,
+            original_user_query=message.text or "",
         )
 
         rag_result_store: dict[str, Any] = {}
@@ -670,12 +672,64 @@ class PropertyBot:
             user_id=str(user_id),
             tags=["telegram", "rag", "agent"],
         ):
+            # --- Pre-agent content filter (#439) ---
+            # Text path must run guard BEFORE agent.ainvoke() so that
+            # injection attempts never reach the LLM at all.
+            user_text = message.text or ""
+            if self.config.content_filter_enabled:
+                detected, risk_score, pattern = detect_injection(user_text)
+                if detected:
+                    if self.config.guard_mode == "hard":
+                        logger.warning(
+                            "Pre-agent guard blocked (score=%.2f, pattern=%s): %.80s",
+                            risk_score,
+                            pattern,
+                            user_text,
+                        )
+                        await message.answer(_BLOCKED_RESPONSE)
+                        lf = get_client()
+                        tid = lf.get_current_trace_id() or ""
+                        lf.update_current_trace(
+                            input={"query": user_text},
+                            output={"response": _BLOCKED_RESPONSE},
+                            metadata={
+                                "pipeline_mode": "sdk_agent",
+                                "guard_blocked": True,
+                                "injection_pattern": pattern,
+                                "injection_risk_score": risk_score,
+                            },
+                        )
+                        if tid:
+                            score(
+                                lf,
+                                tid,
+                                name="guard_blocked",
+                                value=1,
+                                data_type="BOOLEAN",
+                            )
+                            score(
+                                lf,
+                                tid,
+                                name="injection_pattern",
+                                value=pattern or "unknown",
+                                data_type="CATEGORICAL",
+                            )
+                        return
+                    # soft/log mode: log but don't block
+                    logger.warning(
+                        "Pre-agent guard detected (mode=%s, score=%.2f, pattern=%s): %.80s",
+                        self.config.guard_mode,
+                        risk_score,
+                        pattern,
+                        user_text,
+                    )
+
             # Initialize handler inside propagation context so it inherits session/user/tags.
             langfuse_handler = create_callback_handler()
             callbacks = [langfuse_handler] if langfuse_handler else []
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                 result = await agent.ainvoke(
-                    {"messages": [{"role": "user", "content": message.text or ""}]},
+                    {"messages": [{"role": "user", "content": user_text}]},
                     config={
                         "callbacks": callbacks,
                         "configurable": {
