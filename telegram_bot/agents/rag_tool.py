@@ -80,8 +80,11 @@ async def rag_search(
         content_filter_enabled = ctx.content_filter_enabled if ctx else True
 
         if content_filter_enabled:
+            # Guard the original user text when available (#439), not the agent-reformulated query.
+            # Agent reformulation can sanitize malicious queries, bypassing guard detection.
+            original_text = ctx.original_user_query if ctx and ctx.original_user_query else query
             guard_result = await guard_node(
-                {"messages": [{"content": query}], "latency_stages": {}},
+                {"messages": [{"content": original_text}], "latency_stages": {}},
                 guard_mode=guard_mode,
             )
             if guard_result.get("guard_blocked"):
