@@ -4,27 +4,27 @@ paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, t
 
 # Telegram Bot
 
-LangGraph-based RAG pipeline with aiogram Telegram interface.
+Hybrid RAG pipeline (async functions for text, LangGraph for voice) with aiogram Telegram interface.
 
 ## Purpose
 
-Telegram interface for domain-configurable search (default: Bulgarian property) with LangGraph StateGraph pipeline, streaming-compatible responses, and rate limiting.
+Telegram interface for domain-configurable search (default: Bulgarian property). Text queries use 6-step async `rag_pipeline()`, voice uses 11-node LangGraph StateGraph. Agent SDK routes tool calls.
 
 ## Architecture
 
 ```
 Text:  User Message → ThrottlingMiddleware → ErrorMiddleware
-                   → PropertyBot.handle_query()
-                   → _handle_query_supervisor()
+                   → PropertyBot.handle_query() → _handle_query_supervisor()
                    → create_bot_agent(model, tools, context_schema=BotContext)
-                   → Agent LLM → tool_choice (rag_search | history_search | 8 CRM tools | direct)
-                   → tool executes (deps via BotContext DI) → respond
+                   → Agent LLM → tool_choice:
+                     → rag_search → rag_pipeline() (6-step async: cache→retrieve→grade→rerank→rewrite→store)
+                     → history_search → build_history_graph() (4-node LangGraph)
+                     → 8 CRM tools (Kommo API) | direct response
                    → Langfuse: CallbackHandler + @observe spans
 
 Voice: Voice Message → PropertyBot.handle_voice()
                     → download .ogg → make_initial_state(voice_audio=bytes)
-                    → [transcribe → classify → ... same pipeline]
-                    → Markdown Response
+                    → build_graph().ainvoke() (11-node LangGraph: transcribe→guard→classify→...→respond)
 ```
 
 ## Key Files
@@ -35,22 +35,38 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/scoring.py` | `score()`, `write_langfuse_scores()`, `write_history_scores()`, `write_crm_scores()` (#310, #451, #452) |
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
-| `telegram_bot/graph/graph.py` | `build_graph()` — assembles 11-node StateGraph (RAG pipeline) |
-| `telegram_bot/graph/state.py` | RAGState TypedDict (25 fields incl. voice_audio, stt_text, input_type) + `make_initial_state()` |
-| `telegram_bot/graph/edges.py` | 4 routing functions (`route_start` voice→transcribe/classify, `route_grade` checks `grade_confidence`) |
-| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, `show_transcription`, `voice_language`, `stt_model`, `streaming_enabled`) |
-| `telegram_bot/graph/nodes/` | 9 node modules (transcribe, classify, cache, retrieve, grade, rerank, generate, rewrite, respond) |
+| `telegram_bot/agents/rag_pipeline.py` | 6-step async RAG pipeline: `_cache_check → _hybrid_retrieve → _grade_documents → _rerank → _rewrite_query → _cache_store` (#442) |
 | `telegram_bot/agents/agent.py` | `create_bot_agent()` — wraps `langchain.agents.create_agent` SDK (#413) |
-| `telegram_bot/agents/context.py` | `BotContext` dataclass (13 fields) — DI via `context_schema` into tools |
-| `telegram_bot/agents/rag_tool.py` | `rag_search` @tool — wraps 11-node RAG pipeline via `build_graph().ainvoke()` |
+| `telegram_bot/agents/context.py` | `BotContext` dataclass — DI via `context_schema` into tools |
+| `telegram_bot/agents/rag_tool.py` | `rag_search` @tool — wraps `rag_pipeline()` (async functions) |
 | `telegram_bot/agents/history_tool.py` | `history_search` @tool — wraps 4-node history sub-graph |
 | `telegram_bot/agents/crm_tools.py` | 8 CRM @tools for Kommo API (get/create/update deals, contacts, notes, tasks) |
-| `telegram_bot/agents/history_graph/` | History sub-graph: retrieve → grade → rewrite → summarize (4 nodes) |
+| `telegram_bot/agents/history_graph/` | History sub-graph: guard → retrieve → grade → rewrite → summarize (5 nodes, LangGraph) |
+| `telegram_bot/graph/graph.py` | `build_graph()` — 11-node StateGraph (**voice path only**) |
+| `telegram_bot/graph/state.py` | RAGState TypedDict (25 fields incl. voice_audio, stt_text, input_type) + `make_initial_state()` |
+| `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, pipeline tuning params) |
+| `telegram_bot/graph/nodes/` | 9 node modules — used by voice LangGraph and shared by rag_pipeline.py |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, `create_callback_handler`, PII masking |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 
-## LangGraph Pipeline (11 nodes)
+## Text RAG Pipeline (6 async steps, #442)
+
+`rag_pipeline()` in `agents/rag_pipeline.py` — called by `rag_search` @tool:
+
+```
+rag_pipeline(query, ctx) →
+  1. _cache_check(query, embeddings, cache) → cache_hit? return early
+  2. _hybrid_retrieve(query_embedding, sparse, qdrant) → RRF fusion
+  3. _grade_documents(documents, threshold=0.005) → grade_confidence
+  4. _rerank(documents, reranker) → if confidence < skip_rerank_threshold
+  5. _rewrite_query(query, llm) → loop back to step 2 (max_rewrite_attempts)
+  6. _cache_store(query, response, cache) → store for future hits
+```
+
+Each step is `@observe()`-decorated for Langfuse tracing. Returns dict with `documents`, `response`, `latency_stages`, pipeline metadata.
+
+## Voice LangGraph Pipeline (11 nodes)
 
 ```
 START → [voice_audio?] → transcribe → guard → classify → ...
@@ -193,8 +209,8 @@ result = await agent.ainvoke(
 ```
 
 **Tools (all @tool decorated, deps via BotContext):**
-- `rag_search` — wraps `build_graph().ainvoke()` (11-node RAG pipeline), @observe("tool-rag-search")
-- `history_search` — wraps `build_history_graph().ainvoke()` (4-node sub-graph), @observe("tool-history-search")
+- `rag_search` — wraps `rag_pipeline()` (6-step async functions), @observe("tool-rag-search")
+- `history_search` — wraps `build_history_graph().ainvoke()` (5-node sub-graph incl. guard), @observe("tool-history-search")
 - 8 CRM tools — `crm_get_deal`, `crm_create_lead`, `crm_update_lead`, `crm_upsert_contact`, `crm_add_note`, `crm_create_task`, `crm_link_contact_to_deal`, `crm_get_contacts`
 
 **Runtime context:** Tools receive `BotContext` via `config["configurable"]["bot_context"]` (context_schema DI).
@@ -299,14 +315,14 @@ All tools check `ctx.kommo_client is not None` before proceeding. Enabled via `c
 | — | `NURTURING_INTERVAL_MINUTES` | — | Batch interval |
 | — | `FUNNEL_ROLLUP_CRON` | — | Daily funnel metrics rollup |
 
-### Langfuse Scores (CRM)
+### Langfuse Scores (CRM — `write_crm_scores()` #455)
 
 | Score | Type | Purpose |
 |-------|------|---------|
-| `nurturing_batch_size` | NUMERIC | Total leads in nurturing batch |
-| `nurturing_sent_count` | NUMERIC | Successfully sent nurturing messages |
-| `funnel_conversion_rate` | NUMERIC | Stage conversion rate |
-| `funnel_dropoff_rate` | NUMERIC | Stage dropoff rate |
+| `crm_tool_used` | BOOLEAN | Whether any CRM tool was called |
+| `crm_tools_count` | NUMERIC | Number of CRM tool calls |
+| `crm_tools_success` | NUMERIC | Successful CRM operations |
+| `crm_tools_error` | NUMERIC | Failed CRM operations |
 
 ## Development Guide
 
@@ -323,11 +339,16 @@ async def cmd_newcmd(self, message: Message):
 self.dp.message(Command("newcmd"))(self.cmd_newcmd)
 ```
 
-### Adding new graph node
+### Adding a step to text RAG pipeline
+
+1. Add async function in `telegram_bot/agents/rag_pipeline.py` with `@observe()` decorator
+2. Wire into `rag_pipeline()` orchestrator
+3. Write tests in `tests/unit/agents/`
+
+### Adding new voice graph node (LangGraph)
 
 1. Create module in `telegram_bot/graph/nodes/`
 2. Define async function with `state: dict[str, Any]` signature
 3. Return partial state update dict
 4. Add to `build_graph()` in `graph/graph.py` with `functools.partial` for deps
-5. Add edges in `graph/graph.py`
-6. Write tests in `tests/unit/graph/`
+5. Write tests in `tests/unit/graph/`
