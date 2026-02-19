@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.metrics import PipelineMetrics
 
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ async def rerank_node(
 
     if not documents:
         elapsed = time.perf_counter() - t0
+        PipelineMetrics.get().record("rerank", elapsed * 1000)
         return {
             "documents": [],
             "rerank_applied": False,
@@ -68,6 +70,7 @@ async def rerank_node(
                     reranked.append(doc)
 
             elapsed = time.perf_counter() - t0
+            PipelineMetrics.get().record("rerank", elapsed * 1000)
             logger.info(
                 "rerank: ColBERT reranked %d → %d docs (%.3fs)",
                 len(documents),
@@ -91,6 +94,7 @@ async def rerank_node(
     sorted_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
 
     elapsed = time.perf_counter() - t0
+    PipelineMetrics.get().record("rerank", elapsed * 1000)
     logger.info(
         "rerank: score-based sort %d → %d docs (%.3fs)",
         len(documents),
