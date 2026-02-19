@@ -48,6 +48,7 @@ async def history_search(
             llm=ctx.llm if ctx else None,
             guard_mode=ctx.guard_mode if ctx else "hard",
             content_filter_enabled=ctx.content_filter_enabled if ctx else True,
+            relevance_threshold=ctx.history_relevance_threshold if ctx else 0.7,
         )
         state: dict[str, Any] = {
             "query": query,
@@ -66,6 +67,15 @@ async def history_search(
             write_history_scores(lf, result, trace_id=lf.get_current_trace_id() or "")
             summary = result.get("summary", "")
             lf.update_current_span(output={"summary_length": len(summary)})
+
+            # Attach feedback keyboard to BotContext side-channel (#434)
+            if ctx is not None and summary:
+                trace_id = lf.get_current_trace_id()
+                if trace_id:
+                    from telegram_bot.feedback import build_feedback_keyboard
+
+                    ctx.history_reply_markup = build_feedback_keyboard(trace_id)
+
             return summary or f"По запросу «{query}» ничего не найдено в истории диалогов."
         return f"По запросу «{query}» ничего не найдено в истории диалогов."
     except Exception:
