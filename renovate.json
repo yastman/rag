@@ -38,12 +38,16 @@
       "groupName": "databases"
     },
     {
+      "description": "Langfuse Docker - pin to 3.150.0 until events table bug fixed (upstream #11924)",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["langfuse/langfuse", "langfuse/langfuse-worker"],
+      "enabled": false
+    },
+    {
       "description": "ML Platform - group together",
       "matchDatasources": ["docker"],
       "matchPackageNames": [
         "ghcr.io/berriai/litellm",
-        "langfuse/langfuse",
-        "langfuse/langfuse-worker",
         "ghcr.io/mlflow/mlflow"
       ],
       "groupName": "ml-platform"
