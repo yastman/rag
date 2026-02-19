@@ -19,8 +19,8 @@ from telegram_bot.services.metrics import PipelineMetrics
 logger = logging.getLogger(__name__)
 
 # Only these query types use semantic cache (check + store).
-# Context-sensitive types like GENERAL bypass semantic cache entirely.
-CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED"})
+# GENERAL uses a stricter threshold (0.08) to avoid false positives.
+CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED", "GENERAL"})
 
 
 @observe(name="node-cache-check", capture_input=False, capture_output=False)
