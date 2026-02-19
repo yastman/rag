@@ -7,6 +7,7 @@ from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from redisvl.exceptions import RedisSearchError, RedisVLError, SchemaValidationError
 
 from telegram_bot.integrations.cache import (
     CACHE_VERSION,
@@ -244,6 +245,91 @@ class TestSemanticCache:
         assert call_kwargs["filters"]["user_id"] == "42"
         assert call_kwargs["filters"]["query_type"] == "FAQ"
         assert call_kwargs["filters"]["language"] == "ru"
+
+
+class TestSemanticCacheRedisVLErrors:
+    """Test CacheLayerManager graceful degradation on RedisVL errors (#524).
+
+    When Redis Stack modules are unavailable or the index schema is mismatched,
+    redisvl raises RedisVLError subclasses. Both store_semantic and check_semantic
+    must handle these without propagating exceptions to the caller.
+    """
+
+    async def test_store_semantic_handles_redisvl_error(self):
+        """store_semantic logs and swallows RedisVLError (Redis Stack missing)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock(side_effect=RedisVLError("index not found"))
+        mgr.cache_ttl = {"FAQ": 86400}
+
+        # Should not raise — graceful degradation
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+        )
+
+    async def test_store_semantic_handles_redis_search_error(self):
+        """store_semantic handles RedisSearchError (RediSearch module not loaded)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock(side_effect=RedisSearchError("ERR unknown command"))
+        mgr.cache_ttl = {"GENERAL": 3600}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="GENERAL",
+        )
+
+    async def test_store_semantic_handles_schema_validation_error(self):
+        """store_semantic handles SchemaValidationError (index schema mismatch)."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.astore = AsyncMock(
+            side_effect=SchemaValidationError("Schema validation failed: field mismatch")
+        )
+        mgr.cache_ttl = {"ENTITY": 3600}
+
+        await mgr.store_semantic(
+            query="test",
+            response="answer",
+            vector=[0.1] * 1024,
+            query_type="ENTITY",
+        )
+
+    async def test_check_semantic_handles_redisvl_error(self, _ensure_redisvl_filter_mock):
+        """check_semantic returns None on RedisVLError — miss path."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(side_effect=RedisVLError("connection refused"))
+        mgr.cache_thresholds = {"GENERAL": 0.08}
+
+        result = await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="GENERAL",
+        )
+        assert result is None
+        assert mgr._metrics["semantic"]["misses"] == 1
+
+    async def test_check_semantic_handles_redis_search_error(self, _ensure_redisvl_filter_mock):
+        """check_semantic returns None on RedisSearchError."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(
+            side_effect=RedisSearchError("ERR unknown command `FT.SEARCH`")
+        )
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        result = await mgr.check_semantic(
+            query="test",
+            vector=[0.1] * 1024,
+            query_type="FAQ",
+        )
+        assert result is None
 
 
 class TestExactCaches:
