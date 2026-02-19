@@ -66,7 +66,7 @@ def redis_url():
 
 @pytest.fixture(scope="module")
 def collection_name():
-    return os.getenv("QDRANT_COLLECTION", "contextual_bulgaria_voyage4")
+    return os.getenv("QDRANT_COLLECTION", "gdrive_documents_bge")
 
 
 class TestPreflightQdrant:
