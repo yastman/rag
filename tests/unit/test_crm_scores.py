@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 from telegram_bot.scoring import write_crm_scores
 
 
-def _tool_msg(name: str, content: str) -> SimpleNamespace:
+def _tool_msg(name: str, content: str, *, status: str | None = None) -> SimpleNamespace:
     """Create a minimal ToolMessage-like object."""
-    return SimpleNamespace(type="tool", name=name, content=content)
+    return SimpleNamespace(type="tool", name=name, content=content, status=status)
 
 
 def _human_msg(content: str = "hello") -> SimpleNamespace:
@@ -126,3 +126,31 @@ class TestWriteCrmScores:
             score_id = call.kwargs["id"]
             score_name = call.kwargs["name"]
             assert score_id == f"abc-123-{score_name}"
+
+    def test_tool_status_error_is_prioritized(self):
+        """ToolMessage status=error should be counted as error even without error text."""
+        lf = _make_lf()
+        messages = [
+            _tool_msg("crm_get_deal", '{"id": 42, "name": "Test"}', status="error"),
+        ]
+
+        write_crm_scores(lf, messages, trace_id="t-6")
+
+        calls = {c.kwargs["name"]: c.kwargs["value"] for c in lf.create_score.call_args_list}
+        assert calls["crm_tools_count"] == 1.0
+        assert calls["crm_tools_success"] == 0.0
+        assert calls["crm_tools_error"] == 1.0
+
+    def test_tool_status_success_is_prioritized(self):
+        """ToolMessage status=success should be counted as success."""
+        lf = _make_lf()
+        messages = [
+            _tool_msg("crm_get_deal", "Ошибка при получении сделки: timeout", status="success"),
+        ]
+
+        write_crm_scores(lf, messages, trace_id="t-7")
+
+        calls = {c.kwargs["name"]: c.kwargs["value"] for c in lf.create_score.call_args_list}
+        assert calls["crm_tools_count"] == 1.0
+        assert calls["crm_tools_success"] == 1.0
+        assert calls["crm_tools_error"] == 0.0
