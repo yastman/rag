@@ -790,8 +790,12 @@ class PropertyBot:
                     data_type="CATEGORICAL",
                     id=f"{tid}-user_role",
                 )
-                # Tool call count (#374)
-                tool_calls = result.get("tool_call_count", 0)
+                # Tool call count (#374): count AIMessage tool_calls from agent output
+                tool_calls = sum(
+                    1
+                    for m in result.get("messages", [])
+                    if hasattr(m, "tool_calls") and m.tool_calls
+                )
                 if tool_calls > 0:
                     lf.create_score(
                         trace_id=tid,
