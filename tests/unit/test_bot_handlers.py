@@ -413,8 +413,7 @@ class TestHandleQuery:
                 await bot.handle_query(message)
 
             score_calls = {
-                c.kwargs["name"]: c.kwargs.get("value")
-                for c in mock_lf.score_current_trace.call_args_list
+                c.kwargs["name"]: c.kwargs.get("value") for c in mock_lf.create_score.call_args_list
             }
             assert "supervisor_model" in score_calls
             # SDK agent handles routing internally — no agent_used/supervisor_latency_ms
@@ -804,16 +803,16 @@ class TestCmdHistory:
         assert trace_kwargs["input"]["query"] == "цены"
         assert trace_kwargs["output"]["results_count"] == 1
 
-        # Scores
-        score_calls = mock_lf.score_current_trace.call_args_list
-        score_names = [c[1]["name"] for c in score_calls]
+        # Scores (#435: uses create_score with trace_id)
+        score_calls = mock_lf.create_score.call_args_list
+        score_names = [c.kwargs["name"] for c in score_calls]
         assert "history_search_count" in score_names
         assert "history_search_latency_ms" in score_names
         assert "history_search_empty" in score_names
         assert "history_backend" in score_names
 
         # Verify values
-        score_map = {c[1]["name"]: c[1]["value"] for c in score_calls}
+        score_map = {c.kwargs["name"]: c.kwargs["value"] for c in score_calls}
         assert score_map["history_search_count"] == 1
         assert score_map["history_search_empty"] == 0.0
         assert score_map["history_backend"] == "qdrant"
@@ -831,8 +830,8 @@ class TestCmdHistory:
             with patch("telegram_bot.bot.propagate_attributes"):
                 await bot.cmd_history(message)
 
-        score_calls = mock_lf.score_current_trace.call_args_list
-        score_map = {c[1]["name"]: c[1]["value"] for c in score_calls}
+        score_calls = mock_lf.create_score.call_args_list
+        score_map = {c.kwargs["name"]: c.kwargs["value"] for c in score_calls}
         assert score_map["history_search_count"] == 0
         assert score_map["history_search_empty"] == 1.0
 
@@ -851,9 +850,9 @@ class TestCmdHistory:
         trace_kwargs = mock_lf.update_current_trace.call_args[1]
         assert trace_kwargs["output"]["error"] == "service_unavailable"
 
-        # Scores
-        score_calls = mock_lf.score_current_trace.call_args_list
-        score_map = {c[1]["name"]: c[1]["value"] for c in score_calls}
+        # Scores (#435: uses create_score with trace_id)
+        score_calls = mock_lf.create_score.call_args_list
+        score_map = {c.kwargs["name"]: c.kwargs["value"] for c in score_calls}
         assert score_map["history_search_count"] == 0
         assert score_map["history_search_empty"] == 1.0
 
@@ -1312,7 +1311,9 @@ class TestRegisterHandlers:
 
 
 class TestWriteLangfuseScores:
-    """Test write_langfuse_scores score writing (canonical in scoring.py)."""
+    """Test write_langfuse_scores score writing (canonical in scoring.py, #435: create_score)."""
+
+    _TID = "test-trace-scores"
 
     def test_latency_total_ms_uses_wall_time(self):
         """latency_total_ms should use pipeline_wall_ms from state, not sum of stages."""
@@ -1325,13 +1326,10 @@ class TestWriteLangfuseScores:
             "search_results_count": 20,
             "rerank_applied": False,
             "latency_stages": {"cache_check": 5.0, "retrieve": 8.0, "generate": 3.0},
-            "pipeline_wall_ms": 7500.0,  # wall-time set by handle_query
+            "pipeline_wall_ms": 7500.0,
         }
-        write_langfuse_scores(mock_lf, result)
-        # Find the latency_total_ms call
-        calls = {
-            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
-        }
+        write_langfuse_scores(mock_lf, result, trace_id=self._TID)
+        calls = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
         assert calls["latency_total_ms"] == 7500.0
 
     def test_latency_total_ms_fallback_zero(self):
@@ -1340,10 +1338,8 @@ class TestWriteLangfuseScores:
 
         mock_lf = MagicMock()
         result = {"query_type": "FAQ", "latency_stages": {}}
-        write_langfuse_scores(mock_lf, result)
-        calls = {
-            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
-        }
+        write_langfuse_scores(mock_lf, result, trace_id=self._TID)
+        calls = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
         assert calls["latency_total_ms"] == 0.0
 
     def test_real_scores_from_state(self):
@@ -1362,10 +1358,8 @@ class TestWriteLangfuseScores:
             "search_cache_hit": False,
             "grade_confidence": 0.016,
         }
-        write_langfuse_scores(mock_lf, result)
-        calls = {
-            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
-        }
+        write_langfuse_scores(mock_lf, result, trace_id=self._TID)
+        calls = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
         assert calls["embeddings_cache_hit"] == 1.0
         assert calls["search_cache_hit"] == 0.0
         assert calls["confidence_score"] == 0.016
@@ -1385,10 +1379,8 @@ class TestWriteLangfuseScores:
             "llm_ttft_ms": 450.0,
             "llm_response_duration_ms": 2500.0,
         }
-        write_langfuse_scores(mock_lf, result)
-        calls = {
-            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
-        }
+        write_langfuse_scores(mock_lf, result, trace_id=self._TID)
+        calls = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
         assert calls["llm_ttft_ms"] == 450.0
         assert calls["llm_response_duration_ms"] == 2500.0
 
@@ -1406,11 +1398,11 @@ class TestWriteLangfuseScores:
             "pipeline_wall_ms": 5200.0,
             "user_perceived_wall_ms": 5200.0,
         }
-        write_langfuse_scores(mock_lf, result)
+        write_langfuse_scores(mock_lf, result, trace_id=self._TID)
 
         calls = {
             c.kwargs["name"]: c.kwargs.get("value")
-            for c in mock_lf.score_current_trace.call_args_list
+            for c in mock_lf.create_score.call_args_list
             if "name" in c.kwargs
         }
         assert calls["bge_embed_error"] == 1

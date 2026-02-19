@@ -96,13 +96,21 @@ def _make_typing_cm():
     return mock_cm
 
 
+_TEST_TRACE_ID = "test-trace-abc-123"
+
+
 def _run_score_writer(result, mock_lf):
     """Call write_langfuse_scores directly for unit testing scoring logic.
 
     Since #310, pipeline scores are written by scoring.py (called from rag_agent tool
     and handle_voice). This helper tests the scoring function in isolation.
+    Uses explicit trace_id (#435) — create_score with idempotency keys.
     """
-    write_langfuse_scores(mock_lf, result)
+    if not hasattr(mock_lf, "get_current_trace_id") or not callable(
+        getattr(mock_lf, "get_current_trace_id", None)
+    ):
+        mock_lf.get_current_trace_id = MagicMock(return_value=_TEST_TRACE_ID)
+    write_langfuse_scores(mock_lf, result, trace_id=_TEST_TRACE_ID)
     return mock_lf
 
 
@@ -236,7 +244,7 @@ class TestScoreWriting:
         result = {**FULL_PIPELINE_RESULT, "checkpointer_overhead_proxy_ms": 39.0}
         _run_score_writer(result, mock_lf)
 
-        score_calls = mock_lf.score_current_trace.call_args_list
+        score_calls = mock_lf.create_score.call_args_list
         score_names = [call.kwargs["name"] for call in score_calls]
 
         expected_names = [
@@ -279,7 +287,7 @@ class TestScoreWriting:
             "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.score_current_trace.call_count == 34
+        assert mock_lf.create_score.call_count == 34
 
     def test_score_values_full_pipeline(self):
         """Score values should match the graph result state."""
@@ -288,7 +296,7 @@ class TestScoreWriting:
 
         scores = {
             call.kwargs["name"]: call.kwargs["value"]
-            for call in mock_lf.score_current_trace.call_args_list
+            for call in mock_lf.create_score.call_args_list
         }
         assert scores["query_type"] == 2.0
         assert scores["semantic_cache_hit"] == 0.0
@@ -334,7 +342,7 @@ class TestScoreWriting:
 
         scores = {
             call.kwargs["name"]: call.kwargs["value"]
-            for call in mock_lf.score_current_trace.call_args_list
+            for call in mock_lf.create_score.call_args_list
         }
         for name, expected_value in expected_scores.items():
             assert scores[name] == expected_value, f"{name}: {scores[name]} != {expected_value}"
@@ -354,15 +362,17 @@ class TestScoreWriting:
         result = {**base, **result_override}
         _run_score_writer(result, mock_lf)
 
-        score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
+        score_names = [c.kwargs["name"] for c in mock_lf.create_score.call_args_list]
         assert "response_style_applied" not in score_names
 
     def test_scores_written_even_on_null_client(self):
-        """When Langfuse disabled, _NullLangfuseClient.score_current_trace is called (no-op)."""
+        """When Langfuse disabled, _NullLangfuseClient.create_score is called (no-op, #435)."""
         from telegram_bot.observability import _NullLangfuseClient
 
         mock_lf = _NullLangfuseClient()
-        _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
+        # _NullLangfuseClient.get_current_trace_id() returns "" → write_langfuse_scores
+        # returns early. Pass explicit trace_id to exercise the scoring code path.
+        write_langfuse_scores(mock_lf, FULL_PIPELINE_RESULT, trace_id="null-trace")
 
 
 class TestLatencyBreakdownScores:
@@ -373,7 +383,7 @@ class TestLatencyBreakdownScores:
         mock_lf = MagicMock()
         _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
 
-        calls = mock_lf.score_current_trace.call_args_list
+        calls = mock_lf.create_score.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs for c in calls}
 
         assert score_map["llm_decode_ms"]["value"] == 300.0
@@ -393,7 +403,7 @@ class TestLatencyBreakdownScores:
         mock_lf = MagicMock()
         _run_score_writer(CACHE_HIT_RESULT, mock_lf)
 
-        calls = mock_lf.score_current_trace.call_args_list
+        calls = mock_lf.create_score.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs for c in calls}
 
         assert "llm_decode_ms" not in score_map
@@ -420,7 +430,7 @@ class TestLatencyBreakdownScores:
         }
         _run_score_writer(timeout_result, mock_lf)
 
-        calls = mock_lf.score_current_trace.call_args_list
+        calls = mock_lf.create_score.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs for c in calls}
 
         assert score_map["llm_timeout"]["value"] == 1
@@ -456,7 +466,8 @@ class TestVoiceTraceMetadata:
         """handle_voice metadata should contain all keys from handle_query."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
         voice_result = {
             **FULL_PIPELINE_RESULT,
@@ -497,7 +508,8 @@ class TestVoiceTraceMetadata:
         """Trace metadata should include memory_messages_count and overhead proxy."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
         result = {
             **FULL_PIPELINE_RESULT,
@@ -529,7 +541,7 @@ class TestVoiceScores:
         mock_lf = MagicMock()
         _run_score_writer(VOICE_PIPELINE_RESULT, mock_lf)
 
-        score_calls = mock_lf.score_current_trace.call_args_list
+        score_calls = mock_lf.create_score.call_args_list
         score_map = {c.kwargs["name"]: c.kwargs for c in score_calls}
 
         assert "stt_duration_ms" in score_map
@@ -545,7 +557,7 @@ class TestVoiceScores:
         mock_lf = MagicMock()
         _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
 
-        score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
+        score_names = [c.kwargs["name"] for c in mock_lf.create_score.call_args_list]
 
         assert "input_type" in score_names
         assert "stt_duration_ms" not in score_names
@@ -577,9 +589,7 @@ class TestMemoryScores:
 
         _run_score_writer(result, mock_lf)
 
-        scores = {
-            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
-        }
+        scores = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
         assert scores["memory_messages_count"] == expected_count
 
     @pytest.mark.parametrize(
@@ -603,7 +613,7 @@ class TestMemoryScores:
 
         _run_score_writer(result, mock_lf)
 
-        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.create_score.call_args_list}
         assert scores["summarization_triggered"]["value"] == expected_value
         assert scores["summarization_triggered"]["data_type"] == "BOOLEAN"
 
@@ -629,7 +639,8 @@ class TestHistoryScores:
         """history_save_success reflects save_turn return value."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
         history_svc = AsyncMock()
         history_svc.save_turn = AsyncMock(return_value=save_result)
@@ -637,7 +648,7 @@ class TestHistoryScores:
             mock_config, mock_lf, history_service=history_svc
         )
 
-        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.create_score.call_args_list}
         assert scores["history_save_success"]["value"] == expected_value
         assert scores["history_save_success"]["data_type"] == "BOOLEAN"
 
@@ -645,7 +656,8 @@ class TestHistoryScores:
         """supervisor_model CATEGORICAL score always written (#413)."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
         history_svc = AsyncMock()
         history_svc.save_turn = AsyncMock(return_value=True)
@@ -653,7 +665,7 @@ class TestHistoryScores:
             mock_config, mock_lf, history_service=history_svc
         )
 
-        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.score_current_trace.call_args_list}
+        scores = {c.kwargs["name"]: c.kwargs for c in mock_lf.create_score.call_args_list}
         assert "supervisor_model" in scores
         assert scores["supervisor_model"]["value"] == "gpt-4o-mini"
         assert scores["supervisor_model"]["data_type"] == "CATEGORICAL"
@@ -674,41 +686,48 @@ class TestCheckpointerOverheadScore:
         }
         _run_score_writer(result, mock_lf)
 
-        scores = {
-            c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.score_current_trace.call_args_list
-        }
+        scores = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
         assert scores["checkpointer_overhead_proxy_ms"] == pytest.approx(39.0, abs=0.1)
 
 
 class TestScoreIsolation:
-    """Verify scores are written to specific trace, not session-wide (#435)."""
+    """Verify scores use explicit trace_id via create_score, not session-wide (#435)."""
 
-    def test_write_langfuse_scores_uses_score_current_trace(self):
-        """All scores go through score_current_trace (trace-scoped via @observe context)."""
+    def test_write_langfuse_scores_uses_create_score_with_trace_id(self):
+        """All scores go through create_score(trace_id=...) for isolation (#435)."""
         mock_lf = MagicMock()
         _run_score_writer(FULL_PIPELINE_RESULT, mock_lf)
 
-        # Verify score_current_trace is used (NOT create_score with session-level scope)
-        assert mock_lf.score_current_trace.call_count > 0
-        # Verify create_score is NOT called (would bypass trace context)
-        assert mock_lf.create_score.call_count == 0
+        # Verify create_score is used with explicit trace_id
+        assert mock_lf.create_score.call_count > 0
+        for call in mock_lf.create_score.call_args_list:
+            assert call.kwargs["trace_id"] == _TEST_TRACE_ID
+            # Idempotency key format: {trace_id}-{name}
+            expected_id = f"{_TEST_TRACE_ID}-{call.kwargs['name']}"
+            assert call.kwargs["id"] == expected_id
 
-    async def test_supervisor_scores_use_score_current_trace(self, mock_config):
-        """Supervisor-specific scores also use score_current_trace."""
+        # score_current_trace must NOT be used
+        assert mock_lf.score_current_trace.call_count == 0
+
+    async def test_supervisor_scores_use_create_score_with_trace_id(self, mock_config):
+        """Supervisor-specific scores use create_score(trace_id=...) (#435)."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
         mock_lf.create_score = MagicMock()
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-xyz")
 
         await _run_handle_query_supervisor(mock_config, mock_lf)
 
-        # All supervisor scores via score_current_trace
-        score_names = [c.kwargs["name"] for c in mock_lf.score_current_trace.call_args_list]
+        # All supervisor scores via create_score with trace_id
+        score_names = [c.kwargs["name"] for c in mock_lf.create_score.call_args_list]
         assert "supervisor_model" in score_names
         assert "user_role" in score_names
-        # No session-level create_score
-        assert mock_lf.create_score.call_count == 0
+        for call in mock_lf.create_score.call_args_list:
+            assert call.kwargs["trace_id"] == "trace-xyz"
+            assert "id" in call.kwargs  # idempotency key
+
+        # score_current_trace must NOT be used
+        assert mock_lf.score_current_trace.call_count == 0
 
 
 class TestTextPathFeedbackButtons:
@@ -718,7 +737,8 @@ class TestTextPathFeedbackButtons:
         """Text response should include feedback inline keyboard."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
         bot = _create_bot(mock_config)
@@ -755,7 +775,8 @@ class TestTextPathFeedbackButtons:
         """Text response should use Markdown parse_mode."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
         bot = _create_bot(mock_config)
@@ -790,7 +811,8 @@ class TestTextPathFeedbackButtons:
         """CHITCHAT response should NOT include feedback keyboard."""
         mock_lf = MagicMock()
         mock_lf.update_current_trace = MagicMock()
-        mock_lf.score_current_trace = MagicMock()
+        mock_lf.create_score = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
         mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc-123")
 
         bot = _create_bot(mock_config)
