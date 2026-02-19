@@ -206,7 +206,7 @@ class TestSemanticCache:
         assert result is None
 
     async def test_semantic_check_filters_by_user_id(self, _ensure_redisvl_filter_mock):
-        """check_semantic with user_id builds combined Tag filter (user_id + language)."""
+        """check_semantic with user_id builds combined Tag filter (query_type + language + user_id)."""
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
         mgr.semantic_cache = AsyncMock()
         mgr.semantic_cache.acheck = AsyncMock(
@@ -225,6 +225,40 @@ class TestSemanticCache:
         # Verify acheck was called with a filter_expression
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
+
+    async def test_semantic_check_includes_query_type_scope_role_filters(self):
+        """check_semantic composes Tag filters for query_type/language/scope/role."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.acheck = AsyncMock(
+            return_value=[{"response": "scoped answer", "vector_distance": 0.03}]
+        )
+        mgr.cache_thresholds = {"FAQ": 0.12}
+
+        seen_tag_names: list[str] = []
+
+        class _SpyTag:
+            def __init__(self, name: str):
+                self.name = name
+                seen_tag_names.append(name)
+
+            def __eq__(self, _other):
+                return self
+
+            def __and__(self, _other):
+                return self
+
+        with patch("redisvl.query.filter.Tag", _SpyTag):
+            result = await mgr.check_semantic(
+                query="test",
+                vector=[0.1] * 1024,
+                query_type="FAQ",
+                cache_scope="rag",
+                agent_role="manager",
+            )
+
+        assert result == "scoped answer"
+        assert {"language", "query_type", "cache_scope", "agent_role"}.issubset(set(seen_tag_names))
 
     async def test_semantic_store_includes_user_id_in_filters(self):
         """store_semantic with user_id passes it in filters dict."""
