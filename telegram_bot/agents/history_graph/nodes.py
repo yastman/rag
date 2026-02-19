@@ -301,8 +301,8 @@ async def history_summarize_node(
 # --- Langfuse Scores ---
 
 
-def write_history_scores(lf: Any, result: dict[str, Any]) -> None:
-    """Write history sub-graph scores to current Langfuse trace.
+def write_history_scores(lf: Any, result: dict[str, Any], *, trace_id: str = "") -> None:
+    """Write history sub-graph scores with explicit trace_id (#435).
 
     Scores:
         history_results_count (NUMERIC): Number of retrieved results.
@@ -310,14 +310,36 @@ def write_history_scores(lf: Any, result: dict[str, Any]) -> None:
         history_rewrite_count (NUMERIC): Number of query rewrites.
         history_latency_ms (NUMERIC): Total sub-graph wall time (ms).
     """
+    if not trace_id:
+        trace_id = lf.get_current_trace_id()
+    if not trace_id:
+        return
+
     results = result.get("results", [])
     latency_stages = result.get("latency_stages", {})
     total_ms = sum(latency_stages.values()) * 1000
 
-    lf.score_current_trace(name="history_results_count", value=len(results))
-    lf.score_current_trace(
+    lf.create_score(
+        trace_id=trace_id,
+        name="history_results_count",
+        value=len(results),
+        id=f"{trace_id}-history_results_count",
+    )
+    lf.create_score(
+        trace_id=trace_id,
         name="history_relevance",
         value=1.0 if result.get("results_relevant") else 0.0,
+        id=f"{trace_id}-history_relevance",
     )
-    lf.score_current_trace(name="history_rewrite_count", value=result.get("rewrite_count", 0))
-    lf.score_current_trace(name="history_latency_ms", value=round(total_ms, 1))
+    lf.create_score(
+        trace_id=trace_id,
+        name="history_rewrite_count",
+        value=result.get("rewrite_count", 0),
+        id=f"{trace_id}-history_rewrite_count",
+    )
+    lf.create_score(
+        trace_id=trace_id,
+        name="history_latency_ms",
+        value=round(total_ms, 1),
+        id=f"{trace_id}-history_latency_ms",
+    )
