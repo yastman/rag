@@ -479,8 +479,9 @@ class TestHandleQuery:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-            mock_lf.update_current_trace.assert_called_once()
-            trace_kwargs = mock_lf.update_current_trace.call_args.kwargs
+            # Child span call (first) carries metadata; root span call (second) carries output (#511)
+            assert mock_lf.update_current_trace.call_count >= 1
+            trace_kwargs = mock_lf.update_current_trace.call_args_list[0].kwargs
             assert trace_kwargs["metadata"]["pipeline_mode"] == "sdk_agent"
 
     async def test_handle_query_writes_supervisor_model_score(self, mock_config):
@@ -1698,8 +1699,9 @@ class TestPreAgentGuard:
                 await bot.handle_query(message)
 
         # Verify trace metadata
-        mock_lf.update_current_trace.assert_called_once()
-        trace_meta = mock_lf.update_current_trace.call_args.kwargs["metadata"]
+        # Guard metadata is in the child span call (first); root span call (second) has output (#511)
+        assert mock_lf.update_current_trace.call_count >= 1
+        trace_meta = mock_lf.update_current_trace.call_args_list[0].kwargs["metadata"]
         assert trace_meta["guard_blocked"] is True
         assert trace_meta["injection_pattern"] == "system_prompt_leak"
 
