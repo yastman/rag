@@ -44,16 +44,16 @@ class TestQdrantInfrastructure:
         collections = qdrant_client.get_collections().collections
         names = [c.name for c in collections]
 
-        assert "contextual_bulgaria_voyage" in names
+        assert "gdrive_documents_bge" in names
 
-    def test_collection_voyage_vector_config(self, qdrant_client):
-        """Voyage collection has correct vector config."""
-        info = qdrant_client.get_collection("contextual_bulgaria_voyage")
+    def test_collection_bge_vector_config(self, qdrant_client):
+        """BGE-M3 collection has correct vector config."""
+        info = qdrant_client.get_collection("gdrive_documents_bge")
 
         # Check dense vector config
         dense_config = info.config.params.vectors.get("dense")
         assert dense_config is not None
-        assert dense_config.size == 1024  # voyage-3-large
+        assert dense_config.size == 1024  # bge-m3
 
         # Check sparse vector exists (may be named 'sparse' or 'bm42')
         sparse_config = info.config.params.sparse_vectors
@@ -62,7 +62,7 @@ class TestQdrantInfrastructure:
 
     def test_collection_points_count(self, qdrant_client):
         """Collection has expected number of points."""
-        info = qdrant_client.get_collection("contextual_bulgaria_voyage")
+        info = qdrant_client.get_collection("gdrive_documents_bge")
         assert info.points_count >= 90
 
     def test_search_dense_returns_results(self, qdrant_client):
@@ -70,7 +70,7 @@ class TestQdrantInfrastructure:
         dummy_vector = [0.1] * 1024
 
         results = qdrant_client.query_points(
-            collection_name="contextual_bulgaria_voyage",
+            collection_name="gdrive_documents_bge",
             query=dummy_vector,
             using="dense",
             limit=5,
@@ -85,14 +85,14 @@ class TestQdrantInfrastructure:
         from qdrant_client.models import SparseVector
 
         # Get actual sparse vector name from collection config
-        info = qdrant_client.get_collection("contextual_bulgaria_voyage")
+        info = qdrant_client.get_collection("gdrive_documents_bge")
         sparse_names = list(info.config.params.sparse_vectors.keys())
         sparse_name = sparse_names[0] if sparse_names else "bm42"
 
         sparse = SparseVector(indices=[1, 2, 3], values=[0.5, 0.3, 0.2])
 
         results = qdrant_client.query_points(
-            collection_name="contextual_bulgaria_voyage",
+            collection_name="gdrive_documents_bge",
             query=sparse,
             using=sparse_name,
             limit=5,
