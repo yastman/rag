@@ -50,3 +50,29 @@ funnel-subscribe = Подписаться на обновления
 # Команды
 cmd-help = Задавайте вопросы о недвижимости или используйте меню.
 cmd-clear-done = История диалога очищена.
+
+# Клиентское меню (новые кнопки)
+menu-catalog = Каталог объектов
+menu-booking = Записаться на показ
+menu-mortgage = Рассчитать ипотеку
+menu-my-leads = Мои заявки
+
+# Меню менеджера
+mgr-hello = Привет, { $name }! Панель менеджера.
+mgr-deals = Мои сделки
+mgr-contacts = Поиск контактов
+mgr-new-deal = Новая сделка
+mgr-funnel-stats = Воронка продаж
+mgr-hot-leads = Горячие лиды
+mgr-tasks = Задачи
+mgr-crm-submenu = CRM
+mgr-search = Поиск по базе
+mgr-settings = Настройки
+
+# CRM подменю
+crm-title = CRM
+crm-create-deal = Создать сделку
+crm-create-contact = Создать контакт
+crm-add-note = Добавить заметку
+crm-create-task = Создать задачу
+crm-pipelines = Pipelines
