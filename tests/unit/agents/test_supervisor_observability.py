@@ -87,11 +87,11 @@ async def test_supervisor_writes_model_score(supervisor_config):
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
 
-    score_calls = mock_lf.score_current_trace.call_args_list
-    model_scores = [c for c in score_calls if c[1].get("name") == "supervisor_model"]
+    score_calls = mock_lf.create_score.call_args_list
+    model_scores = [c for c in score_calls if c.kwargs.get("name") == "supervisor_model"]
     assert len(model_scores) == 1
-    assert model_scores[0][1]["value"] == "gpt-4o-mini"
-    assert model_scores[0][1]["data_type"] == "CATEGORICAL"
+    assert model_scores[0].kwargs["value"] == "gpt-4o-mini"
+    assert model_scores[0].kwargs["data_type"] == "CATEGORICAL"
 
 
 async def test_supervisor_trace_has_pipeline_mode_metadata(supervisor_config):
@@ -195,11 +195,11 @@ async def test_supervisor_writes_user_role_score(supervisor_config):
             await bot.handle_query(message)
 
     role_scores = [
-        c for c in mock_lf.score_current_trace.call_args_list if c[1].get("name") == "user_role"
+        c for c in mock_lf.create_score.call_args_list if c.kwargs.get("name") == "user_role"
     ]
     assert len(role_scores) == 1
-    assert role_scores[0][1]["value"] == "manager"
-    assert role_scores[0][1]["data_type"] == "CATEGORICAL"
+    assert role_scores[0].kwargs["value"] == "manager"
+    assert role_scores[0].kwargs["data_type"] == "CATEGORICAL"
 
 
 async def test_supervisor_curated_span_metadata_on_routing(supervisor_config):
