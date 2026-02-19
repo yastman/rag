@@ -71,11 +71,21 @@ class I18nMiddleware(BaseMiddleware):
         self,
         hub: TranslatorHub,
         user_service: UserService | None = None,
+        lead_scoring_store: Any | None = None,
+        hot_lead_notifier: Any | None = None,
+        kommo_client: Any | None = None,
+        pg_pool: Any | None = None,
+        bot_config: Any | None = None,
         default_locale: str = "ru",
     ) -> None:
         super().__init__()
         self._hub = hub
         self._user_service = user_service
+        self._lead_scoring_store = lead_scoring_store
+        self._hot_lead_notifier = hot_lead_notifier
+        self._kommo_client = kommo_client
+        self._pg_pool = pg_pool
+        self._bot_config = bot_config
         self._default_locale = default_locale
 
     async def __call__(
@@ -104,6 +114,11 @@ class I18nMiddleware(BaseMiddleware):
         data["i18n"] = self._hub.get_translator_by_locale(locale)
         data["locale"] = locale
         data["user_service"] = self._user_service
+        data["lead_scoring_store"] = self._lead_scoring_store
+        data["hot_lead_notifier"] = self._hot_lead_notifier
+        data["kommo_client"] = self._kommo_client
+        data["pg_pool"] = self._pg_pool
+        data["bot_config"] = self._bot_config
         return await handler(event, data)
 
 
@@ -111,8 +126,21 @@ def setup_i18n_middleware(
     dp: Dispatcher,
     hub: TranslatorHub,
     user_service: UserService | None = None,
+    lead_scoring_store: Any | None = None,
+    hot_lead_notifier: Any | None = None,
+    kommo_client: Any | None = None,
+    pg_pool: Any | None = None,
+    bot_config: Any | None = None,
 ) -> None:
     """Register i18n middleware on all routers."""
-    middleware = I18nMiddleware(hub=hub, user_service=user_service)
+    middleware = I18nMiddleware(
+        hub=hub,
+        user_service=user_service,
+        lead_scoring_store=lead_scoring_store,
+        hot_lead_notifier=hot_lead_notifier,
+        kommo_client=kommo_client,
+        pg_pool=pg_pool,
+        bot_config=bot_config,
+    )
     dp.message.outer_middleware(middleware)
     dp.callback_query.outer_middleware(middleware)
