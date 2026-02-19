@@ -33,3 +33,4 @@ class BotContext:
     ***REMOVED*** Set to True by tools that deliver response directly (e.g. streaming) to prevent
     ***REMOVED*** bot.py from sending the message a second time (***REMOVED***428).
     response_sent: bool = False
+    original_user_query: str = ""
