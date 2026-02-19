@@ -2087,3 +2087,62 @@ class TestToolCallsCount:
 
         score_names = [c.kwargs["name"] for c in mock_lf.create_score.call_args_list]
         assert "tool_calls_total" not in score_names
+
+
+class TestToolListByRole:
+    """Test that client/manager roles receive correct tool sets (#509)."""
+
+    async def test_client_role_does_not_get_history_search(self, mock_config):
+        """Client role gets only rag_search — no history_search."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()  # service available, but should not be in client tools
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
+        ):
+            message = _make_text_message("цены на квартиры")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        tools = mock_factory.call_args.kwargs["tools"]
+        tool_names = [t.name for t in tools]
+        assert "rag_search" in tool_names
+        assert "history_search" not in tool_names
+
+    async def test_manager_role_gets_history_search(self, mock_config):
+        """Manager role gets history_search when _history_service is available."""
+        mock_config.manager_ids = [12345]
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
+            patch("telegram_bot.agents.manager_tools.build_tools_for_role") as mock_build,
+        ):
+            mock_build.side_effect = lambda *, role, base_tools, manager_tools: (  # noqa: ARG005
+                list(base_tools) + list(manager_tools)
+            )
+            message = _make_text_message("цены", user_id=12345)
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        tools = mock_factory.call_args.kwargs["tools"]
+        tool_names = [t.name for t in tools]
+        assert "rag_search" in tool_names
+        assert "history_search" in tool_names
