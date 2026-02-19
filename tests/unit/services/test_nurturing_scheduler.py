@@ -14,6 +14,7 @@ def fake_services():
     config = MagicMock()
     config.nurturing_interval_minutes = 60
     config.funnel_rollup_cron = "15 * * * *"
+    config.nurturing_dispatch_enabled = False
     return {
         "nurturing_service": AsyncMock(),
         "analytics_service": AsyncMock(),
