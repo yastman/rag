@@ -25,6 +25,7 @@ def test_bot_context_fields():
         "llm",
         "content_filter_enabled",
         "guard_mode",
+        "original_query",
     }
     assert expected.issubset(field_names), f"Missing fields: {expected - field_names}"
 
@@ -50,6 +51,51 @@ def test_bot_context_optional_kommo():
     )
     assert ctx.telegram_user_id == 123
     assert ctx.kommo_client is None
+
+
+def test_bot_context_original_query_default():
+    """BotContext.original_query defaults to empty string."""
+    from telegram_bot.agents.context import BotContext
+
+    ctx = BotContext(
+        telegram_user_id=99,
+        session_id="s-3",
+        language="ru",
+        kommo_client=None,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        content_filter_enabled=True,
+        guard_mode="hard",
+    )
+    assert ctx.original_query == ""
+
+
+def test_bot_context_original_query_explicit():
+    """BotContext stores the provided original_query string."""
+    from telegram_bot.agents.context import BotContext
+
+    ctx = BotContext(
+        telegram_user_id=99,
+        session_id="s-4",
+        language="ru",
+        kommo_client=None,
+        history_service=AsyncMock(),
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=MagicMock(),
+        content_filter_enabled=True,
+        guard_mode="hard",
+        original_query="квартиры в Несебре до 80000",
+    )
+    assert ctx.original_query == "квартиры в Несебре до 80000"
 
 
 def test_bot_context_with_kommo():
