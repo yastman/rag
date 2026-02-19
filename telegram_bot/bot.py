@@ -844,6 +844,11 @@ class PropertyBot:
                         id=f"{tid}-tool_calls_total",
                     )
 
+                ***REMOVED*** CRM tool usage scores (***REMOVED***440)
+                from telegram_bot.scoring import write_crm_scores
+
+                write_crm_scores(lf, messages, trace_id=tid)
+
             ***REMOVED*** Persist Q&A to history
             if self._history_service and response_text:
                 try:
