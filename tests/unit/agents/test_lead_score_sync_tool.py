@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from telegram_bot.agents.context import BotContext
 from telegram_bot.agents.manager_tools import create_crm_score_sync_tool
 from telegram_bot.services.lead_scoring_models import LeadScoreRecord
 
@@ -125,3 +126,53 @@ class TestCrmSyncLeadScoreTool:
         call_kwargs = mock_kommo_client.update_lead_score.call_args[1]
         key = call_kwargs["idempotency_key"]
         assert key == "lead-score:11:chat-1:74:hot"
+
+
+def _make_bot_context_for_sync(role: str = "client") -> BotContext:
+    """Minimal BotContext for crm_sync_lead_score role-path tests (#479)."""
+    return BotContext(
+        telegram_user_id=99,
+        session_id="chat-1",
+        language="ru",
+        kommo_client=None,
+        history_service=None,
+        embeddings=AsyncMock(),
+        sparse_embeddings=AsyncMock(),
+        qdrant=AsyncMock(),
+        cache=AsyncMock(),
+        reranker=None,
+        llm=AsyncMock(),
+        role=role,
+    )
+
+
+class TestCrmSyncLeadScoreToolBotContextPath:
+    """Verify crm_sync_lead_score reads role from ctx.role (BotContext path) (#479)."""
+
+    async def test_allows_manager_via_bot_context(self, mock_scoring_store, mock_kommo_client):
+        sync_tool = create_crm_score_sync_tool(
+            scoring_store=mock_scoring_store,
+            kommo_client=mock_kommo_client,
+            score_field_id=701,
+            band_field_id=702,
+        )
+        ctx = _make_bot_context_for_sync(role="manager")
+        config = {"configurable": {"bot_context": ctx}}
+        result = await sync_tool.ainvoke({"query": "sync scores"}, config=config)
+
+        assert "Access denied" not in result
+        mock_kommo_client.update_lead_score.assert_called_once()
+
+    async def test_denies_client_via_bot_context(self, mock_scoring_store, mock_kommo_client):
+        sync_tool = create_crm_score_sync_tool(
+            scoring_store=mock_scoring_store,
+            kommo_client=mock_kommo_client,
+            score_field_id=701,
+            band_field_id=702,
+        )
+        ctx = _make_bot_context_for_sync(role="client")
+        config = {"configurable": {"bot_context": ctx}}
+        result = await sync_tool.ainvoke({"query": "sync scores"}, config=config)
+
+        assert "Access denied" in result
+        mock_kommo_client.update_lead_score.assert_not_called()
