@@ -2,262 +2,136 @@
 paths: "docs/plans/**/*.md"
 ---
 
-# Skills Workflow (Best Practices 2026)
+# Skills Workflow (2026)
 
-## Выбор workflow по типу задачи
+## Выбор workflow
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    КАКАЯ У ТЕБЯ ЗАДАЧА?                         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-   МЕЛКАЯ                 СРЕДНЯЯ               БОЛЬШАЯ
-   (< 30 мин)            (1-4 часа)            (дни/недели)
-        │                     │                     │
-        ▼                     ▼                     ▼
-   Быстрый fix         Feature/Bugfix          План/ТЗ
-```
+| Размер | Примеры | Workflow | Overhead |
+|--------|---------|---------|----------|
+| **Мелкая** (< 30 мин) | fix, config, поле | Inline: TDD -> verify -> commit | ~0 |
+| **Средняя** (1-4 часа) | endpoint, рефакторинг | Branch -> TDD -> review -> merge to main | ~0 |
+| **Большая** (дни) | milestone, подсистема | Plan inline -> /tmux-swarm-orchestration (Sonnet) -> merge | ~10-20K |
+| **Баг** | тесты падают, прод | /systematic-debugging -> TDD -> fix | ~0 |
+| **Autonomous** | complex pipeline | agent-mux Codex (30-60 min artifact) | varies |
 
 ---
 
 ## 1. МЕЛКАЯ ЗАДАЧА (< 30 минут)
 
-**Примеры:** фикс опечатки, добавить поле, мелкий баг, конфиг
-
-### Workflow
-
 ```
-Задача → /test-driven-development → /verification-before-completion → commit
+Задача -> /test-driven-development -> /verification-before-completion -> commit
 ```
-
-### Скиллы
 
 | Шаг | Скилл | Действие |
 |-----|-------|----------|
-| 1 | `/test-driven-development` | RED → GREEN → REFACTOR |
-| 2 | `/verification-before-completion` | `make test && make check` |
-| 3 | `/git-workflow-manager` | `fix(scope): description` |
+| 1 | /test-driven-development | RED -> GREEN -> REFACTOR |
+| 2 | /verification-before-completion | make check && make test-unit |
+| 3 | /git-workflow-manager | fix(scope): description |
 
-### Если баг
-
-```
-Баг → /systematic-debugging → найти root cause → /test-driven-development → fix
-```
-
-**Правило:** НЕТ фикса без понимания причины.
+Если баг: /systematic-debugging -> root cause -> TDD -> fix
 
 ---
 
 ## 2. СРЕДНЯЯ ЗАДАЧА (1-4 часа)
 
-**Примеры:** новый endpoint, рефакторинг модуля, интеграция сервиса
-
-### Workflow
-
 ```
-Задача → /brainstorming (опционально) → /using-git-worktrees → code → /requesting-code-review → /finishing-a-development-branch
+Branch -> code (TDD) -> /requesting-code-review -> merge to main
 ```
-
-### Скиллы
 
 | Шаг | Скилл | Действие |
 |-----|-------|----------|
-| 1 | `/brainstorming` | (опционально) Уточнить требования |
-| 2 | `/using-git-worktrees` | Изолированная ветка |
-| 3 | `/test-driven-development` | Писать код с TDD |
-| 4 | `/systematic-debugging` | Если что-то сломалось |
-| 5 | `/requesting-code-review` | Review перед merge |
-| 6 | `/verification-before-completion` | Финальная проверка |
-| 7 | `/finishing-a-development-branch` | Merge / PR |
-
-### Пример
-
-```bash
-/using-git-worktrees      # → .worktrees/feature-voice-messages
-# ... пишешь код с TDD ...
-/requesting-code-review   # → subagent проверяет
-/verification-before-completion  # make test
-/finishing-a-development-branch  # → merge to main
-```
+| 1 | git checkout -b feat/... | Изолированная ветка |
+| 2 | /test-driven-development | Код с TDD |
+| 3 | /requesting-code-review | Review inline (НЕ PR) |
+| 4 | /verification-before-completion | make check && make test-unit |
+| 5 | git checkout main && git merge feat/... | Прямой merge |
 
 ---
 
 ## 3. БОЛЬШАЯ ЗАДАЧА (дни/недели)
 
-**Примеры:** новый milestone, большой рефакторинг, новая подсистема
-
-### Workflow
-
 ```
-ТЗ → выбрать milestone → /writing-plans → /executing-plans или /subagent-driven-development → /finishing-a-development-branch
+Plan inline -> /tmux-swarm-orchestration (Sonnet workers) -> merge -> verify
 ```
 
-### Полный pipeline
+### Pipeline
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  ЭТАП 1: ПОДГОТОВКА                                             │
-├─────────────────────────────────────────────────────────────────┤
-│  /gh-issues              → Создать issue для milestone          │
-│  /using-git-worktrees    → Изолированная ветка                  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  ЭТАП 2: ПЛАНИРОВАНИЕ                                           │
-├─────────────────────────────────────────────────────────────────┤
-│  /writing-plans          → Детальный план                       │
-│                            (файлы, код, команды, 2-5 мин/шаг)   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  ЭТАП 3: ВЫПОЛНЕНИЕ (выбери один)                               │
-├─────────────────────────────────────────────────────────────────┤
-│  ВАРИАНТ A: /executing-plans                                    │
-│  └── Батчи по 3 задачи → отчёт → твой feedback                  │
-│  └── Для: максимальный контроль                                 │
-│                                                                 │
-│  ВАРИАНТ B: /subagent-driven-development                        │
-│  └── Субагент на task → spec review → quality review            │
-│  └── Для: автоматическое качество                               │
-│                                                                 │
-│  ВАРИАНТ C: /dispatching-parallel-agents                        │
-│  └── Параллельные агенты на независимые задачи                  │
-│  └── Для: скорость                                              │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  ЭТАП 4: КАЧЕСТВО (встроено)                                    │
-├─────────────────────────────────────────────────────────────────┤
-│  /test-driven-development   → TDD для каждой фичи               │
-│  /systematic-debugging      → Методичный дебаг                  │
-│  /requesting-code-review    → Review после tasks/батчей         │
-│  /receiving-code-review     → Правильно принять feedback        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  ЭТАП 5: ЗАВЕРШЕНИЕ                                             │
-├─────────────────────────────────────────────────────────────────┤
-│  /verification-before-completion → make test && make check      │
-│  /finishing-a-development-branch → Merge / PR / Cleanup         │
-│  /gh-issues                      → Закрыть issue                │
-│  /git-workflow-manager           → Правильный commit/release    │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. ПЛАНИРОВАНИЕ: Координатор пишет план inline (~5-10K tokens)
+2. ВЫПОЛНЕНИЕ: /tmux-swarm-orchestration (2-4 Sonnet workers, worktrees, webhooks)
+3. КАЧЕСТВО: Worker skills (/executing-plans, /requesting-code-review, /verification-before-completion)
+4. ЗАВЕРШЕНИЕ: Merge worker branches + make check + make test-unit + merge to main
+
+### Dispatch
+
+| Задача | Dispatch | Модель |
+|--------|----------|--------|
+| Реализация | tmux-swarm | Sonnet |
+| Дебаг root cause | inline | Opus (coordinator) |
+| Research | tmux-swarm | Haiku |
+| Autonomous pipeline | agent-mux | Codex high |
+| Deep audit | agent-mux | Codex xhigh |
+
+### agent-mux trigger criteria (5% задач)
+
+- Sonnet worker дважды не справился
+- Нужна ортогональная проверка (другая модель линейка)
+- Security/perf audit
+- Autonomous 30-60 min pipeline
 
 ---
 
-## 4. НОВАЯ ИДЕЯ / ДИЗАЙН
-
-**Примеры:** "хочу добавить фичу X", "как лучше сделать Y"
-
-### Workflow
+## 4. ДЕБАГГИНГ
 
 ```
-Идея → /brainstorming → дизайн-документ → /writing-plans → выполнение
+/systematic-debugging -> root cause -> /test-driven-development -> fix -> /verification-before-completion
 ```
 
-### Скиллы
-
-| Шаг | Скилл | Результат |
-|-----|-------|-----------|
-| 1 | `/brainstorming` | `docs/plans/YYYY-MM-DD-feature-design.md` |
-| 2 | `/writing-plans` | `docs/plans/YYYY-MM-DD-feature-plan.md` |
-| 3 | Выполнение | См. "Большая задача" |
+Железные правила:
+1. НЕТ фикса без root cause
+2. НЕТ фикса без теста
+3. 3+ неудачных фикса = архитектурная проблема
 
 ---
 
-## 5. ДЕБАГГИНГ
+## 5. ПАУЗА / HANDOFF
 
-**Примеры:** тесты падают, баг в проде, неожиданное поведение
-
-### Workflow
-
-```
-Баг → /systematic-debugging → root cause → /test-driven-development → fix → /verification-before-completion
-```
-
-### Железные правила
-
-1. **НЕТ фикса без root cause** — сначала понять, потом чинить
-2. **НЕТ фикса без теста** — сначала воспроизвести в тесте
-3. **3+ неудачных фикса = архитектурная проблема** — остановись, переосмысли
-
-### Скиллы
-
-| Шаг | Скилл | Действие |
-|-----|-------|----------|
-| 1 | `/systematic-debugging` | 4 фазы: investigate → analyze → hypothesis → fix |
-| 2 | `/test-driven-development` | Написать падающий тест |
-| 3 | Минимальный fix | Одно изменение |
-| 4 | `/verification-before-completion` | Проверить всё |
+Между сессиями: обновить .planning/STATE.md (что сделано, что дальше).
+Следующая сессия: Read STATE.md -> продолжить.
 
 ---
 
-## 6. ПАУЗА / HANDOFF
+## Tracking
 
-**Примеры:** нужно прерваться, передать задачу, продолжить завтра
-
-### Workflow
-
-```
-Пауза → /gh-issues (save context) → ... → /gh-issues (load context) → продолжить
-```
-
-### AI Context Template
-
-```markdown
-<!-- AI-CONTEXT:START -->
-## Context | IN_PROGRESS
-**Files:** `src/service.py:45`, `tests/test_service.py:120`
-**Done:** task1, task2
-**Next:** task3
-**Resume:** One-line summary for cold start
-<!-- AI-CONTEXT:END -->
-```
-
-### Команды
-
-```bash
-# Сохранить контекст
-gh issue comment 45 --body-file .ai-context.md
-
-# Загрузить контекст
-gh issue view 45 --json comments --jq '.comments[] | select(.body | contains("AI-CONTEXT"))'
-```
+- **TODO.md** -- что делать (update после каждого коммита)
+- **.planning/STATE.md** -- текущее состояние, pause/resume
+- **По умолчанию нет GitHub Issues/PR ceremony.** Solo dev, прямой merge to main.
+- **Исключение:** если branch protection требует PR, делаем минимальный PR с теми же gates.
 
 ---
 
-## Сравнение вариантов выполнения
+## Worker Skills (инжектятся в промт tmux worker)
 
-| Вариант | Скилл | Контроль | Качество | Скорость |
-|---------|-------|----------|----------|----------|
-| **A** | `/executing-plans` | Высокий (feedback каждые 3 задачи) | Среднее | Средняя |
-| **B** | `/subagent-driven-development` | Средний (авто-review) | Высокое (2 review) | Средняя |
-| **C** | `/dispatching-parallel-agents` | Низкий | Среднее | Высокая |
+| Порядок | Скилл | Когда |
+|---------|-------|-------|
+| 1 | /executing-plans | Перед началом работы |
+| 2 | /requesting-code-review | Перед КАЖДЫМ git commit (HARD GATE) |
+| 3 | /verification-before-completion | Перед финальным коммитом |
 
-### Когда какой
-
-- **A** — критичные задачи, хочешь контролировать
-- **B** — доверяешь автоматике, нужно качество
-- **C** — много независимых задач, нужна скорость
+Воркер вызывает skills через Skill tool САМ (не субагент).
 
 ---
 
-## Железные правила (2026)
+## Железные правила
 
-| Скилл | Правило |
-|-------|---------|
-| `/test-driven-development` | **НЕТ кода без падающего теста сначала** |
-| `/systematic-debugging` | **НЕТ фикса без root cause** |
-| `/verification-before-completion` | **НЕТ "готово" без `make test`** |
-| `/receiving-code-review` | **НЕТ "You're right!" — только техника** |
-| `/writing-plans` | **Каждый шаг = 2-5 минут, точные файлы** |
+| Правило | Контекст |
+|---------|----------|
+| НЕТ кода без падающего теста | /test-driven-development |
+| НЕТ фикса без root cause | /systematic-debugging |
+| НЕТ "готово" без make test | /verification-before-completion |
+| НЕТ Opus workers для рутины | Sonnet = 99% quality, 5x cheaper |
+| НЕТ inline tmux промтов | Всегда .claude/prompts/worker-*.md |
+| НЕТ merge без gates | make check + PYTEST -n auto |
+| НЕТ лишней GitHub ceremony | Solo dev, TODO.md + direct merge (PR only if branch protection requires) |
 
 ---
 
@@ -265,32 +139,27 @@ gh issue view 45 --json comments --jq '.comments[] | select(.body | contains("AI
 
 ### Мелкая задача
 ```
-/test-driven-development → /verification-before-completion → commit
+/test-driven-development -> /verification-before-completion -> commit
 ```
 
 ### Средняя задача
 ```
-/using-git-worktrees → code (TDD) → /requesting-code-review → /finishing-a-development-branch
+branch -> TDD -> /requesting-code-review -> merge to main
 ```
 
 ### Большая задача
 ```
-/gh-issues → /using-git-worktrees → /writing-plans → /executing-plans → /finishing-a-development-branch
-```
-
-### Новая идея
-```
-/brainstorming → /writing-plans → выполнение
+plan inline -> /tmux-swarm-orchestration (Sonnet) -> merge + verify
 ```
 
 ### Баг
 ```
-/systematic-debugging → /test-driven-development → /verification-before-completion
+/systematic-debugging -> /test-driven-development -> /verification-before-completion
 ```
 
 ### Пауза
 ```
-/gh-issues (save AI-CONTEXT)
+Edit .planning/STATE.md (done / next / resume context)
 ```
 
 ---
@@ -299,7 +168,10 @@ gh issue view 45 --json comments --jq '.comments[] | select(.body | contains("AI
 
 | Скилл | Назначение |
 |-------|------------|
-| `/gh-issues` | Task management, AI context handoff |
-| `/git-workflow-manager` | Conventional commits, releases, changelog |
-| `/cc-analytics` | Статистика использования Claude Code |
-| `/claude-md-writer` | Рефакторинг CLAUDE.md |
+| /git-workflow-manager | Conventional commits |
+| /cc-analytics | Статистика Claude Code |
+| /claude-md-writer | Рефакторинг CLAUDE.md |
+| /agent-mux | Codex autonomous pipeline (5%) |
+| /tmux-swarm-orchestration | Parallel Sonnet workers |
+| /brainstorming | Дизайн новых фич |
+| /writing-plans | Детальные планы для workers |
