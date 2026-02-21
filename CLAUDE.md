@@ -1,194 +1,97 @@
 # CLAUDE.md
 
-## Quick Reference
+## Commands
 
 ```bash
-uv sync                    # Install all dependencies
-make check                 # Lint + types
-make test                  # All tests
-make test-unit             # Unit tests only (fast)
-uv run pytest tests/unit/ -n auto  # Parallel (4x faster, ~5 min)
-uv run pytest tests/integration/ -v  # Integration tests (~5s, no Docker)
-make docker-up             # Start core services (5 containers, ~17s)
+uv sync                    # Install deps
+make check                 # Lint + types (ruff + mypy)
+make test-unit             # Unit tests (fast)
+uv run pytest tests/unit/ -n auto  # Parallel (4x faster)
+uv run pytest tests/integration/ -v  # Integration (~5s)
+make docker-up             # Core services (5 containers)
 make docker-bot-up         # Core + bot/litellm
-make docker-voice-up       # Core + LiveKit/SIP/voice-agent (preflight)
 make docker-full-up        # All services (17 containers)
-make eval-rag              # RAG evaluation (RAGAS faithfulness >= 0.8)
-make eval-goldset-sync     # Sync gold set to Langfuse dataset
-make eval-experiment       # Run RAG experiment on gold set
-make eval-gold-gen         # Generate gold set from Qdrant → Langfuse + JSONL
-make eval-sdk-experiment   # Run SDK experiment on gold set (DATASET=name)
-make validate-traces-fast  # Trace validation (cold+cache, Langfuse report)
-make monitoring-up         # Start alerting stack
-make ingest-unified        # Unified ingestion (CocoIndex v3.2.1); also: -watch, -status
-make repo-cleanup          # Repo hygiene: branches, worktrees, stashes (dry-run)
-make export-dataset        # Export low-scoring Langfuse traces to evaluation dataset
-# VPS CLI: python -m src.ingestion.unified.cli preflight|bootstrap|run|status|reprocess
+make ingest-unified        # Unified ingestion (CocoIndex)
 ```
-
-**Location:** `/home/user/projects/rag-fresh` (WSL2) | `/opt/rag-fresh` (VPS)
 
 ## Project Overview
 
-**Contextual RAG Pipeline** — Production RAG with hybrid search (RRF + ColBERT rerank), BGE-M3 embeddings (local CPU), multi-level caching, Telegram bot.
+**Contextual RAG Pipeline** — hybrid search (RRF + ColBERT rerank), BGE-M3 embeddings (local), multi-level caching, Telegram bot.
 
-**Stack:** Python 3.12 | gpt-oss-120b (Cerebras) via LiteLLM | BGE-M3 (local) | Qdrant | Redis | CocoIndex
-
-**Use cases:** Bulgarian property (192 docs), Ukrainian Criminal Code (1,294 docs)
+**Stack:** Python 3.12 | gpt-oss-120b via LiteLLM | BGE-M3 | Qdrant | Redis | CocoIndex
 
 ## Architecture
 
 ```
-Ingestion:  Docling Parser → Chunker → BGE-M3 Dense + Sparse → Qdrant
-Text:       Query → create_agent SDK → tool choice
-            → rag_search (6-step async pipeline) | history_search (4-node LangGraph)
-            → 8 CRM tools (Kommo API) | direct response
-Voice STT:  Voice (.ogg) → build_graph() (11-node LangGraph) → transcribe → RAG pipeline
-Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → RAG API
+Ingestion:  Docling → Chunker → BGE-M3 Dense+Sparse → Qdrant
+Text:       Query → create_agent SDK → rag_search | history_search | 8 CRM tools
+Voice STT:  .ogg → LangGraph (11 nodes) → transcribe → RAG pipeline
+Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 ```
 
-| Module | Purpose |
-|--------|---------|
-| `telegram_bot/bot.py` | PropertyBot (~300 LOC, agent orchestrator + voice handler) |
-| `telegram_bot/scoring.py` | `score()`, `write_langfuse_scores()` (14 RAG), `write_history_scores()` (4), `write_crm_scores()` (4 CRM) |
-| `telegram_bot/agents/rag_pipeline.py` | 6-step async RAG pipeline: cache_check → retrieve → grade → rerank → rewrite loop → cache_store (#442) |
-| `telegram_bot/agents/` | create_agent SDK: agent.py (factory), context.py (BotContext DI), rag_tool.py, history_tool.py, crm_tools.py (8 Kommo tools) |
-| `telegram_bot/graph/` | LangGraph 11-node pipeline — **voice path only** (transcribe, guard, classify, cache, retrieve, grade, rerank, generate, respond) |
-| `telegram_bot/integrations/` | Cache (Redis pipelines), embeddings, langfuse, prompt mgmt |
-| `telegram_bot/services/bge_m3_client.py` | Unified BGE-M3 SDK (BGEM3Client async + BGEM3SyncClient) — replaces separate wrappers |
-| `telegram_bot/services/` | LLM, Qdrant (gRPC + batch), preprocessing, reranker |
-| `telegram_bot/services/{lead_scoring,nurturing,funnel}*.py` | CRM: lead scoring + Kommo sync, nurturing scheduler, funnel analytics (#384, #390) |
-| `telegram_bot/services/kommo_*.py` | KommoClient (async httpx, OAuth2), KommoTokenStore (Redis), Pydantic v2 models |
-| `telegram_bot/observability.py` | Langfuse init, @observe, PII masking, `create_callback_handler` (for create_agent) |
-| `src/api/` | RAG API (FastAPI wrapper around LangGraph, POST /query) |
-| `src/voice/` | Voice Bot (LiveKit Agent + ElevenLabs + SIP trunk + transcripts) |
-| `src/retrieval/search_engines.py` | 4 search variants (evaluation) |
-| `src/ingestion/unified/` | Unified pipeline v3.2.1 (CocoIndex) |
-| `telegram_bot/evaluation/` | LLM-as-a-Judge (RAG Triad: faithfulness, relevance, context) |
-| `scripts/validate_*.py` | Trace validation runner + query goldset |
-| `scripts/export_traces_to_dataset.py` | Export low-scoring Langfuse traces to versioned evaluation datasets |
-
-**Services:** Qdrant:6333 (gRPC:6334), Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
-
-**Observability:** Langfuse v3 — 35 observations/trace, 25 scores (14 RAG + 4 /history + 3 supervisor + 4 CRM) + 3 judge scores, curated spans on 6 heavy nodes, error spans on 4 nodes → see `.claude/rules/observability.md`
-
-**Docker Profiles:** `core` (5 svc, ~17s) | `bot` | `ml` | `obs` | `ai` | `eval` | `ingest` | `voice` (LiveKit + SIP + RAG API) | `full` → see `.claude/rules/docker.md`
+**Services:** Qdrant:6333, Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
 ## Code Style
 
-- **Linter/Formatter:** Ruff | **Types:** MyPy (strict in CI) | **Line length:** 100 | **Docstrings:** Google style
-- **Pre-commit:** ruff-check (--fix) → ruff-format → trailing-whitespace → check-yaml/toml/json
-- **CI:** Self-hosted runner (WSL2, `~/actions-runner`) | lint (ruff + mypy) only — tests run locally
-- **Commits:** `feat(scope): message` | `fix(scope): message` | `docs(scope): message`
-
-## Dependency Management
-
-**Mend Renovate** tracks all deps automatically: Python, Docker, GH Actions, pre-commit hooks.
-
-- **Dashboard:** [developer.mend.io/github/yastman/rag](https://developer.mend.io/github/yastman/rag) | Issue #11
-- **Config:** `renovate.json` | Schedule: Monday before 9:00 Kyiv
-- **Skill:** `/deps` — review and merge updates
-- **Lock maintenance:** `uv.lock` refreshed weekly via Renovate
-- **PR workflow:** `.claude/rules/git-workflow.md` — PR size limits, merge discipline, Renovate batching
+- **Ruff** (lint+format) | **MyPy** strict | Line length: 100 | Google docstrings
+- **Pre-commit:** ruff-check → ruff-format → trailing-whitespace → check-yaml/toml/json
+- **Commits:** `feat(scope): msg` | `fix(scope): msg` | `docs(scope): msg`
+- **NEVER** `git add -A` — specific files only, `git diff --cached --stat` before commit
 
 ## Task Management
 
-**Active:** `TODO.md` | **State:** `.planning/STATE.md` | **Pause/Resume:** Edit STATE.md between sessions
-
-## Environment
-
-1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-2. Copy `.env.example` → `.env`
-3. Required: `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY` (Whisper STT), `LANGFUSE_*`, `REDIS_PASSWORD` | Voice: `ELEVENLABS_API_KEY`, `LIVEKIT_*` | CRM: `KOMMO_*`, `NURTURING_ENABLED`
-4. `uv sync && make docker-up`
-
-## Key Docs
-
-| Document | Content |
-|----------|---------|
-| `docs/PIPELINE_OVERVIEW.md` | Architecture |
-| `docs/QDRANT_STACK.md` | Vector DB (gRPC, batch, group_by) |
-| `docs/INGESTION.md` | Document ingestion pipeline |
-| `CACHING.md` | 6-tier cache (Redis pipelines) |
-
-## Qdrant Collections
-
-| Collection | Content | Embeddings | Environment |
-|------------|---------|------------|-------------|
-| `gdrive_documents_bge` | Google Drive docs | BGE-M3 (dense + sparse) | VPS (production) |
-| `contextual_bulgaria_voyage` | Bulgarian property (192 docs) | Voyage | Dev |
-| `legal_documents` | Ukrainian Criminal Code (1,294 docs) | BGE-M3 | Dev |
-| `gdrive_documents_scalar` | Google Drive docs | Voyage | Dev |
-
-**Settings:** `quantization_mode=off|scalar|binary`, `small_to_big_mode=off|on|auto`, `use_hyde=true|false`, `STREAMING_ENABLED=true|false`, `SHOW_TRANSCRIPTION=true|false`, `VOICE_LANGUAGE=ru`, `STT_MODEL=whisper`, `RELEVANCE_THRESHOLD_RRF=0.005`, `SKIP_RERANK_THRESHOLD=0.012`, `SCORE_IMPROVEMENT_DELTA=0.001`, `QDRANT_TIMEOUT=30`, `GUARD_MODE=hard|soft|log`, `CONTENT_FILTER_ENABLED=true|false`, `NURTURING_ENABLED=true|false`, `NURTURING_INTERVAL_MINUTES`, `KOMMO_LEAD_SCORE_FIELD_ID`, `KOMMO_LEAD_BAND_FIELD_ID`, `FUNNEL_ROLLUP_CRON`
-
-## Deployment
-
-```bash
-# Dev (Docker Compose)
-make docker-up                      # Core services (5 svc, ~17s)
-make docker-bot-up                  # + bot
-
-# Build images (parallel via Docker Bake)
-docker buildx bake --load           # All 5 custom images
-docker buildx bake bot              # Single target
-
-# VPS k3s (local embeddings, no Voyage API)
-make k3s-secrets                    # Create k8s secrets
-make k3s-push-bot                   # Transfer image to VPS
-make k3s-bot                        # Deploy bot stack
-make k3s-status                     # Check pods
-```
-
-**VPS:** `admin@95.111.252.29:1654` (`ssh vps`) | Path: `/opt/rag-fresh`
-
-**VPS Env:** `RETRIEVAL_DENSE_PROVIDER=bge_m3_api` `RETRIEVAL_SPARSE_PROVIDER=bge_m3_api` `RERANK_PROVIDER=colbert` `BGE_M3_URL=http://bge-m3:8000`
-
-**k3s details:** → see `.claude/rules/k3s.md`
-
-## Troubleshooting
-
-| Error | Fix |
-|-------|-----|
-| Redis connection refused | `docker compose up -d redis` (requires `REDIS_PASSWORD`, ExponentialBackoff retry) |
-| Qdrant timeout | `QDRANT_TIMEOUT=30` (explicit timeout + FormulaQuery for score boosting) |
-| Voyage 429 | Use CacheLayerManager |
-| Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
-| Alerts not sending | Check `TELEGRAM_ALERTING_*` env vars |
+**TODO.md** (active) | **.planning/STATE.md** (pause/resume between sessions)
 
 ## Skills Workflow
 
 ```
 Small:  inline → /test-driven-development → /verification-before-completion → commit
 Medium: branch → TDD → /requesting-code-review → merge to main
-Large:  plan inline → /tmux-swarm-orchestration (Sonnet workers) → merge + verify
+Large:  plan → /tmux-swarm-orchestration (Sonnet workers) → merge + verify
 Bug:    /systematic-debugging → TDD → fix
-Heavy:  agent-mux → Codex autonomous pipeline (5% of tasks)
 ```
 
-**Tracking:** TODO.md | **State:** .planning/STATE.md | **Details:** `.claude/rules/skills.md`
+**Details:** `.claude/rules/skills.md`
+
+## Troubleshooting
+
+| Error | Fix |
+|-------|-----|
+| Redis connection refused | `docker compose up -d redis` (requires `REDIS_PASSWORD`) |
+| Qdrant timeout | `QDRANT_TIMEOUT=30` |
+| Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
+
+## Environment
+
+`cp .env.example .env` → `uv sync && make docker-up`
+
+**Required:** `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY`, `LANGFUSE_*`, `REDIS_PASSWORD`
+
+## Deployment
+
+**Dev:** `make docker-up` | **VPS:** `ssh vps` → `/opt/rag-fresh` → see `.claude/rules/k3s.md`
 
 ## Modular Docs
 
-See `.claude/rules/` for domain-specific documentation:
+`.claude/rules/` — loaded by `paths:` glob when working on matching files:
 
-| File | Scope | Loads when |
-|------|-------|-----------|
-| `features/search-retrieval.md` | RRF, gRPC, batch, group_by, quantization | `src/retrieval/**` |
-| `features/query-processing.md` | HyDE, preprocessing, routing | `**/query*.py` |
-| `features/evaluation.md` | RAGAS, LLM-as-a-Judge, metrics, A/B tests | `src/evaluation/**, telegram_bot/evaluation/**` |
-| `features/caching.md` | 6-tier cache, Redis pipelines, TTL | `**/cache*.py` |
-| `features/embeddings.md` | BGE-M3 (/encode/hybrid, dense, sparse), Voyage | `**/embed*.py` |
-| `features/llm-integration.md` | LiteLLM, guardrails, fallbacks | `**/llm*.py` |
-| `features/ingestion.md` | CocoIndex, Docling, parsing | `src/ingestion/**` |
-| `features/telegram-bot.md` | Async RAG pipeline, voice LangGraph, agent SDK, middlewares | `telegram_bot/*.py` |
-| `features/voice-bot.md` | LiveKit Agent, SIP, RAG API, /call | `src/voice/**, src/api/**` |
-| `features/user-personalization.md` | CESC, user context, preferences | `**/user_context*.py` |
-| `services.md` | Service/integration patterns, prompt mgmt | `telegram_bot/services/**, telegram_bot/integrations/**` |
-| `observability.md` | Langfuse v3, @observe, scores, baseline | `telegram_bot/observability.py, tests/baseline/**` |
-| `build.md` | uv, Makefile, pre-commit hooks | `Makefile, pyproject.toml` |
-| `docker.md` | Containers, monitoring | `docker/**` |
-| `k3s.md` | k3s manifests, deployment, VPS | `k8s/**` |
-| `testing.md` | Unit tests, chaos tests, E2E | `tests/**` |
-| `skills.md` | Superpowers workflow | `docs/plans/**` |
-| `git-workflow.md` | PR discipline, merge rules, Renovate strategy | `.github/**, renovate.json` |
+| File | Scope |
+|------|-------|
+| `features/telegram-bot.md` | Bot, RAG pipeline, agent SDK, voice LangGraph |
+| `features/search-retrieval.md` | RRF, Qdrant, gRPC, collections, settings |
+| `features/caching.md` | 6-tier cache, Redis pipelines |
+| `features/evaluation.md` | RAGAS, LLM-as-a-Judge, gold sets |
+| `features/embeddings.md` | BGE-M3, Voyage |
+| `features/ingestion.md` | CocoIndex, Docling |
+| `features/llm-integration.md` | LiteLLM, guardrails |
+| `features/query-processing.md` | HyDE, preprocessing |
+| `features/voice-bot.md` | LiveKit, SIP, RAG API |
+| `features/user-personalization.md` | User context, preferences |
+| `observability.md` | Langfuse v3, scores, spans |
+| `services.md` | Service patterns, Kommo CRM |
+| `docker.md` | Containers, profiles, monitoring |
+| `k3s.md` | VPS deployment, k3s manifests |
+| `testing.md` | Unit/chaos/E2E tests |
+| `build.md` | uv, Makefile, pre-commit |
+| `skills.md` | Workflow, dispatch, worker contract |
+| `git-workflow.md` | Commits, merge rules, Renovate |
