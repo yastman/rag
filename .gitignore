@@ -208,3 +208,10 @@ tests/baseline/.current_baseline
 
 ***REMOVED*** Exported evaluation datasets (generated, not committed)
 datasets/*.jsonl
+
+***REMOVED*** agent-mux config (contains env var references)
+mcp-clusters.yaml
+
+***REMOVED*** Worker artifacts (generated, not committed)
+docs/artifacts/*.md
+!docs/artifacts/.gitkeep
