@@ -16,38 +16,11 @@ make baseline-set TAG=main-latest SESSION_ID=smoke-abc-20260128
 make baseline-check                          # Smoke + compare against main-latest
 ```
 
-## Langfuse UI Workflow
+## Langfuse UI
 
 **Local URL:** http://localhost:3001
 
-### Debugging a Slow Query
-
-1. **Find the trace:** Filter by `user_id` or `session_id` (format: `chat-{hash}-{YYYYMMDD}`)
-2. **Check the timeline:** Expand trace to see nested spans with durations
-3. **Identify bottleneck:** Look for spans with >500ms (red highlighted)
-4. **Check cache metrics:** Look at `cache-semantic-check`, `cache-search-check` spans for hit/miss
-
-### Comparing Baseline Runs
-
-1. **Run smoke tests:** `make baseline-smoke` (generates session like `smoke-abc123-20260202`)
-2. **View in UI:** Sessions → filter by `smoke-*` → compare latency/cost columns
-3. **Automated compare:** `make baseline-compare BASELINE_TAG=main-latest CURRENT_SESSION=smoke-new`
-
-### Finding Cache Problems
-
-1. **Filter:** Traces → Name = `cache-semantic-check`
-2. **Group by output:** Check `hit: true/false` distribution
-3. **Low hit rate?** Check distance thresholds in `CacheLayerManager`
-
-### Tracking Costs
-
-1. **Dashboard:** Overview → Cost by model/day
-2. **Per-user:** Traces → filter by `user_id` → sum costs
-3. **Regression check:** Costs tab shows trend line
-
-### Session ID Format
-
-All traces use unified format: `{type}-{hash}-{YYYYMMDD}`
+**Session ID format:** `{type}-{hash}-{YYYYMMDD}`
 
 | Type | Example | Use Case |
 |------|---------|----------|
@@ -56,15 +29,7 @@ All traces use unified format: `{type}-{hash}-{YYYYMMDD}`
 | `load` | `load-def456-20260202` | Load test runs |
 | `ci` | `ci-sha-20260202` | CI pipeline runs |
 
-### Key Filters
-
-| Filter | Example | Purpose |
-|--------|---------|---------|
-| Session | `chat-*` | All chat sessions |
-| User | `123456789` | Specific user traces |
-| Tags | `telegram,rag` | Production queries |
-| Name | `llm-generate-answer` | LLM generation only |
-| Score | `semantic_cache_hit=1` | Cache hits only |
+**Key filters:** Session (`chat-*`), User (`123456789`), Tags (`telegram,rag`), Name (`llm-generate-answer`), Score (`semantic_cache_hit=1`)
 
 ## Thresholds (regression detection)
 
@@ -247,12 +212,6 @@ except Exception as e:
 | generate_node LLM call | `generate-answer` |
 | rewrite_node LLM call | `rewrite-query` |
 
-### OTEL Configuration
-
-```yaml
-OTEL_SERVICE_NAME: rag-bot  # Set in docker-compose.dev.yml bot service
-```
-
 ## Langfuse Scores (All Exit Paths)
 
 14 RAG scores written via `write_langfuse_scores(lf, result)` (from `telegram_bot/scoring.py`) + 4 CRM scores + 3 judge scores (async). Called by `rag_tool.py` (agent path) and `handle_voice` (voice path):
@@ -314,24 +273,6 @@ prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain
 - **TTL cache**: missing prompts cached in `_missing_prompts_until` (default 300s), known in `_known_prompts_until` — no repeated API calls
 - Graceful fallback to hardcoded templates when Langfuse unavailable or prompt absent
 - Variable substitution via `prompt.compile(**variables)`
-- Missing prompt messages at DEBUG level (no production log noise)
-
-## Langfuse v3 Stack (docker-compose.dev.yml)
-
-| Service | Port | Purpose |
-|---------|------|---------|
-| langfuse | 3001 | Web UI + API |
-| langfuse-worker | - | Background processing |
-| clickhouse | 8123, 9009 | Analytics storage |
-| minio | 9090, 9091 | S3 events/media |
-| redis-langfuse | 6380 | Langfuse queues (separate from app Redis) |
-
-**Bot service env vars** (docker-compose.dev.yml):
-```yaml
-LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}   # optional, empty disables tracing
-LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-LANGFUSE_HOST: http://langfuse:3000
-```
 
 ## Trace Validation (#110, #143)
 
