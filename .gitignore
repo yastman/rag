@@ -215,3 +215,10 @@ mcp-clusters.yaml
 ***REMOVED*** Worker artifacts (generated, not committed)
 docs/artifacts/*.md
 !docs/artifacts/.gitkeep
+
+***REMOVED*** Claude plugin skills (installed per-machine, not committed)
+.claude/skills/
+***REMOVED*** Claude settings (per-machine hooks/statusline)
+.claude/settings.json
+***REMOVED*** Claude hooks (per-machine)
+.claude/hooks/
