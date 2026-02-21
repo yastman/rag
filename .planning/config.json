@@ -1,12 +1,21 @@
 {
-  "mode": "yolo",
+  "mode": "interactive",
   "depth": "standard",
-  "parallelization": true,
   "commit_docs": true,
-  "model_profile": "quality",
+  "model_profile": "balanced",
+  "parallelization": {
+    "enabled": true,
+    "plan_level": true,
+    "task_level": false,
+    "max_concurrent_agents": 3
+  },
   "workflow": {
     "research": true,
     "plan_check": true,
     "verifier": true
+  },
+  "safety": {
+    "always_confirm_destructive": true,
+    "always_confirm_external_services": true
   }
 }
