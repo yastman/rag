@@ -95,7 +95,7 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs STT/TTS) → @function_tool → 
 
 ## Task Management
 
-**Active:** `TODO.md` | **Backlog:** `gh issue list --label "next"` | **Shared tasks:** `CLAUDE_CODE_TASK_LIST_ID=X claude` → `.claude/rules/shared-tasks.md`
+**Active:** `TODO.md` | **State:** `.planning/STATE.md` | **Pause/Resume:** Edit STATE.md between sessions
 
 ## Environment
 
@@ -169,11 +169,14 @@ make k3s-status                     # Check pods
 ## Skills Workflow
 
 ```
-/writing-plans → /executing-plans → /finishing-a-development-branch
-/deps — dependency audit (Mend Renovate) | /agent-teams — multi-agent coordination
+Small:  inline → /test-driven-development → /verification-before-completion → commit
+Medium: branch → TDD → /requesting-code-review → merge to main
+Large:  plan inline → /tmux-swarm-orchestration (Sonnet workers) → merge + verify
+Bug:    /systematic-debugging → TDD → fix
+Heavy:  agent-mux → Codex autonomous pipeline (5% of tasks)
 ```
 
-**Details:** `.claude/rules/skills.md`
+**Tracking:** TODO.md | **State:** .planning/STATE.md | **Details:** `.claude/rules/skills.md`
 
 ## Modular Docs
 
