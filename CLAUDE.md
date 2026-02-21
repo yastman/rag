@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with this repository.
-
 ## Quick Reference
 
 ```bash
@@ -148,10 +146,6 @@ make k3s-status                     # Check pods
 
 **k3s details:** → see `.claude/rules/k3s.md`
 
-## Monitoring & Alerting
-
-`make monitoring-up` | `make monitoring-test-alert` → See `.claude/rules/docker.md` and `docs/ALERTING.md`
-
 ## Troubleshooting
 
 | Error | Fix |
@@ -161,10 +155,6 @@ make k3s-status                     # Check pods
 | Voyage 429 | Use CacheLayerManager |
 | Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
 | Alerts not sending | Check `TELEGRAM_ALERTING_*` env vars |
-
-## Repository Hygiene
-
-`make repo-cleanup` (dry-run) | `make repo-cleanup-force` (interactive) — branches, worktrees, stashes. Details: `.claude/rules/git-workflow.md`
 
 ## Skills Workflow
 
@@ -202,4 +192,3 @@ See `.claude/rules/` for domain-specific documentation:
 | `testing.md` | Unit tests, chaos tests, E2E | `tests/**` |
 | `skills.md` | Superpowers workflow | `docs/plans/**` |
 | `git-workflow.md` | PR discipline, merge rules, Renovate strategy | `.github/**, renovate.json` |
-| `shared-tasks.md` | Shared task list between terminals | — |
