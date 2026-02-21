@@ -6,10 +6,6 @@ paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, t
 
 Hybrid RAG pipeline (async functions for text, LangGraph for voice) with aiogram Telegram interface.
 
-## Purpose
-
-Telegram interface for domain-configurable search (default: Bulgarian property). Text queries use 6-step async `rag_pipeline()`, voice uses 11-node LangGraph StateGraph. Agent SDK routes tool calls.
-
 ## Architecture
 
 ```
@@ -166,20 +162,7 @@ self._llm = self._graph_config.create_llm()   # langfuse.openai.AsyncOpenAI
 
 ## handle_voice Flow
 
-```python
-# Download .ogg → bytes → inject into state
-voice = message.voice
-file = await bot.get_file(voice.file_id)
-buf = io.BytesIO()
-await bot.download_file(file.file_path, destination=buf)
-
-state = make_initial_state(user_id, session_id, query="")
-state["voice_audio"] = buf.getvalue()
-state["voice_duration_s"] = float(voice.duration)
-state["input_type"] = "voice"
-
-# Same graph.ainvoke(state) — transcribe_node runs first via route_start
-```
+Downloads `.ogg` → bytes → injects `voice_audio` + `voice_duration_s` + `input_type="voice"` into `make_initial_state()`, then calls `graph.ainvoke(state)`. `transcribe_node` runs first via `route_start`.
 
 **Error handling:** Empty transcription → "Голосовое не содержит речи." | API error → "Не удалось распознать. Попробуйте текстом."
 
@@ -187,26 +170,7 @@ state["input_type"] = "voice"
 
 ## handle_query Flow (create_agent SDK since #413)
 
-```python
-# handle_query always delegates to _handle_query_supervisor
-# 1. Build tools list
-tools = [rag_search]  # @tool from agents/rag_tool.py
-if history_service: tools.append(history_search)  # @tool from agents/history_tool.py
-if kommo_enabled: tools.extend(get_crm_tools())   # 8 @tools from agents/crm_tools.py
-
-# 2. Create agent via SDK
-agent = create_bot_agent(model=config.supervisor_model, tools=tools, checkpointer=...)
-
-# 3. Build BotContext for DI (injected into tools via context_schema)
-ctx = BotContext(telegram_user_id=..., session_id=..., kommo_client=..., embeddings=..., ...)
-
-# 4. Invoke with CallbackHandler for Langfuse
-langfuse_handler = create_callback_handler()
-result = await agent.ainvoke(
-    {"messages": [HumanMessage(content=query)]},
-    config={"configurable": {"bot_context": ctx}, "callbacks": [langfuse_handler]},
-)
-```
+Builds tools list (`rag_search` + optional `history_search` + optional 8 CRM tools), calls `create_bot_agent(model, tools, checkpointer)`, constructs `BotContext` for DI, invokes agent with `CallbackHandler` for Langfuse tracing.
 
 **Tools (all @tool decorated, deps via BotContext):**
 - `rag_search` — wraps `rag_pipeline()` (6-step async functions), @observe("tool-rag-search")
@@ -219,33 +183,14 @@ result = await agent.ainvoke(
 
 ## Streaming Delivery
 
-When `STREAMING_ENABLED=true` (default), `generate_node` streams LLM output directly to Telegram:
+When `STREAMING_ENABLED=true` (default), `generate_node` streams LLM output directly to Telegram: sends placeholder, edits with chunks (throttled 300ms), finalizes with Markdown parse_mode. Sets `response_sent=True` → `respond_node` skips duplicate send.
 
-1. Sends placeholder message (`⏳ Генерирую ответ...`)
-2. Edits message with accumulated chunks (throttled 300ms via `edit_text`)
-3. Finalizes with Markdown parse_mode (plain text fallback)
-4. Sets `response_sent=True` → `respond_node` skips duplicate send
-
-**Fallback:** If streaming fails at any point, falls back to non-streaming LLM call. `respond_node` handles delivery normally.
-
-**Disable:** `STREAMING_ENABLED=false` in env or `GraphConfig(streaming_enabled=False)`.
-
-**Graph wiring:** `_make_generate_node(message)` injects aiogram Message into generate_node (same pattern as `_make_respond_node`).
+**Fallback:** If streaming fails, falls back to non-streaming LLM call. **Disable:** `STREAMING_ENABLED=false`.
 
 ## Middlewares
 
-### ThrottlingMiddleware
-
-Rate limiting: `cachetools.TTLCache(maxsize=10_000, ttl=1.5s)`, admins bypass.
-
-### ErrorHandlerMiddleware
-
-Catches all exceptions, logs with `exc_info=True`, returns user-friendly message.
-
-## Dependencies
-
-- Container: `dev-bot` / `vps-bot`, 512MB RAM
-- Requires: redis, qdrant, litellm, bge-m3
+- **ThrottlingMiddleware:** `cachetools.TTLCache(maxsize=10_000, ttl=1.5s)`, admins bypass.
+- **ErrorHandlerMiddleware:** Catches all exceptions, logs with `exc_info=True`, returns user-friendly message.
 
 ## Testing
 
@@ -323,32 +268,3 @@ All tools check `ctx.kommo_client is not None` before proceeding. Enabled via `c
 | `crm_tools_count` | NUMERIC | Number of CRM tool calls |
 | `crm_tools_success` | NUMERIC | Successful CRM operations |
 | `crm_tools_error` | NUMERIC | Failed CRM operations |
-
-## Development Guide
-
-### Adding new command
-
-1. Add handler method to `PropertyBot`:
-```python
-async def cmd_newcmd(self, message: Message):
-    await message.answer("Response")
-```
-
-2. Register in `_register_handlers()`:
-```python
-self.dp.message(Command("newcmd"))(self.cmd_newcmd)
-```
-
-### Adding a step to text RAG pipeline
-
-1. Add async function in `telegram_bot/agents/rag_pipeline.py` with `@observe()` decorator
-2. Wire into `rag_pipeline()` orchestrator
-3. Write tests in `tests/unit/agents/`
-
-### Adding new voice graph node (LangGraph)
-
-1. Create module in `telegram_bot/graph/nodes/`
-2. Define async function with `state: dict[str, Any]` signature
-3. Return partial state update dict
-4. Add to `build_graph()` in `graph/graph.py` with `functools.partial` for deps
-5. Write tests in `tests/unit/graph/`

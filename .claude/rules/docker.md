@@ -181,6 +181,18 @@ Bot → LiteLLM Proxy (:4000) → Cerebras/Groq/OpenAI → Langfuse tracing
 | `gpt-4o-mini-fallback` | Groq (llama-3.1-70b) | Fallback 1 |
 | `gpt-4o-mini-openai` | OpenAI (gpt-4o-mini) | Fallback 2 |
 
+## Building Images (Docker Bake)
+
+```bash
+# Build all 5 custom images in parallel
+docker buildx bake --load
+
+# Build a single target
+docker buildx bake bot
+```
+
+`docker-bake.hcl` defines targets: `bot`, `bge-m3`, `user-base`, `ingestion`, `docling`.
+
 ## Telegram Bot (Docker)
 
 ```bash
