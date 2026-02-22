@@ -1283,3 +1283,20 @@ class TestGenerateNodeEvalFields:
         ]
         final_output = output_calls[-1]
         assert final_output["eval_context"] == ""
+
+
+def test_format_context_no_raw_score():
+    """_format_context in generate.py must NOT expose raw RRF scores to LLM."""
+    from telegram_bot.graph.nodes.generate import _format_context
+
+    docs = [
+        {"text": "ВНЖ по работе", "score": 0.0167, "metadata": {"title": "Виды ВНЖ"}},
+        {"text": "ВНЖ пенсионеры", "score": 0.0161, "metadata": {}},
+    ]
+    result = _format_context(docs, max_docs=5)
+    # Must NOT contain raw RRF scores like "0.02" or "0.017"
+    assert "0.02" not in result
+    assert "0.017" not in result
+    # Must contain object markers
+    assert "[Объект 1]" in result
+    assert "[Объект 2]" in result
