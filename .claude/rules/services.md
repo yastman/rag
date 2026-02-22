@@ -1,5 +1,5 @@
 ---
-paths: "telegram_bot/services/**/*.py, telegram_bot/integrations/**/*.py"
+paths: "telegram_bot/services/**/*.py, telegram_bot/integrations/**/*.py, telegram_bot/pipelines/**/*.py"
 ---
 
 # Service & Integration Patterns
@@ -10,11 +10,15 @@ Code patterns for `telegram_bot/services/` and `telegram_bot/integrations/`.
 
 ```
 telegram_bot/
-├── bot.py                 # PropertyBot (LangGraph orchestrator + score writing)
+├── bot.py                 # PropertyBot (thin router: client→pipeline, manager→agent)
 ├── config.py              # BotConfig (pydantic-settings BaseSettings)
 ├── observability.py       # Langfuse init, @observe decorator, PII masking
 ├── preflight.py           # Health checks (Redis, Qdrant, BGE-M3, LiteLLM)
+├── pipelines/             # Deterministic orchestration (no agent loop)
+│   ├── __init__.py
+│   └── client.py          # run_client_pipeline(), detect_agent_intent() (#567)
 ├── services/              # Business logic services
+│   ├── types.py           # PipelineResult dataclass (#567)
 │   ├── generate_response.py # Shared LLM generation (streaming, style, fallback)
 │   ├── llm.py             # LLMService (OpenAI SDK, langfuse.openai.AsyncOpenAI)
 │   ├── query_analyzer.py  # QueryAnalyzer (LLM filter extraction)
