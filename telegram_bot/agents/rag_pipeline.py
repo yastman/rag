@@ -665,6 +665,7 @@ async def rag_pipeline(
     llm: Any | None = None,
     agent_role: str | None = None,
     pre_computed_embedding: list[float] | None = None,
+    skip_rewrite: bool = False,
 ) -> dict[str, Any]:
     """Execute RAG pipeline: cache → retrieve → grade → rerank → rewrite loop → cache_store.
 
@@ -828,6 +829,7 @@ async def rag_pipeline(
                 retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
                 retrieval_error_type=retrieve_result.get("retrieval_error_type"),
             )
+            result["skip_rewrite"] = skip_rewrite
             lf.update_current_span(
                 output={
                     "cache_hit": False,
@@ -841,6 +843,7 @@ async def rag_pipeline(
         # Check if we should rewrite
         can_rewrite = (
             rewrite_count < config.max_rewrite_attempts
+            and not skip_rewrite
             and rewrite_effective
             and grade_result.get("score_improved", True)
         )
@@ -890,6 +893,7 @@ async def rag_pipeline(
         retrieval_backend_error=retrieve_result.get("retrieval_backend_error", False),
         retrieval_error_type=retrieve_result.get("retrieval_error_type"),
     )
+    result["skip_rewrite"] = skip_rewrite
     lf.update_current_span(
         output={
             "cache_hit": False,
