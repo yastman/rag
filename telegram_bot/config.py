@@ -56,6 +56,20 @@ class BotConfig(BaseSettings):
         default="zai-glm-4.7", validation_alias=AliasChoices("llm_model", "LLM_MODEL")
     )
 
+    # Langfuse observability
+    langfuse_public_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("langfuse_public_key", "LANGFUSE_PUBLIC_KEY"),
+    )
+    langfuse_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("langfuse_secret_key", "LANGFUSE_SECRET_KEY"),
+    )
+    langfuse_host: str = Field(
+        default="http://localhost:3001",
+        validation_alias=AliasChoices("langfuse_host", "LANGFUSE_HOST"),
+    )
+
     # RAG settings
     top_k: int = 5
     min_score: float = 0.3
@@ -319,6 +333,13 @@ class BotConfig(BaseSettings):
     supervisor_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),
+    )
+    client_direct_pipeline_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "client_direct_pipeline_enabled",
+            "CLIENT_DIRECT_PIPELINE_ENABLED",
+        ),
     )
 
     # Session summary + CRM (#305)
