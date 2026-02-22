@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -132,8 +133,12 @@ async def rag_search(
         # Reuse pre-computed embedding stashed by pre-agent cache check (#563)
         result_store = configurable.get("rag_result_store")
         pre_computed_embedding: list[float] | None = None
+        pre_computed_sparse: Any = None
+        pre_computed_colbert: list[list[float]] | None = None
         if isinstance(result_store, dict):
             pre_computed_embedding = result_store.get("cache_key_embedding")
+            pre_computed_sparse = result_store.get("cache_key_sparse")
+            pre_computed_colbert = result_store.get("cache_key_colbert")
 
         invoke_start = time.perf_counter()
         result = await rag_pipeline(
@@ -150,6 +155,8 @@ async def rag_search(
             llm=ctx.llm if ctx else None,
             agent_role=ctx.role if ctx else None,
             pre_computed_embedding=pre_computed_embedding,
+            pre_computed_sparse=pre_computed_sparse,
+            pre_computed_colbert=pre_computed_colbert,
         )
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
 
