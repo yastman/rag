@@ -863,6 +863,10 @@ class TestQdrantServiceHybridSearchColbert:
         # Inner prefetch should have dense + sparse
         inner_prefetch = outer_prefetch[0].prefetch
         assert len(inner_prefetch) == 2
+        # RRF prefetch should have limit > top_k for meaningful ColBERT reranking
+        rrf_limit = outer_prefetch[0].limit
+        assert rrf_limit >= 20, f"RRF limit {rrf_limit} too low for ColBERT reranking"
+        assert rrf_limit > call_kwargs["limit"]  # must overfetch vs final top_k
 
     async def test_colbert_search_without_sparse(self, service, mock_point):
         """ColBERT search with dense only (no sparse vector)."""
