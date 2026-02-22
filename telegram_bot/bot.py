@@ -15,7 +15,13 @@ from typing import Any
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import BotCommand, CallbackQuery, Message
+from aiogram.types import (
+    BotCommand,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from aiogram.utils.chat_action import ChatActionSender
 
 from .agents.agent import create_bot_agent
@@ -378,10 +384,12 @@ class PropertyBot:
         self.dp.message(Command("metrics"))(self.cmd_metrics)
         self.dp.message(Command("call"))(self.cmd_call)
         self.dp.message(Command("history"))(self.cmd_history)
+        self.dp.message(Command("clearcache"))(self.cmd_clearcache)
         self.dp.message(F.voice)(self.handle_voice)
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
+        self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -514,6 +522,26 @@ class PropertyBot:
         metrics = PipelineMetrics.get()
         text = f"```\n{metrics.format_text()}\n```"
         await message.answer(text, parse_mode="Markdown")
+
+    async def cmd_clearcache(self, message: Message) -> None:
+        """Handle /clearcache command — show inline keyboard to select cache tier for clearing."""
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="Semantic", callback_data="cc:semantic"),
+                    InlineKeyboardButton(text="Embeddings", callback_data="cc:embeddings"),
+                ],
+                [
+                    InlineKeyboardButton(text="Sparse", callback_data="cc:sparse"),
+                    InlineKeyboardButton(text="Analysis", callback_data="cc:analysis"),
+                ],
+                [
+                    InlineKeyboardButton(text="Search+Rerank", callback_data="cc:search"),
+                    InlineKeyboardButton(text="Все", callback_data="cc:all"),
+                ],
+            ]
+        )
+        await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
 
     async def cmd_call(self, message: Message):
         """Handle /call command — trigger outbound voice call.
@@ -1646,6 +1674,39 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
+    async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
+        """Handle /clearcache inline keyboard callbacks (cc: prefix)."""
+        _TIER_NAMES = {
+            "semantic": "Semantic cache",
+            "embeddings": "Embeddings cache",
+            "sparse": "Sparse embeddings cache",
+            "analysis": "Analysis cache",
+            "search": "Search + Rerank cache",
+            "all": "Все кеши",
+        }
+        data = (callback_query.data or "").removeprefix("cc:")
+        tier_name = _TIER_NAMES.get(data, data)
+        try:
+            if data == "all":
+                result = await self._cache.clear_all_caches()
+                lines = [
+                    f"Очищено: {_TIER_NAMES.get(t, t)} — {n} ключей" for t, n in result.items()
+                ]
+                text = "\n".join(lines)
+            elif data == "semantic":
+                deleted = await self._cache.clear_semantic_cache()
+                text = f"Очищено: {tier_name} — {deleted} ключей"
+            else:
+                deleted = await self._cache.clear_by_tier(data)
+                text = f"Очищено: {tier_name} — {deleted} ключей"
+        except Exception:
+            logger.warning("Failed to clear cache tier: %s", data, exc_info=True)
+            text = "Ошибка очистки кеша"
+
+        await callback_query.answer()
+        if callback_query.message is not None:
+            await callback_query.message.edit_text(text)
+
     async def handle_menu_action(
         self, callback: CallbackQuery, query_text: str, locale: str = "ru"
     ) -> None:
@@ -2016,6 +2077,7 @@ class PropertyBot:
                 BotCommand(command="history", description="Поиск по истории диалогов"),
                 BotCommand(command="stats", description="Статистика кеша"),
                 BotCommand(command="metrics", description="Метрики пайплайна (p50/p95)"),
+                BotCommand(command="clearcache", description="Очистить кеш Redis"),
             ]
         )
 
