@@ -450,12 +450,13 @@ qa: all-checks test ***REMOVED******REMOVED*** Full quality assurance
 ***REMOVED*** =============================================================================
 
 .PHONY: local-up local-down local-logs local-ps local-build run-bot
-LOCAL_SERVICES := redis qdrant bge-m3 docling
+LOCAL_SERVICES := redis qdrant bge-m3 docling litellm
 
-local-up:  ***REMOVED******REMOVED*** Start local Docker services
+local-up:  ***REMOVED******REMOVED*** Start local Docker services (bot runs via make run-bot)
 	$(COMPOSE_CMD) up -d $(LOCAL_SERVICES)
+	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
 
-run-bot:  ***REMOVED******REMOVED*** Run bot locally (use with local-up for services)
+run-bot:  ***REMOVED******REMOVED*** Run bot locally (requires: make local-up)
 	uv run python -m telegram_bot.main
 
 local-down:  ***REMOVED******REMOVED*** Stop local Docker services
