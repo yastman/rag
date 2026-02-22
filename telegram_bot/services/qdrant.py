@@ -313,6 +313,19 @@ class QdrantService:
         """
         await self.ensure_collection()
 
+        if not colbert_query:
+            logger.warning(
+                "Qdrant ColBERT search skipped: empty query vectors, falling back to RRF"
+            )
+            return await self.hybrid_search_rrf(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=filters,
+                top_k=top_k,
+                rrf_k=rrf_k,
+                return_meta=return_meta,
+            )
+
         # Inner prefetch: dense + sparse candidates
         inner_prefetch = [
             models.Prefetch(
@@ -365,14 +378,19 @@ class QdrantService:
                 return results, ok_meta
             return results
         except Exception as e:
-            logger.error(f"Qdrant ColBERT search failed (graceful degradation): {e}")
-            if return_meta:
-                return [], {
-                    "backend_error": True,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                }
-            return []
+            logger.warning(
+                "Qdrant ColBERT search failed (%s: %s), falling back to RRF",
+                type(e).__name__,
+                e,
+            )
+            return await self.hybrid_search_rrf(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=filters,
+                top_k=top_k,
+                rrf_k=rrf_k,
+                return_meta=return_meta,
+            )
 
     @observe(name="qdrant-batch-search-rrf")
     async def batch_search_rrf(
