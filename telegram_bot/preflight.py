@@ -4,6 +4,7 @@ import contextlib
 import logging
 from enum import StrEnum
 
+import asyncpg
 import httpx
 import redis.asyncio as aioredis
 from qdrant_client import AsyncQdrantClient
@@ -42,6 +43,7 @@ DEP_CLASSIFICATION: dict[str, DepLevel] = {
     "redis_cache": DepLevel.CRITICAL,
     "qdrant": DepLevel.CRITICAL,
     "bge_m3": DepLevel.CRITICAL,
+    "postgres": DepLevel.OPTIONAL,
     "litellm": DepLevel.OPTIONAL,
     "langfuse": DepLevel.OPTIONAL,
 }
@@ -243,6 +245,24 @@ async def _check_single_dep(
             logger.warning("Preflight BGE-M3 warmup failed: %s", warmup_resp.status_code)
         return True
 
+    if name == "postgres":
+        try:
+            conn = await asyncpg.connect(config.realestate_database_url, timeout=5)
+            try:
+                await conn.fetchval("SELECT 1")
+                logger.info("Preflight Postgres: database reachable")
+                return True
+            finally:
+                await conn.close()
+        except asyncpg.InvalidCatalogNameError:
+            logger.warning(
+                "Preflight WARN: Postgres database does not exist (user features will use defaults)"
+            )
+            return False
+        except Exception as exc:
+            logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
+            return False
+
     if name == "litellm":
         # Health endpoint is at proxy root, not under /v1
         base = config.llm_base_url.rstrip("/").removesuffix("/v1")
@@ -310,7 +330,7 @@ async def check_dependencies(config: BotConfig) -> dict[str, bool]:
     timeout = httpx.Timeout(10.0)
 
     # Order matters: redis_cache depends on redis
-    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "litellm", "langfuse"]
+    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres", "litellm", "langfuse"]
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for dep_name in dep_order:
