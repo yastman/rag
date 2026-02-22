@@ -4,18 +4,30 @@ paths: "src/retrieval/**/*.py"
 
 # Search Engine Patterns
 
-Qdrant hybrid search with RRF fusion.
+Quick reference for `src/retrieval/` sync search engines used in evaluation benchmarks.
+
+**Full retrieval docs (LangGraph, QdrantService, config):** `.claude/rules/features/search-retrieval.md`
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `src/retrieval/search_engines.py` | BaseSearchEngine ABC + variants |
+| `src/retrieval/reranker.py` | ColBERT reranker (sync) |
+| `src/retrieval/__init__.py` | Exports |
 
 ## Search Engine Variants
 
-- **HybridRRFColBERTSearchEngine** (default): Dense + Sparse + ColBERT rerank. Recall@1: 0.94, ~1.0s latency
-- **DBSFColBERTSearchEngine**: 7% faster variant for low-latency requirements
-- **HybridRRFSearchEngine**: Dense + Sparse without ColBERT
-- **BaselineSearchEngine**: Dense only (91.3% Recall@1)
+| Engine | Recall@1 | Latency | Use Case |
+|--------|----------|---------|---------|
+| `HybridRRFColBERTSearchEngine` | 94% | ~1.0s | Default — Dense + Sparse + ColBERT |
+| `DBSFColBERTSearchEngine` | 91% | ~0.7s | Low-latency variant |
+| `HybridRRFSearchEngine` | 92% | ~0.8s | Dense + Sparse, no ColBERT |
+| `BaselineSearchEngine` | 91.3% | ~0.65s | Dense only |
 
-## Qdrant SDK Patterns
+## Qdrant SDK Patterns (Sync)
 
-All hybrid engines use Qdrant SDK `query_points()` with nested prefetch (no httpx):
+Used in `src/retrieval/` for evaluation (not production bot path).
 
 ```python
 from qdrant_client import models
@@ -49,3 +61,9 @@ response = client.query_points(
     limit=top_k,
 )
 ```
+
+## Notes
+
+- These engines use **sync** `QdrantClient` — only for evaluation, not bot path
+- Bot path uses `AsyncQdrantClient` in `telegram_bot/services/qdrant.py`
+- `lexical_weights_to_sparse()` converts BGE-M3 lexical_weights dict → `models.SparseVector`
