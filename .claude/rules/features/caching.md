@@ -20,7 +20,7 @@ LangGraph Pipeline:
 
 | File | Description |
 |------|-------------|
-| `telegram_bot/integrations/cache.py` | CacheLayerManager (~430 LOC) |
+| `telegram_bot/integrations/cache.py` | CacheLayerManager (~300 LOC) |
 | `telegram_bot/graph/nodes/cache.py` | cache_check_node + cache_store_node |
 | `telegram_bot/graph/nodes/retrieve.py` | retrieve_node (hybrid RRF + search/sparse cache) |
 
@@ -98,12 +98,13 @@ Computes embedding (cached or fresh), checks semantic cache. Uses capability-bas
 1. Check embedding cache → if miss:
    - **BGEM3HybridEmbeddings**: `aembed_hybrid()` → dense + sparse in 1 call, cache both
    - **Other**: `aembed_query()` → dense only
-2. Check semantic cache with dense vector
+   - On error → sets `embedding_error=True`, `route_cache` → respond
+2. Check semantic cache with dense vector (only for `CACHEABLE_QUERY_TYPES`: FAQ, ENTITY, STRUCTURED, GENERAL)
 3. Returns `embeddings_cache_hit` flag for Langfuse scoring
 
 ```python
 result = await cache_check_node(state, cache=cache, embeddings=embeddings)
-# Returns: {cache_hit, cached_response, query_embedding, embeddings_cache_hit, latency_stages}
+# Returns: {cache_hit, cached_response, query_embedding, embeddings_cache_hit, embedding_error, latency_stages}
 ```
 
 ### cache_store_node
@@ -123,6 +124,12 @@ Hybrid RRF search with multi-level caching:
 result = await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdrant=qdrant)
 # Flow: search cache → sparse cache → qdrant.hybrid_search_rrf() → cache results
 ```
+
+## Key Details
+
+**Query normalization for cache keys:** `_normalize_query_for_cache()` lowercases, strips trailing punctuation — `"ВНЖ?"` and `"внж"` hash to the same key, avoiding duplicate API calls.
+
+**SemanticCache filterable fields:** `query_type`, `language`, `user_id`, `cache_scope`, `agent_role` (tag fields in RedisVL index `sem:v5:bge1024`).
 
 ## Dependencies
 
