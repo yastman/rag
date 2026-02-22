@@ -2522,3 +2522,109 @@ class TestPreAgentCacheCheck:
         check_calls = bot._cache.check_semantic.call_args_list
         assert len(check_calls) >= 1
         assert check_calls[0].kwargs.get("agent_role") == "client"
+
+
+def _make_cc_callback_query(data: str, user_id: int = 12345):
+    """Create a mock CallbackQuery for clearcache tests."""
+    cq = MagicMock()
+    cq.data = data
+    cq.from_user = MagicMock(id=user_id)
+    cq.answer = AsyncMock()
+    cq.message = MagicMock()
+    cq.message.edit_text = AsyncMock()
+    return cq
+
+
+class TestClearCacheCommand:
+    """Tests for /clearcache command and callback handler."""
+
+    async def test_cmd_clearcache_sends_keyboard(self, mock_config):
+        """cmd_clearcache replies with an InlineKeyboardMarkup."""
+        from aiogram.types import InlineKeyboardMarkup
+
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message("/clearcache")
+
+        await bot.cmd_clearcache(message)
+
+        message.answer.assert_called_once()
+        call_kwargs = message.answer.call_args
+        assert call_kwargs is not None
+        reply_markup = call_kwargs.kwargs.get("reply_markup") or call_kwargs.args[1]
+        assert isinstance(reply_markup, InlineKeyboardMarkup)
+        # 3 rows, 2 buttons each
+        assert len(reply_markup.inline_keyboard) == 3
+        all_buttons = [btn for row in reply_markup.inline_keyboard for btn in row]
+        callback_data_values = {btn.callback_data for btn in all_buttons}
+        assert callback_data_values == {
+            "cc:semantic",
+            "cc:embeddings",
+            "cc:sparse",
+            "cc:analysis",
+            "cc:search",
+            "cc:all",
+        }
+
+    async def test_handle_clearcache_semantic(self, mock_config):
+        """handle_clearcache_callback calls clear_semantic_cache for cc:semantic."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_semantic_cache = AsyncMock(return_value=5)
+
+        cq = _make_cc_callback_query("cc:semantic")
+        await bot.handle_clearcache_callback(cq)
+
+        bot._cache.clear_semantic_cache.assert_called_once()
+        cq.answer.assert_called_once()
+        cq.message.edit_text.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "Semantic cache" in edited_text
+        assert "5" in edited_text
+
+    async def test_handle_clearcache_embeddings(self, mock_config):
+        """handle_clearcache_callback calls clear_by_tier for cc:embeddings."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_by_tier = AsyncMock(return_value=12)
+
+        cq = _make_cc_callback_query("cc:embeddings")
+        await bot.handle_clearcache_callback(cq)
+
+        bot._cache.clear_by_tier.assert_called_once_with("embeddings")
+        cq.answer.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "Embeddings cache" in edited_text
+        assert "12" in edited_text
+
+    async def test_handle_clearcache_all(self, mock_config):
+        """handle_clearcache_callback calls clear_all_caches for cc:all."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_all_caches = AsyncMock(
+            return_value={
+                "semantic": 3,
+                "embeddings": 7,
+                "sparse": 2,
+                "analysis": 0,
+                "search": 4,
+            }
+        )
+
+        cq = _make_cc_callback_query("cc:all")
+        await bot.handle_clearcache_callback(cq)
+
+        bot._cache.clear_all_caches.assert_called_once()
+        cq.answer.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "Semantic cache" in edited_text
+        assert "3" in edited_text
+        assert "7" in edited_text
+
+    async def test_handle_clearcache_error(self, mock_config):
+        """handle_clearcache_callback shows error message on exception."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_by_tier = AsyncMock(side_effect=Exception("Redis down"))
+
+        cq = _make_cc_callback_query("cc:sparse")
+        await bot.handle_clearcache_callback(cq)
+
+        cq.answer.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "Ошибка" in edited_text
