@@ -59,7 +59,6 @@ services:
       --maxmemory 512mb
       --maxmemory-policy volatile-lfu
       --maxmemory-samples 10
-      --appendonly yes
     volumes:
       - redis_data:/data
     healthcheck:
