@@ -159,6 +159,53 @@ class TestCacheCheckNode:
 
         cache.store_embedding.assert_awaited_once_with("new query", [0.3] * 1024)
 
+    async def test_cache_check_computes_colbert_query(self):
+        """When embeddings has aembed_hybrid_with_colbert, colbert_query is set in state."""
+        mock_cache = AsyncMock()
+        mock_cache.get_embedding = AsyncMock(return_value=None)
+        mock_cache.store_embedding = AsyncMock()
+        mock_cache.store_sparse_embedding = AsyncMock()
+        mock_cache.check_semantic = AsyncMock(return_value=None)
+
+        mock_embeddings = AsyncMock()
+        mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}, [[0.2] * 1024] * 4)
+        )
+        mock_embeddings.aembed_hybrid = AsyncMock()
+
+        state = {
+            "messages": [{"role": "user", "content": "test query"}],
+            "query_type": "GENERAL",
+            "latency_stages": {},
+        }
+        result = await cache_check_node(state, cache=mock_cache, embeddings=mock_embeddings)
+
+        assert result.get("colbert_query") is not None
+        assert len(result["colbert_query"]) == 4  # 4 token vectors
+
+    async def test_cache_check_computes_colbert_when_embedding_cached(self):
+        """When embedding is cached but ColBERT not computed, compute ColBERT separately."""
+        mock_cache = AsyncMock()
+        mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  # cached!
+        mock_cache.check_semantic = AsyncMock(return_value=None)
+
+        mock_embeddings = AsyncMock()
+        mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}, [[0.2] * 1024] * 4)
+        )
+
+        state = {
+            "messages": [{"role": "user", "content": "test query"}],
+            "query_type": "GENERAL",
+            "latency_stages": {},
+        }
+        result = await cache_check_node(state, cache=mock_cache, embeddings=mock_embeddings)
+
+        assert result.get("colbert_query") is not None
+        assert len(result["colbert_query"]) == 4
+        # Called to get ColBERT vectors even though embedding was cached
+        mock_embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+
     async def test_hybrid_stores_both_embeddings(self):
         """When hybrid embeddings available, cache both dense and sparse."""
         state = make_initial_state(user_id=1, session_id="s1", query="hybrid query")

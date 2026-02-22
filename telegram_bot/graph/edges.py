@@ -67,6 +67,8 @@ def route_grade(
     if state.get("documents_relevant", False):
         if state.get("skip_rerank", False):
             return "generate"
+        if state.get("rerank_applied", False):
+            return "generate"
         return "rerank"
 
     # LLM call limit check (#374) — prevent rewrite loops

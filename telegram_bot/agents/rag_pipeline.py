@@ -76,6 +76,7 @@ async def _cache_check(
     # If caller pre-computed the embedding (pre-agent cache check), reuse it directly.
     embedding_error: bool = False
     embedding_error_type: str | None = None
+    colbert_query: list[list[float]] | None = None
 
     if pre_computed_embedding:
         logger.debug(
@@ -89,12 +90,22 @@ async def _cache_check(
         embedding = await cache.get_embedding(query)
         embeddings_cache_hit = embedding is not None
 
+    _has_hybrid_colbert = callable(
+        getattr(embeddings, "aembed_hybrid_with_colbert", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+
     if embedding is None:
         try:
             _has_hybrid = callable(
                 getattr(embeddings, "aembed_hybrid", None)
             ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
-            if _has_hybrid:
+            if _has_hybrid_colbert:
+                embedding, sparse, colbert_query = await embeddings.aembed_hybrid_with_colbert(
+                    query
+                )
+                await cache.store_embedding(query, embedding)
+                await cache.store_sparse_embedding(query, sparse)
+            elif _has_hybrid:
                 embedding, sparse = await embeddings.aembed_hybrid(query)
                 await cache.store_embedding(query, embedding)
                 await cache.store_sparse_embedding(query, sparse)
@@ -123,8 +134,16 @@ async def _cache_check(
                 "embedding_error": True,
                 "embedding_error_type": embedding_error_type,
                 "error_response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
+                "colbert_query": None,
                 "latency_stages": {**latency_stages, "cache_check": latency},
             }
+
+    # Compute ColBERT query vectors when embedding was cached but ColBERT not yet computed.
+    if colbert_query is None and _has_hybrid_colbert and embedding is not None:
+        try:
+            _, _, colbert_query = await embeddings.aembed_hybrid_with_colbert(query)
+        except Exception:
+            logger.debug("ColBERT query encode failed (non-critical), skipping")
 
     # Step 2: Check semantic cache (allowlisted types only)
     cached = None
@@ -156,6 +175,7 @@ async def _cache_check(
             "embeddings_cache_hit": embeddings_cache_hit,
             "embedding_error": False,
             "embedding_error_type": None,
+            "colbert_query": colbert_query,
             "latency_stages": {**latency_stages, "cache_check": latency},
         }
 
@@ -175,6 +195,7 @@ async def _cache_check(
         "embeddings_cache_hit": embeddings_cache_hit,
         "embedding_error": embedding_error,
         "embedding_error_type": embedding_error_type,
+        "colbert_query": colbert_query,
         "latency_stages": {**latency_stages, "cache_check": latency},
     }
 
@@ -214,6 +235,7 @@ async def _hybrid_retrieve(
     sparse_embeddings: Any,
     qdrant: Any,
     embeddings: Any | None = None,
+    colbert_query: list[list[float]] | None = None,
     top_k: int = 20,
     latency_stages: dict[str, float],
 ) -> dict[str, Any]:
@@ -243,6 +265,16 @@ async def _hybrid_retrieve(
                 dense_vector = await embeddings.aembed_query(query)
                 await cache.store_embedding(query, dense_vector)
                 sparse_vector = sparse_cached
+            elif callable(
+                getattr(embeddings, "aembed_hybrid_with_colbert", None)
+            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert):
+                (
+                    dense_vector,
+                    sparse_vector,
+                    colbert_query,
+                ) = await embeddings.aembed_hybrid_with_colbert(query)
+                await cache.store_embedding(query, dense_vector)
+                await cache.store_sparse_embedding(query, sparse_vector)
             elif callable(
                 getattr(embeddings, "aembed_hybrid", None)
             ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid):
@@ -295,6 +327,8 @@ async def _hybrid_retrieve(
             "retrieval_backend_error": False,
             "retrieval_error_type": None,
             "retrieved_context": cached_ctx,
+            "rerank_applied": False,
+            "colbert_query": colbert_query,
         }
 
     # Step 2: Get sparse embedding (cached or compute)
@@ -304,13 +338,25 @@ async def _hybrid_retrieve(
             sparse_vector = await sparse_embeddings.aembed_query(query)
             await cache.store_sparse_embedding(query, sparse_vector)
 
-    # Step 3: Hybrid search via Qdrant SDK (RRF fusion)
-    qdrant_result = await qdrant.hybrid_search_rrf(
-        dense_vector=dense_vector,
-        sparse_vector=sparse_vector,
-        top_k=top_k,
-        return_meta=True,
-    )
+    # Step 3: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
+    _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
+    colbert_search_used = False
+    if colbert_query and _has_colbert_search:
+        qdrant_result = await qdrant.hybrid_search_rrf_colbert(
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            colbert_query=colbert_query,
+            top_k=top_k,
+            return_meta=True,
+        )
+        colbert_search_used = True
+    else:
+        qdrant_result = await qdrant.hybrid_search_rrf(
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            top_k=top_k,
+            return_meta=True,
+        )
     if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
         results, search_meta = qdrant_result
     else:
@@ -352,6 +398,8 @@ async def _hybrid_retrieve(
         "retrieval_backend_error": search_meta.get("backend_error", False),
         "retrieval_error_type": search_meta.get("error_type"),
         "retrieved_context": result_ctx,
+        "rerank_applied": colbert_search_used,
+        "colbert_query": colbert_query,
     }
 
 
@@ -720,6 +768,7 @@ async def rag_pipeline(
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
     cache_embedding: list[float] | None = cache_result.get("query_embedding")
     latency_stages = cache_result["latency_stages"]
+    colbert_query: list[list[float]] | None = cache_result.get("colbert_query")
 
     if cache_result.get("embedding_error"):
         return {
@@ -763,6 +812,20 @@ async def rag_pipeline(
     # let _hybrid_retrieve handle cache lookup for those new rewritten queries.
     if cache_key != query:
         query_embedding = await cache.get_embedding(query)
+        # cache_result.colbert_query was computed for cache_key (original user text).
+        # Reset and re-encode for the actual retrieval query to avoid query mismatch.
+        colbert_query = None
+        if (
+            query_embedding is not None
+            and callable(getattr(embeddings, "aembed_hybrid_with_colbert", None))
+            and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+        ):
+            try:
+                _, _, colbert_query = await embeddings.aembed_hybrid_with_colbert(query)
+            except Exception:
+                logger.debug(
+                    "ColBERT query encode failed for reformulated query, using RRF fallback"
+                )
     else:
         query_embedding = cache_embedding
 
@@ -776,11 +839,13 @@ async def rag_pipeline(
             sparse_embeddings=sparse_embeddings,
             qdrant=qdrant,
             embeddings=embeddings,
+            colbert_query=colbert_query,
             latency_stages=latency_stages,
         )
         latency_stages = retrieve_result["latency_stages"]
         documents = retrieve_result["documents"]
         query_embedding = retrieve_result.get("query_embedding", query_embedding)
+        colbert_query = retrieve_result.get("colbert_query", colbert_query)
 
         # Step 3: Grade documents
         grade_result = await _grade_documents(
@@ -793,12 +858,13 @@ async def rag_pipeline(
 
         if grade_result["documents_relevant"]:
             # Step 4: Rerank (if needed)
-            if grade_result["skip_rerank"]:
-                # High confidence — skip rerank, just top-k sort
+            rerank_from_retrieve = retrieve_result.get("rerank_applied", False)
+            if grade_result["skip_rerank"] or rerank_from_retrieve:
+                # High confidence or server-side ColBERT already applied — skip rerank
                 final_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[
                     :_DEFAULT_RERANK_TOP_K
                 ]
-                rerank_applied = False
+                rerank_applied = rerank_from_retrieve  # preserve True from ColBERT path
             else:
                 rerank_result = await _rerank(
                     current_query,
@@ -862,17 +928,26 @@ async def rag_pipeline(
         rewrite_count = rewrite_result["rewrite_count"]
         rewrite_effective = rewrite_result["rewrite_effective"]
         query_embedding = None  # Force re-embed on next retrieve
+        colbert_query = None  # Force re-encode ColBERT on next retrieve
 
     # Fallback: ran out of rewrites, return best docs with rerank
-    rerank_result = await _rerank(
-        current_query,
-        documents,
-        reranker=reranker,
-        latency_stages=latency_stages,
-    )
-    latency_stages = rerank_result["latency_stages"]
-    final_docs = rerank_result["documents"]
-    rerank_applied = rerank_result["rerank_applied"]
+    rerank_from_retrieve = retrieve_result.get("rerank_applied", False)
+    if rerank_from_retrieve:
+        # Server-side ColBERT already applied — skip separate rerank
+        final_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[
+            :_DEFAULT_RERANK_TOP_K
+        ]
+        rerank_applied = True
+    else:
+        rerank_result = await _rerank(
+            current_query,
+            documents,
+            reranker=reranker,
+            latency_stages=latency_stages,
+        )
+        latency_stages = rerank_result["latency_stages"]
+        final_docs = rerank_result["documents"]
+        rerank_applied = rerank_result["rerank_applied"]
 
     result = _assemble_context(
         query=current_query,
