@@ -74,7 +74,7 @@ class TestFormatContext:
         result = service._format_context(chunks)
 
         assert "[Объект 1]" in result
-        assert "релевантность: 0.95" in result
+        assert "релевантность" not in result  # RRF scores removed (#566)
         assert "Название: Apartment 1" in result
         assert "Город: Varna" in result
         assert "50,000€" in result
@@ -104,7 +104,7 @@ class TestFormatContext:
         result = service._format_context(chunks)
 
         assert "Just text" in result
-        assert "релевантность: 0.75" in result
+        assert "релевантность" not in result  # RRF scores removed (#566)
 
 
 class TestGetFallbackAnswer:
