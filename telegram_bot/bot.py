@@ -15,11 +15,18 @@ from typing import Any
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import BotCommand, CallbackQuery, Message
+from aiogram.types import (
+    BotCommand,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from aiogram.utils.chat_action import ChatActionSender
 
 from .agents.agent import create_bot_agent
 from .agents.context import BotContext
+from .agents.rag_pipeline import rag_pipeline
 from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
@@ -41,6 +48,7 @@ from .scoring import (
     write_history_scores,
     write_langfuse_scores,
 )
+from .services.generate_response import generate_response
 from .services.history_service import HistoryService
 from .services.manager_menu import render_start_menu
 from .services.metrics import PipelineMetrics
@@ -53,6 +61,7 @@ logger = logging.getLogger(__name__)
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _TELEGRAM_MESSAGE_LIMIT = 4096
+_NO_RAG_QUERY_TYPES = frozenset({"CHITCHAT", "OFF_TOPIC"})
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -102,6 +111,18 @@ def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) ->
     if len(text) <= limit:
         return [text]
     return [text[i : i + limit] for i in range(0, len(text), limit)]
+
+
+def _build_non_rag_response(query_type: str) -> str:
+    """Fast canned responses for non-RAG query classes in direct client mode."""
+    if query_type == "CHITCHAT":
+        return "Привет! Я помогу с вопросами по недвижимости: цены, районы, покупка, документы."
+    if query_type == "OFF_TOPIC":
+        return (
+            "Я отвечаю по теме недвижимости и связанных услуг. "
+            "Сформулируйте вопрос по объектам, ценам, районам или процессу покупки."
+        )
+    return ""
 
 
 def _extract_current_turn(messages: list[Any]) -> list[Any]:
@@ -378,10 +399,12 @@ class PropertyBot:
         self.dp.message(Command("metrics"))(self.cmd_metrics)
         self.dp.message(Command("call"))(self.cmd_call)
         self.dp.message(Command("history"))(self.cmd_history)
+        self.dp.message(Command("clearcache"))(self.cmd_clearcache)
         self.dp.message(F.voice)(self.handle_voice)
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
+        self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -514,6 +537,26 @@ class PropertyBot:
         metrics = PipelineMetrics.get()
         text = f"```\n{metrics.format_text()}\n```"
         await message.answer(text, parse_mode="Markdown")
+
+    async def cmd_clearcache(self, message: Message) -> None:
+        """Handle /clearcache command — show inline keyboard to select cache tier for clearing."""
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="Semantic", callback_data="cc:semantic"),
+                    InlineKeyboardButton(text="Embeddings", callback_data="cc:embeddings"),
+                ],
+                [
+                    InlineKeyboardButton(text="Sparse", callback_data="cc:sparse"),
+                    InlineKeyboardButton(text="Analysis", callback_data="cc:analysis"),
+                ],
+                [
+                    InlineKeyboardButton(text="Search+Rerank", callback_data="cc:search"),
+                    InlineKeyboardButton(text="Все", callback_data="cc:all"),
+                ],
+            ]
+        )
+        await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
 
     async def cmd_call(self, message: Message):
         """Handle /call command — trigger outbound voice call.
@@ -703,8 +746,17 @@ class PropertyBot:
         bot = message.bot
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        response_text = await self._handle_query_supervisor(message, pipeline_start, locale=locale)
-        get_client().update_current_trace(output={"response": response_text or ""})
+        root_trace_metadata: dict[str, Any] = {}
+        response_text = await self._handle_query_supervisor(
+            message,
+            pipeline_start,
+            locale=locale,
+            root_trace_metadata=root_trace_metadata,
+        )
+        update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
+        if root_trace_metadata:
+            update_kwargs["metadata"] = root_trace_metadata
+        get_client().update_current_trace(**update_kwargs)
 
         # Update session last_active for idle detection (#445)
         if self._cache.redis is not None:
@@ -717,9 +769,214 @@ class PropertyBot:
             except Exception:
                 logger.debug("Failed to update session last_active", exc_info=True)
 
+    async def _send_markdown_chunks(
+        self,
+        message: Message,
+        text: str,
+        *,
+        reply_markup: Any | None = None,
+    ) -> None:
+        """Send long Telegram response in chunks with Markdown fallback."""
+        chunks = list(_split_telegram_response(text))
+        for i, chunk in enumerate(chunks):
+            is_last = i == len(chunks) - 1
+            markup = reply_markup if is_last else None
+            try:
+                await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
+            except Exception:
+                logger.warning("Markdown parse failed in text path, falling back")
+                try:
+                    await message.answer(chunk, reply_markup=markup)
+                except Exception:
+                    logger.exception("Failed to send text response chunk")
+                    await message.answer(chunk)
+
+    async def _handle_client_direct_pipeline(
+        self,
+        *,
+        message: Message,
+        user_text: str,
+        user_id: int,
+        session_id: str,
+        role: str,
+        query_type: str,
+        rag_result_store: dict[str, Any],
+    ) -> str:
+        """Fast-path for client queries: cache/classify -> rag_pipeline -> generate_response."""
+        pipeline_start = time.perf_counter()
+        lf = get_client()
+        result: dict[str, Any] = {
+            "query_type": query_type,
+            "cache_hit": False,
+            "embeddings_cache_hit": False,
+            "search_cache_hit": False,
+            "search_results_count": 0,
+            "rerank_applied": False,
+            "grade_confidence": 0.0,
+            "latency_stages": {},
+            "llm_decode_ms": None,
+            "llm_tps": None,
+            "llm_queue_ms": None,
+            "llm_timeout": False,
+            "llm_stream_recovery": False,
+            "streaming_enabled": False,
+            "llm_call_count": 0,
+            "messages": [{"role": "user", "content": user_text}],
+        }
+
+        if query_type in _NO_RAG_QUERY_TYPES:
+            response_text = _build_non_rag_response(query_type)
+            result.update(
+                {
+                    "response": response_text,
+                    "response_policy_mode": "disabled",
+                    "response_style": "balanced",
+                    "response_difficulty": "easy",
+                    "response_style_reasoning": "direct_non_rag_template",
+                    "answer_words": len(response_text.split()),
+                    "answer_chars": len(response_text),
+                    "answer_to_question_ratio": len(response_text.split())
+                    / max(len(user_text.split()), 1),
+                }
+            )
+        else:
+            pipeline_result = await rag_pipeline(
+                user_text,
+                user_id=user_id,
+                session_id=session_id,
+                query_type=query_type,
+                original_query=user_text,
+                cache=self._cache,
+                embeddings=self._embeddings,
+                sparse_embeddings=self._sparse,
+                qdrant=self._qdrant,
+                reranker=self._reranker,
+                llm=self._llm,
+                agent_role=role,
+                pre_computed_embedding=rag_result_store.get("cache_key_embedding"),
+            )
+            result.update(pipeline_result)
+            response_text = str(pipeline_result.get("response", "") or "")
+
+            if not response_text:
+                generated = await generate_response(
+                    query=user_text,
+                    documents=result.get("documents", []),
+                    retrieved_context=result.get("retrieved_context", []),
+                    raw_messages=[{"role": "user", "content": user_text}],
+                    latency_stages=result.get("latency_stages", {}),
+                    llm_call_count=int(result.get("llm_call_count", 0) or 0),
+                    config=self._graph_config,
+                )
+                result.update(generated)
+                response_text = str(generated.get("response", "") or "")
+
+            result["response"] = response_text
+
+        trace_id = lf.get_current_trace_id() or ""
+
+        reply_markup = None
+        if trace_id and query_type not in _NO_RAG_QUERY_TYPES:
+            from telegram_bot.feedback import build_feedback_keyboard
+
+            reply_markup = build_feedback_keyboard(trace_id)
+
+        sources_text = ""
+        documents = result.get("documents", [])
+        if self._graph_config.show_sources and documents and query_type not in _NO_RAG_QUERY_TYPES:
+            from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
+
+            sources_text = format_sources(documents)
+            result["sources_count"] = min(len(documents), _MAX_SOURCES)
+
+        response_text = result.get("response", "") or ""
+        full_response = response_text + sources_text if sources_text else response_text
+        await self._send_markdown_chunks(message, full_response, reply_markup=reply_markup)
+
+        # Store semantic cache for future pre-agent/direct hits.
+        store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
+        if (
+            self._cache
+            and response_text
+            and query_type in CACHEABLE_QUERY_TYPES
+            and not result.get("cache_hit", False)
+            and isinstance(store_vector, list)
+            and bool(store_vector)
+        ):
+            try:
+                await self._cache.store_semantic(
+                    query=user_text,
+                    response=response_text,
+                    vector=store_vector,
+                    query_type=query_type,
+                    cache_scope="rag",
+                    agent_role=role,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to store semantic cache in client direct path", exc_info=True
+                )
+
+        wall_ms = (time.perf_counter() - pipeline_start) * 1000
+        summarize_s = result.get("latency_stages", {}).get("summarize", 0)
+        result["pipeline_wall_ms"] = wall_ms
+        result["user_perceived_wall_ms"] = wall_ms - (summarize_s * 1000)
+        result["query_type"] = query_type
+        result["input_type"] = "text"
+        result["response"] = response_text
+        result["messages"] = [
+            *result.get("messages", []),
+            {"role": "assistant", "content": response_text},
+        ]
+
+        lf.update_current_trace(
+            input={"query": user_text},
+            output={"response": response_text},
+            metadata={
+                "pipeline_mode": "client_direct",
+                "pipeline_wall_ms": wall_ms,
+            },
+        )
+        tid = trace_id or (lf.get_current_trace_id() or "")
+        if tid:
+            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
+            try:
+                write_langfuse_scores(lf, result, trace_id=tid)
+            except Exception:
+                logger.warning(
+                    "Failed to write Langfuse scores in client direct path", exc_info=True
+                )
+
+        if self._history_service and response_text:
+            try:
+                saved = await self._history_service.save_turn(
+                    user_id=user_id,
+                    session_id=session_id,
+                    query=user_text,
+                    response=response_text,
+                    input_type="text",
+                    query_embedding=result.get("query_embedding"),
+                )
+                if tid:
+                    lf.create_score(
+                        trace_id=tid,
+                        name="history_save_success",
+                        value=1 if saved else 0,
+                        data_type="BOOLEAN",
+                        score_id=f"{tid}-history_save_success",
+                    )
+            except Exception:
+                logger.warning("Failed to save direct-path history turn", exc_info=True)
+
+        return response_text
+
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(
-        self, message: Message, pipeline_start: float, locale: str = "ru"
+        self,
+        message: Message,
+        pipeline_start: float,
+        locale: str = "ru",
+        root_trace_metadata: dict[str, Any] | None = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
         from .agents.agent import LOCALE_TO_LANGUAGE
@@ -733,95 +990,6 @@ class PropertyBot:
         session_id = make_session_id("chat", message.chat.id)
         role = await self._resolve_user_role(user_id)
         language = LOCALE_TO_LANGUAGE.get(locale, self.config.domain_language)
-
-        # Build base tools list (client-only: rag_search)
-        base_tools: list[Any] = [rag_search]
-
-        manager_tools: list[Any] = []
-        if role == "manager":
-            from .agents.manager_tools import (
-                build_tools_for_role,
-                create_crm_score_sync_tool,
-                create_manager_nurturing_tools,
-            )
-
-            # history_search is manager-only: search past conversations with clients/deals
-            if self._history_service is not None:
-                manager_tools.append(history_search)
-
-            manager_tools.extend(
-                create_manager_nurturing_tools(
-                    analytics_service=self._funnel_analytics_service,
-                    nurturing_service=self._nurturing_service,
-                )
-            )
-
-            if self._lead_scoring_store is not None:
-                manager_tools.append(
-                    create_crm_score_sync_tool(
-                        scoring_store=self._lead_scoring_store,
-                        kommo_client=getattr(self, "_kommo_client", None),
-                        score_field_id=self.config.kommo_lead_score_field_id,
-                        band_field_id=self.config.kommo_lead_band_field_id,
-                    )
-                )
-
-            # Add direct CRM tools conditionally
-            if getattr(self.config, "kommo_enabled", False) and getattr(
-                self, "_kommo_client", None
-            ):
-                from .agents.crm_tools import get_crm_tools
-
-                manager_tools.extend(get_crm_tools())
-
-            tools = build_tools_for_role(
-                role=role,
-                base_tools=base_tools,
-                manager_tools=manager_tools,
-            )
-        else:
-            tools = base_tools
-
-        # Add utility tools for all roles (#445)
-        from .agents.utility_tools import get_utility_tools
-
-        tools.extend(get_utility_tools())
-
-        # Create agent via SDK — route through LiteLLM proxy (#420)
-        agent = create_bot_agent(
-            model=self.config.supervisor_model,
-            tools=tools,
-            checkpointer=self._agent_checkpointer,
-            language=language,
-            base_url=self.config.llm_base_url,
-            api_key=self.config.llm_api_key,
-            role=role,
-            max_history_messages=self.config.agent_max_history_messages,
-        )
-
-        # Build context for tool DI
-        ctx = BotContext(
-            telegram_user_id=user_id,
-            session_id=session_id,
-            language=language,
-            kommo_client=getattr(self, "_kommo_client", None),
-            history_service=self._history_service,
-            embeddings=self._embeddings,
-            sparse_embeddings=self._sparse,
-            qdrant=self._qdrant,
-            cache=self._cache,
-            reranker=self._reranker,
-            llm=self._llm,
-            content_filter_enabled=self.config.content_filter_enabled,
-            guard_mode=self.config.guard_mode,
-            role=role,
-            manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
-            history_relevance_threshold=self.config.history_relevance_threshold,
-            original_query=message.text or "",
-            original_user_query=message.text or "",
-            bot=bot,
-            manager_ids=list(self.config.manager_ids),
-        )
 
         rag_result_store: dict[str, Any] = {}
 
@@ -872,6 +1040,15 @@ class PropertyBot:
                                 value=pattern or "unknown",
                                 data_type="CATEGORICAL",
                             )
+                        if root_trace_metadata is not None:
+                            root_trace_metadata.update(
+                                {
+                                    "pipeline_mode": "sdk_agent",
+                                    "guard_blocked": True,
+                                    "injection_pattern": pattern,
+                                    "injection_risk_score": risk_score,
+                                }
+                            )
                         return _BLOCKED_RESPONSE
                     # soft/log mode: log but don't block
                     logger.warning(
@@ -921,28 +1098,17 @@ class PropertyBot:
                             score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
                         # Build feedback keyboard (skip for non-RAG query types)
                         reply_markup = None
-                        if tid and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
+                        if tid and query_type not in _NO_RAG_QUERY_TYPES:
                             from telegram_bot.feedback import build_feedback_keyboard
 
                             reply_markup = build_feedback_keyboard(tid)
-                        # Deliver cached response (split long messages, Markdown fallback)
-                        chunks = list(_split_telegram_response(cached))
-                        for i, chunk in enumerate(chunks):
-                            is_last = i == len(chunks) - 1
-                            markup = reply_markup if is_last else None
-                            try:
-                                await message.answer(
-                                    chunk, parse_mode="Markdown", reply_markup=markup
-                                )
-                            except Exception:
-                                logger.warning(
-                                    "Markdown parse failed in pre-agent cache path, falling back"
-                                )
-                                try:
-                                    await message.answer(chunk, reply_markup=markup)
-                                except Exception:
-                                    logger.exception("Failed to send cached response chunk")
-                                    await message.answer(chunk)
+                        await self._send_markdown_chunks(
+                            message,
+                            str(cached),
+                            reply_markup=reply_markup,
+                        )
+                        if root_trace_metadata is not None:
+                            root_trace_metadata.update({"pipeline_mode": "pre_agent_cache"})
                         return cached
                     # MISS: stash embedding so rag_pipeline can skip recomputation
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
@@ -952,6 +1118,114 @@ class PropertyBot:
                     logger.warning(
                         "Pre-agent cache check failed, proceeding to agent", exc_info=True
                     )
+
+            if role == "client" and self.config.client_direct_pipeline_enabled:
+                try:
+                    async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                        if root_trace_metadata is not None:
+                            root_trace_metadata.update({"pipeline_mode": "client_direct"})
+                        return await self._handle_client_direct_pipeline(
+                            message=message,
+                            user_text=user_text,
+                            user_id=user_id,
+                            session_id=session_id,
+                            role=role,
+                            query_type=query_type,
+                            rag_result_store=rag_result_store,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Client direct pipeline failed; falling back to sdk_agent",
+                    )
+
+            # Build base tools list (client-only: rag_search)
+            base_tools: list[Any] = [rag_search]
+
+            manager_tools: list[Any] = []
+            if role == "manager":
+                from .agents.manager_tools import (
+                    build_tools_for_role,
+                    create_crm_score_sync_tool,
+                    create_manager_nurturing_tools,
+                )
+
+                # history_search is manager-only: search past conversations with clients/deals
+                if self._history_service is not None:
+                    manager_tools.append(history_search)
+
+                manager_tools.extend(
+                    create_manager_nurturing_tools(
+                        analytics_service=self._funnel_analytics_service,
+                        nurturing_service=self._nurturing_service,
+                    )
+                )
+
+                if self._lead_scoring_store is not None:
+                    manager_tools.append(
+                        create_crm_score_sync_tool(
+                            scoring_store=self._lead_scoring_store,
+                            kommo_client=getattr(self, "_kommo_client", None),
+                            score_field_id=self.config.kommo_lead_score_field_id,
+                            band_field_id=self.config.kommo_lead_band_field_id,
+                        )
+                    )
+
+                # Add direct CRM tools conditionally
+                if getattr(self.config, "kommo_enabled", False) and getattr(
+                    self, "_kommo_client", None
+                ):
+                    from .agents.crm_tools import get_crm_tools
+
+                    manager_tools.extend(get_crm_tools())
+
+                tools = build_tools_for_role(
+                    role=role,
+                    base_tools=base_tools,
+                    manager_tools=manager_tools,
+                )
+            else:
+                tools = base_tools
+
+            # Add utility tools for all roles (#445)
+            from .agents.utility_tools import get_utility_tools
+
+            tools.extend(get_utility_tools())
+
+            # Create agent via SDK — route through LiteLLM proxy (#420)
+            agent = create_bot_agent(
+                model=self.config.supervisor_model,
+                tools=tools,
+                checkpointer=self._agent_checkpointer,
+                language=language,
+                base_url=self.config.llm_base_url,
+                api_key=self.config.llm_api_key,
+                role=role,
+                max_history_messages=self.config.agent_max_history_messages,
+            )
+
+            # Build context for tool DI
+            ctx = BotContext(
+                telegram_user_id=user_id,
+                session_id=session_id,
+                language=language,
+                kommo_client=getattr(self, "_kommo_client", None),
+                history_service=self._history_service,
+                embeddings=self._embeddings,
+                sparse_embeddings=self._sparse,
+                qdrant=self._qdrant,
+                cache=self._cache,
+                reranker=self._reranker,
+                llm=self._llm,
+                content_filter_enabled=self.config.content_filter_enabled,
+                guard_mode=self.config.guard_mode,
+                role=role,
+                manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
+                history_relevance_threshold=self.config.history_relevance_threshold,
+                original_query=message.text or "",
+                original_user_query=message.text or "",
+                bot=bot,
+                manager_ids=list(self.config.manager_ids),
+            )
 
             # Initialize handler inside propagation context so it inherits session/user/tags.
             langfuse_handler = create_callback_handler()
@@ -1103,6 +1377,13 @@ class PropertyBot:
                     "pipeline_wall_ms": wall_ms,
                 },
             )
+            if root_trace_metadata is not None:
+                root_trace_metadata.update(
+                    {
+                        "pipeline_mode": "sdk_agent",
+                        "pipeline_wall_ms": wall_ms,
+                    }
+                )
             tid = lf.get_current_trace_id() or ""
             if tid:
                 lf.create_score(
@@ -1646,6 +1927,39 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
+    async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
+        """Handle /clearcache inline keyboard callbacks (cc: prefix)."""
+        _TIER_NAMES = {
+            "semantic": "Semantic cache",
+            "embeddings": "Embeddings cache",
+            "sparse": "Sparse embeddings cache",
+            "analysis": "Analysis cache",
+            "search": "Search + Rerank cache",
+            "all": "Все кеши",
+        }
+        data = (callback_query.data or "").removeprefix("cc:")
+        tier_name = _TIER_NAMES.get(data, data)
+        try:
+            if data == "all":
+                result = await self._cache.clear_all_caches()
+                lines = [
+                    f"Очищено: {_TIER_NAMES.get(t, t)} — {n} ключей" for t, n in result.items()
+                ]
+                text = "\n".join(lines)
+            elif data == "semantic":
+                deleted = await self._cache.clear_semantic_cache()
+                text = f"Очищено: {tier_name} — {deleted} ключей"
+            else:
+                deleted = await self._cache.clear_by_tier(data)
+                text = f"Очищено: {tier_name} — {deleted} ключей"
+        except Exception:
+            logger.warning("Failed to clear cache tier: %s", data, exc_info=True)
+            text = "Ошибка очистки кеша"
+
+        await callback_query.answer()
+        if callback_query.message is not None:
+            await callback_query.message.edit_text(text)
+
     async def handle_menu_action(
         self, callback: CallbackQuery, query_text: str, locale: str = "ru"
     ) -> None:
@@ -2016,6 +2330,7 @@ class PropertyBot:
                 BotCommand(command="history", description="Поиск по истории диалогов"),
                 BotCommand(command="stats", description="Статистика кеша"),
                 BotCommand(command="metrics", description="Метрики пайплайна (p50/p95)"),
+                BotCommand(command="clearcache", description="Очистить кеш Redis"),
             ]
         )
 
