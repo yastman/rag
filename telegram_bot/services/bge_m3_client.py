@@ -71,6 +71,7 @@ class HybridResult:
 
     dense_vecs: list[list[float]]
     lexical_weights: list[dict[str, Any]]
+    colbert_vecs: list[list[list[float]]] | None = None
     processing_time: float | None = None
 
 
@@ -182,6 +183,7 @@ class BGEM3Client:
         return HybridResult(
             dense_vecs=data["dense_vecs"],
             lexical_weights=data["lexical_weights"],
+            colbert_vecs=data.get("colbert_vecs"),
             processing_time=data.get("processing_time"),
         )
 
