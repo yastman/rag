@@ -408,6 +408,103 @@ class TestPipelineFullFlow:
         assert pipeline_call is not None, "update_current_trace with pipeline_mode not found"
         assert pipeline_call.kwargs.get("tags") == ["telegram", "rag", "client_direct"]
 
+    async def test_pipeline_passes_message_to_generate_response(self):
+        """generate_response must receive message= so streaming can be enabled (#571)."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Streamed answer",
+            "response_sent": False,
+            "llm_call_count": 1,
+        }
+
+        mock_gen = AsyncMock(return_value=gen_result)
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            patch("telegram_bot.pipelines.client.generate_response", mock_gen),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие документы для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(streaming_enabled=True),
+                query_type="FAQ",
+            )
+
+        # message= must be forwarded so streaming can activate
+        call_kwargs = mock_gen.call_args.kwargs
+        assert call_kwargs.get("message") is msg, "message not forwarded to generate_response"
+
+    async def test_pipeline_no_double_send_when_streaming_delivers(self):
+        """When streaming delivers the response (response_sent=True), _send_markdown_chunks
+        must NOT send the main body again (#571)."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        # Streaming delivered the response — response_sent=True
+        gen_result = {
+            "response": "Streaming delivered this",
+            "response_sent": True,
+            "llm_call_count": 1,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            result = await run_client_pipeline(
+                user_text="Какие документы для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(streaming_enabled=True),
+                query_type="FAQ",
+            )
+
+        # message.answer() must NOT be called again (streaming already sent)
+        msg.answer.assert_not_called()
+        assert result.answer == "Streaming delivered this"
+
     async def test_pipeline_propagates_exception_to_caller(self):
         """When rag_pipeline raises an exception, it propagates to the caller."""
         msg = _make_message()
