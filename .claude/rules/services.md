@@ -10,38 +10,53 @@ Code patterns for `telegram_bot/services/` and `telegram_bot/integrations/`.
 
 ```
 telegram_bot/
-├── bot.py                 # PropertyBot (~300 LOC, LangGraph orchestrator + score writing)
+├── bot.py                 # PropertyBot (LangGraph orchestrator + score writing)
 ├── config.py              # BotConfig (pydantic-settings BaseSettings)
 ├── observability.py       # Langfuse init, @observe decorator, PII masking
 ├── preflight.py           # Health checks (Redis, Qdrant, BGE-M3, LiteLLM)
-├── services/              # Business logic services (LLM, search, preprocessing)
+├── services/              # Business logic services
 │   ├── llm.py             # LLMService (OpenAI SDK, langfuse.openai.AsyncOpenAI)
-│   ├── query_analyzer.py  # QueryAnalyzer (LLM filter extraction, OpenAI SDK)
+│   ├── query_analyzer.py  # QueryAnalyzer (LLM filter extraction)
 │   ├── query_preprocessor.py # HyDEGenerator + QueryPreprocessor
 │   ├── filter_extractor.py # Regex filter extraction
+│   ├── normalizer.py      # Text normalization
 │   ├── qdrant.py          # QdrantService (async, gRPC, batch_search_rrf, group_by)
-│   ├── bge_m3_client.py   # BGEM3Client (async) + BGEM3SyncClient — unified SDK for all BGE-M3 endpoints
+│   ├── bge_m3_client.py   # BGEM3Client (async) + BGEM3SyncClient
 │   ├── colbert_reranker.py # ColbertRerankerService (uses BGEM3Client)
 │   ├── voyage.py          # VoyageService (embeddings + rerank API)
-│   ├── vectorizers.py     # UserBaseVectorizer + BgeM3CacheVectorizer (uses BGEM3Client)
+│   ├── vectorizers.py     # UserBaseVectorizer + BgeM3CacheVectorizer
+│   ├── small_to_big.py    # Small-to-big context expansion
+│   ├── history_service.py # Conversation history retrieval
+│   ├── session_summary.py / session_summary_worker.py  # Session compression
 │   ├── metrics.py         # PipelineMetrics (p50/p95 tracking)
 │   ├── redis_monitor.py   # RedisHealthMonitor (background task)
+│   ├── user_service.py    # User profile management
+│   ├── response_style_detector.py  # Detect response style preference
+│   ├── llm_guard_client.py         # LLM Guard integration
+│   ├── ingestion_cocoindex.py      # Ingestion service client
+│   ├── manager_menu.py             # Manager menu handlers
+│   ├── hot_lead_notifier.py        # Hot lead Telegram notifications
 │   ├── kommo_client.py        # KommoClient (async httpx, OAuth2 auto-refresh)
 │   ├── kommo_token_store.py   # KommoTokenStore (Redis hash, OAuth2 token mgmt)
-│   ├── kommo_models.py        # Pydantic v2: Lead, Contact, Note, Task, Pipeline, *Create, *Update
+│   ├── kommo_tokens.py        # Token helpers
+│   ├── kommo_models.py        # Pydantic v2: Lead, Contact, Note, Task, Pipeline
 │   ├── lead_scoring_models.py  # LeadScoreRecord, LeadScoreSyncPayload
-│   ├── lead_scoring_store.py   # LeadScoringStore (asyncpg upsert, pending sync queue)
+│   ├── lead_scoring_store.py   # LeadScoringStore (asyncpg upsert, pending sync)
+│   ├── lead_scoring.py         # Lead scoring logic
+│   ├── lead_score_sync.py      # Kommo sync background task
+│   ├── funnel_lead_scoring.py  # Funnel-based scoring
 │   ├── funnel_analytics_store.py   # FunnelAnalyticsStore (daily metrics)
 │   ├── funnel_analytics_service.py # FunnelAnalyticsService
 │   ├── nurturing_service.py    # NurturingService
 │   └── nurturing_scheduler.py  # NurturingScheduler (APScheduler v3)
 ├── integrations/          # LangGraph-compatible wrappers
-│   ├── cache.py           # CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
-│   ├── embeddings.py      # BGEM3HybridEmbeddings (uses BGEM3Client) + legacy wrappers
+│   ├── cache.py           # CacheLayerManager (6-tier, Redis pipelines)
+│   ├── embeddings.py      # BGEM3HybridEmbeddings + legacy wrappers
 │   ├── event_stream.py    # EventStream for graph→bot communication
 │   ├── langfuse.py        # (legacy) Langfuse callback handler — replaced by @observe
 │   ├── memory.py          # MemorySaver for conversation persistence
-│   └── prompt_manager.py  # Langfuse Prompt Management with fallback templates
+│   ├── prompt_manager.py  # Langfuse Prompt Management with fallback templates
+│   └── prompt_templates.py # Hardcoded fallback prompt templates
 └── graph/                 # LangGraph pipeline
     ├── graph.py           # build_graph() — 11-node StateGraph assembly
     ├── state.py           # RAGState TypedDict + make_initial_state()
