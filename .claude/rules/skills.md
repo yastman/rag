@@ -168,10 +168,11 @@ Edit .planning/STATE.md (done / next / resume context)
 
 | Скилл | Назначение |
 |-------|------------|
-| /git-workflow-manager | Conventional commits |
-| /cc-analytics | Статистика Claude Code |
-| /claude-md-writer | Рефакторинг CLAUDE.md |
-| /agent-mux | Codex autonomous pipeline (5%) |
-| /tmux-swarm-orchestration | Parallel Sonnet workers |
-| /brainstorming | Дизайн новых фич |
-| /writing-plans | Детальные планы для workers |
+| /git-workflow-manager | Conventional commits, release notes |
+| /cc-analytics | Статистика Claude Code (weekly report) |
+| /claude-md-writer | Рефакторинг CLAUDE.md и rules/ |
+| /tmux-swarm-orchestration | Parallel Sonnet workers в tmux |
+| /agent-teams | 2+ агентов с общим task list |
+| /gh-issues | GitHub Issues: создание, поиск, контекст |
+| /dependency-updates | Аудит зависимостей, Renovate PRs |
+| /test-suite-optimizer | Flaky tests, xdist, sharding |

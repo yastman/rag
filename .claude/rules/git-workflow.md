@@ -40,15 +40,16 @@ Current config: `renovate.json` | Schedule: Monday before 9:00 Kyiv
 | Update Type | Strategy | Auto-merge |
 |-------------|----------|------------|
 | **Patch** (all) | Individual PR | Yes |
-| **Minor** (databases, core libs, pre-commit) | Grouped PR | Yes |
-| **Minor** (ML, RAG stack, bot) | Grouped PR | No — review changelogs |
+| **Minor** (databases, core libs, pre-commit-hooks) | Grouped PR | Yes |
+| **Minor** (ML, RAG stack, bot, api-clients) | Grouped PR | No — review changelogs |
 | **Major** (all) | Individual PR | No — manual review required |
 | **Lock maintenance** | Weekly Monday 5am | Yes |
+| **Langfuse Docker** | Pinned (disabled) | No — upstream bug #11924 |
 
 **Batching strategy:**
 - `platformAutomerge: true` — GitHub merges automatically after CI passes
 - `prHourlyLimit: 5` — prevents PR flood
-- Groups: databases, ml-platform, ai-services, monitoring, python-core-libs, python-ml-libs, python-rag-stack, python-bot, python-dev-tools, github-actions
+- Groups: databases, ml-platform, ai-services, monitoring, storage, python-base, uv-base, python-core-libs, python-ml-libs, python-rag-stack, python-bot, python-docling, python-api-clients, python-dev-tools, pre-commit-hooks, github-actions
 - Review with `/deps` skill for audit workflow
 
 **When CI is red:** Do not merge Renovate PRs. Fix CI first, then let automerge catch up.
