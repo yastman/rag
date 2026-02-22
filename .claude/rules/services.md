@@ -108,6 +108,11 @@ qdrant = QdrantService(url="http://localhost:6333", collection_name="gdrive_docu
 # Single hybrid search
 results = await qdrant.hybrid_search_rrf(dense_vector=emb, sparse_vector=sparse, top_k=20)
 
+# Server-side ColBERT reranking (#569) — nested prefetch: RRF → MaxSim rescore
+results = await qdrant.hybrid_search_rrf_colbert(
+    dense_vector=emb, colbert_query=colbert_vecs, sparse_vector=sparse, top_k=20
+)
+
 # Batch search (single round-trip via query_batch_points)
 results = await qdrant.batch_search_rrf(queries=[...])
 
