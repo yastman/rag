@@ -120,6 +120,27 @@ class BGEM3HybridEmbeddings(Embeddings):
         result = await self._client.encode_hybrid([text])
         return result.dense_vecs[0], result.lexical_weights[0]
 
+    @observe(name="bge-m3-hybrid-colbert-embed")
+    async def aembed_hybrid_with_colbert(
+        self, text: str
+    ) -> tuple[list[float], dict[str, Any], list[list[float]]]:
+        """Embed text returning (dense, sparse, colbert_query_vectors).
+
+        Tries to get all three from /encode/hybrid in one call.
+        Falls back to separate /encode/colbert if hybrid doesn't return colbert_vecs.
+        """
+        result = await self._client.encode_hybrid([text])
+        dense = result.dense_vecs[0]
+        sparse = result.lexical_weights[0]
+
+        if result.colbert_vecs:
+            colbert = result.colbert_vecs[0]
+        else:
+            colbert_result = await self._client.encode_colbert([text])
+            colbert = colbert_result.colbert_vecs[0]
+
+        return dense, sparse, colbert
+
     @observe(name="bge-m3-hybrid-embed-batch")
     async def aembed_hybrid_batch(
         self, texts: list[str]
