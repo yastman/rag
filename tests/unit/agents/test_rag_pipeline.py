@@ -26,6 +26,7 @@ def mock_embeddings():
     emb = AsyncMock()
     emb.aembed_query = AsyncMock(return_value=[0.1] * 1024)
     emb.aembed_hybrid = AsyncMock(return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}))
+    emb.aembed_hybrid_with_colbert = None  # not available; prevents auto-AsyncMock child
     return emb
 
 
@@ -659,6 +660,7 @@ async def test_pipeline_embedding_error(mock_cache, mock_sparse, mock_qdrant):
 
     bad_embeddings = AsyncMock()
     bad_embeddings.aembed_hybrid = AsyncMock(side_effect=RuntimeError("BGE-M3 down"))
+    bad_embeddings.aembed_hybrid_with_colbert = None  # not available
 
     result = await rag_pipeline(
         "test",
@@ -796,3 +798,193 @@ async def test_skip_rewrite_in_result(
     )
     assert "skip_rewrite" in result_false
     assert result_false["skip_rewrite"] is False
+
+
+# ---------------------------------------------------------------------------
+# ColBERT wiring tests (Tasks 8 & 10, #568)
+# ---------------------------------------------------------------------------
+
+
+async def test_cache_check_returns_colbert_query(mock_cache):
+    """_cache_check returns colbert_query when embeddings has aembed_hybrid_with_colbert."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(
+            [0.1] * 1024,
+            {"indices": [1], "values": [0.5]},
+            [[0.2] * 1024] * 4,
+        )
+    )
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    assert result["cache_hit"] is False
+    assert result["colbert_query"] is not None
+    assert len(result["colbert_query"]) == 4
+    assert len(result["colbert_query"][0]) == 1024
+    mock_embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+
+
+async def test_cache_check_colbert_query_none_without_hybrid_colbert(mock_cache, mock_embeddings):
+    """_cache_check returns colbert_query=None when only aembed_hybrid is available."""
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    assert result["colbert_query"] is None
+
+
+async def test_hybrid_retrieve_uses_colbert_search(mock_cache, mock_sparse):
+    """_hybrid_retrieve calls hybrid_search_rrf_colbert when colbert_query is provided."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+    mock_qdrant.hybrid_search_rrf = AsyncMock()
+
+    colbert_query = [[0.2] * 1024] * 4
+
+    result = await _hybrid_retrieve(
+        "test",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        colbert_query=colbert_query,
+        latency_stages={},
+    )
+
+    assert len(result["documents"]) == 1
+    assert result["rerank_applied"] is True
+    mock_qdrant.hybrid_search_rrf_colbert.assert_called_once()
+    mock_qdrant.hybrid_search_rrf.assert_not_called()
+
+
+async def test_hybrid_retrieve_fallback_without_colbert_query(mock_cache, mock_sparse, mock_qdrant):
+    """_hybrid_retrieve falls back to hybrid_search_rrf when colbert_query is None."""
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    result = await _hybrid_retrieve(
+        "test",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        colbert_query=None,
+        latency_stages={},
+    )
+
+    assert len(result["documents"]) == 2
+    assert result["rerank_applied"] is False
+    mock_qdrant.hybrid_search_rrf.assert_called_once()
+
+
+async def test_rag_pipeline_uses_colbert_search(mock_cache, mock_sparse):
+    """rag_pipeline uses hybrid_search_rrf_colbert when embeddings supports it."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(
+            [0.1] * 1024,
+            {"indices": [1], "values": [0.5]},
+            [[0.2] * 1024] * 4,
+        )
+    )
+    mock_embeddings.aembed_hybrid = AsyncMock()
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    result = await rag_pipeline(
+        "test query",
+        user_id=1,
+        session_id="s1",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=None,
+    )
+
+    mock_qdrant.hybrid_search_rrf_colbert.assert_called_once()
+    assert result["documents"]
+
+
+async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_sparse):
+    """When hybrid_search_rrf_colbert is used, _rerank is NOT called."""
+    from unittest.mock import AsyncMock, patch
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(
+            [0.1] * 1024,
+            {"indices": [1], "values": [0.5]},
+            [[0.2] * 1024] * 4,
+        )
+    )
+
+    mock_qdrant = AsyncMock()
+    # Score between relevance_threshold (0.005) and skip_rerank_threshold (0.018)
+    # so grade says skip_rerank=False, but ColBERT path sets rerank_applied=True
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"id": "1", "score": 0.008, "text": "doc", "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    mock_reranker = AsyncMock()
+    mock_reranker.rerank = AsyncMock(return_value=[{"index": 0, "score": 0.9}])
+
+    with patch(
+        "telegram_bot.agents.rag_pipeline._rerank",
+        new_callable=AsyncMock,
+    ) as mock_rerank_fn:
+        result = await rag_pipeline(
+            "test query",
+            user_id=1,
+            session_id="s1",
+            cache=mock_cache,
+            embeddings=mock_embeddings,
+            sparse_embeddings=mock_sparse,
+            qdrant=mock_qdrant,
+            reranker=mock_reranker,
+        )
+
+    mock_rerank_fn.assert_not_called()
+    assert result["rerank_applied"] is True
