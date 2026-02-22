@@ -216,7 +216,10 @@ async def run_client_pipeline(
         "messages": [{"role": "user", "content": user_text}],
     }
 
-    pre_computed = (rag_result_store or {}).get("cache_key_embedding")
+    _store = rag_result_store or {}
+    pre_computed = _store.get("cache_key_embedding")
+    pre_computed_sparse = _store.get("cache_key_sparse")
+    pre_computed_colbert = _store.get("cache_key_colbert")
 
     pipeline_result = await rag_pipeline(
         user_text,
@@ -232,6 +235,8 @@ async def run_client_pipeline(
         llm=llm,
         agent_role=role,
         pre_computed_embedding=pre_computed,
+        pre_computed_sparse=pre_computed_sparse,
+        pre_computed_colbert=pre_computed_colbert,
     )
     result.update(pipeline_result)
     response_text = str(pipeline_result.get("response", "") or "")
