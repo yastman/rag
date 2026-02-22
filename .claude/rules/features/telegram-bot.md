@@ -168,7 +168,7 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 |-----------|---------|---------|-------------|
 | `skip_rerank_threshold` | `SKIP_RERANK_THRESHOLD` | `0.018` | Skip rerank when grade confidence >= threshold (RRF scale; must be > 1/61≈0.016 to ensure ColBERT runs) |
 | `max_rewrite_attempts` | `MAX_REWRITE_ATTEMPTS` | `1` | Max query rewrites before fallback |
-| `generate_max_tokens` | `GENERATE_MAX_TOKENS` | `2048` | Token cap for LLM generation |
+| `generate_max_tokens` | `GENERATE_MAX_TOKENS` | `4096` | Token cap for LLM generation |
 | `rewrite_max_tokens` | `REWRITE_MAX_TOKENS` | `64` | Token budget for rewrite LLM call |
 | `rewrite_model` | `REWRITE_MODEL` | `gpt-4o-mini` | Model for rewrites |
 | `bge_m3_timeout` | `BGE_M3_TIMEOUT` | `120.0` | BGE-M3 API timeout (seconds) |
@@ -238,9 +238,11 @@ run_client_pipeline(user_text, user_id, session_id, message, cache, ...) → Pip
      → if intent: return PipelineResult(needs_agent=True, agent_intent=intent)
   3. Cache check: semantic cache for CACHEABLE types → hit: return early
   4. RAG pipeline: rag_pipeline(skip_rewrite=True for FAQ)
-  5. Generate: generate_response() with streaming
-  6. Post-process: cache store (with confidence/source/contextual guards), history save, Langfuse scores
+  5. Generate: generate_response(message=message) with streaming (#571: message forwarded for chunked edits)
+  6. Post-process: double-send guard (response_sent), cache store (confidence/source/contextual guards), history save, Langfuse scores
 ```
+
+**Embedding passthrough (#571):** Pre-agent computes dense+sparse+ColBERT in one `aembed_hybrid_with_colbert()` call. All three are stashed in `rag_result_store` (on both HIT and MISS) and passed to `rag_pipeline()` via `pre_computed_sparse`/`pre_computed_colbert` params, eliminating redundant BGE-M3 calls.
 
 **`detect_agent_intent()`**: Regex/keyword detector for intents not covered by `classify_query()`:
 - "ипотек", "кредит", "рассрочка" → `"mortgage"`

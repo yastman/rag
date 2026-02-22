@@ -672,7 +672,7 @@ class TestGenerateNodeProviderMetadata:
     """Test provider metadata and TTFT tracking in generate_node."""
 
     async def test_non_streaming_captures_provider_model(self) -> None:
-        """Non-streaming path captures response.model into llm_provider_model."""
+        """Non-streaming path captures response.model and one-shot TTFT."""
         from telegram_bot.graph.nodes.generate import generate_node
 
         mock_config, _mock_client = _make_mock_config(
@@ -689,7 +689,7 @@ class TestGenerateNodeProviderMetadata:
 
         assert result["llm_provider_model"] == "cerebras/gpt-oss-120b"
         assert result["llm_response_duration_ms"] > 0
-        assert result["llm_ttft_ms"] == 0.0  # non-streaming has no TTFT
+        assert result["llm_ttft_ms"] > 0.0
 
     async def test_streaming_captures_ttft(self) -> None:
         """Streaming path measures TTFT > 0 on first content chunk."""
