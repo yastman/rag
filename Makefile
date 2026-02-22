@@ -457,7 +457,7 @@ local-up:  ## Start local Docker services (bot runs via make run-bot)
 	@echo "$(GREEN)✓ Local services started. Run bot: make run-bot$(NC)"
 
 run-bot:  ## Run bot locally (requires: make local-up)
-	uv run python -m telegram_bot.main
+	uv run --env-file .env python -m telegram_bot.main
 
 local-down:  ## Stop local Docker services
 	$(COMPOSE_CMD) stop $(LOCAL_SERVICES) || true

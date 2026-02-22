@@ -1,10 +1,10 @@
 """Trace resilience contracts — verify graceful degradation when Langfuse is unavailable.
 
 Contracts:
-  - _NullLangfuseClient: all methods callable, no exceptions raised
+  - Langfuse SDK disabled client: all methods callable, no exceptions raised
   - write_langfuse_scores: empty trace_id → silent no-op
   - write_history_scores / write_crm_scores: empty trace_id → silent no-op
-  - scoring functions work transparently with _NullLangfuseClient
+  - scoring functions work transparently with SDK disabled client
   - _write_voice_error_scores: graceful handling of empty trace_id
   - bot.py wraps scoring calls in try/except (static contract)
 """
@@ -36,43 +36,42 @@ _MINIMAL_RESULT: dict = {
 
 
 # ---------------------------------------------------------------------------
-# _NullLangfuseClient: all public methods must be callable without raising
+# SDK disabled client: all public methods must be callable without raising
 # ---------------------------------------------------------------------------
 
 
-class TestNullLangfuseClientResilience:
-    """_NullLangfuseClient: every method must be a no-op that never raises."""
+class TestSdkDisabledClientResilience:
+    """Langfuse SDK disabled client should remain no-op and exception-free."""
+
+    @pytest.fixture(autouse=True)
+    def _disable_langfuse(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+        monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+        monkeypatch.delenv("LANGFUSE_HOST", raising=False)
+        from telegram_bot.observability import _reset_langfuse_client_for_tests
+
+        _reset_langfuse_client_for_tests()
+
+    def _client(self):
+        from telegram_bot.observability import get_client
+
+        return get_client()
 
     def test_update_current_trace_no_raise(self):
-        from telegram_bot.observability import _NullLangfuseClient
-
-        _NullLangfuseClient().update_current_trace(
+        self._client().update_current_trace(
             input={"query": "test"}, output={"response": "ok"}, metadata={"k": "v"}
         )
 
     def test_update_current_span_no_raise(self):
-        from telegram_bot.observability import _NullLangfuseClient
-
-        _NullLangfuseClient().update_current_span(
+        self._client().update_current_span(
             input={"x": 1}, output={"y": 2}, level="WARNING", status_message="msg"
         )
 
     def test_update_current_generation_no_raise(self):
-        from telegram_bot.observability import _NullLangfuseClient
-
-        _NullLangfuseClient().update_current_generation(model="gpt-4", usage={"tokens": 100})
-
-    def test_score_current_trace_no_raise(self):
-        from telegram_bot.observability import _NullLangfuseClient
-
-        _NullLangfuseClient().score_current_trace(
-            name="hitl_action", value="approve", data_type="CATEGORICAL"
-        )
+        self._client().update_current_generation(model="gpt-4", usage_details={"input": 100})
 
     def test_create_score_no_raise(self):
-        from telegram_bot.observability import _NullLangfuseClient
-
-        _NullLangfuseClient().create_score(
+        self._client().create_score(
             trace_id="abc",
             name="metric",
             value=1.0,
@@ -80,36 +79,27 @@ class TestNullLangfuseClientResilience:
             data_type="NUMERIC",
         )
 
-    def test_get_current_trace_id_returns_empty_string(self):
-        from telegram_bot.observability import _NullLangfuseClient
-
-        result = _NullLangfuseClient().get_current_trace_id()
-        assert result == ""
-        assert isinstance(result, str)
+    def test_get_current_trace_id_returns_none_or_string(self):
+        result = self._client().get_current_trace_id()
+        assert result is None or isinstance(result, str)
 
     def test_flush_no_raise(self):
-        from telegram_bot.observability import _NullLangfuseClient
+        self._client().flush()
 
-        _NullLangfuseClient().flush()
-
-    def test_write_langfuse_scores_with_null_client_no_raise(self):
-        """write_langfuse_scores with _NullLangfuseClient and explicit trace_id must not raise."""
-        from telegram_bot.observability import _NullLangfuseClient
+    def test_write_langfuse_scores_with_sdk_disabled_client_no_raise(self):
         from telegram_bot.scoring import write_langfuse_scores
 
-        write_langfuse_scores(_NullLangfuseClient(), _MINIMAL_RESULT, trace_id=_TRACE_ID)
+        write_langfuse_scores(self._client(), _MINIMAL_RESULT, trace_id=_TRACE_ID)
 
-    def test_write_history_scores_with_null_client_no_raise(self):
-        from telegram_bot.observability import _NullLangfuseClient
+    def test_write_history_scores_with_sdk_disabled_client_no_raise(self):
         from telegram_bot.scoring import write_history_scores
 
-        write_history_scores(_NullLangfuseClient(), _TRACE_ID, count=0)
+        write_history_scores(self._client(), _TRACE_ID, count=0)
 
-    def test_write_crm_scores_with_null_client_no_raise(self):
-        from telegram_bot.observability import _NullLangfuseClient
+    def test_write_crm_scores_with_sdk_disabled_client_no_raise(self):
         from telegram_bot.scoring import write_crm_scores
 
-        write_crm_scores(_NullLangfuseClient(), [], trace_id=_TRACE_ID)
+        write_crm_scores(self._client(), [], trace_id=_TRACE_ID)
 
 
 # ---------------------------------------------------------------------------
