@@ -53,7 +53,7 @@ Dense embedding comes from `state["query_embedding"]` (set by cache_check_node).
 
 ### grade_node
 
-Score-based heuristic: `top_score > relevance_threshold_rrf` (default 0.005, env `RELEVANCE_THRESHOLD_RRF`) → documents relevant. RRF scores use scale `1/(k+rank)` where k=60, so typical scores are 0.001–0.016. Also sets `grade_confidence` (= top_score) and `skip_rerank` (true when `top_score >= skip_rerank_threshold`).
+Score-based heuristic: `top_score > relevance_threshold_rrf` (default 0.005, env `RELEVANCE_THRESHOLD_RRF`) → documents relevant. RRF scores use scale `1/(k+rank)` where k=60, so typical scores are 0.001–0.016. Also sets `grade_confidence` (= top_score), `skip_rerank` (true when `top_score >= skip_rerank_threshold`), and `score_improved` (delta vs prev confidence >= `score_improvement_delta` 0.001, always True on first pass).
 
 ### rerank_node
 
@@ -87,6 +87,7 @@ LLM reformulation via OpenAI SDK (`GraphConfig.create_llm()`). Increments `rewri
 | `small_to_big_mode` | off | off/on/auto (context expansion) |
 | `acorn_mode` | off | off/on/auto (filtered search optimization) |
 | `skip_rerank_threshold` | 0.012 | Skip ColBERT rerank when grade confidence >= threshold (RRF scale) |
+| `score_improvement_delta` | 0.001 | Minimum score delta vs prev confidence to count as improvement |
 | `generate_max_tokens` | 2048 | Token cap for LLM generation (env: `GENERATE_MAX_TOKENS`) |
 
 ## RRF Weights by Query Type
@@ -173,25 +174,30 @@ Enabled by default for 40x faster search, 75% less RAM.
 
 ## LangGraph Graph Assembly
 
-9-node StateGraph with conditional routing:
+11-node StateGraph with conditional routing:
 
 ```
-START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
-                 → [other] → cache_check → [HIT] → respond → END
-                                         → [MISS] → retrieve → grade
-                                                      → [relevant + high confidence] → generate → cache_store → respond → END
-                                                      → [relevant] → rerank → generate → cache_store → respond → END
-                                                      → [count < max_rewrite_attempts AND effective] → rewrite → retrieve (loop)
-                                                      → [count >= max_rewrite_attempts] → generate → cache_store → respond → END
+START → [voice_audio] → transcribe ─┐
+      → [text]        → classify ───┤→ guard → [blocked] → respond → END
+                        [CHITCHAT/OFF_TOPIC] → respond → END
+                                             → [clean] → cache_check → [HIT] → respond → END
+                                                                      → [embedding_error] → respond → END
+                                                                      → [MISS] → retrieve → grade
+                                                                                  → [skip_rerank] → generate → cache_store → respond → END
+                                                                                  → [relevant] → rerank → generate → cache_store → respond → END
+                                                                                  → [count < max AND effective AND score_improved] → rewrite → retrieve (loop)
+                                                                                  → [llm_limit / fallback] → generate → cache_store → respond → END
 ```
 
 ### Edges
 
 | Function | From → To |
 |----------|-----------|
-| `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or cache_check |
-| `route_cache` | cache_check → respond (hit) or retrieve (miss) |
-| `route_grade` | grade → generate (skip_rerank), rerank (relevant), rewrite (count < max_rewrite_attempts AND effective), generate (fallback) |
+| `route_start` | START → transcribe (voice_audio) or classify (text) |
+| `route_by_query_type` | classify → respond (CHITCHAT/OFF_TOPIC) or guard |
+| `route_after_guard` | guard → respond (blocked) or cache_check (clean) |
+| `route_cache` | cache_check → respond (hit or embedding_error) or retrieve (miss) |
+| `route_grade` | grade → generate (skip_rerank), rerank (relevant), rewrite (count < max AND rewrite_effective AND score_improved AND llm_count < max_llm_calls), generate (fallback) |
 
 ### Usage
 
