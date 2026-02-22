@@ -1,5 +1,5 @@
 ---
-paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, telegram_bot/agents/**, telegram_bot/services/generate_response.py"
+paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, telegram_bot/agents/**, telegram_bot/services/generate_response.py, telegram_bot/pipelines/**, telegram_bot/services/types.py"
 ---
 
 # Telegram Bot
@@ -12,7 +12,8 @@ Hybrid RAG pipeline (async functions for text, LangGraph for voice) with aiogram
 Text (client fast-path — default for client role):
   User Message → ThrottlingMiddleware → ErrorMiddleware
              → PropertyBot.handle_query() → _handle_client_direct_pipeline()
-             → guard → classify → rag_pipeline() → generate_response service
+             → run_client_pipeline() (pipelines/client.py)
+             → classify → detect_agent_intent → cache → rag_pipeline(skip_rewrite?) → generate_response
              → Langfuse: @observe spans (pipeline_mode="client_direct")
 
 Text (sdk_agent — manager role, fallback for client on fast-path error):
@@ -51,6 +52,8 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/graph/graph.py` | `build_graph()` — 11-node StateGraph (**voice path only**) |
 | `telegram_bot/graph/state.py` | RAGState TypedDict (25 fields incl. voice_audio, stt_text, input_type) + `make_initial_state()` |
 | `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, pipeline tuning params) |
+| `telegram_bot/pipelines/client.py` | `run_client_pipeline()` — deterministic client fast-path: classify → intent gate → cache → RAG → generate → post-process (#567) |
+| `telegram_bot/services/types.py` | `PipelineResult` dataclass (frozen, slots) — pipeline return type with needs_agent fallback signal |
 | `telegram_bot/services/generate_response.py` | `generate_response()` — shared LLM generation service (streaming, style, fallback) |
 | `telegram_bot/graph/nodes/` | 9 node modules — used by voice LangGraph and shared by rag_pipeline.py |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, `create_callback_handler`, PII masking |
@@ -66,19 +69,21 @@ Voice: Voice Message → PropertyBot.handle_voice()
 
 ## Text RAG Pipeline (6 async steps, #442)
 
-`rag_pipeline()` in `agents/rag_pipeline.py` — called by `rag_search` @tool:
+`rag_pipeline()` in `agents/rag_pipeline.py` — called by `rag_search` @tool and `run_client_pipeline()`:
 
 ```
-rag_pipeline(query, ctx) →
+rag_pipeline(query, ctx, skip_rewrite=False) →
   1. _cache_check(query, embeddings, cache) → cache_hit? return early
   2. _hybrid_retrieve(query_embedding, sparse, qdrant) → RRF fusion
   3. _grade_documents(documents, threshold=0.005) → grade_confidence
   4. _rerank(documents, reranker) → if confidence < skip_rerank_threshold
-  5. _rewrite_query(query, llm) → loop back to step 2 (max_rewrite_attempts)
+  5. _rewrite_query(query, llm) → loop back to step 2 (skipped if skip_rewrite=True)
   6. _cache_store(query, response, cache) → store for future hits
 ```
 
 Each step is `@observe()`-decorated for Langfuse tracing. Returns dict with `documents`, `response`, `latency_stages`, pipeline metadata.
+
+**`skip_rewrite`** (#567): When `True`, bypasses the rewrite loop entirely. Used by client pipeline for FAQ queries where rewrite adds latency without improving retrieval.
 
 ## Voice LangGraph Pipeline (11 nodes)
 
@@ -194,7 +199,12 @@ Downloads `.ogg` → bytes → injects `voice_audio` + `voice_duration_s` + `inp
 
 Role-based routing in `PropertyBot.handle_query()`:
 
-1. **Client fast-path** (`_handle_client_direct_pipeline`): `guard → classify → rag_pipeline() → generate_response service`. No `create_agent` SDK, no tool-routing LLM call. Feature flag: `CLIENT_DIRECT_PIPELINE_ENABLED` in BotConfig. Fail-safe: on exception, falls back to sdk_agent path.
+1. **Client fast-path** (`_handle_client_direct_pipeline` → `run_client_pipeline()`): Deterministic pipeline in `pipelines/client.py`:
+   - classify → `detect_agent_intent()` (mortgage/handoff/daily_summary → `needs_agent=True`) → cache check → `rag_pipeline()` → `generate_response()` → post-process
+   - No `create_agent` SDK, no tool-routing LLM call. Feature flag: `CLIENT_DIRECT_PIPELINE_ENABLED`.
+   - Returns `PipelineResult` (frozen dataclass from `services/types.py`). If `needs_agent=True`, falls through to agent path.
+   - Cache rules: contextual queries skipped, confidence/source guards before store.
+   - Fail-safe: on exception, falls back to sdk_agent path.
 2. **Manager / fallback** (`_handle_query_supervisor`): Full `create_agent` SDK with tool choice, CRM tools, history search.
 
 **Observability:** `pipeline_mode` metadata on Langfuse span — `"client_direct"` vs `"sdk_agent"`.
@@ -215,6 +225,33 @@ Builds tools list (`rag_search` + optional `history_search` + optional 8 CRM too
 **Runtime context:** Tools receive `BotContext` via `config["configurable"]["bot_context"]` (context_schema DI). Role (`ctx.role`) gates manager tools.
 
 **Score writing:** RAG pipeline scores (14 metrics) are written inside `rag_search` tool via `write_langfuse_scores()` from `telegram_bot/scoring.py`.
+
+## Client Pipeline (`pipelines/client.py`, #567)
+
+Deterministic fast-path for client queries — no agent loop, 0-1 LLM calls.
+
+```
+run_client_pipeline(user_text, user_id, session_id, message, cache, ...) → PipelineResult
+  1. Classify: query_type from classify_query() → CHITCHAT/OFF_TOPIC → canned response
+  2. Agent intent gate: detect_agent_intent(user_text) → "mortgage"|"handoff"|"daily_summary"|""
+     → if intent: return PipelineResult(needs_agent=True, agent_intent=intent)
+  3. Cache check: semantic cache for CACHEABLE types → hit: return early
+  4. RAG pipeline: rag_pipeline(skip_rewrite=True for FAQ)
+  5. Generate: generate_response() with streaming
+  6. Post-process: cache store (with confidence/source/contextual guards), history save, Langfuse scores
+```
+
+**`detect_agent_intent()`**: Regex/keyword detector for intents not covered by `classify_query()`:
+- "ипотек", "кредит", "рассрочка" → `"mortgage"`
+- "менеджер", "позвонить", "связаться" → `"handoff"`
+- "сводка", "отчёт", "итог дня" → `"daily_summary"`
+
+**`PipelineResult`** (`services/types.py`): Frozen dataclass with `answer`, `sources`, `query_type`, `cache_hit`, `needs_agent`, `agent_intent`, `latency_ms`, `llm_call_count`, `scores`, `pipeline_mode`, `sent_message`, `response_sent`.
+
+**Cache store guards:**
+- Contextual follow-ups ("подробнее", "первый", "это", "ещё") → skip cache store
+- `grade_confidence` < threshold → skip
+- Empty documents → skip
 
 ## generate_response Service
 
@@ -252,10 +289,11 @@ When `STREAMING_ENABLED=true` (default), `generate_response` streams LLM output 
 ## Testing
 
 ```bash
-pytest tests/unit/test_bot_handlers.py -v
+pytest tests/unit/test_bot_handlers.py -v                # Bot handlers + client direct pipeline routing
+pytest tests/unit/pipelines/test_client_pipeline.py -v   # Client pipeline: classify, intent, cache, RAG, generate
 pytest tests/unit/test_middlewares.py -v
 pytest tests/unit/graph/ -v                              # All graph tests (incl. test_transcribe_node.py)
-pytest tests/unit/agents/ -v                             # Agent tests (factory, context, tools, CRM, history, streaming)
+pytest tests/unit/agents/ -v                             # Agent tests (factory, context, tools, CRM, history, streaming, skip_rewrite)
 pytest tests/unit/services/test_generate_response.py -v  # Shared generation service
 pytest tests/integration/test_graph_paths.py -v          # Graph path tests incl. voice flow (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
