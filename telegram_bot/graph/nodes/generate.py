@@ -11,7 +11,6 @@ edits with accumulated chunks (throttled 300ms), finalizes with Markdown.
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import logging
 import time
 from typing import Any
@@ -23,7 +22,7 @@ from telegram_bot.integrations.prompt_templates import (
     get_token_limit,
 )
 from telegram_bot.observability import get_client, observe
-from telegram_bot.services.metrics import PipelineMetrics
+from telegram_bot.services.generate_response import generate_response as _generate_response_service
 from telegram_bot.services.response_style_detector import ResponseStyleDetector
 
 
@@ -259,28 +258,10 @@ def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float |
 
 @observe(name="node-generate", capture_input=False, capture_output=False)
 async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[str, Any]:
-    """Generate an answer from retrieved documents using LLM.
-
-    Builds a prompt with:
-    - System prompt (domain from config)
-    - Formatted context from top-5 documents
-    - Conversation history from state messages
-
-    When message is provided and streaming is enabled, streams the response
-    directly to Telegram via edit_text. Falls back to non-streaming on error.
-
-    Returns partial state update with response, response_sent flag, and latency.
-    """
-    t0 = time.monotonic()
-
+    """Adapter: delegates generation core to shared service with node defaults."""
     documents = state.get("documents", [])
     raw_messages = state.get("messages", [])
     messages = _select_recent_history(raw_messages)
-
-    config = _get_config()
-    context = _format_context(documents)
-
-    # Extract current query (needed for style detection before prompt building)
     last_msg = messages[-1] if messages else None
     query = ""
     if last_msg:
@@ -290,249 +271,27 @@ async def generate_node(state: RAGState, *, message: Any | None = None) -> dict[
             else getattr(last_msg, "content", "")
         )
 
-    # Detect response style (C+ scoring, no LLM call, ~0ms) (#129)
-    # Rollout-safe: disabled → legacy, shadow → compute metrics but legacy prompt/tokens
-    style_info = _detector.detect(query)
-    style_enabled = bool(getattr(config, "response_style_enabled", False))
-    shadow_mode = bool(getattr(config, "response_style_shadow_mode", False))
-
-    legacy_max_tokens = int(config.generate_max_tokens)
-
-    use_style = style_enabled and not shadow_mode
-    if use_style:
-        style_system_prompt = build_system_prompt_with_manager(
-            style=style_info.style,
-            difficulty=style_info.difficulty,
-            domain=config.domain,
-        )
-        style_budget = get_token_limit(style_info.style, style_info.difficulty)
-        system_prompt = style_system_prompt
-        max_tokens = min(style_budget, legacy_max_tokens)
-    else:
-        system_prompt = _build_system_prompt(config.domain)
-        max_tokens = legacy_max_tokens
-
-    system_prompt = _ensure_history_instruction(system_prompt)
-
-    # Citation instruction (#225) — only when sources are enabled
-    if getattr(config, "show_sources", True) and documents:
-        separator = "\n" if system_prompt.endswith("\n") else "\n\n"
-        system_prompt = f"{system_prompt}{separator}{_CITATION_INSTRUCTION}"
-
-    # Build OpenAI-format messages
-    llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
-
-    # Add conversation history (all messages except the last user message)
-    for msg in messages[:-1]:
-        role = msg.get("role", "") if isinstance(msg, dict) else getattr(msg, "type", "")
-        content = msg.get("content", "") if isinstance(msg, dict) else getattr(msg, "content", "")
-        if role in ("user", "human"):
-            llm_messages.append({"role": "user", "content": str(content)})
-        elif role in ("assistant", "ai"):
-            llm_messages.append({"role": "assistant", "content": str(content)})
-
-    user_content = (
-        f"Контекст:\n{context}\n\nВопрос: {query}\n\nОтветь на вопрос на основе контекста выше."
+    return await _generate_response_service(
+        query=query,
+        documents=documents,
+        retrieved_context=state.get("retrieved_context", []),
+        raw_messages=raw_messages,
+        latency_stages=state.get("latency_stages", {}),
+        llm_call_count=int(state.get("llm_call_count", 0) or 0),
+        message=message,
+        config=_get_config(),
+        lf_client=get_client(),
+        max_context_docs=_MAX_CONTEXT_DOCS,
+        format_context=_format_context,
+        select_recent_history=_select_recent_history,
+        build_system_prompt=_build_system_prompt,
+        ensure_history_instruction=_ensure_history_instruction,
+        build_fallback_response=_build_fallback_response,
+        generate_streaming=_generate_streaming,
+        style_detector=_detector,
+        style_prompt_builder=build_system_prompt_with_manager,
+        style_token_limit=get_token_limit,
+        extract_queue_ms=_extract_queue_ms_from_provider_headers,
+        extract_sent_message_ref=_extract_sent_message_ref,
+        citation_instruction=_CITATION_INSTRUCTION,
     )
-    llm_messages.append({"role": "user", "content": user_content})
-
-    response_sent = False
-    actual_model = config.llm_model
-    ttft_ms = 0.0
-    response_obj: Any | None = None
-    completion_tokens: int | None = None
-    stream_recovery = False
-    hard_timeout = False
-    sent_msg: Any = None
-
-    # Curated span metadata
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "query_preview": query[:120],
-            "query_len": len(query),
-            "query_hash": hashlib.sha256(query.encode()).hexdigest()[:8],
-            "context_docs_count": len(documents),
-            "streaming_enabled": bool(message is not None and config.streaming_enabled),
-        }
-    )
-
-    try:
-        llm = config.create_llm()
-
-        # Streaming path: deliver directly to Telegram
-        if message is not None and config.streaming_enabled:
-            try:
-                (
-                    answer,
-                    actual_model,
-                    ttft_ms,
-                    completion_tokens,
-                    sent_msg,
-                ) = await _generate_streaming(
-                    llm,
-                    config,
-                    llm_messages,
-                    message,
-                    max_tokens,
-                )
-                response_sent = True
-            except StreamingPartialDeliveryError as e:
-                logger.warning(
-                    "Streaming failed after partial delivery (%d chars), "
-                    "falling back to non-streaming with edit",
-                    len(e.partial_text),
-                    exc_info=True,
-                )
-                sent_msg = e.sent_msg
-                response_obj = await llm.chat.completions.create(
-                    model=config.llm_model,
-                    messages=llm_messages,
-                    temperature=config.llm_temperature,
-                    max_tokens=max_tokens,
-                    name="generate-answer",  # type: ignore[call-overload]
-                )
-                answer = response_obj.choices[0].message.content or ""
-                actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
-                # Recovery is successful once fallback LLM response is produced,
-                # even if edit delivery fails and respond_node sends later.
-                stream_recovery = True
-                # Edit existing message with fallback answer
-                delivered = False
-                try:
-                    await e.sent_msg.edit_text(answer, parse_mode="Markdown")
-                    delivered = True
-                except Exception:
-                    try:
-                        await e.sent_msg.edit_text(answer)
-                        delivered = True
-                    except Exception:
-                        logger.warning(
-                            "Failed to deliver fallback edit after partial stream; "
-                            "respond_node will send final answer",
-                            exc_info=True,
-                        )
-                response_sent = delivered
-            except Exception:
-                logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
-                get_client().update_current_span(
-                    level="WARNING",
-                    status_message="Streaming failed, using non-streaming fallback",
-                )
-                # Fall back to non-streaming
-                response_obj = await llm.chat.completions.create(
-                    model=config.llm_model,
-                    messages=llm_messages,
-                    temperature=config.llm_temperature,
-                    max_tokens=max_tokens,
-                    name="generate-answer",  # type: ignore[call-overload]
-                )
-                answer = response_obj.choices[0].message.content or ""
-                actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
-                stream_recovery = True
-        else:
-            # Non-streaming path (original)
-            response_obj = await llm.chat.completions.create(
-                model=config.llm_model,
-                messages=llm_messages,
-                temperature=config.llm_temperature,
-                max_tokens=max_tokens,
-                name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
-            )
-            answer = response_obj.choices[0].message.content or ""
-            actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
-    except Exception as e:
-        logger.exception("generate_node: LLM call failed, using fallback")
-        get_client().update_current_span(
-            level="ERROR",
-            status_message=f"LLM failed: {str(e)[:200]}",
-        )
-        answer = _build_fallback_response(documents)
-        actual_model = "fallback"
-        ttft_ms = 0.0
-        hard_timeout = True
-        stream_recovery = False
-
-    elapsed = time.monotonic() - t0
-    PipelineMetrics.get().record("generate", elapsed * 1000)
-
-    # Build eval context for managed evaluators (#386)
-    retrieved_context = state.get("retrieved_context", [])
-    eval_context = "\n\n".join(
-        f"[{d.get('score', 0):.2f}] {d.get('content', '')[:500]}"
-        for d in retrieved_context[:5]
-        if isinstance(d, dict)
-    )
-
-    span_output: dict[str, Any] = {
-        "response_length": len(answer),
-        "llm_provider_model": actual_model,
-        "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
-        "llm_response_duration_ms": round(elapsed * 1000, 1),
-        "fallback_used": actual_model == "fallback",
-        "response_sent": response_sent,
-        # Full data for Langfuse managed evaluators (#386)
-        "eval_query": query[:2000],
-        "eval_answer": answer[:3000],
-        "eval_context": eval_context,
-    }
-    if response_obj is not None:
-        usage = getattr(response_obj, "usage", None)
-        if usage is not None:
-            span_output["token_usage"] = {
-                "prompt_tokens": getattr(usage, "prompt_tokens", None),
-                "completion_tokens": getattr(usage, "completion_tokens", None),
-                "total_tokens": getattr(usage, "total_tokens", None),
-            }
-    lf.update_current_span(output=span_output)
-
-    # --- Latency breakdown (#147) ---
-    streaming_was_enabled = bool(message is not None and config.streaming_enabled)
-    llm_decode_ms: float | None = None
-    llm_tps: float | None = None
-    llm_queue_ms: float | None = _extract_queue_ms_from_provider_headers(response_obj)
-
-    if streaming_was_enabled and ttft_ms > 0:
-        response_duration_ms = elapsed * 1000
-        llm_decode_ms = response_duration_ms - ttft_ms
-        if llm_decode_ms < 0:
-            llm_decode_ms = 0.0
-        if completion_tokens is not None and llm_decode_ms > 0:
-            llm_tps = completion_tokens / (llm_decode_ms / 1000)
-
-    # Response length metrics (#129)
-    answer_words = len(answer.split())
-    answer_chars = len(answer)
-    question_words = style_info.word_count
-    ratio = answer_words / max(question_words, 1)
-    response_policy_mode = "enforced" if use_style else ("shadow" if shadow_mode else "disabled")
-
-    sent_message_ref = (
-        _extract_sent_message_ref(sent_msg) if response_sent and sent_msg is not None else None
-    )
-
-    return {
-        "response": answer,
-        "response_sent": response_sent,
-        "sent_message": sent_message_ref,
-        "llm_provider_model": actual_model,
-        "llm_ttft_ms": ttft_ms,
-        "llm_response_duration_ms": elapsed * 1000,
-        "llm_call_count": state.get("llm_call_count", 0) + 1,
-        "latency_stages": {**state.get("latency_stages", {}), "generate": elapsed},
-        # Latency breakdown (#147)
-        "llm_decode_ms": llm_decode_ms,
-        "llm_tps": llm_tps,
-        "llm_queue_ms": llm_queue_ms,
-        "llm_timeout": hard_timeout,
-        "llm_stream_recovery": stream_recovery,
-        "streaming_enabled": streaming_was_enabled,
-        # Response length control (#129)
-        "response_style": style_info.style,
-        "response_difficulty": style_info.difficulty,
-        "response_style_reasoning": style_info.reasoning,
-        "answer_words": answer_words,
-        "answer_chars": answer_chars,
-        "answer_to_question_ratio": ratio,
-        "response_policy_mode": response_policy_mode,
-    }

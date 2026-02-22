@@ -244,7 +244,9 @@ async def _check_single_dep(
         return True
 
     if name == "litellm":
-        resp = await client.get(f"{config.llm_base_url}/health/liveliness")
+        # Health endpoint is at proxy root, not under /v1
+        base = config.llm_base_url.rstrip("/").removesuffix("/v1")
+        resp = await client.get(f"{base}/health/liveliness")
         if resp.status_code != 200:
             logger.error("Preflight FAIL: LiteLLM — %s", resp.status_code)
             return False

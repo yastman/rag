@@ -15,6 +15,7 @@ telegram_bot/
 ├── observability.py       # Langfuse init, @observe decorator, PII masking
 ├── preflight.py           # Health checks (Redis, Qdrant, BGE-M3, LiteLLM)
 ├── services/              # Business logic services
+│   ├── generate_response.py # Shared LLM generation (streaming, style, fallback)
 │   ├── llm.py             # LLMService (OpenAI SDK, langfuse.openai.AsyncOpenAI)
 │   ├── query_analyzer.py  # QueryAnalyzer (LLM filter extraction)
 │   ├── query_preprocessor.py # HyDEGenerator + QueryPreprocessor
