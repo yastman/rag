@@ -812,6 +812,20 @@ async def rag_pipeline(
     # let _hybrid_retrieve handle cache lookup for those new rewritten queries.
     if cache_key != query:
         query_embedding = await cache.get_embedding(query)
+        # cache_result.colbert_query was computed for cache_key (original user text).
+        # Reset and re-encode for the actual retrieval query to avoid query mismatch.
+        colbert_query = None
+        if (
+            query_embedding is not None
+            and callable(getattr(embeddings, "aembed_hybrid_with_colbert", None))
+            and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+        ):
+            try:
+                _, _, colbert_query = await embeddings.aembed_hybrid_with_colbert(query)
+            except Exception:
+                logger.debug(
+                    "ColBERT query encode failed for reformulated query, using RRF fallback"
+                )
     else:
         query_embedding = cache_embedding
 
