@@ -20,17 +20,24 @@ Queries + Ground Truth → SearchEvaluator → Metrics
 
 ## Key Files
 
-| File | Line | Description |
-|------|------|-------------|
-| `src/evaluation/evaluator.py` | 20 | SearchEvaluator class |
-| `src/evaluation/ragas_evaluation.py` | - | RAGAS integration |
-| `src/evaluation/mlflow_integration.py` | - | MLflow setup |
-| `src/evaluation/run_ab_test.py` | - | A/B test runner |
-| `tests/baseline/collector.py` | - | LangfuseMetricsCollector |
-| `tests/baseline/thresholds.yaml` | - | Regression thresholds (incl. judge quality) |
-| `scripts/eval/goldset_sync.py` | - | Gold set sync to Langfuse dataset |
-| `scripts/eval/run_experiment.py` | - | Experiment runner (dataset.run_experiment) |
-| `docs/eval/managed-evaluator-templates.json` | - | Managed evaluator prompt templates |
+| File | Description |
+|------|-------------|
+| `src/evaluation/evaluator.py` | SearchEvaluator class |
+| `src/evaluation/ragas_evaluation.py` | RAGAS integration |
+| `src/evaluation/mlflow_integration.py` | MLflow setup helpers |
+| `src/evaluation/mlflow_experiments.py` | MLflow experiment runners |
+| `src/evaluation/run_ab_test.py` | A/B test runner |
+| `src/evaluation/langfuse_integration.py` | Langfuse tracing for eval |
+| `src/evaluation/config_snapshot.py` | Config snapshot for reproducibility |
+| `src/evaluation/metrics_logger.py` | Metrics logging utilities |
+| `src/evaluation/search_engines.py` | Sync search engine wrappers for eval |
+| `src/evaluation/search_engines_rerank.py` | Search engines with reranking for eval |
+| `src/evaluation/smoke_test.py` | Smoke test runner |
+| `tests/baseline/collector.py` | LangfuseMetricsCollector |
+| `tests/baseline/thresholds.yaml` | Regression thresholds (incl. judge quality) |
+| `scripts/eval/goldset_sync.py` | Gold set sync to Langfuse dataset |
+| `scripts/eval/run_experiment.py` | Experiment runner (dataset.run_experiment) |
+| `docs/eval/managed-evaluator-templates.json` | Managed evaluator prompt templates |
 
 ## Metrics
 
