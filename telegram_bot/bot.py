@@ -1999,7 +1999,7 @@ class PropertyBot:
         if self.config.kommo_enabled and self.config.kommo_subdomain:
             try:
                 from .services.kommo_client import KommoClient
-                from .services.kommo_tokens import KommoTokenStore
+                from .services.kommo_tokens import REDIS_KEY, KommoTokenStore
 
                 if self._cache.redis is None:
                     logger.warning("Kommo CRM skipped: Redis client not initialized")
@@ -2013,16 +2013,28 @@ class PropertyBot:
                         redirect_uri=self.config.kommo_redirect_uri,
                     )
                     auth_code = self.config.kommo_auth_code or None
-                    await token_store.initialize(authorization_code=auth_code)
+                    should_init_kommo = True
+                    if auth_code is None:
+                        existing = await self._cache.redis.hgetall(REDIS_KEY)
+                        if not existing:
+                            logger.info(
+                                "Kommo CRM disabled: no stored tokens and no KOMMO_AUTH_CODE "
+                                "(set env var for first-time setup)"
+                            )
+                            self._kommo_client = None
+                            should_init_kommo = False
 
-                    self._kommo_client = KommoClient(
-                        subdomain=self.config.kommo_subdomain,
-                        token_store=token_store,
-                    )
-                    logger.info(
-                        "Kommo CRM client initialized (subdomain=%s)",
-                        self.config.kommo_subdomain,
-                    )
+                    if should_init_kommo:
+                        await token_store.initialize(authorization_code=auth_code)
+
+                        self._kommo_client = KommoClient(
+                            subdomain=self.config.kommo_subdomain,
+                            token_store=token_store,
+                        )
+                        logger.info(
+                            "Kommo CRM client initialized (subdomain=%s)",
+                            self.config.kommo_subdomain,
+                        )
             except Exception:
                 logger.warning("Kommo CRM init failed — CRM features disabled", exc_info=True)
                 self._kommo_client = None
@@ -2030,6 +2042,10 @@ class PropertyBot:
         # Initialize PostgreSQL pool for realestate DB
         try:
             import asyncpg
+
+            # Validate DB exists before creating pool (avoid traceback spam #570)
+            test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
+            await test_conn.close()
 
             self._pg_pool = await asyncpg.create_pool(
                 self.config.realestate_database_url,
