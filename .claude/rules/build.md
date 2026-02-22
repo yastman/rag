@@ -4,93 +4,139 @@ paths: "Makefile, pyproject.toml, uv.lock, .pre-commit-config.yaml"
 
 # Build & Tooling
 
-Project uses **uv 0.10.0** package manager with **Ruff v0.14.14** linter/formatter and **pre-commit v4.5.1** hooks.
+Project uses **uv** package manager with **Ruff** linter/formatter and **pre-commit** hooks.
 
 ## Package Management
-
-### uv Commands
 
 | Command | Purpose |
 |---------|---------|
 | `uv sync` | Install all deps from uv.lock |
 | `uv sync --no-dev` | Production only |
+| `uv sync --extra voice --extra ingest --extra eval` | CI dependency profile |
+| `uv sync --all-extras --all-groups` | Everything (docs, ML, etc.) |
 | `uv add package` | Add dependency |
-| `uv add package --dev` | Add dev dependency |
-| `uv remove package` | Remove dependency |
+| `uv add --group dev package` | Add dev dependency |
 | `uv lock` | Regenerate lock file |
 | `uv lock --upgrade` | Upgrade all deps |
-| `uv run command` | Run in venv |
+| `uv lock --check` | Verify lock file (CI) |
 
-### Makefile Targets
+## Makefile: Core Targets
 
-| Target | Command | Purpose |
+| Target | Command / Effect |
+|--------|-----------------|
+| `make check` | lint + type-check (pre-commit gate) |
+| `make lint` | `ruff check src/` |
+| `make type-check` | `mypy src/ telegram_bot/ --ignore-missing-imports` |
+| `make format` | `ruff format src/` |
+| `make install` | `uv sync --no-dev` |
+| `make install-dev` | `uv sync` |
+| `make install-all` | `uv sync --all-extras --all-groups` |
+| `make lock` | `uv lock` |
+| `make update` | `uv lock --upgrade` |
+| `make update-pkg PKG=X` | `uv lock --upgrade-package X` |
+| `make reinstall` | `rm -rf .venv && uv sync` |
+| `make setup-hooks` | Install pre-commit + pre-push hooks |
+| `make clean` | Remove caches, .pyc files |
+
+## Makefile: Test Targets
+
+| Target | Runs |
+|--------|------|
+| `make test` | unit + graph_paths, `-n auto --dist=worksteal`, skip legacy_api + requires_extras |
+| `make test-unit` | unit only, `-n auto --dist=worksteal`, skip legacy_api |
+| `make test-unit-core` | unit, skip legacy_api + requires_extras + slow |
+| `make test-integration` | `tests/integration/test_graph_paths.py`, no Docker |
+| `make test-cov` | All tests with coverage (src + telegram_bot), HTML report |
+| `make test-nightly` | chaos + smoke + slow unit |
+| `make test-store-durations` | Regen `.test_durations` for pytest-split |
+
+## Makefile: Docker Targets
+
+| Target | Profile | Services |
 |--------|---------|---------|
-| `make install` | `uv sync --no-dev` | Production deps |
-| `make install-dev` | `uv sync` | All deps |
-| `make lock` | `uv lock` | Regenerate lock |
-| `make update` | `uv lock --upgrade` | Upgrade all |
-| `make setup-hooks` | `uv run pre-commit install` | Install git hooks |
+| `make docker-up` | (none) | core: postgres, qdrant, redis, docling |
+| `make docker-bot-up` | bot | + litellm, bot |
+| `make docker-obs-up` | obs | + loki, promtail, alertmanager |
+| `make docker-ml-up` | ml | + langfuse, mlflow, clickhouse, minio |
+| `make docker-ai-up` | ai | + bge-m3, user-base |
+| `make docker-ingest-up` | ingest | + ingestion service |
+| `make docker-voice-up` | voice | + livekit, sip, voice-agent |
+| `make docker-full-up` | full | all services |
+| `make docker-down` | full | stop all |
+| `make local-up` | - | redis, qdrant, bge-m3, docling (minimal) |
+
+All compose commands use `docker compose --compatibility -f docker-compose.dev.yml`.
 
 ## Pre-commit Hooks
 
-**Status:** Activated (`.git/hooks/pre-commit`, `.git/hooks/pre-push`)
-
-### Hooks Configuration
-
 File: `.pre-commit-config.yaml`
 
-| Hook | Stage | Purpose |
-|------|-------|---------|
-| ruff-check | pre-commit | Lint + auto-fix |
-| ruff-format | pre-commit | Code formatting |
-| trailing-whitespace | pre-commit | Trim whitespace |
-| end-of-file-fixer | pre-commit | Ensure newline |
-| check-yaml/toml/json | pre-commit | Syntax check |
-| check-added-large-files | pre-commit | Block >1MB files |
-| branch-protection | pre-push | Warn on main/master |
-
-### Commands
-
-```bash
-# Install hooks (one-time)
-uv run pre-commit install
-uv run pre-commit install --hook-type pre-push
-
-# Run manually
-uv run pre-commit run --all-files
-
-# Skip hooks (emergency only)
-git commit --no-verify
-```
-
-### Bypass for CI
+| Hook | Purpose |
+|------|---------|
+| ruff-check (v0.15.1) | Lint + auto-fix |
+| ruff-format (v0.15.1) | Code formatting |
+| trailing-whitespace | Trim whitespace |
+| end-of-file-fixer | Ensure newline |
+| check-yaml/toml/json | Syntax check |
+| check-added-large-files | Block >1MB |
+| check-merge-conflict | Detect conflict markers |
+| debug-statements | Detect debugger imports |
+| mixed-line-ending (--fix=lf) | Normalize line endings |
+| branch-protection | Warn on push to main/master (pre-push, exit 0) |
 
 ```bash
-# Use --no-verify only when:
-# 1. Pre-existing lint errors not related to your changes
-# 2. Documented in commit message
-git commit --no-verify -m "feat: ... (skip hooks: pre-existing E402)"
+make setup-hooks                          # Install (one-time)
+uv run pre-commit run --all-files         # Run manually
 ```
 
 ## CI Pipeline (`.github/workflows/ci.yml`)
 
-| Job | Purpose |
-|-----|---------|
-| `lint` | Ruff lint + format + mypy (strict, no `\|\| true`) |
-| `test` | Unit tests (`-m "not legacy_api" --timeout=30`) |
-| `baseline-compare` | PR-only: Langfuse regression check |
+Single job **checks** (self-hosted runner):
 
-## Lock File
+| Step | Command |
+|------|---------|
+| Ruff lint | `ruff check src/ telegram_bot/ tests/ --output-format=github` |
+| Ruff format | `ruff format --check src/ telegram_bot/ tests/` |
+| Type check | `mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary` |
 
-**File:** `uv.lock` (committed to git)
+Install: `uv sync --frozen` (base deps only).
 
-- Ensures reproducible builds across dev/CI/prod
-- Regenerate after pyproject.toml changes: `uv lock`
-- Verify in CI: `uv lock --check`
+## Dependencies
+
+### pyproject.toml structure
+
+- **`[project.dependencies]`** — runtime (always installed)
+- **`[project.optional-dependencies]`** — ml-local, docs, voice, ingest, eval
+- **`[dependency-groups]`** (PEP 735) — dev (installed by default with `uv sync`)
+
+### Key production deps
+
+| Package | Purpose |
+|---------|---------|
+| `qdrant-client>=1.16.2` | Vector DB |
+| `langfuse>=3.14.0` | Observability |
+| `voyageai>=0.3.0` | Embeddings + rerank API |
+| `langgraph>=1.0.3,<2.0` | RAG state graph |
+| `langchain-core>=1.2` | Embeddings ABC |
+| `aiogram>=3.25.0` | Telegram bot |
+| `aiogram-dialog>=2.4.0` | Dialog UI |
+| `asyncpg>=0.31.0` | PostgreSQL (lead scoring) |
+| `apscheduler>=3.11.2,<4.0` | Nurturing scheduler |
+| `cocoindex>=0.3.28` | Ingestion (ingest extra) |
+
+### Key dev deps (`[dependency-groups].dev`)
+
+| Package | Purpose |
+|---------|---------|
+| `ruff>=0.6.0` | Linter + formatter |
+| `mypy>=1.11.0` | Type checking |
+| `pytest>=8.3.0` | Test framework |
+| `pytest-xdist>=3.8.0` | Parallel tests |
+| `pytest-timeout>=2.4.0` | 30s default timeout |
+| `pytest-split>=0.11.0` | CI shard splitting |
+| `pytest-httpx>=0.35.0` | HTTP mocking |
 
 ## Service-level pyproject.toml
-
-Each Docker service with custom code has its own `pyproject.toml` + `uv.lock`:
 
 | Service | pyproject.toml | uv.lock |
 |---------|---------------|---------|
@@ -99,31 +145,7 @@ Each Docker service with custom code has its own `pyproject.toml` + `uv.lock`:
 | USER-base | `services/user-base/pyproject.toml` | `services/user-base/uv.lock` |
 | Ingestion | `pyproject.toml` (root) | `uv.lock` (root) |
 
-After changing service dependencies:
-```bash
-cd telegram_bot && uv lock        # Regenerate service lockfile
-cd services/bge-m3-api && uv lock
-cd services/user-base && uv lock
-```
-
-## Dependencies
-
-### Production (pyproject.toml `[project.dependencies]`)
-
-Key packages:
-- `qdrant-client>=1.16.2` — Vector DB
-- `voyageai>=0.3.0` — Embeddings
-- `cocoindex>=0.3.28` — Ingestion
-- `langfuse>=3.0.0` — Observability
-
-### Development (`[project.optional-dependencies.dev]`)
-
-Key packages:
-- `ruff>=0.6.0` — Linter + formatter (v0.14.14 in pre-commit)
-- `mypy>=1.11.0` — Type checking
-- `pytest>=8.3.0` — Testing
-- `pytest-httpx>=0.35.0` — HTTP mocking
-- `pre-commit>=3.8.0` — Git hooks (v4.5.1 on VPS)
+After changing service deps: `cd telegram_bot && uv lock`
 
 ## Troubleshooting
 
@@ -131,5 +153,6 @@ Key packages:
 |-------|-----|
 | `uv: command not found` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | Lock file outdated | `uv lock` |
-| Pre-commit not running | `uv run pre-commit install` |
+| Pre-commit not running | `make setup-hooks` |
 | Dependency conflict | `uv lock --upgrade-package X` |
+| CI: import error | Add to `uv sync --extra voice --extra ingest --extra eval` |
