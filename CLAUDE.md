@@ -24,7 +24,8 @@ make ingest-unified        # Unified ingestion (CocoIndex)
 
 ```
 Ingestion:  Docling → Chunker → BGE-M3 Dense+Sparse → Qdrant
-Text:       Query → create_agent SDK → rag_search | history_search | 8 CRM tools
+Text:       Query → [client] rag_pipeline → generate_response service (fast-path)
+                  → [manager] create_agent SDK → rag_search | history_search | 8 CRM tools
 Voice STT:  .ogg → LangGraph (11 nodes) → transcribe → RAG pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 ```
@@ -60,6 +61,8 @@ Bug:    /systematic-debugging → TDD → fix
 | Redis connection refused | `docker compose up -d redis` (requires `REDIS_PASSWORD`) |
 | Qdrant timeout | `QDRANT_TIMEOUT=30` |
 | Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
+| `Model gpt-4o-mini not found` (404) | `LLM_BASE_URL` must point to LiteLLM, not directly to Cerebras |
+| Langfuse traces missing locally | `make run-bot` uses `uv run --env-file .env` to load env vars |
 
 ## Environment
 
