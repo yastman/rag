@@ -10,6 +10,8 @@ from typing import Any
 
 from qdrant_client import AsyncQdrantClient, models
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,7 @@ class HistoryService:
             logger.info("Created history collection: %s", self._collection_name)
         self._ensured = True
 
+    @observe(name="history-save", capture_input=False, capture_output=False)
     async def save_turn(
         self,
         *,
