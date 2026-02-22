@@ -70,7 +70,7 @@ def _make_validation_run(**overrides: object) -> ValidationRun:
         "git_sha": "abc123",
         "started_at": datetime.datetime.now(datetime.UTC),
         "collections": ["c1"],
-        "skip_rerank_threshold": 0.012,
+        "skip_rerank_threshold": 0.018,
         "relevance_threshold_rrf": 0.005,
         "results": [],
     }
@@ -1089,7 +1089,7 @@ class TestRunSingleQuery:
         config = types.SimpleNamespace(
             streaming_enabled=False,
             max_rewrite_attempts=1,
-            skip_rerank_threshold=0.012,
+            skip_rerank_threshold=0.018,
             relevance_threshold_rrf=0.005,
         )
         services = {
