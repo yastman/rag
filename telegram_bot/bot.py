@@ -24,6 +24,7 @@ from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
 from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
+from .graph.nodes.classify import classify_query
 from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
 from .middlewares import setup_error_middleware, setup_throttling_middleware
@@ -879,6 +880,77 @@ class PropertyBot:
                         risk_score,
                         pattern,
                         user_text,
+                    )
+
+            # Pre-agent semantic cache check (#563) — skip agent entirely on HIT.
+            # classify_query is ~0ms (regex-only). Embedding + check only for CACHEABLE types.
+            query_type = classify_query(user_text)
+            if query_type in CACHEABLE_QUERY_TYPES:
+                try:
+                    embedding = await self._embeddings.aembed_query(user_text)
+                    await self._cache.store_embedding(user_text, embedding)
+                    cached = await self._cache.check_semantic(
+                        query=user_text,
+                        vector=embedding,
+                        query_type=query_type,
+                        cache_scope="rag",
+                        agent_role=role,
+                    )
+                    if cached:
+                        logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
+                        rag_result_store["cache_hit"] = True
+                        rag_result_store["query_type"] = query_type
+                        rag_result_store["cache_key_embedding"] = embedding
+                        # Write Langfuse scores and trace metadata
+                        lf = get_client()
+                        lf.update_current_trace(
+                            input={"query": user_text},
+                            output={"response": cached},
+                            metadata={"pipeline_mode": "pre_agent_cache"},
+                        )
+                        tid = lf.get_current_trace_id() or ""
+                        if tid:
+                            score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
+                            score(
+                                lf,
+                                tid,
+                                name="query_type",
+                                value=query_type,
+                                data_type="CATEGORICAL",
+                            )
+                            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
+                        # Build feedback keyboard (skip for non-RAG query types)
+                        reply_markup = None
+                        if tid and query_type not in {"CHITCHAT", "OFF_TOPIC"}:
+                            from telegram_bot.feedback import build_feedback_keyboard
+
+                            reply_markup = build_feedback_keyboard(tid)
+                        # Deliver cached response (split long messages, Markdown fallback)
+                        chunks = list(_split_telegram_response(cached))
+                        for i, chunk in enumerate(chunks):
+                            is_last = i == len(chunks) - 1
+                            markup = reply_markup if is_last else None
+                            try:
+                                await message.answer(
+                                    chunk, parse_mode="Markdown", reply_markup=markup
+                                )
+                            except Exception:
+                                logger.warning(
+                                    "Markdown parse failed in pre-agent cache path, falling back"
+                                )
+                                try:
+                                    await message.answer(chunk, reply_markup=markup)
+                                except Exception:
+                                    logger.exception("Failed to send cached response chunk")
+                                    await message.answer(chunk)
+                        return cached
+                    # MISS: stash embedding so rag_pipeline can skip recomputation
+                    logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
+                    rag_result_store["cache_key_embedding"] = embedding
+                    rag_result_store["query_type"] = query_type
+                except Exception:
+                    logger.warning(
+                        "Pre-agent cache check failed, proceeding to agent", exc_info=True
                     )
 
             # Initialize handler inside propagation context so it inherits session/user/tags.
