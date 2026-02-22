@@ -449,11 +449,14 @@ qa: all-checks test ***REMOVED******REMOVED*** Full quality assurance
 ***REMOVED*** Local Development (single docker-compose.dev.yml)
 ***REMOVED*** =============================================================================
 
-.PHONY: local-up local-down local-logs local-ps local-build
+.PHONY: local-up local-down local-logs local-ps local-build run-bot
 LOCAL_SERVICES := redis qdrant bge-m3 docling
 
 local-up:  ***REMOVED******REMOVED*** Start local Docker services
 	$(COMPOSE_CMD) up -d $(LOCAL_SERVICES)
+
+run-bot:  ***REMOVED******REMOVED*** Run bot locally (use with local-up for services)
+	uv run python -m telegram_bot.main
 
 local-down:  ***REMOVED******REMOVED*** Stop local Docker services
 	$(COMPOSE_CMD) stop $(LOCAL_SERVICES) || true
