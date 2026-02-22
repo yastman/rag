@@ -1,5 +1,7 @@
 """Unit tests for telegram_bot/bot.py handlers (LangGraph pipeline)."""
 
+import logging
+
 import pytest
 
 
@@ -1573,6 +1575,81 @@ class TestHistoryServiceLifecycle:
 
         # Should not raise
         await bot.stop()
+
+
+class TestPostgresPoolInit:
+    """Pool is not created when DB doesn't exist (#570)."""
+
+    async def test_pg_pool_skipped_when_db_missing(self, mock_config):
+        """Pool not created when asyncpg.connect raises InvalidCatalogNameError."""
+        import asyncpg
+
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot._cache.redis = MagicMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+
+        mock_checkpointer = AsyncMock()
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch(
+                "telegram_bot.integrations.memory.create_redis_checkpointer",
+                return_value=mock_checkpointer,
+            ),
+            patch(
+                "asyncpg.connect",
+                AsyncMock(side_effect=asyncpg.InvalidCatalogNameError),
+            ),
+            patch("asyncpg.create_pool", new_callable=AsyncMock) as mock_create_pool,
+        ):
+            await bot.start()
+
+        mock_create_pool.assert_not_awaited()
+        assert bot._pg_pool is None
+        assert bot._user_service is None
+
+
+class TestKommoGracefulInit:
+    """Kommo init logs INFO (not WARNING+traceback) when tokens unavailable (#570)."""
+
+    async def test_kommo_missing_tokens_logs_info_not_warning(self, mock_config, caplog):
+        """INFO log (no traceback) when no Redis tokens and no KOMMO_AUTH_CODE."""
+        mock_config.kommo_enabled = True
+        mock_config.kommo_subdomain = "test"
+        mock_config.kommo_auth_code = ""
+
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot._cache.redis = AsyncMock()
+        bot._cache.redis.hgetall = AsyncMock(return_value={})
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+
+        mock_checkpointer = AsyncMock()
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch(
+                "telegram_bot.integrations.memory.create_redis_checkpointer",
+                return_value=mock_checkpointer,
+            ),
+            caplog.at_level(logging.INFO),
+        ):
+            await bot.start()
+
+        assert "Kommo CRM disabled" in caplog.text
+        assert "Kommo CRM init failed" not in caplog.text
+        assert bot._kommo_client is None
 
 
 class TestSetupMiddlewares:
