@@ -673,3 +673,126 @@ async def test_pipeline_embedding_error(mock_cache, mock_sparse, mock_qdrant):
     assert result["embedding_error"] is True
     assert result["cache_hit"] is False
     assert result["documents"] == []
+
+
+# ---------------------------------------------------------------------------
+# skip_rewrite tests
+# ---------------------------------------------------------------------------
+
+
+async def test_skip_rewrite_bypasses_rewrite_loop(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
+):
+    """skip_rewrite=True prevents _rewrite_query from being called."""
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    # Return irrelevant docs so the rewrite check is reached
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "irrelevant", "score": 0.001, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    with (
+        patch(
+            "telegram_bot.agents.rag_pipeline._rewrite_query",
+            new_callable=AsyncMock,
+        ) as mock_rewrite,
+        patch.dict("os.environ", {"MAX_REWRITE_ATTEMPTS": "1"}),
+    ):
+        result = await rag_pipeline(
+            "вопрос",
+            user_id=42,
+            session_id="test",
+            cache=mock_cache,
+            embeddings=mock_embeddings,
+            sparse_embeddings=mock_sparse,
+            qdrant=mock_qdrant,
+            reranker=mock_reranker,
+            skip_rewrite=True,
+        )
+
+    mock_rewrite.assert_not_called()
+    assert result["skip_rewrite"] is True
+
+
+async def test_skip_rewrite_false_allows_rewrite(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
+):
+    """skip_rewrite=False (default) allows the rewrite loop to execute."""
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    # Return irrelevant docs so rewrite condition is reached
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "irrelevant", "score": 0.001, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    mock_rewrite_result = {
+        "rewrite_effective": True,
+        "rewritten_query": "улучшенный запрос",
+        "rewrite_count": 1,
+        "latency_stages": {},
+    }
+
+    with (
+        patch(
+            "telegram_bot.agents.rag_pipeline._rewrite_query",
+            new=AsyncMock(return_value=mock_rewrite_result),
+        ) as mock_rewrite,
+        patch.dict("os.environ", {"MAX_REWRITE_ATTEMPTS": "1"}),
+    ):
+        result = await rag_pipeline(
+            "вопрос",
+            user_id=42,
+            session_id="test",
+            cache=mock_cache,
+            embeddings=mock_embeddings,
+            sparse_embeddings=mock_sparse,
+            qdrant=mock_qdrant,
+            reranker=mock_reranker,
+            skip_rewrite=False,
+        )
+
+    mock_rewrite.assert_called_once()
+    assert result["skip_rewrite"] is False
+
+
+async def test_skip_rewrite_in_result(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant, mock_reranker
+):
+    """result dict contains 'skip_rewrite' key reflecting the passed value."""
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    result_true = await rag_pipeline(
+        "квартиры",
+        user_id=42,
+        session_id="test",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=mock_reranker,
+        skip_rewrite=True,
+    )
+    assert "skip_rewrite" in result_true
+    assert result_true["skip_rewrite"] is True
+
+    result_false = await rag_pipeline(
+        "квартиры",
+        user_id=42,
+        session_id="test",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=mock_reranker,
+        skip_rewrite=False,
+    )
+    assert "skip_rewrite" in result_false
+    assert result_false["skip_rewrite"] is False
