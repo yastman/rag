@@ -783,3 +783,76 @@ class TestConversationMemory:
 
         assert result["response"]
         assert "summarize" in result.get("latency_stages", {})
+
+
+# ---------------------------------------------------------------------------
+# Path 9: classify → cache_check(ColBERT embed) → retrieve(ColBERT search)
+#        → grade(relevant, rerank_applied=True) → generate → cache_store → respond
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+async def test_path_retrieve_colbert_skips_rerank():
+    """When retrieve uses server-side ColBERT search, rerank node is skipped."""
+    mocks = _make_graph_mocks(llm_response="Найдено 2 варианта квартир с ColBERT.")
+
+    # Embeddings supports aembed_hybrid_with_colbert → returns 3-tuple
+    colbert_vecs = [[0.2] * 1024] * 4  # 4 token vectors
+    mocks["embeddings"].aembed_hybrid_with_colbert = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1, 5], "values": [0.5, 0.3]}, colbert_vecs)
+    )
+
+    # Qdrant supports hybrid_search_rrf_colbert → 3-stage server-side search
+    _ok_meta = {"backend_error": False, "error_type": None, "error_message": None}
+    colbert_docs = [
+        {
+            "text": "Квартира в Несебр, 85000 евро",
+            "score": 85.0,  # ColBERT MaxSim score (different scale)
+            "id": "1",
+            "metadata": {"title": "Квартира", "city": "Несебр", "price": 85000},
+        },
+        {
+            "text": "Студия в Солнечный берег, 60000 евро",
+            "score": 72.0,
+            "id": "2",
+            "metadata": {"title": "Студия", "city": "Солнечный берег", "price": 60000},
+        },
+    ]
+    mocks["qdrant"].hybrid_search_rrf_colbert = AsyncMock(return_value=(colbert_docs, _ok_meta))
+
+    mock_gc = _make_mock_graph_config(mocks["llm"])
+
+    with _patch_graph_configs(mock_gc):
+        graph = build_graph(
+            cache=mocks["cache"],
+            embeddings=mocks["embeddings"],
+            sparse_embeddings=mocks["sparse_embeddings"],
+            qdrant=mocks["qdrant"],
+            reranker=mocks["reranker"],
+            llm=mocks["llm"],
+            message=mocks["message"],
+        )
+
+    state = make_initial_state(
+        user_id=9, session_id="test-path9", query="квартира в Несебре у моря"
+    )
+
+    with traced_pipeline(session_id="test-colbert-path", user_id="integration"):
+        with _patch_graph_configs(mock_gc):
+            result = await graph.ainvoke(state)
+
+    # State assertions
+    assert result["cache_hit"] is False
+    assert result["documents_relevant"] is True
+    assert result["rerank_applied"] is True  # set by retrieve_node (server-side ColBERT)
+    assert result["response"] == "Найдено 2 варианта квартир с ColBERT."
+
+    # ColBERT search path used (NOT regular hybrid_search_rrf)
+    mocks["qdrant"].hybrid_search_rrf_colbert.assert_awaited_once()
+    mocks["qdrant"].hybrid_search_rrf.assert_not_awaited()
+
+    # Rerank node SKIPPED (server-side ColBERT already reranked)
+    mocks["reranker"].rerank.assert_not_awaited()
+
+    # Generate ran
+    mocks["llm"].chat.completions.create.assert_awaited_once()
