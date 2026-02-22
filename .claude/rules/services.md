@@ -10,38 +10,53 @@ Code patterns for `telegram_bot/services/` and `telegram_bot/integrations/`.
 
 ```
 telegram_bot/
-├── bot.py                 ***REMOVED*** PropertyBot (~300 LOC, LangGraph orchestrator + score writing)
+├── bot.py                 ***REMOVED*** PropertyBot (LangGraph orchestrator + score writing)
 ├── config.py              ***REMOVED*** BotConfig (pydantic-settings BaseSettings)
 ├── observability.py       ***REMOVED*** Langfuse init, @observe decorator, PII masking
 ├── preflight.py           ***REMOVED*** Health checks (Redis, Qdrant, BGE-M3, LiteLLM)
-├── services/              ***REMOVED*** Business logic services (LLM, search, preprocessing)
+├── services/              ***REMOVED*** Business logic services
 │   ├── llm.py             ***REMOVED*** LLMService (OpenAI SDK, langfuse.openai.AsyncOpenAI)
-│   ├── query_analyzer.py  ***REMOVED*** QueryAnalyzer (LLM filter extraction, OpenAI SDK)
+│   ├── query_analyzer.py  ***REMOVED*** QueryAnalyzer (LLM filter extraction)
 │   ├── query_preprocessor.py ***REMOVED*** HyDEGenerator + QueryPreprocessor
 │   ├── filter_extractor.py ***REMOVED*** Regex filter extraction
+│   ├── normalizer.py      ***REMOVED*** Text normalization
 │   ├── qdrant.py          ***REMOVED*** QdrantService (async, gRPC, batch_search_rrf, group_by)
-│   ├── bge_m3_client.py   ***REMOVED*** BGEM3Client (async) + BGEM3SyncClient — unified SDK for all BGE-M3 endpoints
+│   ├── bge_m3_client.py   ***REMOVED*** BGEM3Client (async) + BGEM3SyncClient
 │   ├── colbert_reranker.py ***REMOVED*** ColbertRerankerService (uses BGEM3Client)
 │   ├── voyage.py          ***REMOVED*** VoyageService (embeddings + rerank API)
-│   ├── vectorizers.py     ***REMOVED*** UserBaseVectorizer + BgeM3CacheVectorizer (uses BGEM3Client)
+│   ├── vectorizers.py     ***REMOVED*** UserBaseVectorizer + BgeM3CacheVectorizer
+│   ├── small_to_big.py    ***REMOVED*** Small-to-big context expansion
+│   ├── history_service.py ***REMOVED*** Conversation history retrieval
+│   ├── session_summary.py / session_summary_worker.py  ***REMOVED*** Session compression
 │   ├── metrics.py         ***REMOVED*** PipelineMetrics (p50/p95 tracking)
 │   ├── redis_monitor.py   ***REMOVED*** RedisHealthMonitor (background task)
+│   ├── user_service.py    ***REMOVED*** User profile management
+│   ├── response_style_detector.py  ***REMOVED*** Detect response style preference
+│   ├── llm_guard_client.py         ***REMOVED*** LLM Guard integration
+│   ├── ingestion_cocoindex.py      ***REMOVED*** Ingestion service client
+│   ├── manager_menu.py             ***REMOVED*** Manager menu handlers
+│   ├── hot_lead_notifier.py        ***REMOVED*** Hot lead Telegram notifications
 │   ├── kommo_client.py        ***REMOVED*** KommoClient (async httpx, OAuth2 auto-refresh)
 │   ├── kommo_token_store.py   ***REMOVED*** KommoTokenStore (Redis hash, OAuth2 token mgmt)
-│   ├── kommo_models.py        ***REMOVED*** Pydantic v2: Lead, Contact, Note, Task, Pipeline, *Create, *Update
+│   ├── kommo_tokens.py        ***REMOVED*** Token helpers
+│   ├── kommo_models.py        ***REMOVED*** Pydantic v2: Lead, Contact, Note, Task, Pipeline
 │   ├── lead_scoring_models.py  ***REMOVED*** LeadScoreRecord, LeadScoreSyncPayload
-│   ├── lead_scoring_store.py   ***REMOVED*** LeadScoringStore (asyncpg upsert, pending sync queue)
+│   ├── lead_scoring_store.py   ***REMOVED*** LeadScoringStore (asyncpg upsert, pending sync)
+│   ├── lead_scoring.py         ***REMOVED*** Lead scoring logic
+│   ├── lead_score_sync.py      ***REMOVED*** Kommo sync background task
+│   ├── funnel_lead_scoring.py  ***REMOVED*** Funnel-based scoring
 │   ├── funnel_analytics_store.py   ***REMOVED*** FunnelAnalyticsStore (daily metrics)
 │   ├── funnel_analytics_service.py ***REMOVED*** FunnelAnalyticsService
 │   ├── nurturing_service.py    ***REMOVED*** NurturingService
 │   └── nurturing_scheduler.py  ***REMOVED*** NurturingScheduler (APScheduler v3)
 ├── integrations/          ***REMOVED*** LangGraph-compatible wrappers
-│   ├── cache.py           ***REMOVED*** CacheLayerManager (6-tier, Redis pipelines, ~430 LOC)
-│   ├── embeddings.py      ***REMOVED*** BGEM3HybridEmbeddings (uses BGEM3Client) + legacy wrappers
+│   ├── cache.py           ***REMOVED*** CacheLayerManager (6-tier, Redis pipelines)
+│   ├── embeddings.py      ***REMOVED*** BGEM3HybridEmbeddings + legacy wrappers
 │   ├── event_stream.py    ***REMOVED*** EventStream for graph→bot communication
 │   ├── langfuse.py        ***REMOVED*** (legacy) Langfuse callback handler — replaced by @observe
 │   ├── memory.py          ***REMOVED*** MemorySaver for conversation persistence
-│   └── prompt_manager.py  ***REMOVED*** Langfuse Prompt Management with fallback templates
+│   ├── prompt_manager.py  ***REMOVED*** Langfuse Prompt Management with fallback templates
+│   └── prompt_templates.py ***REMOVED*** Hardcoded fallback prompt templates
 └── graph/                 ***REMOVED*** LangGraph pipeline
     ├── graph.py           ***REMOVED*** build_graph() — 11-node StateGraph assembly
     ├── state.py           ***REMOVED*** RAGState TypedDict + make_initial_state()
