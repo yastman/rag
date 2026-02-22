@@ -71,6 +71,7 @@ class HybridResult:
 
     dense_vecs: list[list[float]]
     lexical_weights: list[dict[str, Any]]
+    colbert_vecs: list[list[list[float]]] | None = None
     processing_time: float | None = None
 
 
@@ -79,6 +80,14 @@ class RerankResult:
     """Result from /rerank."""
 
     results: list[dict[str, Any]] = field(default_factory=list)
+    processing_time: float | None = None
+
+
+@dataclass
+class ColbertResult:
+    """Result from /encode/colbert."""
+
+    colbert_vecs: list[list[list[float]]]
     processing_time: float | None = None
 
 
@@ -174,6 +183,7 @@ class BGEM3Client:
         return HybridResult(
             dense_vecs=data["dense_vecs"],
             lexical_weights=data["lexical_weights"],
+            colbert_vecs=data.get("colbert_vecs"),
             processing_time=data.get("processing_time"),
         )
 
@@ -196,6 +206,23 @@ class BGEM3Client:
         data = resp.json()
         return RerankResult(
             results=[{"index": r["index"], "score": r["score"]} for r in data["results"]],
+            processing_time=data.get("processing_time"),
+        )
+
+    @_bge_retry
+    async def encode_colbert(self, texts: list[str]) -> ColbertResult:
+        """Encode texts to ColBERT multivectors via /encode/colbert."""
+        if not texts:
+            return ColbertResult(colbert_vecs=[])
+        client = self._get_client()
+        resp = await client.post(
+            f"{self.base_url}/encode/colbert",
+            json={"texts": texts, "max_length": self.max_length},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return ColbertResult(
+            colbert_vecs=data["colbert_vecs"],
             processing_time=data.get("processing_time"),
         )
 
