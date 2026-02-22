@@ -164,3 +164,19 @@ class TestGraphConfig:
         with patch.dict(os.environ, env, clear=True):
             cfg = GraphConfig.from_env()
         assert cfg.rerank_provider == "none"
+
+    def test_skip_rerank_threshold_requires_fusion_overlap(self):
+        """Default threshold must be above single-query top-1 RRF score.
+
+        RRF with k=60: rank 1 = 1/61 ≈ 0.01639.
+        skip_rerank_threshold must be > 0.01639 so that a single top-1
+        result does NOT skip reranking.
+        """
+        from telegram_bot.graph.config import GraphConfig
+
+        config = GraphConfig.from_env()
+        single_query_top1_rrf = 1 / 61  # ≈ 0.01639
+        assert config.skip_rerank_threshold > single_query_top1_rrf, (
+            f"skip_rerank_threshold={config.skip_rerank_threshold} must be > "
+            f"single-query top-1 RRF={single_query_top1_rrf:.5f}"
+        )
