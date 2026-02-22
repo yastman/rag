@@ -55,10 +55,13 @@ async def _cache_check(
     latency_stages: dict[str, float],
     agent_role: str | None = None,
     pre_computed_embedding: list[float] | None = None,
+    pre_computed_sparse: Any = None,
+    pre_computed_colbert: list[list[float]] | None = None,
 ) -> dict[str, Any]:
     """Compute embedding and check semantic cache.
 
-    Returns dict with cache_hit, cached_response, query_embedding, and latency.
+    Returns dict with cache_hit, cached_response, query_embedding, sparse_embedding,
+    colbert_query, and latency.
     """
     lf = get_client()
     lf.update_current_span(
@@ -77,6 +80,7 @@ async def _cache_check(
     embedding_error: bool = False
     embedding_error_type: str | None = None
     colbert_query: list[list[float]] | None = None
+    sparse: Any = None  # tracked for return so _hybrid_retrieve can skip re-fetch
 
     if pre_computed_embedding:
         logger.debug(
@@ -86,6 +90,12 @@ async def _cache_check(
         embeddings_cache_hit = False  # embedding came from caller, not Redis
         # Still warm the embedding cache so downstream hits benefit
         await cache.store_embedding(query, embedding)
+        # Reuse pre-computed sparse + colbert so rag_pipeline avoids redundant BGE-M3 calls (#571)
+        if pre_computed_sparse is not None:
+            await cache.store_sparse_embedding(query, pre_computed_sparse)
+            sparse = pre_computed_sparse
+        if pre_computed_colbert is not None:
+            colbert_query = pre_computed_colbert
     else:
         embedding = await cache.get_embedding(query)
         embeddings_cache_hit = embedding is not None
@@ -130,6 +140,7 @@ async def _cache_check(
                 "cache_hit": False,
                 "cached_response": None,
                 "query_embedding": None,
+                "sparse_embedding": None,
                 "embeddings_cache_hit": False,
                 "embedding_error": True,
                 "embedding_error_type": embedding_error_type,
@@ -172,6 +183,7 @@ async def _cache_check(
             "cache_hit": True,
             "cached_response": cached,
             "query_embedding": embedding,
+            "sparse_embedding": sparse,
             "embeddings_cache_hit": embeddings_cache_hit,
             "embedding_error": False,
             "embedding_error_type": None,
@@ -192,6 +204,7 @@ async def _cache_check(
         "cache_hit": False,
         "cached_response": None,
         "query_embedding": embedding,
+        "sparse_embedding": sparse,
         "embeddings_cache_hit": embeddings_cache_hit,
         "embedding_error": embedding_error,
         "embedding_error_type": embedding_error_type,
@@ -236,6 +249,7 @@ async def _hybrid_retrieve(
     qdrant: Any,
     embeddings: Any | None = None,
     colbert_query: list[list[float]] | None = None,
+    sparse_embedding: Any = None,
     top_k: int = 20,
     latency_stages: dict[str, float],
 ) -> dict[str, Any]:
@@ -254,7 +268,8 @@ async def _hybrid_retrieve(
     )
 
     dense_vector = query_embedding
-    sparse_vector: Any = None
+    # Initialize with pre-computed sparse from _cache_check to avoid redundant BGE-M3 call (#571)
+    sparse_vector: Any = sparse_embedding
 
     # After rewrite, query_embedding is None — re-embed the rewritten query
     if dense_vector is None and embeddings is not None:
@@ -713,6 +728,8 @@ async def rag_pipeline(
     llm: Any | None = None,
     agent_role: str | None = None,
     pre_computed_embedding: list[float] | None = None,
+    pre_computed_sparse: Any = None,
+    pre_computed_colbert: list[list[float]] | None = None,
     skip_rewrite: bool = False,
 ) -> dict[str, Any]:
     """Execute RAG pipeline: cache → retrieve → grade → rerank → rewrite loop → cache_store.
@@ -764,9 +781,12 @@ async def rag_pipeline(
         latency_stages=latency_stages,
         agent_role=agent_role,
         pre_computed_embedding=pre_computed_embedding,
+        pre_computed_sparse=pre_computed_sparse,
+        pre_computed_colbert=pre_computed_colbert,
     )
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
     cache_embedding: list[float] | None = cache_result.get("query_embedding")
+    cache_sparse: Any = cache_result.get("sparse_embedding")
     latency_stages = cache_result["latency_stages"]
     colbert_query: list[list[float]] | None = cache_result.get("colbert_query")
 
@@ -815,6 +835,7 @@ async def rag_pipeline(
         # cache_result.colbert_query was computed for cache_key (original user text).
         # Reset and re-encode for the actual retrieval query to avoid query mismatch.
         colbert_query = None
+        query_sparse: Any = None  # pre-computed sparse is for cache_key, not reformulated query
         if (
             query_embedding is not None
             and callable(getattr(embeddings, "aembed_hybrid_with_colbert", None))
@@ -828,6 +849,7 @@ async def rag_pipeline(
                 )
     else:
         query_embedding = cache_embedding
+        query_sparse = cache_sparse  # reuse sparse from _cache_check for this query (#571)
 
     # Retrieve → grade → (rerank | rewrite loop)
     for _attempt in range(config.max_rewrite_attempts + 1):
@@ -840,6 +862,7 @@ async def rag_pipeline(
             qdrant=qdrant,
             embeddings=embeddings,
             colbert_query=colbert_query,
+            sparse_embedding=query_sparse,
             latency_stages=latency_stages,
         )
         latency_stages = retrieve_result["latency_stages"]
@@ -929,6 +952,7 @@ async def rag_pipeline(
         rewrite_effective = rewrite_result["rewrite_effective"]
         query_embedding = None  # Force re-embed on next retrieve
         colbert_query = None  # Force re-encode ColBERT on next retrieve
+        query_sparse = None  # Force re-compute sparse on next retrieve (query changed)
 
     # Fallback: ran out of rewrites, return best docs with rerank
     rerank_from_retrieve = retrieve_result.get("rerank_applied", False)
