@@ -887,8 +887,11 @@ class TestQdrantServiceHybridSearchColbert:
         assert len(inner_prefetch) == 1  # dense only
 
     async def test_colbert_search_graceful_degradation(self, service):
-        """Return empty on Qdrant error."""
+        """Fallback to hybrid_search_rrf on ColBERT query error."""
         service._client.query_points = AsyncMock(side_effect=Exception("Connection lost"))
+        service.hybrid_search_rrf = AsyncMock(
+            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
+        )
 
         colbert_query = [[0.1] * 1024] * 3
 
@@ -898,7 +901,34 @@ class TestQdrantServiceHybridSearchColbert:
             top_k=5,
         )
 
-        assert results == []
+        assert len(results) == 1
+        assert results[0]["id"] == "fallback_1"
+        service.hybrid_search_rrf.assert_awaited_once()
+
+    async def test_colbert_search_fallback_return_meta(self, service):
+        """When return_meta=True fallback preserves tuple contract."""
+        service._client.query_points = AsyncMock(
+            side_effect=Exception("No such vector named 'colbert'")
+        )
+        service.hybrid_search_rrf = AsyncMock(
+            return_value=(
+                [{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}],
+                {"backend_error": False, "error_type": None, "error_message": None},
+            )
+        )
+
+        colbert_query = [[0.1] * 1024] * 3
+
+        results, meta = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=colbert_query,
+            top_k=5,
+            return_meta=True,
+        )
+
+        assert len(results) == 1
+        assert meta["backend_error"] is False
+        service.hybrid_search_rrf.assert_awaited_once()
 
     async def test_colbert_search_with_filters(self, service, mock_point):
         """Filters are passed through to query_points."""
