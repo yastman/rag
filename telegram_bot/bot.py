@@ -896,8 +896,22 @@ class PropertyBot:
             query_type = classify_query(user_text)
             if query_type in CACHEABLE_QUERY_TYPES:
                 try:
-                    embedding = await self._embeddings.aembed_query(user_text)
+                    _has_hybrid_colbert = callable(
+                        getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
+                    ) and asyncio.iscoroutinefunction(self._embeddings.aembed_hybrid_with_colbert)
+                    if _has_hybrid_colbert:
+                        # Single call yields dense + sparse + colbert — stash all three (#571)
+                        dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(
+                            user_text
+                        )
+                        embedding = dense
+                    else:
+                        embedding = await self._embeddings.aembed_query(user_text)
+                        sparse = None
+                        colbert = None
                     await self._cache.store_embedding(user_text, embedding)
+                    if sparse is not None:
+                        await self._cache.store_sparse_embedding(user_text, sparse)
                     cached = await self._cache.check_semantic(
                         query=user_text,
                         vector=embedding,
@@ -910,6 +924,8 @@ class PropertyBot:
                         rag_result_store["cache_hit"] = True
                         rag_result_store["query_type"] = query_type
                         rag_result_store["cache_key_embedding"] = embedding
+                        rag_result_store["cache_key_sparse"] = sparse
+                        rag_result_store["cache_key_colbert"] = colbert
                         # Write Langfuse scores and trace metadata
                         lf = get_client()
                         lf.update_current_trace(
@@ -942,9 +958,11 @@ class PropertyBot:
                         if root_trace_metadata is not None:
                             root_trace_metadata.update({"pipeline_mode": "pre_agent_cache"})
                         return cached
-                    # MISS: stash embedding so rag_pipeline can skip recomputation
+                    # MISS: stash all embeddings so rag_pipeline can skip recomputation (#571)
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
                     rag_result_store["cache_key_embedding"] = embedding
+                    rag_result_store["cache_key_sparse"] = sparse
+                    rag_result_store["cache_key_colbert"] = colbert
                     rag_result_store["query_type"] = query_type
                 except Exception:
                     logger.warning(

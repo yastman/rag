@@ -234,7 +234,8 @@ except Exception as e:
 | `llm_used` | 0.0/1.0 | LLM generation was invoked |
 | `confidence_score` | 0.0-1.0 | Grade confidence (real value from state) |
 | `hyde_used` | 0.0 | Not yet tracked in LangGraph state |
-| `llm_ttft_ms` | float | Time to first token (ms), streaming only |
+| `llm_ttft_ms` | float | Time to first token (ms); streaming: first chunk, non-streaming: total LLM call time (#571) |
+| `llm_tps` | float/None | Tokens per second; streaming: from decode phase, non-streaming: from total call + usage.completion_tokens (#571) |
 | `llm_response_duration_ms` | float | Full LLM response wall-time (ms) |
 | `user_feedback` | 0.0/1.0 | User like/dislike via inline button (#229) |
 
