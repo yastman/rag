@@ -24,7 +24,7 @@ make ingest-unified        # Unified ingestion (CocoIndex)
 
 ```
 Ingestion:  Docling → Chunker → BGE-M3 Dense+Sparse → Qdrant
-Text:       Query → [client] rag_pipeline → generate_response service (fast-path)
+Text:       Query → [client] pipelines/client.py → guard → classify → cache → rag → generate
                   → [manager] create_agent SDK → rag_search | history_search | 8 CRM tools
 Voice STT:  .ogg → LangGraph (11 nodes) → transcribe → RAG pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
