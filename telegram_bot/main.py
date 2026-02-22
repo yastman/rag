@@ -22,7 +22,7 @@ from tenacity import (
 from .bot import PropertyBot
 from .config import BotConfig
 from .logging_config import setup_logging
-from .observability import get_langfuse_client
+from .observability import initialize_langfuse
 
 
 # Startup retry settings
@@ -41,15 +41,19 @@ async def main():
     setup_logging(level=log_level, json_format=json_format, log_file=log_file)
     logger = logging.getLogger(__name__)
 
-    # Initialize Langfuse client with PII masking FIRST (no-op when keys not set)
-    _langfuse = get_langfuse_client()
+    # Load config
+    config = BotConfig()
+
+    # Initialize Langfuse after BotConfig loaded .env / env vars
+    _langfuse = initialize_langfuse(
+        public_key=config.langfuse_public_key,
+        secret_key=config.langfuse_secret_key,
+        host=config.langfuse_host,
+    )
     if _langfuse:
         logger.info("Langfuse client initialized with PII masking")
     else:
-        logger.info("Langfuse disabled (LANGFUSE_SECRET_KEY not set)")
-
-    # Load config
-    config = BotConfig()
+        logger.info("Langfuse disabled (missing LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY)")
 
     if not config.telegram_token:
         logger.error("TELEGRAM_BOT_TOKEN not set in .env")

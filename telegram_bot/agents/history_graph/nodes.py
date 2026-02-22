@@ -223,15 +223,15 @@ async def history_rewrite_node(
     rewrite_count = state.get("rewrite_count", 0)
 
     try:
-        if llm is None:
-            from telegram_bot.graph.config import GraphConfig
+        from telegram_bot.graph.config import GraphConfig
 
-            config = GraphConfig.from_env()
+        config = GraphConfig.from_env()
+        if llm is None:
             llm = config.create_llm()
 
         prompt = _HISTORY_REWRITE_PROMPT.format(query=original_query)
         response = await llm.chat.completions.create(
-            model="gpt-4o-mini",
+            model=config.llm_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=64,
@@ -348,16 +348,16 @@ async def history_summarize_node(
 
     used_llm = False
     try:
-        if llm is None:
-            from telegram_bot.graph.config import GraphConfig
+        from telegram_bot.graph.config import GraphConfig
 
-            config = GraphConfig.from_env()
+        config = GraphConfig.from_env()
+        if llm is None:
             llm = config.create_llm()
 
         context = _format_history_context(results)
         prompt = _HISTORY_SUMMARIZE_PROMPT.format(query=query, context=context)
         response = await llm.chat.completions.create(
-            model="gpt-4o-mini",
+            model=config.llm_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=512,

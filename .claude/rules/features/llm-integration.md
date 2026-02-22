@@ -62,13 +62,26 @@ gpt-4o-mini (Cerebras/gpt-oss-120b) → cerebras-glm → Groq → OpenAI
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `LLM_BASE_URL` | http://litellm:4000 | LiteLLM proxy URL |
+| `LLM_BASE_URL` | http://litellm:4000 | LiteLLM proxy URL (local: `http://localhost:4000/v1`) |
 | `LLM_MODEL` | gpt-4o-mini | Model alias |
+| `SUPERVISOR_MODEL` | gpt-4o-mini | Model for agent routing (BotConfig) |
 | `max_tokens` | 4096 | Response length limit |
 | `temperature` | 0.7 | For generate_node and LLMService |
 | `REWRITE_MODEL` | gpt-4o-mini | Separate model for rewrite_node (defaults to LLM_MODEL) |
 | `REWRITE_MAX_TOKENS` | 200 | Max tokens for query rewrite (short output) |
 | `STREAMING_ENABLED` | true | Stream generate_node output to Telegram (feature flag) |
+
+## Local Dev (`make run-bot`)
+
+**IMPORTANT:** Bot MUST go through LiteLLM even locally — many components use `gpt-4o-mini` alias which LiteLLM routes to Cerebras. Direct Cerebras URL (`api.cerebras.ai`) → 404 on `gpt-4o-mini`.
+
+`.env` for local dev:
+```
+LLM_BASE_URL=http://localhost:4000/v1
+LLM_API_KEY=sk-litellm-master-dev
+```
+
+`make run-bot` uses `uv run --env-file .env` to load env vars into the process (required for Langfuse SDK init via `os.getenv()` in `observability.py`).
 
 ## OpenAI SDK Pattern (services)
 
@@ -142,7 +155,9 @@ Enriches document chunks with LLM-generated summaries before indexing to improve
 
 All LLM calls auto-traced via `langfuse.openai.AsyncOpenAI` drop-in. Graph-level tracing uses `@observe` decorator + `propagate_attributes()` context manager (Langfuse SDK v3). Scores written via `_write_langfuse_scores()` in `bot.py`.
 
-Graceful degradation: `_NullLangfuseClient` stub when `LANGFUSE_SECRET_KEY` not set.
+Graceful degradation: `_NullLangfuseClient` stub when `LANGFUSE_SECRET_KEY` not set. Langfuse SDK v3 also self-disables without credentials (`@observe` works as passthrough).
+
+**Note:** `LANGFUSE_SECRET_KEY` must be in process env (not just `.env` file) — `observability.py` checks `os.getenv()` at import time. `uv run --env-file .env` handles this.
 
 ## Guardrails
 
@@ -176,7 +191,9 @@ pytest tests/unit/graph/test_generate_node.py -v
 
 | Error | Fix |
 |-------|-----|
-| `LiteLLM unhealthy` | Wait 30s, check `docker logs dev-litellm` |
+| `Model gpt-4o-mini does not exist` (404) | `LLM_BASE_URL` points directly to Cerebras — must go through LiteLLM |
+| `LiteLLM unhealthy` / preflight 404 | Preflight strips `/v1` from URL for health check. Verify: `curl localhost:4000/health/liveliness` |
+| Langfuse traces missing | `LANGFUSE_SECRET_KEY` not in process env — use `uv run --env-file .env` |
 | All providers fail | Check API keys in `.env` |
 | Slow responses | Cerebras is fastest, check fallback didn't trigger |
 
