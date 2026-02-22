@@ -108,6 +108,17 @@ class QdrantHybridWriter:
         result = self._bge_client.encode_sparse(texts)
         return result.weights
 
+    def _embed_colbert(self, texts: list[str]) -> list[list[list[float]]]:
+        """Generate ColBERT multivectors via BGEM3SyncClient.
+
+        Returns list of token vector lists (one per document).
+        Each document's colbert is list[list[float]] (num_tokens x 1024).
+        """
+        if not texts:
+            return []
+        result = self._bge_client.encode_colbert(texts)
+        return result.colbert_vecs
+
     @staticmethod
     def _to_sparse_vector(sparse_emb: Any) -> SparseVector:
         if isinstance(sparse_emb, dict):
@@ -283,6 +294,7 @@ class QdrantHybridWriter:
                     raise RuntimeError("VoyageService not initialized")
                 dense_embeddings = await self.voyage.embed_documents(texts)
             sparse_embeddings = self._embed_sparse(texts)
+            colbert_embeddings = self._embed_colbert(texts) if self.use_local_embeddings else []
 
             # Step 4: Build points
             points = []
@@ -295,12 +307,16 @@ class QdrantHybridWriter:
                     chunk, file_id, source_path, chunk_location, file_metadata
                 )
 
+                vector_dict: dict = {
+                    "dense": dense_vec,
+                    "bm42": self._to_sparse_vector(sparse_emb),
+                }
+                if colbert_embeddings:
+                    vector_dict["colbert"] = colbert_embeddings[i]
+
                 point = PointStruct(
                     id=point_id,
-                    vector={
-                        "dense": dense_vec,
-                        "bm42": self._to_sparse_vector(sparse_emb),
-                    },
+                    vector=vector_dict,
                     payload=payload,
                 )
                 points.append(point)
@@ -386,6 +402,7 @@ class QdrantHybridWriter:
                     all_dense_embeddings.extend(response.embeddings)
 
             sparse_embeddings = self._embed_sparse(texts)
+            colbert_embeddings = self._embed_colbert(texts) if self.use_local_embeddings else []
 
             # Step 4: Build points
             points = []
@@ -398,12 +415,16 @@ class QdrantHybridWriter:
                     chunk, file_id, source_path, chunk_location, file_metadata
                 )
 
+                vector_dict: dict = {
+                    "dense": dense_vec,
+                    "bm42": self._to_sparse_vector(sparse_emb),
+                }
+                if colbert_embeddings:
+                    vector_dict["colbert"] = colbert_embeddings[i]
+
                 point = PointStruct(
                     id=point_id,
-                    vector={
-                        "dense": dense_vec,
-                        "bm42": self._to_sparse_vector(sparse_emb),
-                    },
+                    vector=vector_dict,
                     payload=payload,
                 )
                 points.append(point)
