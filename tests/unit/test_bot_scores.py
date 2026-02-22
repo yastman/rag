@@ -13,9 +13,11 @@ from telegram_bot.scoring import compute_checkpointer_overhead_proxy_ms, write_l
 
 
 @pytest.fixture
-def mock_config():
+def mock_config(monkeypatch):
     """Create mock bot config."""
+    monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
     return BotConfig(
+        _env_file=None,
         telegram_token="test-token",
         voyage_api_key="voyage-key",
         llm_api_key="llm-key",
@@ -365,14 +367,19 @@ class TestScoreWriting:
         score_names = [c.kwargs["name"] for c in mock_lf.create_score.call_args_list]
         assert "response_style_applied" not in score_names
 
-    def test_scores_written_even_on_null_client(self):
-        """When Langfuse disabled, _NullLangfuseClient.create_score is called (no-op, #435)."""
-        from telegram_bot.observability import _NullLangfuseClient
+    def test_scores_written_even_on_sdk_disabled_client(self, monkeypatch):
+        """When Langfuse is unconfigured, SDK disabled client path still does not raise."""
+        from telegram_bot.observability import _reset_langfuse_client_for_tests, get_client
 
-        mock_lf = _NullLangfuseClient()
-        # _NullLangfuseClient.get_current_trace_id() returns "" → write_langfuse_scores
-        # returns early. Pass explicit trace_id to exercise the scoring code path.
-        write_langfuse_scores(mock_lf, FULL_PIPELINE_RESULT, trace_id="null-trace")
+        monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+        monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+        monkeypatch.delenv("LANGFUSE_HOST", raising=False)
+        _reset_langfuse_client_for_tests()
+
+        disabled_client = get_client()
+        # Disabled client may not have active trace context; pass explicit trace_id
+        # to exercise score writing code path without relying on context lookup.
+        write_langfuse_scores(disabled_client, FULL_PIPELINE_RESULT, trace_id="null-trace")
 
 
 class TestLatencyBreakdownScores:
