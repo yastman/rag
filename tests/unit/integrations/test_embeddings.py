@@ -208,6 +208,54 @@ class TestBGEM3HybridEmbeddings:
             result = await emb.aembed_query("test")
         assert result == [0.1, 0.2]
 
+    async def test_aembed_hybrid_with_colbert(self):
+        """aembed_hybrid_with_colbert returns 3-tuple (dense, sparse, colbert)."""
+        from telegram_bot.services.bge_m3_client import BGEM3Client, HybridResult
+
+        mock_client = AsyncMock(spec=BGEM3Client)
+        mock_client.encode_hybrid = AsyncMock(
+            return_value=HybridResult(
+                dense_vecs=[[0.1] * 1024],
+                lexical_weights=[{"indices": [1], "values": [0.5]}],
+                colbert_vecs=[[[0.2] * 1024] * 4],
+                processing_time=0.1,
+            )
+        )
+
+        emb = BGEM3HybridEmbeddings(client=mock_client)
+        dense, sparse, colbert = await emb.aembed_hybrid_with_colbert("test query")
+
+        assert len(dense) == 1024
+        assert "indices" in sparse
+        assert len(colbert) == 4
+        assert len(colbert[0]) == 1024
+
+    async def test_aembed_hybrid_with_colbert_fallback_to_encode_colbert(self):
+        """When encode_hybrid returns no colbert_vecs, falls back to encode_colbert."""
+        from telegram_bot.services.bge_m3_client import BGEM3Client, ColbertResult, HybridResult
+
+        mock_client = AsyncMock(spec=BGEM3Client)
+        mock_client.encode_hybrid = AsyncMock(
+            return_value=HybridResult(
+                dense_vecs=[[0.1] * 1024],
+                lexical_weights=[{"indices": [1], "values": [0.5]}],
+                colbert_vecs=None,
+                processing_time=0.1,
+            )
+        )
+        mock_client.encode_colbert = AsyncMock(
+            return_value=ColbertResult(
+                colbert_vecs=[[[0.3] * 1024] * 3],
+                processing_time=0.02,
+            )
+        )
+
+        emb = BGEM3HybridEmbeddings(client=mock_client)
+        _dense, _sparse, colbert = await emb.aembed_hybrid_with_colbert("test")
+
+        assert len(colbert) == 3
+        mock_client.encode_colbert.assert_called_once()
+
 
 class TestBGEM3HybridRetry:
     """Tests for retry behavior on transient errors."""
