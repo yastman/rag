@@ -1,5 +1,5 @@
 ---
-paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, telegram_bot/agents/**"
+paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, telegram_bot/agents/**, telegram_bot/services/generate_response.py"
 ---
 
 # Telegram Bot
@@ -9,14 +9,21 @@ Hybrid RAG pipeline (async functions for text, LangGraph for voice) with aiogram
 ## Architecture
 
 ```
-Text:  User Message → ThrottlingMiddleware → ErrorMiddleware
-                   → PropertyBot.handle_query() → _handle_query_supervisor()
-                   → create_bot_agent(model, tools, context_schema=BotContext)
-                   → Agent LLM → tool_choice:
-                     → rag_search → rag_pipeline() (6-step async: cache→retrieve→grade→rerank→rewrite→store)
-                     → history_search → build_history_graph() (4-node LangGraph)
-                     → 8 CRM tools (Kommo API) | direct response
-                   → Langfuse: CallbackHandler + @observe spans
+Text (client fast-path — default for client role):
+  User Message → ThrottlingMiddleware → ErrorMiddleware
+             → PropertyBot.handle_query() → _handle_client_direct_pipeline()
+             → guard → classify → rag_pipeline() → generate_response service
+             → Langfuse: @observe spans (pipeline_mode="client_direct")
+
+Text (sdk_agent — manager role, fallback for client on fast-path error):
+  User Message → ThrottlingMiddleware → ErrorMiddleware
+             → PropertyBot.handle_query() → _handle_query_supervisor()
+             → create_bot_agent(model, tools, context_schema=BotContext)
+             → Agent LLM → tool_choice:
+               → rag_search → rag_pipeline() (6-step async)
+               → history_search → build_history_graph() (4-node LangGraph)
+               → 8 CRM tools (Kommo API) | direct response
+             → Langfuse: CallbackHandler + @observe spans (pipeline_mode="sdk_agent")
 
 Voice: Voice Message → PropertyBot.handle_voice()
                     → download .ogg → make_initial_state(voice_audio=bytes)
@@ -44,6 +51,7 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/graph/graph.py` | `build_graph()` — 11-node StateGraph (**voice path only**) |
 | `telegram_bot/graph/state.py` | RAGState TypedDict (25 fields incl. voice_audio, stt_text, input_type) + `make_initial_state()` |
 | `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, pipeline tuning params) |
+| `telegram_bot/services/generate_response.py` | `generate_response()` — shared LLM generation service (streaming, style, fallback) |
 | `telegram_bot/graph/nodes/` | 9 node modules — used by voice LangGraph and shared by rag_pipeline.py |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, `create_callback_handler`, PII masking |
 | `telegram_bot/integrations/prompt_manager.py` | `get_prompt()` — Langfuse Prompt Management with fallback templates + TTL probe cache |
@@ -101,7 +109,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 | retrieve | `graph/nodes/retrieve.py` | cache, sparse_embeddings, qdrant (parallel dense+sparse on re-embed) |
 | grade | `graph/nodes/grade.py` | — (RRF threshold 0.005, returns `grade_confidence`) |
 | rerank | `graph/nodes/rerank.py` | reranker (ColBERT or None) |
-| generate | `graph/nodes/generate.py` | message (aiogram Message, for streaming; uses GraphConfig.create_llm) |
+| generate | `graph/nodes/generate.py` | Thin adapter → delegates to `services/generate_response.py` (voice/LangGraph compat) |
 | rewrite | `graph/nodes/rewrite.py` | llm (optional, uses `config.rewrite_model`/`rewrite_max_tokens`) |
 | cache_store | `graph/nodes/cache.py` | cache |
 | respond | `graph/nodes/respond.py` | message (aiogram Message, injected) |
@@ -123,9 +131,11 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 | `/start` | cmd_start | Welcome message (domain from config) |
 | `/help` | cmd_help | Usage instructions |
 | `/clear` | cmd_clear | Clear conversation history |
+| `/clearcache` | cmd_clearcache | Inline keyboard to select cache tier for clearing (semantic/embeddings/sparse/analysis/search+rerank/all) |
 | `/stats` | cmd_stats | Cache tier hit rates |
 | `/metrics` | cmd_metrics | Pipeline p50/p95 timing |
 | (callback) | handle_feedback | Like/dislike feedback (#229) |
+| (callback `cc:`) | handle_clearcache_callback | Execute selected cache tier clearing |
 
 ## Configuration (BotConfig)
 
@@ -139,6 +149,7 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `rerank_provider` | `RERANK_PROVIDER` | `voyage` | colbert / none / voyage |
 | `admin_ids` | `ADMIN_IDS` | [] | Comma-separated Telegram IDs |
 | `supervisor_model` | `SUPERVISOR_MODEL` | `gpt-4o-mini` | Model for agent routing decisions (#413: create_agent SDK) |
+| `client_direct_pipeline_enabled` | `CLIENT_DIRECT_PIPELINE_ENABLED` | `false` | Client fast-path: bypass create_agent, call rag_pipeline → generate_response directly |
 | `kommo_enabled` | `KOMMO_ENABLED` | `false` | Enable Kommo CRM tools in agent |
 | `streaming_enabled` | `STREAMING_ENABLED` | `true` | Stream LLM output to Telegram via edit_text |
 | `show_transcription` | `SHOW_TRANSCRIPTION` | `true` | Show transcribed text before RAG response |
@@ -178,7 +189,16 @@ Downloads `.ogg` → bytes → injects `voice_audio` + `voice_duration_s` + `inp
 
 **Langfuse scores:** `input_type` (CATEGORICAL), `stt_duration_ms` (NUMERIC), `voice_duration_s` (NUMERIC)
 
-## handle_query Flow (create_agent SDK since #413)
+## handle_query Flow (dual-path routing)
+
+Role-based routing in `PropertyBot.handle_query()`:
+
+1. **Client fast-path** (`_handle_client_direct_pipeline`): `guard → classify → rag_pipeline() → generate_response service`. No `create_agent` SDK, no tool-routing LLM call. Feature flag: `CLIENT_DIRECT_PIPELINE_ENABLED` in BotConfig. Fail-safe: on exception, falls back to sdk_agent path.
+2. **Manager / fallback** (`_handle_query_supervisor`): Full `create_agent` SDK with tool choice, CRM tools, history search.
+
+**Observability:** `pipeline_mode` metadata on Langfuse span — `"client_direct"` vs `"sdk_agent"`.
+
+### sdk_agent path (manager role)
 
 Builds tools list (`rag_search` + optional `history_search` + optional 8 CRM tools), calls `create_bot_agent(model, tools, checkpointer)`, constructs `BotContext` for DI, invokes agent with `CallbackHandler` for Langfuse tracing.
 
@@ -195,9 +215,30 @@ Builds tools list (`rag_search` + optional `history_search` + optional 8 CRM too
 
 **Score writing:** RAG pipeline scores (14 metrics) are written inside `rag_search` tool via `write_langfuse_scores()` from `telegram_bot/scoring.py`.
 
+## generate_response Service
+
+**File:** `telegram_bot/services/generate_response.py` — shared LLM generation extracted from `generate_node`.
+
+Called by both client direct pipeline (via bot.py) and voice LangGraph (via `generate_node` adapter in `graph/nodes/generate.py`).
+
+```
+generate_response(query, documents, message?, config?, ...) →
+  1. Style detection (ResponseStyleDetector, ~0ms)
+  2. System prompt (Langfuse Prompt Manager + style/citation/history injection)
+  3. Build OpenAI-format messages (system + history + context + query)
+  4. Streaming path: placeholder → stream chunks (300ms throttle) → finalize Markdown
+     Non-streaming path: single completion call
+  5. Fallback: document summary if LLM unavailable
+  → Returns dict: response, response_sent, sent_message, latency_stages, style metrics
+```
+
+**Dependency injection:** All core functions passed as kwargs (format_context, build_system_prompt, generate_streaming, etc.) for testability. `generate_node` passes its own local implementations.
+
+**Span:** `@observe(name="service-generate-response")` with curated input/output metadata.
+
 ## Streaming Delivery
 
-When `STREAMING_ENABLED=true` (default), `generate_node` streams LLM output directly to Telegram: sends placeholder, edits with chunks (throttled 300ms), finalizes with Markdown parse_mode. Sets `response_sent=True` → `respond_node` skips duplicate send.
+When `STREAMING_ENABLED=true` (default), `generate_response` streams LLM output directly to Telegram: sends placeholder, edits with chunks (throttled 300ms), finalizes with Markdown parse_mode. Sets `response_sent=True` → `respond_node` skips duplicate send.
 
 **Fallback:** If streaming fails, falls back to non-streaming LLM call. **Disable:** `STREAMING_ENABLED=false`.
 
@@ -214,6 +255,7 @@ pytest tests/unit/test_bot_handlers.py -v
 pytest tests/unit/test_middlewares.py -v
 pytest tests/unit/graph/ -v                              # All graph tests (incl. test_transcribe_node.py)
 pytest tests/unit/agents/ -v                             # Agent tests (factory, context, tools, CRM, history, streaming)
+pytest tests/unit/services/test_generate_response.py -v  # Shared generation service
 pytest tests/integration/test_graph_paths.py -v          # Graph path tests incl. voice flow (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 ```
