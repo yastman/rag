@@ -262,7 +262,6 @@ class LLMService:
         for i, chunk in enumerate(chunks, 1):
             text = chunk["text"]
             metadata = chunk.get("metadata", {})
-            score = chunk.get("score", 0)
 
             meta_str = ""
             if "title" in metadata:
@@ -272,7 +271,7 @@ class LLMService:
             if "price" in metadata:
                 meta_str += f"Цена: {metadata['price']:,}€\n"
 
-            context_parts.append(f"[Объект {i}] (релевантность: {score:.2f})\n{meta_str}{text}")
+            context_parts.append(f"[Объект {i}]\n{meta_str}{text}")
 
         return "\n\n---\n\n".join(context_parts)
 
