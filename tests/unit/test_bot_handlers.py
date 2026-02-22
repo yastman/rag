@@ -13,9 +13,11 @@ from telegram_bot.config import BotConfig
 
 
 @pytest.fixture
-def mock_config():
+def mock_config(monkeypatch):
     """Create mock bot config."""
+    monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
     return BotConfig(
+        _env_file=None,
         telegram_token="test-token",
         voyage_api_key="voyage-key",
         llm_api_key="llm-key",
@@ -1900,6 +1902,191 @@ class TestSdkAgentIntegration:
             mock_agent.ainvoke.assert_called_once()
 
 
+class TestClientDirectPipeline:
+    """Tests for client direct fast-path (feature-flagged)."""
+
+    def _setup_pre_agent_cache_miss(self, bot):
+        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_semantic = AsyncMock()
+
+    async def test_client_direct_cache_hit_returns_early(self, mock_config):
+        mock_config.client_direct_pipeline_enabled = True
+        bot, _ = _create_bot(mock_config)
+        bot._embeddings.aembed_query = AsyncMock(return_value=[0.2] * 10)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value="Ответ из кеша")
+        bot._cache.store_semantic = AsyncMock()
+
+        with (
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
+            patch("telegram_bot.bot.rag_pipeline") as mock_rag,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("цены?")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_create_agent.assert_not_called()
+        mock_rag.assert_not_called()
+        message.answer.assert_called()
+
+    async def test_client_direct_uses_rag_and_generate_without_agent(self, mock_config):
+        mock_config.client_direct_pipeline_enabled = True
+        bot, _ = _create_bot(mock_config)
+        self._setup_pre_agent_cache_miss(bot)
+
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="")
+        rag_result = {
+            "query_type": "FAQ",
+            "cache_hit": False,
+            "documents": [{"text": "doc", "score": 0.8, "metadata": {}}],
+            "latency_stages": {"retrieve": 0.02},
+            "search_results_count": 1,
+            "embeddings_cache_hit": False,
+            "search_cache_hit": False,
+            "rerank_applied": False,
+            "grade_confidence": 0.8,
+            "query_embedding": [0.1] * 10,
+            "cache_key_embedding": [0.1] * 10,
+        }
+        generated = {
+            "response": "Direct answer",
+            "llm_call_count": 1,
+            "latency_stages": {"retrieve": 0.02, "generate": 0.05},
+            "llm_decode_ms": None,
+            "llm_tps": None,
+            "llm_queue_ms": None,
+            "llm_timeout": False,
+            "llm_stream_recovery": False,
+            "streaming_enabled": False,
+            "response_policy_mode": "disabled",
+        }
+
+        with (
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
+            patch("telegram_bot.bot.rag_pipeline", AsyncMock(return_value=rag_result)) as mock_rag,
+            patch(
+                "telegram_bot.bot.generate_response",
+                AsyncMock(return_value=generated),
+            ) as mock_generate,
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("что по ценам?")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_create_agent.assert_not_called()
+        mock_rag.assert_awaited_once()
+        mock_generate.assert_awaited_once()
+        message.answer.assert_called()
+
+    async def test_client_direct_chitchat_skips_rag_and_sets_pipeline_mode(self, mock_config):
+        mock_config.client_direct_pipeline_enabled = True
+        bot, _ = _create_bot(mock_config)
+        bot._cache.store_semantic = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
+
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="")
+
+        with (
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
+            patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),
+            patch("telegram_bot.bot.create_bot_agent") as mock_create_agent,
+            patch("telegram_bot.bot.rag_pipeline") as mock_rag,
+            patch("telegram_bot.bot.generate_response") as mock_generate,
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("привет")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_create_agent.assert_not_called()
+        mock_rag.assert_not_called()
+        mock_generate.assert_not_called()
+        message.answer.assert_called_once()
+        sent = message.answer.call_args[0][0]
+        assert "недвижим" in sent.lower()
+
+        trace_calls = mock_lf.update_current_trace.call_args_list
+        meta_call = next(
+            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            None,
+        )
+        assert meta_call is not None
+        assert meta_call.kwargs["metadata"]["pipeline_mode"] == "client_direct"
+
+    async def test_client_direct_failure_falls_back_to_sdk_agent(self, mock_config):
+        mock_config.client_direct_pipeline_enabled = True
+        bot, _ = _create_bot(mock_config)
+        self._setup_pre_agent_cache_miss(bot)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="client"),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.bot.rag_pipeline", AsyncMock(side_effect=RuntimeError("boom"))),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("найди квартиру")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_factory.assert_called_once()
+        mock_agent.ainvoke.assert_awaited_once()
+
+    async def test_manager_path_unchanged_when_direct_flag_enabled(self, mock_config):
+        mock_config.client_direct_pipeline_enabled = True
+        bot, _ = _create_bot(mock_config)
+        self._setup_pre_agent_cache_miss(bot)
+        bot._history_service = None
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.PropertyBot._resolve_user_role", return_value="manager"),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent) as mock_factory,
+            patch("telegram_bot.bot.rag_pipeline") as mock_rag,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("статус сделки")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        mock_factory.assert_called_once()
+        mock_agent.ainvoke.assert_awaited_once()
+        mock_rag.assert_not_called()
+
+
 class TestStreamingCoordination:
     """Test response_sent flag prevents double-sending after streaming (#428)."""
 
@@ -2522,3 +2709,109 @@ class TestPreAgentCacheCheck:
         check_calls = bot._cache.check_semantic.call_args_list
         assert len(check_calls) >= 1
         assert check_calls[0].kwargs.get("agent_role") == "client"
+
+
+def _make_cc_callback_query(data: str, user_id: int = 12345):
+    """Create a mock CallbackQuery for clearcache tests."""
+    cq = MagicMock()
+    cq.data = data
+    cq.from_user = MagicMock(id=user_id)
+    cq.answer = AsyncMock()
+    cq.message = MagicMock()
+    cq.message.edit_text = AsyncMock()
+    return cq
+
+
+class TestClearCacheCommand:
+    """Tests for /clearcache command and callback handler."""
+
+    async def test_cmd_clearcache_sends_keyboard(self, mock_config):
+        """cmd_clearcache replies with an InlineKeyboardMarkup."""
+        from aiogram.types import InlineKeyboardMarkup
+
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message("/clearcache")
+
+        await bot.cmd_clearcache(message)
+
+        message.answer.assert_called_once()
+        call_kwargs = message.answer.call_args
+        assert call_kwargs is not None
+        reply_markup = call_kwargs.kwargs.get("reply_markup") or call_kwargs.args[1]
+        assert isinstance(reply_markup, InlineKeyboardMarkup)
+        # 3 rows, 2 buttons each
+        assert len(reply_markup.inline_keyboard) == 3
+        all_buttons = [btn for row in reply_markup.inline_keyboard for btn in row]
+        callback_data_values = {btn.callback_data for btn in all_buttons}
+        assert callback_data_values == {
+            "cc:semantic",
+            "cc:embeddings",
+            "cc:sparse",
+            "cc:analysis",
+            "cc:search",
+            "cc:all",
+        }
+
+    async def test_handle_clearcache_semantic(self, mock_config):
+        """handle_clearcache_callback calls clear_semantic_cache for cc:semantic."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_semantic_cache = AsyncMock(return_value=5)
+
+        cq = _make_cc_callback_query("cc:semantic")
+        await bot.handle_clearcache_callback(cq)
+
+        bot._cache.clear_semantic_cache.assert_called_once()
+        cq.answer.assert_called_once()
+        cq.message.edit_text.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "Semantic cache" in edited_text
+        assert "5" in edited_text
+
+    async def test_handle_clearcache_embeddings(self, mock_config):
+        """handle_clearcache_callback calls clear_by_tier for cc:embeddings."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_by_tier = AsyncMock(return_value=12)
+
+        cq = _make_cc_callback_query("cc:embeddings")
+        await bot.handle_clearcache_callback(cq)
+
+        bot._cache.clear_by_tier.assert_called_once_with("embeddings")
+        cq.answer.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "Embeddings cache" in edited_text
+        assert "12" in edited_text
+
+    async def test_handle_clearcache_all(self, mock_config):
+        """handle_clearcache_callback calls clear_all_caches for cc:all."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_all_caches = AsyncMock(
+            return_value={
+                "semantic": 3,
+                "embeddings": 7,
+                "sparse": 2,
+                "analysis": 0,
+                "search": 4,
+            }
+        )
+
+        cq = _make_cc_callback_query("cc:all")
+        await bot.handle_clearcache_callback(cq)
+
+        bot._cache.clear_all_caches.assert_called_once()
+        cq.answer.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "Semantic cache" in edited_text
+        assert "3" in edited_text
+        assert "7" in edited_text
+
+    async def test_handle_clearcache_error(self, mock_config):
+        """handle_clearcache_callback shows error message on exception."""
+        bot, _ = _create_bot(mock_config)
+        bot._cache.clear_by_tier = AsyncMock(side_effect=Exception("Redis down"))
+
+        cq = _make_cc_callback_query("cc:sparse")
+        await bot.handle_clearcache_callback(cq)
+
+        cq.answer.assert_called_once()
+        edited_text = cq.message.edit_text.call_args.args[0]
+        assert "Ошибка" in edited_text

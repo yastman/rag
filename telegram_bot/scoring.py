@@ -49,7 +49,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
     All scores use create_score(trace_id=...) for explicit trace scoping (#435).
 
     Args:
-        lf: Langfuse client (from get_client(), may be _NullLangfuseClient).
+        lf: Langfuse client (from get_client(), may be SDK disabled client).
         result: State dict returned by graph.ainvoke().
         trace_id: Explicit trace ID for score isolation. Falls back to
             lf.get_current_trace_id() if empty.
