@@ -606,6 +606,36 @@ class TestQdrantVectorValidation:
             assert result is False
 
 
+# ===========================================================================
+# Qdrant preflight client config
+# ===========================================================================
+
+
+class TestQdrantPreflightClient:
+    """Preflight Qdrant client uses timeout and gRPC."""
+
+    async def test_qdrant_preflight_uses_timeout_and_grpc(self):
+        """Preflight uses BotConfig timeout and prefer_grpc=True."""
+        config = _make_config(qdrant_timeout=42)
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 100
+        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with patch(
+            "telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant
+        ) as MockClient:
+            client = AsyncMock()
+            await _check_single_dep("qdrant", config, client)
+
+            call_kwargs = MockClient.call_args[1]
+            assert call_kwargs.get("timeout") == config.qdrant_timeout
+            assert call_kwargs.get("prefer_grpc") is True
+
+
 class TestPostgresPreflight:
     """Postgres preflight check validates database existence."""
 
