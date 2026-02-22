@@ -353,6 +353,61 @@ class TestPipelineFullFlow:
         assert result.needs_agent is False
         msg.answer.assert_called()
 
+    async def test_pipeline_trace_tags_override_agent_tag(self):
+        """update_current_trace must set tags=client_direct, not agent (#566).
+
+        propagate_attributes in bot.py sets tags=["telegram","rag","agent"] before
+        the role check, so the client pipeline must override tags to remove "agent".
+        """
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Generated answer",
+            "response_sent": False,
+            "llm_call_count": 1,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры в центре?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+            )
+
+        trace_calls = lf.update_current_trace.call_args_list
+        pipeline_call = next(
+            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            None,
+        )
+        assert pipeline_call is not None, "update_current_trace with pipeline_mode not found"
+        assert pipeline_call.kwargs.get("tags") == ["telegram", "rag", "client_direct"]
+
     async def test_pipeline_propagates_exception_to_caller(self):
         """When rag_pipeline raises an exception, it propagates to the caller."""
         msg = _make_message()
