@@ -49,6 +49,7 @@ class RedisHealthMonitor:
             self.redis_url,
             encoding="utf-8",
             decode_responses=True,
+            max_connections=5,
             socket_connect_timeout=5,
             socket_timeout=5,
             retry_on_timeout=True,
