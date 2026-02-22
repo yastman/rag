@@ -21,6 +21,7 @@ class RAGState(TypedDict):
     cached_response: str | None
     query_embedding: list[float] | None
     sparse_embedding: dict[str, Any] | None
+    colbert_query: list[list[float]] | None
     documents: list[dict[str, Any]]
     documents_relevant: bool
     rewrite_count: int
@@ -99,6 +100,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "cached_response": None,
         "query_embedding": None,
         "sparse_embedding": None,
+        "colbert_query": None,
         "documents": [],
         "documents_relevant": False,
         "rewrite_count": 0,
