@@ -1,5 +1,5 @@
 ---
-paths: "k8s/**, docker-bake.hcl, k3s-*"
+paths: "k8s/**, k3s-*"
 ---
 
 # k3s Deployment
@@ -20,7 +20,7 @@ WSL2 (dev) ──build──→ docker buildx bake ──save/import──→ VP
 ```
 k8s/
 ├── base/                          # Base manifests
-│   ├── kustomization.yaml         # 22 resources, labels
+│   ├── kustomization.yaml         # 23 resources, labels
 │   ├── namespace.yaml             # Namespace: rag
 │   ├── configmaps/                # postgres-init, litellm-config
 │   ├── postgres/                  # PVC + Deployment + Service
@@ -59,23 +59,26 @@ k8s/
 | `make k3s-ingest-start` | Scale ingestion to 1 |
 | `make k3s-ingest-stop` | Scale ingestion to 0 |
 
-## Docker Bake (Parallel Builds)
+## Building Images
 
 ```bash
-docker buildx bake --load           # All 5 images (parallel)
-docker buildx bake bot --load       # Single target
-docker buildx bake stack-bot --load # Bot + bge-m3 + user-base
+# Build all custom images
+docker compose -f docker-compose.dev.yml build
+
+# Build a single image
+docker compose -f docker-compose.dev.yml build bot
 ```
 
-**Config:** `docker-bake.hcl`
-
-| Target | Dockerfile | Context |
-|--------|-----------|---------|
-| bot | `telegram_bot/Dockerfile` | `.` |
-| bge-m3 | `services/bge-m3-api/Dockerfile` | `./services/bge-m3-api` |
-| user-base | `services/user-base/Dockerfile` | `./services/user-base` |
-| docling | `services/docling/Dockerfile` | `./services/docling` |
-| ingestion | `Dockerfile.ingestion` | `.` |
+| Service | Dockerfile |
+|---------|-----------|
+| bot | `telegram_bot/Dockerfile` |
+| bge-m3 | `services/bge-m3-api/Dockerfile` |
+| user-base | `services/user-base/Dockerfile` |
+| docling | `services/docling/Dockerfile` |
+| ingestion | `Dockerfile.ingestion` |
+| llm-guard | `services/llm-guard-api/Dockerfile` |
+| rag-api | `src/api/Dockerfile` |
+| voice-agent | `src/voice/Dockerfile` |
 
 ## Image Transfer to VPS
 
@@ -132,7 +135,7 @@ All deployments have:
 
 ## LiteLLM ConfigMap Sync
 
-k8s ConfigMap (`k8s/base/configmaps/litellm-config.yaml`) must stay in sync with Docker config (`docker/litellm/config.yaml`). Key params: `max_tokens`, `merge_reasoning_content_in_choices`. Sync test: `tests/unit/test_litellm_config_sync.py`.
+k8s ConfigMap (`k8s/base/configmaps/litellm-config.yaml`) must stay in sync with Docker config (`docker/litellm/config.yaml`). Key params: `max_tokens`, `merge_reasoning_content_in_choices` (required for `gpt-oss-120b` reasoning model). Sync test: `tests/unit/test_litellm_config_sync.py`.
 
 ## Kustomize Notes
 
