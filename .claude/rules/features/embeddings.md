@@ -19,7 +19,8 @@ VPS Production:
   Semantic Cache:  USER-base (768-dim, Russian optimized)
 
 Dev:
-  Dense:  Voyage voyage-4-large (indexing) / voyage-4-lite (queries)
+  Dense:  Voyage voyage-4-large (indexing, Matryoshka: 2048/1024/512/256-dim) / voyage-4-lite (queries)
+  Rerank: rerank-2.5 (32K context)
   Sparse: BM42 (deprecated on VPS, replaced by BGE-M3 /encode/sparse)
   Cache:  USER-base (768-dim)
 
