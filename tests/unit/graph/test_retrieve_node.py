@@ -387,6 +387,72 @@ class TestRetrieveNode:
         assert result["retrieved_context"][0]["score"] == 0.85
 
 
+class TestRetrieveNodeColbert:
+    """Tests for ColBERT server-side search in retrieve_node."""
+
+    async def test_retrieve_uses_colbert_search_when_available(self):
+        """When colbert_query in state, uses hybrid_search_rrf_colbert."""
+        mock_cache = AsyncMock()
+        mock_cache.get_search_results = AsyncMock(return_value=None)
+        mock_cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+        mock_cache.store_search_results = AsyncMock()
+
+        mock_qdrant = AsyncMock()
+        mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+            return_value=(
+                [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+                {"backend_error": False, "error_type": None, "error_message": None},
+            )
+        )
+        mock_qdrant.hybrid_search_rrf = AsyncMock()  # should NOT be called
+
+        mock_sparse = AsyncMock()
+
+        state = {
+            "messages": [{"role": "user", "content": "test"}],
+            "query_embedding": [0.1] * 1024,
+            "colbert_query": [[0.2] * 1024] * 4,
+            "latency_stages": {},
+            "query_type": "GENERAL",
+        }
+        result = await retrieve_node(
+            state, cache=mock_cache, sparse_embeddings=mock_sparse, qdrant=mock_qdrant
+        )
+
+        assert len(result["documents"]) == 1
+        assert result.get("rerank_applied") is True
+        mock_qdrant.hybrid_search_rrf_colbert.assert_awaited_once()
+        mock_qdrant.hybrid_search_rrf.assert_not_awaited()
+
+    async def test_retrieve_falls_back_when_no_colbert_query(self):
+        """When colbert_query is None in state, uses hybrid_search_rrf (fallback)."""
+        mock_cache = AsyncMock()
+        mock_cache.get_search_results = AsyncMock(return_value=None)
+        mock_cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+        mock_cache.store_search_results = AsyncMock()
+
+        mock_docs = _make_docs(3)
+        mock_qdrant = AsyncMock()
+        mock_qdrant.hybrid_search_rrf = AsyncMock(return_value=(mock_docs, _OK_META))
+
+        mock_sparse = AsyncMock()
+
+        state = {
+            "messages": [{"role": "user", "content": "test"}],
+            "query_embedding": [0.1] * 1024,
+            "colbert_query": None,
+            "latency_stages": {},
+            "query_type": "GENERAL",
+        }
+        result = await retrieve_node(
+            state, cache=mock_cache, sparse_embeddings=mock_sparse, qdrant=mock_qdrant
+        )
+
+        assert len(result["documents"]) == 3
+        assert result.get("rerank_applied") is False
+        mock_qdrant.hybrid_search_rrf.assert_awaited_once()
+
+
 class TestRetrieveNodeEvalFields:
     """Test eval_query/eval_docs fields for managed evaluators (#386)."""
 
