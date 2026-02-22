@@ -852,6 +852,79 @@ async def test_cache_check_colbert_query_none_without_hybrid_colbert(mock_cache,
     assert result["colbert_query"] is None
 
 
+async def test_cache_check_computes_colbert_when_embedding_cached(mock_cache):
+    """_cache_check computes ColBERT vectors even when dense embedding is cached."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  # cached!
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(
+            [0.1] * 1024,
+            {"indices": [1], "values": [0.5]},
+            [[0.2] * 1024] * 4,
+        )
+    )
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+    )
+
+    assert result["colbert_query"] is not None
+    assert len(result["colbert_query"]) == 4
+    mock_embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+
+
+async def test_hybrid_retrieve_recomputes_colbert_after_rewrite(mock_cache, mock_sparse):
+    """_hybrid_retrieve re-embeds with ColBERT when dense_vector is None (post-rewrite)."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(
+            [0.3] * 1024,
+            {"indices": [2], "values": [0.7]},
+            [[0.4] * 1024] * 3,
+        )
+    )
+
+    # query_embedding=None simulates post-rewrite state
+    result = await _hybrid_retrieve(
+        "rewritten query",
+        None,  # dense_vector is None after rewrite
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        embeddings=mock_embeddings,
+        colbert_query=None,  # was reset after rewrite
+        latency_stages={},
+    )
+
+    assert result["rerank_applied"] is True
+    assert result["colbert_query"] is not None
+    assert len(result["colbert_query"]) == 3
+    mock_embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+    mock_qdrant.hybrid_search_rrf_colbert.assert_called_once()
+
+
 async def test_hybrid_retrieve_uses_colbert_search(mock_cache, mock_sparse):
     """_hybrid_retrieve calls hybrid_search_rrf_colbert when colbert_query is provided."""
     from unittest.mock import AsyncMock
