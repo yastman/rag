@@ -270,8 +270,12 @@ class TestCheckSingleDep:
         config = _make_config()
         client = AsyncMock(spec=httpx.AsyncClient)
 
+        mock_info = MagicMock()
+        mock_info.points_count = 100
+        mock_info.config.params.vectors = {"dense": MagicMock(), "colbert": MagicMock()}
+        mock_info.config.params.sparse_vectors = {"bm42": MagicMock()}
         mock_qdrant_client = AsyncMock()
-        mock_qdrant_client.get_collection = AsyncMock(return_value=MagicMock(points_count=100))
+        mock_qdrant_client.get_collection = AsyncMock(return_value=mock_info)
         mock_qdrant_client.close = AsyncMock()
 
         with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
@@ -512,6 +516,94 @@ class TestCheckDependencies:
 # ===========================================================================
 # PostgreSQL preflight check
 # ===========================================================================
+
+
+# ===========================================================================
+# Qdrant vector name validation
+# ===========================================================================
+
+
+class TestQdrantVectorValidation:
+    """Preflight validates required named vectors in collection."""
+
+    async def test_qdrant_warns_when_colbert_vector_missing(self, caplog):
+        """Missing colbert vector logged as warning, but check still passes."""
+        import logging
+
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 278
+        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with (
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            caplog.at_level(logging.WARNING),
+        ):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+            assert result is True
+            assert "colbert" in caplog.text.lower()
+
+    async def test_qdrant_no_warning_when_all_vectors_present(self, caplog):
+        """No warning when dense + bm42 + colbert all present."""
+        import logging
+
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 278
+        mock_collection_info.config.params.vectors = {
+            "dense": MagicMock(),
+            "colbert": MagicMock(),
+        }
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with (
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            caplog.at_level(logging.WARNING),
+        ):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+            assert result is True
+            assert "missing" not in caplog.text.lower()
+
+    async def test_qdrant_fails_when_dense_missing(self):
+        """Missing dense vector causes check to fail."""
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 278
+        mock_collection_info.config.params.vectors = {}
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+            assert result is False
+
+    async def test_qdrant_fails_when_bm42_missing(self):
+        """Missing bm42 sparse vector causes check to fail."""
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 278
+        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
+        mock_collection_info.config.params.sparse_vectors = {}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+            assert result is False
 
 
 class TestPostgresPreflight:
