@@ -105,19 +105,21 @@ Usage:
     with traced_pipeline(session_id="...", user_id="..."):
         result = await graph.ainvoke(state)
 
-### Graph Nodes (9 nodes, all covered)
+### Graph Nodes (11 nodes — 9 core + 2 voice-only)
 
-| Node | Span Name |
-|------|-----------|
-| classify_node | `node-classify` |
-| cache_check_node | `node-cache-check` |
-| cache_store_node | `node-cache-store` |
-| retrieve_node | `node-retrieve` |
-| grade_node | `node-grade` |
-| rerank_node | `node-rerank` |
-| generate_node | `node-generate` |
-| rewrite_node | `node-rewrite` |
-| respond_node | `node-respond` |
+| Node | Span Name | Notes |
+|------|-----------|-------|
+| guard_node | `node-guard` | Voice-only (regex injection check) |
+| transcribe_node | `node-transcribe` | Voice-only (Whisper STT) |
+| classify_node | `node-classify` | |
+| cache_check_node | `node-cache-check` | |
+| cache_store_node | `node-cache-store` | |
+| retrieve_node | `node-retrieve` | |
+| grade_node | `node-grade` | |
+| rerank_node | `node-rerank` | |
+| generate_node | `node-generate` | |
+| rewrite_node | `node-rewrite` | |
+| respond_node | `node-respond` | |
 
 ### Payload Bloat Prevention (#143)
 
