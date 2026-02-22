@@ -143,7 +143,7 @@ gc = GraphConfig.from_env()              ***REMOVED*** reads MAX_REWRITE_ATTEMPT
 llm = gc.create_llm()                    ***REMOVED*** langfuse.openai.AsyncOpenAI
 hybrid = gc.create_hybrid_embeddings()   ***REMOVED*** BGEM3HybridEmbeddings (preferred)
 sparse = gc.create_sparse_embeddings()   ***REMOVED*** BGEM3SparseEmbeddings
-***REMOVED*** gc.skip_rerank_threshold (0.012), gc.relevance_threshold_rrf (0.005)
+***REMOVED*** gc.skip_rerank_threshold (0.018), gc.relevance_threshold_rrf (0.005)
 ```
 
 ***REMOVED******REMOVED*** Cache Key Versioning
