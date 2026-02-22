@@ -422,6 +422,7 @@ async def generate_response(
                     stream_recovery = True
         else:
             ***REMOVED*** Non-streaming path
+            t_llm_start = time.monotonic()
             response_obj = await llm.chat.completions.create(
                 model=config.llm_model,
                 messages=llm_messages,
@@ -429,8 +430,14 @@ async def generate_response(
                 max_tokens=max_tokens,
                 name="generate-answer",  ***REMOVED*** type: ignore[call-overload]  ***REMOVED*** langfuse kwarg
             )
+            t_llm_end = time.monotonic()
             answer = response_obj.choices[0].message.content or ""
             actual_model = getattr(response_obj, "model", config.llm_model) or config.llm_model
+            ***REMOVED*** For non-streaming: TTFT = entire call duration (one-shot completion)
+            ttft_ms = (t_llm_end - t_llm_start) * 1000
+            usage = getattr(response_obj, "usage", None)
+            if usage is not None:
+                completion_tokens = getattr(usage, "completion_tokens", None)
     except Exception as e:
         logger.exception("generate_response: LLM call failed, using fallback")
         lf_client.update_current_span(
@@ -488,6 +495,10 @@ async def generate_response(
             llm_decode_ms = 0.0
         if completion_tokens is not None and llm_decode_ms > 0:
             llm_tps = completion_tokens / (llm_decode_ms / 1000)
+    elif not streaming_was_enabled and ttft_ms > 0:
+        ***REMOVED*** Non-streaming: no decode/prefill distinction; compute TPS from total call time
+        if completion_tokens is not None and ttft_ms > 0:
+            llm_tps = completion_tokens / (ttft_ms / 1000)
 
     ***REMOVED*** Response length metrics (***REMOVED***129)
     answer_words = len(answer.split())
