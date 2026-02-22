@@ -215,7 +215,12 @@ async def _check_single_dep(
         collection = config.qdrant_collection
         scheme = urlparse(config.qdrant_url).scheme.lower()
         effective_key = config.qdrant_api_key if scheme == "https" else None
-        qdrant = AsyncQdrantClient(url=config.qdrant_url, api_key=effective_key)
+        qdrant = AsyncQdrantClient(
+            url=config.qdrant_url,
+            api_key=effective_key,
+            timeout=config.qdrant_timeout,
+            prefer_grpc=True,
+        )
         try:
             info = await qdrant.get_collection(collection)
             logger.info(
