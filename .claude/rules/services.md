@@ -144,7 +144,7 @@ gc = GraphConfig.from_env()              # reads MAX_REWRITE_ATTEMPTS, SKIP_RERA
 llm = gc.create_llm()                    # langfuse.openai.AsyncOpenAI
 hybrid = gc.create_hybrid_embeddings()   # BGEM3HybridEmbeddings (preferred)
 sparse = gc.create_sparse_embeddings()   # BGEM3SparseEmbeddings
-# gc.skip_rerank_threshold (0.012), gc.relevance_threshold_rrf (0.005)
+# gc.skip_rerank_threshold (0.018), gc.relevance_threshold_rrf (0.005)
 ```
 
 ## Cache Key Versioning
