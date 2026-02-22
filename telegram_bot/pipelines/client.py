@@ -217,7 +217,10 @@ async def run_client_pipeline(
         "messages": [{"role": "user", "content": user_text}],
     }
 
-    pre_computed = (rag_result_store or {}).get("cache_key_embedding")
+    _store = rag_result_store or {}
+    pre_computed = _store.get("cache_key_embedding")
+    pre_computed_sparse = _store.get("cache_key_sparse")
+    pre_computed_colbert = _store.get("cache_key_colbert")
 
     pipeline_result = await rag_pipeline(
         user_text,
@@ -233,6 +236,8 @@ async def run_client_pipeline(
         llm=llm,
         agent_role=role,
         pre_computed_embedding=pre_computed,
+        pre_computed_sparse=pre_computed_sparse,
+        pre_computed_colbert=pre_computed_colbert,
     )
     result.update(pipeline_result)
     response_text = str(pipeline_result.get("response", "") or "")
@@ -247,6 +252,7 @@ async def run_client_pipeline(
             latency_stages=result.get("latency_stages", {}),
             llm_call_count=int(result.get("llm_call_count", 0) or 0),
             config=config,
+            message=message,
         )
         result.update(generated)
         response_text = str(generated.get("response", "") or "")
@@ -267,8 +273,14 @@ async def run_client_pipeline(
         sources_text = format_sources(documents_list)
         result["sources_count"] = min(len(documents_list), _MAX_SOURCES)
 
-    full_response = response_text + sources_text if sources_text else response_text
-    await _send_markdown_chunks(message, full_response, reply_markup=reply_markup)
+    response_already_sent = result.get("response_sent", False)
+    if response_already_sent:
+        # Streaming already delivered the main response; only send sources if applicable.
+        if sources_text:
+            await _send_markdown_chunks(message, sources_text, reply_markup=reply_markup)
+    else:
+        full_response = response_text + sources_text if sources_text else response_text
+        await _send_markdown_chunks(message, full_response, reply_markup=reply_markup)
 
     # --- Step f) Post-process ---
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
