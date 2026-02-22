@@ -72,6 +72,11 @@ await cache.store_conversation_batch(user_id=123, messages=[("user", "hi"), ("as
 history = await cache.get_conversation(user_id=123, last_n=5)
 await cache.clear_conversation(user_id=123)
 
+***REMOVED*** Cache clearing (bot /clearcache command)
+await cache.clear_semantic_cache()           ***REMOVED*** Semantic cache (redisvl aclear or SCAN fallback)
+await cache.clear_by_tier("embeddings")      ***REMOVED*** Exact tier (embeddings/sparse/analysis/search/rerank)
+await cache.clear_all_caches()               ***REMOVED*** All tiers → dict[tier, deleted_count]
+
 ***REMOVED*** Metrics
 stats = cache.get_metrics()  ***REMOVED*** per-tier hits/misses/hit_rate
 
