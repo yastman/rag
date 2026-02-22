@@ -74,6 +74,12 @@ await cache.clear_conversation(user_id=123)
 
 ***REMOVED*** Metrics
 stats = cache.get_metrics()  ***REMOVED*** per-tier hits/misses/hit_rate
+
+***REMOVED*** Cache clearing (/clearcache command, ***REMOVED***566)
+deleted = await cache.clear_by_tier("embeddings")  ***REMOVED*** SCAN+DELETE, returns count
+deleted = await cache.clear_by_tier("search")       ***REMOVED*** also clears "rerank" tier
+cleared = await cache.clear_semantic_cache()         ***REMOVED*** drop+recreate index, returns 1/0
+results = await cache.clear_all_caches()             ***REMOVED*** dict[tier_name, deleted_count]
 ```
 
 ***REMOVED******REMOVED*** Redis Pipelines
