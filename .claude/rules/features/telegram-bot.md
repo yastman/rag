@@ -92,8 +92,8 @@ guard → [injection_detected] → respond (blocked message) → END
 START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
                  → [other] → cache_check → [HIT] → respond → END
                                           → [MISS] → retrieve → grade
-                                                       → [relevant + confidence >= 0.012] → generate → cache_store → respond → END (skip rerank)
-                                                       → [relevant + confidence < 0.012] → rerank → generate → cache_store → respond → END
+                                                       → [relevant + confidence >= 0.018] → generate → cache_store → respond → END (skip rerank)
+                                                       → [relevant + confidence < 0.018] → rerank → generate → cache_store → respond → END
                                                        → [count < max_rewrite_attempts AND effective] → rewrite → retrieve (loop)
                                                        → [count >= max_rewrite_attempts] → generate → cache_store → respond → END
 ```
@@ -161,7 +161,7 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 
 | Parameter | Env Var | Default | Description |
 |-----------|---------|---------|-------------|
-| `skip_rerank_threshold` | `SKIP_RERANK_THRESHOLD` | `0.012` | Skip rerank when grade confidence >= threshold (RRF scale) |
+| `skip_rerank_threshold` | `SKIP_RERANK_THRESHOLD` | `0.018` | Skip rerank when grade confidence >= threshold (RRF scale; must be > 1/61≈0.016 to ensure ColBERT runs) |
 | `max_rewrite_attempts` | `MAX_REWRITE_ATTEMPTS` | `1` | Max query rewrites before fallback |
 | `generate_max_tokens` | `GENERATE_MAX_TOKENS` | `2048` | Token cap for LLM generation |
 | `rewrite_max_tokens` | `REWRITE_MAX_TOKENS` | `64` | Token budget for rewrite LLM call |
