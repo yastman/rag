@@ -66,13 +66,25 @@ async def cache_check_node(
     embeddings_cache_hit = embedding is not None
     embedding_error = False
     embedding_error_type: str | None = None
+    colbert_query: list[list[float]] | None = None
 
     if embedding is None:
         try:
             _has_hybrid = callable(
                 getattr(embeddings, "aembed_hybrid", None)
             ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
-            if _has_hybrid:
+            _has_hybrid_colbert = callable(
+                getattr(embeddings, "aembed_hybrid_with_colbert", None)
+            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+
+            if _has_hybrid_colbert:
+                # 3-way hybrid: dense + sparse + colbert in one call
+                embedding, sparse, colbert_query = await embeddings.aembed_hybrid_with_colbert(
+                    query
+                )
+                await cache.store_embedding(query, embedding)
+                await cache.store_sparse_embedding(query, sparse)
+            elif _has_hybrid:
                 # Hybrid: get both dense + sparse in one call, cache both
                 embedding, sparse = await embeddings.aembed_hybrid(query)
                 await cache.store_embedding(query, embedding)
@@ -141,6 +153,7 @@ async def cache_check_node(
             "embeddings_cache_hit": embeddings_cache_hit,
             "embedding_error": False,
             "embedding_error_type": None,
+            "colbert_query": colbert_query,
             "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
         }
 
@@ -161,6 +174,7 @@ async def cache_check_node(
         "embeddings_cache_hit": embeddings_cache_hit,
         "embedding_error": embedding_error,
         "embedding_error_type": embedding_error_type,
+        "colbert_query": colbert_query,
         "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
     }
 

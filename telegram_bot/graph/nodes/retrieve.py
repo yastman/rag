@@ -155,6 +155,7 @@ async def retrieve_node(
             "documents": cached_results,
             "search_results_count": len(cached_results),
             "search_cache_hit": True,
+            "rerank_applied": False,
             "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
             # Clear stale backend-error markers from previous turns/branches.
             "retrieval_backend_error": False,
@@ -169,13 +170,29 @@ async def retrieve_node(
             sparse_vector = await sparse_embeddings.aembed_query(query)
             await cache.store_sparse_embedding(query, sparse_vector)
 
-    # Step 3: Hybrid search via Qdrant SDK (RRF fusion)
-    qdrant_result = await qdrant.hybrid_search_rrf(
-        dense_vector=dense_vector,
-        sparse_vector=sparse_vector,
-        top_k=top_k,
-        return_meta=True,
-    )
+    # Step 3: Hybrid search via Qdrant SDK
+    colbert_query = state.get("colbert_query")
+    _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
+
+    if colbert_query and _has_colbert_search:
+        # 3-stage: dense+sparse -> RRF -> ColBERT MaxSim (server-side)
+        qdrant_result = await qdrant.hybrid_search_rrf_colbert(
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            colbert_query=colbert_query,
+            top_k=top_k,
+            return_meta=True,
+        )
+        rerank_applied = True
+    else:
+        # 2-stage fallback: dense+sparse -> RRF
+        qdrant_result = await qdrant.hybrid_search_rrf(
+            dense_vector=dense_vector,
+            sparse_vector=sparse_vector,
+            top_k=top_k,
+            return_meta=True,
+        )
+        rerank_applied = False
     if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
         results, search_meta = qdrant_result
     else:
@@ -215,6 +232,7 @@ async def retrieve_node(
         "search_results_count": len(results),
         "search_cache_hit": False,
         "sparse_embedding": sparse_vector,
+        "rerank_applied": rerank_applied,
         "latency_stages": {**state.get("latency_stages", {}), "retrieve": latency},
         "retrieval_backend_error": search_meta.get("backend_error", False),
         "retrieval_error_type": search_meta.get("error_type"),
