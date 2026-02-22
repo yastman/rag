@@ -1109,3 +1109,174 @@ async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache
     assert called_colbert_query == reformulated_colbert
     assert called_colbert_query != original_colbert
     assert result["documents"]
+
+
+# ---------------------------------------------------------------------------
+# Pre-computed sparse + colbert passthrough (#571)
+# ---------------------------------------------------------------------------
+
+
+async def test_cache_check_uses_pre_computed_sparse(mock_cache):
+    """_cache_check stores pre_computed_sparse in Redis and returns it as sparse_embedding."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [1, 2], "values": [0.5, 0.3]}
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None  # not available
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        pre_computed_embedding=dense,
+        pre_computed_sparse=sparse,
+    )
+
+    assert result["sparse_embedding"] == sparse
+    mock_cache.store_sparse_embedding.assert_awaited_once_with("test query", sparse)
+    assert result["cache_hit"] is False
+    assert result["query_embedding"] == dense
+
+
+async def test_cache_check_uses_pre_computed_colbert_skips_reencode(mock_cache):
+    """_cache_check uses pre_computed_colbert and does NOT call aembed_hybrid_with_colbert."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    dense = [0.1] * 1024
+    colbert = [[0.2] * 1024] * 3
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(dense, {"indices": [1], "values": [0.5]}, colbert)
+    )
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        pre_computed_embedding=dense,
+        pre_computed_colbert=colbert,
+    )
+
+    assert result["colbert_query"] == colbert
+    # Must NOT call aembed_hybrid_with_colbert since colbert was pre-computed
+    mock_embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
+
+
+async def test_cache_check_returns_sparse_embedding_in_all_paths(mock_cache):
+    """_cache_check returns sparse_embedding key in result for both HIT and MISS."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [1], "values": [0.5]}
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None
+
+    # MISS path
+    result_miss = await _cache_check(
+        "miss query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        pre_computed_embedding=dense,
+        pre_computed_sparse=sparse,
+    )
+    assert "sparse_embedding" in result_miss
+
+    # HIT path
+    mock_cache.check_semantic = AsyncMock(return_value="cached answer")
+    result_hit = await _cache_check(
+        "hit query",
+        "FAQ",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        pre_computed_embedding=dense,
+        pre_computed_sparse=sparse,
+    )
+    assert "sparse_embedding" in result_hit
+    assert result_hit["sparse_embedding"] == sparse
+
+
+async def test_hybrid_retrieve_uses_pre_computed_sparse(mock_cache, mock_sparse, mock_qdrant):
+    """_hybrid_retrieve uses sparse_embedding param and skips cache fetch + recompute."""
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    pre_sparse = {"indices": [5], "values": [0.9]}
+    dense = [0.1] * 1024
+
+    result = await _hybrid_retrieve(
+        "test query",
+        dense,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        sparse_embedding=pre_sparse,
+        latency_stages={},
+    )
+
+    # Sparse cache and recompute must NOT be called — pre-computed sparse was provided
+    mock_cache.get_sparse_embedding.assert_not_awaited()
+    mock_sparse.aembed_query.assert_not_awaited()
+    assert result["documents"]
+
+
+async def test_rag_pipeline_passes_pre_computed_sparse_to_retrieve(mock_cache, mock_sparse):
+    """rag_pipeline passes pre_computed_sparse through _cache_check to _hybrid_retrieve."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [3], "values": [0.7]}
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None  # disable colbert
+    mock_embeddings.aembed_hybrid = None  # disable hybrid
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = None  # ensure plain RRF path
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "doc", "score": 0.9, "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    result = await rag_pipeline(
+        "test query",
+        user_id=1,
+        session_id="s1",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        reranker=None,
+        pre_computed_embedding=dense,
+        pre_computed_sparse=sparse,
+    )
+
+    # sparse_embeddings.aembed_query must NOT be called — sparse was pre-computed
+    mock_sparse.aembed_query.assert_not_awaited()
+    # cache get_sparse_embedding must NOT be called either
+    mock_cache.get_sparse_embedding.assert_not_awaited()
+    assert result["documents"]
