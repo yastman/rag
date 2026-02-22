@@ -125,7 +125,9 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 | `/clear` | cmd_clear | Clear conversation history |
 | `/stats` | cmd_stats | Cache tier hit rates |
 | `/metrics` | cmd_metrics | Pipeline p50/p95 timing |
+| `/clearcache` | cmd_clearcache | Inline keyboard to clear individual Redis cache tiers (#566) |
 | (callback) | handle_feedback | Like/dislike feedback (#229) |
+| (callback) | handle_clearcache_callback | Clear selected cache tier (cc: prefix) (#566) |
 
 ## Configuration (BotConfig)
 
