@@ -41,16 +41,21 @@ All LLM-calling code uses `langfuse.openai.AsyncOpenAI` (OpenAI SDK drop-in with
 
 ## Model Routing
 
-| Model Name | Provider | Actual Model |
-|------------|----------|--------------|
-| `gpt-4o-mini` | Cerebras | zai-glm-4.7 (primary) |
-| `gpt-4o-mini-fallback` | Groq | llama-3.1-70b |
-| `gpt-4o-mini-openai` | OpenAI | gpt-4o-mini |
+| Model Name | Provider | Actual Model | Notes |
+|------------|----------|--------------|-------|
+| `gpt-4o-mini` | Cerebras | gpt-oss-120b (primary) | Reasoning model, 3000 tok/s, `merge_reasoning_content_in_choices: true` |
+| `gpt-4o-mini-cerebras-glm` | Cerebras | zai-glm-4.7 | Fallback 1 (former primary) |
+| `gpt-4o-mini-fallback` | Groq | llama-3.1-70b-versatile | Fallback 2 |
+| `gpt-4o-mini-openai` | OpenAI | gpt-4o-mini | Fallback 3 (reliable) |
+| `gpt-oss-120b` | Cerebras | gpt-oss-120b | Standalone alias for benchmarking |
+| `whisper` | OpenAI | whisper-1 | STT (audio_transcription mode) |
+
+**Note:** `gpt-oss-120b` sends reasoning tokens as `delta.reasoning` — `merge_reasoning_content_in_choices: true` merges them into `delta.content`.
 
 ## Fallback Chain
 
 ```
-Cerebras → [error] → Groq → [error] → OpenAI
+gpt-4o-mini (Cerebras/gpt-oss-120b) → cerebras-glm → Groq → OpenAI
 ```
 
 ## Configuration
@@ -97,6 +102,19 @@ except (openai.APIConnectionError, openai.RateLimitError, openai.APITimeoutError
     logger.error("API error: %s", e)
     return fallback_value
 ```
+
+## Contextualization Module (`src/contextualization/`)
+
+Enriches document chunks with LLM-generated summaries before indexing to improve retrieval quality.
+
+| File | Provider | Notes |
+|------|----------|-------|
+| `src/contextualization/base.py` | — | `ContextualizeProvider` ABC, `ContextualizedChunk` dataclass |
+| `src/contextualization/openai.py` | OpenAI | `OpenAIContextualizer`, ~$0.008-0.012/chunk |
+| `src/contextualization/claude.py` | Anthropic | `ClaudeContextualizer` |
+| `src/contextualization/groq.py` | Groq | `GroqContextualizer` |
+
+**Impact:** +2-5% Recall@1, +0.5-1% NDCG@10. Used during ingestion (optional, not in default CocoIndex flow).
 
 ## generate_node (LangGraph)
 
