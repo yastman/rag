@@ -3,6 +3,7 @@
 import contextlib
 import logging
 from enum import StrEnum
+from urllib.parse import urlparse
 
 import asyncpg
 import httpx
@@ -212,7 +213,9 @@ async def _check_single_dep(
 
     if name == "qdrant":
         collection = config.qdrant_collection
-        qdrant = AsyncQdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key)
+        scheme = urlparse(config.qdrant_url).scheme.lower()
+        effective_key = config.qdrant_api_key if scheme == "https" else None
+        qdrant = AsyncQdrantClient(url=config.qdrant_url, api_key=effective_key)
         try:
             info = await qdrant.get_collection(collection)
             logger.info(
