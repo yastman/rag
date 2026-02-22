@@ -28,8 +28,12 @@ def _make_config(**overrides) -> MagicMock:
     cfg.qdrant_url = overrides.get("qdrant_url", "http://localhost:6333")
     cfg.qdrant_api_key = overrides.get("qdrant_api_key")
     cfg.qdrant_collection = overrides.get("qdrant_collection", "test_col")
+    cfg.qdrant_timeout = overrides.get("qdrant_timeout", 30)
     cfg.bge_m3_url = overrides.get("bge_m3_url", "http://localhost:8000")
     cfg.llm_base_url = overrides.get("llm_base_url", "http://localhost:4000")
+    cfg.realestate_database_url = overrides.get(
+        "realestate_database_url", "postgresql://postgres:postgres@localhost:5432/realestate"
+    )
     return cfg
 
 
@@ -503,3 +507,71 @@ class TestCheckDependencies:
             await check_dependencies(config)
 
         assert "bge_m3" in exc_info.value.failed_deps
+
+
+# ===========================================================================
+# PostgreSQL preflight check
+# ===========================================================================
+
+
+class TestPostgresPreflight:
+    """Postgres preflight check validates database existence."""
+
+    async def test_postgres_check_passes_when_db_exists(self):
+        """Preflight passes when Postgres connection succeeds."""
+        config = _make_config(realestate_database_url="postgresql://u:p@localhost/realestate")
+        with patch("telegram_bot.preflight.asyncpg") as mock_asyncpg:
+            mock_conn = AsyncMock()
+            mock_conn.fetchval = AsyncMock(return_value=1)
+            mock_conn.close = AsyncMock()
+            mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
+
+            client = AsyncMock()
+            result = await _check_single_dep("postgres", config, client)
+            assert result is True
+
+    async def test_postgres_check_fails_when_db_missing(self):
+        """Preflight fails when database does not exist."""
+        import asyncpg as real_asyncpg
+
+        config = _make_config(realestate_database_url="postgresql://u:p@localhost/realestate")
+        with patch("telegram_bot.preflight.asyncpg") as mock_asyncpg:
+            mock_asyncpg.connect = AsyncMock(
+                side_effect=real_asyncpg.InvalidCatalogNameError(
+                    'database "realestate" does not exist'
+                )
+            )
+            mock_asyncpg.InvalidCatalogNameError = real_asyncpg.InvalidCatalogNameError
+
+            client = AsyncMock()
+            result = await _check_single_dep("postgres", config, client)
+            assert result is False
+
+    async def test_postgres_in_dep_classification_as_optional(self):
+        """Postgres is OPTIONAL — bot degrades without it."""
+        from telegram_bot.preflight import DEP_CLASSIFICATION, DepLevel
+
+        assert DEP_CLASSIFICATION.get("postgres") == DepLevel.OPTIONAL
+
+
+class TestPostgresOptionalBehavior:
+    """Postgres failure does not block startup."""
+
+    async def test_postgres_optional_does_not_block_startup(self):
+        """Postgres failure does not raise PreflightError."""
+        config = _make_config(realestate_database_url="postgresql://u:p@localhost/missing")
+
+        async def fake_optional(name, cfg, client):
+            return False
+
+        with (
+            patch(
+                "telegram_bot.preflight._check_critical_with_retry",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_optional),
+        ):
+            results = await check_dependencies(config)
+
+        assert results["postgres"] is False
