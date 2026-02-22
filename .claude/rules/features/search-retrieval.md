@@ -88,7 +88,7 @@ LLM reformulation via OpenAI SDK (`GraphConfig.create_llm()`). Increments `rewri
 | `acorn_mode` | off | off/on/auto (filtered search optimization) |
 | `skip_rerank_threshold` | 0.018 | Skip ColBERT rerank when grade confidence >= threshold (RRF scale; must be > 1/61≈0.016) |
 | `score_improvement_delta` | 0.001 | Minimum score delta vs prev confidence to count as improvement |
-| `generate_max_tokens` | 2048 | Token cap for LLM generation (env: `GENERATE_MAX_TOKENS`) |
+| `generate_max_tokens` | 4096 | Token cap for LLM generation (env: `GENERATE_MAX_TOKENS`) |
 
 ## RRF Weights by Query Type
 
