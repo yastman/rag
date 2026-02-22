@@ -822,6 +822,115 @@ class TestQdrantServiceFormatResults:
         assert isinstance(results[0]["id"], str)
 
 
+class TestQdrantServiceHybridSearchColbert:
+    """Tests for hybrid_search_rrf_colbert (3-stage: dense+sparse -> RRF -> ColBERT)."""
+
+    @pytest.fixture
+    def service(self):
+        return _make_service(validated=True)
+
+    @pytest.fixture
+    def mock_point(self):
+        return _make_mock_point(
+            id="doc_1", score=85.5, text="Test content", metadata={"city": "Sofia"}
+        )
+
+    async def test_colbert_search_calls_query_points_with_nested_prefetch(
+        self, service, mock_point
+    ):
+        """Verify nested prefetch structure: inner RRF, outer ColBERT."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        colbert_query = [[0.1] * 1024] * 5  # 5 query tokens
+        sparse_vector = {"indices": [1, 5], "values": [0.5, 0.3]}
+
+        results = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            sparse_vector=sparse_vector,
+            colbert_query=colbert_query,
+            top_k=5,
+        )
+
+        assert len(results) == 1
+        assert results[0]["id"] == "doc_1"
+
+        call_kwargs = service._client.query_points.call_args.kwargs
+        # Outer query should be colbert vectors
+        assert call_kwargs["using"] == "colbert"
+        # Outer prefetch should contain 1 RRF prefetch
+        outer_prefetch = call_kwargs["prefetch"]
+        assert len(outer_prefetch) == 1
+        # Inner prefetch should have dense + sparse
+        inner_prefetch = outer_prefetch[0].prefetch
+        assert len(inner_prefetch) == 2
+
+    async def test_colbert_search_without_sparse(self, service, mock_point):
+        """ColBERT search with dense only (no sparse vector)."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        colbert_query = [[0.1] * 1024] * 3
+
+        results = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            sparse_vector=None,
+            colbert_query=colbert_query,
+            top_k=5,
+        )
+
+        assert len(results) == 1
+        call_kwargs = service._client.query_points.call_args.kwargs
+        inner_prefetch = call_kwargs["prefetch"][0].prefetch
+        assert len(inner_prefetch) == 1  # dense only
+
+    async def test_colbert_search_graceful_degradation(self, service):
+        """Return empty on Qdrant error."""
+        service._client.query_points = AsyncMock(side_effect=Exception("Connection lost"))
+
+        colbert_query = [[0.1] * 1024] * 3
+
+        results = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=colbert_query,
+            top_k=5,
+        )
+
+        assert results == []
+
+    async def test_colbert_search_with_filters(self, service, mock_point):
+        """Filters are passed through to query_points."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        colbert_query = [[0.1] * 1024] * 3
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=colbert_query,
+            filters={"city": "Sofia"},
+            top_k=5,
+        )
+
+        call_kwargs = service._client.query_points.call_args.kwargs
+        assert call_kwargs["query_filter"] is not None
+
+    async def test_colbert_search_return_meta(self, service, mock_point):
+        """return_meta=True returns (results, meta) tuple."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
+
+        colbert_query = [[0.1] * 1024] * 3
+
+        result = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=colbert_query,
+            top_k=5,
+            return_meta=True,
+        )
+
+        assert isinstance(result, tuple)
+        results, meta = result
+        assert len(results) == 1
+        assert meta["backend_error"] is False
+
+
 class TestQdrantServiceClose:
     """Tests for close method."""
 
