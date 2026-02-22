@@ -157,6 +157,36 @@ class TestBGEM3Client:
         await client.aclose()
         mock_http.aclose.assert_called_once()
 
+    async def test_encode_colbert_returns_vectors(self, client):
+        """Test ColBERT encoding returns nested list of token vectors."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        # ColBERT: list of texts -> list of (num_tokens, 1024) arrays
+        # Single text with 3 tokens, each 1024-dim
+        mock_resp.json.return_value = {
+            "colbert_vecs": [[[0.1] * 1024] * 3],
+            "processing_time": 0.05,
+        }
+
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_colbert(["hello"])
+
+        assert len(result.colbert_vecs) == 1
+        assert len(result.colbert_vecs[0]) == 3  # 3 tokens
+        assert len(result.colbert_vecs[0][0]) == 1024  # 1024-dim per token
+        assert result.processing_time == 0.05
+        mock_http.post.assert_called_once()
+        assert "/encode/colbert" in mock_http.post.call_args[0][0]
+
+    async def test_encode_colbert_empty_input(self, client):
+        result = await client.encode_colbert([])
+        assert result.colbert_vecs == []
+
     async def test_encode_dense_batching(self, client):
         """Large input gets split into batches."""
         from telegram_bot.services.bge_m3_client import BGEM3Client
