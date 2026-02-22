@@ -90,11 +90,12 @@ async def _cache_check(
         embedding = await cache.get_embedding(query)
         embeddings_cache_hit = embedding is not None
 
+    _has_hybrid_colbert = callable(
+        getattr(embeddings, "aembed_hybrid_with_colbert", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+
     if embedding is None:
         try:
-            _has_hybrid_colbert = callable(
-                getattr(embeddings, "aembed_hybrid_with_colbert", None)
-            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
             _has_hybrid = callable(
                 getattr(embeddings, "aembed_hybrid", None)
             ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
@@ -136,6 +137,13 @@ async def _cache_check(
                 "colbert_query": None,
                 "latency_stages": {**latency_stages, "cache_check": latency},
             }
+
+    # Compute ColBERT query vectors when embedding was cached but ColBERT not yet computed.
+    if colbert_query is None and _has_hybrid_colbert and embedding is not None:
+        try:
+            _, _, colbert_query = await embeddings.aembed_hybrid_with_colbert(query)
+        except Exception:
+            logger.debug("ColBERT query encode failed (non-critical), skipping")
 
     # Step 2: Check semantic cache (allowlisted types only)
     cached = None
