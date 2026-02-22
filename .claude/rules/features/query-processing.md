@@ -16,11 +16,13 @@ Classify queries to skip unnecessary RAG steps, extract structured filters, and 
 LangGraph Pipeline:
   Query → classify_node (6-type regex taxonomy)
        → [CHITCHAT/OFF_TOPIC: canned response → respond_node]
-       → [STRUCTURED/FAQ/ENTITY/GENERAL: → cache_check → retrieve → ...]
+       → [STRUCTURED/FAQ/ENTITY/GENERAL: → guard_node → cache_check → retrieve → ...]
 
 Supporting services (used by graph nodes):
   QueryPreprocessor (translit, weights) + QueryAnalyzer (LLM filter extraction)
 ```
+
+**Note:** After classify, non-chitchat queries go to `guard_node` (prompt injection defense) before `cache_check`.
 
 ## Key Files
 
@@ -59,6 +61,10 @@ result = await classify_node(state)
 ```
 
 CHITCHAT sub-categories: greeting, thanks, bot_info, farewell — each with localized responses.
+
+**Routing:**
+- `route_by_query_type`: CHITCHAT/OFF_TOPIC → respond_node; others → guard_node
+- `route_after_guard`: guard_node → respond (blocked) or cache_check (clean)
 
 ## respond_node (LangGraph)
 
