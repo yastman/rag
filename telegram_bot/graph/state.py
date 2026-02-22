@@ -146,7 +146,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         # LLM-as-a-Judge evaluation context
         "retrieved_context": [],
         # Source attribution (#225)
-        "show_sources": True,
+        "show_sources": False,
         "sources_count": 0,
         # Content filtering (#227)
         "guard_blocked": False,
