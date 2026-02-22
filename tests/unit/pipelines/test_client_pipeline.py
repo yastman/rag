@@ -34,11 +34,17 @@ def _make_message() -> MagicMock:
     return msg
 
 
-def _make_config(*, show_sources: bool = False, streaming_enabled: bool = False) -> MagicMock:
+def _make_config(
+    *,
+    show_sources: bool = False,
+    streaming_enabled: bool = False,
+    relevance_threshold_rrf: float = _CONFIDENCE_THRESHOLD,
+) -> MagicMock:
     """Create a mock GraphConfig."""
     cfg = MagicMock()
     cfg.show_sources = show_sources
     cfg.streaming_enabled = streaming_enabled
+    cfg.relevance_threshold_rrf = relevance_threshold_rrf
     return cfg
 
 
@@ -524,6 +530,91 @@ class TestCacheStoreGuards:
                 reranker=None,
                 llm=None,
                 config=_make_config(),
+                query_type="FAQ",
+            )
+
+        mock_cache.store_semantic.assert_not_called()
+
+    async def test_rrf_level_confidence_allows_cache_store(self):
+        """RRF-scale confidence should still allow semantic cache write."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.0167}],
+            "grade_confidence": 0.0167,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+            "query_embedding": [0.1, 0.2, 0.3],
+        }
+        gen_result = {"response": "RRF answer", "response_sent": False}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры в Несебре?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+            )
+
+        assert _CONFIDENCE_THRESHOLD <= 0.0167
+        mock_cache.store_semantic.assert_called_once()
+
+    async def test_cache_store_uses_config_relevance_threshold(self):
+        """Cache store guard should use config.relevance_threshold_rrf as source of truth."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.02}],
+            "grade_confidence": 0.02,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+            "query_embedding": [0.1, 0.2, 0.3],
+        }
+        gen_result = {"response": "Config threshold answer", "response_sent": False}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры доступны?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(relevance_threshold_rrf=0.03),
                 query_type="FAQ",
             )
 

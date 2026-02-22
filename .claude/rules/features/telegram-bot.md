@@ -250,9 +250,11 @@ run_client_pipeline(user_text, user_id, session_id, message, cache, ...) → Pip
 **`PipelineResult`** (`services/types.py`): Frozen dataclass with `answer`, `sources`, `query_type`, `cache_hit`, `needs_agent`, `agent_intent`, `latency_ms`, `llm_call_count`, `scores`, `pipeline_mode`, `sent_message`, `response_sent`.
 
 **Cache store guards:**
+- `query_type in _PIPELINE_STORE_TYPES` (FAQ, GENERAL, ENTITY — not STRUCTURED)
 - Contextual follow-ups ("подробнее", "первый", "это", "ещё") → skip cache store
-- `grade_confidence` < threshold → skip
+- `grade_confidence >= config.relevance_threshold_rrf` (RRF scale, default 0.005; fallback `_CONFIDENCE_THRESHOLD=0.005`)
 - Empty documents → skip
+- **Note:** `grade_confidence` is a RRF score (max ~0.016). The threshold must be on the same RRF scale, not cosine similarity [0-1].
 
 ## generate_response Service
 
