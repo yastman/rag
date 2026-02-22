@@ -210,3 +210,12 @@ class TestRouteGrade:
             "rewrite_effective": True,
         }
         assert route_grade(state) == "rewrite"
+
+    def test_route_grade_skips_rerank_when_already_reranked(self):
+        """When rerank_applied=True from retrieve (server-side ColBERT), route to generate."""
+        state = {
+            "documents_relevant": True,
+            "skip_rerank": False,
+            "rerank_applied": True,
+        }
+        assert route_grade(state) == "generate"
