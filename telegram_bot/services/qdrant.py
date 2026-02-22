@@ -335,9 +335,12 @@ class QdrantService:
             )
 
         # Middle stage: RRF fusion of dense + sparse
+        # Overfetch so ColBERT has enough candidates to meaningfully rerank
+        rrf_limit = max(top_k * 4, 20)
         rrf_prefetch = models.Prefetch(
             prefetch=inner_prefetch,
             query=models.RrfQuery(rrf=models.Rrf(k=rrf_k)),
+            limit=rrf_limit,
         )
 
         ok_meta: dict[str, Any] = {
