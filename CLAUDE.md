@@ -8,8 +8,8 @@ make check                 # Lint + types (ruff + mypy)
 make test-unit             # Unit tests (fast)
 uv run pytest tests/unit/ -n auto  # Parallel (4x faster)
 uv run pytest tests/integration/ -v  # Integration (~5s)
-make docker-up             # Core services (5 containers)
-make docker-bot-up         # Core + bot/litellm
+make local-up              # Dev services (redis, qdrant, bge-m3, litellm)
+make run-bot               # Bot natively (no Docker)
 make docker-full-up        # All services (17 containers)
 make ingest-unified        # Unified ingestion (CocoIndex)
 ```
@@ -63,13 +63,13 @@ Bug:    /systematic-debugging → TDD → fix
 
 ## Environment
 
-`cp .env.example .env` → `uv sync && make docker-up`
+`cp .env.example .env` → `uv sync && make local-up && make run-bot`
 
 **Required:** `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY`, `LANGFUSE_*`, `REDIS_PASSWORD`
 
 ## Deployment
 
-**Dev:** `make docker-up` | **VPS:** `ssh vps` → `/opt/rag-fresh` → see `.claude/rules/k3s.md`
+**Dev:** `make local-up && make run-bot` | **VPS:** `ssh vps` → `/opt/rag-fresh` → see `.claude/rules/k3s.md`
 
 ## Modular Docs
 
