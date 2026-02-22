@@ -187,6 +187,52 @@ class TestBGEM3Client:
         result = await client.encode_colbert([])
         assert result.colbert_vecs == []
 
+    async def test_encode_hybrid_includes_colbert_vecs(self, client):
+        """encode_hybrid returns colbert_vecs when present in response."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "dense_vecs": [[0.1] * 1024],
+            "lexical_weights": [{"indices": [1], "values": [0.5]}],
+            "colbert_vecs": [[[0.2] * 1024] * 4],  # 1 text, 4 tokens
+            "processing_time": 0.1,
+        }
+
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_hybrid(["hello"])
+
+        assert result.colbert_vecs is not None
+        assert len(result.colbert_vecs) == 1
+        assert len(result.colbert_vecs[0]) == 4
+
+    async def test_encode_hybrid_colbert_vecs_optional(self, client):
+        """encode_hybrid works when response has no colbert_vecs (backward compat)."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "dense_vecs": [[0.1] * 1024],
+            "lexical_weights": [{"indices": [1], "values": [0.5]}],
+            "processing_time": 0.1,
+        }
+
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        result = await client.encode_hybrid(["hello"])
+
+        assert result.colbert_vecs is None
+        # Existing fields still work
+        assert len(result.dense_vecs) == 1
+        assert len(result.lexical_weights) == 1
+
     async def test_encode_dense_batching(self, client):
         """Large input gets split into batches."""
         from telegram_bot.services.bge_m3_client import BGEM3Client
