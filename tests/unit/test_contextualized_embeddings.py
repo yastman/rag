@@ -9,6 +9,7 @@ Tests cover:
 - Sync wrappers
 """
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,6 +33,19 @@ def mock_langfuse():
         mock_langfuse.update_current_generation = MagicMock()
         mock.return_value = mock_langfuse
         yield mock_langfuse
+
+
+@pytest.fixture(autouse=True)
+def no_retry_sleep(monkeypatch):
+    """Make tenacity retries immediate to keep tests deterministic and fast."""
+    from src.models.contextualized_embedding import ContextualizedEmbeddingService
+
+    def _no_wait(_seconds: float):
+        return asyncio.sleep(0)
+
+    monkeypatch.setattr(ContextualizedEmbeddingService.embed_documents.retry, "sleep", _no_wait)
+    monkeypatch.setattr(ContextualizedEmbeddingService.embed_query.retry, "sleep", _no_wait)
+    monkeypatch.setattr(ContextualizedEmbeddingService.embed_queries.retry, "sleep", _no_wait)
 
 
 class TestContextualizedEmbeddingServiceInit:
