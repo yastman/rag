@@ -97,7 +97,6 @@ def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEX
     for i, doc in enumerate(documents[:max_docs], 1):
         text = doc.get("text", "")
         metadata = doc.get("metadata", {})
-        score = doc.get("score", 0)
 
         meta_str = ""
         if "title" in metadata:
@@ -107,7 +106,7 @@ def _format_context(documents: list[dict[str, Any]], max_docs: int = _MAX_CONTEX
         if "price" in metadata:
             meta_str += f"Цена: {metadata['price']:,}€\n"
 
-        parts.append(f"[Объект {i}] (релевантность: {score:.2f})\n{meta_str}{text}")
+        parts.append(f"[Объект {i}]\n{meta_str}{text}")
 
     return "\n\n---\n\n".join(parts)
 
