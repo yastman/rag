@@ -58,6 +58,8 @@ rclone sync gdrive:RAG-Documents ~/drive-sync/ --progress
 | `src/ingestion/unified/state_manager.py` | Postgres state + DLQ + sync methods |
 | `src/ingestion/unified/cli.py` | CLI: preflight, bootstrap, run, status, reprocess |
 | `src/ingestion/unified/manifest.py` | Content-hash → stable UUID mapping |
+| `src/ingestion/unified/config.py` | `UnifiedIngestionConfig` — env-driven settings |
+| `src/ingestion/unified/metrics.py` | Ingestion metrics (counters, timing) |
 | `src/ingestion/docling_client.py` | Docling API client + chunk_file_sync() |
 
 ## Sync Execution Pattern
