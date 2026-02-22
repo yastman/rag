@@ -15,11 +15,12 @@ Production RAG system with a LangGraph Telegram bot, hybrid retrieval in Qdrant,
 uv sync
 cp .env.example .env
 
-***REMOVED*** Core runtime: postgres, redis, qdrant, bge-m3, user-base, docling
-make docker-up
+***REMOVED*** Local dev: services in Docker, bot natively
+make local-up              ***REMOVED*** redis, qdrant, bge-m3, docling, litellm
+make run-bot               ***REMOVED*** bot via uv run (no Docker rebuild)
 
-***REMOVED*** Bot path (adds litellm + telegram bot)
-make docker-bot-up
+***REMOVED*** Or all-in-Docker (CI / production-like)
+make docker-bot-up         ***REMOVED*** core + litellm + bot in Docker
 
 ***REMOVED*** Optional stacks
 make docker-ml-up       ***REMOVED*** langfuse + mlflow + clickhouse + minio
@@ -34,8 +35,8 @@ PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit
 
 ***REMOVED******REMOVED*** Main Commands
 
+- `make local-up` / `make local-down` (dev services) + `make run-bot` (bot natively)
 - `make docker-up` / `make docker-down` / `make docker-ps`
-- `make local-up` / `make local-down` (minimal subset from `docker-compose.dev.yml`)
 - `make ingest-unified`, `make ingest-unified-watch`, `make ingest-unified-status`
 - `make k3s-core`, `make k3s-bot`, `make k3s-ingest`, `make k3s-full`
 
