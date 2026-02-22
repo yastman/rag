@@ -278,6 +278,120 @@ class QdrantService:
                 }
             return []
 
+    @observe(name="qdrant-hybrid-search-rrf-colbert")
+    async def hybrid_search_rrf_colbert(
+        self,
+        dense_vector: list[float],
+        colbert_query: list[list[float]],
+        sparse_vector: dict | None = None,
+        filters: dict | None = None,
+        top_k: int = 5,
+        dense_limit: int = 100,
+        sparse_limit: int = 100,
+        rrf_k: int = 60,
+        return_meta: bool = False,
+    ) -> list[dict] | tuple[list[dict], dict[str, Any]]:
+        """3-stage hybrid search: dense+sparse -> RRF fusion -> ColBERT MaxSim rerank.
+
+        Uses Qdrant nested prefetch to perform all three stages server-side
+        in a single query_points call. ColBERT reranking uses pre-stored
+        multivectors (no CPU-side encoding needed for documents).
+
+        Args:
+            dense_vector: Dense embedding for semantic search
+            colbert_query: ColBERT query token vectors (num_tokens x 1024)
+            sparse_vector: Optional sparse vector {"indices": [...], "values": [...]}
+            filters: Optional metadata filters
+            top_k: Final number of results after ColBERT reranking
+            dense_limit: Number of dense candidates for RRF
+            sparse_limit: Number of sparse candidates for RRF
+            rrf_k: RRF constant k
+            return_meta: If True, return (results, meta) tuple
+
+        Returns:
+            Reranked results (ColBERT MaxSim scores).
+        """
+        await self.ensure_collection()
+
+        if not colbert_query:
+            logger.warning(
+                "Qdrant ColBERT search skipped: empty query vectors, falling back to RRF"
+            )
+            return await self.hybrid_search_rrf(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=filters,
+                top_k=top_k,
+                rrf_k=rrf_k,
+                return_meta=return_meta,
+            )
+
+        # Inner prefetch: dense + sparse candidates
+        inner_prefetch = [
+            models.Prefetch(
+                query=dense_vector,
+                using=self._dense_vector_name,
+                limit=dense_limit,
+            )
+        ]
+
+        if sparse_vector and sparse_vector.get("indices"):
+            inner_prefetch.append(
+                models.Prefetch(
+                    query=models.SparseVector(
+                        indices=sparse_vector["indices"],
+                        values=sparse_vector["values"],
+                    ),
+                    using=self._sparse_vector_name,
+                    limit=sparse_limit,
+                )
+            )
+
+        # Middle stage: RRF fusion of dense + sparse
+        # Overfetch so ColBERT has enough candidates to meaningfully rerank
+        rrf_limit = max(top_k * 4, 20)
+        rrf_prefetch = models.Prefetch(
+            prefetch=inner_prefetch,
+            query=models.RrfQuery(rrf=models.Rrf(k=rrf_k)),
+            limit=rrf_limit,
+        )
+
+        ok_meta: dict[str, Any] = {
+            "backend_error": False,
+            "error_type": None,
+            "error_message": None,
+        }
+
+        try:
+            # Outer stage: ColBERT MaxSim reranking on pre-stored multivectors
+            result = await self._client.query_points(
+                collection_name=self._collection_name,
+                prefetch=[rrf_prefetch],
+                query=colbert_query,
+                using="colbert",
+                query_filter=self._build_filter(filters),
+                limit=top_k,
+                with_payload=True,
+            )
+            results = self._format_results(result.points)
+            if return_meta:
+                return results, ok_meta
+            return results
+        except Exception as e:
+            logger.warning(
+                "Qdrant ColBERT search failed (%s: %s), falling back to RRF",
+                type(e).__name__,
+                e,
+            )
+            return await self.hybrid_search_rrf(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=filters,
+                top_k=top_k,
+                rrf_k=rrf_k,
+                return_meta=return_meta,
+            )
+
     @observe(name="qdrant-batch-search-rrf")
     async def batch_search_rrf(
         self,
