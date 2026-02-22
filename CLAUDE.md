@@ -63,6 +63,7 @@ Bug:    /systematic-debugging → TDD → fix
 | Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
 | `Model gpt-4o-mini not found` (404) | `LLM_BASE_URL` must point to LiteLLM, not directly to Cerebras |
 | Langfuse traces missing locally | `make run-bot` uses `uv run --env-file .env` to load env vars |
+| Cache never stores / always MISS | Store guard threshold must be on RRF scale (~0.005), not cosine [0-1] |
 
 ## Environment
 
