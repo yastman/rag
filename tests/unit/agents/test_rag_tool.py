@@ -136,6 +136,38 @@ async def test_rag_search_stores_result_in_side_channel(bot_context):
     assert len(rag_result_store.get("documents", [])) == 1
 
 
+async def test_rag_search_forwards_precomputed_sparse_and_colbert(bot_context):
+    """rag_search forwards all pre-computed embeddings from rag_result_store (#571)."""
+    from telegram_bot.agents.rag_tool import rag_search
+
+    dense = [0.1, 0.2, 0.3]
+    sparse = {"indices": [1, 2], "values": [0.7, 0.5]}
+    colbert = [[0.4, 0.5], [0.6, 0.7]]
+
+    config = RunnableConfig(
+        configurable={
+            "bot_context": bot_context,
+            "rag_result_store": {
+                "cache_key_embedding": dense,
+                "cache_key_sparse": sparse,
+                "cache_key_colbert": colbert,
+            },
+        }
+    )
+
+    with patch(
+        "telegram_bot.agents.rag_tool.rag_pipeline",
+        new_callable=AsyncMock,
+        return_value=_pipeline_result(),
+    ) as mock_pipeline:
+        await rag_search.ainvoke({"query": "квартиры"}, config=config)
+
+    kwargs = mock_pipeline.call_args.kwargs
+    assert kwargs["pre_computed_embedding"] == dense
+    assert kwargs["pre_computed_sparse"] == sparse
+    assert kwargs["pre_computed_colbert"] == colbert
+
+
 async def test_rag_search_writes_langfuse_scores(bot_context):
     """rag_search tool calls write_langfuse_scores with full pipeline result."""
     from telegram_bot.agents.rag_tool import rag_search
