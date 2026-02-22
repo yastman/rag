@@ -304,6 +304,7 @@ async def run_client_pipeline(
     lf.update_current_trace(
         input={"query": user_text},
         output={"response": response_text},
+        tags=["telegram", "rag", "client_direct"],
         metadata={
             "pipeline_mode": "client_direct",
             "pipeline_wall_ms": wall_ms,
