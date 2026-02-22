@@ -1,6 +1,8 @@
 # tests/unit/test_observability.py
 """Unit tests for PII masking and Langfuse client initialization."""
 
+from unittest.mock import MagicMock, patch
+
 
 class TestMaskPii:
     """Tests for mask_pii function."""
@@ -80,16 +82,40 @@ class TestTracedPipeline:
             pass
 
 
-class TestNullLangfuseClient:
-    def test_create_score_is_noop(self):
-        from telegram_bot.observability import _NullLangfuseClient
+class TestLangfuseInitialization:
+    def test_initialize_langfuse_returns_none_without_credentials(self, monkeypatch):
+        import telegram_bot.observability as observability
 
-        client = _NullLangfuseClient()
-        client.create_score(trace_id="abc123", name="user_feedback", value=1.0, data_type="NUMERIC")
+        monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+        monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+        observability._reset_langfuse_client_for_tests()
 
-    def test_get_current_trace_id_returns_empty(self):
-        from telegram_bot.observability import _NullLangfuseClient
+        assert observability.initialize_langfuse(force=True) is None
 
-        client = _NullLangfuseClient()
-        result = client.get_current_trace_id()
-        assert result == ""
+    def test_initialize_langfuse_uses_explicit_config(self):
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+                force=True,
+            )
+
+        assert result is fake_client
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["public_key"] == "pk-test"
+        assert kwargs["secret_key"] == "sk-test"
+        assert kwargs["host"] == "http://localhost:3001"
+        assert callable(kwargs["mask"])
+
+    def test_get_langfuse_client_returns_cached_instance(self):
+        import telegram_bot.observability as observability
+
+        fake_client = MagicMock()
+        observability._langfuse_client = fake_client
+        assert observability.get_langfuse_client() is fake_client
+        observability._reset_langfuse_client_for_tests()
