@@ -54,6 +54,7 @@ async def _cache_check(
     embeddings: Any,
     latency_stages: dict[str, float],
     agent_role: str | None = None,
+    pre_computed_embedding: list[float] | None = None,
 ) -> dict[str, Any]:
     """Compute embedding and check semantic cache.
 
@@ -72,10 +73,21 @@ async def _cache_check(
     start = time.perf_counter()
 
     # Step 1: Get or compute dense embedding (prefer hybrid for efficiency)
-    embedding = await cache.get_embedding(query)
-    embeddings_cache_hit = embedding is not None
-    embedding_error = False
+    # If caller pre-computed the embedding (pre-agent cache check), reuse it directly.
+    embedding_error: bool = False
     embedding_error_type: str | None = None
+
+    if pre_computed_embedding:
+        logger.debug(
+            "_cache_check: reusing pre-computed embedding (%d dims)", len(pre_computed_embedding)
+        )
+        embedding = pre_computed_embedding
+        embeddings_cache_hit = False  # embedding came from caller, not Redis
+        # Still warm the embedding cache so downstream hits benefit
+        await cache.store_embedding(query, embedding)
+    else:
+        embedding = await cache.get_embedding(query)
+        embeddings_cache_hit = embedding is not None
 
     if embedding is None:
         try:
@@ -652,6 +664,7 @@ async def rag_pipeline(
     reranker: Any | None = None,
     llm: Any | None = None,
     agent_role: str | None = None,
+    pre_computed_embedding: list[float] | None = None,
 ) -> dict[str, Any]:
     """Execute RAG pipeline: cache → retrieve → grade → rerank → rewrite loop → cache_store.
 
@@ -692,6 +705,7 @@ async def rag_pipeline(
     query_embedding: list[float] | None = None
 
     # Step 1: Cache check (use cache_key = original user query)
+    # Pass pre_computed_embedding when caller already computed it (avoids redundant BGE-M3 call).
     cache_result = await _cache_check(
         cache_key,
         query_type,
@@ -700,6 +714,7 @@ async def rag_pipeline(
         embeddings=embeddings,
         latency_stages=latency_stages,
         agent_role=agent_role,
+        pre_computed_embedding=pre_computed_embedding,
     )
     # Embedding of cache_key — kept separately for _cache_store so rewrites don't overwrite it
     cache_embedding: list[float] | None = cache_result.get("query_embedding")
