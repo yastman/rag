@@ -652,3 +652,105 @@ class TestCacheStoreGuards:
             )
 
         mock_cache.store_semantic.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# History save
+# ---------------------------------------------------------------------------
+
+
+class TestHistorySave:
+    async def test_history_save_called_when_response_available(self):
+        """history_service.save_turn() is called when response is generated."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_history = AsyncMock()
+        mock_history.save_turn = AsyncMock(return_value=True)
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {"response": "Answer text", "response_sent": False}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            result = await run_client_pipeline(
+                user_text="Какие документы нужны?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+                history_service=mock_history,
+            )
+
+        mock_history.save_turn.assert_called_once_with(
+            user_id=1,
+            session_id="s1",
+            query="Какие документы нужны?",
+            response="Answer text",
+            input_type="text",
+            query_embedding=[0.1, 0.2],
+        )
+        assert result.answer == "Answer text"
+
+    async def test_history_save_skipped_when_no_history_service(self):
+        """history_service.save_turn() is NOT called when history_service=None."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {"response": "Answer text", "response_sent": False}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            result = await run_client_pipeline(
+                user_text="Какие документы нужны?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+                history_service=None,
+            )
+
+        assert result.answer == "Answer text"
+        assert result.response_sent is True
