@@ -82,6 +82,10 @@ def test_no_module_level_sys_modules_assignment():
             continue
 
         source = py_file.read_text(encoding="utf-8")
+        # Fast path: most files do not touch sys.modules at all.
+        if "sys.modules[" not in source:
+            continue
+
         try:
             tree = ast.parse(source, filename=str(py_file))
         except SyntaxError:

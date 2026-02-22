@@ -13,14 +13,17 @@ Retrieve relevant documents using combination of dense (semantic) and sparse (ke
 ## Architecture
 
 ```
-LangGraph retrieve_node:
-  Query → Dense Embedding (BGE-M3, from cache_check) + Sparse Embedding (BGE-M3)
-       → Qdrant Prefetch (dense + sparse)
-       → RRF Fusion
-       → grade_node → rerank_node (ColBERT or score-sort)
-       → Results
+Server-side ColBERT path (preferred, #569):
+  Query → Dense + Sparse + ColBERT embeddings (BGE-M3 /encode/hybrid)
+       → Qdrant nested prefetch: dense+sparse → RRF fusion → ColBERT MaxSim rescore
+       → grade_node → skip rerank (rerank_applied=True) → Results
 
-VPS:  BGE-M3 for dense + sparse + ColBERT rerank (local CPU)
+Fallback path (no ColBERT vectors):
+  Query → Dense + Sparse (BGE-M3)
+       → Qdrant Prefetch (dense + sparse) → RRF Fusion
+       → grade_node → rerank_node (CPU ColBERT or score-sort) → Results
+
+VPS:  BGE-M3 for dense + sparse + ColBERT (server-side via Qdrant Query API)
 Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
 ```
 
@@ -29,23 +32,44 @@ Dev:  Voyage dense + BM42 sparse + Voyage rerank (API)
 | File | Description |
 |------|-------------|
 | `src/retrieval/search_engines.py` | BaseSearchEngine ABC + variants |
-| `telegram_bot/services/qdrant.py` | QdrantService (async, gRPC, batch, group_by) |
-| `telegram_bot/graph/nodes/retrieve.py` | LangGraph retrieve_node (hybrid RRF + cache) |
+| `telegram_bot/services/qdrant.py` | QdrantService (async, gRPC, batch, group_by, `hybrid_search_rrf_colbert`) |
+| `telegram_bot/services/bge_m3_client.py` | BGEM3Client (`encode_colbert()` for ColBERT query vectors) |
+| `telegram_bot/integrations/embeddings.py` | BGEM3HybridEmbeddings (`aembed_hybrid_with_colbert()` 3-tuple) |
+| `telegram_bot/graph/nodes/retrieve.py` | LangGraph retrieve_node (hybrid RRF + ColBERT path + cache) |
 | `telegram_bot/graph/nodes/grade.py` | Score-based relevance grading (RRF threshold 0.005) |
 | `telegram_bot/graph/nodes/rerank.py` | Optional ColBERT + score-sort fallback, top-5 |
 | `telegram_bot/graph/nodes/rewrite.py` | LLM query reformulation, max 2 retries |
+
+## Server-Side ColBERT Reranking (#569)
+
+Replaces CPU-side ColBERT reranking (16s per query via HTTP to bge-m3-api) with server-side MaxSim reranking using pre-stored multivectors in Qdrant (~100-200ms).
+
+**Pipeline wiring:**
+- `cache_check_node` / `_cache_check()`: compute ColBERT query vectors via `aembed_hybrid_with_colbert()` (3-tuple: dense, sparse, colbert)
+- `retrieve_node` / `_hybrid_retrieve()`: call `qdrant.hybrid_search_rrf_colbert()` when `colbert_query` available
+- `route_grade` / grade step: skip rerank when `rerank_applied=True` (server-side ColBERT already applied)
+- **Fallback**: capability-based detection — falls back to regular `hybrid_search_rrf()` + CPU rerank when ColBERT unavailable
+
+**Qdrant nested prefetch structure:**
+```
+Prefetch L1: dense (limit=overfetch) + sparse (limit=overfetch)
+  → Prefetch L2: RRF fusion (limit=overfetch)
+    → Final: ColBERT MaxSim rescore (using="colbert", limit=top_k)
+```
+
+**RAGState field:** `colbert_query: list[list[float]] | None` — ColBERT multi-vector for query.
 
 ## LangGraph retrieve_node
 
 ```python
 from telegram_bot.graph.nodes.retrieve import retrieve_node
 
-# Flow: search cache → sparse cache → qdrant.hybrid_search_rrf() → cache results
+# Flow: search cache → sparse cache → ColBERT path or RRF fallback → cache results
 result = await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdrant=qdrant)
-# Returns: {documents, search_results_count, sparse_embedding, latency_stages}
+# Returns: {documents, search_results_count, sparse_embedding, rerank_applied, latency_stages}
 ```
 
-Dense embedding comes from `state["query_embedding"]` (set by cache_check_node).
+Dense embedding comes from `state["query_embedding"]` (set by cache_check_node). ColBERT vectors from `state["colbert_query"]`.
 
 **Re-embed path:** After rewrite (`query_embedding=None`), uses capability-based hybrid detection (`callable(getattr(embeddings, "aembed_hybrid", None)) + iscoroutinefunction`) to prefer single `/encode/hybrid` call. Falls back to parallel `asyncio.gather` for non-hybrid embeddings.
 
