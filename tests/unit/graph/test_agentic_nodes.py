@@ -70,27 +70,27 @@ class TestGradeNodeRRFScores:
         assert result["documents_relevant"] is False
 
     async def test_rrf_high_confidence_skips_rerank(self):
-        """RRF top-1 score 0.016 exceeds skip_rerank_threshold (0.012) → skip_rerank=True."""
+        """RRF fusion score 0.020 exceeds skip_rerank_threshold (0.018) → skip_rerank=True."""
         from telegram_bot.graph.nodes.grade import grade_node
 
         state = make_initial_state(user_id=1, session_id="s", query="квартиры")
         state["documents"] = [
-            {"score": 0.016, "text": "doc1"},
-            {"score": 0.015, "text": "doc2"},
+            {"score": 0.020, "text": "doc1"},
+            {"score": 0.018, "text": "doc2"},
         ]
         result = await grade_node(state)
         assert result["documents_relevant"] is True
         assert result["skip_rerank"] is True
-        assert result["grade_confidence"] == 0.016
+        assert result["grade_confidence"] == 0.020
 
     async def test_rrf_low_confidence_does_not_skip_rerank(self):
-        """RRF score 0.010 below skip_rerank_threshold (0.012) → skip_rerank=False."""
+        """RRF score 0.016 below skip_rerank_threshold (0.018) → skip_rerank=False."""
         from telegram_bot.graph.nodes.grade import grade_node
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["documents"] = [
-            {"score": 0.010, "text": "doc1"},
-            {"score": 0.008, "text": "doc2"},
+            {"score": 0.016, "text": "doc1"},
+            {"score": 0.014, "text": "doc2"},
         ]
         result = await grade_node(state)
         assert result["documents_relevant"] is True
