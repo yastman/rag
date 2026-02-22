@@ -1016,3 +1016,33 @@ class TestQdrantServiceInit:
             assert service._dense_vector_name == expected["dense"]
             assert service._sparse_vector_name == expected["sparse"]
             assert service._client is not None
+
+
+# ===========================================================================
+# api_key safety for insecure transport
+# ===========================================================================
+
+
+class TestQdrantApiKeySafety:
+    """api_key should be None for http:// URLs to avoid insecure warning."""
+
+    def test_api_key_stripped_for_http(self):
+        """HTTP URL + api_key -> api_key=None (no insecure warning)."""
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
+            QdrantService(url="http://localhost:6333", api_key="test-key")
+            call_kwargs = MockClient.call_args[1]
+            assert call_kwargs["api_key"] is None
+
+    def test_api_key_kept_for_https(self):
+        """HTTPS URL + api_key -> api_key passed through."""
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
+            QdrantService(url="https://qdrant.example.com:6333", api_key="test-key")
+            call_kwargs = MockClient.call_args[1]
+            assert call_kwargs["api_key"] == "test-key"
+
+    def test_no_api_key_no_change(self):
+        """No api_key -> None regardless of scheme."""
+        with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as MockClient:
+            QdrantService(url="http://localhost:6333", api_key=None)
+            call_kwargs = MockClient.call_args[1]
+            assert call_kwargs["api_key"] is None
