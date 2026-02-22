@@ -6,22 +6,29 @@ paths: "tests/**/*.py"
 
 Coverage: ~85% unit. Full audit: `logs/full-pipeline-coverage-audit.txt`
 
-**Markers:** `legacy_api` — tests for pre-LangGraph API (excluded from CI).
+**Markers:**
+
+| Marker | Meaning |
+|--------|---------|
+| `legacy_api` | Pre-LangGraph API tests — excluded from CI |
+| `requires_extras` | Needs optional extras (voice, ingest, eval) |
+| `slow` | Heavy tests — nightly only |
 
 ## Unit Tests
 
 ```bash
-# Sequential (21 min)
-uv run pytest tests/unit/ -v
-uv run pytest tests/unit/test_settings.py -v          # Single module
-uv run pytest tests/unit/test_file.py::test_method -v # Single test
+# Parallel (recommended — xdist worksteal)
+uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
+make test-unit        # Same as above via Makefile
+make test-unit-core   # Also skips requires_extras + slow
 
-# Parallel with xdist (5 min, 4.22x speedup, safe for CI)
-uv run pytest tests/unit/ -n auto
+# Single module / test
+uv run pytest tests/unit/test_settings.py -v
+uv run pytest tests/unit/test_file.py::test_method -v
 
 # With coverage
-uv run pytest tests/unit/ --cov=telegram_bot/services --cov-report=term-missing
-make test-cov                                          # Opens htmlcov/index.html
+uv run pytest tests/unit/ --cov=src --cov=telegram_bot --cov-report=term-missing
+make test-cov         # Full coverage with HTML report (htmlcov/index.html)
 ```
 
 **pytest-timeout:** All tests have 30s default timeout (pyproject.toml). Override per-test with `@pytest.mark.timeout(60)`.
@@ -101,70 +108,34 @@ uv run pytest tests/unit/test_validate_queries.py tests/unit/test_validate_aggre
 | `test_validate_queries.py` | 10 | Query sets, collection mapping, warmup/cache selection |
 | `test_validate_aggregates.py` | 8 | p50/p95, phase split, score_rate, node latencies |
 
-## CI Pipeline: Sharded Unit Tests (pytest-split)
+## CI Pipeline (`.github/workflows/ci.yml`)
 
-CI splits unit tests into **4 parallel shards** using `pytest-split` for ~4x faster feedback.
+CI has **one job: `checks`** (self-hosted runner). Runs lint + format + type-check only.
 
-### How it works
+| Step | Command |
+|------|---------|
+| Ruff lint | `ruff check src/ telegram_bot/ tests/` |
+| Ruff format | `ruff format --check src/ telegram_bot/ tests/` |
+| Type check | `mypy src/ telegram_bot/ --ignore-missing-imports` |
 
-1. `.test_durations` (committed) contains per-test timing data
-2. `pytest-split` uses durations to distribute tests evenly across shards
-3. Each shard runs with `pytest-xdist` (`-n auto`) for intra-shard parallelism
-4. On `main` branch, durations are re-measured and cached for future runs
+Install: `uv sync --frozen` (base deps).
 
-### CI matrix
+**Tests run locally**, not in CI. Pre-push gate: `make check && make test-unit`.
 
-```yaml
-strategy:
-  fail-fast: false
-  matrix:
-    group: [1, 2, 3, 4]
-# Each shard: --splits 4 --group ${{ matrix.group }} -n auto --dist loadscope
-```
+## pytest-split: Local Sharding
 
-### CI Dependency Profile
-
-Unit/integration/baseline CI jobs must install optional runtime dependencies used by imports in the test graph:
+`pytest-split` (installed) + `.test_durations` enable balanced local shards:
 
 ```bash
-uv sync --frozen --extra voice --extra ingest --extra eval
-```
+# Regenerate .test_durations after major test changes
+make test-store-durations   # or:
+uv run pytest tests/unit/ --store-durations -n auto --timeout=30 -m "not legacy_api" -q
 
-Do not use `--all-extras` for this profile unless docs tooling is required.
-If new imports are added to the suite, update the preflight module list in `.github/workflows/ci.yml`.
-
-### Updating `.test_durations`
-
-Regenerate after adding/removing tests or significant refactors:
-
-```bash
-uv run pytest tests/unit/ --store-durations --timeout=30 -m "not legacy_api" -q
-```
-
-This overwrites `.test_durations` with fresh timing data. Commit the updated file.
-
-On `main` branch, CI automatically re-measures and caches durations.
-
-### Running sharded tests locally
-
-```bash
-# Run a specific shard (e.g., shard 2 of 4)
+# Run shard 2 of 4 locally
 uv run pytest tests/unit/ --splits 4 --group 2 -n auto --dist loadscope --timeout=30 -m "not legacy_api"
-
-# Run all 4 shards sequentially (for debugging split balance)
-for g in 1 2 3 4; do
-  echo "=== Shard $g ==="
-  uv run pytest tests/unit/ --splits 4 --group $g -n auto --dist loadscope --timeout=30 -m "not legacy_api" -q
-done
 ```
 
-### Integration tests in CI
-
-Graph path tests run as a separate CI job (no Docker, ~5s):
-
-```bash
-uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
-```
+Commit updated `.test_durations` after regeneration.
 
 ## Notes
 
@@ -182,7 +153,7 @@ uv run pytest tests/integration/test_graph_paths.py -v --timeout=30
 | `pytest-cov>=5.0.0` | Coverage reporting |
 | `pytest-httpx>=0.35.0` | HTTP request mocking |
 | `pytest-xdist>=3.8.0` | Parallel test execution (`-n auto`) |
-| `pytest-timeout>=2.3.0` | Per-test timeout (default 30s) |
+| `pytest-timeout>=2.4.0` | Per-test timeout (default 30s) |
 | `pytest-split>=0.11.0` | CI shard splitting by test duration |
 
 ### HTTP Mocking with pytest-httpx
