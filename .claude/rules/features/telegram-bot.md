@@ -174,6 +174,7 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `bge_m3_timeout` | `BGE_M3_TIMEOUT` | `120.0` | BGE-M3 API timeout (seconds) |
 | `guard_mode` | `GUARD_MODE` | `hard` | Content filter mode: hard (block), soft (flag+continue), log (log only) |
 | `content_filter_enabled` | `CONTENT_FILTER_ENABLED` | `true` | Enable/disable guard_node entirely |
+| `show_sources` | `SHOW_SOURCES` | `false` | Source attribution footer + inline citations in responses (#225) |
 
 ## Service Dependencies (initialized in PropertyBot.__init__)
 
