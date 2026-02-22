@@ -306,7 +306,7 @@ async def generate_response(
     system_prompt = ensure_history_instruction(system_prompt)
 
     # Citation instruction (#225) — only when sources are enabled
-    if getattr(config, "show_sources", True) and docs:
+    if getattr(config, "show_sources", False) and docs:
         separator = "\n" if system_prompt.endswith("\n") else "\n\n"
         system_prompt = f"{system_prompt}{separator}{citation_instruction}"
 
