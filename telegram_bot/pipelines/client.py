@@ -12,7 +12,7 @@ from typing import Any
 
 from telegram_bot.agents.rag_pipeline import rag_pipeline
 from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
-from telegram_bot.observability import get_client
+from telegram_bot.observability import get_client, observe
 from telegram_bot.scoring import score, write_langfuse_scores
 from telegram_bot.services.generate_response import generate_response
 from telegram_bot.services.history_service import HistoryService
@@ -133,6 +133,7 @@ async def _send_markdown_chunks(
 # ---------------------------------------------------------------------------
 
 
+@observe(name="client-direct-pipeline", capture_input=False, capture_output=False)
 async def run_client_pipeline(
     *,
     user_text: str,
