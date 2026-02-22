@@ -136,6 +136,20 @@ result = await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdran
 # Flow: search cache → sparse cache → qdrant.hybrid_search_rrf() → cache results
 ```
 
+## Cache Store Guard (client pipeline)
+
+Client pipeline (`pipelines/client.py`) guards semantic cache STORE with multiple conditions:
+
+| Guard | Purpose |
+|-------|---------|
+| `query_type in _PIPELINE_STORE_TYPES` | Only FAQ, GENERAL, ENTITY (not STRUCTURED) |
+| `not _is_contextual_query(user_text)` | Skip follow-ups ("подробнее", "первый", etc.) |
+| `grade_confidence >= config.relevance_threshold_rrf` | RRF-scale threshold (default 0.005) |
+| `bool(documents_list)` | Must have retrieved documents |
+| `not cache_hit` | Don't re-store cached responses |
+
+**Important:** `grade_confidence` is a RRF score (max ~0.016, scale `1/(k+rank)` where k=60). The store threshold uses `config.relevance_threshold_rrf` (0.005) — NOT cosine similarity scale. This is distinct from the `distance_threshold` used for cache CHECK (cosine distance [0-2]).
+
 ## Key Details
 
 **Query normalization for cache keys:** `_normalize_query_for_cache()` lowercases, strips trailing punctuation — `"ВНЖ?"` and `"внж"` hash to the same key, avoiding duplicate API calls.
@@ -166,3 +180,4 @@ pytest tests/unit/graph/test_retrieve_node.py -v          # 5 tests
 | False positive hits | Lower threshold in `cache_thresholds` |
 | High miss rate | Raise threshold or increase TTL |
 | Semantic cache timeout | Check Redis latency, adjust `cache_timeout` (default 0.3s) |
+| Cache never stores (always MISS) | Check store guard threshold — must be on RRF scale (~0.005), not cosine scale |

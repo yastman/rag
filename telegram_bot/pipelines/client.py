@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from numbers import Real
 from typing import Any
 
 from telegram_bot.agents.rag_pipeline import rag_pipeline
@@ -37,8 +38,8 @@ _CONTEXTUAL_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Minimum grade_confidence to allow cache store.
-_CONFIDENCE_THRESHOLD = 0.5
+# Fallback confidence threshold for semantic cache store guard.
+_CONFIDENCE_THRESHOLD = 0.005
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +276,10 @@ async def run_client_pipeline(
     # Cache store — apply guards: type, contextual, confidence, source presence.
     store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
     grade_confidence = float(result.get("grade_confidence", 0.0))
+    raw_threshold = getattr(config, "relevance_threshold_rrf", _CONFIDENCE_THRESHOLD)
+    confidence_threshold = (
+        float(raw_threshold) if isinstance(raw_threshold, Real) else _CONFIDENCE_THRESHOLD
+    )
 
     should_store = (
         cache
@@ -284,7 +289,7 @@ async def run_client_pipeline(
         and isinstance(store_vector, list)
         and bool(store_vector)
         and not _is_contextual_query(user_text)
-        and grade_confidence >= _CONFIDENCE_THRESHOLD
+        and grade_confidence >= confidence_threshold
         and bool(documents_list)
     )
 
