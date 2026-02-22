@@ -55,6 +55,10 @@ emb = BGEM3HybridEmbeddings(base_url="http://bge-m3:8000", timeout=120.0)
 # Returns (dense, sparse) tuple in one /encode/hybrid call
 dense, sparse = await emb.aembed_hybrid("search text")    # (list[float], dict)
 
+# Returns (dense, sparse, colbert) 3-tuple (#569)
+dense, sparse, colbert = await emb.aembed_hybrid_with_colbert("search text")
+# colbert: list[list[float]] — multi-vector for Qdrant MaxSim rescore
+
 # Also works as LangChain Embeddings (dense only)
 vector = await emb.aembed_query("search text")             # list[float], 1024-dim
 ```
@@ -106,8 +110,9 @@ Wraps BGE-M3 `/encode/sparse` endpoint (fixed from legacy `/encode`). Returns `l
 |----------|---------|---------|
 | `/encode/dense` | `dense_vecs` | BGEM3Embeddings |
 | `/encode/sparse` | `lexical_weights` | BGEM3SparseEmbeddings |
-| `/encode/hybrid` | `dense_vecs` + `lexical_weights` | BGEM3HybridEmbeddings (preferred) |
-| `/rerank` | ColBERT scores | ColbertRerankerService |
+| `/encode/hybrid` | `dense_vecs` + `lexical_weights` (+ optional `colbert_vecs`) | BGEM3HybridEmbeddings (preferred) |
+| `/encode/colbert` | `colbert_vecs` | BGEM3Client.encode_colbert() (#569) |
+| `/rerank` | ColBERT scores | ColbertRerankerService (CPU fallback) |
 
 ## Dependencies
 
