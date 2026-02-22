@@ -2471,3 +2471,54 @@ class TestPreAgentCacheCheck:
         assert score_map["pre_agent_cache_hit"]["data_type"] == "BOOLEAN"
         assert score_map["query_type"]["value"] == "FAQ"
         assert score_map["query_type"]["data_type"] == "CATEGORICAL"
+
+    async def test_pre_agent_cache_skip_off_topic(self, mock_config):
+        """OFF_TOPIC query type skips pre-agent cache entirely (#563)."""
+        bot, _ = _create_bot(mock_config)
+        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="OFF_TOPIC"),
+        ):
+            message = _make_text_message("Как дела?")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._embeddings.aembed_query.assert_not_called()
+        bot._cache.check_semantic.assert_not_called()
+        mock_agent.ainvoke.assert_called_once()
+
+    async def test_pre_agent_cache_hit_respects_role_isolation(self, mock_config):
+        """Cache check passes correct agent_role to check_semantic (#563)."""
+        bot, _ = _create_bot(mock_config)
+        self._setup_cache_mocks(bot, cached_response=None)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("Цены на квартиры?")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        check_calls = bot._cache.check_semantic.call_args_list
+        assert len(check_calls) >= 1
+        assert check_calls[0].kwargs.get("agent_role") == "client"
