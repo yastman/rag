@@ -129,6 +129,16 @@ def _build_fallback_response(documents: list[dict[str, Any]]) -> str:
     return fallback
 
 
+def _coerce_positive_number(value: Any) -> float | None:
+    """Normalize provider token metrics to a positive numeric value."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        num = float(value)
+        return num if num > 0 else None
+    return None
+
+
 def _select_recent_history(
     messages: list[Any], max_messages: int = _MAX_HISTORY_MESSAGES
 ) -> list[Any]:
@@ -158,7 +168,7 @@ async def _generate_streaming(
     llm_messages: list[dict[str, str]],
     message: Any,
     max_tokens: int = 0,
-) -> tuple[str, str, float, int | None, Any]:
+) -> tuple[str, str, float, float | None, Any]:
     """Stream LLM response directly to Telegram via message editing."""
     sent_msg = await message.answer(_STREAM_PLACEHOLDER)
 
@@ -166,7 +176,7 @@ async def _generate_streaming(
     last_edit = 0.0
     ttft_ms = 0.0
     actual_model = config.llm_model
-    completion_tokens: int | None = None
+    completion_tokens: float | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
     stream = await llm.chat.completions.create(
@@ -183,8 +193,9 @@ async def _generate_streaming(
         async for chunk in stream:
             if hasattr(chunk, "usage") and chunk.usage is not None:
                 ct = getattr(chunk.usage, "completion_tokens", None)
-                if ct is not None:
-                    completion_tokens = ct
+                maybe_tokens = _coerce_positive_number(ct)
+                if maybe_tokens is not None:
+                    completion_tokens = maybe_tokens
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -329,7 +340,7 @@ async def generate_response(
     actual_model = config.llm_model
     ttft_ms = 0.0
     response_obj: Any | None = None
-    completion_tokens: int | None = None
+    completion_tokens: float | None = None
     stream_recovery = False
     hard_timeout = False
     sent_msg: Any = None
@@ -374,6 +385,7 @@ async def generate_response(
                         exc_info=True,
                     )
                     sent_msg = getattr(stream_exc, "sent_msg", None)
+                    t_llm_start = time.monotonic()
                     response_obj = await llm.chat.completions.create(
                         model=config.llm_model,
                         messages=llm_messages,
@@ -381,10 +393,17 @@ async def generate_response(
                         max_tokens=max_tokens,
                         name="generate-answer",  # type: ignore[call-overload]
                     )
+                    t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
                     actual_model = (
                         getattr(response_obj, "model", config.llm_model) or config.llm_model
                     )
+                    ttft_ms = (t_llm_end - t_llm_start) * 1000
+                    usage = getattr(response_obj, "usage", None)
+                    if usage is not None:
+                        completion_tokens = _coerce_positive_number(
+                            getattr(usage, "completion_tokens", None)
+                        )
                     stream_recovery = True
                     delivered = False
                     if sent_msg is not None:
@@ -408,6 +427,7 @@ async def generate_response(
                         level="WARNING",
                         status_message="Streaming failed, using non-streaming fallback",
                     )
+                    t_llm_start = time.monotonic()
                     response_obj = await llm.chat.completions.create(
                         model=config.llm_model,
                         messages=llm_messages,
@@ -415,10 +435,17 @@ async def generate_response(
                         max_tokens=max_tokens,
                         name="generate-answer",  # type: ignore[call-overload]
                     )
+                    t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
                     actual_model = (
                         getattr(response_obj, "model", config.llm_model) or config.llm_model
                     )
+                    ttft_ms = (t_llm_end - t_llm_start) * 1000
+                    usage = getattr(response_obj, "usage", None)
+                    if usage is not None:
+                        completion_tokens = _coerce_positive_number(
+                            getattr(usage, "completion_tokens", None)
+                        )
                     stream_recovery = True
         else:
             # Non-streaming path
@@ -437,7 +464,9 @@ async def generate_response(
             ttft_ms = (t_llm_end - t_llm_start) * 1000
             usage = getattr(response_obj, "usage", None)
             if usage is not None:
-                completion_tokens = getattr(usage, "completion_tokens", None)
+                completion_tokens = _coerce_positive_number(
+                    getattr(usage, "completion_tokens", None)
+                )
     except Exception as e:
         logger.exception("generate_response: LLM call failed, using fallback")
         lf_client.update_current_span(
