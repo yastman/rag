@@ -68,7 +68,7 @@ CHITCHAT sub-categories: greeting, thanks, bot_info, farewell — each with loca
 
 ***REMOVED******REMOVED*** respond_node (LangGraph)
 
-Sends `state["response"]` via `message.answer()` with Markdown `parse_mode`. Falls back to plain text on parse error.
+Sends `state["response"]` via `message.answer()` with Markdown `parse_mode`. Falls back to plain text on parse error. Source attribution (`SHOW_SOURCES`, default `false`) appends footnotes when enabled.
 
 ***REMOVED******REMOVED*** Query Preprocessing
 
