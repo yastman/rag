@@ -435,6 +435,83 @@ class CacheLayerManager:
         except Exception as e:
             logger.error("Conversation clear error: %s: %s", type(e).__name__, e)
 
+    # ========== Cache Clearing ==========
+
+    async def clear_by_tier(self, tier: str) -> int:
+        """Clear all Redis keys for the given exact cache tier via SCAN + DELETE.
+
+        Args:
+            tier: Cache tier name (embeddings, sparse, analysis, search, rerank).
+                Passing "search" also clears the "rerank" tier (logically linked).
+
+        Returns:
+            Number of deleted keys. Returns 0 if Redis is unavailable.
+        """
+        if not self.redis:
+            return 0
+
+        tiers_to_clear = [tier]
+        if tier == "search":
+            tiers_to_clear.append("rerank")
+
+        total_deleted = 0
+        try:
+            for t in tiers_to_clear:
+                pattern = f"{t}:{CACHE_VERSION}:*"
+                keys = [key async for key in self.redis.scan_iter(match=pattern)]
+                if keys:
+                    deleted = await self.redis.delete(*keys)
+                    total_deleted += deleted
+                    logger.info("Cleared %d keys for tier '%s'", deleted, t)
+                else:
+                    logger.debug("No keys found for tier '%s' (pattern: %s)", t, pattern)
+        except Exception as e:
+            logger.error("Cache clear error (tier=%s): %s: %s", tier, type(e).__name__, e)
+
+        return total_deleted
+
+    async def clear_semantic_cache(self) -> int:
+        """Clear all entries in the semantic cache.
+
+        Uses redisvl API (aclear/clear) if available, otherwise falls back
+        to Redis SCAN + DELETE on the semantic cache key pattern.
+
+        Returns:
+            1 if cleared successfully, 0 if semantic cache is unavailable or on error.
+        """
+        if not self.semantic_cache:
+            return 0
+
+        try:
+            if hasattr(self.semantic_cache, "aclear"):
+                await self.semantic_cache.aclear()
+            elif hasattr(self.semantic_cache, "clear"):
+                self.semantic_cache.clear()
+            elif self.redis:
+                pattern = f"sem:{CACHE_VERSION}:*"
+                keys = [key async for key in self.redis.scan_iter(match=pattern)]
+                if keys:
+                    await self.redis.delete(*keys)
+                    logger.info("Cleared %d semantic cache keys via SCAN", len(keys))
+            logger.info("Semantic cache cleared")
+            return 1
+        except Exception as e:
+            logger.error("Semantic cache clear error: %s: %s", type(e).__name__, e)
+            return 0
+
+    async def clear_all_caches(self) -> dict[str, int]:
+        """Clear all cache tiers (semantic + all exact tiers).
+
+        Returns:
+            Dict mapping tier name to number of deleted keys.
+            Semantic returns 1 on success, 0 on failure/unavailable.
+        """
+        results: dict[str, int] = {}
+        results["semantic"] = await self.clear_semantic_cache()
+        for tier in ("embeddings", "sparse", "analysis", "search", "rerank"):
+            results[tier] = await self.clear_by_tier(tier)
+        return results
+
     # ========== Metrics ==========
 
     def get_metrics(self) -> dict[str, Any]:
