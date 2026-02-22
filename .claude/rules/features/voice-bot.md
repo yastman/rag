@@ -12,10 +12,10 @@ Telegram /call → LiveKit API (dispatch + SIP call)
 LiveKit SIP Server → lifecell trunk (csbc.lifecell.ua:5061)
                      ↓
 LiveKit Voice Agent (Python):
-  - ElevenLabs Scribe v2 RT (STT, ~80ms)
-  - LLM via LiteLLM (gpt-4o-mini)
+  - ElevenLabs STT (`scribe_v2_realtime`, ~80ms)
+  - LLM via LiteLLM (`LLM_MODEL`, default `gpt-4o-mini`) + Silero VAD
   - @function_tool → RAG API (FastAPI + LangGraph)
-  - ElevenLabs Flash v2.5 (TTS, ~75ms)
+  - ElevenLabs TTS (`eleven_turbo_v2_5`, voice_id via `ELEVENLABS_VOICE_ID`)
   - Langfuse via OTEL
                      ↓
 PostgreSQL (call transcripts)
