@@ -1,12 +1,11 @@
-# telegram_bot/observability.py
-"""Langfuse observability with PII masking and graceful disable.
+"""Langfuse observability helpers with runtime initialization.
 
-When LANGFUSE_SECRET_KEY is not set, all Langfuse functionality is disabled:
-- @observe decorators become no-ops (zero overhead)
-- get_client() returns a stub that silently ignores all calls
-- get_langfuse_client() returns None
+This module always exposes the real Langfuse SDK APIs (`observe`, `get_client`,
+`propagate_attributes`) and relies on SDK-native graceful degradation when
+credentials are unavailable.
 
-Set LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY to enable tracing.
+Use `initialize_langfuse()` after loading runtime config (e.g. BotConfig) to
+ensure credentials from `.env`/environment are applied before first tracing.
 """
 
 import logging
@@ -14,14 +13,28 @@ import os
 import re
 from typing import Any
 
+from langfuse import (
+    Langfuse,
+)
+from langfuse import (
+    get_client as _real_get_client,
+)
+from langfuse import (
+    observe as _real_observe,
+)
+from langfuse import (
+    propagate_attributes as _real_propagate,
+)
+
 
 logger = logging.getLogger(__name__)
 
-LANGFUSE_ENABLED = bool(os.getenv("LANGFUSE_SECRET_KEY"))
+_langfuse_client: Langfuse | None = None
+_langfuse_init_attempted = False
 
 
 # ---------------------------------------------------------------------------
-# PII masking (always available, used when Langfuse IS enabled)
+# PII masking (always available)
 # ---------------------------------------------------------------------------
 
 
@@ -55,113 +68,102 @@ def mask_pii(data: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# No-op stubs (used when Langfuse is disabled)
+# Public SDK exports
 # ---------------------------------------------------------------------------
 
-
-class _NullLangfuseClient:
-    """Stub that silently ignores all Langfuse client method calls."""
-
-    def update_current_trace(self, **kwargs: Any) -> None:
-        pass
-
-    def update_current_span(self, **kwargs: Any) -> None:
-        pass
-
-    def update_current_generation(self, **kwargs: Any) -> None:
-        pass
-
-    def score_current_trace(self, **kwargs: Any) -> None:
-        pass
-
-    def create_score(self, **kwargs: Any) -> None:
-        pass
-
-    def get_current_trace_id(self) -> str:
-        return ""
-
-    def flush(self) -> None:
-        pass
+observe = _real_observe
+get_client = _real_get_client
+propagate_attributes = _real_propagate
 
 
-_null_client = _NullLangfuseClient()
+def _resolve_config_value(explicit: str | None, env_name: str) -> str | None:
+    """Resolve explicit override first, then environment variable."""
+    value = explicit if explicit is not None else os.getenv(env_name)
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
 
 
-def _noop_observe(**kwargs: Any):
-    """No-op @observe decorator — returns the function unchanged."""
+def initialize_langfuse(
+    *,
+    public_key: str | None = None,
+    secret_key: str | None = None,
+    host: str | None = None,
+    force: bool = False,
+) -> Langfuse | None:
+    """Initialize a Langfuse client after runtime config is loaded.
 
-    def decorator(func):
-        return func
+    Returns None when credentials are missing or client creation fails.
+    """
+    global _langfuse_client
+    global _langfuse_init_attempted
 
-    return decorator
+    if _langfuse_client is not None and not force:
+        return _langfuse_client
+
+    resolved_public_key = _resolve_config_value(public_key, "LANGFUSE_PUBLIC_KEY")
+    resolved_secret_key = _resolve_config_value(secret_key, "LANGFUSE_SECRET_KEY")
+    resolved_host = _resolve_config_value(host, "LANGFUSE_HOST")
+
+    if not resolved_public_key or not resolved_secret_key:
+        _langfuse_client = None
+        if force or not _langfuse_init_attempted:
+            logger.info("Langfuse disabled (missing LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY)")
+        _langfuse_init_attempted = True
+        return None
+
+    kwargs: dict[str, Any] = {
+        "public_key": resolved_public_key,
+        "secret_key": resolved_secret_key,
+        "mask": mask_pii,  # type: ignore[arg-type]  # MaskFunction typing mismatch
+        "flush_at": 50,
+        "flush_interval": 5,
+    }
+    if resolved_host:
+        kwargs["host"] = resolved_host
+
+    try:
+        _langfuse_client = Langfuse(**kwargs)
+        _langfuse_init_attempted = True
+        logger.info("Langfuse observability initialized")
+        return _langfuse_client
+    except Exception:
+        logger.warning("Failed to initialize Langfuse client", exc_info=True)
+        _langfuse_client = None
+        _langfuse_init_attempted = True
+        return None
 
 
-def _noop_get_client() -> _NullLangfuseClient:
-    """Return the null client stub."""
-    return _null_client
+def get_langfuse_client() -> Langfuse | None:
+    """Get initialized Langfuse client, lazy-initializing from env when possible."""
+    if _langfuse_client is not None:
+        return _langfuse_client
+    return initialize_langfuse()
 
 
-# ---------------------------------------------------------------------------
-# Public API — conditional on LANGFUSE_ENABLED
-# ---------------------------------------------------------------------------
+def create_callback_handler(
+    *,
+    trace_context: Any | None = None,
+    update_trace: bool = False,
+):
+    """Create Langfuse CallbackHandler for create_agent integration.
 
-if LANGFUSE_ENABLED:
-    from langfuse import Langfuse
-    from langfuse import get_client as _real_get_client
-    from langfuse import observe as _real_observe
-    from langfuse import propagate_attributes as _real_propagate
+    Returns None when Langfuse is not configured or handler init fails.
+    """
+    if get_langfuse_client() is None:
+        return None
 
-    observe = _real_observe
-    get_client = _real_get_client
-    propagate_attributes = _real_propagate
-
-    def get_langfuse_client() -> Langfuse:
-        """Get Langfuse client with PII masking enabled."""
-        return Langfuse(
-            mask=mask_pii,  # type: ignore[arg-type]  # MaskFunction stub mismatch
-            flush_at=50,
-            flush_interval=5,
-        )
-
-    def create_callback_handler(
-        *,
-        trace_context: Any | None = None,
-        update_trace: bool = False,
-    ):
-        """Create a Langfuse CallbackHandler for create_agent integration.
-
-        Returns a NEW handler per invocation. Use inside propagate_attributes()
-        context to inherit session_id, user_id, tags automatically (SDK v3).
-        """
+    try:
         from langfuse.langchain import CallbackHandler
 
         return CallbackHandler(
             trace_context=trace_context,
             update_trace=update_trace,
         )
-
-    logger.info("Langfuse observability ENABLED")
-else:
-    from contextlib import contextmanager
-
-    observe = _noop_observe  # type: ignore[assignment]  # noop stub for disabled Langfuse
-    get_client = _noop_get_client  # type: ignore[assignment]  # noop stub for disabled Langfuse
-
-    @contextmanager
-    def _noop_propagate(**kwargs: Any):
-        yield
-
-    propagate_attributes = _noop_propagate  # type: ignore[assignment]  # noop stub
-
-    def get_langfuse_client() -> None:  # type: ignore[misc]  # conditional return type
-        """Langfuse disabled — return None."""
-        return
-
-    def create_callback_handler(**kwargs: Any):  # type: ignore[misc]  # noop stub
-        """Noop when Langfuse disabled."""
-        return
-
-    logger.info("Langfuse observability DISABLED (LANGFUSE_SECRET_KEY not set)")
+    except Exception:
+        logger.warning("Failed to create Langfuse CallbackHandler", exc_info=True)
+        return None
 
 
 def traced_pipeline(
@@ -180,3 +182,11 @@ def traced_pipeline(
         user_id=user_id,
         tags=tags or [],
     )
+
+
+def _reset_langfuse_client_for_tests() -> None:
+    """Reset module-level client cache (test-only helper)."""
+    global _langfuse_client
+    global _langfuse_init_attempted
+    _langfuse_client = None
+    _langfuse_init_attempted = False
