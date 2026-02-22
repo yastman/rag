@@ -295,6 +295,21 @@ class BGEM3SyncClient:
             processing_time = data.get("processing_time")
         return SparseResult(weights=all_weights, processing_time=processing_time)
 
+    def encode_colbert(self, texts: list[str]) -> ColbertResult:
+        """Encode texts to ColBERT multivectors (sync)."""
+        if not texts:
+            return ColbertResult(colbert_vecs=[])
+        resp = self._client.post(
+            f"{self.base_url}/encode/colbert",
+            json={"texts": texts, "max_length": self.max_length},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return ColbertResult(
+            colbert_vecs=data["colbert_vecs"],
+            processing_time=data.get("processing_time"),
+        )
+
     def close(self) -> None:
         """Close the underlying httpx client."""
         self._client.close()
