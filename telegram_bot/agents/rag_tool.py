@@ -129,6 +129,12 @@ async def rag_search(
                 lf.update_current_span(output={"response_length": len(context)})
                 return context
 
+        # Reuse pre-computed embedding stashed by pre-agent cache check (#563)
+        result_store = configurable.get("rag_result_store")
+        pre_computed_embedding: list[float] | None = None
+        if isinstance(result_store, dict):
+            pre_computed_embedding = result_store.get("cache_key_embedding")
+
         invoke_start = time.perf_counter()
         result = await rag_pipeline(
             query,
@@ -143,6 +149,7 @@ async def rag_search(
             reranker=ctx.reranker if ctx else None,
             llm=ctx.llm if ctx else None,
             agent_role=ctx.role if ctx else None,
+            pre_computed_embedding=pre_computed_embedding,
         )
         pipeline_wall_ms = (time.perf_counter() - invoke_start) * 1000
 
