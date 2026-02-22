@@ -32,19 +32,29 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/main.py` | Entry point |
 | `telegram_bot/config.py` | BotConfig (pydantic-settings BaseSettings) |
 | `telegram_bot/agents/rag_pipeline.py` | 6-step async RAG pipeline: `_cache_check → _hybrid_retrieve → _grade_documents → _rerank → _rewrite_query → _cache_store` (#442) |
-| `telegram_bot/agents/agent.py` | `create_bot_agent()` — wraps `langchain.agents.create_agent` SDK (#413) |
+| `telegram_bot/agents/agent.py` | `create_bot_agent()` — `langchain.agents.create_agent` SDK, `ChatOpenAI` client, `get_prompt` (#413) |
 | `telegram_bot/agents/context.py` | `BotContext` dataclass — DI via `context_schema` into tools |
 | `telegram_bot/agents/rag_tool.py` | `rag_search` @tool — wraps `rag_pipeline()` (async functions) |
 | `telegram_bot/agents/history_tool.py` | `history_search` @tool — wraps 4-node history sub-graph |
 | `telegram_bot/agents/crm_tools.py` | 8 CRM @tools for Kommo API (get/create/update deals, contacts, notes, tasks) |
+| `telegram_bot/agents/hitl.py` | `hitl_guard()` — LangGraph `interrupt()` for HITL confirmation on CRM write ops (#443) |
+| `telegram_bot/agents/manager_tools.py` | `build_tools_for_role()` — role-gating (client vs manager), `sync_pending_lead_scores` tool |
+| `telegram_bot/agents/utility_tools.py` | `mortgage_calculator`, `daily_summary`, `handoff` @tools (#445) |
 | `telegram_bot/agents/history_graph/` | History sub-graph: guard → retrieve → grade → rewrite → summarize (5 nodes, LangGraph) |
 | `telegram_bot/graph/graph.py` | `build_graph()` — 11-node StateGraph (**voice path only**) |
 | `telegram_bot/graph/state.py` | RAGState TypedDict (25 fields incl. voice_audio, stt_text, input_type) + `make_initial_state()` |
 | `telegram_bot/graph/config.py` | GraphConfig dataclass (service factories, pipeline tuning params) |
 | `telegram_bot/graph/nodes/` | 9 node modules — used by voice LangGraph and shared by rag_pipeline.py |
 | `telegram_bot/observability.py` | `get_client()`, `@observe`, `propagate_attributes`, `create_callback_handler`, PII masking |
+| `telegram_bot/integrations/prompt_manager.py` | `get_prompt()` — Langfuse Prompt Management with fallback templates + TTL probe cache |
+| `telegram_bot/integrations/event_stream.py` | EventStream for graph→bot communication |
+| `telegram_bot/services/user_service.py` | `UserService` — user CRUD (asyncpg), locale detection |
+| `telegram_bot/services/session_summary.py` | `SessionSummary` — structured CRM note generation from dialog (LLM, Pydantic) |
+| `telegram_bot/services/response_style_detector.py` | `ResponseStyleDetector` — zero-latency regex style/difficulty classifier (#129) |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
+| `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection from user DB record |
+| `telegram_bot/dialogs/` | aiogram-dialog menus: `client_menu`, `crm_submenu`, `faq`, `funnel`, `manager_menu`, `settings` |
 
 ## Text RAG Pipeline (6 async steps, #442)
 
@@ -176,8 +186,12 @@ Builds tools list (`rag_search` + optional `history_search` + optional 8 CRM too
 - `rag_search` — wraps `rag_pipeline()` (6-step async functions), @observe("tool-rag-search")
 - `history_search` — wraps `build_history_graph().ainvoke()` (5-node sub-graph incl. guard), @observe("tool-history-search")
 - 8 CRM tools — `crm_get_deal`, `crm_create_lead`, `crm_update_lead`, `crm_upsert_contact`, `crm_add_note`, `crm_create_task`, `crm_link_contact_to_deal`, `crm_get_contacts`
+- Manager tools — `sync_pending_lead_scores`, role-gated via `build_tools_for_role(role=ctx.role, ...)`
+- Utility tools — `mortgage_calculator`, `daily_summary`, `handoff` (#445)
 
-**Runtime context:** Tools receive `BotContext` via `config["configurable"]["bot_context"]` (context_schema DI).
+**HITL (CRM write ops):** CRM write tools call `hitl_guard(tool_name, preview, args)` → `interrupt()` pauses graph → bot sends inline keyboard → user approves/cancels → `Command(resume={"action": "approve"|"cancel"})`.
+
+**Runtime context:** Tools receive `BotContext` via `config["configurable"]["bot_context"]` (context_schema DI). Role (`ctx.role`) gates manager tools.
 
 **Score writing:** RAG pipeline scores (14 metrics) are written inside `rag_search` tool via `write_langfuse_scores()` from `telegram_bot/scoring.py`.
 
@@ -191,6 +205,7 @@ When `STREAMING_ENABLED=true` (default), `generate_node` streams LLM output dire
 
 - **ThrottlingMiddleware:** `cachetools.TTLCache(maxsize=10_000, ttl=1.5s)`, admins bypass.
 - **ErrorHandlerMiddleware:** Catches all exceptions, logs with `exc_info=True`, returns user-friendly message.
+- **I18nMiddleware:** Loads user locale from DB (via `UserService`), sets `i18n` context for Fluent translations.
 
 ## Testing
 
