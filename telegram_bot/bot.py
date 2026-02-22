@@ -26,7 +26,6 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from .agents.agent import create_bot_agent
 from .agents.context import BotContext
-from .agents.rag_pipeline import rag_pipeline
 from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
@@ -42,13 +41,13 @@ from .observability import (
     observe,
     propagate_attributes,
 )
+from .pipelines.client import _NO_RAG_QUERY_TYPES, _split_telegram_response, run_client_pipeline
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     score,
     write_history_scores,
     write_langfuse_scores,
 )
-from .services.generate_response import generate_response
 from .services.history_service import HistoryService
 from .services.manager_menu import render_start_menu
 from .services.metrics import PipelineMetrics
@@ -60,8 +59,6 @@ logger = logging.getLogger(__name__)
 # --- Checkpoint namespace constants (versioned for safe migration) ---
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
-_TELEGRAM_MESSAGE_LIMIT = 4096
-_NO_RAG_QUERY_TYPES = frozenset({"CHITCHAT", "OFF_TOPIC"})
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -99,30 +96,6 @@ async def _delete_checkpointer_thread(checkpointer: Any, thread_id: str) -> None
         return
 
     raise AttributeError("checkpointer does not expose delete_thread/adelete_thread")
-
-
-def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
-    """Split a long text into Telegram-safe chunks.
-
-    Telegram rejects outgoing messages over 4096 characters.
-    """
-    if not text:
-        return []
-    if len(text) <= limit:
-        return [text]
-    return [text[i : i + limit] for i in range(0, len(text), limit)]
-
-
-def _build_non_rag_response(query_type: str) -> str:
-    """Fast canned responses for non-RAG query classes in direct client mode."""
-    if query_type == "CHITCHAT":
-        return "Привет! Я помогу с вопросами по недвижимости: цены, районы, покупка, документы."
-    if query_type == "OFF_TOPIC":
-        return (
-            "Я отвечаю по теме недвижимости и связанных услуг. "
-            "Сформулируйте вопрос по объектам, ценам, районам или процессу покупки."
-        )
-    return ""
 
 
 def _extract_current_turn(messages: list[Any]) -> list[Any]:
@@ -801,174 +774,33 @@ class PropertyBot:
         role: str,
         query_type: str,
         rag_result_store: dict[str, Any],
-    ) -> str:
-        """Fast-path for client queries: cache/classify -> rag_pipeline -> generate_response."""
-        pipeline_start = time.perf_counter()
-        lf = get_client()
-        result: dict[str, Any] = {
-            "query_type": query_type,
-            "cache_hit": False,
-            "embeddings_cache_hit": False,
-            "search_cache_hit": False,
-            "search_results_count": 0,
-            "rerank_applied": False,
-            "grade_confidence": 0.0,
-            "latency_stages": {},
-            "llm_decode_ms": None,
-            "llm_tps": None,
-            "llm_queue_ms": None,
-            "llm_timeout": False,
-            "llm_stream_recovery": False,
-            "streaming_enabled": False,
-            "llm_call_count": 0,
-            "messages": [{"role": "user", "content": user_text}],
-        }
+    ) -> str | None:
+        """Thin wrapper: delegates to run_client_pipeline (see pipelines/client.py).
 
-        if query_type in _NO_RAG_QUERY_TYPES:
-            response_text = _build_non_rag_response(query_type)
-            result.update(
-                {
-                    "response": response_text,
-                    "response_policy_mode": "disabled",
-                    "response_style": "balanced",
-                    "response_difficulty": "easy",
-                    "response_style_reasoning": "direct_non_rag_template",
-                    "answer_words": len(response_text.split()),
-                    "answer_chars": len(response_text),
-                    "answer_to_question_ratio": len(response_text.split())
-                    / max(len(user_text.split()), 1),
-                }
-            )
-        else:
-            pipeline_result = await rag_pipeline(
-                user_text,
-                user_id=user_id,
-                session_id=session_id,
-                query_type=query_type,
-                original_query=user_text,
-                cache=self._cache,
-                embeddings=self._embeddings,
-                sparse_embeddings=self._sparse,
-                qdrant=self._qdrant,
-                reranker=self._reranker,
-                llm=self._llm,
-                agent_role=role,
-                pre_computed_embedding=rag_result_store.get("cache_key_embedding"),
-            )
-            result.update(pipeline_result)
-            response_text = str(pipeline_result.get("response", "") or "")
-
-            if not response_text:
-                generated = await generate_response(
-                    query=user_text,
-                    documents=result.get("documents", []),
-                    retrieved_context=result.get("retrieved_context", []),
-                    raw_messages=[{"role": "user", "content": user_text}],
-                    latency_stages=result.get("latency_stages", {}),
-                    llm_call_count=int(result.get("llm_call_count", 0) or 0),
-                    config=self._graph_config,
-                )
-                result.update(generated)
-                response_text = str(generated.get("response", "") or "")
-
-            result["response"] = response_text
-
-        trace_id = lf.get_current_trace_id() or ""
-
-        reply_markup = None
-        if trace_id and query_type not in _NO_RAG_QUERY_TYPES:
-            from telegram_bot.feedback import build_feedback_keyboard
-
-            reply_markup = build_feedback_keyboard(trace_id)
-
-        sources_text = ""
-        documents = result.get("documents", [])
-        if self._graph_config.show_sources and documents and query_type not in _NO_RAG_QUERY_TYPES:
-            from telegram_bot.graph.nodes.respond import _MAX_SOURCES, format_sources
-
-            sources_text = format_sources(documents)
-            result["sources_count"] = min(len(documents), _MAX_SOURCES)
-
-        response_text = result.get("response", "") or ""
-        full_response = response_text + sources_text if sources_text else response_text
-        await self._send_markdown_chunks(message, full_response, reply_markup=reply_markup)
-
-        # Store semantic cache for future pre-agent/direct hits.
-        store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
-        if (
-            self._cache
-            and response_text
-            and query_type in CACHEABLE_QUERY_TYPES
-            and not result.get("cache_hit", False)
-            and isinstance(store_vector, list)
-            and bool(store_vector)
-        ):
-            try:
-                await self._cache.store_semantic(
-                    query=user_text,
-                    response=response_text,
-                    vector=store_vector,
-                    query_type=query_type,
-                    cache_scope="rag",
-                    agent_role=role,
-                )
-            except Exception:
-                logger.warning(
-                    "Failed to store semantic cache in client direct path", exc_info=True
-                )
-
-        wall_ms = (time.perf_counter() - pipeline_start) * 1000
-        summarize_s = result.get("latency_stages", {}).get("summarize", 0)
-        result["pipeline_wall_ms"] = wall_ms
-        result["user_perceived_wall_ms"] = wall_ms - (summarize_s * 1000)
-        result["query_type"] = query_type
-        result["input_type"] = "text"
-        result["response"] = response_text
-        result["messages"] = [
-            *result.get("messages", []),
-            {"role": "assistant", "content": response_text},
-        ]
-
-        lf.update_current_trace(
-            input={"query": user_text},
-            output={"response": response_text},
-            metadata={
-                "pipeline_mode": "client_direct",
-                "pipeline_wall_ms": wall_ms,
-            },
+        Returns:
+            Response text if the pipeline handled the request.
+            None if the pipeline signals needs_agent=True (caller falls through to sdk_agent).
+        """
+        result = await run_client_pipeline(
+            user_text=user_text,
+            user_id=user_id,
+            session_id=session_id,
+            message=message,
+            cache=self._cache,
+            embeddings=self._embeddings,
+            sparse_embeddings=self._sparse,
+            qdrant=self._qdrant,
+            reranker=self._reranker,
+            llm=self._llm,
+            config=self._graph_config,
+            history_service=self._history_service,
+            rag_result_store=rag_result_store,
+            role=role,
+            query_type=query_type,
         )
-        tid = trace_id or (lf.get_current_trace_id() or "")
-        if tid:
-            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
-            try:
-                write_langfuse_scores(lf, result, trace_id=tid)
-            except Exception:
-                logger.warning(
-                    "Failed to write Langfuse scores in client direct path", exc_info=True
-                )
-
-        if self._history_service and response_text:
-            try:
-                saved = await self._history_service.save_turn(
-                    user_id=user_id,
-                    session_id=session_id,
-                    query=user_text,
-                    response=response_text,
-                    input_type="text",
-                    query_embedding=result.get("query_embedding"),
-                )
-                if tid:
-                    lf.create_score(
-                        trace_id=tid,
-                        name="history_save_success",
-                        value=1 if saved else 0,
-                        data_type="BOOLEAN",
-                        score_id=f"{tid}-history_save_success",
-                    )
-            except Exception:
-                logger.warning("Failed to save direct-path history turn", exc_info=True)
-
-        return response_text
+        if result.needs_agent:
+            return None  # caller falls through to sdk_agent path
+        return result.answer
 
     @observe(name="telegram-rag-supervisor")
     async def _handle_query_supervisor(
@@ -1124,7 +956,7 @@ class PropertyBot:
                     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
                         if root_trace_metadata is not None:
                             root_trace_metadata.update({"pipeline_mode": "client_direct"})
-                        return await self._handle_client_direct_pipeline(
+                        pipeline_answer = await self._handle_client_direct_pipeline(
                             message=message,
                             user_text=user_text,
                             user_id=user_id,
@@ -1133,6 +965,9 @@ class PropertyBot:
                             query_type=query_type,
                             rag_result_store=rag_result_store,
                         )
+                        if pipeline_answer is not None:
+                            return pipeline_answer
+                        # needs_agent=True: fall through to sdk_agent path below
                 except Exception:
                     logger.exception(
                         "Client direct pipeline failed; falling back to sdk_agent",
