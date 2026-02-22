@@ -754,3 +754,111 @@ class TestHistorySave:
 
         assert result.answer == "Answer text"
         assert result.response_sent is True
+
+
+# ---------------------------------------------------------------------------
+# Pre-computed sparse + colbert passthrough (#571)
+# ---------------------------------------------------------------------------
+
+
+class TestPreComputedEmbeddingPassthrough:
+    """Verify all three pre-computed embeddings are passed to rag_pipeline (#571)."""
+
+    async def test_passes_sparse_and_colbert_from_rag_result_store(self):
+        """pre_computed_sparse and pre_computed_colbert from rag_result_store reach rag_pipeline."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        dense = [0.1] * 1024
+        sparse = {"indices": [1], "values": [0.5]}
+        colbert = [[0.2] * 1024] * 2
+
+        rag_result = {
+            "response": "Есть студии",
+            "cache_hit": False,
+            "documents": [],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+        }
+
+        captured_kwargs: dict = {}
+
+        async def _capture_rag(*args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return rag_result
+
+        with (
+            _patch_observability(lf),
+            patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры есть?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                rag_result_store={
+                    "cache_key_embedding": dense,
+                    "cache_key_sparse": sparse,
+                    "cache_key_colbert": colbert,
+                },
+            )
+
+        assert captured_kwargs.get("pre_computed_embedding") == dense
+        assert captured_kwargs.get("pre_computed_sparse") == sparse
+        assert captured_kwargs.get("pre_computed_colbert") == colbert
+
+    async def test_passes_none_when_embeddings_absent_from_store(self):
+        """When rag_result_store lacks sparse/colbert, None is passed to rag_pipeline."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "ok",
+            "cache_hit": False,
+            "documents": [],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+        }
+
+        captured_kwargs: dict = {}
+
+        async def _capture_rag(*args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return rag_result
+
+        with (
+            _patch_observability(lf),
+            patch("telegram_bot.pipelines.client.rag_pipeline", side_effect=_capture_rag),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="тест",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                rag_result_store={"cache_key_embedding": [0.1]},
+            )
+
+        assert captured_kwargs.get("pre_computed_sparse") is None
+        assert captured_kwargs.get("pre_computed_colbert") is None
