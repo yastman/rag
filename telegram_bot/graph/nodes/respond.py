@@ -82,7 +82,7 @@ async def respond_node(state: dict[str, Any]) -> dict[str, Any]:
     trace_id = state.get("trace_id", "")
     query_type = state.get("query_type", "")
     documents = state.get("documents", [])
-    show_sources = state.get("show_sources", True)
+    show_sources = state.get("show_sources", False)
 
     if not response:
         response = "Извините, не удалось сформировать ответ. Попробуйте переформулировать вопрос."

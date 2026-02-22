@@ -235,6 +235,7 @@ class TestRespondNodeSourceAttribution:
         state["message"] = message
         state["documents"] = _SAMPLE_DOCS
         state["query_type"] = "GENERAL"
+        state["show_sources"] = True
 
         result = await respond_node(state)
 
@@ -255,6 +256,7 @@ class TestRespondNodeSourceAttribution:
         state["sent_message"] = {"chat_id": 12345, "message_id": 77}
         state["documents"] = _SAMPLE_DOCS
         state["query_type"] = "GENERAL"
+        state["show_sources"] = True
 
         result = await respond_node(state)
 
@@ -265,13 +267,14 @@ class TestRespondNodeSourceAttribution:
         assert result["sources_count"] == 2
 
     async def test_no_sources_for_chitchat(self):
-        """CHITCHAT queries should not have sources appended."""
+        """CHITCHAT queries should not have sources appended even when enabled."""
         message = AsyncMock()
         state = make_initial_state(user_id=1, session_id="s", query="Привет")
         state["response"] = "Привет!"
         state["message"] = message
         state["documents"] = _SAMPLE_DOCS
         state["query_type"] = "CHITCHAT"
+        state["show_sources"] = True
 
         result = await respond_node(state)
 
@@ -321,6 +324,7 @@ class TestRespondNodeSourceAttribution:
         state["sent_message"] = {"chat_id": 12345, "message_id": 77}
         state["documents"] = _SAMPLE_DOCS
         state["query_type"] = "GENERAL"
+        state["show_sources"] = True
 
         await respond_node(state)
 
