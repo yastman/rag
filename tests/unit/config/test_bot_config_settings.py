@@ -114,3 +114,20 @@ class TestBotConfigIsPydanticSettings:
 
         config2 = BotConfig(qdrant_collection="test_col", qdrant_quantization_mode="off")
         assert config2.get_collection_name() == "test_col"
+
+    def test_client_direct_pipeline_flag_default_false(self, monkeypatch):
+        """Client direct pipeline should be opt-in."""
+        monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        assert cfg.client_direct_pipeline_enabled is False
+
+    def test_client_direct_pipeline_flag_reads_env(self, monkeypatch):
+        """CLIENT_DIRECT_PIPELINE_ENABLED must map to BotConfig field."""
+        monkeypatch.setenv("CLIENT_DIRECT_PIPELINE_ENABLED", "true")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        assert cfg.client_direct_pipeline_enabled is True
