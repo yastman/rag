@@ -667,3 +667,108 @@ class TestScopeRoleIsolation:
         # Verify filter_expression was built (role=manager filter applied)
         call_kwargs = mgr.semantic_cache.acheck.call_args[1]
         assert call_kwargs.get("filter_expression") is not None
+
+
+class TestCacheClearing:
+    """Test cache clearing methods: clear_by_tier, clear_semantic_cache, clear_all_caches."""
+
+    async def test_clear_by_tier_embeddings(self):
+        """clear_by_tier scans pattern and deletes matching keys, returns count."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = AsyncMock()
+
+        deleted_keys = [f"embeddings:{CACHE_VERSION}:key1", f"embeddings:{CACHE_VERSION}:key2"]
+
+        async def mock_scan_iter(**kwargs):
+            for key in deleted_keys:
+                yield key
+
+        mgr.redis.scan_iter = mock_scan_iter
+        mgr.redis.delete = AsyncMock(return_value=2)
+
+        count = await mgr.clear_by_tier("embeddings")
+
+        assert count == 2
+        mgr.redis.delete.assert_awaited_once_with(*deleted_keys)
+
+    async def test_clear_by_tier_search_includes_rerank(self):
+        """clear_by_tier('search') also scans and deletes rerank keys."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = AsyncMock()
+
+        scanned_patterns: list[str] = []
+
+        async def mock_scan_iter(**kwargs):
+            pattern = kwargs.get("match", "")
+            scanned_patterns.append(pattern)
+            if "search" in pattern:
+                yield f"search:{CACHE_VERSION}:abc"
+            elif "rerank" in pattern:
+                yield f"rerank:{CACHE_VERSION}:def"
+
+        mgr.redis.scan_iter = mock_scan_iter
+        mgr.redis.delete = AsyncMock(return_value=1)
+
+        count = await mgr.clear_by_tier("search")
+
+        assert f"search:{CACHE_VERSION}:*" in scanned_patterns
+        assert f"rerank:{CACHE_VERSION}:*" in scanned_patterns
+        assert mgr.redis.delete.await_count == 2
+        assert count == 2
+
+    async def test_clear_by_tier_no_redis(self):
+        """clear_by_tier returns 0 when Redis is unavailable."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = None
+
+        count = await mgr.clear_by_tier("embeddings")
+
+        assert count == 0
+
+    async def test_clear_semantic_cache(self):
+        """clear_semantic_cache calls aclear() and returns 1 on success."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.aclear = AsyncMock()
+
+        result = await mgr.clear_semantic_cache()
+
+        assert result == 1
+        mgr.semantic_cache.aclear.assert_awaited_once()
+
+    async def test_clear_semantic_cache_none(self):
+        """clear_semantic_cache returns 0 when semantic cache is not initialized."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = None
+
+        result = await mgr.clear_semantic_cache()
+
+        assert result == 0
+
+    async def test_clear_all_caches(self):
+        """clear_all_caches calls all tiers and returns a complete result dict."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.semantic_cache = AsyncMock()
+        mgr.semantic_cache.aclear = AsyncMock()
+        mgr.redis = AsyncMock()
+
+        async def mock_scan_iter(**kwargs):
+            if False:  # makes this an async generator with no items
+                yield ""
+
+        mgr.redis.scan_iter = mock_scan_iter
+
+        result = await mgr.clear_all_caches()
+
+        assert isinstance(result, dict)
+        assert set(result.keys()) == {
+            "semantic",
+            "embeddings",
+            "sparse",
+            "analysis",
+            "search",
+            "rerank",
+        }
+        assert result["semantic"] == 1
+        assert all(result[t] == 0 for t in ("embeddings", "sparse", "analysis", "search", "rerank"))
+        mgr.semantic_cache.aclear.assert_awaited_once()
