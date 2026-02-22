@@ -2293,3 +2293,181 @@ class TestHITLBotHandler:
         callback.answer.assert_called_once_with("Отменено")
         command = mock_agent.ainvoke.call_args[0][0]
         assert command.resume == {"action": "cancel"}
+
+
+class TestPreAgentCacheCheck:
+    """Tests for pre-agent semantic cache check (#563)."""
+
+    def _setup_cache_mocks(self, bot, embedding=None, cached_response=None):
+        """Configure cache and embeddings mocks on a bot instance."""
+        if embedding is None:
+            embedding = [0.1] * 10
+        bot._embeddings.aembed_query = AsyncMock(return_value=embedding)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=cached_response)
+
+    async def test_pre_agent_cache_hit_returns_cached_response(self, mock_config):
+        """On pre-agent cache HIT, cached response is sent and agent.ainvoke is NOT called (#563)."""
+        bot, _ = _create_bot(mock_config)
+        self._setup_cache_mocks(bot, cached_response="Ответ из кеша")
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+        mock_lf = MagicMock()
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("как оформить покупку")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        # Agent must NOT be called on cache HIT
+        mock_agent.ainvoke.assert_not_called()
+        # Cached response must be delivered to the user
+        message.answer.assert_called()
+        sent_text = message.answer.call_args_list[0].args[0]
+        assert "Ответ из кеша" in sent_text
+
+    async def test_pre_agent_cache_miss_proceeds_to_agent(self, mock_config):
+        """On pre-agent cache MISS, agent.ainvoke is called and embedding is stashed (#563)."""
+        bot, _ = _create_bot(mock_config)
+        test_embedding = [0.5] * 10
+        self._setup_cache_mocks(bot, embedding=test_embedding, cached_response=None)
+
+        stashed_store: dict = {}
+        invoke_count = 0
+
+        async def _capture_invoke(*args, **kwargs):
+            nonlocal invoke_count
+            invoke_count += 1
+            # Capture the rag_result_store reference before agent runs
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("как оформить покупку")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        # Agent MUST be called on cache MISS
+        assert invoke_count == 1
+        # Pre-computed embedding must be stashed in rag_result_store
+        assert stashed_store.get("cache_key_embedding") == test_embedding
+        assert stashed_store.get("query_type") == "FAQ"
+
+    async def test_pre_agent_cache_skip_chitchat(self, mock_config):
+        """CHITCHAT query type skips pre-agent cache entirely — no embedding computed (#563)."""
+        bot, _ = _create_bot(mock_config)
+        bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="CHITCHAT"),
+        ):
+            message = _make_text_message("привет")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        # For CHITCHAT, embedding computation must be skipped
+        bot._embeddings.aembed_query.assert_not_called()
+        # Agent must still be called
+        mock_agent.ainvoke.assert_called_once()
+
+    async def test_pre_agent_cache_embedding_error_proceeds_to_agent(self, mock_config):
+        """Embedding error in pre-agent check is swallowed; agent.ainvoke still called (#563)."""
+        bot, _ = _create_bot(mock_config)
+        bot._embeddings.aembed_query = AsyncMock(side_effect=RuntimeError("BGE-M3 timeout"))
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_semantic = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("как оформить покупку")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                # Must NOT raise despite embedding failure
+                await bot.handle_query(message)
+
+        # Graceful degradation: agent must still be called
+        mock_agent.ainvoke.assert_called_once()
+
+    async def test_pre_agent_cache_hit_writes_langfuse_scores(self, mock_config):
+        """Pre-agent cache HIT writes pre_agent_cache_hit, query_type, user_role scores (#563)."""
+        bot, _ = _create_bot(mock_config)
+        self._setup_cache_mocks(bot, cached_response="Ответ из кеша")
+
+        mock_agent = AsyncMock()
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-abc")
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.bot.score") as mock_score,
+        ):
+            message = _make_text_message("как оформить покупку")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        # Verify Langfuse trace metadata
+        trace_calls = mock_lf.update_current_trace.call_args_list
+        # First update_current_trace call should have pipeline_mode = "pre_agent_cache"
+        meta_call = next(
+            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            None,
+        )
+        assert meta_call is not None
+        assert meta_call.kwargs["metadata"]["pipeline_mode"] == "pre_agent_cache"
+
+        # Verify scores were written
+        score_names = [c.kwargs["name"] for c in mock_score.call_args_list]
+        assert "pre_agent_cache_hit" in score_names
+        assert "query_type" in score_names
+        assert "user_role" in score_names
+
+        # Verify values
+        score_map = {c.kwargs["name"]: c.kwargs for c in mock_score.call_args_list}
+        assert score_map["pre_agent_cache_hit"]["value"] == 1
+        assert score_map["pre_agent_cache_hit"]["data_type"] == "BOOLEAN"
+        assert score_map["query_type"]["value"] == "FAQ"
+        assert score_map["query_type"]["data_type"] == "CATEGORICAL"
