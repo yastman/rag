@@ -37,6 +37,18 @@ Payload indexes created by bootstrap include:
 # Create ingestion-ready collection if missing
 uv run python -m src.ingestion.unified.cli bootstrap
 
+# Validate vector schema (fail if colbert missing)
+uv run python -m src.ingestion.unified.cli schema-check --require-colbert
+
+# Check point-level ColBERT coverage (>=99.5% recommended, 100% target)
+uv run python -m src.ingestion.unified.cli coverage-check --min-ratio 0.995
+
+# Backfill missing point-level ColBERT vectors
+uv run python -m src.ingestion.unified.cli backfill-colbert --batch-size 32 --resume
+
+# Dry-run sample before writes
+uv run python -m src.ingestion.unified.cli backfill-colbert --dry-run --limit 1000
+
 # Check collection
 curl -fsS http://localhost:6333/collections/gdrive_documents_bge | python -m json.tool
 
@@ -62,4 +74,7 @@ Snapshots are created via `scripts/qdrant_snapshot.py`.
 
 - Empty retrieval results: verify `QDRANT_COLLECTION` matches existing collection.
 - Ingestion writes fail: run `src.ingestion.unified.cli preflight` to confirm reachability.
+- ColBERT schema drift: run `src.ingestion.unified.cli schema-check --require-colbert`.
+- Low ColBERT coverage: run `src.ingestion.unified.cli coverage-check --min-ratio 0.995`.
+- Interrupted backfill: rerun `src.ingestion.unified.cli backfill-colbert --resume` to continue from `.colbert_backfill_checkpoint.json`.
 - Slow queries: verify collection contains expected `dense`/`bm42` vectors and payload indexes.
