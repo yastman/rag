@@ -6,6 +6,7 @@ Otherwise, falls back to score-based sort with top-5 selection.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -23,6 +24,7 @@ _DEFAULT_TOP_K = 5
 async def rerank_node(
     state: dict[str, Any],
     *,
+    cache: Any | None = None,
     reranker: Any | None = None,
     top_k: int = _DEFAULT_TOP_K,
 ) -> dict[str, Any]:
@@ -30,11 +32,12 @@ async def rerank_node(
 
     Args:
         state: RAGState dict (needs documents, messages)
+        cache: Optional CacheLayerManager instance
         reranker: Optional ColbertRerankerService instance
         top_k: Number of top results to keep
 
     Returns:
-        State update with reranked documents, rerank_applied flag, latency.
+        State update with reranked documents, rerank_applied, rerank_cache_hit, latency.
     """
     t0 = time.perf_counter()
 
@@ -47,6 +50,7 @@ async def rerank_node(
         return {
             "documents": [],
             "rerank_applied": False,
+            "rerank_cache_hit": False,
             "llm_call_count": llm_call_count,
             "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
         }
@@ -59,6 +63,32 @@ async def rerank_node(
 
     if reranker is not None:
         try:
+            get_rerank = getattr(cache, "get_rerank_results", None) if cache is not None else None
+            store_rerank = (
+                getattr(cache, "store_rerank_results", None) if cache is not None else None
+            )
+            _has_get_rerank = callable(get_rerank) and asyncio.iscoroutinefunction(get_rerank)
+            _has_store_rerank = callable(store_rerank) and asyncio.iscoroutinefunction(store_rerank)
+
+            if _has_get_rerank and get_rerank is not None:
+                cached_reranked = await get_rerank(query, documents, top_k)
+                if cached_reranked is not None:
+                    elapsed = time.perf_counter() - t0
+                    PipelineMetrics.get().record("rerank", elapsed * 1000)
+                    logger.info(
+                        "rerank: HIT rerank cache %d → %d docs (%.3fs)",
+                        len(documents),
+                        len(cached_reranked),
+                        elapsed,
+                    )
+                    return {
+                        "documents": cached_reranked,
+                        "rerank_applied": True,
+                        "rerank_cache_hit": True,
+                        "llm_call_count": llm_call_count,
+                        "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
+                    }
+
             doc_texts = [doc.get("text", "") for doc in documents]
             rerank_results = await reranker.rerank(query=query, documents=doc_texts, top_k=top_k)
 
@@ -68,6 +98,9 @@ async def rerank_node(
                 if idx < len(documents):
                     doc = {**documents[idx], "score": rr["score"]}
                     reranked.append(doc)
+
+            if _has_store_rerank and store_rerank is not None:
+                await store_rerank(query, documents, top_k, reranked)
 
             elapsed = time.perf_counter() - t0
             PipelineMetrics.get().record("rerank", elapsed * 1000)
@@ -80,6 +113,7 @@ async def rerank_node(
             return {
                 "documents": reranked,
                 "rerank_applied": True,
+                "rerank_cache_hit": False,
                 "llm_call_count": llm_call_count,
                 "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
             }
@@ -104,6 +138,7 @@ async def rerank_node(
     return {
         "documents": sorted_docs,
         "rerank_applied": False,
+        "rerank_cache_hit": False,
         "llm_call_count": llm_call_count,
         "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
     }

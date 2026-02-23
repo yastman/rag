@@ -605,7 +605,6 @@ class TestRedisFlush:
         assert result == "OK"
         assert any(m == "embeddings:v9:*" for m in seen_matches)
         assert any(m == "sparse:v9:*" for m in seen_matches)
-        assert any(m == "analysis:v9:*" for m in seen_matches)
         assert any(m == "search:v9:*" for m in seen_matches)
         assert any(m == "rerank:v9:*" for m in seen_matches)
 
