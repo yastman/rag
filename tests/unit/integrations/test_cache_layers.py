@@ -367,7 +367,7 @@ class TestSemanticCacheRedisVLErrors:
 
 
 class TestExactCaches:
-    """Test exact key-value caches (embeddings, sparse, analysis, search, rerank)."""
+    """Test exact key-value caches (embeddings, sparse, search, rerank)."""
 
     async def test_exact_store_and_get(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
@@ -409,6 +409,21 @@ class TestExactCaches:
         result = await mgr.get_exact("search", "some_hash")
         assert result == cached_docs
         assert mgr._metrics["search"]["hits"] == 1
+
+    async def test_rerank_cache_store_and_get(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.redis = AsyncMock()
+        docs = [{"text": "Doc A", "score": 0.4}, {"text": "Doc B", "score": 0.5}]
+        reranked = [{"text": "Doc B", "score": 0.9}]
+
+        await mgr.store_rerank_results("test query", docs, 5, reranked)
+        mgr.redis.setex.assert_awaited_once()
+
+        mgr.redis.get = AsyncMock(return_value=json.dumps(reranked))
+        loaded = await mgr.get_rerank_results("test query", docs, 5)
+
+        assert loaded == reranked
+        assert mgr._metrics["rerank"]["hits"] == 1
 
 
 def _make_pipeline_mock():
@@ -765,12 +780,11 @@ class TestCacheClearing:
             "semantic",
             "embeddings",
             "sparse",
-            "analysis",
             "search",
             "rerank",
         }
         assert result["semantic"] == 1
-        assert all(result[t] == 0 for t in ("embeddings", "sparse", "analysis", "search", "rerank"))
+        assert all(result[t] == 0 for t in ("embeddings", "sparse", "search", "rerank"))
         mgr.semantic_cache.aclear.assert_awaited_once()
 
 
