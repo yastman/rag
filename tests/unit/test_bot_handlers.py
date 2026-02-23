@@ -1578,10 +1578,10 @@ class TestHistoryServiceLifecycle:
 
 
 class TestPostgresPoolInit:
-    """Pool is not created when DB doesn't exist (#570)."""
+    """PostgreSQL pool startup behavior for missing DB scenarios."""
 
     async def test_pg_pool_skipped_when_db_missing(self, mock_config):
-        """Pool not created when asyncpg.connect raises InvalidCatalogNameError."""
+        """Pool not created when DB is missing and auto-create path also fails."""
         import asyncpg
 
         bot, _ = _create_bot(mock_config)
@@ -1613,6 +1613,59 @@ class TestPostgresPoolInit:
         mock_create_pool.assert_not_awaited()
         assert bot._pg_pool is None
         assert bot._user_service is None
+
+    async def test_pg_pool_created_after_auto_create_db(self, mock_config):
+        """Missing DB should be auto-created via maintenance connection, then pool starts."""
+        import asyncpg
+
+        bot, _ = _create_bot(mock_config)
+        bot._cache = MagicMock()
+        bot._cache.initialize = AsyncMock()
+        bot._cache.redis = MagicMock()
+        bot.dp = MagicMock()
+        bot.dp.start_polling = AsyncMock()
+        bot._redis_monitor = MagicMock()
+        bot._redis_monitor.start = AsyncMock()
+        bot.bot = MagicMock()
+        bot.bot.set_my_commands = AsyncMock()
+        bot._ensure_realestate_schema = AsyncMock()
+
+        missing_exc = asyncpg.InvalidCatalogNameError('database "realestate" does not exist')
+        admin_conn = AsyncMock()
+        admin_conn.fetchval = AsyncMock(return_value=None)
+        admin_conn.execute = AsyncMock(return_value="CREATE DATABASE")
+        admin_conn.close = AsyncMock()
+        test_conn = AsyncMock()
+        test_conn.close = AsyncMock()
+        pool = AsyncMock()
+        pool.execute = AsyncMock()
+
+        mock_checkpointer = AsyncMock()
+        with (
+            patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock),
+            patch(
+                "telegram_bot.integrations.memory.create_redis_checkpointer",
+                return_value=mock_checkpointer,
+            ),
+            patch("telegram_bot.services.user_service.UserService") as mock_user_service,
+            patch("telegram_bot.services.lead_scoring_store.LeadScoringStore") as mock_score_store,
+            patch(
+                "asyncpg.connect",
+                AsyncMock(side_effect=[missing_exc, admin_conn, test_conn]),
+            ) as mock_connect,
+            patch("asyncpg.create_pool", AsyncMock(return_value=pool)) as mock_create_pool,
+        ):
+            await bot.start()
+
+        assert bot._pg_pool is pool
+        mock_create_pool.assert_awaited_once()
+        bot._ensure_realestate_schema.assert_awaited_once()
+        mock_user_service.assert_called_once_with(pool=pool)
+        mock_score_store.assert_called_once_with(pool=pool)
+        assert len(mock_connect.await_args_list) == 3
+        assert mock_connect.await_args_list[1].kwargs["database"] == "postgres"
+        admin_conn.execute.assert_awaited_once_with('CREATE DATABASE "realestate"')
+        test_conn.close.assert_awaited_once()
 
 
 class TestKommoGracefulInit:
