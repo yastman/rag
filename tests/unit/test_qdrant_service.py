@@ -827,7 +827,10 @@ class TestQdrantServiceHybridSearchColbert:
 
     @pytest.fixture
     def service(self):
-        return _make_service(validated=True)
+        svc = _make_service(validated=True)
+        # Explicitly enable ColBERT path for tests that validate nested prefetch contract.
+        svc._colbert_available = True
+        return svc
 
     @pytest.fixture
     def mock_point(self):
@@ -963,6 +966,46 @@ class TestQdrantServiceHybridSearchColbert:
         results, meta = result
         assert len(results) == 1
         assert meta["backend_error"] is False
+
+    async def test_colbert_missing_vector_disables_feature(self, service):
+        """Vector-name errors disable ColBERT path for subsequent queries."""
+        service._client.query_points = AsyncMock(
+            side_effect=Exception("Wrong input: Not existing vector name error: colbert")
+        )
+        service.hybrid_search_rrf = AsyncMock(
+            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
+        )
+
+        colbert_query = [[0.1] * 1024] * 3
+
+        await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=colbert_query,
+            top_k=5,
+        )
+
+        assert service._colbert_available is False
+        service._client.query_points.assert_awaited_once()
+        service.hybrid_search_rrf.assert_awaited_once()
+
+    async def test_colbert_skipped_when_capability_disabled(self, service):
+        """When capability is disabled, method should bypass ColBERT query call."""
+        service._colbert_available = False
+        service._client.query_points = AsyncMock()
+        service.hybrid_search_rrf = AsyncMock(
+            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
+        )
+
+        colbert_query = [[0.1] * 1024] * 3
+        result = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=colbert_query,
+            top_k=5,
+        )
+
+        assert result[0]["id"] == "fallback_1"
+        service._client.query_points.assert_not_called()
+        service.hybrid_search_rrf.assert_awaited_once()
 
 
 class TestQdrantServiceClose:
