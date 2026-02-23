@@ -826,20 +826,20 @@ ingest-gdrive-status: ## Show GDrive collection stats
 
 ingest-unified: ## Run unified ingestion once
 	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
-	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli run
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run
 	@echo "$(GREEN)✓ Ingestion complete$(NC)"
 
 ingest-unified-watch: ## Run unified ingestion continuously (watch mode)
 	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
-	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli run --watch
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run --watch
 
 ingest-unified-status: ## Show unified ingestion status
 	@echo "$(BLUE)Unified ingestion status:$(NC)"
-	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli status
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli status
 
 ingest-unified-reprocess: ## Reprocess all error files
 	@echo "$(BLUE)Reprocessing error files...$(NC)"
-	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli reprocess --errors
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli reprocess --errors
 	@echo "$(GREEN)✓ Reprocess queued$(NC)"
 
 ingest-unified-logs: ## Show ingestion service logs
