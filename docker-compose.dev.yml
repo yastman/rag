@@ -406,7 +406,7 @@ services:
   # =============================================================================
 
   loki:
-    image: grafana/loki:3.6.5@sha256:847c287ada0e12603910589f42038c5cdaaad04e248bd1dc6c6e0920a235f427
+    image: grafana/loki:3.6.6@sha256:434c7effbd66dbf69c2665fe4b2125549ecf7b45039ac28595d4034031cf47ce
     container_name: dev-loki
     profiles: ["obs", "full"]
     restart: unless-stopped
@@ -425,7 +425,7 @@ services:
       start_period: 30s
 
   promtail:
-    image: grafana/promtail:3.6.5@sha256:6140a3158fddd7ef2276908bd321ad5265ee6ad2abd9fb3c937394827df3ea4d
+    image: grafana/promtail:3.6.6@sha256:73440757b88c8cd4452f199b2ec109590d27cdbbd594264e317466dcd7de7932
     container_name: dev-promtail
     profiles: ["obs", "full"]
     restart: unless-stopped
