@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import asyncpg
 import httpx
 import redis.asyncio as aioredis
-from qdrant_client import AsyncQdrantClient
+from qdrant_client import AsyncQdrantClient, models
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .config import BotConfig
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Retry settings for critical deps
 CRITICAL_RETRIES = 3
 CRITICAL_RETRY_DELAY = 5.0  # seconds
+COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
 
 # Cache key prefixes used by CacheService (see telegram_bot/services/cache.py)
 # Used for synthetic write/read/ttl/delete verification at startup.
@@ -254,6 +255,41 @@ async def _check_single_dep(
                     "(server-side ColBERT reranking unavailable, RRF fallback active)",
                     collection,
                 )
+            elif info.points_count:
+                try:
+                    with_colbert = await qdrant.count(
+                        collection_name=collection,
+                        count_filter=models.Filter(
+                            must=[models.HasVectorCondition(has_vector="colbert")]
+                        ),
+                        exact=True,
+                    )
+                    covered = int(with_colbert.count)
+                    total = int(info.points_count)
+                    ratio = covered / total
+
+                    if ratio < COLBERT_COVERAGE_WARN_THRESHOLD:
+                        logger.warning(
+                            "Preflight WARN: Qdrant collection %s colbert coverage is %.2f%% "
+                            "(%d/%d), below %.2f%% threshold",
+                            collection,
+                            ratio * 100,
+                            covered,
+                            total,
+                            COLBERT_COVERAGE_WARN_THRESHOLD * 100,
+                        )
+                    else:
+                        logger.info(
+                            "Preflight Qdrant: colbert coverage %.2f%% (%d/%d)",
+                            ratio * 100,
+                            covered,
+                            total,
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "Preflight WARN: Qdrant colbert coverage check failed: %s",
+                        exc,
+                    )
 
             return True
         except Exception as exc:

@@ -10,6 +10,12 @@ from collections.abc import Mapping
 
 from dotenv import load_dotenv
 
+from src.ingestion.unified.colbert_backfill import (
+    ColbertBackfillRunner,
+    compute_colbert_coverage,
+    inspect_collection_schema,
+)
+
 
 def setup_logging(verbose: bool = False) -> None:
     """Configure logging."""
@@ -209,7 +215,7 @@ async def cmd_schema_check(args: argparse.Namespace) -> int:
     )
 
     try:
-        info = client.get_collection(collection_name)
+        schema = inspect_collection_schema(client, collection_name)
     except UnexpectedResponse as exc:
         print(f"  [FAIL] Cannot load collection '{collection_name}': {exc}")
         return 1
@@ -217,10 +223,11 @@ async def cmd_schema_check(args: argparse.Namespace) -> int:
         print(f"  [FAIL] Qdrant error while loading '{collection_name}': {exc}")
         return 1
 
-    missing, dense_names, sparse_names = _schema_requirements_status(
-        info,
-        require_colbert=args.require_colbert,
-    )
+    dense_names = schema["dense_names"]
+    sparse_names = schema["sparse_names"]
+    missing = sorted(schema["missing_dense"] | schema["missing_sparse"])
+    if getattr(args, "require_colbert", False):
+        missing.extend(sorted(schema["missing_colbert"]))
     if missing:
         print(
             "  [FAIL] Schema drift detected: missing "
@@ -282,7 +289,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
 
     if exists:
         print(f"  Collection '{collection_name}' already exists.")
-        if args.require_colbert:
+        if getattr(args, "require_colbert", False):
             missing, dense_names, sparse_names = _schema_requirements_status(
                 existing_info,
                 require_colbert=True,
@@ -360,7 +367,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
-    if args.require_colbert:
+    if getattr(args, "require_colbert", False):
         info = client.get_collection(collection_name)
         missing, dense_names, sparse_names = _schema_requirements_status(
             info,
@@ -413,6 +420,88 @@ async def cmd_reprocess(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backfill_colbert(args: argparse.Namespace) -> int:
+    """Backfill missing ColBERT vectors for points in existing collection."""
+    from src.ingestion.unified.config import UnifiedConfig
+
+    config = UnifiedConfig()
+    checkpoint_path = config.effective_manifest_dir() / ".colbert_backfill_checkpoint.json"
+
+    runner = ColbertBackfillRunner(
+        collection_name=config.collection_name,
+        qdrant_url=config.qdrant_url,
+        qdrant_api_key=config.qdrant_api_key,
+        bge_m3_url=config.bge_m3_url,
+        bge_m3_timeout=config.bge_m3_timeout,
+        checkpoint_path=checkpoint_path,
+    )
+    try:
+        stats = runner.run(
+            batch_size=getattr(args, "batch_size", 32),
+            limit=getattr(args, "limit", None),
+            dry_run=getattr(args, "dry_run", False),
+            resume=getattr(args, "resume", False),
+        )
+    except Exception as exc:
+        print(f"  [FAIL] ColBERT backfill failed: {exc}")
+        return 1
+    finally:
+        runner.close()
+
+    print("\n=== ColBERT Backfill ===")
+    if getattr(args, "dry_run", False):
+        print("  Mode: dry-run (vectors are not written)")
+    print(f"  Collection: {config.collection_name}")
+    print(f"  scanned={stats.scanned}")
+    print(f"  processed={stats.processed}")
+    print(f"  skipped={stats.skipped}")
+    print(f"  failed={stats.failed}")
+    print(f"  qps={getattr(stats, 'qps', 0.0):.2f}")
+    print(f"  error_rate={getattr(stats, 'error_rate', 0.0) * 100:.2f}%")
+    print(f"  bge_latency_ms={getattr(stats, 'bge_latency_ms', 0.0):.1f}")
+    print(f"  qdrant_latency_ms={getattr(stats, 'qdrant_latency_ms', 0.0):.1f}")
+    print(f"  checkpoint={checkpoint_path}")
+    errors = getattr(stats, "errors", [])
+    if errors:
+        print("  sample_errors:")
+        for message in errors[:5]:
+            print(f"    - {message}")
+
+    return 0 if stats.failed == 0 else 2
+
+
+async def cmd_coverage_check(args: argparse.Namespace) -> int:
+    """Check ColBERT coverage ratio in collection."""
+    from qdrant_client import QdrantClient
+
+    from src.ingestion.unified.config import UnifiedConfig
+
+    config = UnifiedConfig()
+    client = QdrantClient(
+        url=os.getenv("QDRANT_URL", config.qdrant_url),
+        api_key=os.getenv("QDRANT_API_KEY") or config.qdrant_api_key,
+        timeout=60,
+    )
+
+    try:
+        covered, total, ratio = compute_colbert_coverage(client, config.collection_name)
+    except Exception as exc:
+        print(f"  [FAIL] Coverage check failed: {exc}")
+        return 1
+
+    required_ratio = float(getattr(args, "min_ratio", 0.995))
+    print(f"\n=== ColBERT Coverage: {config.collection_name} ===")
+    print(f"  Coverage: {covered}/{total} ({ratio * 100:.2f}%)")
+    print(f"  Threshold: {required_ratio * 100:.2f}%")
+
+    if ratio < required_ratio:
+        print("  [FAIL] Coverage below threshold")
+        return 1
+
+    print("  [OK] Coverage threshold satisfied")
+    return 0
+
+
 def main() -> int:
     """Main entry point."""
     load_dotenv()
@@ -452,6 +541,27 @@ def main() -> int:
         action="store_true",
         help="Require 'colbert' vector to be present",
     )
+    # coverage-check
+    coverage_check_p = subparsers.add_parser(
+        "coverage-check",
+        help="Check point-level ColBERT vector coverage",
+    )
+    coverage_check_p.add_argument(
+        "--min-ratio",
+        type=float,
+        default=0.995,
+        help="Minimum acceptable ColBERT coverage ratio (default: 0.995)",
+    )
+
+    # backfill-colbert
+    backfill_p = subparsers.add_parser(
+        "backfill-colbert",
+        help="Backfill missing ColBERT vectors for existing points",
+    )
+    backfill_p.add_argument("--batch-size", type=int, default=32, help="Batch size")
+    backfill_p.add_argument("--limit", type=int, help="Process at most N points")
+    backfill_p.add_argument("--dry-run", action="store_true", help="Do not write updates")
+    backfill_p.add_argument("--resume", action="store_true", help="Resume from checkpoint")
 
     # reprocess
     reprocess_p = subparsers.add_parser("reprocess", help="Reprocess files")
@@ -471,6 +581,10 @@ def main() -> int:
         return asyncio.run(cmd_bootstrap(args))
     if args.command == "schema-check":
         return asyncio.run(cmd_schema_check(args))
+    if args.command == "coverage-check":
+        return asyncio.run(cmd_coverage_check(args))
+    if args.command == "backfill-colbert":
+        return cmd_backfill_colbert(args)
     if args.command == "reprocess":
         return asyncio.run(cmd_reprocess(args))
 
