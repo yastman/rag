@@ -869,7 +869,7 @@ validate-traces: ***REMOVED******REMOVED*** Full rebuild + trace validation + re
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
-validate-traces-fast: ***REMOVED******REMOVED*** No rebuild, just start stack + trace validation + report
+validate-traces-fast: ***REMOVED******REMOVED*** No rebuild; trace validation fails if required trace families are missing
 	@echo "$(BLUE)Fast validation (no rebuild)...$(NC)"
 	$(COMPOSE_CMD) --profile core --profile bot --profile ml up -d --wait
 	uv run python scripts/validate_traces.py --report
