@@ -498,7 +498,7 @@ endif
 # E2E TESTING
 # =============================================================================
 
-.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-traces e2e-test-group e2e-setup
+.PHONY: e2e-install e2e-generate-data e2e-index-data e2e-test e2e-test-traces e2e-test-group e2e-telegram-test e2e-setup
 
 e2e-install: ## Install E2E testing dependencies
 	@echo "$(BLUE)Installing E2E dependencies...$(NC)"
@@ -515,10 +515,15 @@ e2e-index-data: ## Index test data into Qdrant
 	uv run python scripts/index_test_properties.py
 	@echo "$(GREEN)✓ Test data indexed$(NC)"
 
-e2e-test: ## Run E2E tests against Telegram bot
-	@echo "$(BLUE)Running E2E tests...$(NC)"
+e2e-test: ## Run pytest E2E suite (Docker/live services)
+	@echo "$(BLUE)Running pytest E2E suite...$(NC)"
+	uv run pytest tests/e2e/test_core_flows_live.py -v --tb=short -m "e2e and not legacy_api"
+	@echo "$(GREEN)✓ Pytest E2E suite complete$(NC)"
+
+e2e-telegram-test: ## Run Telegram userbot E2E runner (Telethon + judge)
+	@echo "$(BLUE)Running Telegram E2E runner...$(NC)"
 	uv run python scripts/e2e/runner.py
-	@echo "$(GREEN)✓ E2E tests complete$(NC)"
+	@echo "$(GREEN)✓ Telegram E2E runner complete$(NC)"
 
 e2e-test-traces: ## Run E2E tests + validate Langfuse traces
 	@echo "$(BLUE)Running E2E tests with Langfuse trace validation...$(NC)"
