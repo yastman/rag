@@ -5,6 +5,14 @@ Run these for most code changes:
 - `make check`
 - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
 
+CI policy (issue #608):
+- PR fast gate runs:
+  - core unit tests (`not requires_extras`, coverage gate `--cov-fail-under=74`)
+  - deterministic integration/smoke subset (`tests/integration/test_graph_paths.py`, `tests/smoke/test_langgraph_smoke.py`)
+- Nightly/manual heavy tier runs:
+  - `requires_extras` + `load` + `chaos` + `e2e` + `benchmark`
+  - full `pytest tests/ --collect-only` with extras installed
+
 Run full test suite when touching cross-cutting logic:
 - `make test-full`
 

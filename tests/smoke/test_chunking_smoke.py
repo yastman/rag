@@ -15,6 +15,9 @@ sys.path.insert(0, str(project_root / "legacy"))
 
 import pytest
 
+
+pytest.importorskip("fitz", reason="PyMuPDF/fitz not installed (ingest extra)")
+
 from legacy.pymupdf_chunker import PyMuPDFChunker
 
 
