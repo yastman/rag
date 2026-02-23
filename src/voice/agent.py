@@ -25,6 +25,7 @@ from livekit.agents import (
 )
 from livekit.plugins import elevenlabs, openai, silero
 
+from src.voice.observability import trace_voice_session, update_voice_trace, voice_session_id
 from src.voice.schemas import CallStatus
 from src.voice.transcript_store import TranscriptStore
 
@@ -164,6 +165,7 @@ class VoiceBot(Agent):
             ),
         )
         self._call_id = call_id
+        self._session_id = voice_session_id(call_id)
         self._transcript_store = transcript_store
         self._langfuse_trace_id = langfuse_trace_id
 
@@ -194,11 +196,18 @@ class VoiceBot(Agent):
             payload: dict[str, Any] = {
                 "query": query,
                 "user_id": 0,
-                "session_id": f"voice-{self._call_id}",
+                "session_id": self._session_id,
                 "channel": "voice",
             }
             if self._langfuse_trace_id:
                 payload["langfuse_trace_id"] = self._langfuse_trace_id
+            with contextlib.suppress(Exception):
+                update_voice_trace(
+                    call_id=self._call_id,
+                    status="tool_call",
+                    session_id=self._session_id,
+                    langfuse_trace_id=self._langfuse_trace_id,
+                )
             resp = await client.post(
                 f"{RAG_API_URL}/query",
                 json=payload,
@@ -249,6 +258,7 @@ async def entrypoint(ctx: agents.JobContext):
     phone = str(metadata.get("phone", "")).strip()
     callback_chat_id = metadata.get("callback_chat_id")
     langfuse_trace_id = metadata.get("langfuse_trace_id")
+    session_id = voice_session_id(call_id)
 
     store = await _get_transcript_store()
     if store is not None and phone:
@@ -260,8 +270,23 @@ async def entrypoint(ctx: agents.JobContext):
                 call_id=call_id or None,
             )
             await store.update_status(call_id, CallStatus.ANSWERED)
+            session_id = voice_session_id(call_id)
         except Exception:
             logger.exception("Failed to initialize transcript row for call_id=%s", call_id)
+            await trace_voice_session(
+                call_id=call_id,
+                status="error",
+                session_id=session_id,
+                error="transcript_init_failed",
+                langfuse_trace_id=langfuse_trace_id,
+            )
+
+    await trace_voice_session(
+        call_id=call_id,
+        status="answered",
+        session_id=session_id,
+        langfuse_trace_id=langfuse_trace_id,
+    )
 
     # Create agent session with ElevenLabs STT/TTS
     session: AgentSession = AgentSession(
@@ -297,9 +322,23 @@ async def entrypoint(ctx: agents.JobContext):
                     duration_sec=duration_sec,
                     langfuse_trace_id=langfuse_trace_id,
                 )
+                await trace_voice_session(
+                    call_id=call_id,
+                    status="finalized",
+                    duration_sec=duration_sec,
+                    session_id=session_id,
+                    langfuse_trace_id=langfuse_trace_id,
+                )
                 logger.info("Call %s finalized: duration=%ds", call_id, duration_sec)
         except Exception:
             logger.exception("Failed to finalize call %s", call_id)
+            await trace_voice_session(
+                call_id=call_id,
+                status="error",
+                session_id=session_id,
+                error="finalize_failed",
+                langfuse_trace_id=langfuse_trace_id,
+            )
         finally:
             await _mark_job_finished()
 
