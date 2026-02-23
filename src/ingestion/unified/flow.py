@@ -228,6 +228,9 @@ def run_watch(config: UnifiedConfig | None = None) -> None:
     if config is None:
         config = UnifiedConfig()
 
+    final_status = "completed"
+    final_metadata: dict[str, str] | None = None
+
     try_update_ingestion_trace(command="flow-watch", status="started")
     flow = build_flow(config)
     flow.setup()
@@ -242,14 +245,15 @@ def run_watch(config: UnifiedConfig | None = None) -> None:
             updater.wait()
     except KeyboardInterrupt:
         logger.info("Watch mode interrupted")
-        try_update_ingestion_trace(command="flow-watch", status="interrupted")
+        final_status = "interrupted"
     except Exception as exc:
-        try_update_ingestion_trace(
-            command="flow-watch",
-            status="error",
-            metadata={"error_type": type(exc).__name__},
-        )
+        final_status = "error"
+        final_metadata = {"error_type": type(exc).__name__}
         raise
     finally:
         flow.close()
-        try_update_ingestion_trace(command="flow-watch", status="completed")
+        try_update_ingestion_trace(
+            command="flow-watch",
+            status=final_status,
+            metadata=final_metadata,
+        )
