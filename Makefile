@@ -153,6 +153,11 @@ test-unit: ***REMOVED******REMOVED*** Run unit tests locally in parallel (xdist 
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Unit tests complete$(NC)"
 
+test-unit-loadscope: ***REMOVED******REMOVED*** Run unit tests with loadscope (faster fixture reuse locally)
+	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=loadscope -q --timeout=30 -m "not legacy_api"
+	@echo "$(GREEN)✓ Unit tests (loadscope) complete$(NC)"
+
 test-unit-core: ***REMOVED******REMOVED*** Run core unit tests (no optional deps needed, PR gate)
 	@echo "$(BLUE)Running core unit tests (no optional deps)...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
