@@ -19,9 +19,12 @@ async def test_fetch_stage_counts_queries_metric_date() -> None:
 
     assert result == rows
     pool.fetch.assert_awaited_once()
-    query, metric_date = pool.fetch.await_args.args
+    query, day_start, day_end = pool.fetch.await_args.args
     assert "FROM funnel_events" in query
-    assert metric_date == dt.date(2026, 2, 19)
+    assert "created_at >= $1" in query
+    assert "created_at < $2" in query
+    assert day_start == dt.datetime(2026, 2, 19, tzinfo=dt.UTC)
+    assert day_end == dt.datetime(2026, 2, 20, tzinfo=dt.UTC)
 
 
 @pytest.mark.asyncio
