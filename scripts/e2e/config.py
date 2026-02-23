@@ -34,8 +34,10 @@ class E2EConfig:
     ***REMOVED*** Thresholds
     pass_score: float = 6.0
 
-    ***REMOVED*** Qdrant test collection
-    test_collection: str = "contextual_bulgaria_test"
+    ***REMOVED*** Canonical Qdrant collection for current corpus
+    test_collection: str = field(
+        default_factory=lambda: os.getenv("E2E_COLLECTION_NAME", "gdrive_documents_bge")
+    )
 
     ***REMOVED*** Reports
     reports_dir: str = "reports"
