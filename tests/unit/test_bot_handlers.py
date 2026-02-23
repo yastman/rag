@@ -1,5 +1,6 @@
 """Unit tests for telegram_bot/bot.py handlers (LangGraph pipeline)."""
 
+import asyncio
 import logging
 
 import pytest
@@ -858,6 +859,21 @@ class TestCmdHistory:
         assert "цены на квартиры" in answer_text
         assert "Квартиры от 50к евро" in answer_text
 
+    async def test_history_search_passes_full_multitoken_query(self, mock_config):
+        """/history with extra spaces should pass full user query to history service."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(return_value=[])
+        message = _make_text_message("/history   цены на квартиры в аликанте")
+
+        await bot.cmd_history(message)
+
+        bot._history_service.search_user_history.assert_awaited_once_with(
+            user_id=12345,
+            query="цены на квартиры в аликанте",
+            limit=5,
+        )
+
     async def test_history_empty_results(self, mock_config):
         """/history with no matches returns informative message."""
         bot, _ = _create_bot(mock_config)
@@ -1085,6 +1101,71 @@ class TestCheckpointNamespace:
             graph_kwargs = mock_build_graph.call_args.kwargs
             assert graph_kwargs["llm_guard_client"] is bot._llm_guard_client
             assert graph_kwargs["checkpointer"] is bot._agent_checkpointer
+
+    async def test_text_and_voice_concurrent_requests_keep_separate_threads(self, mock_config):
+        """Concurrent text+voice requests from same user should not interfere (#540)."""
+        bot, _ = _create_bot(mock_config)
+        bot._llm_guard_client = MagicMock()
+        bot._checkpointer = object()
+        bot._agent_checkpointer = object()
+        bot._history_service = None
+
+        async def _mock_supervisor(*args, **kwargs):
+            await asyncio.sleep(0.02)
+            return "text-ok"
+
+        bot._handle_query_supervisor = AsyncMock(side_effect=_mock_supervisor)
+
+        mock_graph = AsyncMock()
+
+        async def _mock_voice_ainvoke(state, config):
+            await asyncio.sleep(0.02)
+            return {
+                "response": "voice-ok",
+                "query_type": "GENERAL",
+                "latency_stages": {},
+                "stt_text": "voice text",
+                "session_id": state["session_id"],
+                "input_type": "voice",
+            }
+
+        mock_graph.ainvoke = AsyncMock(side_effect=_mock_voice_ainvoke)
+
+        text_message = _make_text_message("text query", user_id=12345, chat_id=12345)
+        voice_message = MagicMock()
+        voice_message.from_user = MagicMock(id=12345)
+        voice_message.chat = MagicMock(id=12345)
+        voice_message.bot = MagicMock()
+        voice_message.bot.send_chat_action = AsyncMock()
+        voice_message.bot.get_file = AsyncMock()
+        voice_message.bot.download_file = AsyncMock()
+        voice_message.answer = AsyncMock()
+        voice_message.voice = MagicMock()
+        voice_message.voice.file_id = "file123"
+        voice_message.voice.duration = 5
+        file_mock = MagicMock()
+        file_mock.file_path = "voice/file.ogg"
+        voice_message.bot.get_file.return_value = file_mock
+
+        mock_lf = MagicMock()
+        with (
+            patch("telegram_bot.bot.build_graph", return_value=mock_graph),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.write_langfuse_scores"),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.ChatActionSender") as mock_cas,
+        ):
+            mock_cas.typing.return_value = _make_typing_cm()
+            await asyncio.gather(
+                bot.handle_query(text_message),
+                bot.handle_voice(voice_message),
+            )
+
+        bot._handle_query_supervisor.assert_awaited_once()
+        assert mock_graph.ainvoke.await_count == 1
+        voice_cfg = mock_graph.ainvoke.call_args.kwargs["config"]["configurable"]
+        assert voice_cfg["thread_id"] == "12345"
+        assert voice_cfg["checkpoint_ns"] == "tg:voice:v1"
 
 
 class TestHandleVoiceExceptionHandling:
