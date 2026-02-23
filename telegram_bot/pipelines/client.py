@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 # Query types that bypass RAG — return canned response immediately.
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 
-# Cache store is limited to these types; STRUCTURED excluded (MVP: stale/over-specific risk).
-_PIPELINE_STORE_TYPES: frozenset[str] = frozenset({"FAQ", "GENERAL", "ENTITY"})
+# Cache store allowlist mirrors graph semantic cache policy.
+_PIPELINE_STORE_TYPES: frozenset[str] = frozenset({"FAQ", "GENERAL", "ENTITY", "STRUCTURED"})
 
 _TELEGRAM_MESSAGE_LIMIT = 4096
 
