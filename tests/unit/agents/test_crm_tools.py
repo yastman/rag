@@ -454,6 +454,18 @@ async def test_crm_get_my_leads(bot_context, mock_kommo):
     mock_kommo.search_leads.assert_called_once_with(responsible_user_id=42, limit=20)
 
 
+async def test_crm_get_my_leads_uses_manager_id_not_telegram_user_id(bot_context, mock_kommo):
+    """Manager workflow must use ctx.manager_id for responsible_user_id filter."""
+    from telegram_bot.agents.crm_tools import crm_get_my_leads
+
+    bot_context.telegram_user_id = 999
+    bot_context.manager_id = 77
+
+    await crm_get_my_leads.ainvoke({}, config=_make_config(bot_context))
+
+    mock_kommo.search_leads.assert_called_once_with(responsible_user_id=77, limit=20)
+
+
 async def test_crm_get_my_leads_no_manager_id(bot_context_no_manager):
     """crm_get_my_leads returns error when manager_id is None."""
     from telegram_bot.agents.crm_tools import crm_get_my_leads
@@ -471,6 +483,24 @@ async def test_crm_get_my_tasks(bot_context, mock_kommo):
     assert "Send docs" in result
     # task with complete_till=1000000000 (past) should be marked overdue
     assert "ПРОСРОЧЕНО" in result
+    mock_kommo.get_tasks.assert_called_once_with(responsible_user_id=42, is_completed=False)
+
+
+async def test_crm_get_my_tasks_marks_only_incomplete_overdue(bot_context, mock_kommo):
+    """Overdue marker must not be shown for completed tasks with past due date."""
+    from telegram_bot.agents.crm_tools import crm_get_my_tasks
+
+    mock_kommo.get_tasks.return_value = [
+        Task(id=401, text="Open overdue", complete_till=1000000000, is_completed=False),
+        Task(id=402, text="Done overdue", complete_till=1000000000, is_completed=True),
+    ]
+
+    result = await crm_get_my_tasks.ainvoke({}, config=_make_config(bot_context))
+
+    assert "Open overdue" in result
+    assert "Done overdue" in result
+    assert "Open overdue (ID: 401) ⚠️ ПРОСРОЧЕНО" in result
+    assert "Done overdue (ID: 402) ⚠️ ПРОСРОЧЕНО" not in result
     mock_kommo.get_tasks.assert_called_once_with(responsible_user_id=42, is_completed=False)
 
 
