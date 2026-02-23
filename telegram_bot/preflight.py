@@ -25,7 +25,6 @@ COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
 # Used for synthetic write/read/ttl/delete verification at startup.
 CACHE_KEY_PREFIXES = [
     "sparse:",
-    "analysis:",
     "search:",
     "rerank:",
     "conversation:",
