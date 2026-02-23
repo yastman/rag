@@ -37,8 +37,14 @@ Payload indexes created by bootstrap include:
 ***REMOVED*** Create ingestion-ready collection if missing
 uv run python -m src.ingestion.unified.cli bootstrap
 
+***REMOVED*** Fail-fast guard: require ColBERT in existing/new runtime schema
+uv run python -m src.ingestion.unified.cli bootstrap --require-colbert
+
+***REMOVED*** Explicit drift check (non-zero exit on missing required vectors)
+uv run python -m src.ingestion.unified.cli schema-check --require-colbert
+
 ***REMOVED*** Check collection
-curl -fsS http://localhost:6333/collections/gdrive_documents_bge | python -m json.tool
+curl -fsS http://localhost:6333/collections/gdrive_documents_bge | python3 -m json.tool
 
 ***REMOVED*** Check service readiness
 curl -fsS http://localhost:6333/readyz
@@ -62,4 +68,5 @@ Snapshots are created via `scripts/qdrant_snapshot.py`.
 
 - Empty retrieval results: verify `QDRANT_COLLECTION` matches existing collection.
 - Ingestion writes fail: run `src.ingestion.unified.cli preflight` to confirm reachability.
+- ColBERT missing in runtime: run `src.ingestion.unified.cli schema-check --require-colbert`.
 - Slow queries: verify collection contains expected `dense`/`bm42` vectors and payload indexes.
