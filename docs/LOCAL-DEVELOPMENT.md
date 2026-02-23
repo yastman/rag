@@ -65,6 +65,18 @@ make test
 make test-full
 ```
 
+Trace coverage gate:
+
+```bash
+make validate-traces-fast
+```
+
+If Langfuse CLI returns `401` or points to wrong host, run with explicit host:
+
+```bash
+lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1
+```
+
 ## 5. Running Components Without Docker Wrapper
 
 ```bash

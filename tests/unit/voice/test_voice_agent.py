@@ -79,8 +79,16 @@ def test_voice_bot_langfuse_trace_id_defaults_none():
     assert agent._langfuse_trace_id is None
 
 
-async def test_search_tool_forwards_langfuse_trace_id():
-    """langfuse_trace_id is included in the RAG API payload (#241)."""
+def test_voice_bot_stores_trace_session_id():
+    """Voice agent keeps `voice-<call_id>` session id for lifecycle traces."""
+    from src.voice.agent import VoiceBot
+
+    agent = VoiceBot(call_id="call-xyz")
+    assert agent._session_id == "voice-call-xyz"
+
+
+async def test_voice_tool_propagates_langfuse_trace_id_to_api_payload():
+    """Voice tool should pass langfuse_trace_id to RAG API payload (#609)."""
     from src.voice.agent import VoiceBot
 
     store = MagicMock()
@@ -89,7 +97,7 @@ async def test_search_tool_forwards_langfuse_trace_id():
     agent = VoiceBot(
         call_id="22222222-2222-2222-2222-222222222222",
         transcript_store=store,
-        langfuse_trace_id="trace-link-test",
+        langfuse_trace_id="trace-123",
     )
 
     mock_response = MagicMock()
@@ -103,7 +111,7 @@ async def test_search_tool_forwards_langfuse_trace_id():
         await VoiceBot.search_knowledge_base.__wrapped__(agent, None, "test query")
 
     payload = mock_client.post.await_args.kwargs["json"]
-    assert payload["langfuse_trace_id"] == "trace-link-test"
+    assert payload["langfuse_trace_id"] == "trace-123"
     assert payload["channel"] == "voice"
 
 

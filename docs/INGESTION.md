@@ -45,6 +45,23 @@ uv run python -m src.ingestion.unified.cli status
 uv run python -m src.ingestion.unified.cli reprocess --errors
 ```
 
+## Langfuse Trace Contract
+
+- CLI root spans:
+  - `ingestion-cli-run`
+  - `ingestion-cli-preflight`
+- Runtime stage spans:
+  - `ingestion-flow-run-once`
+  - `ingestion-flow-watch`
+  - `ingestion-qdrant-upsert-chunks`
+  - `ingestion-qdrant-delete-file`
+
+Validate coverage together with API/voice traces:
+
+```bash
+make validate-traces-fast
+```
+
 ## Required Environment Variables
 
 - `INGESTION_DATABASE_URL`
