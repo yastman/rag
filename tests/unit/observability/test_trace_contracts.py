@@ -365,3 +365,34 @@ class TestBuildTraceMetadataContract:
         result = {"messages": [{"role": "user"}, {"role": "assistant"}, {"role": "user"}]}
         metadata = _build_trace_metadata(result)
         assert metadata["memory_messages_count"] == 3
+
+    def test_heavy_payload_keys_are_not_in_trace_metadata(self):
+        """Heavy internals should never leak into trace metadata payload."""
+        from telegram_bot.bot import _build_trace_metadata
+
+        result = {
+            "documents": [{"id": "d1"}],
+            "query_embedding": [0.1] * 16,
+            "voice_audio": b"raw-bytes",
+            "messages": [],
+        }
+        metadata = _build_trace_metadata(result)
+        assert "documents" not in metadata
+        assert "query_embedding" not in metadata
+        assert "voice_audio" not in metadata
+
+
+class TestSessionIdFormatContract:
+    """Session id should keep `{type}-{hash}-{YYYYMMDD}` contract."""
+
+    @pytest.fixture(autouse=True)
+    def _require_aiogram(self):
+        pytest.importorskip("aiogram", reason="bot.py requires aiogram")
+
+    def test_make_session_id_matches_expected_format(self):
+        import re
+
+        from telegram_bot.bot import make_session_id
+
+        sid = make_session_id("history", 12345)
+        assert re.match(r"^history-[a-f0-9]{8}-\d{8}$", sid)
