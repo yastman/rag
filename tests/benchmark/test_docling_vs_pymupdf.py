@@ -14,6 +14,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent / "legacy"))
 
+pytest.importorskip("docling", reason="docling not installed (ingest extra)")
+pytest.importorskip("docling_core", reason="docling-core not installed (ingest extra)")
+pytest.importorskip("transformers", reason="transformers not installed (ml-local extra)")
+pytest.importorskip("fitz", reason="PyMuPDF/fitz not installed (ingest extra)")
+
 from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
