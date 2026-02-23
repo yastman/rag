@@ -92,7 +92,7 @@ async def test_manager_service_chain_includes_history_and_crm_tools():
         patch("telegram_bot.agents.manager_tools.create_crm_score_sync_tool", return_value=None),
         patch(
             "telegram_bot.agents.manager_tools.build_tools_for_role",
-            side_effect=lambda _role, base_tools, manager_tools: [*base_tools, *manager_tools],
+            side_effect=lambda **kwargs: [*kwargs["base_tools"], *kwargs["manager_tools"]],
         ),
         patch("telegram_bot.agents.crm_tools.get_crm_tools", return_value=[fake_crm_tool]),
         patch("telegram_bot.agents.utility_tools.get_utility_tools", return_value=[]),
