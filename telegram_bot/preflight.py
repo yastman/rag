@@ -3,7 +3,9 @@
 import contextlib
 import logging
 from enum import StrEnum
+from urllib.parse import urlparse
 
+import asyncpg
 import httpx
 import redis.asyncio as aioredis
 from qdrant_client import AsyncQdrantClient
@@ -42,6 +44,7 @@ DEP_CLASSIFICATION: dict[str, DepLevel] = {
     "redis_cache": DepLevel.CRITICAL,
     "qdrant": DepLevel.CRITICAL,
     "bge_m3": DepLevel.CRITICAL,
+    "postgres": DepLevel.OPTIONAL,
     "litellm": DepLevel.OPTIONAL,
     "langfuse": DepLevel.OPTIONAL,
 }
@@ -210,7 +213,14 @@ async def _check_single_dep(
 
     if name == "qdrant":
         collection = config.qdrant_collection
-        qdrant = AsyncQdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key)
+        scheme = urlparse(config.qdrant_url).scheme.lower()
+        effective_key = config.qdrant_api_key if scheme == "https" else None
+        qdrant = AsyncQdrantClient(
+            url=config.qdrant_url,
+            api_key=effective_key,
+            timeout=config.qdrant_timeout,
+            prefer_grpc=True,
+        )
         try:
             info = await qdrant.get_collection(collection)
             logger.info(
@@ -218,6 +228,33 @@ async def _check_single_dep(
                 collection,
                 info.points_count,
             )
+
+            # Validate expected vector configs (#570)
+            dense_vectors = info.config.params.vectors
+            sparse_vectors = info.config.params.sparse_vectors or {}
+            dense_names = set(dense_vectors.keys()) if isinstance(dense_vectors, dict) else set()
+            sparse_names = set(sparse_vectors.keys()) if isinstance(sparse_vectors, dict) else set()
+
+            missing_required: set[str] = set()
+            if "dense" not in dense_names:
+                missing_required.add("dense")
+            if "bm42" not in sparse_names:
+                missing_required.add("bm42")
+            if missing_required:
+                logger.error(
+                    "Preflight FAIL: Qdrant collection %s missing required vectors: %s",
+                    collection,
+                    sorted(missing_required),
+                )
+                return False
+
+            if "colbert" not in dense_names:
+                logger.warning(
+                    "Preflight WARN: Qdrant collection %s missing 'colbert' vector "
+                    "(server-side ColBERT reranking unavailable, RRF fallback active)",
+                    collection,
+                )
+
             return True
         except Exception as exc:
             logger.error("Preflight FAIL: Qdrant — %s", exc)
@@ -242,6 +279,24 @@ async def _check_single_dep(
         else:
             logger.warning("Preflight BGE-M3 warmup failed: %s", warmup_resp.status_code)
         return True
+
+    if name == "postgres":
+        try:
+            conn = await asyncpg.connect(config.realestate_database_url, timeout=5)
+            try:
+                await conn.fetchval("SELECT 1")
+                logger.info("Preflight Postgres: database reachable")
+                return True
+            finally:
+                await conn.close()
+        except asyncpg.InvalidCatalogNameError:
+            logger.warning(
+                "Preflight WARN: Postgres database does not exist (user features will use defaults)"
+            )
+            return False
+        except Exception as exc:
+            logger.warning("Preflight WARN: Postgres unreachable — %s", exc)
+            return False
 
     if name == "litellm":
         # Health endpoint is at proxy root, not under /v1
@@ -310,7 +365,7 @@ async def check_dependencies(config: BotConfig) -> dict[str, bool]:
     timeout = httpx.Timeout(10.0)
 
     # Order matters: redis_cache depends on redis
-    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "litellm", "langfuse"]
+    dep_order = ["redis", "redis_cache", "qdrant", "bge_m3", "postgres", "litellm", "langfuse"]
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for dep_name in dep_order:
