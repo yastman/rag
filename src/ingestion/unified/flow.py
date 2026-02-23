@@ -19,6 +19,7 @@ from cocoindex.op import function as cocoindex_function
 
 from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.manifest import GDriveManifest, compute_content_hash_from_bytes
+from src.ingestion.unified.observability import observe, try_update_ingestion_trace
 from src.ingestion.unified.targets.qdrant_hybrid_target import (
     QdrantHybridTargetConnector,  # noqa: F401 - registers the connector
     QdrantHybridTargetSpec,
@@ -202,19 +203,35 @@ def build_flow(config: UnifiedConfig | None = None) -> cocoindex.Flow:
     return cocoindex.open_flow(flow_name, flow_def)
 
 
+@observe(name="ingestion-flow-run-once", capture_input=False, capture_output=False)
 def run_once(config: UnifiedConfig | None = None) -> None:
     """Run ingestion once (single pass)."""
-    flow = build_flow(config)
-    flow.setup()
-    flow.update(print_stats=True)
-    flow.close()
+    try_update_ingestion_trace(command="flow-run-once", status="started")
+    try:
+        flow = build_flow(config)
+        flow.setup()
+        flow.update(print_stats=True)
+        flow.close()
+    except Exception as exc:
+        try_update_ingestion_trace(
+            command="flow-run-once",
+            status="error",
+            metadata={"error_type": type(exc).__name__},
+        )
+        raise
+    try_update_ingestion_trace(command="flow-run-once", status="completed")
 
 
+@observe(name="ingestion-flow-watch", capture_input=False, capture_output=False)
 def run_watch(config: UnifiedConfig | None = None) -> None:
     """Run ingestion continuously using FlowLiveUpdater."""
     if config is None:
         config = UnifiedConfig()
 
+    final_status = "completed"
+    final_metadata: dict[str, str] | None = None
+
+    try_update_ingestion_trace(command="flow-watch", status="started")
     flow = build_flow(config)
     flow.setup()
 
@@ -228,5 +245,15 @@ def run_watch(config: UnifiedConfig | None = None) -> None:
             updater.wait()
     except KeyboardInterrupt:
         logger.info("Watch mode interrupted")
+        final_status = "interrupted"
+    except Exception as exc:
+        final_status = "error"
+        final_metadata = {"error_type": type(exc).__name__}
+        raise
     finally:
         flow.close()
+        try_update_ingestion_trace(
+            command="flow-watch",
+            status=final_status,
+            metadata=final_metadata,
+        )
