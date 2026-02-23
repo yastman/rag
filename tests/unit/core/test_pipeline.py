@@ -1,13 +1,22 @@
 """Tests for RAG pipeline."""
 
 import os
+import sys
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 
-pytest.importorskip("pymupdf", reason="pymupdf not installed (ingest extra)")
-pytestmark = pytest.mark.requires_extras
+# Keep import of src.core.pipeline deterministic in core unit env without ingest extras.
+sys.modules.setdefault("pymupdf", ModuleType("pymupdf"))
+docling_pkg = sys.modules.setdefault("docling", ModuleType("docling"))
+docling_converter_mod = sys.modules.setdefault(
+    "docling.document_converter",
+    ModuleType("docling.document_converter"),
+)
+docling_converter_mod.DocumentConverter = MagicMock
+docling_pkg.document_converter = docling_converter_mod
 
 from src.core.pipeline import RAGPipeline, RAGResult
 
@@ -297,8 +306,6 @@ class TestRAGPipelineIndex:
 
     async def test_index_documents_success(self, mock_pipeline):
         """Test successful document indexing."""
-        from src.ingestion.voyage_indexer import IndexStats
-
         # Mock parser
         mock_doc = MagicMock()
         mock_doc.content = "Test content"
@@ -310,7 +317,7 @@ class TestRAGPipelineIndex:
         mock_pipeline.chunker.chunk_text.return_value = [mock_chunk]
 
         # Mock indexer
-        mock_stats = IndexStats(
+        mock_stats = SimpleNamespace(
             total_chunks=1, indexed_chunks=1, failed_chunks=0, duration_seconds=0.5
         )
         mock_pipeline.indexer.index_chunks = AsyncMock(return_value=mock_stats)
@@ -324,12 +331,10 @@ class TestRAGPipelineIndex:
 
     async def test_index_documents_handles_exception(self, mock_pipeline):
         """Test indexing handles parser exceptions."""
-        from src.ingestion.voyage_indexer import IndexStats
-
         mock_pipeline.parser.parse_file.side_effect = Exception("Parse error")
 
         # Mock indexer (empty chunks)
-        mock_stats = IndexStats(
+        mock_stats = SimpleNamespace(
             total_chunks=0, indexed_chunks=0, failed_chunks=0, duration_seconds=0.1
         )
         mock_pipeline.indexer.index_chunks = AsyncMock(return_value=mock_stats)
@@ -377,3 +382,27 @@ class TestRAGPipelineEvaluate:
         assert results["average_latency"] == 0.0
         assert results["results"] == []
         assert results["metrics"] == {}
+
+
+class TestRAGPipelineMain:
+    """Tests for module-level main helper."""
+
+    async def test_main_prints_result_summary(self):
+        """main() should print basic query result information."""
+        from src.core.pipeline import main
+
+        fake_result = RAGResult(
+            query="q",
+            results=[{"article_number": "1", "text": "abc", "score": 0.1, "metadata": {}}],
+            context_used=True,
+            search_method="mock",
+            execution_time=0.01,
+        )
+        fake_pipeline = MagicMock()
+        fake_pipeline.search = AsyncMock(return_value=fake_result)
+
+        with patch("src.core.pipeline.RAGPipeline", return_value=fake_pipeline):
+            with patch("builtins.print") as mock_print:
+                await main()
+
+        assert mock_print.call_count >= 4
