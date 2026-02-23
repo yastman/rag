@@ -124,7 +124,7 @@ def build_graph(
 
     workflow.add_node(
         "rerank",
-        functools.partial(rerank_node, reranker=reranker),
+        functools.partial(rerank_node, cache=cache, reranker=reranker),
     )
 
     workflow.add_node(
