@@ -37,6 +37,9 @@ Payload indexes created by bootstrap include:
 # Create ingestion-ready collection if missing
 uv run python -m src.ingestion.unified.cli bootstrap
 
+# Fail-fast guard: require ColBERT in existing/new runtime schema
+uv run python -m src.ingestion.unified.cli bootstrap --require-colbert
+
 # Validate vector schema (fail if colbert missing)
 uv run python -m src.ingestion.unified.cli schema-check --require-colbert
 
@@ -48,9 +51,8 @@ uv run python -m src.ingestion.unified.cli backfill-colbert --batch-size 32 --re
 
 # Dry-run sample before writes
 uv run python -m src.ingestion.unified.cli backfill-colbert --dry-run --limit 1000
-
 # Check collection
-curl -fsS http://localhost:6333/collections/gdrive_documents_bge | python -m json.tool
+curl -fsS http://localhost:6333/collections/gdrive_documents_bge | python3 -m json.tool
 
 # Check service readiness
 curl -fsS http://localhost:6333/readyz

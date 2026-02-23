@@ -163,7 +163,9 @@ async def test_backfill_enables_server_side_colbert_search(tmp_path):
         colbert_query=[[0.3, 0.6]],
         top_k=5,
     )
-    assert before == []
+    # No point-level ColBERT vectors yet: service falls back to RRF and disables ColBERT path.
+    assert len(before) > 0
+    assert service._colbert_available is False
 
     stats = backfill.run(batch_size=10)
     assert stats.processed == 1
@@ -175,5 +177,6 @@ async def test_backfill_enables_server_side_colbert_search(tmp_path):
         colbert_query=[[0.3, 0.6]],
         top_k=5,
     )
+    assert service._colbert_available is True
     assert len(after) > 0
     assert after[0]["text"] == "doc without colbert before backfill"
