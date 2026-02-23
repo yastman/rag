@@ -28,8 +28,12 @@ def _make_config(**overrides) -> MagicMock:
     cfg.qdrant_url = overrides.get("qdrant_url", "http://localhost:6333")
     cfg.qdrant_api_key = overrides.get("qdrant_api_key")
     cfg.qdrant_collection = overrides.get("qdrant_collection", "test_col")
+    cfg.qdrant_timeout = overrides.get("qdrant_timeout", 30)
     cfg.bge_m3_url = overrides.get("bge_m3_url", "http://localhost:8000")
     cfg.llm_base_url = overrides.get("llm_base_url", "http://localhost:4000")
+    cfg.realestate_database_url = overrides.get(
+        "realestate_database_url", "postgresql://postgres:postgres@localhost:5432/realestate"
+    )
     return cfg
 
 
@@ -266,8 +270,12 @@ class TestCheckSingleDep:
         config = _make_config()
         client = AsyncMock(spec=httpx.AsyncClient)
 
+        mock_info = MagicMock()
+        mock_info.points_count = 100
+        mock_info.config.params.vectors = {"dense": MagicMock(), "colbert": MagicMock()}
+        mock_info.config.params.sparse_vectors = {"bm42": MagicMock()}
         mock_qdrant_client = AsyncMock()
-        mock_qdrant_client.get_collection = AsyncMock(return_value=MagicMock(points_count=100))
+        mock_qdrant_client.get_collection = AsyncMock(return_value=mock_info)
         mock_qdrant_client.close = AsyncMock()
 
         with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
@@ -503,3 +511,189 @@ class TestCheckDependencies:
             await check_dependencies(config)
 
         assert "bge_m3" in exc_info.value.failed_deps
+
+
+# ===========================================================================
+# PostgreSQL preflight check
+# ===========================================================================
+
+
+# ===========================================================================
+# Qdrant vector name validation
+# ===========================================================================
+
+
+class TestQdrantVectorValidation:
+    """Preflight validates required named vectors in collection."""
+
+    async def test_qdrant_warns_when_colbert_vector_missing(self, caplog):
+        """Missing colbert vector logged as warning, but check still passes."""
+        import logging
+
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 278
+        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with (
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            caplog.at_level(logging.WARNING),
+        ):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+            assert result is True
+            assert "colbert" in caplog.text.lower()
+
+    async def test_qdrant_no_warning_when_all_vectors_present(self, caplog):
+        """No warning when dense + bm42 + colbert all present."""
+        import logging
+
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 278
+        mock_collection_info.config.params.vectors = {
+            "dense": MagicMock(),
+            "colbert": MagicMock(),
+        }
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with (
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            caplog.at_level(logging.WARNING),
+        ):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+            assert result is True
+            assert "missing" not in caplog.text.lower()
+
+    async def test_qdrant_fails_when_dense_missing(self):
+        """Missing dense vector causes check to fail."""
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 278
+        mock_collection_info.config.params.vectors = {}
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+            assert result is False
+
+    async def test_qdrant_fails_when_bm42_missing(self):
+        """Missing bm42 sparse vector causes check to fail."""
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 278
+        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
+        mock_collection_info.config.params.sparse_vectors = {}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+            assert result is False
+
+
+# ===========================================================================
+# Qdrant preflight client config
+# ===========================================================================
+
+
+class TestQdrantPreflightClient:
+    """Preflight Qdrant client uses timeout and gRPC."""
+
+    async def test_qdrant_preflight_uses_timeout_and_grpc(self):
+        """Preflight uses BotConfig timeout and prefer_grpc=True."""
+        config = _make_config(qdrant_timeout=42)
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 100
+        mock_collection_info.config.params.vectors = {"dense": MagicMock()}
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.close = AsyncMock()
+
+        with patch(
+            "telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant
+        ) as MockClient:
+            client = AsyncMock()
+            await _check_single_dep("qdrant", config, client)
+
+            call_kwargs = MockClient.call_args[1]
+            assert call_kwargs.get("timeout") == config.qdrant_timeout
+            assert call_kwargs.get("prefer_grpc") is True
+
+
+class TestPostgresPreflight:
+    """Postgres preflight check validates database existence."""
+
+    async def test_postgres_check_passes_when_db_exists(self):
+        """Preflight passes when Postgres connection succeeds."""
+        config = _make_config(realestate_database_url="postgresql://u:p@localhost/realestate")
+        with patch("telegram_bot.preflight.asyncpg") as mock_asyncpg:
+            mock_conn = AsyncMock()
+            mock_conn.fetchval = AsyncMock(return_value=1)
+            mock_conn.close = AsyncMock()
+            mock_asyncpg.connect = AsyncMock(return_value=mock_conn)
+
+            client = AsyncMock()
+            result = await _check_single_dep("postgres", config, client)
+            assert result is True
+
+    async def test_postgres_check_fails_when_db_missing(self):
+        """Preflight fails when database does not exist."""
+        import asyncpg as real_asyncpg
+
+        config = _make_config(realestate_database_url="postgresql://u:p@localhost/realestate")
+        with patch("telegram_bot.preflight.asyncpg") as mock_asyncpg:
+            mock_asyncpg.connect = AsyncMock(
+                side_effect=real_asyncpg.InvalidCatalogNameError(
+                    'database "realestate" does not exist'
+                )
+            )
+            mock_asyncpg.InvalidCatalogNameError = real_asyncpg.InvalidCatalogNameError
+
+            client = AsyncMock()
+            result = await _check_single_dep("postgres", config, client)
+            assert result is False
+
+    async def test_postgres_in_dep_classification_as_optional(self):
+        """Postgres is OPTIONAL — bot degrades without it."""
+        from telegram_bot.preflight import DEP_CLASSIFICATION, DepLevel
+
+        assert DEP_CLASSIFICATION.get("postgres") == DepLevel.OPTIONAL
+
+
+class TestPostgresOptionalBehavior:
+    """Postgres failure does not block startup."""
+
+    async def test_postgres_optional_does_not_block_startup(self):
+        """Postgres failure does not raise PreflightError."""
+        config = _make_config(realestate_database_url="postgresql://u:p@localhost/missing")
+
+        async def fake_optional(name, cfg, client):
+            return False
+
+        with (
+            patch(
+                "telegram_bot.preflight._check_critical_with_retry",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch("telegram_bot.preflight._check_single_dep", side_effect=fake_optional),
+        ):
+            results = await check_dependencies(config)
+
+        assert results["postgres"] is False
