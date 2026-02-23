@@ -37,3 +37,15 @@ def test_unified_config_import_is_lazy(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg is not None
     assert "src.ingestion.unified.qdrant_writer" not in sys.modules
     assert "src.ingestion.unified.targets.qdrant_hybrid_target" not in sys.modules
+    assert "src.ingestion.unified.observability" not in sys.modules
+
+
+def test_unified_cli_import_keeps_flow_lazy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLI import should not eagerly import flow/writer modules."""
+    _clear_modules_safe(monkeypatch, ("src",))
+
+    module = importlib.import_module("src.ingestion.unified.cli")
+
+    assert module is not None
+    assert "src.ingestion.unified.flow" not in sys.modules
+    assert "src.ingestion.unified.qdrant_writer" not in sys.modules

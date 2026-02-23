@@ -734,6 +734,13 @@ class PropertyBot:
             return
 
         lead_desc = parts[2] if len(parts) > 2 else ""
+        trace_id = ""
+        try:
+            trace_id = get_client().get_current_trace_id() or ""
+        except Exception:
+            logger.debug("Failed to resolve current Langfuse trace id for /call", exc_info=True)
+        if not trace_id:
+            trace_id = f"call-{uuid.uuid4().hex}"
 
         try:
             from livekit import api
@@ -762,6 +769,7 @@ class PropertyBot:
                                     "triggered_by": message.from_user.id,
                                 },
                                 "callback_chat_id": message.chat.id,
+                                "langfuse_trace_id": trace_id,
                             }
                         ),
                     )
