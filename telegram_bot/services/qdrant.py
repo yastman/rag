@@ -61,6 +61,7 @@ class QdrantService:
         self._dense_vector_name = dense_vector_name
         self._sparse_vector_name = sparse_vector_name
         self._collection_validated = False
+        self._colbert_available: bool | None = None
 
         logger.info(
             f"QdrantService initialized: {self._collection_name} (mode={quantization_mode})"
@@ -117,6 +118,8 @@ class QdrantService:
         that hasn't been created/reindexed yet.
         """
         if self._collection_validated:
+            if self._colbert_available is None:
+                await self._refresh_collection_capabilities()
             return
 
         try:
@@ -129,6 +132,7 @@ class QdrantService:
 
         if self._collection_name in names:
             self._collection_validated = True
+            await self._refresh_collection_capabilities()
             return
 
         # Fallback: use base collection if it exists.
@@ -141,12 +145,40 @@ class QdrantService:
             self._collection_name = self._base_collection_name
             self._quantization_mode = "off"
             self._collection_validated = True
+            await self._refresh_collection_capabilities()
             return
 
         raise RuntimeError(
             f"Qdrant collection '{self._collection_name}' not found "
             f"(base '{self._base_collection_name}' also missing)"
         )
+
+    async def _refresh_collection_capabilities(self) -> None:
+        """Refresh runtime capability flags from collection config."""
+        try:
+            info = await self._client.get_collection(self._collection_name)
+            dense_vectors = info.config.params.vectors
+            dense_names = set(dense_vectors.keys()) if isinstance(dense_vectors, dict) else set()
+            colbert_present = "colbert" in dense_names
+            if self._colbert_available is None and not colbert_present:
+                logger.info(
+                    "QdrantService: collection '%s' missing 'colbert' vector; "
+                    "server-side ColBERT disabled (RRF fallback active)",
+                    self._collection_name,
+                )
+            self._colbert_available = colbert_present
+        except Exception as exc:
+            logger.debug(
+                "QdrantService: failed to inspect vector config for %s: %s",
+                self._collection_name,
+                exc,
+            )
+
+    @staticmethod
+    def _is_missing_vector_error(exc: Exception) -> bool:
+        """Detect errors that indicate absent vector names in collection config."""
+        msg = str(exc).lower()
+        return "not existing vector name" in msg or "requires specified vector name" in msg
 
     @observe(name="qdrant-hybrid-search-rrf")
     async def hybrid_search_rrf(
@@ -316,6 +348,19 @@ class QdrantService:
             Reranked results (ColBERT MaxSim scores).
         """
         await self.ensure_collection()
+        if self._colbert_available is False:
+            logger.debug(
+                "Qdrant ColBERT skipped: vector unavailable in collection %s; using RRF",
+                self._collection_name,
+            )
+            return await self.hybrid_search_rrf(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=filters,
+                top_k=top_k,
+                rrf_k=rrf_k,
+                return_meta=return_meta,
+            )
 
         if not colbert_query:
             logger.warning(
@@ -382,6 +427,13 @@ class QdrantService:
                 return results, ok_meta
             return results
         except Exception as e:
+            if self._is_missing_vector_error(e):
+                self._colbert_available = False
+                logger.info(
+                    "Qdrant ColBERT disabled for collection %s: %s",
+                    self._collection_name,
+                    e,
+                )
             logger.warning(
                 "Qdrant ColBERT search failed (%s: %s), falling back to RRF",
                 type(e).__name__,
