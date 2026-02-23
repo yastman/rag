@@ -16,6 +16,7 @@ from qdrant_client.models import (
     SparseVector,
 )
 
+from src.ingestion.unified.observability import observe, try_update_ingestion_trace
 from telegram_bot.services import VoyageService
 
 
@@ -233,11 +234,17 @@ class QdrantHybridWriter:
             "file_id": file_id,  # Flat for fast delete
         }
 
+    @observe(name="ingestion-qdrant-delete-file", capture_input=False, capture_output=False)
     async def delete_file(self, file_id: str, collection_name: str) -> int:
         """Delete all points for a file.
 
         Uses metadata.file_id filter (more reliable than flat file_id).
         """
+        try_update_ingestion_trace(
+            command="qdrant-delete-file",
+            status="started",
+            metadata={"collection": collection_name},
+        )
         # Count before delete
         count_result = self.client.count(
             collection_name=collection_name,
@@ -257,8 +264,14 @@ class QdrantHybridWriter:
             )
             logger.info(f"Deleted {count} points for file_id={file_id}")
 
+        try_update_ingestion_trace(
+            command="qdrant-delete-file",
+            status="completed",
+            metadata={"collection": collection_name, "points_deleted": count},
+        )
         return count
 
+    @observe(name="ingestion-qdrant-upsert-chunks", capture_input=False, capture_output=False)
     async def upsert_chunks(
         self,
         chunks: list[Any],
@@ -275,8 +288,18 @@ class QdrantHybridWriter:
         4. Upsert to Qdrant
         """
         stats = WriteStats()
+        try_update_ingestion_trace(
+            command="qdrant-upsert-chunks",
+            status="started",
+            metadata={"collection": collection_name, "chunks": len(chunks)},
+        )
 
         if not chunks:
+            try_update_ingestion_trace(
+                command="qdrant-upsert-chunks",
+                status="completed",
+                metadata={"collection": collection_name, "chunks": 0},
+            )
             return stats
 
         try:
@@ -333,7 +356,22 @@ class QdrantHybridWriter:
         except Exception as e:
             stats.errors = [str(e)]
             logger.error(f"Error upserting chunks: {e}", exc_info=True)
+            try_update_ingestion_trace(
+                command="qdrant-upsert-chunks",
+                status="error",
+                metadata={"collection": collection_name, "error_type": type(e).__name__},
+            )
+            return stats
 
+        try_update_ingestion_trace(
+            command="qdrant-upsert-chunks",
+            status="completed",
+            metadata={
+                "collection": collection_name,
+                "points_deleted": stats.points_deleted,
+                "points_upserted": stats.points_upserted,
+            },
+        )
         return stats
 
     def delete_file_sync(self, file_id: str, collection_name: str) -> int:

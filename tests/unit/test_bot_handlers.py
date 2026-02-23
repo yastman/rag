@@ -1,7 +1,10 @@
 """Unit tests for telegram_bot/bot.py handlers (LangGraph pipeline)."""
 
 import asyncio
+import json
 import logging
+import sys
+import types
 
 import pytest
 
@@ -404,6 +407,41 @@ class TestCommandHandlers:
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
         assert "p50" in call_args
+
+    async def test_cmd_call_dispatch_includes_langfuse_trace_id(self, mock_config):
+        """`/call` dispatch metadata should include langfuse_trace_id for continuity (#609)."""
+        mock_config.admin_ids = [12345]
+        mock_config.livekit_url = "ws://livekit.local"
+        mock_config.livekit_api_key = "lk-key"
+        mock_config.livekit_api_secret = "lk-secret"
+        mock_config.sip_trunk_id = "trunk-123"
+
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message("/call +380501234567 тестовая заявка")
+
+        fake_lk = MagicMock()
+        fake_lk.agent_dispatch.create_dispatch = AsyncMock()
+        fake_lk.sip.create_sip_participant = AsyncMock()
+        fake_lk.aclose = AsyncMock()
+
+        fake_api = types.SimpleNamespace(
+            LiveKitAPI=MagicMock(return_value=fake_lk),
+            CreateAgentDispatchRequest=lambda **kwargs: types.SimpleNamespace(**kwargs),
+            CreateSIPParticipantRequest=lambda **kwargs: types.SimpleNamespace(**kwargs),
+        )
+        fake_livekit = types.SimpleNamespace(api=fake_api)
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id.return_value = "trace-123"
+
+        with (
+            patch.dict(sys.modules, {"livekit": fake_livekit}),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+        ):
+            await bot.cmd_call(message)
+
+        dispatch_request = fake_lk.agent_dispatch.create_dispatch.await_args.args[0]
+        metadata = json.loads(dispatch_request.metadata)
+        assert metadata["langfuse_trace_id"] == "trace-123"
 
 
 def _mock_agent_result(**overrides):
