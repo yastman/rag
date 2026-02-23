@@ -826,20 +826,20 @@ ingest-gdrive-status: ***REMOVED******REMOVED*** Show GDrive collection stats
 
 ingest-unified: ***REMOVED******REMOVED*** Run unified ingestion once
 	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
-	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli run
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run
 	@echo "$(GREEN)✓ Ingestion complete$(NC)"
 
 ingest-unified-watch: ***REMOVED******REMOVED*** Run unified ingestion continuously (watch mode)
 	@echo "$(BLUE)Starting unified ingestion watch mode...$(NC)"
-	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli run --watch
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli run --watch
 
 ingest-unified-status: ***REMOVED******REMOVED*** Show unified ingestion status
 	@echo "$(BLUE)Unified ingestion status:$(NC)"
-	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli status
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli status
 
 ingest-unified-reprocess: ***REMOVED******REMOVED*** Reprocess all error files
 	@echo "$(BLUE)Reprocessing error files...$(NC)"
-	set -a && source .env && set +a && uv run python -m src.ingestion.unified.cli reprocess --errors
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m src.ingestion.unified.cli reprocess --errors
 	@echo "$(GREEN)✓ Reprocess queued$(NC)"
 
 ingest-unified-logs: ***REMOVED******REMOVED*** Show ingestion service logs
@@ -869,7 +869,7 @@ validate-traces: ***REMOVED******REMOVED*** Full rebuild + trace validation + re
 	uv run python scripts/validate_traces.py --report
 	@echo "$(GREEN)Validation complete — see docs/reports/$(NC)"
 
-validate-traces-fast: ***REMOVED******REMOVED*** No rebuild, just start stack + trace validation + report
+validate-traces-fast: ***REMOVED******REMOVED*** No rebuild; trace validation fails if required trace families are missing
 	@echo "$(BLUE)Fast validation (no rebuild)...$(NC)"
 	$(COMPOSE_CMD) --profile core --profile bot --profile ml up -d --wait
 	uv run python scripts/validate_traces.py --report

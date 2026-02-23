@@ -15,6 +15,7 @@ from src.ingestion.unified.colbert_backfill import (
     compute_colbert_coverage,
     inspect_collection_schema,
 )
+from src.ingestion.unified.observability import observe, try_update_ingestion_trace
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -29,18 +30,31 @@ def setup_logging(verbose: bool = False) -> None:
     logging.getLogger("cocoindex").setLevel(logging.INFO)
 
 
+@observe(name="ingestion-cli-run", capture_input=False, capture_output=False)
 def cmd_run(args: argparse.Namespace) -> int:
     """Run ingestion."""
     from src.ingestion.unified.config import UnifiedConfig
     from src.ingestion.unified.flow import run_once, run_watch
 
     config = UnifiedConfig()
+    watch_mode = bool(args.watch)
+    try_update_ingestion_trace(command="run", status="started", metadata={"watch": watch_mode})
 
-    if args.watch:
-        logging.info("Starting CocoIndex watch mode (FlowLiveUpdater)")
-        run_watch(config)
-    else:
-        run_once(config)
+    try:
+        if watch_mode:
+            logging.info("Starting CocoIndex watch mode (FlowLiveUpdater)")
+            run_watch(config)
+        else:
+            run_once(config)
+    except Exception as exc:
+        try_update_ingestion_trace(
+            command="run",
+            status="error",
+            metadata={"watch": watch_mode, "error_type": type(exc).__name__},
+        )
+        raise
+
+    try_update_ingestion_trace(command="run", status="completed", metadata={"watch": watch_mode})
 
     return 0
 
@@ -72,6 +86,7 @@ async def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+@observe(name="ingestion-cli-preflight", capture_input=False, capture_output=False)
 async def cmd_preflight(args: argparse.Namespace) -> int:
     """Check that all ingestion dependencies are reachable."""
     import httpx
@@ -79,6 +94,7 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     from src.ingestion.unified.config import UnifiedConfig
 
     config = UnifiedConfig()
+    try_update_ingestion_trace(command="preflight", status="started")
     timeout = httpx.Timeout(float(os.getenv("BGE_M3_TIMEOUT", "60")))
     results: dict[str, bool] = {}
 
@@ -156,6 +172,11 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     total = len(results)
     all_ok = ok == total
     print(f"\nPreflight: {ok}/{total} checks passed {'— READY' if all_ok else '— NOT READY'}")
+    try_update_ingestion_trace(
+        command="preflight",
+        status="completed" if all_ok else "failed",
+        metadata={"checks_passed": ok, "checks_total": total},
+    )
     return 0 if all_ok else 1
 
 
