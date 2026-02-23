@@ -67,13 +67,18 @@ Source code: `src/voice/agent.py` + `src/api/main.py`.
 
 Runtime path:
 1. LiveKit session starts voice agent.
-2. Voice agent calls RAG API (`POST /query`).
-3. RAG API runs the same graph pipeline used by Telegram bot.
-4. Transcript persistence goes to PostgreSQL when configured.
+2. `/call` dispatch metadata carries `langfuse_trace_id` for continuity.
+3. Voice agent calls RAG API (`POST /query`) with the same `langfuse_trace_id`.
+4. RAG API runs the same graph pipeline used by Telegram bot.
+5. Transcript persistence goes to PostgreSQL when configured.
 
 ## 5) Observability
 
 - App traces/scores: Langfuse (`telegram_bot/observability.py`, scoring hooks)
+- Required trace families validated by `make validate-traces-fast`:
+  - `rag-api-query`
+  - `voice-session`
+  - `ingestion-cli-run`
 - Log monitoring: Loki + Promtail + Alertmanager
 - Alert rules: `docker/monitoring/rules/*.yaml`
 

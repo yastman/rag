@@ -48,7 +48,12 @@ Run full test suite when touching cross-cutting logic:
 ## Observability Validation
 - For tracing changes, run:
   - `make validate-traces-fast`
-- Verify that critical spans/scores remain present in Langfuse-driven outputs.
+- Verify that critical trace families remain present in Langfuse-driven outputs:
+  - `rag-api-query`
+  - `voice-session`
+  - `ingestion-cli-run`
+- If CLI auth/host issues occur, validate host explicitly:
+  - `lf --host "$LANGFUSE_HOST" traces list --name rag-api-query --limit 1`
 
 ## Documentation Validation
 - Ensure commands in docs match `Makefile` or real CLI modules.
