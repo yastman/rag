@@ -2117,6 +2117,8 @@ class TestClientDirectPipeline:
     """Tests for client direct fast-path (feature-flagged)."""
 
     def _setup_pre_agent_cache_miss(self, bot):
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._embeddings.aembed_query = AsyncMock(return_value=[0.1] * 10)
         bot._cache.store_embedding = AsyncMock()
         bot._cache.check_semantic = AsyncMock(return_value=None)
@@ -2125,6 +2127,8 @@ class TestClientDirectPipeline:
     async def test_client_direct_cache_hit_returns_early(self, mock_config):
         mock_config.client_direct_pipeline_enabled = True
         bot, _ = _create_bot(mock_config)
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._embeddings.aembed_query = AsyncMock(return_value=[0.2] * 10)
         bot._cache.store_embedding = AsyncMock()
         bot._cache.check_semantic = AsyncMock(return_value="Ответ из кеша")
@@ -2711,6 +2715,8 @@ class TestPreAgentCacheCheck:
         """Configure cache and embeddings mocks on a bot instance."""
         if embedding is None:
             embedding = [0.1] * 10
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._embeddings.aembed_query = AsyncMock(return_value=embedding)
         bot._cache.store_embedding = AsyncMock()
         bot._cache.store_semantic = AsyncMock()
@@ -2812,6 +2818,8 @@ class TestPreAgentCacheCheck:
     async def test_pre_agent_cache_embedding_error_proceeds_to_agent(self, mock_config):
         """Embedding error in pre-agent check is swallowed; agent.ainvoke still called (#563)."""
         bot, _ = _create_bot(mock_config)
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._embeddings.aembed_query = AsyncMock(side_effect=RuntimeError("BGE-M3 timeout"))
         bot._cache.store_embedding = AsyncMock()
         bot._cache.store_semantic = AsyncMock()
@@ -2908,18 +2916,17 @@ class TestPreAgentCacheCheck:
         bot._cache.check_semantic.assert_not_called()
         mock_agent.ainvoke.assert_called_once()
 
-    async def test_pre_agent_uses_hybrid_colbert_when_available(self, mock_config):
-        """When aembed_hybrid_with_colbert exists, all three embeddings are stashed (#571)."""
+    async def test_pre_agent_uses_hybrid_when_available(self, mock_config):
+        """When aembed_hybrid exists, pre-agent path stashes dense+sparse only."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
         sparse = {"indices": [1], "values": [0.7]}
-        colbert = [[0.3] * 10] * 2
 
-        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
-            return_value=(dense, sparse, colbert)
-        )
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
         bot._embeddings.aembed_query = AsyncMock()  # should NOT be called
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
         bot._cache.store_sparse_embedding = AsyncMock()
         bot._cache.check_semantic = AsyncMock(return_value=None)
@@ -2948,23 +2955,25 @@ class TestPreAgentCacheCheck:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
-        # hybrid_with_colbert must be called; aembed_query must NOT be called
-        bot._embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+        # aembed_hybrid must be called; aembed_query must NOT be called
+        bot._embeddings.aembed_hybrid.assert_awaited_once()
         bot._embeddings.aembed_query.assert_not_called()
         # sparse must be stored in cache
         bot._cache.store_sparse_embedding.assert_awaited_once()
-        # all three embeddings must be stashed
+        # dense+sparse are stashed; ColBERT is deferred to post-semantic miss paths
         assert stashed_store.get("cache_key_embedding") == dense
         assert stashed_store.get("cache_key_sparse") == sparse
-        assert stashed_store.get("cache_key_colbert") == colbert
+        assert stashed_store.get("cache_key_colbert") is None
 
-    async def test_pre_agent_fallback_to_aembed_query_when_no_hybrid_colbert(self, mock_config):
-        """Fallback to aembed_query when aembed_hybrid_with_colbert is not available (#571)."""
+    async def test_pre_agent_fallback_to_aembed_query_when_no_hybrid(self, mock_config):
+        """Fallback to aembed_query when aembed_hybrid is not available."""
         bot, _ = _create_bot(mock_config)
         test_embedding = [0.5] * 10
 
         bot._embeddings.aembed_query = AsyncMock(return_value=test_embedding)
-        bot._embeddings.aembed_hybrid_with_colbert = None  # not available
+        bot._embeddings.aembed_hybrid = None  # not available
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
         bot._cache.store_sparse_embedding = AsyncMock()
         bot._cache.check_semantic = AsyncMock(return_value=None)
@@ -2998,17 +3007,16 @@ class TestPreAgentCacheCheck:
         assert stashed_store.get("cache_key_sparse") is None
         assert stashed_store.get("cache_key_colbert") is None
 
-    async def test_pre_agent_hybrid_colbert_stash_on_cache_hit(self, mock_config):
-        """On cache HIT with hybrid_with_colbert, sparse is stored in cache (#571)."""
+    async def test_pre_agent_hybrid_stash_on_cache_hit(self, mock_config):
+        """On cache HIT with hybrid embeddings, sparse is stored and agent is skipped."""
         bot, _ = _create_bot(mock_config)
 
         dense = [0.5] * 10
         sparse = {"indices": [2], "values": [0.8]}
-        colbert = [[0.4] * 10] * 3
 
-        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
-            return_value=(dense, sparse, colbert)
-        )
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
         bot._cache.store_embedding = AsyncMock()
         bot._cache.store_sparse_embedding = AsyncMock()
         bot._cache.check_semantic = AsyncMock(return_value="Cached answer")
@@ -3087,7 +3095,7 @@ class TestClearCacheCommand:
         assert call_kwargs is not None
         reply_markup = call_kwargs.kwargs.get("reply_markup") or call_kwargs.args[1]
         assert isinstance(reply_markup, InlineKeyboardMarkup)
-        # 3 rows, 2 buttons each
+        # 3 rows total, without analysis tier
         assert len(reply_markup.inline_keyboard) == 3
         all_buttons = [btn for row in reply_markup.inline_keyboard for btn in row]
         callback_data_values = {btn.callback_data for btn in all_buttons}
@@ -3095,7 +3103,6 @@ class TestClearCacheCommand:
             "cc:semantic",
             "cc:embeddings",
             "cc:sparse",
-            "cc:analysis",
             "cc:search",
             "cc:all",
         }
@@ -3137,8 +3144,8 @@ class TestClearCacheCommand:
                 "semantic": 3,
                 "embeddings": 7,
                 "sparse": 2,
-                "analysis": 0,
                 "search": 4,
+                "rerank": 1,
             }
         )
 

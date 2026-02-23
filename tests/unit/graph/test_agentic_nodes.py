@@ -180,6 +180,29 @@ class TestRerankNode:
         assert result["rerank_applied"] is False
         assert result["documents"][0]["text"] == "B"
 
+    async def test_rerank_uses_cache_hit(self):
+        """When rerank cache has a hit, ColBERT service call is skipped."""
+        from telegram_bot.graph.nodes.rerank import rerank_node
+
+        state = make_initial_state(user_id=1, session_id="s", query="test query")
+        state["documents"] = [
+            {"text": "doc A", "score": 0.3},
+            {"text": "doc B", "score": 0.5},
+        ]
+
+        mock_cache = AsyncMock()
+        mock_cache.get_rerank_results = AsyncMock(return_value=[{"text": "doc B", "score": 0.9}])
+        mock_cache.store_rerank_results = AsyncMock()
+
+        mock_reranker = AsyncMock()
+        mock_reranker.rerank = AsyncMock()
+
+        result = await rerank_node(state, cache=mock_cache, reranker=mock_reranker, top_k=1)
+        assert result["rerank_applied"] is True
+        assert result["rerank_cache_hit"] is True
+        assert result["documents"][0]["text"] == "doc B"
+        mock_reranker.rerank.assert_not_awaited()
+
 
 # --- rewrite_node tests ---
 
