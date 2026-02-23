@@ -34,7 +34,11 @@ class TestArgParsing:
 
         subparsers.add_parser("status")
         subparsers.add_parser("preflight")
-        subparsers.add_parser("bootstrap")
+        bootstrap_p = subparsers.add_parser("bootstrap")
+        bootstrap_p.add_argument("--require-colbert", action="store_true")
+
+        schema_check_p = subparsers.add_parser("schema-check")
+        schema_check_p.add_argument("--require-colbert", action="store_true")
 
         reprocess_p = subparsers.add_parser("reprocess")
         reprocess_p.add_argument("--file-id")
@@ -66,6 +70,22 @@ class TestArgParsing:
     def test_bootstrap(self):
         args = self._parse("bootstrap")
         assert args.command == "bootstrap"
+        assert args.require_colbert is False
+
+    def test_bootstrap_require_colbert(self):
+        args = self._parse("bootstrap", "--require-colbert")
+        assert args.command == "bootstrap"
+        assert args.require_colbert is True
+
+    def test_schema_check(self):
+        args = self._parse("schema-check")
+        assert args.command == "schema-check"
+        assert args.require_colbert is False
+
+    def test_schema_check_require_colbert(self):
+        args = self._parse("schema-check", "--require-colbert")
+        assert args.command == "schema-check"
+        assert args.require_colbert is True
 
     def test_reprocess_file_id(self):
         args = self._parse("reprocess", "--file-id", "abc123")
@@ -525,7 +545,7 @@ class TestCmdBootstrap:
 
     @pytest.fixture
     def args(self):
-        return argparse.Namespace(command="bootstrap", verbose=False)
+        return argparse.Namespace(command="bootstrap", verbose=False, require_colbert=False)
 
     async def test_collection_already_exists(self, args, capsys):
         config = _make_config(collection_name="existing_col")
@@ -545,6 +565,30 @@ class TestCmdBootstrap:
         output = capsys.readouterr().out
         assert "already exists" in output
         client.create_collection.assert_not_called()
+
+    async def test_collection_exists_require_colbert_fails_on_drift(self, capsys):
+        config = _make_config(collection_name="existing_col")
+        client = MagicMock()
+        client.get_collections.return_value = MagicMock()
+        collection_info = MagicMock()
+        collection_info.config.params.vectors = {"dense": MagicMock()}
+        collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        client.get_collection.return_value = collection_info
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("qdrant_client.QdrantClient", return_value=client),
+        ):
+            from src.ingestion.unified.cli import cmd_bootstrap
+
+            result = await cmd_bootstrap(
+                argparse.Namespace(command="bootstrap", verbose=False, require_colbert=True)
+            )
+
+        assert result == 1
+        output = capsys.readouterr().out
+        assert "schema drift" in output.lower()
+        assert "colbert" in output
 
     async def test_connection_failure(self, args, capsys):
         config = _make_config(collection_name="new_col")
@@ -585,6 +629,55 @@ class TestCmdBootstrap:
         client.create_collection.assert_called_once()
         output = capsys.readouterr().out
         assert "Bootstrap completed" in output
+
+
+class TestCmdSchemaCheck:
+    """Test schema-check command."""
+
+    async def test_schema_check_passes_when_requirements_met(self, capsys):
+        config = _make_config(collection_name="existing_col")
+        client = MagicMock()
+        collection_info = MagicMock()
+        collection_info.config.params.vectors = {"dense": MagicMock(), "colbert": MagicMock()}
+        collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        client.get_collection.return_value = collection_info
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("qdrant_client.QdrantClient", return_value=client),
+        ):
+            from src.ingestion.unified.cli import cmd_schema_check
+
+            result = await cmd_schema_check(
+                argparse.Namespace(command="schema-check", verbose=False, require_colbert=True)
+            )
+
+        assert result == 0
+        output = capsys.readouterr().out
+        assert "Schema valid" in output
+
+    async def test_schema_check_fails_when_colbert_missing(self, capsys):
+        config = _make_config(collection_name="existing_col")
+        client = MagicMock()
+        collection_info = MagicMock()
+        collection_info.config.params.vectors = {"dense": MagicMock()}
+        collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        client.get_collection.return_value = collection_info
+
+        with (
+            patch("src.ingestion.unified.config.UnifiedConfig", return_value=config),
+            patch("qdrant_client.QdrantClient", return_value=client),
+        ):
+            from src.ingestion.unified.cli import cmd_schema_check
+
+            result = await cmd_schema_check(
+                argparse.Namespace(command="schema-check", verbose=False, require_colbert=True)
+            )
+
+        assert result == 1
+        output = capsys.readouterr().out
+        assert "Schema drift" in output
+        assert "colbert" in output
 
 
 # ---------------------------------------------------------------------------
@@ -648,6 +741,18 @@ class TestMainDispatch:
     @patch("src.ingestion.unified.cli.load_dotenv")
     def test_main_dispatches_reprocess(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
         monkeypatch.setattr("sys.argv", ["cli", "reprocess", "--errors"])
+
+        from src.ingestion.unified.cli import main
+
+        result = main()
+        assert result == 0
+        mock_cmd.assert_awaited_once()
+
+    @patch("src.ingestion.unified.cli.cmd_schema_check", new_callable=AsyncMock, return_value=0)
+    @patch("src.ingestion.unified.cli.setup_logging")
+    @patch("src.ingestion.unified.cli.load_dotenv")
+    def test_main_dispatches_schema_check(self, mock_dotenv, mock_logging, mock_cmd, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["cli", "schema-check", "--require-colbert"])
 
         from src.ingestion.unified.cli import main
 
