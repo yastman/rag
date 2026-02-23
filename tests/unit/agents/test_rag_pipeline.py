@@ -17,6 +17,8 @@ def mock_cache():
     cache.check_semantic = AsyncMock(return_value=None)
     cache.get_search_results = AsyncMock(return_value=None)
     cache.store_search_results = AsyncMock()
+    cache.get_rerank_results = AsyncMock(return_value=None)
+    cache.store_rerank_results = AsyncMock()
     cache.store_semantic = AsyncMock()
     return cache
 
@@ -27,6 +29,7 @@ def mock_embeddings():
     emb.aembed_query = AsyncMock(return_value=[0.1] * 1024)
     emb.aembed_hybrid = AsyncMock(return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}))
     emb.aembed_hybrid_with_colbert = None  # not available; prevents auto-AsyncMock child
+    emb.aembed_colbert_query = None
     return emb
 
 
@@ -93,6 +96,7 @@ async def test_cache_check_hit(mock_cache, mock_embeddings):
 
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)
     mock_cache.check_semantic = AsyncMock(return_value="Cached answer about apartments")
+    mock_embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.2] * 1024])
 
     result = await _cache_check(
         "квартиры",
@@ -105,6 +109,7 @@ async def test_cache_check_hit(mock_cache, mock_embeddings):
 
     assert result["cache_hit"] is True
     assert result["cached_response"] == "Cached answer about apartments"
+    mock_embeddings.aembed_colbert_query.assert_not_awaited()
 
 
 async def test_cache_check_embedding_error(mock_cache, mock_embeddings):
@@ -261,11 +266,13 @@ async def test_rerank_with_colbert(mock_reranker):
     result = await _rerank(
         "query",
         docs,
+        cache=AsyncMock(get_rerank_results=AsyncMock(return_value=None)),
         reranker=mock_reranker,
         latency_stages={},
     )
 
     assert result["rerank_applied"] is True
+    assert result["rerank_cache_hit"] is False
     assert len(result["documents"]) == 2
     assert result["documents"][0]["score"] == 0.95
 
@@ -278,6 +285,7 @@ async def test_rerank_fallback_no_reranker():
     result = await _rerank("query", docs, reranker=None, latency_stages={})
 
     assert result["rerank_applied"] is False
+    assert result["rerank_cache_hit"] is False
     assert result["documents"][0]["score"] == 0.8  # sorted desc
 
 
@@ -288,6 +296,24 @@ async def test_rerank_empty_docs():
 
     assert result["documents"] == []
     assert result["rerank_applied"] is False
+    assert result["rerank_cache_hit"] is False
+
+
+async def test_rerank_uses_cache_hit(mock_reranker):
+    from telegram_bot.agents.rag_pipeline import _rerank
+
+    docs = [{"text": "A", "score": 0.1}, {"text": "B", "score": 0.2}]
+    cached = [{"text": "B", "score": 0.9}]
+    cache = AsyncMock()
+    cache.get_rerank_results = AsyncMock(return_value=cached)
+    cache.store_rerank_results = AsyncMock()
+
+    result = await _rerank("query", docs, cache=cache, reranker=mock_reranker, latency_stages={})
+
+    assert result["rerank_applied"] is True
+    assert result["rerank_cache_hit"] is True
+    assert result["documents"] == cached
+    mock_reranker.rerank.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -812,6 +838,7 @@ async def test_cache_check_returns_colbert_query(mock_cache):
     from telegram_bot.agents.rag_pipeline import _cache_check
 
     mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = None
     mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
         return_value=(
             [0.1] * 1024,
@@ -819,6 +846,7 @@ async def test_cache_check_returns_colbert_query(mock_cache):
             [[0.2] * 1024] * 4,
         )
     )
+    mock_embeddings.aembed_colbert_query = None
 
     result = await _cache_check(
         "test query",
@@ -861,6 +889,7 @@ async def test_cache_check_computes_colbert_when_embedding_cached(mock_cache):
     mock_cache.get_embedding = AsyncMock(return_value=[0.1] * 1024)  # cached!
 
     mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = None
     mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
         return_value=(
             [0.1] * 1024,
@@ -868,6 +897,7 @@ async def test_cache_check_computes_colbert_when_embedding_cached(mock_cache):
             [[0.2] * 1024] * 4,
         )
     )
+    mock_embeddings.aembed_colbert_query = None
 
     result = await _cache_check(
         "test query",
@@ -991,7 +1021,10 @@ async def test_rag_pipeline_uses_colbert_search(mock_cache, mock_sparse):
             [[0.2] * 1024] * 4,
         )
     )
-    mock_embeddings.aembed_hybrid = AsyncMock()
+    mock_embeddings.aembed_hybrid = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]})
+    )
+    mock_embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.2] * 1024] * 4)
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -1030,6 +1063,10 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
             [[0.2] * 1024] * 4,
         )
     )
+    mock_embeddings.aembed_hybrid = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]})
+    )
+    mock_embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.2] * 1024] * 4)
 
     mock_qdrant = AsyncMock()
     # Score between relevance_threshold (0.005) and skip_rerank_threshold (0.018)
@@ -1073,13 +1110,13 @@ async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache
     reformulated_colbert = [[0.7] * 1024] * 3
 
     mock_embeddings = AsyncMock()
-    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
-        side_effect=[
-            ([0.1] * 1024, {"indices": [1], "values": [0.5]}, original_colbert),
-            ([0.9] * 1024, {"indices": [2], "values": [0.4]}, reformulated_colbert),
-        ]
+    mock_embeddings.aembed_hybrid = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]})
     )
-    mock_embeddings.aembed_hybrid = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = None
+    mock_embeddings.aembed_colbert_query = AsyncMock(
+        side_effect=[original_colbert, reformulated_colbert]
+    )
 
     # First call is cache_key embedding (miss), second is reformulated query warm embedding (hit).
     mock_cache.get_embedding = AsyncMock(side_effect=[None, [0.9] * 1024])
@@ -1127,6 +1164,7 @@ async def test_cache_check_uses_pre_computed_sparse(mock_cache):
 
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid_with_colbert = None  # not available
+    mock_embeddings.aembed_colbert_query = None
 
     result = await _cache_check(
         "test query",
@@ -1155,9 +1193,11 @@ async def test_cache_check_uses_pre_computed_colbert_skips_reencode(mock_cache):
     colbert = [[0.2] * 1024] * 3
 
     mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = None
     mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
         return_value=(dense, {"indices": [1], "values": [0.5]}, colbert)
     )
+    mock_embeddings.aembed_colbert_query = None
 
     result = await _cache_check(
         "test query",
@@ -1186,6 +1226,7 @@ async def test_cache_check_returns_sparse_embedding_in_all_paths(mock_cache):
 
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid_with_colbert = None
+    mock_embeddings.aembed_colbert_query = None
 
     # MISS path
     result_miss = await _cache_check(
@@ -1251,6 +1292,7 @@ async def test_rag_pipeline_passes_pre_computed_sparse_to_retrieve(mock_cache, m
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid_with_colbert = None  # disable colbert
     mock_embeddings.aembed_hybrid = None  # disable hybrid
+    mock_embeddings.aembed_colbert_query = None
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = None  # ensure plain RRF path

@@ -141,6 +141,12 @@ class BGEM3HybridEmbeddings(Embeddings):
 
         return dense, sparse, colbert
 
+    @observe(name="bge-m3-colbert-query-embed")
+    async def aembed_colbert_query(self, text: str) -> list[list[float]]:
+        """Embed text via /encode/colbert, returning query token vectors only."""
+        result = await self._client.encode_colbert([text])
+        return result.colbert_vecs[0]
+
     @observe(name="bge-m3-hybrid-embed-batch")
     async def aembed_hybrid_batch(
         self, texts: list[str]
