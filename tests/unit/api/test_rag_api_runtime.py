@@ -139,6 +139,34 @@ async def test_query_observe_trace_sets_api_tags_and_ids() -> None:
     assert call_kwargs["user_id"] == "42"
 
 
+async def test_query_propagates_explicit_langfuse_trace_id() -> None:
+    """POST /query should forward explicit trace id into propagate_attributes."""
+    graph = _DummyGraph()
+    app.state.graph = graph
+    app.state.max_rewrite_attempts = 1
+
+    lf = MagicMock()
+    lf.update_current_trace = MagicMock()
+
+    with (
+        patch(
+            "telegram_bot.observability.propagate_attributes", return_value=nullcontext()
+        ) as mock_propagate,
+        patch("telegram_bot.observability.get_client", return_value=lf),
+    ):
+        await query(
+            QueryRequest(
+                query="test",
+                user_id=42,
+                session_id="sess-1",
+                channel="voice",
+                langfuse_trace_id="trace-123",
+            )
+        )
+
+    assert mock_propagate.call_args.kwargs["trace_id"] == "trace-123"
+
+
 async def test_lifespan_respects_rerank_provider_none() -> None:
     fake_cfg = SimpleNamespace(
         redis_url="redis://localhost:6379",

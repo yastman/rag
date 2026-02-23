@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from scripts.validate_traces import (
+    REQUIRED_TRACE_NAMES,
     TRACKED_NODE_NAMES,
     TraceResult,
     ValidationRun,
@@ -187,6 +188,12 @@ class TestComputeAggregates:
             "respond",
         ]:
             assert node in TRACKED_NODE_NAMES
+
+    def test_required_trace_names_include_api_voice_and_ingestion(self):
+        """Coverage gate should require API, voice, and ingestion trace families (#609)."""
+        assert "rag-api-query" in REQUIRED_TRACE_NAMES
+        assert "voice-session" in REQUIRED_TRACE_NAMES
+        assert "ingestion-cli-run" in REQUIRED_TRACE_NAMES
 
     def test_node_latencies_includes_transcribe(self):
         """Transcribe node spans are tracked in aggregates (#241)."""
