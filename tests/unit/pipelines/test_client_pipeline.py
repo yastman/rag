@@ -799,9 +799,9 @@ class TestCacheStoreGuards:
 
         mock_cache.store_semantic.assert_called_once()
 
-    async def test_structured_query_type_skips_cache_store(self):
-        """STRUCTURED query type is NOT in _PIPELINE_STORE_TYPES so cache store is skipped."""
-        assert "STRUCTURED" not in _PIPELINE_STORE_TYPES
+    async def test_structured_query_type_stores_cache(self):
+        """STRUCTURED query type is in _PIPELINE_STORE_TYPES, so cache store is enabled."""
+        assert "STRUCTURED" in _PIPELINE_STORE_TYPES
         msg = _make_message()
         lf = _make_lf_client()
         mock_cache = AsyncMock()
@@ -836,10 +836,10 @@ class TestCacheStoreGuards:
                 reranker=None,
                 llm=None,
                 config=_make_config(),
-                query_type="STRUCTURED",  # not in _PIPELINE_STORE_TYPES
+                query_type="STRUCTURED",
             )
 
-        mock_cache.store_semantic.assert_not_called()
+        mock_cache.store_semantic.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

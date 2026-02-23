@@ -516,7 +516,6 @@ async def _flush_redis_caches(cache: Any) -> str:
     patterns = [
         f"embeddings:{cache_version}:*",
         f"sparse:{cache_version}:*",
-        f"analysis:{cache_version}:*",
         f"search:{cache_version}:*",
         f"rerank:{cache_version}:*",
         "conversation:*",
