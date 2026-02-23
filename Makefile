@@ -528,7 +528,8 @@ e2e-test-traces: ## Run E2E tests + validate Langfuse traces
 e2e-test-group: ## Run specific test group (usage: make e2e-test-group GROUP=filters)
 	uv run python scripts/e2e/runner.py --group $(GROUP)
 
-e2e-setup: e2e-install e2e-generate-data e2e-index-data ## Full E2E setup
+e2e-setup: e2e-install ## Full E2E setup on canonical collection
+	@echo "$(YELLOW)Using canonical collection via E2E_COLLECTION_NAME (default: gdrive_documents_bge)$(NC)"
 	@echo "$(GREEN)✓ E2E setup complete$(NC)"
 
 # =============================================================================
