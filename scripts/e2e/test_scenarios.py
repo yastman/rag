@@ -13,6 +13,7 @@ class TestGroup(Enum):
     ROOM_FILTERS = "room_filters"
     LOCATION_FILTERS = "location_filters"
     SEARCH = "search"
+    IMMIGRATION = "immigration"
     EDGE_CASES = "edge_cases"
 
 
@@ -44,6 +45,49 @@ class TestScenario:
 
 # All 25 test scenarios
 SCENARIOS: list[TestScenario] = [
+    # Group 0: Immigration corpus (6 tests)
+    TestScenario(
+        id="0.1",
+        name="Digital Nomad visa basics",
+        query="Какие требования для визы Digital Nomad в Болгарии?",
+        group=TestGroup.IMMIGRATION,
+        expected_keywords=["digital", "nomad", "виза", "болгар"],
+    ),
+    TestScenario(
+        id="0.2",
+        name="VNZ options",
+        query="Какие есть основные основания для ВНЖ в Болгарии?",
+        group=TestGroup.IMMIGRATION,
+        expected_keywords=["внж", "основан", "болгар"],
+    ),
+    TestScenario(
+        id="0.3",
+        name="PMJ path",
+        query="Через сколько лет после ВНЖ можно получить ПМЖ в Болгарии?",
+        group=TestGroup.IMMIGRATION,
+        expected_keywords=["пмж", "внж", "лет"],
+    ),
+    TestScenario(
+        id="0.4",
+        name="Immigration plus housing cross-question",
+        query="Можно ли получить ВНЖ через покупку недвижимости и какие есть риски?",
+        group=TestGroup.IMMIGRATION,
+        expected_keywords=["внж", "недвижим", "риск"],
+    ),
+    TestScenario(
+        id="0.5",
+        name="Document checklist",
+        query="Какие документы обычно нужны для подачи на ВНЖ?",
+        group=TestGroup.IMMIGRATION,
+        expected_keywords=["документ", "внж", "подач"],
+    ),
+    TestScenario(
+        id="0.6",
+        name="2026 rule changes",
+        query="Что изменилось в правилах ВНЖ/ПМЖ в Болгарии в 2026 году?",
+        group=TestGroup.IMMIGRATION,
+        expected_keywords=["2026", "внж", "пмж", "измен"],
+    ),
     # Group 1: Commands (4 tests)
     TestScenario(
         id="1.1",
