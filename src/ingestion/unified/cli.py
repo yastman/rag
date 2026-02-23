@@ -199,6 +199,7 @@ def _schema_requirements_status(
 async def cmd_schema_check(args: argparse.Namespace) -> int:
     """Validate Qdrant collection schema for required vector names."""
     from qdrant_client import QdrantClient
+    from qdrant_client.http.exceptions import UnexpectedResponse
 
     from src.ingestion.unified.config import UnifiedConfig
 
@@ -215,6 +216,9 @@ async def cmd_schema_check(args: argparse.Namespace) -> int:
 
     try:
         schema = inspect_collection_schema(client, collection_name)
+    except UnexpectedResponse as exc:
+        print(f"  [FAIL] Cannot load collection '{collection_name}': {exc}")
+        return 1
     except Exception as exc:
         print(f"  [FAIL] Qdrant error while loading '{collection_name}': {exc}")
         return 1
@@ -224,7 +228,6 @@ async def cmd_schema_check(args: argparse.Namespace) -> int:
     missing = sorted(schema["missing_dense"] | schema["missing_sparse"])
     if getattr(args, "require_colbert", False):
         missing.extend(sorted(schema["missing_colbert"]))
-
     if missing:
         print(
             "  [FAIL] Schema drift detected: missing "
@@ -538,7 +541,6 @@ def main() -> int:
         action="store_true",
         help="Require 'colbert' vector to be present",
     )
-
     # coverage-check
     coverage_check_p = subparsers.add_parser(
         "coverage-check",
