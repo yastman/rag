@@ -185,6 +185,7 @@ async def _generate_streaming(
         temperature=config.llm_temperature,
         max_tokens=effective_max_tokens,
         stream=True,
+        stream_options={"include_usage": True},
         name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
     )
 
