@@ -1,0 +1,41 @@
+name: Nightly Heavy Tests
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-heavy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  heavy-tier:
+    name: Heavy Tier (requires_extras/load/chaos/e2e/benchmark)
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies with extras
+        run: uv sync --frozen --extra all
+
+      - name: Validate full test collection
+        run: >
+          PYTHONDONTWRITEBYTECODE=1
+          uv run pytest tests/ --collect-only -q
+
+      - name: Run heavy tier suites
+        run: >
+          PYTHONDONTWRITEBYTECODE=1
+          uv run pytest tests/
+          -n auto --dist=loadscope
+          -q --timeout=60
+          -m "requires_extras or load or chaos or e2e or benchmark"
