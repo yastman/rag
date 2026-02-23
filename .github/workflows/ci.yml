@@ -55,14 +55,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run core unit tests (PR gate)
-        run: PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit-core
-
-      - name: Coverage gate (>=75%)
+      - name: Run core unit tests + coverage gate (>=75%)
         run: >
           PYTHONDONTWRITEBYTECODE=1
           uv run pytest tests/unit/
-          -n auto --dist=worksteal
+          -n auto --dist=loadscope
           -q --timeout=30
           -m "not legacy_api and not requires_extras and not slow"
           --cov=src --cov=telegram_bot
