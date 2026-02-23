@@ -37,3 +37,66 @@ jobs:
 
       - name: Type check
         run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
+
+  unit-core:
+    name: Unit Tests (Core)
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run core unit tests (PR gate)
+        run: PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit-core
+
+      - name: Coverage gate (>=75%)
+        run: >
+          PYTHONDONTWRITEBYTECODE=1
+          uv run pytest tests/unit/
+          -n auto --dist=worksteal
+          -q --timeout=30
+          -m "not legacy_api and not requires_extras and not slow"
+          --cov=src --cov=telegram_bot
+          --cov-report=term-missing
+          --cov-fail-under=75
+
+  precommit:
+    name: Pre-commit Validation
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run pre-commit
+        run: uv run pre-commit run --all-files
+
+  docker-validate:
+    name: Docker Build Validation
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Validate Compose file
+        run: docker compose -f docker-compose.dev.yml config --quiet
+
+      - name: Build bot image
+        run: docker compose -f docker-compose.dev.yml build bot
