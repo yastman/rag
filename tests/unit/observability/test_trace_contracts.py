@@ -10,6 +10,7 @@ Contracts tested:
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from unittest.mock import MagicMock
 
 import pytest
@@ -380,6 +381,46 @@ class TestBuildTraceMetadataContract:
         assert "documents" not in metadata
         assert "query_embedding" not in metadata
         assert "voice_audio" not in metadata
+
+
+class TestVoiceLifecycleTraceContract:
+    """Voice lifecycle traces should preserve call/session/status contract (#609)."""
+
+    def test_voice_session_id_has_voice_prefix(self):
+        from src.voice.observability import voice_session_id
+
+        assert voice_session_id("call-123") == "voice-call-123"
+        assert voice_session_id("") == "voice-unknown"
+
+    def test_build_voice_trace_metadata_includes_finalize_duration(self):
+        from src.voice.observability import build_voice_trace_metadata
+
+        payload = build_voice_trace_metadata(
+            call_id="call-123",
+            status="finalized",
+            duration_sec=31,
+        )
+        assert payload["call_id"] == "call-123"
+        assert payload["status"] == "finalized"
+        assert payload["duration_sec"] == 31
+
+    def test_update_voice_trace_writes_answered_status(self):
+        from src.voice.observability import update_voice_trace
+
+        lf = MagicMock()
+        lf.update_current_trace = MagicMock()
+        with (
+            pytest.MonkeyPatch().context() as mp,
+        ):
+            mp.setattr("src.voice.observability.get_client", lambda: lf)
+            mp.setattr("src.voice.observability.propagate_attributes", lambda **_: nullcontext())
+            update_voice_trace(call_id="call-123", status="answered")
+
+        lf.update_current_trace.assert_called_once()
+        kwargs = lf.update_current_trace.call_args.kwargs
+        assert kwargs["session_id"] == "voice-call-123"
+        assert kwargs["metadata"]["status"] == "answered"
+        assert kwargs["metadata"]["call_id"] == "call-123"
 
 
 class TestSessionIdFormatContract:
