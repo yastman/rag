@@ -14,16 +14,20 @@ class FunnelAnalyticsStore:
 
     async def fetch_stage_counts(self, metric_date: dt.date) -> list[Any]:
         """Aggregate entered/converted counts per stage for a given date."""
+        day_start = dt.datetime.combine(metric_date, dt.time.min, tzinfo=dt.UTC)
+        day_end = day_start + dt.timedelta(days=1)
         rows = await self._pool.fetch(
             """
             SELECT stage_name,
                    COUNT(*) FILTER (WHERE event_type = 'entered') AS entered_count,
                    COUNT(*) FILTER (WHERE event_type = 'converted') AS converted_count
             FROM funnel_events
-            WHERE DATE(created_at) = $1
+            WHERE created_at >= $1
+              AND created_at < $2
             GROUP BY stage_name
             """,
-            metric_date,
+            day_start,
+            day_end,
         )
         return cast(list[Any], rows)
 
