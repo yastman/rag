@@ -423,6 +423,29 @@ class QdrantService:
                 with_payload=True,
             )
             results = self._format_results(result.points)
+            if not results:
+                logger.warning(
+                    "Qdrant ColBERT returned 0 docs for collection %s, falling back to RRF",
+                    self._collection_name,
+                )
+                fallback = await self.hybrid_search_rrf(
+                    dense_vector=dense_vector,
+                    sparse_vector=sparse_vector,
+                    filters=filters,
+                    top_k=top_k,
+                    rrf_k=rrf_k,
+                    return_meta=return_meta,
+                )
+                fallback_results = fallback[0] if isinstance(fallback, tuple) else fallback
+                if fallback_results:
+                    self._colbert_available = False
+                    logger.info(
+                        "Qdrant ColBERT disabled for collection %s: no point-level "
+                        "ColBERT vectors detected (RRF returned %d docs)",
+                        self._collection_name,
+                        len(fallback_results),
+                    )
+                return fallback
             if return_meta:
                 return results, ok_meta
             return results
