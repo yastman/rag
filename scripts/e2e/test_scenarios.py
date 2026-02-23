@@ -14,6 +14,7 @@ class TestGroup(Enum):
     LOCATION_FILTERS = "location_filters"
     SEARCH = "search"
     EDGE_CASES = "edge_cases"
+    VOICE_TRANSCRIPTION = "voice_transcription"
 
 
 @dataclass
@@ -42,7 +43,7 @@ class TestScenario:
     timeout: int = 60
 
 
-# All 25 test scenarios
+# All 28 test scenarios
 SCENARIOS: list[TestScenario] = [
     # Group 1: Commands (4 tests)
     TestScenario(
@@ -237,6 +238,31 @@ SCENARIOS: list[TestScenario] = [
         query="квартира <script>alert(1)</script>",
         group=TestGroup.EDGE_CASES,
         description="Should handle safely without XSS",
+    ),
+    # Group 8: Voice transcription (3 tests)
+    TestScenario(
+        id="8.1",
+        name="Voice transcription + property search",
+        query="(voice) найди квартиру у моря до 120 тысяч",
+        group=TestGroup.VOICE_TRANSCRIPTION,
+        description="Voice message should transcribe and run property search flow.",
+        expected_keywords=["квартир", "мор", "120"],
+    ),
+    TestScenario(
+        id="8.2",
+        name="Voice transcription + CRM lookup",
+        query="(voice) покажи мои сделки в crm",
+        group=TestGroup.VOICE_TRANSCRIPTION,
+        description="Voice message should transcribe and route to CRM tool path.",
+        expected_keywords=["сделк", "crm", "ID"],
+    ),
+    TestScenario(
+        id="8.3",
+        name="Voice transcription timeout handling",
+        query="(voice) [simulate timeout]",
+        group=TestGroup.VOICE_TRANSCRIPTION,
+        description="Voice transcription timeout should return graceful fallback.",
+        expected_keywords=["не удалось", "попробуйте", "голос"],
     ),
 ]
 
