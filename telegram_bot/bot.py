@@ -700,12 +700,9 @@ class PropertyBot:
                 ],
                 [
                     InlineKeyboardButton(text="Sparse", callback_data="cc:sparse"),
-                    InlineKeyboardButton(text="Analysis", callback_data="cc:analysis"),
-                ],
-                [
                     InlineKeyboardButton(text="Search+Rerank", callback_data="cc:search"),
-                    InlineKeyboardButton(text="Все", callback_data="cc:all"),
                 ],
+                [InlineKeyboardButton(text="Все", callback_data="cc:all")],
             ]
         )
         await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
@@ -1075,22 +1072,19 @@ class PropertyBot:
             query_type = classify_query(user_text)
             if query_type in CACHEABLE_QUERY_TYPES:
                 try:
-                    _has_hybrid_colbert = callable(
-                        getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
-                    ) and asyncio.iscoroutinefunction(self._embeddings.aembed_hybrid_with_colbert)
-                    if _has_hybrid_colbert:
-                        # Single call yields dense + sparse + colbert — stash all three (#571)
-                        dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(
-                            user_text
-                        )
-                        embedding = dense
-                    else:
-                        embedding = await self._embeddings.aembed_query(user_text)
-                        sparse = None
-                        colbert = None
-                    await self._cache.store_embedding(user_text, embedding)
-                    if sparse is not None:
-                        await self._cache.store_sparse_embedding(user_text, sparse)
+                    embedding = await self._cache.get_embedding(user_text)
+                    sparse = await self._cache.get_sparse_embedding(user_text)
+                    if embedding is None:
+                        _has_hybrid = callable(
+                            getattr(self._embeddings, "aembed_hybrid", None)
+                        ) and asyncio.iscoroutinefunction(self._embeddings.aembed_hybrid)
+                        if _has_hybrid:
+                            embedding, sparse = await self._embeddings.aembed_hybrid(user_text)
+                            await self._cache.store_embedding(user_text, embedding)
+                            await self._cache.store_sparse_embedding(user_text, sparse)
+                        else:
+                            embedding = await self._embeddings.aembed_query(user_text)
+                            await self._cache.store_embedding(user_text, embedding)
                     cached = await self._cache.check_semantic(
                         query=user_text,
                         vector=embedding,
@@ -1104,7 +1098,6 @@ class PropertyBot:
                         rag_result_store["query_type"] = query_type
                         rag_result_store["cache_key_embedding"] = embedding
                         rag_result_store["cache_key_sparse"] = sparse
-                        rag_result_store["cache_key_colbert"] = colbert
                         # Write Langfuse scores and trace metadata
                         lf = get_client()
                         lf.update_current_trace(
@@ -1141,7 +1134,6 @@ class PropertyBot:
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
                     rag_result_store["cache_key_embedding"] = embedding
                     rag_result_store["cache_key_sparse"] = sparse
-                    rag_result_store["cache_key_colbert"] = colbert
                     rag_result_store["query_type"] = query_type
                 except Exception:
                     logger.warning(
@@ -1965,8 +1957,8 @@ class PropertyBot:
             "semantic": "Semantic cache",
             "embeddings": "Embeddings cache",
             "sparse": "Sparse embeddings cache",
-            "analysis": "Analysis cache",
             "search": "Search + Rerank cache",
+            "rerank": "Rerank cache",
             "all": "Все кеши",
         }
         data = (callback_query.data or "").removeprefix("cc:")

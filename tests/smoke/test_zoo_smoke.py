@@ -223,27 +223,27 @@ class TestZooEndToEnd:
         import time
 
         baseline = cache_service.get_metrics()
-        base_hits = baseline["analysis"]["hits"]
-        base_misses = baseline["analysis"]["misses"]
+        base_hits = baseline["search"]["hits"]
+        base_misses = baseline["search"]["misses"]
 
         query = f"zoo_e2e_test_{int(time.time())}"
-        analysis = {"filters": {"test": True}, "semantic_query": query}
+        payload = {"filters": {"test": True}, "semantic_query": query}
 
         # First request - should be MISS
         key = cache_service.make_hash(query)
-        await cache_service.get_exact("analysis", key)
+        await cache_service.get_exact("search", key)
         after_first = cache_service.get_metrics()
-        first_misses = after_first["analysis"]["misses"] - base_misses
-        assert first_misses >= 1, "First request should miss in analysis tier"
+        first_misses = after_first["search"]["misses"] - base_misses
+        assert first_misses >= 1, "First request should miss in search tier"
 
         # Store result
-        await cache_service.store_exact("analysis", key, analysis)
+        await cache_service.store_exact("search", key, payload)
 
         # Second request - should be HIT
-        cached = await cache_service.get_exact("analysis", key)
+        cached = await cache_service.get_exact("search", key)
         after_second = cache_service.get_metrics()
-        second_hits = after_second["analysis"]["hits"] - base_hits
+        second_hits = after_second["search"]["hits"] - base_hits
 
         assert cached is not None, "Second request should return cached result"
-        assert second_hits >= 1, "Second request should be a cache hit in analysis tier"
+        assert second_hits >= 1, "Second request should be a cache hit in search tier"
         assert cached["semantic_query"] == query
