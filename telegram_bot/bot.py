@@ -12,6 +12,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
@@ -362,6 +363,184 @@ class PropertyBot:
         setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=self.config.admin_ids)
         setup_error_middleware(self.dp)
         logger.info("Middlewares configured")
+
+    @staticmethod
+    def _extract_database_name(database_url: str) -> str | None:
+        """Extract database name from PostgreSQL URL."""
+        parsed = urlparse(database_url)
+        raw_path = (parsed.path or "").lstrip("/")
+        if not raw_path:
+            return None
+        return unquote(raw_path.split("/", 1)[0]) or None
+
+    async def _ensure_postgres_database_exists(
+        self, asyncpg_module: Any, database_name: str
+    ) -> bool:
+        """Ensure target PostgreSQL database exists, creating it when missing."""
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database_name):
+            logger.error("Unsafe PostgreSQL database name: %r", database_name)
+            return False
+
+        admin_conn: Any = None
+        try:
+            # Connect to maintenance DB to run CREATE DATABASE (required by PostgreSQL).
+            admin_conn = await asyncpg_module.connect(
+                self.config.realestate_database_url,
+                timeout=5,
+                database="postgres",
+            )
+            exists = await admin_conn.fetchval(
+                "SELECT 1 FROM pg_database WHERE datname = $1",
+                database_name,
+            )
+            if exists:
+                return True
+
+            escaped_name = database_name.replace('"', '""')
+            await admin_conn.execute(f'CREATE DATABASE "{escaped_name}"')
+            logger.info("Created PostgreSQL database: %s", database_name)
+            return True
+        except Exception as exc:
+            duplicate_error = getattr(asyncpg_module, "DuplicateDatabaseError", None)
+            if duplicate_error is not None and isinstance(exc, duplicate_error):
+                logger.info(
+                    "PostgreSQL database already exists after concurrent create: %s", database_name
+                )
+                return True
+            logger.warning(
+                "Failed to ensure PostgreSQL database exists: %s",
+                database_name,
+                exc_info=True,
+            )
+            return False
+        finally:
+            if admin_conn is not None:
+                with contextlib.suppress(Exception):
+                    await admin_conn.close()
+
+    async def _ensure_realestate_schema(self) -> None:
+        """Idempotent bootstrap for realestate runtime tables."""
+        if self._pg_pool is None:
+            return
+
+        schema_statements = [
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                telegram_id BIGINT UNIQUE NOT NULL,
+                locale VARCHAR(5) DEFAULT 'ru',
+                role VARCHAR(20) DEFAULT 'client',
+                first_name VARCHAR(100),
+                telegram_language_code VARCHAR(10),
+                notifications_enabled BOOLEAN DEFAULT true,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS leads (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                stage VARCHAR(30) DEFAULT 'new',
+                score INTEGER DEFAULT 0,
+                preferences JSONB DEFAULT '{}',
+                kommo_lead_id BIGINT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS funnel_events (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                event_type VARCHAR(50) NOT NULL,
+                metadata JSONB DEFAULT '{}',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS lead_scores (
+                id BIGSERIAL PRIMARY KEY,
+                lead_id BIGINT NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+                user_id BIGINT NOT NULL,
+                session_id TEXT NOT NULL,
+                score_value INTEGER NOT NULL CHECK (score_value BETWEEN 0 AND 100),
+                score_band TEXT NOT NULL CHECK (score_band IN ('hot', 'warm', 'cold')),
+                reason_codes JSONB NOT NULL DEFAULT '[]'::jsonb,
+                kommo_lead_id BIGINT,
+                sync_status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (sync_status IN ('pending', 'synced', 'failed')),
+                sync_attempts INTEGER NOT NULL DEFAULT 0,
+                last_synced_at TIMESTAMPTZ,
+                sync_error TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (lead_id)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS lead_score_sync_audit (
+                id BIGSERIAL PRIMARY KEY,
+                lead_score_id BIGINT NOT NULL REFERENCES lead_scores(id) ON DELETE CASCADE,
+                idempotency_key TEXT NOT NULL,
+                sync_status TEXT NOT NULL,
+                http_status INTEGER,
+                response_excerpt TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS nurturing_jobs (
+                id BIGSERIAL PRIMARY KEY,
+                lead_score_id BIGINT NOT NULL REFERENCES lead_scores(id) ON DELETE CASCADE,
+                scheduled_for TIMESTAMPTZ NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'running', 'sent', 'failed', 'skipped')),
+                channel TEXT NOT NULL DEFAULT 'telegram',
+                payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                last_error TEXT,
+                sent_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (lead_score_id, scheduled_for)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS funnel_metrics_daily (
+                id BIGSERIAL PRIMARY KEY,
+                metric_date DATE NOT NULL,
+                stage_name TEXT NOT NULL,
+                entered_count INTEGER NOT NULL DEFAULT 0,
+                converted_count INTEGER NOT NULL DEFAULT 0,
+                dropoff_count INTEGER NOT NULL DEFAULT 0,
+                conversion_rate NUMERIC(6,4) NOT NULL DEFAULT 0,
+                prev_stage_count INTEGER NOT NULL DEFAULT 0,
+                step_conversion_rate NUMERIC(6,4) NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (metric_date, stage_name)
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS scheduler_leases (
+                lease_name TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                lease_until TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """,
+            "ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT",
+            "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_user_id ON leads(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage)",
+            "CREATE INDEX IF NOT EXISTS idx_funnel_events_user_id ON funnel_events(user_id)",
+            "CREATE INDEX IF NOT EXISTS idx_funnel_events_created ON funnel_events(created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_funnel_events_date_stage ON funnel_events (DATE(created_at), stage_name)",
+            "CREATE INDEX IF NOT EXISTS idx_lead_scores_pending_sync ON lead_scores (sync_status, updated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_lead_scores_band_sync ON lead_scores (score_band, sync_status, updated_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending ON nurturing_jobs (status, scheduled_for ASC)",
+        ]
+        for stmt in schema_statements:
+            await self._pg_pool.execute(stmt)
 
     def _register_handlers(self):
         """Register message handlers."""
@@ -2061,9 +2240,24 @@ class PropertyBot:
         try:
             import asyncpg
 
-            # Validate DB exists before creating pool (avoid traceback spam #570)
-            test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
-            await test_conn.close()
+            test_conn: Any | None = None
+            try:
+                # Validate DB exists before creating pool (avoid traceback spam #570)
+                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
+            except asyncpg.InvalidCatalogNameError:
+                target_db = self._extract_database_name(self.config.realestate_database_url)
+                if target_db is None:
+                    raise
+                logger.warning(
+                    "PostgreSQL database %s missing; attempting auto-create",
+                    target_db,
+                )
+                if not await self._ensure_postgres_database_exists(asyncpg, target_db):
+                    raise
+                test_conn = await asyncpg.connect(self.config.realestate_database_url, timeout=5)
+            finally:
+                if test_conn is not None:
+                    await test_conn.close()
 
             self._pg_pool = await asyncpg.create_pool(
                 self.config.realestate_database_url,
@@ -2072,6 +2266,8 @@ class PropertyBot:
                 timeout=5,
             )
             logger.info("PostgreSQL pool ready (realestate)")
+            await self._ensure_realestate_schema()
+            logger.info("PostgreSQL schema ready (realestate)")
 
             from .services.user_service import UserService
 
