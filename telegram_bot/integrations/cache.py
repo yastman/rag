@@ -1,4 +1,4 @@
-"""CacheLayerManager — 6-tier Redis cache for RAG pipeline.
+"""CacheLayerManager — 5-tier Redis cache for RAG pipeline.
 
 Replaces CacheService (1000+ LOC) with a focused ~300 LOC implementation.
 
@@ -6,9 +6,8 @@ Tiers:
   1. Semantic cache (RedisVL SemanticCache, threshold per query_type)
   2. Embeddings cache (Redis exact, 7d TTL)
   3. Sparse embeddings cache (Redis exact, 7d TTL)
-  4. Analysis cache (Redis exact, 24h TTL)
-  5. Search results cache (Redis exact, 2h TTL)
-  6. Rerank results cache (Redis exact, 2h TTL)
+  4. Search results cache (Redis exact, 2h TTL)
+  5. Rerank results cache (Redis exact, 2h TTL)
   + Conversation history (Redis LIST, 20 msgs, 2h TTL)
 
 NOTE: redisvl imports are lazy-loaded in initialize() to avoid ~7.5s import
@@ -44,12 +43,11 @@ CACHE_VERSION = "v5"
 DEFAULT_TTLS: dict[str, int] = {
     "embeddings": 7 * 86400,  # 7 days
     "sparse": 7 * 86400,  # 7 days
-    "analysis": 86400,  # 24 hours
     "search": 7200,  # 2 hours
     "rerank": 7200,  # 2 hours
 }
 
-_METRIC_TIERS = ("semantic", "embeddings", "sparse", "analysis", "search", "rerank")
+_METRIC_TIERS = ("semantic", "embeddings", "sparse", "search", "rerank")
 
 
 def _hash(data: str) -> str:
@@ -99,7 +97,7 @@ def _create_semantic_cache(
 
 
 class CacheLayerManager:
-    """6-tier Redis cache manager for RAG pipeline."""
+    """5-tier Redis cache manager for RAG pipeline."""
 
     def __init__(
         self,
@@ -328,7 +326,7 @@ class CacheLayerManager:
         """Get value from exact cache tier.
 
         Args:
-            tier: Cache tier name (embeddings, sparse, analysis, search, rerank)
+            tier: Cache tier name (embeddings, sparse, search, rerank)
             key: Cache key (pre-hashed or raw)
 
         Returns:
@@ -341,13 +339,16 @@ class CacheLayerManager:
         try:
             cached = await self.redis.get(redis_key)
             if cached:
-                self._metrics[tier]["hits"] += 1
+                if tier in self._metrics:
+                    self._metrics[tier]["hits"] += 1
                 return json.loads(cached)
-            self._metrics[tier]["misses"] += 1
+            if tier in self._metrics:
+                self._metrics[tier]["misses"] += 1
             return None
         except Exception as e:
             logger.error("Cache get error (%s): %s: %s", tier, type(e).__name__, e)
-            self._metrics[tier]["misses"] += 1
+            if tier in self._metrics:
+                self._metrics[tier]["misses"] += 1
             return None
 
     @observe(name="cache-exact-store")
@@ -423,6 +424,41 @@ class CacheLayerManager:
         key = _hash(str(embedding_prefix[:10]) + json.dumps(filters, sort_keys=True, default=str))
         await self.store_exact("search", key, results)
 
+    # ========== Convenience: Rerank Results ==========
+
+    def _build_rerank_key(self, query: str, documents: list[dict[str, Any]], top_k: int) -> str:
+        doc_fingerprints = [
+            {
+                "text_hash": _hash(str(doc.get("text", ""))),
+                "score": round(float(doc.get("score", 0.0)), 6),
+            }
+            for doc in documents[:50]
+        ]
+        payload = {
+            "query": _normalize_query_for_cache(query),
+            "top_k": top_k,
+            "docs": doc_fingerprints,
+        }
+        return _hash(json.dumps(payload, sort_keys=True, ensure_ascii=False))
+
+    async def get_rerank_results(
+        self, query: str, documents: list[dict[str, Any]], top_k: int
+    ) -> list[dict[str, Any]] | None:
+        """Get cached rerank results for a query+document set."""
+        key = self._build_rerank_key(query, documents, top_k)
+        return await self.get_exact("rerank", key)
+
+    async def store_rerank_results(
+        self,
+        query: str,
+        documents: list[dict[str, Any]],
+        top_k: int,
+        results: list[dict[str, Any]],
+    ) -> None:
+        """Store rerank results for a query+document set."""
+        key = self._build_rerank_key(query, documents, top_k)
+        await self.store_exact("rerank", key, results)
+
     # ========== Conversation History ==========
     # Legacy store/get methods removed in #157: memory owned by LangGraph checkpointer.
 
@@ -442,7 +478,7 @@ class CacheLayerManager:
         """Clear all Redis keys for the given exact cache tier via SCAN + DELETE.
 
         Args:
-            tier: Cache tier name (embeddings, sparse, analysis, search, rerank).
+            tier: Cache tier name (embeddings, sparse, search, rerank).
                 Passing "search" also clears the "rerank" tier (logically linked).
 
         Returns:
@@ -509,7 +545,7 @@ class CacheLayerManager:
         """
         results: dict[str, int] = {}
         results["semantic"] = await self.clear_semantic_cache()
-        for tier in ("embeddings", "sparse", "analysis", "search", "rerank"):
+        for tier in ("embeddings", "sparse", "search", "rerank"):
             results[tier] = await self.clear_by_tier(tier)
         return results
 
