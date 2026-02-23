@@ -6,6 +6,7 @@ Features: RRF fusion, freshness boosting, MMR diversity.
 
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import numpy as np
 from qdrant_client import AsyncQdrantClient, models
@@ -48,8 +49,11 @@ class QdrantService:
             quantization_mode: One of 'off', 'scalar', 'binary' - controls collection suffix
             timeout: Connection timeout in seconds (default 30)
         """
+        # Strip api_key for http:// to avoid "insecure connection" warning (#570)
+        scheme = urlparse(url).scheme.lower()
+        effective_api_key = api_key if scheme == "https" else None
         self._client = AsyncQdrantClient(
-            url=url, api_key=api_key, prefer_grpc=True, timeout=timeout
+            url=url, api_key=effective_api_key, prefer_grpc=True, timeout=timeout
         )
         self._base_collection_name = collection_name
         self._quantization_mode = quantization_mode.lower()

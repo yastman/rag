@@ -300,3 +300,30 @@ class TestBGEM3SyncClient:
     def test_encode_sparse_empty(self, sync_client):
         result = sync_client.encode_sparse([])
         assert result.weights == []
+
+    def test_encode_colbert_sync_returns_multivectors(self, sync_client):
+        """encode_colbert returns ColbertResult with nested token vectors."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        # 1 text, 3 tokens, 1024-dim each
+        mock_resp.json.return_value = {
+            "colbert_vecs": [[[0.1] * 1024] * 3],
+            "processing_time": 0.05,
+        }
+
+        sync_client._client = MagicMock()
+        sync_client._client.post = MagicMock(return_value=mock_resp)
+
+        result = sync_client.encode_colbert(["hello world"])
+
+        assert len(result.colbert_vecs) == 1
+        assert len(result.colbert_vecs[0]) == 3
+        assert len(result.colbert_vecs[0][0]) == 1024
+        assert result.processing_time == 0.05
+        assert "/encode/colbert" in sync_client._client.post.call_args[0][0]
+
+    def test_encode_colbert_sync_empty_input(self, sync_client):
+        """encode_colbert returns empty result for empty input (no HTTP call)."""
+        result = sync_client.encode_colbert([])
+        assert result.colbert_vecs == []
