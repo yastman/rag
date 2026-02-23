@@ -6,6 +6,11 @@ They use mocks to avoid requiring external services but test the full flow.
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+
+pytest.importorskip("pymupdf", reason="pymupdf not installed (ingest extra)")
+
 from src.core.pipeline import RAGPipeline, RAGResult
 
 

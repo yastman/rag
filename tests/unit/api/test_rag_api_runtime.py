@@ -2,18 +2,59 @@
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
+_FASTAPI_SHIM_ACTIVE = False
+if importlib.util.find_spec("fastapi") is None:
+    # Minimal shim so src.api.main can be imported in core unit CI.
+    class _FakeJSONResponse:
+        def __init__(self, *, status_code: int, content: dict) -> None:
+            self.status_code = status_code
+            self.content = content
 
-pytest.importorskip("fastapi", reason="fastapi not installed (voice extra)")
-pytestmark = pytest.mark.requires_extras
+    class _FakeFastAPI:
+        def __init__(self, *args, **kwargs) -> None:
+            self.state = SimpleNamespace()
+
+        def exception_handler(self, *_args, **_kwargs):
+            def _decorator(func):
+                return func
+
+            return _decorator
+
+        def get(self, *_args, **_kwargs):
+            def _decorator(func):
+                return func
+
+            return _decorator
+
+        def post(self, *_args, **_kwargs):
+            def _decorator(func):
+                return func
+
+            return _decorator
+
+    fake_fastapi = type(sys)("fastapi")
+    fake_fastapi.FastAPI = _FakeFastAPI
+    fake_fastapi_responses = type(sys)("fastapi.responses")
+    fake_fastapi_responses.JSONResponse = _FakeJSONResponse
+    sys.modules["fastapi"] = fake_fastapi
+    sys.modules["fastapi.responses"] = fake_fastapi_responses
+    _FASTAPI_SHIM_ACTIVE = True
 
 from src.api.main import app, lifespan, query
 from src.api.schemas import QueryRequest
+
+
+if _FASTAPI_SHIM_ACTIVE:
+    # Prevent leaking shim into other tests that intentionally importorskip fastapi.
+    sys.modules.pop("fastapi.responses", None)
+    sys.modules.pop("fastapi", None)
 
 
 class _DummyGraph:
@@ -129,3 +170,39 @@ async def test_lifespan_respects_rerank_provider_none() -> None:
 
     assert mock_build_graph.call_args.kwargs["reranker"] is None
     mock_colbert.assert_not_called()
+
+
+async def test_lifespan_unknown_rerank_provider_logs_and_closes_embeddings() -> None:
+    closable_embeddings = SimpleNamespace(aclose=AsyncMock())
+    closable_sparse = SimpleNamespace(aclose=AsyncMock())
+    fake_cfg = SimpleNamespace(
+        redis_url="redis://localhost:6379",
+        cache_thresholds={"GENERAL": 0.08},
+        cache_ttl={"GENERAL": 3600},
+        qdrant_url="http://qdrant:6333",
+        qdrant_collection="test_collection",
+        bge_m3_url="http://bge-m3:8000",
+        rerank_provider="mystery",
+        max_rewrite_attempts=2,
+    )
+    fake_cfg.create_embeddings = MagicMock(return_value=closable_embeddings)
+    fake_cfg.create_sparse_embeddings = MagicMock(return_value=closable_sparse)
+    fake_cfg.create_llm = MagicMock(return_value=MagicMock())
+
+    fake_cache = AsyncMock()
+    fake_qdrant = AsyncMock()
+    fake_graph = MagicMock()
+
+    with (
+        patch("telegram_bot.graph.config.GraphConfig.from_env", return_value=fake_cfg),
+        patch("telegram_bot.integrations.cache.CacheLayerManager", return_value=fake_cache),
+        patch("telegram_bot.services.qdrant.QdrantService", return_value=fake_qdrant),
+        patch("telegram_bot.graph.graph.build_graph", return_value=fake_graph),
+        patch("src.api.main.logger.warning") as mock_warning,
+    ):
+        async with lifespan(app):
+            pass
+
+    mock_warning.assert_called_once()
+    closable_embeddings.aclose.assert_awaited_once()
+    closable_sparse.aclose.assert_awaited_once()
