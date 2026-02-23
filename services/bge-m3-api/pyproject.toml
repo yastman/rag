@@ -19,7 +19,7 @@ dependencies = [
     "prometheus-client==0.24.1",
     # Utilities
     "numpy==1.26.4",
-    "scipy==1.17.0",
+    "scipy==1.17.1",
 ]
 
 [tool.uv]
