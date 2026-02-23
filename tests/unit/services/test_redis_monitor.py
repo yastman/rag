@@ -126,3 +126,17 @@ async def test_check_health_checkpoint_scan_failure_is_non_fatal():
         0,
         0,
     )
+
+
+async def test_start_sets_max_connections_for_monitor_pool():
+    """RedisHealthMonitor uses max_connections=5 for its Redis pool."""
+    monitor = RedisHealthMonitor("redis://localhost:6379")
+
+    with patch("telegram_bot.services.redis_monitor.aioredis.from_url") as mock_from_url:
+        mock_client = AsyncMock()
+        mock_from_url.return_value = mock_client
+        await monitor.start()
+        await monitor.stop()  # cleanup background task created by start()
+
+    call_kwargs = mock_from_url.call_args[1]
+    assert call_kwargs["max_connections"] == 5
