@@ -933,6 +933,26 @@ class TestQdrantServiceHybridSearchColbert:
         assert meta["backend_error"] is False
         service.hybrid_search_rrf.assert_awaited_once()
 
+    async def test_colbert_empty_results_falls_back_and_disables_feature(self, service):
+        """Empty ColBERT result set should fallback to RRF and disable ColBERT runtime path."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
+        service.hybrid_search_rrf = AsyncMock(
+            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
+        )
+
+        colbert_query = [[0.1] * 1024] * 3
+
+        results = await service.hybrid_search_rrf_colbert(
+            dense_vector=[0.1] * 1024,
+            colbert_query=colbert_query,
+            top_k=5,
+        )
+
+        assert len(results) == 1
+        assert results[0]["id"] == "fallback_1"
+        assert service._colbert_available is False
+        service.hybrid_search_rrf.assert_awaited_once()
+
     async def test_colbert_search_with_filters(self, service, mock_point):
         """Filters are passed through to query_points."""
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
