@@ -432,9 +432,10 @@ class TestRunWatch:
         mock_updater.wait.assert_called_once()
         mock_flow.close.assert_called_once()
 
+    @patch("src.ingestion.unified.flow.try_update_ingestion_trace")
     @patch("src.ingestion.unified.flow.build_flow")
     @patch("cocoindex.FlowLiveUpdater")
-    def test_handles_keyboard_interrupt(self, mock_updater_cls, mock_build):
+    def test_handles_keyboard_interrupt(self, mock_updater_cls, mock_build, mock_update_trace):
         from src.ingestion.unified.flow import run_watch
 
         mock_flow = MagicMock()
@@ -449,10 +450,14 @@ class TestRunWatch:
         run_watch()
 
         mock_flow.close.assert_called_once()
+        assert mock_update_trace.call_count == 2
+        assert mock_update_trace.call_args_list[0].kwargs["status"] == "started"
+        assert mock_update_trace.call_args_list[1].kwargs["status"] == "interrupted"
 
+    @patch("src.ingestion.unified.flow.try_update_ingestion_trace")
     @patch("src.ingestion.unified.flow.build_flow")
     @patch("cocoindex.FlowLiveUpdater")
-    def test_uses_default_config_when_none(self, mock_updater_cls, mock_build):
+    def test_uses_default_config_when_none(self, mock_updater_cls, mock_build, mock_update_trace):
         from src.ingestion.unified.flow import run_watch
 
         mock_flow = MagicMock()
@@ -465,3 +470,33 @@ class TestRunWatch:
         run_watch(None)
 
         mock_build.assert_called_once()
+        assert mock_update_trace.call_count == 2
+        assert mock_update_trace.call_args_list[0].kwargs["status"] == "started"
+        assert mock_update_trace.call_args_list[1].kwargs["status"] == "completed"
+
+    @patch("src.ingestion.unified.flow.try_update_ingestion_trace")
+    @patch("src.ingestion.unified.flow.build_flow")
+    @patch("cocoindex.FlowLiveUpdater")
+    def test_records_error_status_without_completed(
+        self, mock_updater_cls, mock_build, mock_update_trace
+    ):
+        from src.ingestion.unified.flow import run_watch
+
+        mock_flow = MagicMock()
+        mock_build.return_value = mock_flow
+        mock_updater = MagicMock()
+        mock_updater.__enter__ = MagicMock(return_value=mock_updater)
+        mock_updater.__exit__ = MagicMock(return_value=False)
+        mock_updater.wait.side_effect = RuntimeError("boom")
+        mock_updater_cls.return_value = mock_updater
+
+        with pytest.raises(RuntimeError, match="boom"):
+            run_watch()
+
+        mock_flow.close.assert_called_once()
+        assert mock_update_trace.call_count == 2
+        assert mock_update_trace.call_args_list[0].kwargs["status"] == "started"
+        assert mock_update_trace.call_args_list[1].kwargs["status"] == "error"
+        assert mock_update_trace.call_args_list[1].kwargs["metadata"] == {
+            "error_type": "RuntimeError"
+        }
