@@ -858,6 +858,21 @@ class TestCmdHistory:
         assert "цены на квартиры" in answer_text
         assert "Квартиры от 50к евро" in answer_text
 
+    async def test_history_search_passes_full_multitoken_query(self, mock_config):
+        """/history with extra spaces should pass full user query to history service."""
+        bot, _ = _create_bot(mock_config)
+        bot._history_service = AsyncMock()
+        bot._history_service.search_user_history = AsyncMock(return_value=[])
+        message = _make_text_message("/history   цены на квартиры в аликанте")
+
+        await bot.cmd_history(message)
+
+        bot._history_service.search_user_history.assert_awaited_once_with(
+            user_id=12345,
+            query="цены на квартиры в аликанте",
+            limit=5,
+        )
+
     async def test_history_empty_results(self, mock_config):
         """/history with no matches returns informative message."""
         bot, _ = _create_bot(mock_config)
