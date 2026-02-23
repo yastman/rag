@@ -474,6 +474,24 @@ async def test_crm_get_my_tasks(bot_context, mock_kommo):
     mock_kommo.get_tasks.assert_called_once_with(responsible_user_id=42, is_completed=False)
 
 
+async def test_crm_get_my_tasks_marks_only_incomplete_overdue(bot_context, mock_kommo):
+    """Overdue marker must not be shown for completed tasks with past due date."""
+    from telegram_bot.agents.crm_tools import crm_get_my_tasks
+
+    mock_kommo.get_tasks.return_value = [
+        Task(id=401, text="Open overdue", complete_till=1000000000, is_completed=False),
+        Task(id=402, text="Done overdue", complete_till=1000000000, is_completed=True),
+    ]
+
+    result = await crm_get_my_tasks.ainvoke({}, config=_make_config(bot_context))
+
+    assert "Open overdue" in result
+    assert "Done overdue" in result
+    assert "Open overdue (ID: 401) ⚠️ ПРОСРОЧЕНО" in result
+    assert "Done overdue (ID: 402) ⚠️ ПРОСРОЧЕНО" not in result
+    mock_kommo.get_tasks.assert_called_once_with(responsible_user_id=42, is_completed=False)
+
+
 async def test_crm_get_my_tasks_no_manager_id(bot_context_no_manager):
     """crm_get_my_tasks returns error when manager_id is None."""
     from telegram_bot.agents.crm_tools import crm_get_my_tasks
