@@ -7,8 +7,14 @@ Investigates Docling's document structure and metadata flow.
 import sys
 from pathlib import Path
 
+import pytest
+
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+pytest.importorskip("docling", reason="docling not installed (ingest extra)")
+pytest.importorskip("docling_core", reason="docling-core not installed (ingest extra)")
+pytest.importorskip("transformers", reason="transformers not installed (ml-local extra)")
 
 from docling.chunking import HybridChunker
 from docling.document_converter import DocumentConverter

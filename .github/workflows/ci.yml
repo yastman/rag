@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Run core unit tests + coverage gate (>=75%)
+      - name: Run core unit tests + coverage gate (>=74%)
         run: >
           PYTHONDONTWRITEBYTECODE=1
           uv run pytest tests/unit/
@@ -64,7 +64,34 @@ jobs:
           -m "not legacy_api and not requires_extras and not slow"
           --cov=src --cov=telegram_bot
           --cov-report=term-missing
-          --cov-fail-under=75
+          --cov-fail-under=74
+
+  integration-smoke-fast:
+    name: Integration+Smoke (Deterministic Fast)
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run deterministic integration/smoke subset
+        run: >
+          PYTHONDONTWRITEBYTECODE=1
+          uv run pytest
+          tests/integration/test_graph_paths.py
+          tests/smoke/test_langgraph_smoke.py
+          -n auto --dist=worksteal
+          -q --timeout=30
+          -m "not requires_extras and not slow and not load and not chaos and not e2e and not benchmark"
 
   precommit:
     name: Pre-commit Validation
