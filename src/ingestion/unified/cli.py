@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import sys
+from collections.abc import Mapping
 
 from dotenv import load_dotenv
 
@@ -152,6 +153,86 @@ async def cmd_preflight(args: argparse.Namespace) -> int:
     return 0 if all_ok else 1
 
 
+def _extract_vector_names(collection_info) -> tuple[set[str], set[str]]:
+    """Extract named dense/sparse vector names from a Qdrant collection."""
+    params = getattr(getattr(collection_info, "config", None), "params", None)
+    vectors = getattr(params, "vectors", {})
+    sparse_vectors = getattr(params, "sparse_vectors", {})
+
+    dense_names: set[str] = set()
+    sparse_names: set[str] = set()
+
+    if isinstance(vectors, Mapping) or hasattr(vectors, "keys"):
+        dense_names = set(vectors.keys())
+
+    if isinstance(sparse_vectors, Mapping) or hasattr(sparse_vectors, "keys"):
+        sparse_names = set(sparse_vectors.keys())
+
+    return dense_names, sparse_names
+
+
+def _schema_requirements_status(
+    collection_info,
+    *,
+    require_colbert: bool,
+) -> tuple[list[str], set[str], set[str]]:
+    """Validate required vector names and return missing requirements."""
+    dense_names, sparse_names = _extract_vector_names(collection_info)
+    missing: list[str] = []
+
+    if "dense" not in dense_names:
+        missing.append("dense")
+    if "bm42" not in sparse_names:
+        missing.append("bm42")
+    if require_colbert and "colbert" not in dense_names:
+        missing.append("colbert")
+
+    return missing, dense_names, sparse_names
+
+
+async def cmd_schema_check(args: argparse.Namespace) -> int:
+    """Validate Qdrant collection schema for required vector names."""
+    from qdrant_client import QdrantClient
+    from qdrant_client.http.exceptions import UnexpectedResponse
+
+    from src.ingestion.unified.config import UnifiedConfig
+
+    config = UnifiedConfig()
+    collection_name = config.collection_name
+
+    print(f"\n=== Schema Check: {collection_name} ===")
+
+    client = QdrantClient(
+        url=os.getenv("QDRANT_URL", "http://localhost:6333"),
+        api_key=os.getenv("QDRANT_API_KEY"),
+        timeout=60,
+    )
+
+    try:
+        info = client.get_collection(collection_name)
+    except UnexpectedResponse as exc:
+        print(f"  [FAIL] Cannot load collection '{collection_name}': {exc}")
+        return 1
+    except Exception as exc:
+        print(f"  [FAIL] Qdrant error while loading '{collection_name}': {exc}")
+        return 1
+
+    missing, dense_names, sparse_names = _schema_requirements_status(
+        info,
+        require_colbert=args.require_colbert,
+    )
+    if missing:
+        print(
+            "  [FAIL] Schema drift detected: missing "
+            f"{', '.join(sorted(missing))}. "
+            f"dense={sorted(dense_names)} sparse={sorted(sparse_names)}"
+        )
+        return 1
+
+    print(f"  [OK] Schema valid: dense={sorted(dense_names)} sparse={sorted(sparse_names)}")
+    return 0
+
+
 async def cmd_bootstrap(args: argparse.Namespace) -> int:
     """Create Qdrant collection if it doesn't exist."""
     from qdrant_client import QdrantClient
@@ -192,14 +273,31 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
 
     # Check if collection already exists
     exists = False
+    existing_info = None
     try:
-        client.get_collection(collection_name)
+        existing_info = client.get_collection(collection_name)
         exists = True
     except (UnexpectedResponse, Exception):
         pass
 
     if exists:
-        print(f"  Collection '{collection_name}' already exists — nothing to do.")
+        print(f"  Collection '{collection_name}' already exists.")
+        if args.require_colbert:
+            missing, dense_names, sparse_names = _schema_requirements_status(
+                existing_info,
+                require_colbert=True,
+            )
+            if missing:
+                print(
+                    "  [FAIL] Existing collection schema drift: missing "
+                    f"{', '.join(sorted(missing))}. "
+                    "Recreate collection and run full reingest. "
+                    f"dense={sorted(dense_names)} sparse={sorted(sparse_names)}"
+                )
+                return 1
+            print("  [OK] Existing collection schema includes required vectors.")
+        else:
+            print("  Nothing to do.")
         return 0
 
     # Create collection
@@ -262,6 +360,20 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
 
+    if args.require_colbert:
+        info = client.get_collection(collection_name)
+        missing, dense_names, sparse_names = _schema_requirements_status(
+            info,
+            require_colbert=True,
+        )
+        if missing:
+            print(
+                "  [FAIL] Created collection schema drift: missing "
+                f"{', '.join(sorted(missing))}. "
+                f"dense={sorted(dense_names)} sparse={sorted(sparse_names)}"
+            )
+            return 1
+
     print(f"  Bootstrap completed: {collection_name}")
     return 0
 
@@ -323,7 +435,23 @@ def main() -> int:
     subparsers.add_parser("preflight", help="Check dependencies are reachable")
 
     # bootstrap
-    subparsers.add_parser("bootstrap", help="Create Qdrant collection if missing")
+    bootstrap_p = subparsers.add_parser("bootstrap", help="Create Qdrant collection if missing")
+    bootstrap_p.add_argument(
+        "--require-colbert",
+        action="store_true",
+        help="Fail if existing/new collection schema misses 'colbert' vector",
+    )
+
+    # schema-check
+    schema_check_p = subparsers.add_parser(
+        "schema-check",
+        help="Validate collection schema (dense/bm42 and optional colbert)",
+    )
+    schema_check_p.add_argument(
+        "--require-colbert",
+        action="store_true",
+        help="Require 'colbert' vector to be present",
+    )
 
     # reprocess
     reprocess_p = subparsers.add_parser("reprocess", help="Reprocess files")
@@ -341,6 +469,8 @@ def main() -> int:
         return asyncio.run(cmd_preflight(args))
     if args.command == "bootstrap":
         return asyncio.run(cmd_bootstrap(args))
+    if args.command == "schema-check":
+        return asyncio.run(cmd_schema_check(args))
     if args.command == "reprocess":
         return asyncio.run(cmd_reprocess(args))
 
