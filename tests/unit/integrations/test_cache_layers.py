@@ -772,3 +772,22 @@ class TestCacheClearing:
         assert result["semantic"] == 1
         assert all(result[t] == 0 for t in ("embeddings", "sparse", "analysis", "search", "rerank"))
         mgr.semantic_cache.aclear.assert_awaited_once()
+
+
+class TestRedisPoolConfig:
+    """Redis pool has explicit connection limit."""
+
+    async def test_redis_pool_has_max_connections(self):
+        """CacheLayerManager sets max_connections on Redis pool."""
+        with patch("telegram_bot.integrations.cache.redis") as mock_redis:
+            mock_client = AsyncMock()
+            mock_client.ping = AsyncMock()
+            mock_redis.from_url.return_value = mock_client
+
+            cache = CacheLayerManager(redis_url="redis://localhost:6379")
+            with patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None):
+                await cache.initialize()
+
+            call_kwargs = mock_redis.from_url.call_args[1]
+            assert "max_connections" in call_kwargs
+            assert call_kwargs["max_connections"] == 20
