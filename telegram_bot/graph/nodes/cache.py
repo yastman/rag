@@ -68,24 +68,19 @@ async def cache_check_node(
     embedding_error_type: str | None = None
     colbert_query: list[list[float]] | None = None
 
+    _has_hybrid = callable(
+        getattr(embeddings, "aembed_hybrid", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
     _has_hybrid_colbert = callable(
         getattr(embeddings, "aembed_hybrid_with_colbert", None)
     ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+    _has_colbert_only = callable(
+        getattr(embeddings, "aembed_colbert_query", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
 
     if embedding is None:
         try:
-            _has_hybrid = callable(
-                getattr(embeddings, "aembed_hybrid", None)
-            ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
-
-            if _has_hybrid_colbert:
-                # 3-way hybrid: dense + sparse + colbert in one call
-                embedding, sparse, colbert_query = await embeddings.aembed_hybrid_with_colbert(
-                    query
-                )
-                await cache.store_embedding(query, embedding)
-                await cache.store_sparse_embedding(query, sparse)
-            elif _has_hybrid:
+            if _has_hybrid:
                 # Hybrid: get both dense + sparse in one call, cache both
                 embedding, sparse = await embeddings.aembed_hybrid(query)
                 await cache.store_embedding(query, embedding)
@@ -121,14 +116,6 @@ async def cache_check_node(
                 },
             }
 
-    # Compute ColBERT query vectors when embedding was cached but ColBERT not yet computed.
-    # ColBERT vectors are per-query token-level and not cached in Redis.
-    if colbert_query is None and _has_hybrid_colbert and embedding is not None:
-        try:
-            _, _, colbert_query = await embeddings.aembed_hybrid_with_colbert(query)
-        except Exception:
-            logger.debug("ColBERT query encode failed (non-critical), skipping")
-
     # Step 2: Check semantic cache with query-type threshold (allowlisted types only).
     # Voice path has no user role — agent_role is intentionally omitted so that
     # voice responses are shared across roles within the same cache_scope="rag" bucket.
@@ -162,9 +149,23 @@ async def cache_check_node(
             "embeddings_cache_hit": embeddings_cache_hit,
             "embedding_error": False,
             "embedding_error_type": None,
-            "colbert_query": colbert_query,
+            "colbert_query": None,
             "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
         }
+
+    # ColBERT vectors are only needed after semantic miss.
+    if colbert_query is None:
+        if _has_colbert_only:
+            try:
+                colbert_query = await embeddings.aembed_colbert_query(query)
+            except Exception:
+                logger.debug("ColBERT query encode failed (non-critical), skipping")
+        elif _has_hybrid_colbert:
+            try:
+                _, sparse, colbert_query = await embeddings.aembed_hybrid_with_colbert(query)
+                await cache.store_sparse_embedding(query, sparse)
+            except Exception:
+                logger.debug("ColBERT query encode failed (non-critical), skipping")
 
     PipelineMetrics.get().inc("cache_miss")
     logger.info("cache_check MISS (%.3fs, type=%s)", latency, query_type)
