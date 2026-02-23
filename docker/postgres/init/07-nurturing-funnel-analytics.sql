@@ -44,5 +44,5 @@ CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending
 -- Add stage_name to funnel_events (#387 dependency — needed by analytics queries)
 ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT;
 
-CREATE INDEX IF NOT EXISTS idx_funnel_events_date_stage
-    ON funnel_events (DATE(created_at), stage_name);
+CREATE INDEX IF NOT EXISTS idx_funnel_events_created_stage
+    ON funnel_events (created_at DESC, stage_name);

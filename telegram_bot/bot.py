@@ -534,7 +534,7 @@ class PropertyBot:
             "CREATE INDEX IF NOT EXISTS idx_leads_stage ON leads(stage)",
             "CREATE INDEX IF NOT EXISTS idx_funnel_events_user_id ON funnel_events(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_funnel_events_created ON funnel_events(created_at DESC)",
-            "CREATE INDEX IF NOT EXISTS idx_funnel_events_date_stage ON funnel_events (DATE(created_at), stage_name)",
+            "CREATE INDEX IF NOT EXISTS idx_funnel_events_created_stage ON funnel_events (created_at DESC, stage_name)",
             "CREATE INDEX IF NOT EXISTS idx_lead_scores_pending_sync ON lead_scores (sync_status, updated_at DESC)",
             "CREATE INDEX IF NOT EXISTS idx_lead_scores_band_sync ON lead_scores (score_band, sync_status, updated_at DESC)",
             "CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending ON nurturing_jobs (status, scheduled_for ASC)",
