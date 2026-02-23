@@ -925,6 +925,9 @@ class TestTextPathSemanticCacheStore:
 
         bot = _create_bot(mock_config)
         bot._cache = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.check_semantic = AsyncMock(return_value=None)
         bot._cache.store_semantic = AsyncMock()
         message = _make_message("какие документы нужны для покупки квартиры")
 
@@ -970,6 +973,9 @@ class TestTextPathSemanticCacheStore:
 
         bot = _create_bot(mock_config)
         bot._cache = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.check_semantic = AsyncMock(return_value=None)
         bot._cache.store_semantic = AsyncMock()
         message = _make_message("расскажи в целом про рынок")
 
