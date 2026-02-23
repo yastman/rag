@@ -14,7 +14,7 @@ def test_nurturing_schema_has_jobs_metrics_and_leases():
 def test_nurturing_schema_has_required_indexes():
     ddl = Path("docker/postgres/init/07-nurturing-funnel-analytics.sql").read_text(encoding="utf-8")
     assert "idx_nurturing_jobs_pending" in ddl
-    assert "idx_funnel_events_date_stage" in ddl
+    assert "idx_funnel_events_created_stage" in ddl
 
 
 def test_nurturing_schema_has_step_conversion_columns():
