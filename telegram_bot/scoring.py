@@ -69,7 +69,7 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
         "embeddings_cache_hit": 1.0 if result.get("embeddings_cache_hit") else 0.0,
         "search_cache_hit": 1.0 if result.get("search_cache_hit") else 0.0,
         "rerank_applied": 1.0 if result.get("rerank_applied") else 0.0,
-        "rerank_cache_hit": 0.0,  # Tracked when rerank cache implemented
+        "rerank_cache_hit": 1.0 if result.get("rerank_cache_hit") else 0.0,
         "results_count": float(result.get("search_results_count", 0)),
         "no_results": 1.0 if result.get("search_results_count", 0) == 0 else 0.0,
         "llm_used": 1.0 if "generate" in latency_stages else 0.0,
