@@ -74,6 +74,23 @@ class TestBGEM3Client:
         result = await client.encode_sparse([])
         assert result.weights == []
 
+    async def test_encode_sparse_contract_rejects_legacy_sparse_vecs_key(self, client):
+        """Contract test: /encode/sparse must return lexical_weights (not sparse_vecs)."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "sparse_vecs": [{"indices": [1, 2], "values": [0.5, 0.3]}],
+        }
+
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        with pytest.raises(KeyError):
+            await client.encode_sparse(["hello"])
+
     async def test_encode_hybrid_returns_both(self, client):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -100,6 +117,24 @@ class TestBGEM3Client:
         result = await client.encode_hybrid([])
         assert result.dense_vecs == []
         assert result.lexical_weights == []
+
+    async def test_encode_hybrid_contract_requires_dense_and_lexical_keys(self, client):
+        """Contract test: /encode/hybrid response must contain both required keys."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "dense_vecs": [[0.1] * 1024],
+            # lexical_weights intentionally missing
+        }
+
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        mock_http.is_closed = False
+        client._client = mock_http
+
+        with pytest.raises(KeyError):
+            await client.encode_hybrid(["hello"])
 
     async def test_rerank_returns_results(self, client):
         mock_resp = MagicMock()
