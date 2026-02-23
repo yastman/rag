@@ -21,7 +21,7 @@ import sys
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -83,6 +83,7 @@ TRACKED_NODE_NAMES = [
     "summarize",
 ]
 _TRACKED_NODE_SET = frozenset(TRACKED_NODE_NAMES)
+REQUIRED_TRACE_NAMES = ["rag-api-query", "voice-session", "ingestion-cli-run"]
 
 GO_NO_GO_THRESHOLDS_PATH = (
     Path(__file__).resolve().parent.parent / "tests" / "baseline" / "thresholds.yaml"
@@ -754,10 +755,44 @@ def check_orphan_traces(results: list[TraceResult]) -> float:
     return rate
 
 
+def check_required_trace_coverage(
+    *,
+    required_trace_names: list[str] | None = None,
+    lookback_hours: int = 24,
+) -> dict[str, list[str]]:
+    """Check that required trace families exist in Langfuse within lookback window."""
+    required = required_trace_names or REQUIRED_TRACE_NAMES
+    from_timestamp = datetime.now(UTC) - timedelta(hours=lookback_hours)
+    lf = Langfuse()
+    present: list[str] = []
+    missing: list[str] = []
+
+    for trace_name in required:
+        try:
+            traces_page = lf.api.trace.list(
+                name=trace_name,
+                from_timestamp=from_timestamp,
+                order_by="timestamp.desc",
+                limit=1,
+            )
+            if getattr(traces_page, "data", None):
+                present.append(trace_name)
+            else:
+                missing.append(trace_name)
+        except Exception as exc:
+            logger.warning("Failed to check required trace '%s': %s", trace_name, exc)
+            missing.append(trace_name)
+
+    lf.flush()
+    logger.info("Required trace coverage: present=%s missing=%s", present, missing)
+    return {"required": required, "present": present, "missing": missing}
+
+
 def evaluate_go_no_go(
     aggregates: dict[str, Any],
     results: list[TraceResult],
     orphan_rate: float = 0.0,
+    required_trace_coverage: dict[str, list[str]] | None = None,
     thresholds: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Evaluate Go/No-Go criteria for Gate 1.
@@ -886,7 +921,30 @@ def evaluate_go_no_go(
         "stddev": "\u2014",
     }
 
-    # 10. Streaming TTFT p50 (skipped if sample < min)
+    # 10. Required trace families are present in Langfuse.
+    if required_trace_coverage is None:
+        criteria["required_trace_families_present"] = {
+            "target": ", ".join(REQUIRED_TRACE_NAMES),
+            "actual": "N/A (coverage not checked)",
+            "passed": True,
+            "skipped": True,
+            "stddev": "\u2014",
+        }
+    else:
+        missing_families = required_trace_coverage.get("missing", [])
+        criteria["required_trace_families_present"] = {
+            "target": ", ".join(required_trace_coverage.get("required", REQUIRED_TRACE_NAMES)),
+            "actual": (
+                "all present"
+                if not missing_families
+                else f"missing: {', '.join(sorted(missing_families))}"
+            ),
+            "passed": not missing_families,
+            "skipped": False,
+            "stddev": "\u2014",
+        }
+
+    # 11. Streaming TTFT p50 (skipped if sample < min)
     ttft_min_sample = t.get("ttft_min_sample", 3)
     ttft_p50_limit = t.get("ttft_p50_ms", 1000)
     streaming = aggregates.get("streaming", {})
@@ -910,7 +968,7 @@ def evaluate_go_no_go(
             "stddev": "\u2014",
         }
 
-    # 11. Judge quality scores (#386) — from Langfuse managed evaluators
+    # 12. Judge quality scores (#386) — from Langfuse managed evaluators
     judge_thresholds = t.get("judge", {})
     for metric, key, label in [
         ("judge_faithfulness_mean", "faithfulness_mean_gte", "faithfulness"),
@@ -1372,8 +1430,16 @@ async def run_validation(args: argparse.Namespace) -> None:
     logger.info("Checking orphan traces...")
     orphan_rate = check_orphan_traces(all_results)
 
+    logger.info("Checking required trace family coverage...")
+    required_trace_coverage = check_required_trace_coverage()
+
     # Evaluate Go/No-Go criteria
-    go_no_go = evaluate_go_no_go(aggregates, all_results, orphan_rate=orphan_rate)
+    go_no_go = evaluate_go_no_go(
+        aggregates,
+        all_results,
+        orphan_rate=orphan_rate,
+        required_trace_coverage=required_trace_coverage,
+    )
     all_passed = all(c["passed"] for c in go_no_go.values())
     passed_count = sum(1 for c in go_no_go.values() if c["passed"])
     logger.info(
@@ -1392,6 +1458,14 @@ async def run_validation(args: argparse.Namespace) -> None:
         else:
             status = "FAIL"
         logger.info("  [%s] %s: %s (target: %s)", status, name, c["actual"], c["target"])
+
+    required_coverage_gate = go_no_go.get("required_trace_families_present", {})
+    if not required_coverage_gate.get("passed", False):
+        logger.error(
+            "Missing required trace families: %s",
+            required_coverage_gate.get("actual", "unknown"),
+        )
+        sys.exit(1)
 
     # Print summary to console
     for phase, agg in aggregates.items():
@@ -1442,6 +1516,7 @@ async def run_validation(args: argparse.Namespace) -> None:
         "go_no_go": go_no_go,
         "payload_summary": payload_summary,
         "orphan_rate": orphan_rate,
+        "required_trace_coverage": required_trace_coverage,
         "traces": [
             {
                 "trace_id": r.trace_id,
