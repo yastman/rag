@@ -26,6 +26,7 @@ class TestRAGState:
             "latency_stages",
             "search_results_count",
             "rerank_applied",
+            "rerank_cache_hit",
             "grade_confidence",
         ]
         for field in required:
@@ -46,6 +47,7 @@ class TestRAGState:
         assert state["latency_stages"] == {}
         assert state["search_results_count"] == 0
         assert state["rerank_applied"] is False
+        assert state["rerank_cache_hit"] is False
         assert state["query_embedding"] is None
         assert state["sparse_embedding"] is None
         assert state["cached_response"] is None

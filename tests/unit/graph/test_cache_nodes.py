@@ -110,6 +110,23 @@ class TestCacheCheckNode:
         # Should use cached embedding, not recompute
         embeddings.aembed_query.assert_not_awaited()
 
+    async def test_hit_path_does_not_compute_colbert(self):
+        """ColBERT vectors must not be computed before semantic cache miss."""
+        state = make_initial_state(user_id=1, session_id="s1", query="test query")
+        state["query_type"] = "GENERAL"
+
+        cache = AsyncMock()
+        cache.get_embedding = AsyncMock(return_value=[0.2] * 1024)
+        cache.check_semantic = AsyncMock(return_value="cached answer")
+
+        embeddings = AsyncMock()
+        embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.2] * 1024] * 2)
+
+        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+
+        assert result["cache_hit"] is True
+        embeddings.aembed_colbert_query.assert_not_awaited()
+
     async def test_check_does_not_pass_user_id_to_cache(self):
         """cache_check_node does NOT pass user_id to check_semantic (global cache)."""
         state = make_initial_state(user_id=99, session_id="s1", query="test query")
@@ -168,10 +185,11 @@ class TestCacheCheckNode:
         mock_cache.check_semantic = AsyncMock(return_value=None)
 
         mock_embeddings = AsyncMock()
+        mock_embeddings.aembed_hybrid = None
         mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
             return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}, [[0.2] * 1024] * 4)
         )
-        mock_embeddings.aembed_hybrid = AsyncMock()
+        mock_embeddings.aembed_colbert_query = None
 
         state = {
             "messages": [{"role": "user", "content": "test query"}],
@@ -190,9 +208,11 @@ class TestCacheCheckNode:
         mock_cache.check_semantic = AsyncMock(return_value=None)
 
         mock_embeddings = AsyncMock()
+        mock_embeddings.aembed_hybrid = None
         mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
             return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}, [[0.2] * 1024] * 4)
         )
+        mock_embeddings.aembed_colbert_query = None
 
         state = {
             "messages": [{"role": "user", "content": "test query"}],
