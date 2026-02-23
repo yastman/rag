@@ -4,14 +4,34 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+_OTEL_MODULE_NAMES = (
+    "opentelemetry",
+    "opentelemetry.metrics",
+    "opentelemetry.trace",
+    "opentelemetry.exporter",
+    "opentelemetry.exporter.otlp",
+    "opentelemetry.exporter.otlp.proto",
+    "opentelemetry.exporter.otlp.proto.grpc",
+    "opentelemetry.exporter.otlp.proto.grpc.metric_exporter",
+    "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+    "opentelemetry.instrumentation",
+    "opentelemetry.instrumentation.aiohttp_client",
+    "opentelemetry.instrumentation.redis",
+    "opentelemetry.sdk",
+    "opentelemetry.sdk.metrics",
+    "opentelemetry.sdk.metrics.export",
+    "opentelemetry.sdk.resources",
+    "opentelemetry.sdk.trace",
+    "opentelemetry.sdk.trace.export",
+)
+
+
 @pytest.fixture(autouse=True)
 def fresh_otel_setup_module():
     """Clear src.observability.otel_setup from cache to ensure fresh import.
 
-    NOTE: We do NOT mock opentelemetry hierarchy in sys.modules - that's fragile.
-    Instead, we rely on targeted patches inside test functions.
+    Keep cleanup scoped to our module to avoid cross-test leakage.
     """
-    # Clear only our module, not opentelemetry itself
     sys.modules.pop("src.observability.otel_setup", None)
     sys.modules.pop("src.observability", None)
     yield
@@ -19,34 +39,21 @@ def fresh_otel_setup_module():
     sys.modules.pop("src.observability", None)
 
 
-def reset_otel_mocks():
-    """Reset all OpenTelemetry mocks to fresh state."""
-    mocks = {
-        "opentelemetry": MagicMock(),
-        "opentelemetry.metrics": MagicMock(),
-        "opentelemetry.trace": MagicMock(),
-        "opentelemetry.exporter": MagicMock(),
-        "opentelemetry.exporter.otlp": MagicMock(),
-        "opentelemetry.exporter.otlp.proto": MagicMock(),
-        "opentelemetry.exporter.otlp.proto.grpc": MagicMock(),
-        "opentelemetry.exporter.otlp.proto.grpc.metric_exporter": MagicMock(),
-        "opentelemetry.exporter.otlp.proto.grpc.trace_exporter": MagicMock(),
-        "opentelemetry.instrumentation": MagicMock(),
-        "opentelemetry.instrumentation.aiohttp_client": MagicMock(),
-        "opentelemetry.instrumentation.redis": MagicMock(),
-        "opentelemetry.sdk": MagicMock(),
-        "opentelemetry.sdk.metrics": MagicMock(),
-        "opentelemetry.sdk.metrics.export": MagicMock(),
-        "opentelemetry.sdk.resources": MagicMock(),
-        "opentelemetry.sdk.trace": MagicMock(),
-        "opentelemetry.sdk.trace.export": MagicMock(),
-    }
-    sys.modules.update(mocks)
-    return mocks
+@pytest.fixture(autouse=True)
+def isolated_otel_modules():
+    """Provide missing opentelemetry modules per-test and teardown safely.
 
-
-# Pre-mock opentelemetry to avoid import side effects
-reset_otel_mocks()
+    Nightly marker runs collect all test modules; import-time sys.modules mutation
+    here can leak into unrelated voice tests. Keep this fixture-scoped.
+    """
+    injected: list[str] = []
+    for name in _OTEL_MODULE_NAMES:
+        if name not in sys.modules:
+            sys.modules[name] = MagicMock()
+            injected.append(name)
+    yield
+    for name in injected:
+        sys.modules.pop(name, None)
 
 
 def test_setup_opentelemetry():
@@ -88,6 +95,11 @@ async def test_traced_pipeline_query():
     from src.observability.otel_setup import TracedRAGPipeline
 
     pipeline = TracedRAGPipeline()
+    pipeline.embedding_latency = MagicMock()
+    pipeline.search_latency = MagicMock()
+    pipeline.rerank_latency = MagicMock()
+    pipeline.query_latency = MagicMock()
+    pipeline.query_counter = MagicMock()
 
     # Mock internal methods using patches on instance
     with patch.object(pipeline, "_embed", new_callable=AsyncMock) as mock_embed:
@@ -100,11 +112,11 @@ async def test_traced_pipeline_query():
 
                 # Setup tracer mock context managers
                 mock_span = MagicMock()
-                mock_start_span = pipeline.tracer.start_as_current_span
-                mock_start_span.return_value.__enter__.return_value = mock_span
+                with patch.object(pipeline.tracer, "start_as_current_span") as mock_start_span:
+                    mock_start_span.return_value.__enter__.return_value = mock_span
 
-                # Execute
-                result = await pipeline.query("test query", top_k=5)
+                    # Execute
+                    result = await pipeline.query("test query", top_k=5)
 
                 # Assert
                 assert len(result["results"]) == 1
