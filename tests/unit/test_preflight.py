@@ -573,6 +573,62 @@ class TestQdrantVectorValidation:
             assert result is True
             assert "missing" not in caplog.text.lower()
 
+    async def test_qdrant_warns_when_colbert_coverage_below_threshold(self, caplog):
+        """Low ColBERT point coverage logs warning but does not fail preflight."""
+        import logging
+
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 200
+        mock_collection_info.config.params.vectors = {
+            "dense": MagicMock(),
+            "colbert": MagicMock(),
+        }
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.count = AsyncMock(return_value=MagicMock(count=180))
+        mock_qdrant.close = AsyncMock()
+
+        with (
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            caplog.at_level(logging.WARNING),
+        ):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+
+        assert result is True
+        assert "coverage" in caplog.text.lower()
+        assert "90.00%" in caplog.text
+
+    async def test_qdrant_logs_coverage_info_when_threshold_met(self, caplog):
+        """Coverage at/above threshold logs informational line."""
+        import logging
+
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_collection_info = MagicMock()
+        mock_collection_info.points_count = 100
+        mock_collection_info.config.params.vectors = {
+            "dense": MagicMock(),
+            "colbert": MagicMock(),
+        }
+        mock_collection_info.config.params.sparse_vectors = {"bm42": MagicMock()}
+        mock_qdrant.get_collection = AsyncMock(return_value=mock_collection_info)
+        mock_qdrant.count = AsyncMock(return_value=MagicMock(count=100))
+        mock_qdrant.close = AsyncMock()
+
+        with (
+            patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant),
+            caplog.at_level(logging.INFO),
+        ):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+
+        assert result is True
+        assert "coverage" in caplog.text.lower()
+        assert "100.00%" in caplog.text
+
     async def test_qdrant_fails_when_dense_missing(self):
         """Missing dense vector causes check to fail."""
         config = _make_config()
