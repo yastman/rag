@@ -38,7 +38,7 @@ class TestBotHybridSearch:
     """Validate bot service wiring for hybrid retrieval pipeline."""
 
     def test_bot_initializes_qdrant_service(self):
-        """PropertyBot must initialize QdrantService with configured timeout."""
+        """PropertyBot must initialize primary + apartments Qdrant services."""
         with (
             patch("telegram_bot.bot.Bot"),
             patch("telegram_bot.bot.setup_throttling_middleware"),
@@ -52,8 +52,12 @@ class TestBotHybridSearch:
         ):
             bot = PropertyBot(_make_config())
 
-        mock_qdrant.assert_called_once()
-        assert mock_qdrant.call_args.kwargs["timeout"] == 7
+        assert mock_qdrant.call_count == 2
+        primary_call = mock_qdrant.call_args_list[0].kwargs
+        apartments_call = mock_qdrant.call_args_list[1].kwargs
+        assert primary_call["collection_name"] == "test_collection"
+        assert primary_call["timeout"] == 7
+        assert apartments_call["collection_name"] == "apartments"
         assert hasattr(bot, "_qdrant")
 
     def test_bot_initializes_sparse_embeddings_with_bge_url(self):
