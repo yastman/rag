@@ -150,7 +150,7 @@ class TestCommandHandlers:
     @pytest.mark.parametrize(
         ("handler_name", "expected_fragments"),
         [
-            ("cmd_start", ["assistant", "недвижимость"]),
+            ("cmd_start", ["FortNoks"]),
             ("cmd_help", ["Примеры запросов", "/clear", "/stats"]),
         ],
     )
@@ -1413,6 +1413,7 @@ class TestBotLifecycle:
         bot._redis_monitor.start = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
 
         with patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock):
             await bot.start()
@@ -1432,6 +1433,7 @@ class TestBotLifecycle:
         bot._redis_monitor.start = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
 
         with patch("telegram_bot.preflight.check_dependencies", new_callable=AsyncMock):
             await bot.start()
@@ -1554,6 +1556,7 @@ class TestAgentCheckpointerLifecycle:
         bot._redis_monitor.start = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
 
     async def test_start_creates_redis_agent_checkpointer(self, mock_config):
         """start() creates Redis agent checkpointer with configured TTL (#424)."""
@@ -1630,6 +1633,7 @@ class TestHistoryServiceLifecycle:
         bot._redis_monitor.start = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
 
         mock_checkpointer = AsyncMock()
         with (
@@ -1658,6 +1662,7 @@ class TestHistoryServiceLifecycle:
         bot._redis_monitor.start = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
 
         mock_checkpointer = AsyncMock()
         with (
@@ -1716,6 +1721,7 @@ class TestPostgresPoolInit:
         bot._redis_monitor.start = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
 
         mock_checkpointer = AsyncMock()
         with (
@@ -1750,6 +1756,7 @@ class TestPostgresPoolInit:
         bot._redis_monitor.start = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
         bot._ensure_realestate_schema = AsyncMock()
 
         missing_exc = asyncpg.InvalidCatalogNameError('database "realestate" does not exist')
@@ -1810,6 +1817,7 @@ class TestKommoGracefulInit:
         bot._redis_monitor.start = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.set_my_commands = AsyncMock()
+        bot.bot.set_chat_menu_button = AsyncMock()
 
         mock_checkpointer = AsyncMock()
         with (
