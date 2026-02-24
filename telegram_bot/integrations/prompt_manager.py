@@ -11,6 +11,8 @@ import os
 import time
 from typing import Any
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,7 @@ def _get_langfuse_client() -> Any | None:
         return None
 
 
+@observe(name="get-prompt")
 def get_prompt(
     name: str,
     *,
