@@ -1192,6 +1192,7 @@ class TestEnsureAlias:
     async def test_ensure_alias_calls_update_aliases(self):
         """_ensure_alias creates alias '{collection}_active' via update_collection_aliases."""
         svc = _make_service(validated=True)
+        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
         svc._client.update_collection_aliases = AsyncMock()
 
         await svc._ensure_alias()
@@ -1203,11 +1204,51 @@ class TestEnsureAlias:
         assert op.create_alias.collection_name == svc._collection_name
         assert op.create_alias.alias_name == f"{svc._collection_name}_active"
 
+    async def test_ensure_alias_replaces_existing_alias_atomically(self):
+        """Existing alias is switched via delete+create in one aliases update call."""
+        svc = _make_service(validated=True)
+        alias_name = f"{svc._collection_name}_active"
+        svc._client.get_aliases = AsyncMock(
+            return_value=MagicMock(
+                aliases=[
+                    MagicMock(alias_name=alias_name, collection_name="old_collection"),
+                ]
+            )
+        )
+        svc._client.update_collection_aliases = AsyncMock()
+
+        await svc._ensure_alias()
+
+        svc._client.update_collection_aliases.assert_awaited_once()
+        ops = svc._client.update_collection_aliases.call_args.kwargs["change_aliases_operations"]
+        assert len(ops) == 2
+        assert ops[0].delete_alias.alias_name == alias_name
+        assert ops[1].create_alias.alias_name == alias_name
+        assert ops[1].create_alias.collection_name == svc._collection_name
+
+    async def test_ensure_alias_skips_when_already_pointing_to_target(self, caplog):
+        """No-op when alias already points to current collection."""
+        svc = _make_service(validated=True)
+        alias_name = f"{svc._collection_name}_active"
+        svc._client.get_aliases = AsyncMock(
+            return_value=MagicMock(
+                aliases=[
+                    MagicMock(alias_name=alias_name, collection_name=svc._collection_name),
+                ]
+            )
+        )
+        svc._client.update_collection_aliases = AsyncMock()
+
+        with caplog.at_level(logging.INFO):
+            await svc._ensure_alias()
+
+        svc._client.update_collection_aliases.assert_not_awaited()
+        assert "already points" in caplog.text.lower()
+
     async def test_ensure_alias_logs_on_success(self, caplog):
         """_ensure_alias logs INFO on successful alias creation."""
-        import logging
-
         svc = _make_service(validated=True)
+        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
         svc._client.update_collection_aliases = AsyncMock()
 
         with caplog.at_level(logging.INFO):
@@ -1217,9 +1258,8 @@ class TestEnsureAlias:
 
     async def test_ensure_alias_warns_on_error(self, caplog):
         """_ensure_alias catches exceptions and logs WARNING (non-blocking)."""
-        import logging
-
         svc = _make_service(validated=True)
+        svc._client.get_aliases = AsyncMock(return_value=MagicMock(aliases=[]))
         svc._client.update_collection_aliases = AsyncMock(
             side_effect=Exception("permission denied")
         )

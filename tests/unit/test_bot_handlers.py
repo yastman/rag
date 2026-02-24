@@ -1891,6 +1891,21 @@ class TestWriteLangfuseScores:
         calls = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
         assert calls["latency_total_ms"] == 0.0
 
+    def test_latency_total_ms_prefers_e2e_latency_ms(self):
+        """When e2e_latency_ms is present, latency_total_ms must use it."""
+        from telegram_bot.scoring import write_langfuse_scores
+
+        mock_lf = MagicMock()
+        result = {
+            "query_type": "GENERAL",
+            "pipeline_wall_ms": 1200.0,
+            "e2e_latency_ms": 1800.0,
+            "latency_stages": {},
+        }
+        write_langfuse_scores(mock_lf, result, trace_id=self._TID)
+        calls = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
+        assert calls["latency_total_ms"] == 1800.0
+
     def test_real_scores_from_state(self):
         """Hardcoded scores should now use real state values."""
         from telegram_bot.scoring import write_langfuse_scores
@@ -1956,6 +1971,21 @@ class TestWriteLangfuseScores:
         }
         assert calls["bge_embed_error"] == 1
         assert "bge_embed_latency_ms" in calls
+
+    def test_prefers_pre_agent_embed_latency_over_cache_check(self):
+        """bge_embed_latency_ms should prefer explicit pre-agent embed timing."""
+        from telegram_bot.scoring import write_langfuse_scores
+
+        mock_lf = MagicMock()
+        result = {
+            "query_type": "FAQ",
+            "cache_hit": False,
+            "latency_stages": {"cache_check": 9.999},  # fallback should be ignored
+            "pre_agent_embed_ms": 321.5,
+        }
+        write_langfuse_scores(mock_lf, result, trace_id=self._TID)
+        calls = {c.kwargs["name"]: c.kwargs["value"] for c in mock_lf.create_score.call_args_list}
+        assert calls["bge_embed_latency_ms"] == 321.5
 
 
 class TestMakeSessionId:
