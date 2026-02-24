@@ -1218,6 +1218,47 @@ async def test_cache_check_uses_pre_computed_colbert_skips_reencode(mock_cache):
     mock_embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
 
 
+async def test_cache_check_no_redundant_stores_or_embeds_with_all_precomputed(mock_cache):
+    """_cache_check with all three pre-computed skips stores AND extra BGE-M3 calls (#633)."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    dense = [0.1] * 1024
+    sparse = {"indices": [1, 2], "values": [0.5, 0.3]}
+    colbert = [[0.2] * 1024] * 3
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock()
+    mock_embeddings.aembed_colbert_query = AsyncMock()
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        pre_computed_embedding=dense,
+        pre_computed_sparse=sparse,
+        pre_computed_colbert=colbert,
+    )
+
+    # No redundant cache stores — pre-agent already stored (#633)
+    mock_cache.store_embedding.assert_not_awaited()
+    mock_cache.store_sparse_embedding.assert_not_awaited()
+    # No redundant BGE-M3 calls — all vectors pre-computed
+    mock_embeddings.aembed_hybrid.assert_not_awaited()
+    mock_embeddings.aembed_hybrid_with_colbert.assert_not_awaited()
+    mock_embeddings.aembed_colbert_query.assert_not_awaited()
+    # All vectors passed through
+    assert result["query_embedding"] == dense
+    assert result["sparse_embedding"] == sparse
+    assert result["colbert_query"] == colbert
+    assert result["cache_hit"] is False
+
+
 async def test_cache_check_returns_sparse_embedding_in_all_paths(mock_cache):
     """_cache_check returns sparse_embedding key in result for both HIT and MISS."""
     from unittest.mock import AsyncMock
