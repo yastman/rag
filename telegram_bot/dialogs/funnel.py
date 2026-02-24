@@ -177,6 +177,7 @@ async def on_refine_or_show_selected(
     item_id: str,
 ) -> None:
     """Branch: show results immediately or go to optional refinement steps."""
+    manager.dialog_data["refine_or_show"] = item_id
     if item_id == "show":
         try:
             from telegram_bot.bot import make_session_id
