@@ -43,3 +43,4 @@ class BotContext:
     history_reply_markup: Any | None = None  # side-channel for #434
     bot: Any | None = None  # aiogram Bot instance (for handoff tool, #445)
     manager_ids: list[int] | None = None  # Telegram IDs of managers (for handoff, #445)
+    apartments_service: Any | None = None  # ApartmentsService (#629)
