@@ -1,6 +1,8 @@
 # tests/unit/test_observability.py
 """Unit tests for PII masking and Langfuse client initialization."""
 
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 
@@ -119,3 +121,162 @@ class TestLangfuseInitialization:
         observability._langfuse_client = fake_client
         assert observability.get_langfuse_client() is fake_client
         observability._reset_langfuse_client_for_tests()
+
+    def test_initialize_langfuse_runs_model_sync(self):
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with (
+            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+            patch(
+                "telegram_bot.observability.sync_langfuse_model_definitions", return_value=2
+            ) as sync,
+        ):
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+                force=True,
+            )
+
+        assert result is fake_client
+        sync.assert_called_once_with(fake_client)
+
+
+class TestLangfuseModelSync:
+    def test_load_model_definitions_from_env_parses_valid_payload(self, monkeypatch):
+        import telegram_bot.observability as observability
+
+        monkeypatch.setenv(
+            "LANGFUSE_MODEL_DEFINITIONS_JSON",
+            """
+            [
+              {
+                "model_name": "zai-glm-4.7",
+                "match_pattern": "(?i)^(zai-glm-4\\\\.7)$",
+                "unit": "tokens",
+                "input_price": "0.000001",
+                "output_price": 0.000003,
+                "start_date": "2026-02-24T00:00:00Z"
+              }
+            ]
+            """,
+        )
+
+        definitions = observability._load_model_definitions_from_env()
+        assert len(definitions) == 1
+        definition = definitions[0]
+        assert definition["model_name"] == "zai-glm-4.7"
+        assert definition["match_pattern"] == "(?i)^(zai-glm-4\\.7)$"
+        assert definition["unit"] == "TOKENS"
+        assert definition["input_price"] == 0.000001
+        assert definition["output_price"] == 0.000003
+        assert definition["start_date"] == datetime(2026, 2, 24, 0, 0, tzinfo=UTC)
+
+    def test_sync_langfuse_model_definitions_creates_missing_model(self):
+        import telegram_bot.observability as observability
+
+        models_api = MagicMock()
+        models_api.list.return_value = SimpleNamespace(data=[])
+        models_api.create.return_value = SimpleNamespace(
+            id="model-1",
+            model_name="zai-glm-4.7",
+            match_pattern="(?i)^(zai-glm-4\\.7)$",
+            is_langfuse_managed=False,
+            unit="TOKENS",
+            input_price=0.000001,
+            output_price=0.000003,
+            total_price=None,
+            tokenizer_id=None,
+        )
+        client = MagicMock()
+        client.api = SimpleNamespace(models=models_api)
+
+        result = observability.sync_langfuse_model_definitions(
+            client,
+            definitions=[
+                {
+                    "model_name": "zai-glm-4.7",
+                    "match_pattern": "(?i)^(zai-glm-4\\.7)$",
+                    "unit": "TOKENS",
+                    "input_price": 0.000001,
+                    "output_price": 0.000003,
+                }
+            ],
+        )
+
+        assert result == 1
+        models_api.create.assert_called_once()
+        req = models_api.create.call_args.kwargs["request"]
+        assert req.model_name == "zai-glm-4.7"
+        assert req.match_pattern == "(?i)^(zai-glm-4\\.7)$"
+        assert req.input_price == 0.000001
+        assert req.output_price == 0.000003
+
+    def test_sync_langfuse_model_definitions_updates_stale_custom_model(self):
+        import telegram_bot.observability as observability
+
+        stale = SimpleNamespace(
+            id="model-old",
+            model_name="zai-glm-4.7",
+            match_pattern="(?i)^(zai-glm-4\\.7)$",
+            is_langfuse_managed=False,
+            unit="TOKENS",
+            input_price=0.00001,
+            output_price=0.00003,
+            total_price=None,
+            tokenizer_id=None,
+        )
+        models_api = MagicMock()
+        models_api.list.return_value = SimpleNamespace(data=[stale])
+        models_api.create.return_value = SimpleNamespace(
+            id="model-new",
+            model_name="zai-glm-4.7",
+            match_pattern="(?i)^(zai-glm-4\\.7)$",
+            is_langfuse_managed=False,
+            unit="TOKENS",
+            input_price=0.000001,
+            output_price=0.000003,
+            total_price=None,
+            tokenizer_id=None,
+        )
+        client = MagicMock()
+        client.api = SimpleNamespace(models=models_api)
+
+        result = observability.sync_langfuse_model_definitions(
+            client,
+            definitions=[
+                {
+                    "model_name": "zai-glm-4.7",
+                    "match_pattern": "(?i)^(zai-glm-4\\.7)$",
+                    "unit": "TOKENS",
+                    "input_price": 0.000001,
+                    "output_price": 0.000003,
+                }
+            ],
+        )
+
+        assert result == 1
+        models_api.delete.assert_called_once_with("model-old")
+        models_api.create.assert_called_once()
+
+    def test_sync_langfuse_model_definitions_skips_when_api_missing(self):
+        import telegram_bot.observability as observability
+
+        client = MagicMock()
+        client.api = None
+
+        result = observability.sync_langfuse_model_definitions(
+            client,
+            definitions=[
+                {
+                    "model_name": "x",
+                    "match_pattern": "(?i)^x$",
+                    "input_price": 1.0,
+                    "output_price": 1.0,
+                }
+            ],
+        )
+
+        assert result == 0
