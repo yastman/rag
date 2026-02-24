@@ -252,12 +252,14 @@ class TestBaselineSearchEngineAcorn:
     def mock_qdrant_client(self):
         """Create a mock Qdrant client."""
         client = MagicMock()
-        client.search.return_value = [
+        mock_response = MagicMock()
+        mock_response.points = [
             MagicMock(
                 payload={"metadata": {"article_number": "1"}, "page_content": "Test content"},
                 score=0.95,
             )
         ]
+        client.query_points.return_value = mock_response
         return client
 
     @pytest.fixture
@@ -293,8 +295,8 @@ class TestBaselineSearchEngineAcorn:
                 estimated_selectivity=0.2,
             )
 
-            # Verify search was called with ACORN params
-            call_kwargs = mock_qdrant_client.search.call_args.kwargs
+            # Verify query_points was called with ACORN params
+            call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
             search_params = call_kwargs.get("search_params")
 
             assert search_params is not None
@@ -315,8 +317,8 @@ class TestBaselineSearchEngineAcorn:
                 estimated_selectivity=None,
             )
 
-            # Verify search was called without ACORN params
-            call_kwargs = mock_qdrant_client.search.call_args.kwargs
+            # Verify query_points was called without ACORN params
+            call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
             search_params = call_kwargs.get("search_params")
 
             # ACORN should be None when no filters
