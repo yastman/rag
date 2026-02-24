@@ -153,14 +153,14 @@ class TestBaselineSearchEngine:
         mock_settings_cls.return_value = mock_settings
 
         mock_client = MagicMock()
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
         mock_qdrant.return_value = mock_client
 
         engine = BaselineSearchEngine(mock_settings)
         engine.search([0.1, 0.2, 0.3], top_k=5)
 
-        # Check that search was called with default threshold 0.5
-        call_kwargs = mock_client.search.call_args[1]
+        # Check that query_points was called with default threshold 0.5
+        call_kwargs = mock_client.query_points.call_args[1]
         assert call_kwargs["score_threshold"] == 0.5
 
     @patch.object(search_engines, "QdrantClient")
@@ -173,13 +173,13 @@ class TestBaselineSearchEngine:
         mock_settings_cls.return_value = mock_settings
 
         mock_client = MagicMock()
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
         mock_qdrant.return_value = mock_client
 
         engine = BaselineSearchEngine(mock_settings)
         engine.search([0.1, 0.2, 0.3], top_k=5, score_threshold=0.7)
 
-        call_kwargs = mock_client.search.call_args[1]
+        call_kwargs = mock_client.query_points.call_args[1]
         assert call_kwargs["score_threshold"] == 0.7
 
     @patch.object(search_engines, "QdrantClient")
@@ -200,7 +200,7 @@ class TestBaselineSearchEngine:
         mock_result.score = 0.95
 
         mock_client = MagicMock()
-        mock_client.search.return_value = [mock_result]
+        mock_client.query_points.return_value = MagicMock(points=[mock_result])
         mock_qdrant.return_value = mock_client
 
         engine = BaselineSearchEngine(mock_settings)
@@ -233,21 +233,23 @@ class TestHybridRRFSearchEngine:
     @patch.object(search_engines, "QdrantClient")
     @patch.object(search_engines, "Settings")
     def test_hybrid_search_with_embedding(self, mock_settings_cls, mock_qdrant, mock_bge):
-        """Test search with pre-computed embedding uses dense-only."""
+        """Test search with pre-computed embedding uses dense-only via query_points."""
         mock_settings = MagicMock()
         mock_settings.qdrant_url = "http://localhost:6333"
         mock_settings.collection_name = "test"
         mock_settings_cls.return_value = mock_settings
 
         mock_client = MagicMock()
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
         mock_qdrant.return_value = mock_client
 
         engine = HybridRRFSearchEngine(mock_settings)
         engine.search([0.1, 0.2, 0.3], top_k=5)
 
-        # Should call dense-only search when embedding provided
-        mock_client.search.assert_called_once()
+        # Should call dense-only query_points when pre-computed embedding provided
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args[1]
+        assert call_kwargs["using"] == "dense"
 
     @patch.object(search_engines, "get_bge_m3_model")
     @patch.object(search_engines, "QdrantClient")
@@ -321,21 +323,23 @@ class TestHybridRRFColBERTSearchEngine:
     @patch.object(search_engines, "QdrantClient")
     @patch.object(search_engines, "Settings")
     def test_colbert_search_with_embedding(self, mock_settings_cls, mock_qdrant, mock_bge):
-        """Test search with pre-computed embedding uses dense-only."""
+        """Test search with pre-computed embedding uses dense-only via query_points."""
         mock_settings = MagicMock()
         mock_settings.qdrant_url = "http://localhost:6333"
         mock_settings.collection_name = "test"
         mock_settings_cls.return_value = mock_settings
 
         mock_client = MagicMock()
-        mock_client.search.return_value = []
+        mock_client.query_points.return_value = MagicMock(points=[])
         mock_qdrant.return_value = mock_client
 
         engine = HybridRRFColBERTSearchEngine(mock_settings)
         engine.search([0.1, 0.2, 0.3], top_k=5)
 
-        # Should call dense-only search when embedding provided
-        mock_client.search.assert_called_once()
+        # Should call dense-only query_points when pre-computed embedding provided
+        mock_client.query_points.assert_called_once()
+        call_kwargs = mock_client.query_points.call_args[1]
+        assert call_kwargs["using"] == "dense"
 
     @patch.object(search_engines, "get_bge_m3_model")
     @patch.object(search_engines, "QdrantClient")
