@@ -61,10 +61,13 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
 
     latency_stages = result.get("latency_stages", {})
     total_ms = result.get("pipeline_wall_ms", 0.0)
+    e2e_ms = result.get("e2e_latency_ms")
+    if e2e_ms is None:
+        e2e_ms = result.get("user_perceived_wall_ms", total_ms)
 
     scores = {
         "query_type": _QUERY_TYPE_SCORE.get(result.get("query_type", ""), 1.0),
-        "latency_total_ms": result.get("user_perceived_wall_ms", total_ms),
+        "latency_total_ms": e2e_ms,
         "semantic_cache_hit": 1.0 if result.get("cache_hit") else 0.0,
         "embeddings_cache_hit": 1.0 if result.get("embeddings_cache_hit") else 0.0,
         "search_cache_hit": 1.0 if result.get("search_cache_hit") else 0.0,
@@ -168,13 +171,17 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
         value=1 if result.get("embedding_error") else 0,
         data_type="BOOLEAN",
     )
-    cache_check_s = result.get("latency_stages", {}).get("cache_check")
-    if cache_check_s is not None:
+    embed_latency_ms = result.get("pre_agent_embed_ms")
+    if embed_latency_ms is None:
+        cache_check_s = result.get("latency_stages", {}).get("cache_check")
+        if cache_check_s is not None:
+            embed_latency_ms = round(cache_check_s * 1000, 1)
+    if embed_latency_ms is not None:
         score(
             lf,
             trace_id,
             name="bge_embed_latency_ms",
-            value=round(cache_check_s * 1000, 1),
+            value=float(embed_latency_ms),
         )
 
     # --- Prompt injection defense (#226) ---
