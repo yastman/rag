@@ -1,172 +1,80 @@
 """PII redaction and security guardrails for production RAG."""
 
 import re
-
-from langfuse import get_client
+from typing import Any
 
 
 class PIIRedactor:
     """
-    Redact PII from queries before logging to Langfuse/MLflow.
+    Redact PII from queries and data before logging.
 
-    Common PII patterns:
-    - Ukrainian phone numbers: +380XXXXXXXXX
+    Superset of patterns from both query redaction and Langfuse masking:
+    - Ukrainian passport numbers
+    - Tax IDs (РНОКПП): 10 digits (applied before user_id to avoid overlap)
+    - Telegram user IDs: 9-10 digit standalone numbers
+    - Phone numbers: international format (10-15 digits, optional +)
     - Email addresses
-    - Tax IDs (РНОКПП): 10 digits
-    - Passport numbers
     """
 
-    def __init__(self):
-        self.patterns = {
-            "phone": re.compile(r"\+380\d{9}|\b0\d{9}\b"),
-            "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
-            "tax_id": re.compile(r"\b\d{10}\b"),  # РНОКПП
+    # Replacement tokens keyed by pattern name
+    _REPLACEMENTS: dict[str, str] = {
+        "passport": "[PASSPORT]",
+        "tax_id": "[TAX_ID]",
+        "user_id": "[USER_ID]",
+        "phone": "[PHONE]",
+        "email": "[EMAIL]",
+    }
+
+    def __init__(self) -> None:
+        # Order matters: phone before tax_id so 0-prefixed Ukrainian local numbers (0XXXXXXXXX)
+        # are matched as phone rather than tax_id; tax_id before user_id to avoid overlap on
+        # 10-digit numbers without prefix.
+        self.patterns: dict[str, re.Pattern[str]] = {
             "passport": re.compile(r"\b[А-ЯІЇЄҐ]{2}\d{6}\b"),
+            "phone": re.compile(
+                r"\+\d{9,14}|\b0\d{9}\b"
+            ),  # + prefix international or 0 prefix Ukrainian local
+            "tax_id": re.compile(r"\b\d{10}\b"),  # РНОКПП (10 digits, applied after phone)
+            "user_id": re.compile(r"\b\d{9,10}\b"),  # Telegram user IDs (9-10 digits)
+            "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
         }
 
-    def redact_query(self, query: str) -> tuple[str, dict]:
+    def redact_query(self, query: str) -> tuple[str, dict[str, Any]]:
         """
-        Redact PII from query.
+        Redact PII from a user query string.
 
         Returns:
             (redacted_query, metadata_with_flags)
         """
         redacted = query
-        pii_found = {}
+        pii_found: dict[str, Any] = {}
 
-        # Redact phone numbers
-        phones = self.patterns["phone"].findall(query)
-        if phones:
-            redacted = self.patterns["phone"].sub("[PHONE]", redacted)
-            pii_found["phone_count"] = len(phones)
+        for name, pattern in self.patterns.items():
+            matches = pattern.findall(redacted)
+            if matches:
+                redacted = pattern.sub(self._REPLACEMENTS[name], redacted)
+                pii_found[f"{name}_count"] = len(matches)
 
-        # Redact emails
-        emails = self.patterns["email"].findall(query)
-        if emails:
-            redacted = self.patterns["email"].sub("[EMAIL]", redacted)
-            pii_found["email_count"] = len(emails)
+        return redacted, {"pii_redacted": len(pii_found) > 0, **pii_found}
 
-        # Redact tax IDs
-        tax_ids = self.patterns["tax_id"].findall(query)
-        if tax_ids:
-            redacted = self.patterns["tax_id"].sub("[TAX_ID]", redacted)
-            pii_found["tax_id_count"] = len(tax_ids)
-
-        # Redact passports
-        passports = self.patterns["passport"].findall(query)
-        if passports:
-            redacted = self.patterns["passport"].sub("[PASSPORT]", redacted)
-            pii_found["passport_count"] = len(passports)
-
-        metadata = {"pii_redacted": len(pii_found) > 0, **pii_found}
-
-        return redacted, metadata
-
-
-class BudgetGuard:
-    """
-    Budget limits for LLM providers.
-
-    Prevents runaway costs in production.
-    """
-
-    def __init__(self):
-        self.limits = {
-            "daily": 10.0,  # $10/day
-            "monthly": 300.0,  # $300/month
-        }
-
-        self.current_spend = {
-            "daily": 0.0,
-            "monthly": 0.0,
-        }
-
-        self.alert_threshold = 0.80  # Alert at 80%
-
-    def check_budget(self, estimated_cost: float) -> tuple[bool, str | None]:
+    def mask(self, data: Any, *, max_length: int | None = None) -> Any:
         """
-        Check if request would exceed budget.
+        Recursively mask PII in any data structure (str, dict, list).
+
+        Args:
+            data: Data to mask (string, dict, list, or other).
+            max_length: If set, truncate strings longer than this value.
 
         Returns:
-            (allowed, warning_message)
+            Data with PII replaced and (optionally) long strings truncated.
         """
-
-        # Check daily limit
-        if self.current_spend["daily"] + estimated_cost > self.limits["daily"]:
-            return (
-                False,
-                f"Daily budget exceeded: ${self.current_spend['daily']:.2f} / ${self.limits['daily']:.2f}",
-            )
-
-        # Check monthly limit
-        if self.current_spend["monthly"] + estimated_cost > self.limits["monthly"]:
-            return (
-                False,
-                f"Monthly budget exceeded: ${self.current_spend['monthly']:.2f} / ${self.limits['monthly']:.2f}",
-            )
-
-        # Check alert threshold
-        daily_pct = (self.current_spend["daily"] + estimated_cost) / self.limits["daily"]
-        if daily_pct >= self.alert_threshold:
-            return (
-                True,
-                f"⚠️  Daily budget at {daily_pct:.0%}: ${self.current_spend['daily']:.2f} / ${self.limits['daily']:.2f}",
-            )
-
-        return True, None
-
-    def record_spend(self, cost: float):
-        """Record actual spend."""
-        self.current_spend["daily"] += cost
-        self.current_spend["monthly"] += cost
-
-    def reset_daily(self):
-        """Reset daily counter (run at midnight)."""
-        self.current_spend["daily"] = 0.0
-
-
-# Usage in RAG pipeline
-class SecureRAGPipeline:
-    """RAG Pipeline with PII redaction and budget guards."""
-
-    def __init__(self):
-        self.pii_redactor = PIIRedactor()
-        self.budget_guard = BudgetGuard()
-
-    async def query(self, query: str, user_id: str):
-        """Query with security checks."""
-
-        # 1. Redact PII
-        redacted_query, pii_metadata = self.pii_redactor.redact_query(query)
-
-        if pii_metadata["pii_redacted"]:
-            print(f"⚠️  PII detected and redacted: {pii_metadata}")
-
-        # 2. Check budget
-        estimated_cost = 0.001  # Estimate based on query length
-        allowed, warning = self.budget_guard.check_budget(estimated_cost)
-
-        if not allowed:
-            raise Exception(f"🚫 Budget limit reached: {warning}")
-
-        if warning:
-            print(warning)
-
-        # 3. Execute query (with redacted version logged to Langfuse)
-        langfuse = get_client()
-        langfuse.update_current_trace(
-            input={"query": redacted_query},  # Redacted version
-            metadata={
-                **pii_metadata,
-                "user_id": user_id,
-                "budget_check": "passed",
-            },
-        )
-
-        # ... execute RAG pipeline ...
-
-        # 4. Record actual cost
-        actual_cost = 0.0008  # From LLM response
-        self.budget_guard.record_spend(actual_cost)
-
-        return {"results": []}  # Placeholder
+        if isinstance(data, str):
+            redacted, _ = self.redact_query(data)
+            if max_length is not None and len(redacted) > max_length:
+                redacted = redacted[:max_length] + "... [TRUNCATED]"
+            return redacted
+        if isinstance(data, dict):
+            return {k: self.mask(v, max_length=max_length) for k, v in data.items()}
+        if isinstance(data, list):
+            return [self.mask(item, max_length=max_length) for item in data]
+        return data
