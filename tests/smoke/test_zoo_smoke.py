@@ -80,8 +80,11 @@ class TestZooHealth:
             pytest.skip(f"LLM_BASE_URL points to external API ({litellm_url}), not LiteLLM")
         if not _is_port_open("localhost", 4000):
             pytest.skip("LiteLLM not running (port 4000)")
+        # Health endpoint is rooted at LiteLLM host (without API version suffix).
+        health_base_url = litellm_url.rstrip("/")
+        health_base_url = health_base_url.removesuffix("/v1")
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{litellm_url}/health/liveliness")
+            response = await client.get(f"{health_base_url}/health/liveliness")
             assert response.status_code == 200
 
     @pytest.mark.asyncio
