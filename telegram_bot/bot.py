@@ -2469,21 +2469,21 @@ class PropertyBot:
 
         if action == "back":
             if callback.message:
-                await callback.message.delete()
+                await callback.message.delete()  # type: ignore[union-attr]
             await callback.answer()
 
         elif action == "menu":
             text = get_services_menu_text()
             kb = build_services_menu()
             if callback.message:
-                await callback.message.edit_text(text, reply_markup=kb)
+                await callback.message.edit_text(text, reply_markup=kb)  # type: ignore[union-attr]
             await callback.answer()
 
         elif action == "service" and param:
             svc = get_service_card(param)
             if svc and callback.message:
                 kb = build_service_card_buttons(param)
-                await callback.message.edit_text(svc["card_text"], reply_markup=kb)
+                await callback.message.edit_text(svc["card_text"], reply_markup=kb)  # type: ignore[union-attr]
             await callback.answer()
 
         else:
@@ -2546,7 +2546,7 @@ class PropertyBot:
                 telegram_id=callback.from_user.id, property_id=property_id
             )
             if callback.message:
-                await callback.message.delete()
+                await callback.message.delete()  # type: ignore[union-attr]
             await callback.answer("🗑 Удалено из закладок")
 
         elif action == "viewing" and property_id and state is not None:
