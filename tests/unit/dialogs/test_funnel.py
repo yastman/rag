@@ -61,6 +61,8 @@ async def test_show_results_schedules_background_persist(monkeypatch):
     assert spawn_mock.call_args.kwargs["telegram_user_id"] == 12345
     assert spawn_mock.call_args.kwargs["property_type"] == "2bed"
     assert spawn_mock.call_args.kwargs["budget"] == "mid"
+    assert spawn_mock.call_args.kwargs["timeline"] == "show"
+    assert manager.dialog_data["refine_or_show"] == "show"
     manager.switch_to.assert_awaited_once_with(FunnelSG.results)
 
 
@@ -107,6 +109,7 @@ async def test_refine_path_switches_to_floor(monkeypatch):
         item_id="refine",
     )
 
+    assert manager.dialog_data["refine_or_show"] == "refine"
     manager.switch_to.assert_awaited_once_with(FunnelSG.floor)
 
 
@@ -120,7 +123,12 @@ async def test_view_selected_schedules_persist_and_switches(monkeypatch):
         message=SimpleNamespace(chat=SimpleNamespace(id=111)),
     )
     manager = SimpleNamespace(
-        dialog_data={"property_type": "studio", "budget": "low", "floor": "mid"},
+        dialog_data={
+            "property_type": "studio",
+            "budget": "low",
+            "floor": "mid",
+            "refine_or_show": "refine",
+        },
         middleware_data={
             "user_service": object(),
             "pg_pool": object(),
@@ -142,4 +150,5 @@ async def test_view_selected_schedules_persist_and_switches(monkeypatch):
     assert manager.dialog_data["view"] == "sea"
     spawn_mock.assert_called_once()
     assert spawn_mock.call_args.kwargs["telegram_user_id"] == 99
+    assert spawn_mock.call_args.kwargs["timeline"] == "refine"
     manager.switch_to.assert_awaited_once_with(FunnelSG.results)
