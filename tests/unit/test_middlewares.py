@@ -196,4 +196,5 @@ class TestSetupThrottlingMiddleware:
         setup_throttling_middleware(dp, rate_limit=2.0, admin_ids=[123])
 
         dp.message.middleware.register.assert_called_once()
-        dp.callback_query.middleware.register.assert_called_once()
+        # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
+        assert dp.callback_query.middleware.register.call_count == 2
