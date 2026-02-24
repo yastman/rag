@@ -24,6 +24,8 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +130,7 @@ class BGEM3Client:
             )
         return self._client
 
+    @observe(name="bge-m3-encode-dense")
     @_bge_retry
     async def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors via /encode/dense."""
@@ -148,6 +151,7 @@ class BGEM3Client:
             processing_time = data.get("processing_time")
         return DenseResult(vectors=all_vecs, processing_time=processing_time)
 
+    @observe(name="bge-m3-encode-sparse")
     @_bge_retry
     async def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors via /encode/sparse."""
@@ -168,6 +172,7 @@ class BGEM3Client:
             processing_time = data.get("processing_time")
         return SparseResult(weights=all_weights, processing_time=processing_time)
 
+    @observe(name="bge-m3-encode-hybrid")
     @_bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
         """Encode texts to dense + sparse via /encode/hybrid (single call)."""
@@ -187,6 +192,7 @@ class BGEM3Client:
             processing_time=data.get("processing_time"),
         )
 
+    @observe(name="bge-m3-rerank")
     @_bge_retry
     async def rerank(self, query: str, documents: list[str], top_k: int = 5) -> RerankResult:
         """Rerank documents via ColBERT MaxSim /rerank endpoint."""
@@ -209,6 +215,7 @@ class BGEM3Client:
             processing_time=data.get("processing_time"),
         )
 
+    @observe(name="bge-m3-encode-colbert")
     @_bge_retry
     async def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors via /encode/colbert."""
