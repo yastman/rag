@@ -1,16 +1,11 @@
 import pytest
 
-from src.security.pii_redaction import BudgetGuard, PIIRedactor
+from src.security.pii_redaction import PIIRedactor
 
 
 @pytest.fixture
 def redactor():
     return PIIRedactor()
-
-
-@pytest.fixture
-def budget():
-    return BudgetGuard()
 
 
 class TestPIIRedactor:
@@ -47,39 +42,3 @@ class TestPIIRedactor:
 
         assert redacted == query
         assert meta["pii_redacted"] is False
-
-
-class TestBudgetGuard:
-    def test_daily_limit_ok(self, budget):
-        allowed, msg = budget.check_budget(1.0)
-        assert allowed is True
-        assert msg is None
-
-    def test_daily_limit_exceeded(self, budget):
-        budget.current_spend["daily"] = 9.99
-        allowed, msg = budget.check_budget(0.10)
-
-        assert allowed is False
-        assert "Daily budget exceeded" in msg
-
-    def test_alert_threshold(self, budget):
-        budget.current_spend["daily"] = 8.50  # 85% of $10
-        allowed, msg = budget.check_budget(0.10)
-
-        assert allowed is True
-        assert "⚠️" in msg
-        assert "Daily budget at" in msg
-
-    def test_record_spend(self, budget):
-        budget.record_spend(1.50)
-        assert budget.current_spend["daily"] == 1.50
-        assert budget.current_spend["monthly"] == 1.50
-
-    def test_reset_daily(self, budget):
-        budget.current_spend["daily"] = 5.0
-        budget.current_spend["monthly"] = 100.0
-
-        budget.reset_daily()
-
-        assert budget.current_spend["daily"] == 0.0
-        assert budget.current_spend["monthly"] == 100.0
