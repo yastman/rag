@@ -1,0 +1,130 @@
+"""Apartment search tool for agent SDK."""
+
+from __future__ import annotations
+
+import logging
+
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool
+
+from telegram_bot.observability import get_client, observe
+
+
+logger = logging.getLogger(__name__)
+
+
+def _format_apartment_results(results: list[dict]) -> str:
+    """Format apartment search results for LLM context."""
+    if not results:
+        return "Апартаменты по вашим критериям не найдены. Попробуйте изменить параметры поиска."
+
+    lines = []
+    for i, apt in enumerate(results, 1):
+        p = apt.get("payload", {})
+        price_fmt = f"{p.get('price_eur', 0):,.0f}".replace(",", " ")
+        view = ", ".join(p.get("view_tags", [])) or p.get("view_primary", "")
+        furnished = "с мебелью" if p.get("is_furnished") else "без мебели"
+        floor_str = "цоколь" if p.get("floor", 0) == 0 else f"{p.get('floor')} эт."
+
+        lines.append(
+            f"{i}. {p.get('complex_name', '?')}, секция {p.get('section', '?')}, "
+            f"апп. {p.get('apartment_number', '?')} — "
+            f"{p.get('rooms', '?')}к, {p.get('area_m2', '?')} м², {floor_str}, "
+            f"вид: {view}, {price_fmt} €, {furnished}"
+        )
+
+    return f"Найдено {len(results)} апартаментов:\n" + "\n".join(lines)
+
+
+@tool
+@observe(name="tool-apartment-search", capture_input=False, capture_output=False)
+async def apartment_search(
+    query: str,
+    config: RunnableConfig,
+    rooms: int | None = None,
+    min_price_eur: float | None = None,
+    max_price_eur: float | None = None,
+    min_area_m2: float | None = None,
+    max_area_m2: float | None = None,
+    min_floor: int | None = None,
+    max_floor: int | None = None,
+    complex_name: str | None = None,
+    view: str | None = None,
+    is_furnished: bool | None = None,
+) -> str:
+    """Search available apartments in Fort Beach complexes.
+
+    Use for ALL apartment/property listing queries. Supports structured filters
+    and free-text semantic search.
+
+    Args:
+        query: Free-text search query (e.g. "уютная двушка у моря").
+        rooms: Number of rooms (1=studio, 2=1-bedroom, 3=2-bedroom, 4=3-bedroom).
+        min_price_eur: Minimum price in EUR.
+        max_price_eur: Maximum price in EUR.
+        min_area_m2: Minimum area in m².
+        max_area_m2: Maximum area in m².
+        min_floor: Minimum floor (0=ground).
+        max_floor: Maximum floor.
+        complex_name: Complex name (e.g. "Premier Fort Beach").
+        view: View type (sea, pool, garden, forest, panorama).
+        is_furnished: Whether apartment is furnished.
+    """
+    ctx = (config.get("configurable") or {}).get("bot_context")
+    if not ctx or not ctx.apartments_service:
+        return "Сервис поиска апартаментов недоступен."
+
+    lf = get_client()
+    lf.update_current_span(input={"query": query[:100], "rooms": rooms, "max_price": max_price_eur})
+
+    # Build filters dict
+    filters: dict = {}
+    if rooms is not None:
+        filters["rooms"] = rooms
+    if min_price_eur is not None or max_price_eur is not None:
+        price_f: dict = {}
+        if min_price_eur is not None:
+            price_f["gte"] = min_price_eur
+        if max_price_eur is not None:
+            price_f["lte"] = max_price_eur
+        filters["price_eur"] = price_f
+    if min_area_m2 is not None or max_area_m2 is not None:
+        area_f: dict = {}
+        if min_area_m2 is not None:
+            area_f["gte"] = min_area_m2
+        if max_area_m2 is not None:
+            area_f["lte"] = max_area_m2
+        filters["area_m2"] = area_f
+    if min_floor is not None or max_floor is not None:
+        floor_f: dict = {}
+        if min_floor is not None:
+            floor_f["gte"] = min_floor
+        if max_floor is not None:
+            floor_f["lte"] = max_floor
+        filters["floor"] = floor_f
+    if complex_name is not None:
+        filters["complex_name"] = complex_name
+    if view is not None:
+        filters["view_tags"] = [view]
+    if is_furnished is not None:
+        filters["is_furnished"] = is_furnished
+
+    try:
+        # Embed query
+        dense, sparse, colbert = await ctx.embeddings.aembed_hybrid_with_colbert(query)
+
+        results, total = await ctx.apartments_service.search_with_filters(
+            dense_vector=dense,
+            colbert_query=colbert or None,
+            sparse_vector=sparse,
+            filters=filters or None,
+            top_k=10,
+        )
+
+        response = _format_apartment_results(results)
+        lf.update_current_span(output={"results_count": total})
+        return response
+
+    except Exception:
+        logger.exception("Apartment search failed")
+        return "Ошибка при поиске апартаментов. Попробуйте позже."
