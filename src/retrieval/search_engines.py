@@ -10,8 +10,9 @@ from qdrant_client import QdrantClient, models
 from src.config import AcornMode, QuantizationMode, SearchEngine, Settings
 
 
-# Check if AcornSearchParams is available in qdrant-client
-# (Feature may not be implemented yet in current version)
+# ACORN: available in qdrant-client SDK (≥1.16.2) but intentionally not connected
+# to bot runtime. Evaluation-only — used in search benchmark engines below.
+# Connect to production when filtered queries need higher recall. See #590.
 try:
     from qdrant_client.models import AcornSearchParams
 
