@@ -23,13 +23,15 @@ class SettingsSG(StatesGroup):
 
 
 class FunnelSG(StatesGroup):
-    """BANT sales funnel."""
+    """Property search funnel (#628)."""
 
-    property_type = State()
-    area = State()  # Phase 3: area/location selection (deferred)
-    budget = State()
-    timeline = State()
-    results = State()
+    location = State()  # Step 1: район
+    property_type = State()  # Step 2: тип квартиры
+    budget = State()  # Step 3: бюджет
+    refine_or_show = State()  # Step 4: показать / уточнить
+    floor = State()  # Step 4a: этаж (optional)
+    view = State()  # Step 4b: вид (optional)
+    results = State()  # Step 5: результаты
 
 
 class FaqSG(StatesGroup):
