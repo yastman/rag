@@ -147,6 +147,29 @@ def _coerce_positive_number(value: Any) -> float | None:
     return None
 
 
+def _extract_usage_details(usage: Any | None) -> dict[str, int] | None:
+    """Extract Langfuse-compatible usage_details from provider usage object."""
+    if usage is None:
+        return None
+
+    details: dict[str, int] = {}
+    for target_key, source_attr in (
+        ("input", "prompt_tokens"),
+        ("output", "completion_tokens"),
+        ("total", "total_tokens"),
+        ("input", "input_tokens"),
+        ("output", "output_tokens"),
+    ):
+        if target_key in details:
+            continue
+        raw = getattr(usage, source_attr, None)
+        value = _coerce_positive_number(raw)
+        if value is not None:
+            details[target_key] = int(value)
+
+    return details or None
+
+
 def _select_recent_history(
     messages: list[Any], max_messages: int = _MAX_HISTORY_MESSAGES
 ) -> list[Any]:
@@ -177,7 +200,7 @@ async def _generate_streaming(
     message: Any,
     max_tokens: int = 0,
     lf_client: Any | None = None,
-) -> tuple[str, str, float, float | None, float | None, Any]:
+) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
     """Stream LLM response directly to Telegram via message editing."""
     sent_msg = await message.answer(_STREAM_PLACEHOLDER)
 
@@ -186,6 +209,7 @@ async def _generate_streaming(
     ttft_ms = 0.0
     actual_model = config.llm_model
     completion_tokens: float | None = None
+    usage_details: dict[str, int] | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
     # Measure TTFT from request dispatch (includes pre-stream provider wait).
@@ -207,8 +231,12 @@ async def _generate_streaming(
     try:
         async for chunk in stream:
             if hasattr(chunk, "usage") and chunk.usage is not None:
-                ct = getattr(chunk.usage, "completion_tokens", None)
-                maybe_tokens = _coerce_positive_number(ct)
+                chunk_usage = _extract_usage_details(chunk.usage)
+                if chunk_usage:
+                    usage_details = {**(usage_details or {}), **chunk_usage}
+                maybe_tokens = _coerce_positive_number(
+                    getattr(chunk.usage, "completion_tokens", None)
+                )
                 if maybe_tokens is not None:
                     completion_tokens = maybe_tokens
             if not chunk.choices:
@@ -264,7 +292,15 @@ async def _generate_streaming(
         except Exception:
             logger.warning("Failed to finalize streaming message")
 
-    return accumulated, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg
+    return (
+        accumulated,
+        actual_model,
+        ttft_ms,
+        completion_tokens,
+        stream_only_ttft_ms,
+        usage_details,
+        sent_msg,
+    )
 
 
 def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float | None:
@@ -373,6 +409,7 @@ async def generate_response(
     stream_only_ttft_ms: float | None = None
     response_obj: Any | None = None
     completion_tokens: float | None = None
+    usage_details: dict[str, int] | None = None
     stream_recovery = False
     hard_timeout = False
     sent_msg: Any = None
@@ -415,6 +452,15 @@ async def generate_response(
                         sent_msg,
                     ) = stream_result
                     stream_only_ttft_ms = None
+                elif len(stream_result) == 6:
+                    (
+                        answer,
+                        actual_model,
+                        ttft_ms,
+                        completion_tokens,
+                        stream_only_ttft_ms,
+                        sent_msg,
+                    ) = stream_result
                 else:
                     (
                         answer,
@@ -422,6 +468,7 @@ async def generate_response(
                         ttft_ms,
                         completion_tokens,
                         stream_only_ttft_ms,
+                        usage_details,
                         sent_msg,
                     ) = stream_result
                 response_sent = True
@@ -450,6 +497,7 @@ async def generate_response(
                     ttft_ms = (t_llm_end - t_llm_start) * 1000
                     usage = getattr(response_obj, "usage", None)
                     if usage is not None:
+                        usage_details = _extract_usage_details(usage)
                         completion_tokens = _coerce_positive_number(
                             getattr(usage, "completion_tokens", None)
                         )
@@ -492,6 +540,7 @@ async def generate_response(
                     ttft_ms = (t_llm_end - t_llm_start) * 1000
                     usage = getattr(response_obj, "usage", None)
                     if usage is not None:
+                        usage_details = _extract_usage_details(usage)
                         completion_tokens = _coerce_positive_number(
                             getattr(usage, "completion_tokens", None)
                         )
@@ -513,6 +562,7 @@ async def generate_response(
             ttft_ms = (t_llm_end - t_llm_start) * 1000
             usage = getattr(response_obj, "usage", None)
             if usage is not None:
+                usage_details = _extract_usage_details(usage)
                 completion_tokens = _coerce_positive_number(
                     getattr(usage, "completion_tokens", None)
                 )
@@ -530,6 +580,15 @@ async def generate_response(
 
     elapsed = time.monotonic() - t0
     PipelineMetrics.get().record("generate", elapsed * 1000)
+
+    if actual_model != "fallback":
+        generation_payload: dict[str, Any] = {"model": actual_model}
+        if usage_details:
+            generation_payload["usage_details"] = usage_details
+        elif completion_tokens is not None:
+            generation_payload["usage_details"] = {"output": int(completion_tokens)}
+        with contextlib.suppress(Exception):
+            lf_client.update_current_generation(**generation_payload)
 
     # Build eval context for managed evaluators (#386)
     retrieved_ctx = retrieved_context or []
@@ -551,7 +610,13 @@ async def generate_response(
         "eval_answer": answer[:3000],
         "eval_context": eval_context,
     }
-    if response_obj is not None:
+    if usage_details:
+        span_output["token_usage"] = {
+            "prompt_tokens": usage_details.get("input"),
+            "completion_tokens": usage_details.get("output"),
+            "total_tokens": usage_details.get("total"),
+        }
+    elif response_obj is not None:
         usage = getattr(response_obj, "usage", None)
         if usage is not None:
             span_output["token_usage"] = {

@@ -24,7 +24,7 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -130,11 +130,20 @@ class BGEM3Client:
             )
         return self._client
 
-    @observe(name="bge-m3-encode-dense")
+    @observe(name="bge-m3-encode-dense", capture_input=False, capture_output=False)
     @_bge_retry
     async def encode_dense(self, texts: list[str]) -> DenseResult:
         """Encode texts to dense vectors via /encode/dense."""
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "texts_count": len(texts),
+                "batch_size": self.batch_size,
+                "max_length": self.max_length,
+            }
+        )
         if not texts:
+            lf.update_current_span(output={"vectors_count": 0, "vector_dim": 0})
             return DenseResult(vectors=[])
         client = self._get_client()
         all_vecs: list[list[float]] = []
@@ -149,13 +158,29 @@ class BGEM3Client:
             data = resp.json()
             all_vecs.extend(data["dense_vecs"])
             processing_time = data.get("processing_time")
+        lf.update_current_span(
+            output={
+                "vectors_count": len(all_vecs),
+                "vector_dim": len(all_vecs[0]) if all_vecs else 0,
+                "processing_time": processing_time,
+            }
+        )
         return DenseResult(vectors=all_vecs, processing_time=processing_time)
 
-    @observe(name="bge-m3-encode-sparse")
+    @observe(name="bge-m3-encode-sparse", capture_input=False, capture_output=False)
     @_bge_retry
     async def encode_sparse(self, texts: list[str]) -> SparseResult:
         """Encode texts to sparse vectors via /encode/sparse."""
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "texts_count": len(texts),
+                "batch_size": self.batch_size,
+                "max_length": self.max_length,
+            }
+        )
         if not texts:
+            lf.update_current_span(output={"weights_count": 0})
             return SparseResult(weights=[])
         client = self._get_client()
         all_weights: list[dict[str, Any]] = []
@@ -170,13 +195,24 @@ class BGEM3Client:
             data = resp.json()
             all_weights.extend(data["lexical_weights"])
             processing_time = data.get("processing_time")
+        lf.update_current_span(
+            output={"weights_count": len(all_weights), "processing_time": processing_time}
+        )
         return SparseResult(weights=all_weights, processing_time=processing_time)
 
-    @observe(name="bge-m3-encode-hybrid")
+    @observe(name="bge-m3-encode-hybrid", capture_input=False, capture_output=False)
     @_bge_retry
     async def encode_hybrid(self, texts: list[str]) -> HybridResult:
         """Encode texts to dense + sparse via /encode/hybrid (single call)."""
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "texts_count": len(texts),
+                "max_length": self.max_length,
+            }
+        )
         if not texts:
+            lf.update_current_span(output={"dense_count": 0, "sparse_count": 0, "colbert_count": 0})
             return HybridResult(dense_vecs=[], lexical_weights=[])
         client = self._get_client()
         resp = await client.post(
@@ -185,18 +221,38 @@ class BGEM3Client:
         )
         resp.raise_for_status()
         data = resp.json()
-        return HybridResult(
+        result = HybridResult(
             dense_vecs=data["dense_vecs"],
             lexical_weights=data["lexical_weights"],
             colbert_vecs=data.get("colbert_vecs"),
             processing_time=data.get("processing_time"),
         )
+        lf.update_current_span(
+            output={
+                "dense_count": len(result.dense_vecs),
+                "dense_dim": len(result.dense_vecs[0]) if result.dense_vecs else 0,
+                "sparse_count": len(result.lexical_weights),
+                "colbert_count": len(result.colbert_vecs or []),
+                "processing_time": result.processing_time,
+            }
+        )
+        return result
 
-    @observe(name="bge-m3-rerank")
+    @observe(name="bge-m3-rerank", capture_input=False, capture_output=False)
     @_bge_retry
     async def rerank(self, query: str, documents: list[str], top_k: int = 5) -> RerankResult:
         """Rerank documents via ColBERT MaxSim /rerank endpoint."""
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "query_length": len(query),
+                "documents_count": len(documents),
+                "top_k": top_k,
+                "max_length": self.max_length,
+            }
+        )
         if not documents:
+            lf.update_current_span(output={"results_count": 0, "top_score": None})
             return RerankResult()
         client = self._get_client()
         resp = await client.post(
@@ -210,16 +266,32 @@ class BGEM3Client:
         )
         resp.raise_for_status()
         data = resp.json()
-        return RerankResult(
+        result = RerankResult(
             results=[{"index": r["index"], "score": r["score"]} for r in data["results"]],
             processing_time=data.get("processing_time"),
         )
+        lf.update_current_span(
+            output={
+                "results_count": len(result.results),
+                "top_score": result.results[0]["score"] if result.results else None,
+                "processing_time": result.processing_time,
+            }
+        )
+        return result
 
-    @observe(name="bge-m3-encode-colbert")
+    @observe(name="bge-m3-encode-colbert", capture_input=False, capture_output=False)
     @_bge_retry
     async def encode_colbert(self, texts: list[str]) -> ColbertResult:
         """Encode texts to ColBERT multivectors via /encode/colbert."""
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "texts_count": len(texts),
+                "max_length": self.max_length,
+            }
+        )
         if not texts:
+            lf.update_current_span(output={"colbert_count": 0, "token_vectors": 0})
             return ColbertResult(colbert_vecs=[])
         client = self._get_client()
         resp = await client.post(
@@ -228,10 +300,18 @@ class BGEM3Client:
         )
         resp.raise_for_status()
         data = resp.json()
-        return ColbertResult(
+        result = ColbertResult(
             colbert_vecs=data["colbert_vecs"],
             processing_time=data.get("processing_time"),
         )
+        lf.update_current_span(
+            output={
+                "colbert_count": len(result.colbert_vecs),
+                "token_vectors": len(result.colbert_vecs[0]) if result.colbert_vecs else 0,
+                "processing_time": result.processing_time,
+            }
+        )
+        return result
 
     async def health(self) -> bool:
         """Check BGE-M3 service health."""

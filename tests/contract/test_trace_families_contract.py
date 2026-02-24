@@ -23,7 +23,7 @@ _SCAN_DIRS = [
     Path(__file__).resolve().parent.parent.parent / "src",
 ]
 # Exclude non-production code from the undocumented-spans check
-_EXCLUDE_PATTERNS = ["src/evaluation"]
+_EXCLUDE_PATTERNS = ["src/evaluation", ".venv/"]
 
 # 14 core RAG scores from tests/unit/observability/test_trace_contracts.py::_CORE_RAG_SCORES
 _CORE_RAG_SCORES = [

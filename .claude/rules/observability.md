@@ -42,7 +42,7 @@ make baseline-check                          # Smoke + compare against main-late
 
 Config: `tests/baseline/thresholds.yaml` (includes `go_no_go` section for validate_traces.py)
 
-## Instrumented Services (35 traced operations)
+## Instrumented Services (55+ traced operations)
 
 ### Root Trace
 
@@ -174,7 +174,7 @@ except Exception as e:
 
 **Graceful degradation:** `_NullLangfuseClient.update_current_span()` is a no-op when Langfuse disabled.
 
-### Cache (15 methods)
+### Cache (12 methods)
 
 | Method | Span Name |
 |--------|-----------|
@@ -190,9 +190,6 @@ except Exception as e:
 | store_search_results | `cache-search-store` |
 | get_rerank_results | `cache-rerank-get` |
 | store_rerank_results | `cache-rerank-store` |
-| get_conversation | `cache-conversation-get` |
-| store_conversation | `cache-conversation-store` |
-| store_conversation_batch | `cache-conversation-batch-store` |
 
 ### Services
 
@@ -253,7 +250,7 @@ except Exception as e:
 | `embeddings_cache_hit` | 0.0/1.0 | Embeddings cache (real value from state) |
 | `search_cache_hit` | 0.0/1.0 | Search results cache (real value from state) |
 | `rerank_applied` | 0.0/1.0 | Whether reranking was performed |
-| `rerank_cache_hit` | 0.0/1.0 | Rerank cache (not yet tracked in state, default 0.0) |
+| `rerank_cache_hit` | 0.0/1.0 | Rerank cache (real value from state) |
 | `results_count` | 0-N | Number of retrieved documents |
 | `no_results` | 0.0/1.0 | Query returned empty results |
 | `llm_used` | 0.0/1.0 | LLM generation was invoked |
