@@ -1,23 +1,12 @@
 """Tests for RAG pipeline."""
 
 import os
-import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
-# Keep import of src.core.pipeline deterministic in core unit env without ingest extras.
-sys.modules.setdefault("pymupdf", ModuleType("pymupdf"))
-docling_pkg = sys.modules.setdefault("docling", ModuleType("docling"))
-docling_converter_mod = sys.modules.setdefault(
-    "docling.document_converter",
-    ModuleType("docling.document_converter"),
-)
-docling_converter_mod.DocumentConverter = MagicMock
-docling_pkg.document_converter = docling_converter_mod
-
+# Stubs for pymupdf/docling are installed via conftest.py pytest_configure (#611).
 from src.core.pipeline import RAGPipeline, RAGResult
 
 
