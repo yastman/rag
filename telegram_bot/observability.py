@@ -11,7 +11,6 @@ ensure credentials from `.env`/environment are applied before first tracing.
 import json
 import logging
 import os
-import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -28,6 +27,8 @@ from langfuse import (
     propagate_attributes as _real_propagate,
 )
 
+from src.security.pii_redaction import PIIRedactor
+
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ _MODEL_DEFINITIONS_ENV = "LANGFUSE_MODEL_DEFINITIONS_JSON"
 _MODEL_SYNC_ENABLED_ENV = "LANGFUSE_MODEL_SYNC_ENABLED"
 _MODEL_LIST_PAGE_SIZE = 100
 
+_pii_redactor = PIIRedactor()
+
 
 # ---------------------------------------------------------------------------
 # PII masking (always available)
@@ -49,29 +52,17 @@ def mask_pii(data: Any) -> Any:
     """Mask PII before sending to Langfuse.
 
     Applied to all inputs/outputs/metadata automatically.
+    Delegates to PIIRedactor for pattern matching; truncates long strings.
 
     Masks:
+    - Ukrainian passport numbers
+    - Tax IDs (РНОКПП, 10 digits)
     - Telegram user IDs (9-10 digits)
     - Phone numbers (10-15 digits with optional +)
     - Email addresses
     - Long texts (>4000 chars truncated)
     """
-    if isinstance(data, str):
-        # Mask Telegram user IDs (9-10 digits not part of larger number)
-        data = re.sub(r"\b\d{9,10}\b", "[USER_ID]", data)
-        # Mask phone numbers
-        data = re.sub(r"\+?\d{10,15}", "[PHONE]", data)
-        # Mask emails
-        data = re.sub(r"[\w.-]+@[\w.-]+\.\w+", "[EMAIL]", data)
-        # Truncate long texts
-        if len(data) > _MAX_PII_TEXT_LENGTH:
-            data = data[:_MAX_PII_TEXT_LENGTH] + "... [TRUNCATED]"
-        return data
-    if isinstance(data, dict):
-        return {k: mask_pii(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [mask_pii(item) for item in data]
-    return data
+    return _pii_redactor.mask(data, max_length=_MAX_PII_TEXT_LENGTH)
 
 
 # ---------------------------------------------------------------------------

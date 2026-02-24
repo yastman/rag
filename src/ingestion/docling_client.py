@@ -202,6 +202,7 @@ class DoclingClient:
         self._client = httpx.AsyncClient(
             base_url=self.config.base_url,
             timeout=self.config.timeout,
+            transport=httpx.AsyncHTTPTransport(retries=3),
         )
         return self
 
@@ -225,6 +226,7 @@ class DoclingClient:
         self._client = httpx.AsyncClient(
             base_url=self.config.base_url,
             timeout=self.config.timeout,
+            transport=httpx.AsyncHTTPTransport(retries=3),
         )
 
     async def close(self) -> None:
