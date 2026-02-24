@@ -230,7 +230,16 @@ async def _generate_streaming(
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
-            if delta and delta.content:
+            # Reasoning models (e.g. gpt-oss-120b via Cerebras) may send tokens
+            # as delta.reasoning_content or delta.reasoning instead of delta.content.
+            # LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode
+            # (issues #9578, #15690), so we merge client-side as fallback.
+            text = delta.content if delta else None
+            if not text:
+                text = getattr(delta, "reasoning_content", None) or getattr(
+                    delta, "reasoning", None
+                )
+            if text:
                 if ttft_ms == 0.0:
                     first_token_at = time.monotonic()
                     ttft_ms = (first_token_at - t_request_start) * 1000
@@ -240,7 +249,7 @@ async def _generate_streaming(
                             lf_client.update_current_generation(
                                 completion_start_time=datetime.now(UTC)
                             )
-                accumulated += delta.content
+                accumulated += text
                 now = time.monotonic()
                 if now - last_edit >= _STREAM_EDIT_INTERVAL:
                     with contextlib.suppress(Exception):
