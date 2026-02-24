@@ -12,7 +12,7 @@ import re
 import time
 from typing import Any
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -241,25 +241,31 @@ def _get_chitchat_response(query: str) -> str:
     return random.choice(CHITCHAT_RESPONSES["greeting"])
 
 
-@observe(name="classify-query")
+@observe(name="classify-query", capture_input=False, capture_output=False)
 def classify_query(query: str) -> str:
     """Classify query into one of 6 types using regex patterns.
 
     Priority order: CHITCHAT > OFF_TOPIC > STRUCTURED > FAQ > ENTITY > GENERAL.
     """
     text = query.strip()
+    lf = get_client()
+    lf.update_current_span(input={"query_length": len(text)})
 
     if _match_any(_CHITCHAT_COMPILED, text):
-        return CHITCHAT
-    if _match_any(_OFF_TOPIC_COMPILED, text):
-        return OFF_TOPIC
-    if _match_any(_STRUCTURED_COMPILED, text):
-        return STRUCTURED
-    if _match_any(_FAQ_COMPILED, text):
-        return FAQ
-    if _match_any(_ENTITY_COMPILED, text):
-        return ENTITY
-    return GENERAL
+        query_type = CHITCHAT
+    elif _match_any(_OFF_TOPIC_COMPILED, text):
+        query_type = OFF_TOPIC
+    elif _match_any(_STRUCTURED_COMPILED, text):
+        query_type = STRUCTURED
+    elif _match_any(_FAQ_COMPILED, text):
+        query_type = FAQ
+    elif _match_any(_ENTITY_COMPILED, text):
+        query_type = ENTITY
+    else:
+        query_type = GENERAL
+
+    lf.update_current_span(output={"query_type": query_type})
+    return query_type
 
 
 @observe(name="node-classify")
