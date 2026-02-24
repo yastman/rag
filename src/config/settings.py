@@ -320,24 +320,3 @@ def get_settings() -> Settings:
     if _settings is None:
         _settings = Settings()
     return _settings
-
-
-# Backward compatibility: settings is now a property-like object
-# that creates Settings on first attribute access
-class _LazySettings:
-    """Lazy proxy for backward compatibility with `from src.config.settings import settings`."""
-
-    _instance: Settings | None = None
-
-    def __getattr__(self, name: str):
-        if self._instance is None:
-            self._instance = Settings()
-        return getattr(self._instance, name)
-
-    def __repr__(self) -> str:
-        if self._instance is None:
-            return "LazySettings(not initialized)"
-        return repr(self._instance)
-
-
-settings = _LazySettings()

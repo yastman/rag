@@ -1114,3 +1114,236 @@ class TestPreComputedEmbeddingPassthrough:
 
         assert captured_kwargs.get("pre_computed_sparse") is None
         assert captured_kwargs.get("pre_computed_colbert") is None
+
+
+# ---------------------------------------------------------------------------
+# Task 3: Additional cache store guard keyword coverage
+# ---------------------------------------------------------------------------
+
+
+class TestContextualKeywordCoverage:
+    """Verify specific contextual keywords trigger cache-store skip."""
+
+    def test_este_pronoun_skips_cache_store(self):
+        """'это' (demonstrative pronoun) is a contextual follow-up."""
+        assert _is_contextual_query("это правильный вариант?") is True
+
+    def test_esho_adverb_skips_cache_store(self):
+        """'ещё' (still / more) marks a contextual follow-up."""
+        assert _is_contextual_query("ещё варианты есть?") is True
+
+    def test_oni_pronoun_is_contextual(self):
+        """'они' (they) references prior items — contextual."""
+        assert _is_contextual_query("они уже проданы?") is True
+
+    def test_tot_zhe_phrase_is_contextual(self):
+        """'тот же' (the same) references previous context."""
+        assert _is_contextual_query("это тот же объект?") is True
+
+    def test_plain_question_without_context_markers_is_not_contextual(self):
+        """Questions without contextual pronouns are not follow-ups."""
+        assert _is_contextual_query("Квартиры в центре Москвы") is False
+        assert _is_contextual_query("Сколько стоит однокомнатная?") is False
+
+
+class TestCacheStoreGuardMissingVector:
+    """Verify cache store is skipped when store_vector is absent or invalid."""
+
+    async def test_none_cache_key_embedding_skips_cache_store(self):
+        """When neither cache_key_embedding nor query_embedding is present, skip store."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            # No cache_key_embedding or query_embedding → store_vector will be None
+        }
+        gen_result = {"response": "Answer", "response_sent": False}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+            )
+
+        mock_cache.store_semantic.assert_not_called()
+
+    async def test_cache_hit_skips_cache_store(self):
+        """Cache hit path does not re-store the same response."""
+        msg = _make_message()
+        lf = _make_lf_client()
+        mock_cache = AsyncMock()
+
+        rag_result = {
+            "response": "Hit response",
+            "cache_hit": True,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.9,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "cache_key_embedding": [0.1, 0.2, 0.3],
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие объекты?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=mock_cache,
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="FAQ",
+            )
+
+        mock_cache.store_semantic.assert_not_called()
+
+
+class TestDetectAgentIntentEdgeCases:
+    """Verify keyword matching details and case insensitivity."""
+
+    def test_uppercase_mortgage_keyword_detected(self):
+        """Mortgage detection is case-insensitive (text.lower() applied)."""
+        assert detect_agent_intent("ИПОТЕКА на 20 лет") == "mortgage"
+
+    def test_позвонить_triggers_handoff(self):
+        """'позвонить' contains the 'позвон' keyword — maps to handoff."""
+        assert detect_agent_intent("хочу позвонить менеджеру") == "handoff"
+
+    def test_рассрочка_triggers_mortgage(self):
+        """'рассрочка' contains 'рассрочк' — maps to mortgage."""
+        assert detect_agent_intent("есть ли рассрочка?") == "mortgage"
+
+    def test_итоги_дня_triggers_daily_summary(self):
+        """'итоги дня' (plural) maps to daily_summary."""
+        assert detect_agent_intent("покажи итоги дня") == "daily_summary"
+
+
+# ---------------------------------------------------------------------------
+# Task 4: PipelineResult dataclass invariants (telegram_bot/services/types.py)
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineResultFrozenInvariants:
+    """Verify PipelineResult is an immutable frozen dataclass with slots."""
+
+    def test_frozen_raises_on_field_assignment(self):
+        """Assigning to any field after construction must raise FrozenInstanceError."""
+        from dataclasses import FrozenInstanceError
+
+        result = PipelineResult(answer="test")
+        with pytest.raises(FrozenInstanceError):
+            result.answer = "modified"  # type: ignore[misc]
+
+    def test_frozen_raises_on_new_attribute(self):
+        """Setting a non-existent attribute must also be rejected (slots=True)."""
+        result = PipelineResult()
+        with pytest.raises((AttributeError, TypeError)):
+            result.new_field = "value"  # type: ignore[attr-defined]
+
+    def test_uses_slots(self):
+        """slots=True should add __slots__ to the class."""
+        assert hasattr(PipelineResult, "__slots__")
+
+
+class TestPipelineResultDefaultValues:
+    """Verify all default field values match the documented contract."""
+
+    def test_answer_defaults_to_empty_string(self):
+        assert PipelineResult().answer == ""
+
+    def test_query_type_defaults_to_general(self):
+        assert PipelineResult().query_type == "GENERAL"
+
+    def test_cache_hit_defaults_to_false(self):
+        assert PipelineResult().cache_hit is False
+
+    def test_needs_agent_defaults_to_false(self):
+        assert PipelineResult().needs_agent is False
+
+    def test_agent_intent_defaults_to_empty_string(self):
+        assert PipelineResult().agent_intent == ""
+
+    def test_latency_ms_defaults_to_zero(self):
+        assert PipelineResult().latency_ms == 0.0
+
+    def test_llm_call_count_defaults_to_zero(self):
+        assert PipelineResult().llm_call_count == 0
+
+    def test_pipeline_mode_defaults_to_client_direct(self):
+        assert PipelineResult().pipeline_mode == "client_direct"
+
+    def test_response_sent_defaults_to_false(self):
+        assert PipelineResult().response_sent is False
+
+    def test_sent_message_defaults_to_none(self):
+        assert PipelineResult().sent_message is None
+
+    def test_sources_defaults_to_empty_list(self):
+        assert PipelineResult().sources == []
+
+    def test_scores_defaults_to_empty_dict(self):
+        assert PipelineResult().scores == {}
+
+
+class TestPipelineResultNeedsAgentFlag:
+    """Verify needs_agent flag semantics in context of pipeline routing."""
+
+    def test_needs_agent_true_with_intent(self):
+        """needs_agent=True with agent_intent set — signals agent routing required."""
+        result = PipelineResult(needs_agent=True, agent_intent="mortgage")
+        assert result.needs_agent is True
+        assert result.agent_intent == "mortgage"
+
+    def test_needs_agent_false_with_full_answer(self):
+        """Normal pipeline result has needs_agent=False and an answer."""
+        result = PipelineResult(
+            answer="Here is the answer",
+            needs_agent=False,
+            response_sent=True,
+        )
+        assert result.needs_agent is False
+        assert result.answer == "Here is the answer"
+
+    def test_sources_list_is_independent_per_instance(self):
+        """Each PipelineResult instance gets its own sources list (default_factory)."""
+        r1 = PipelineResult()
+        r2 = PipelineResult()
+        assert r1.sources is not r2.sources
+
+    def test_scores_dict_is_independent_per_instance(self):
+        """Each PipelineResult instance gets its own scores dict (default_factory)."""
+        r1 = PipelineResult()
+        r2 = PipelineResult()
+        assert r1.scores is not r2.scores
