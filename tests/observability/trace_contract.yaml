@@ -303,13 +303,13 @@ error_allowlist:
     trigger: "Agent pipeline step failed"
   - span: history-retrieve
     level: ERROR
-    trigger: "History retrieval failed"
+    trigger: "History search failed"
   - span: history-rewrite
     level: ERROR
     trigger: "History rewrite failed"
   - span: history-summarize
     level: ERROR
-    trigger: "History summarization failed"
+    trigger: "History summarize failed"
   # Services — curated error spans for degraded operations
   - span: cache-*
     level: ERROR
