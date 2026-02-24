@@ -367,6 +367,7 @@ async def _hybrid_retrieve(
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     colbert_search_used = False
     if colbert_query and _has_colbert_search:
+        logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
         qdrant_result = await qdrant.hybrid_search_rrf_colbert(
             dense_vector=dense_vector,
             sparse_vector=sparse_vector,
@@ -387,6 +388,9 @@ async def _hybrid_retrieve(
     else:
         results = qdrant_result
         search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+
+    if not results:
+        logger.info("metric", extra={"metric_name": "retrieval_zero_docs", "value": 1})
 
     # Step 4: Cache results
     if results and not search_meta.get("backend_error", False):
