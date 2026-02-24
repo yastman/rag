@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 import numpy as np
 from qdrant_client import AsyncQdrantClient, models
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -115,6 +115,7 @@ class QdrantService:
         self._collection_validated = False
         logger.info(f"QdrantService: switched to {self._collection_name} (mode={mode})")
 
+    @observe(name="qdrant-apply-strict-mode")
     async def _apply_strict_mode(self) -> None:
         """Apply conservative strict mode limits to the current collection.
 
@@ -150,6 +151,7 @@ class QdrantService:
                 exc,
             )
 
+    @observe(name="qdrant-ensure-alias")
     async def _ensure_alias(self) -> None:
         """Ensure the collection alias '{name}_active' points to the current collection.
 
@@ -214,6 +216,7 @@ class QdrantService:
                 exc,
             )
 
+    @observe(name="qdrant-ensure-collection")
     async def ensure_collection(self) -> None:
         """Ensure the configured collection exists; fallback to base collection if needed.
 
@@ -287,7 +290,7 @@ class QdrantService:
         msg = str(exc).lower()
         return "not existing vector name" in msg or "requires specified vector name" in msg
 
-    @observe(name="qdrant-hybrid-search-rrf")
+    @observe(name="qdrant-hybrid-search-rrf", capture_input=False, capture_output=False)
     async def hybrid_search_rrf(
         self,
         dense_vector: list[float],
@@ -333,6 +336,17 @@ class QdrantService:
                 backend_error, error_type, error_message.
         """
         await self.ensure_collection()
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "collection": self._collection_name,
+                "top_k": top_k,
+                "has_sparse": bool(sparse_vector and sparse_vector.get("indices")),
+                "has_filters": bool(filters),
+                "group_by": group_by,
+                "rrf_k": rrf_k,
+            }
+        )
         # Build prefetch queries
         prefetch = []
 
@@ -407,12 +421,23 @@ class QdrantService:
                 search_params=search_params,
             )
             results = self._format_results(result.points)
+            lf.update_current_span(
+                output={
+                    "results_count": len(results),
+                    "top_score": results[0]["score"] if results else None,
+                }
+            )
             if return_meta:
                 return results, ok_meta
             return results
         except Exception as e:
             # Graceful degradation: return empty list on any Qdrant error
             logger.error(f"Qdrant search failed (graceful degradation): {e}")
+            lf.update_current_span(
+                level="ERROR",
+                status_message=f"Qdrant search failed: {type(e).__name__}: {str(e)[:200]}",
+                output={"results_count": 0, "error": type(e).__name__},
+            )
             if return_meta:
                 return [], {
                     "backend_error": True,
@@ -421,7 +446,7 @@ class QdrantService:
                 }
             return []
 
-    @observe(name="qdrant-hybrid-search-rrf-colbert")
+    @observe(name="qdrant-hybrid-search-rrf-colbert", capture_input=False, capture_output=False)
     async def hybrid_search_rrf_colbert(
         self,
         dense_vector: list[float],
@@ -455,6 +480,17 @@ class QdrantService:
             Reranked results (ColBERT MaxSim scores).
         """
         await self.ensure_collection()
+        lf = get_client()
+        lf.update_current_span(
+            input={
+                "collection": self._collection_name,
+                "top_k": top_k,
+                "has_sparse": bool(sparse_vector and sparse_vector.get("indices")),
+                "has_filters": bool(filters),
+                "colbert_tokens": len(colbert_query) if colbert_query else 0,
+                "rrf_k": rrf_k,
+            }
+        )
         if self._colbert_available is False:
             logger.debug(
                 "Qdrant ColBERT skipped: vector unavailable in collection %s; using RRF",
@@ -586,7 +622,7 @@ class QdrantService:
                 return_meta=return_meta,
             )
 
-    @observe(name="qdrant-batch-search-rrf")
+    @observe(name="qdrant-batch-search-rrf", capture_input=False, capture_output=False)
     async def batch_search_rrf(
         self,
         queries: list[dict],
@@ -683,7 +719,7 @@ class QdrantService:
             logger.error(f"Qdrant batch search failed (graceful degradation): {e}")
             return []
 
-    @observe(name="qdrant-search-score-boosting")
+    @observe(name="qdrant-search-score-boosting", capture_input=False, capture_output=False)
     async def search_with_score_boosting(
         self,
         dense_vector: list[float],
@@ -777,6 +813,7 @@ class QdrantService:
             )
             return self._format_results(result.points)
 
+    @observe(name="qdrant-mmr-rerank", capture_input=False, capture_output=False)
     def mmr_rerank(
         self,
         points: list[dict],
