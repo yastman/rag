@@ -1,5 +1,6 @@
 """Tests for QdrantService quantization parameters."""
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -953,6 +954,25 @@ class TestQdrantServiceHybridSearchColbert:
         assert service._colbert_available is False
         service.hybrid_search_rrf.assert_awaited_once()
 
+    async def test_colbert_empty_results_logs_rerank_empty_metric(self, service, caplog):
+        """Empty ColBERT results log colbert_rerank_empty metric."""
+        service._client.query_points = AsyncMock(return_value=MagicMock(points=[]))
+        service.hybrid_search_rrf = AsyncMock(
+            return_value=[{"id": "fallback_1", "score": 0.9, "text": "fallback", "metadata": {}}]
+        )
+
+        with caplog.at_level(logging.INFO):
+            await service.hybrid_search_rrf_colbert(
+                dense_vector=[0.1] * 1024,
+                colbert_query=[[0.1] * 1024] * 3,
+                top_k=5,
+            )
+
+        metric_records = [r for r in caplog.records if r.getMessage() == "metric"]
+        names = [getattr(r, "metric_name", None) for r in metric_records]
+        assert "colbert_rerank_empty" in names
+        assert "colbert_fallback_to_rrf" in names
+
     async def test_colbert_search_with_filters(self, service, mock_point):
         """Filters are passed through to query_points."""
         service._client.query_points = AsyncMock(return_value=MagicMock(points=[mock_point]))
@@ -1109,3 +1129,103 @@ class TestQdrantApiKeySafety:
             QdrantService(url="http://localhost:6333", api_key=None)
             call_kwargs = MockClient.call_args[1]
             assert call_kwargs["api_key"] is None
+
+
+# ===========================================================================
+# _apply_strict_mode
+# ===========================================================================
+
+
+class TestApplyStrictMode:
+    """Tests for QdrantService._apply_strict_mode()."""
+
+    async def test_apply_strict_mode_calls_update_collection(self):
+        """Strict mode calls update_collection with StrictModeConfig."""
+        svc = _make_service(validated=True)
+        svc._client.update_collection = AsyncMock()
+
+        await svc._apply_strict_mode()
+
+        svc._client.update_collection.assert_awaited_once()
+        call_kwargs = svc._client.update_collection.call_args.kwargs
+        assert call_kwargs["collection_name"] == svc._collection_name
+        strict_cfg = call_kwargs["strict_mode_config"]
+        assert strict_cfg is not None
+        assert strict_cfg.enabled is True
+        assert strict_cfg.max_query_limit == 100
+        assert strict_cfg.max_timeout == 30
+        assert strict_cfg.search_max_hnsw_ef == 512
+
+    async def test_apply_strict_mode_logs_on_success(self, caplog):
+        """Strict mode logs INFO message when successfully applied."""
+        import logging
+
+        svc = _make_service(validated=True)
+        svc._client.update_collection = AsyncMock()
+
+        with caplog.at_level(logging.INFO):
+            await svc._apply_strict_mode()
+
+        assert "strict mode" in caplog.text.lower()
+
+    async def test_apply_strict_mode_warns_on_error(self, caplog):
+        """Strict mode catches exceptions and logs WARNING (non-blocking)."""
+        import logging
+
+        svc = _make_service(validated=True)
+        svc._client.update_collection = AsyncMock(side_effect=Exception("unsupported"))
+
+        with caplog.at_level(logging.WARNING):
+            await svc._apply_strict_mode()  # Must not raise
+
+        assert "strict mode not applied" in caplog.text.lower()
+
+
+# ===========================================================================
+# _ensure_alias
+# ===========================================================================
+
+
+class TestEnsureAlias:
+    """Tests for QdrantService._ensure_alias()."""
+
+    async def test_ensure_alias_calls_update_aliases(self):
+        """_ensure_alias creates alias '{collection}_active' via update_collection_aliases."""
+        svc = _make_service(validated=True)
+        svc._client.update_collection_aliases = AsyncMock()
+
+        await svc._ensure_alias()
+
+        svc._client.update_collection_aliases.assert_awaited_once()
+        ops = svc._client.update_collection_aliases.call_args.kwargs["change_aliases_operations"]
+        assert len(ops) == 1
+        op = ops[0]
+        assert op.create_alias.collection_name == svc._collection_name
+        assert op.create_alias.alias_name == f"{svc._collection_name}_active"
+
+    async def test_ensure_alias_logs_on_success(self, caplog):
+        """_ensure_alias logs INFO on successful alias creation."""
+        import logging
+
+        svc = _make_service(validated=True)
+        svc._client.update_collection_aliases = AsyncMock()
+
+        with caplog.at_level(logging.INFO):
+            await svc._ensure_alias()
+
+        assert "alias" in caplog.text.lower()
+
+    async def test_ensure_alias_warns_on_error(self, caplog):
+        """_ensure_alias catches exceptions and logs WARNING (non-blocking)."""
+        import logging
+
+        svc = _make_service(validated=True)
+        svc._client.update_collection_aliases = AsyncMock(
+            side_effect=Exception("permission denied")
+        )
+
+        with caplog.at_level(logging.WARNING):
+            await svc._ensure_alias()  # Must not raise
+
+        assert "alias" in caplog.text.lower()
+        assert "failed" in caplog.text.lower()
