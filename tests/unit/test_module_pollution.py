@@ -68,12 +68,22 @@ def test_prometheus_client_not_globally_mocked():
 
 
 def test_no_module_level_sys_modules_assignment():
-    """Static guard: scan test files for module-level ``sys.modules[...] = ...``.
+    """Static guard: scan test files for module-level sys.modules mutations.
 
     Conftest files using ``pytest_configure`` are allowed.
-    Assignments inside functions, fixtures, and classes are fine.
-    Only bare module-level assignments are forbidden.
+    Mutations inside functions, fixtures, and classes are fine.
+    Only bare module-level mutations are forbidden.
+
+    Detected patterns:
+    - ``sys.modules["foo"] = ...``   (direct assignment)
+    - ``sys.modules.update(...)``    (bulk update)
+    - ``sys.modules.setdefault(...)`` (conditional insert)
     """
+    _FORBIDDEN = (
+        "sys.modules[",
+        "sys.modules.update(",
+        "sys.modules.setdefault(",
+    )
     violations: list[str] = []
 
     for py_file in sorted(_TESTS_ROOT.rglob("*.py")):
@@ -83,7 +93,7 @@ def test_no_module_level_sys_modules_assignment():
 
         source = py_file.read_text(encoding="utf-8")
         # Fast path: most files do not touch sys.modules at all.
-        if "sys.modules[" not in source:
+        if not any(pat in source for pat in _FORBIDDEN):
             continue
 
         try:
@@ -98,13 +108,18 @@ def test_no_module_level_sys_modules_assignment():
 
             source_line = ast.get_source_segment(source, node) or ""
 
-            if "sys.modules[" in source_line and "=" in source_line:
+            is_violation = (
+                ("sys.modules[" in source_line and "=" in source_line)
+                or "sys.modules.update(" in source_line
+                or "sys.modules.setdefault(" in source_line
+            )
+            if is_violation:
                 rel = py_file.relative_to(_TESTS_ROOT)
                 violations.append(f"{rel}:{node.lineno}")
 
     if violations:
         pytest.fail(
-            f"Module-level sys.modules assignment detected in {len(violations)} "
+            f"Module-level sys.modules mutation detected in {len(violations)} "
             f"location(s):\n"
             + "\n".join(f"  - {v}" for v in violations)
             + "\n\nUse monkeypatch.setitem(sys.modules, ...) in a fixture instead. "
