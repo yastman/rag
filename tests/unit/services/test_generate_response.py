@@ -46,6 +46,32 @@ class _StreamChunk:
         self.usage = None
 
 
+class _ReasoningStreamChunk:
+    """Mock streaming chunk where content arrives via reasoning fields (Cerebras gpt-oss-120b).
+
+    LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode
+    (issues #9578, #15690) — delta.content is None/empty while reasoning tokens
+    appear in delta.reasoning_content (LiteLLM standardized) or delta.reasoning
+    (raw Cerebras).
+    """
+
+    def __init__(
+        self,
+        *,
+        reasoning_content: str | None = None,
+        reasoning: str | None = None,
+    ):
+        delta = MagicMock(spec=[])  # spec=[] prevents auto-attribute creation
+        delta.content = None
+        delta.reasoning_content = reasoning_content
+        delta.reasoning = reasoning
+        choice = MagicMock()
+        choice.delta = delta
+        self.choices = [choice]
+        self.model = "gpt-4o-mini"
+        self.usage = None
+
+
 class _AsyncStream:
     def __init__(self, chunks: list[_StreamChunk]):
         self._chunks = chunks
@@ -250,3 +276,122 @@ async def test_generate_response_non_streaming_tps_none_when_no_usage() -> None:
     # No usage → no TPS, fallback to llm_tps_unavailable score
     assert result["llm_tps"] is None
     assert result["llm_decode_ms"] is None
+
+
+@pytest.mark.asyncio
+async def test_streaming_reasoning_content_merged_into_response() -> None:
+    """Streaming with delta.reasoning_content (LiteLLM standardized) produces response.
+
+    Cerebras gpt-oss-120b sends reasoning tokens; LiteLLM standardizes them as
+    delta.reasoning_content. When merge_reasoning_content_in_choices is buggy in
+    streaming mode, delta.content is None — our client-side merge must catch this.
+    """
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    chunks = [
+        _ReasoningStreamChunk(reasoning_content="Рассуждение "),
+        _ReasoningStreamChunk(reasoning_content="и ответ"),
+    ]
+    stream = _AsyncStream(chunks)
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=100)
+    sent_msg.message_id = 200
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Тест reasoning_content",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест reasoning_content"}],
+    )
+
+    assert result["response"] == "Рассуждение и ответ"
+    assert result["response_sent"] is True
+
+
+@pytest.mark.asyncio
+async def test_streaming_raw_reasoning_merged_into_response() -> None:
+    """Streaming with delta.reasoning (raw Cerebras) produces response.
+
+    Raw Cerebras output uses delta.reasoning (not delta.reasoning_content).
+    Our client-side merge must handle this as a second fallback.
+    """
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    chunks = [
+        _ReasoningStreamChunk(reasoning="Cerebras "),
+        _ReasoningStreamChunk(reasoning="рассуждение"),
+    ]
+    stream = _AsyncStream(chunks)
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=100)
+    sent_msg.message_id = 200
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Тест reasoning",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест reasoning"}],
+    )
+
+    assert result["response"] == "Cerebras рассуждение"
+    assert result["response_sent"] is True
+
+
+@pytest.mark.asyncio
+async def test_streaming_mixed_content_and_reasoning() -> None:
+    """Streaming with mixed delta.content and delta.reasoning_content works.
+
+    Real-world scenario: some chunks have delta.content (after LiteLLM merge works),
+    others have delta.reasoning_content (when merge fails mid-stream).
+    """
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    chunks = [
+        _ReasoningStreamChunk(reasoning_content="Думаю... "),
+        _StreamChunk("Ответ: "),
+        _StreamChunk("Болгария"),
+    ]
+    stream = _AsyncStream(chunks)
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=100)
+    sent_msg.message_id = 200
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Тест mixed",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест mixed"}],
+    )
+
+    assert result["response"] == "Думаю... Ответ: Болгария"
+    assert result["response_sent"] is True
