@@ -120,6 +120,9 @@ def _build_trace_metadata(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "input_type": result.get("input_type", "text"),
         "query_type": result.get("query_type", ""),
+        "pipeline_wall_ms": result.get("pipeline_wall_ms"),
+        "pre_agent_ms": result.get("pre_agent_ms"),
+        "e2e_latency_ms": result.get("e2e_latency_ms"),
         "cache_hit": result.get("cache_hit", False),
         "search_results_count": result.get("search_results_count", 0),
         "rerank_applied": result.get("rerank_applied", False),
@@ -1008,6 +1011,7 @@ class PropertyBot:
         language = LOCALE_TO_LANGUAGE.get(locale, self.config.domain_language)
 
         rag_result_store: dict[str, Any] = {}
+        pre_agent_start = time.perf_counter()
 
         with propagate_attributes(
             session_id=session_id,
@@ -1029,6 +1033,7 @@ class PropertyBot:
                             user_text,
                         )
                         await message.answer(_BLOCKED_RESPONSE)
+                        wall_ms = (time.perf_counter() - pipeline_start) * 1000
                         lf = get_client()
                         tid = lf.get_current_trace_id() or ""
                         lf.update_current_trace(
@@ -1036,6 +1041,8 @@ class PropertyBot:
                             output={"response": _BLOCKED_RESPONSE},
                             metadata={
                                 "pipeline_mode": "sdk_agent",
+                                "pipeline_wall_ms": wall_ms,
+                                "e2e_latency_ms": wall_ms,
                                 "guard_blocked": True,
                                 "injection_pattern": pattern,
                                 "injection_risk_score": risk_score,
@@ -1060,6 +1067,8 @@ class PropertyBot:
                             root_trace_metadata.update(
                                 {
                                     "pipeline_mode": "sdk_agent",
+                                    "pipeline_wall_ms": wall_ms,
+                                    "e2e_latency_ms": wall_ms,
                                     "guard_blocked": True,
                                     "injection_pattern": pattern,
                                     "injection_risk_score": risk_score,
@@ -1080,6 +1089,7 @@ class PropertyBot:
             query_type = classify_query(user_text)
             if query_type in CACHEABLE_QUERY_TYPES:
                 try:
+                    embed_start = time.perf_counter()
                     embedding = await self._cache.get_embedding(user_text)
                     sparse = await self._cache.get_sparse_embedding(user_text)
                     if embedding is None:
@@ -1093,6 +1103,10 @@ class PropertyBot:
                         else:
                             embedding = await self._embeddings.aembed_query(user_text)
                             await self._cache.store_embedding(user_text, embedding)
+                    rag_result_store["pre_agent_embed_ms"] = (
+                        time.perf_counter() - embed_start
+                    ) * 1000
+                    check_start = time.perf_counter()
                     cached = await self._cache.check_semantic(
                         query=user_text,
                         vector=embedding,
@@ -1100,6 +1114,9 @@ class PropertyBot:
                         cache_scope="rag",
                         agent_role=role,
                     )
+                    rag_result_store["pre_agent_cache_check_ms"] = (
+                        time.perf_counter() - check_start
+                    ) * 1000
                     if cached:
                         logger.info("Pre-agent cache HIT (type=%s): %.60s", query_type, user_text)
                         rag_result_store["cache_hit"] = True
@@ -1108,23 +1125,9 @@ class PropertyBot:
                         rag_result_store["cache_key_sparse"] = sparse
                         # Write Langfuse scores and trace metadata
                         lf = get_client()
-                        lf.update_current_trace(
-                            input={"query": user_text},
-                            output={"response": cached},
-                            metadata={"pipeline_mode": "pre_agent_cache"},
-                        )
+                        pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
+                        rag_result_store["pre_agent_ms"] = pre_agent_ms
                         tid = lf.get_current_trace_id() or ""
-                        if tid:
-                            score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
-                            score(
-                                lf,
-                                tid,
-                                name="query_type",
-                                value=query_type,
-                                data_type="CATEGORICAL",
-                            )
-                            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
-                        # Build feedback keyboard (skip for non-RAG query types)
                         reply_markup = None
                         if tid and query_type not in _NO_RAG_QUERY_TYPES:
                             from telegram_bot.feedback import build_feedback_keyboard
@@ -1135,8 +1138,46 @@ class PropertyBot:
                             str(cached),
                             reply_markup=reply_markup,
                         )
+                        wall_ms = (time.perf_counter() - pipeline_start) * 1000
+                        lf.update_current_trace(
+                            input={"query": user_text},
+                            output={"response": cached},
+                            metadata={
+                                "pipeline_mode": "pre_agent_cache",
+                                "pipeline_wall_ms": wall_ms,
+                                "pre_agent_ms": pre_agent_ms,
+                                "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
+                                "pre_agent_cache_check_ms": rag_result_store.get(
+                                    "pre_agent_cache_check_ms"
+                                ),
+                                "e2e_latency_ms": wall_ms,
+                            },
+                        )
+                        if tid:
+                            score(lf, tid, name="pre_agent_cache_hit", value=1, data_type="BOOLEAN")
+                            score(
+                                lf,
+                                tid,
+                                name="query_type",
+                                value=query_type,
+                                data_type="CATEGORICAL",
+                            )
+                            score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
                         if root_trace_metadata is not None:
-                            root_trace_metadata.update({"pipeline_mode": "pre_agent_cache"})
+                            root_trace_metadata.update(
+                                {
+                                    "pipeline_mode": "pre_agent_cache",
+                                    "pipeline_wall_ms": wall_ms,
+                                    "pre_agent_ms": pre_agent_ms,
+                                    "pre_agent_embed_ms": rag_result_store.get(
+                                        "pre_agent_embed_ms"
+                                    ),
+                                    "pre_agent_cache_check_ms": rag_result_store.get(
+                                        "pre_agent_cache_check_ms"
+                                    ),
+                                    "e2e_latency_ms": wall_ms,
+                                }
+                            )
                         return cached
                     # MISS: stash all embeddings so rag_pipeline can skip recomputation (#571)
                     logger.debug("Pre-agent cache MISS (type=%s): %.60s", query_type, user_text)
@@ -1148,11 +1189,23 @@ class PropertyBot:
                         "Pre-agent cache check failed, proceeding to agent", exc_info=True
                     )
 
+            rag_result_store.setdefault(
+                "pre_agent_ms", (time.perf_counter() - pre_agent_start) * 1000
+            )
+
             if role == "client" and self.config.client_direct_pipeline_enabled:
                 try:
                     async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
+                        rag_result_store["pre_agent_ms"] = (
+                            time.perf_counter() - pre_agent_start
+                        ) * 1000
                         if root_trace_metadata is not None:
-                            root_trace_metadata.update({"pipeline_mode": "client_direct"})
+                            root_trace_metadata.update(
+                                {
+                                    "pipeline_mode": "client_direct",
+                                    "pre_agent_ms": rag_result_store["pre_agent_ms"],
+                                }
+                            )
                         pipeline_answer = await self._handle_client_direct_pipeline(
                             message=message,
                             user_text=user_text,
@@ -1163,6 +1216,15 @@ class PropertyBot:
                             rag_result_store=rag_result_store,
                         )
                         if pipeline_answer is not None:
+                            if root_trace_metadata is not None:
+                                root_trace_metadata.update(
+                                    {
+                                        "pipeline_wall_ms": rag_result_store.get(
+                                            "pipeline_wall_ms"
+                                        ),
+                                        "e2e_latency_ms": rag_result_store.get("e2e_latency_ms"),
+                                    }
+                                )
                             return pipeline_answer
                         # needs_agent=True: fall through to sdk_agent path below
                 except Exception:
@@ -1399,6 +1461,7 @@ class PropertyBot:
 
             # Wall-time for the full pipeline
             wall_ms = (time.perf_counter() - pipeline_start) * 1000
+            pre_agent_ms = float(rag_result_store.get("pre_agent_ms", 0.0) or 0.0)
 
             # Write Langfuse trace metadata
             lf = get_client()
@@ -1407,6 +1470,10 @@ class PropertyBot:
                 metadata={
                     "pipeline_mode": "sdk_agent",
                     "pipeline_wall_ms": wall_ms,
+                    "pre_agent_ms": pre_agent_ms,
+                    "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
+                    "pre_agent_cache_check_ms": rag_result_store.get("pre_agent_cache_check_ms"),
+                    "e2e_latency_ms": wall_ms,
                 },
             )
             if root_trace_metadata is not None:
@@ -1414,6 +1481,12 @@ class PropertyBot:
                     {
                         "pipeline_mode": "sdk_agent",
                         "pipeline_wall_ms": wall_ms,
+                        "pre_agent_ms": pre_agent_ms,
+                        "pre_agent_embed_ms": rag_result_store.get("pre_agent_embed_ms"),
+                        "pre_agent_cache_check_ms": rag_result_store.get(
+                            "pre_agent_cache_check_ms"
+                        ),
+                        "e2e_latency_ms": wall_ms,
                     }
                 )
             tid = lf.get_current_trace_id() or ""
@@ -1677,6 +1750,7 @@ class PropertyBot:
                     )
 
             result["pipeline_wall_ms"] = (time.perf_counter() - pipeline_start) * 1000
+            result["e2e_latency_ms"] = result["pipeline_wall_ms"]
             # User-perceived latency excludes post-respond summarization
             summarize_s = result.get("latency_stages", {}).get("summarize", 0)
             result["user_perceived_wall_ms"] = result["pipeline_wall_ms"] - (summarize_s * 1000)
