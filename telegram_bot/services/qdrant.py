@@ -160,16 +160,44 @@ class QdrantService:
         """
         alias_name = f"{self._collection_name}_active"
         try:
-            await self._client.update_collection_aliases(
-                change_aliases_operations=[
-                    models.CreateAliasOperation(
-                        create_alias=models.CreateAlias(
-                            collection_name=self._collection_name,
-                            alias_name=alias_name,
-                        )
-                    )
-                ]
+            aliases = await self._client.get_aliases()
+            current_target = next(
+                (
+                    alias.collection_name
+                    for alias in aliases.aliases
+                    if alias.alias_name == alias_name
+                ),
+                None,
             )
+
+            if current_target == self._collection_name:
+                logger.info(
+                    "QdrantService: alias '%s' already points to '%s'",
+                    alias_name,
+                    self._collection_name,
+                )
+                return
+
+            operations: list[
+                models.CreateAliasOperation
+                | models.DeleteAliasOperation
+                | models.RenameAliasOperation
+            ] = []
+            if current_target is not None:
+                operations.append(
+                    models.DeleteAliasOperation(
+                        delete_alias=models.DeleteAlias(alias_name=alias_name)
+                    )
+                )
+            operations.append(
+                models.CreateAliasOperation(
+                    create_alias=models.CreateAlias(
+                        collection_name=self._collection_name,
+                        alias_name=alias_name,
+                    )
+                )
+            )
+            await self._client.update_collection_aliases(change_aliases_operations=operations)
             logger.info(
                 "QdrantService: alias '%s' → '%s' ensured",
                 alias_name,

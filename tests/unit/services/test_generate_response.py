@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -127,6 +128,45 @@ async def test_generate_response_streaming_sets_response_sent_and_message_ref() 
     assert result["response"] == "Часть 1 Часть 2"
     assert result["response_sent"] is True
     assert result["sent_message"] == {"chat_id": 555, "message_id": 777}
+
+
+@pytest.mark.asyncio
+async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> None:
+    """TTFT must include provider wait before stream object is returned."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    stream = _AsyncStream([_StreamChunk("Часть 1 "), _StreamChunk("Часть 2")])
+
+    async def _delayed_stream_create(*_args, **_kwargs):
+        await asyncio.sleep(0.05)  # emulate provider wait before first stream chunk
+        return stream
+
+    client.chat.completions.create = AsyncMock(side_effect=_delayed_stream_create)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=555)
+    sent_msg.message_id = 777
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Стриминг?",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Стриминг?"}],
+    )
+
+    assert result["response"] == "Часть 1 Часть 2"
+    assert result["llm_ttft_ms"] >= 45.0
+    assert result["llm_stream_only_ttft_ms"] is not None
+    assert result["llm_stream_only_ttft_ms"] < result["llm_ttft_ms"]
+    assert result["llm_ttft_drift_ms"] is not None
+    assert result["llm_ttft_drift_ms"] >= 40.0
 
 
 @pytest.mark.asyncio
