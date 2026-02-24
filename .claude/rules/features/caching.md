@@ -171,6 +171,37 @@ pytest tests/unit/graph/test_cache_nodes.py -v            # 7 tests
 pytest tests/unit/graph/test_retrieve_node.py -v          # 5 tests
 ```
 
+## Redis CLI Debug
+
+`redis-cli` (7.4.2, `~/.local/bin`) — use for cache inspection and debugging:
+
+```bash
+# Connect (local dev)
+redis-cli -p 6379 -a "$REDIS_PASSWORD"
+
+# Inspect keys by tier
+redis-cli -a "$REDIS_PASSWORD" KEYS "sem:v5:*"        # Semantic cache
+redis-cli -a "$REDIS_PASSWORD" KEYS "embeddings:v5:*"  # Embedding cache
+redis-cli -a "$REDIS_PASSWORD" KEYS "search:v5:*"      # Search cache
+redis-cli -a "$REDIS_PASSWORD" KEYS "conversation:*"    # Conversation history
+
+# Key count per tier
+redis-cli -a "$REDIS_PASSWORD" EVAL "return #redis.call('keys','sem:v5:*')" 0
+redis-cli -a "$REDIS_PASSWORD" DBSIZE
+
+# Inspect conversation (LIST type)
+redis-cli -a "$REDIS_PASSWORD" LRANGE "conversation:123" 0 -1
+
+# TTL check
+redis-cli -a "$REDIS_PASSWORD" TTL "sem:v5:bge1024:somekey"
+
+# Memory usage
+redis-cli -a "$REDIS_PASSWORD" INFO memory | grep used_memory_human
+
+# Flush all (DANGER — dev only)
+redis-cli -a "$REDIS_PASSWORD" FLUSHDB
+```
+
 ## Troubleshooting
 
 | Error | Fix |
