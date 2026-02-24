@@ -12,6 +12,8 @@ from typing import Any
 
 import httpx
 
+from telegram_bot.observability import get_client, observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -38,20 +40,26 @@ class KommoTokenStore:
         self._redirect_uri = redirect_uri
         self._key = f"{REDIS_KEY_PREFIX}{subdomain}"
 
+    @observe(name="kommo-token-get", capture_input=False, capture_output=False)
     async def get_valid_token(self) -> str:
         """Get valid access token, refreshing if needed."""
+        lf = get_client()
         data = await self._redis.hgetall(self._key)
         if not data:
             raise ValueError(f"No token stored for {self._subdomain}")
 
         expires_at = self._to_int(data.get(b"expires_at", b"0"), default=0)
         if time.time() < expires_at - TOKEN_REFRESH_BUFFER_S:
+            lf.update_current_span(output={"refresh_needed": False})
             return self._to_str_token(data.get(b"access_token"), field="access_token")
 
+        lf.update_current_span(output={"refresh_needed": True})
         return await self.force_refresh()
 
+    @observe(name="kommo-token-refresh", capture_input=False, capture_output=False)
     async def force_refresh(self) -> str:
         """Force token refresh via Kommo OAuth2."""
+        lf = get_client()
         data = await self._redis.hgetall(self._key)
         refresh_token = self._to_str_token(data.get(b"refresh_token", b""), field="refresh_token")
 
@@ -80,6 +88,7 @@ class KommoTokenStore:
             refreshed_token,
             expires_in,
         )
+        lf.update_current_span(output={"refreshed": True, "expires_in_s": expires_in})
         return access_token
 
     async def store_initial(
