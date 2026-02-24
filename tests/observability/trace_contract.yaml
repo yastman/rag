@@ -210,7 +210,10 @@ sensitive_spans:
   - bge-m3-encode-hybrid
   - bge-m3-rerank
   - bge-m3-encode-colbert
-  # qdrant (raw search payloads)
+  # qdrant (raw search payloads + lifecycle)
+  - qdrant-ensure-collection
+  - qdrant-apply-strict-mode
+  - qdrant-ensure-alias
   - qdrant-hybrid-search-rrf
   - qdrant-hybrid-search-rrf-colbert
   - qdrant-batch-search-rrf
@@ -269,6 +272,7 @@ scores:
     - crm_tools_error
 
 error_allowlist:
+  # Graph nodes — core pipeline error/fallback paths
   - span: node-generate
     level: ERROR
     trigger: "LLM call failed"
@@ -284,9 +288,41 @@ error_allowlist:
   - span: node-respond
     level: ERROR
     trigger: "Telegram send failed"
+  - span: node-cache-check
+    level: ERROR
+    trigger: "Cache check failed"
+  # Agent tools — pipeline wrapper error paths
   - span: tool-rag-search
     level: ERROR
     trigger: "RAG pipeline failed"
   - span: tool-history-search
     level: ERROR
     trigger: "History search failed"
+  - span: rag-pipeline
+    level: ERROR
+    trigger: "Agent pipeline step failed"
+  - span: history-graph-nodes
+    level: ERROR
+    trigger: "History graph node failed"
+  # Services — curated error spans for degraded operations
+  - span: cache-*
+    level: ERROR
+    trigger: "Cache tier operation failed"
+  - span: cache-semantic-check
+    level: WARNING
+    trigger: "Semantic similarity below threshold"
+  - span: service-generate-response
+    level: ERROR
+    trigger: "Generation failed"
+  - span: service-generate-response
+    level: WARNING
+    trigger: "Streaming/fallback degradation"
+  - span: qdrant-*
+    level: ERROR
+    trigger: "Qdrant operation failed"
+  - span: qdrant-*
+    level: WARNING
+    trigger: "Qdrant lifecycle warning"
+  - span: history-delete
+    level: ERROR
+    trigger: "History deletion failed"

@@ -10,7 +10,7 @@ from typing import Any
 
 from qdrant_client import AsyncQdrantClient, models
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -150,12 +150,14 @@ class HistoryService:
             logger.warning("Failed to search history", exc_info=True)
             return []
 
-    @observe(name="history-delete")
+    @observe(name="history-delete", capture_input=False, capture_output=False)
     async def delete_user_history(self, user_id: int) -> bool:
         """Delete all history points for a given user (e.g. on /clear).
 
         Returns True on success, False on failure.
         """
+        lf = get_client()
+        lf.update_current_span(input={"has_user_id": True})
         try:
             await self._client.delete(
                 collection_name=self._collection_name,
@@ -171,9 +173,15 @@ class HistoryService:
                 ),
             )
             logger.info("Deleted Qdrant history for user_id=%s", user_id)
+            lf.update_current_span(output={"deleted": True})
             return True
         except Exception:
             logger.warning("Failed to delete Qdrant history for user_id=%s", user_id, exc_info=True)
+            lf.update_current_span(
+                level="ERROR",
+                status_message="Failed to delete user history from Qdrant",
+                output={"deleted": False},
+            )
             return False
 
     @observe(name="history-get-session-turns", capture_input=False, capture_output=False)

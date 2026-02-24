@@ -16,7 +16,7 @@ SCAN_DIRS = [
     REPO_ROOT / "telegram_bot",
     REPO_ROOT / "src",
 ]
-EXCLUDE_DIRS = ["tests/", "src/evaluation/"]
+EXCLUDE_DIRS = ["tests/", "src/evaluation/", ".venv/"]
 
 # Spans that carry large/sensitive payloads — must have capture_input=False, capture_output=False
 SENSITIVE_SPANS = [
