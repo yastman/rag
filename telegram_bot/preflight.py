@@ -20,7 +20,27 @@ logger = logging.getLogger(__name__)
 ***REMOVED*** Retry settings for critical deps
 CRITICAL_RETRIES = 3
 CRITICAL_RETRY_DELAY = 5.0  ***REMOVED*** seconds
-COLBERT_COVERAGE_WARN_THRESHOLD = float(os.getenv("COLBERT_COVERAGE_WARN_THRESHOLD", "0.995"))
+_DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
+
+
+def _read_colbert_coverage_warn_threshold() -> float:
+    """Read configurable ColBERT coverage warning threshold safely."""
+    raw = os.getenv(
+        "COLBERT_COVERAGE_WARN_THRESHOLD",
+        str(_DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD),
+    )
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid COLBERT_COVERAGE_WARN_THRESHOLD=%r, fallback to %.3f",
+            raw,
+            _DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD,
+        )
+        return _DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD
+
+
+COLBERT_COVERAGE_WARN_THRESHOLD = _read_colbert_coverage_warn_threshold()
 
 ***REMOVED*** Cache key prefixes used by CacheService (see telegram_bot/services/cache.py)
 ***REMOVED*** Used for synthetic write/read/ttl/delete verification at startup.
