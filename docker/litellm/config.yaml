@@ -32,7 +32,7 @@ model_list:
       model: openai/zai-glm-4.7
       api_base: https://api.cerebras.ai/v1
       api_key: os.environ/CEREBRAS_API_KEY
-      max_completion_tokens: 2048
+      max_completion_tokens: 1024
 
   # Fallback 2: Groq (fast, free tier)
   - model_name: gpt-4o-mini-fallback
