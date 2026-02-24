@@ -1,4 +1,4 @@
-"""BANT sales funnel dialog (aiogram-dialog)."""
+"""Property search funnel dialog (aiogram-dialog) — #628."""
 
 from __future__ import annotations
 
@@ -39,93 +39,113 @@ def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
 # --- Getters (provide data to windows) ---
 
 
-async def get_property_types(i18n: Any = None, **kwargs: Any) -> dict[str, Any]:
+async def get_location_options(**kwargs: Any) -> dict[str, Any]:
+    """Getter for location (district) selection."""
+    items = [
+        ("Солнечный Берег", "sunny_beach"),
+        ("Святой Влас", "sveti_vlas"),
+        ("Елените", "elenite"),
+        ("Несебр", "nessebar"),
+        ("Равда", "ravda"),
+        ("Бургас", "burgas"),
+        ("Поморие", "pomorie"),
+        ("Созополь", "sozopol"),
+        ("Приморско", "primorsko"),
+        ("Банско", "bansko"),
+        ("София", "sofia"),
+        ("Любой район", "any"),
+    ]
+    return {"title": "В каком районе ищете?", "items": items, "btn_back": "Назад"}
+
+
+async def get_property_types(**kwargs: Any) -> dict[str, Any]:
     """Getter for property type selection."""
-    if i18n is None:
-        items = [
-            ("Купить квартиру", "apartment"),
-            ("Купить дом", "house"),
-            ("Арендовать", "rent"),
-            ("Просто посмотреть", "looking"),
-        ]
-    else:
-        items = [
-            (i18n.get("funnel-buy-apartment"), "apartment"),
-            (i18n.get("funnel-buy-house"), "house"),
-            (i18n.get("funnel-rent"), "rent"),
-            (i18n.get("funnel-just-looking"), "looking"),
-        ]
-
-    title = i18n.get("funnel-what-looking") if i18n else "Что вас интересует?"
-    back = i18n.get("back") if i18n else "Назад"
-    return {"title": title, "items": items, "btn_back": back}
+    items = [
+        ("Студия", "studio"),
+        ("1-спальня", "1bed"),
+        ("2-спальни", "2bed"),
+        ("3-спальни", "3bed"),
+        ("Любой тип", "any"),
+    ]
+    return {"title": "Какой тип жилья?", "items": items, "btn_back": "Назад"}
 
 
-async def get_budget_options(i18n: Any = None, **kwargs: Any) -> dict[str, Any]:
+async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for budget selection."""
-    if i18n is None:
-        items = [
-            ("До 50 000 €", "low"),
-            ("50 000 – 100 000 €", "mid"),
-            ("100 000 – 200 000 €", "high"),
-            ("Более 200 000 €", "premium"),
-        ]
-    else:
-        items = [
-            (i18n.get("funnel-budget-low"), "low"),
-            (i18n.get("funnel-budget-mid"), "mid"),
-            (i18n.get("funnel-budget-high"), "high"),
-            (i18n.get("funnel-budget-premium"), "premium"),
-        ]
-
-    title = i18n.get("funnel-budget") if i18n else "Какой бюджет?"
-    back = i18n.get("back") if i18n else "Назад"
-    return {"title": title, "items": items, "btn_back": back}
+    items = [
+        ("До 50 000 €", "low"),
+        ("50 000 – 100 000 €", "mid"),
+        ("100 000 – 150 000 €", "high"),
+        ("150 000 – 200 000 €", "premium"),
+        ("Более 200 000 €", "luxury"),
+        ("Любой бюджет", "any"),
+    ]
+    return {"title": "Какой бюджет?", "items": items, "btn_back": "Назад"}
 
 
-async def get_timeline_options(i18n: Any = None, **kwargs: Any) -> dict[str, Any]:
-    """Getter for timeline selection."""
-    if i18n is None:
-        items = [
-            ("В ближайший месяц", "asap"),
-            ("В течение 3 месяцев", "3months"),
-            ("В течение полугода", "6months"),
-            ("Просто присматриваюсь", "looking"),
-        ]
-    else:
-        items = [
-            (i18n.get("funnel-timeline-asap"), "asap"),
-            (i18n.get("funnel-timeline-3m"), "3months"),
-            (i18n.get("funnel-timeline-6m"), "6months"),
-            (i18n.get("funnel-timeline-looking"), "looking"),
-        ]
+async def get_refine_or_show_options(**kwargs: Any) -> dict[str, Any]:
+    """Getter for refine-or-show decision step."""
+    items = [
+        ("Показать результаты", "show"),
+        ("Уточнить параметры", "refine"),
+    ]
+    return {"title": "Что делаем дальше?", "items": items, "btn_back": "Назад"}
 
-    title = i18n.get("funnel-timeline") if i18n else "Когда планируете?"
-    back = i18n.get("back") if i18n else "Назад"
-    return {"title": title, "items": items, "btn_back": back}
+
+async def get_floor_options(**kwargs: Any) -> dict[str, Any]:
+    """Getter for floor selection (optional refinement)."""
+    items = [
+        ("0-1 этаж", "low"),
+        ("2-3 этаж", "mid"),
+        ("4-5 этаж", "high"),
+        ("6+ этаж", "top"),
+        ("Любой этаж", "any"),
+    ]
+    return {"title": "Какой этаж предпочитаете?", "items": items, "btn_back": "Назад"}
+
+
+async def get_view_options(**kwargs: Any) -> dict[str, Any]:
+    """Getter for view selection (optional refinement)."""
+    items = [
+        ("Море", "sea"),
+        ("Бассейн", "pool"),
+        ("Газон/сад", "garden"),
+        ("Лес/горы", "forest"),
+        ("Любой вид", "any"),
+    ]
+    return {"title": "Какой вид предпочитаете?", "items": items, "btn_back": "Назад"}
 
 
 async def get_results_data(
     dialog_manager: DialogManager,
-    i18n: Any = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
     """Getter for results window — compiles funnel answers."""
     data = dialog_manager.dialog_data
-    title = i18n.get("funnel-results-title") if i18n else "Подобрали для вас:"
-    empty_msg = i18n.get("funnel-results-empty") if i18n else "Пока не нашли вариантов."
-    back = i18n.get("back") if i18n else "Назад"
     return {
-        "title": title,
+        "title": "Подобрали для вас:",
+        "location": data.get("location", ""),
         "property_type": data.get("property_type", ""),
         "budget": data.get("budget", ""),
-        "timeline": data.get("timeline", ""),
-        "results_text": empty_msg,  # Placeholder — Phase 2 integrates RAG
-        "btn_back": back,
+        "floor": data.get("floor", ""),
+        "view": data.get("view", ""),
+        "results_text": "Пока не нашли вариантов.",  # Phase 2: RAG integration
+        "btn_back": "Назад",
     }
 
 
 # --- Handlers (on_click) ---
+
+
+async def on_location_selected(
+    callback: CallbackQuery,
+    widget: Select,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """Save location and advance to property type."""
+    manager.dialog_data["location"] = item_id
+    await manager.switch_to(FunnelSG.property_type)
 
 
 async def on_property_type_selected(
@@ -145,21 +165,67 @@ async def on_budget_selected(
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    """Save budget and advance to timeline."""
+    """Save budget and advance to refine-or-show."""
     manager.dialog_data["budget"] = item_id
-    await manager.switch_to(FunnelSG.timeline)
+    await manager.switch_to(FunnelSG.refine_or_show)
 
 
-async def on_timeline_selected(
+async def on_refine_or_show_selected(
     callback: CallbackQuery,
     widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    """Save timeline and show results."""
-    manager.dialog_data["timeline"] = item_id
+    """Branch: show results immediately or go to optional refinement steps."""
+    if item_id == "show":
+        try:
+            from telegram_bot.bot import make_session_id
 
-    # Persist scoring + CRM sync asynchronously on completed funnel answers.
+            if callback.from_user is not None:
+                data = manager.dialog_data
+                _spawn_persist_funnel_lead_score(
+                    telegram_user_id=callback.from_user.id,
+                    session_id=make_session_id("chat", callback.message.chat.id)
+                    if callback.message is not None
+                    else make_session_id("chat", callback.from_user.id),
+                    property_type=data.get("property_type"),
+                    budget=data.get("budget"),
+                    timeline=data.get("refine_or_show"),
+                    user_service=manager.middleware_data.get("user_service"),
+                    pg_pool=manager.middleware_data.get("pg_pool"),
+                    lead_scoring_store=manager.middleware_data.get("lead_scoring_store"),
+                    kommo_client=manager.middleware_data.get("kommo_client"),
+                    hot_lead_notifier=manager.middleware_data.get("hot_lead_notifier"),
+                    config=manager.middleware_data.get("bot_config"),
+                )
+        except Exception:
+            logger.exception("Failed to schedule funnel lead score persistence")
+
+        await manager.switch_to(FunnelSG.results)
+    else:
+        await manager.switch_to(FunnelSG.floor)
+
+
+async def on_floor_selected(
+    callback: CallbackQuery,
+    widget: Select,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """Save floor preference and advance to view selection."""
+    manager.dialog_data["floor"] = item_id
+    await manager.switch_to(FunnelSG.view)
+
+
+async def on_view_selected(
+    callback: CallbackQuery,
+    widget: Select,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """Save view preference, persist lead score and show results."""
+    manager.dialog_data["view"] = item_id
+
     try:
         from telegram_bot.bot import make_session_id
 
@@ -172,7 +238,7 @@ async def on_timeline_selected(
                 else make_session_id("chat", callback.from_user.id),
                 property_type=data.get("property_type"),
                 budget=data.get("budget"),
-                timeline=data.get("timeline"),
+                timeline=data.get("refine_or_show"),
                 user_service=manager.middleware_data.get("user_service"),
                 pg_pool=manager.middleware_data.get("pg_pool"),
                 lead_scoring_store=manager.middleware_data.get("lead_scoring_store"),
@@ -190,7 +256,23 @@ async def on_timeline_selected(
 
 
 funnel_dialog = Dialog(
-    # Step 1: Property type (SPIN: Situation)
+    # Step 1: Location (район)
+    Window(
+        Format("{title}"),
+        Column(
+            Select(
+                Format("{item[0]}"),
+                id="location",
+                item_id_getter=operator.itemgetter(1),
+                items="items",
+                on_click=on_location_selected,
+            ),
+        ),
+        Cancel(Format("{btn_back}")),
+        getter=get_location_options,
+        state=FunnelSG.location,
+    ),
+    # Step 2: Property type
     Window(
         Format("{title}"),
         Column(
@@ -202,11 +284,11 @@ funnel_dialog = Dialog(
                 on_click=on_property_type_selected,
             ),
         ),
-        Cancel(Format("{btn_back}")),
+        Back(Format("{btn_back}")),
         getter=get_property_types,
         state=FunnelSG.property_type,
     ),
-    # Step 2: Budget (BANT: Budget)
+    # Step 3: Budget
     Window(
         Format("{title}"),
         Column(
@@ -222,23 +304,55 @@ funnel_dialog = Dialog(
         getter=get_budget_options,
         state=FunnelSG.budget,
     ),
-    # Step 3: Timeline (BANT: Timeline)
+    # Step 4: Refine or show
     Window(
         Format("{title}"),
         Column(
             Select(
                 Format("{item[0]}"),
-                id="timeline",
+                id="refine_or_show",
                 item_id_getter=operator.itemgetter(1),
                 items="items",
-                on_click=on_timeline_selected,
+                on_click=on_refine_or_show_selected,
             ),
         ),
         Back(Format("{btn_back}")),
-        getter=get_timeline_options,
-        state=FunnelSG.timeline,
+        getter=get_refine_or_show_options,
+        state=FunnelSG.refine_or_show,
     ),
-    # Step 4: Results
+    # Step 4a: Floor (optional)
+    Window(
+        Format("{title}"),
+        Column(
+            Select(
+                Format("{item[0]}"),
+                id="floor",
+                item_id_getter=operator.itemgetter(1),
+                items="items",
+                on_click=on_floor_selected,
+            ),
+        ),
+        Back(Format("{btn_back}")),
+        getter=get_floor_options,
+        state=FunnelSG.floor,
+    ),
+    # Step 4b: View (optional)
+    Window(
+        Format("{title}"),
+        Column(
+            Select(
+                Format("{item[0]}"),
+                id="view",
+                item_id_getter=operator.itemgetter(1),
+                items="items",
+                on_click=on_view_selected,
+            ),
+        ),
+        Back(Format("{btn_back}")),
+        getter=get_view_options,
+        state=FunnelSG.view,
+    ),
+    # Step 5: Results
     Window(
         Format("{title}\n\n{results_text}"),
         Cancel(Format("{btn_back}")),
