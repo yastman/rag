@@ -104,7 +104,7 @@ class TestPropertyBotInit:
             mock_cache.assert_called_once()
             mock_emb.assert_called_once()
             mock_sparse.assert_called_once()
-            mock_qdrant.assert_called_once()
+            assert mock_qdrant.call_count == 2  # main + apartments collection
 
     def test_init_passes_qdrant_timeout(self, mock_config):
         """PropertyBot should pass configured timeout to QdrantService."""
@@ -120,7 +120,8 @@ class TestPropertyBotInit:
         ):
             PropertyBot(mock_config)
 
-        assert mock_qdrant.call_args.kwargs["timeout"] == 7
+        # First call is main collection (with timeout), second is apartments
+        assert mock_qdrant.call_args_list[0].kwargs["timeout"] == 7
 
     def test_init_creates_llm_guard_client_when_enabled(self, mock_config):
         """PropertyBot initializes LLMGuardClient when ML guard is enabled."""
