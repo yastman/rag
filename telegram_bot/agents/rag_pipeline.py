@@ -36,9 +36,8 @@ _REWRITE_PROMPT = (
     "Верни ТОЛЬКО переформулированный запрос, без пояснений.\n\n"
     "Оригинальный запрос: {query}"
 )
-# top_k=5 for reranking. Reducing to 3 saves ~20ms but may miss relevant docs
-# that were ranked lower by RRF but higher by ColBERT semantic similarity.
-_DEFAULT_RERANK_TOP_K = 5
+# top_k=3 for reranking. Saves ~20ms vs top_k=5 while capturing most relevant docs via ColBERT semantic similarity.
+_DEFAULT_RERANK_TOP_K = 3
 
 
 # ---------------------------------------------------------------------------
