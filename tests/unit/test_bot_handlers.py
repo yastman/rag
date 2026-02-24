@@ -3205,6 +3205,80 @@ class TestPreAgentCacheCheck:
         mock_agent.ainvoke.assert_not_called()
         bot._cache.store_sparse_embedding.assert_awaited_once()
 
+    async def test_pre_agent_hybrid_colbert_error_proceeds_to_agent(self, mock_config):
+        """aembed_hybrid_with_colbert error is swallowed; agent.ainvoke still called (#633)."""
+        bot, _ = _create_bot(mock_config)
+
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            side_effect=RuntimeError("BGE-M3 timeout")
+        )
+        bot._embeddings.aembed_hybrid = None  # also unavailable
+        bot._embeddings.aembed_query = AsyncMock(side_effect=RuntimeError("also down"))
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("документы для ВНЖ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        # Graceful degradation: agent must still be called despite embed failure
+        mock_agent.ainvoke.assert_called_once()
+
+    async def test_pre_agent_cache_hit_stashes_colbert_on_hybrid_colbert_path(self, mock_config):
+        """On cache HIT via hybrid_with_colbert, colbert is stashed and agent is skipped (#633)."""
+        bot, _ = _create_bot(mock_config)
+
+        dense = [0.5] * 10
+        sparse = {"indices": [2], "values": [0.8]}
+        colbert = [[0.3] * 10, [0.4] * 10]
+
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=(dense, sparse, colbert)
+        )
+        bot._embeddings.aembed_hybrid = AsyncMock()  # should NOT be called
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value="Cached answer")
+
+        mock_lf = MagicMock()
+        mock_lf.get_current_trace_id = MagicMock(return_value="trace-123")
+        mock_agent = AsyncMock()
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=mock_lf),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+            patch("telegram_bot.bot.score"),
+        ):
+            message = _make_text_message("документы для ВНЖ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        # On cache HIT, agent is NOT called
+        mock_agent.ainvoke.assert_not_called()
+        # hybrid_with_colbert was used, not hybrid
+        bot._embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+        bot._embeddings.aembed_hybrid.assert_not_called()
+
     async def test_pre_agent_cache_hit_respects_role_isolation(self, mock_config):
         """Cache check passes correct agent_role to check_semantic (#563)."""
         bot, _ = _create_bot(mock_config)
