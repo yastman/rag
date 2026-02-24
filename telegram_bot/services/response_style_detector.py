@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 ResponseStyle = Literal["short", "balanced", "detailed"]
@@ -54,7 +54,7 @@ class ResponseStyleDetector:
             re.compile(r"до.*евро", re.IGNORECASE),
         ]
 
-    @observe(name="detect-response-style")
+    @observe(name="detect-response-style", capture_input=False, capture_output=False)
     def detect(self, query: str) -> StyleInfo:
         """Detect response style from query text.
 
@@ -67,33 +67,62 @@ class ResponseStyleDetector:
         query_lower = query.lower()
         words = query.split()
         word_count = len(words)
+        lf = get_client()
+        lf.update_current_span(input={"query_length": len(query), "word_count": word_count})
 
         # 1. Explicit detailed triggers (highest priority)
         if self._detailed_triggers.search(query_lower):
-            return StyleInfo(
+            result = StyleInfo(
                 style="detailed",
                 difficulty=self._detect_difficulty(query_lower, word_count),
                 reasoning="explicit_detailed_trigger",
                 word_count=word_count,
             )
+            lf.update_current_span(
+                output={
+                    "style": result.style,
+                    "difficulty": result.difficulty,
+                    "reasoning": result.reasoning,
+                    "word_count": result.word_count,
+                }
+            )
+            return result
 
         # 2. Explicit short triggers
         if self._short_triggers.search(query_lower):
-            return StyleInfo(
+            result = StyleInfo(
                 style="short",
                 difficulty="easy",
                 reasoning="explicit_short_trigger",
                 word_count=word_count,
             )
+            lf.update_current_span(
+                output={
+                    "style": result.style,
+                    "difficulty": result.difficulty,
+                    "reasoning": result.reasoning,
+                    "word_count": result.word_count,
+                }
+            )
+            return result
 
         # 3. Transactional domain intents
         if any(p.search(query_lower) for p in self._transactional_patterns):
-            return StyleInfo(
+            result = StyleInfo(
                 style="short",
                 difficulty="easy",
                 reasoning="transactional_intent",
                 word_count=word_count,
             )
+            lf.update_current_span(
+                output={
+                    "style": result.style,
+                    "difficulty": result.difficulty,
+                    "reasoning": result.reasoning,
+                    "word_count": result.word_count,
+                }
+            )
+            return result
 
         # 4. Length heuristics (fallback)
         if word_count <= 8:
@@ -106,12 +135,21 @@ class ResponseStyleDetector:
             style = "detailed"
             reasoning = "long_query"
 
-        return StyleInfo(
+        result = StyleInfo(
             style=style,
             difficulty=self._detect_difficulty(query_lower, word_count),
             reasoning=reasoning,
             word_count=word_count,
         )
+        lf.update_current_span(
+            output={
+                "style": result.style,
+                "difficulty": result.difficulty,
+                "reasoning": result.reasoning,
+                "word_count": result.word_count,
+            }
+        )
+        return result
 
     def _detect_difficulty(self, query_lower: str, word_count: int) -> Difficulty:
         """Detect query difficulty for token budget allocation."""
