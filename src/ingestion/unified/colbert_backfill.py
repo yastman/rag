@@ -138,6 +138,8 @@ class ColbertBackfillRunner:
 
         exhausted_collection = False
         offset = start_offset
+        retry_stop = stop_after_attempt(self.retry_attempts)
+        retry_wait = wait_exponential(multiplier=self.retry_backoff_seconds, max=60)
 
         while True:
             remaining = None if limit is None else max(limit - stats.scanned, 0)
@@ -147,7 +149,7 @@ class ColbertBackfillRunner:
             if page_size <= 0:
                 break
 
-            @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=60))
+            @retry(stop=retry_stop, wait=retry_wait, reraise=True)
             def _scroll_page(
                 page_size_value: int = page_size,
                 scroll_offset: Any = offset,
@@ -196,9 +198,7 @@ class ColbertBackfillRunner:
                     try:
                         bge_started = time.perf_counter()
 
-                        @retry(
-                            stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=60)
-                        )
+                        @retry(stop=retry_stop, wait=retry_wait, reraise=True)
                         def _encode_batch(
                             texts_batch: list[str] = texts,
                         ) -> list[list[list[float]]]:
@@ -221,9 +221,7 @@ class ColbertBackfillRunner:
                         ]
                         qdrant_started = time.perf_counter()
 
-                        @retry(
-                            stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=60)
-                        )
+                        @retry(stop=retry_stop, wait=retry_wait, reraise=True)
                         def _update_batch(points_batch: list[Any] = points) -> Any:
                             return self._qdrant.update_vectors(
                                 collection_name=self.collection_name,
