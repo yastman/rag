@@ -68,6 +68,21 @@ def normalize_view(raw: str) -> tuple[str, list[str]]:
     return (normalized, tags)
 
 
+def _parse_bool(raw: object) -> bool:
+    """Parse bool-like values from CSV/JSON sources."""
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return raw != 0
+    if isinstance(raw, str):
+        normalized = raw.strip().lower()
+        if normalized in {"1", "true", "yes", "y", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "n", "off", ""}:
+            return False
+    return bool(raw)
+
+
 # --- Records ---
 
 
@@ -110,9 +125,9 @@ class ApartmentRecord:
             view_tags=view_tags,
             price_eur=float(row["price_eur"]),
             price_bgn=float(row.get("price_bgn", 0)),
-            is_furnished=bool(row.get("is_furnished", False)),
-            has_floor_plan=bool(row.get("has_floor_plan", False)),
-            has_photo=bool(row.get("has_photo", False)),
+            is_furnished=_parse_bool(row.get("is_furnished", False)),
+            has_floor_plan=_parse_bool(row.get("has_floor_plan", False)),
+            has_photo=_parse_bool(row.get("has_photo", False)),
         )
 
     def to_description(self) -> str:
