@@ -1,11 +1,13 @@
 """Verify docker-compose bot service has CRM env vars (#402)."""
 
+from functools import cache
 from pathlib import Path
 
 import pytest
 import yaml
 
 
+@cache
 def _load_bot_env(compose_file: str) -> dict[str, str]:
     """Load bot service environment from compose file."""
     path = Path(compose_file)

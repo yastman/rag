@@ -33,6 +33,8 @@ def mock_config(monkeypatch):
         qdrant_api_key="qdrant-key",
         qdrant_collection="test_collection",
         redis_url="redis://localhost:6379",
+        # Keep the DB name for tests that exercise auto-create logic, but fail fast locally.
+        realestate_database_url="postgresql://postgres:postgres@127.0.0.1:1/realestate",
         rerank_provider="none",
     )
 
@@ -1150,7 +1152,7 @@ class TestCheckpointNamespace:
         bot._history_service = None
 
         async def _mock_supervisor(*args, **kwargs):
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0)
             return "text-ok"
 
         bot._handle_query_supervisor = AsyncMock(side_effect=_mock_supervisor)
@@ -1158,7 +1160,7 @@ class TestCheckpointNamespace:
         mock_graph = AsyncMock()
 
         async def _mock_voice_ainvoke(state, config):
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0)
             return {
                 "response": "voice-ok",
                 "query_type": "GENERAL",
