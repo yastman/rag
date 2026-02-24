@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 _langfuse_client: Langfuse | None = None
 _langfuse_init_attempted = False
 
+_MAX_PII_TEXT_LENGTH = 4000
+
 
 # ---------------------------------------------------------------------------
 # PII masking (always available)
@@ -47,7 +49,7 @@ def mask_pii(data: Any) -> Any:
     - Telegram user IDs (9-10 digits)
     - Phone numbers (10-15 digits with optional +)
     - Email addresses
-    - Long texts (>500 chars truncated)
+    - Long texts (>4000 chars truncated)
     """
     if isinstance(data, str):
         # Mask Telegram user IDs (9-10 digits not part of larger number)
@@ -57,8 +59,8 @@ def mask_pii(data: Any) -> Any:
         # Mask emails
         data = re.sub(r"[\w.-]+@[\w.-]+\.\w+", "[EMAIL]", data)
         # Truncate long texts
-        if len(data) > 500:
-            data = data[:500] + "... [TRUNCATED]"
+        if len(data) > _MAX_PII_TEXT_LENGTH:
+            data = data[:_MAX_PII_TEXT_LENGTH] + "... [TRUNCATED]"
         return data
     if isinstance(data, dict):
         return {k: mask_pii(v) for k, v in data.items()}
