@@ -129,6 +129,7 @@ class TestPipelineNonRagPaths:
         """CHITCHAT query type returns canned response without calling rag_pipeline."""
         msg = _make_message()
         lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-123"
 
         with (
             _patch_observability(lf),
@@ -413,6 +414,62 @@ class TestPipelineFullFlow:
         )
         assert pipeline_call is not None, "update_current_trace with pipeline_mode not found"
         assert pipeline_call.kwargs.get("tags") == ["telegram", "rag", "client_direct"]
+
+    async def test_pipeline_metadata_includes_pre_agent_and_e2e_latency(self):
+        """Trace metadata should include pre-agent and canonical end-to-end latency."""
+        msg = _make_message()
+        lf = _make_lf_client()
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Generated answer",
+            "response_sent": False,
+            "llm_call_count": 1,
+        }
+        rag_store = {"pre_agent_ms": 120.0}
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие квартиры в центре?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(),
+                query_type="GENERAL",
+                rag_result_store=rag_store,
+            )
+
+        trace_calls = lf.update_current_trace.call_args_list
+        pipeline_call = next(
+            (c for c in trace_calls if c.kwargs.get("metadata", {}).get("pipeline_mode")),
+            None,
+        )
+        assert pipeline_call is not None
+        metadata = pipeline_call.kwargs["metadata"]
+        assert metadata["pre_agent_ms"] == 120.0
+        assert metadata["e2e_latency_ms"] >= metadata["pipeline_wall_ms"]
+        assert rag_store["e2e_latency_ms"] >= rag_store["pipeline_wall_ms"]
 
     async def test_pipeline_passes_message_to_generate_response(self):
         """generate_response must receive message= so streaming can be enabled (#571)."""
