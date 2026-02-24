@@ -14,8 +14,8 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Default cache TTL in seconds (5 minutes)
-DEFAULT_CACHE_TTL = 300
+# 1h TTL: prompts change via Langfuse UI deploy, not runtime. Reduces API calls.
+DEFAULT_CACHE_TTL = 3600
 
 # Module-level Langfuse client (lazy-initialized singleton)
 _langfuse_client: Any | None = None
