@@ -186,15 +186,13 @@ class VoyageIndexer:
         chunks: list[Chunk],
         collection_name: str,
         batch_size: int = 8,
-        rate_limit_delay: float = 25.0,
     ) -> IndexStats:
         """Index chunks to Qdrant with Voyage embeddings.
 
         Args:
             chunks: List of chunks to index
             collection_name: Target collection name
-            batch_size: Batch size for indexing (default 8 for rate limits)
-            rate_limit_delay: Delay between batches in seconds (default 25s for 3 RPM)
+            batch_size: Batch size for indexing
 
         Returns:
             Indexing statistics
@@ -205,7 +203,7 @@ class VoyageIndexer:
         # Create collection if needed
         self.create_collection(collection_name)
 
-        # Process in batches with rate limiting
+        # Process in batches — rate limiting handled by VoyageService retry
         total_batches = (len(chunks) + batch_size - 1) // batch_size
         for i, batch_idx in enumerate(range(0, len(chunks), batch_size)):
             batch = chunks[batch_idx : batch_idx + batch_size]
@@ -213,11 +211,6 @@ class VoyageIndexer:
             logger.info(
                 f"Progress: {min(batch_idx + batch_size, len(chunks))}/{len(chunks)} (batch {i + 1}/{total_batches})"
             )
-
-            # Rate limit delay (skip for last batch)
-            if batch_idx + batch_size < len(chunks):
-                logger.info(f"Rate limit delay: {rate_limit_delay}s...")
-                await asyncio.sleep(rate_limit_delay)
 
         self.stats.duration_seconds = time.time() - start_time
         logger.info(
