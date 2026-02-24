@@ -47,7 +47,7 @@ _CONFIDENCE_THRESHOLD = 0.005
 # ---------------------------------------------------------------------------
 
 
-@observe(name="detect-agent-intent")
+@observe(name="detect-agent-intent", capture_input=False, capture_output=False)
 def detect_agent_intent(user_text: str) -> str:
     """Detect if the user intent requires agent routing.
 
@@ -58,13 +58,18 @@ def detect_agent_intent(user_text: str) -> str:
         Intent string: "mortgage" | "handoff" | "daily_summary" | "".
     """
     text = user_text.lower()
+    lf = get_client()
+    lf.update_current_span(input={"query_length": len(user_text)})
     if any(kw in text for kw in ("ипотек", "кредит", "рассрочк")):
-        return "mortgage"
-    if any(kw in text for kw in ("менеджер", "позвон", "связаться")):
-        return "handoff"
-    if any(kw in text for kw in ("сводк", "отчёт", "итог дня", "итоги дня")):
-        return "daily_summary"
-    return ""
+        intent = "mortgage"
+    elif any(kw in text for kw in ("менеджер", "позвон", "связаться")):
+        intent = "handoff"
+    elif any(kw in text for kw in ("сводк", "отчёт", "итог дня", "итоги дня")):
+        intent = "daily_summary"
+    else:
+        intent = ""
+    lf.update_current_span(output={"intent": intent or "none"})
+    return intent
 
 
 # ---------------------------------------------------------------------------
