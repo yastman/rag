@@ -1,7 +1,7 @@
 """Tests for client menu dialog."""
 
 from telegram_bot.dialogs.client_menu import _BUTTON_QUERIES, client_menu_dialog, get_menu_data
-from telegram_bot.dialogs.states import ClientMenuSG
+from telegram_bot.dialogs.states import ClientMenuSG, FunnelSG
 
 
 def test_client_menu_dialog_exists():
@@ -73,3 +73,12 @@ def test_client_menu_launch_mode_root():
     from aiogram_dialog import LaunchMode
 
     assert client_menu_dialog.launch_mode == LaunchMode.ROOT
+
+
+def test_client_menu_search_starts_funnel_from_location():
+    """Search button must start funnel from the first location step."""
+    window = client_menu_dialog.windows[ClientMenuSG.main]
+    buttons = getattr(window.keyboard, "buttons", ())
+    funnel_start = next((btn for btn in buttons if getattr(btn, "widget_id", "") == "funnel"), None)
+    assert funnel_start is not None
+    assert getattr(funnel_start, "state", None) == FunnelSG.location
