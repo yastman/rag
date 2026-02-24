@@ -11,7 +11,7 @@ import os
 import time
 from typing import Any
 
-from telegram_bot.observability import observe
+from telegram_bot.observability import get_client, observe
 
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ def _get_langfuse_client() -> Any | None:
         return None
 
 
-@observe(name="get-prompt")
+@observe(name="get-prompt", capture_input=False, capture_output=False)
 def get_prompt(
     name: str,
     *,
@@ -73,12 +73,36 @@ def get_prompt(
         Compiled prompt string from Langfuse, or the fallback.
     """
     vars_ = variables or {}
+    lf = get_client()
+    lf.update_current_span(
+        input={
+            "prompt_name": name,
+            "cache_ttl_s": cache_ttl,
+            "has_variables": bool(vars_),
+            "variables_count": len(vars_),
+        }
+    )
+
+    def _finish(value: str, *, source: str, reason: str) -> str:
+        lf.update_current_span(
+            output={"source": source, "reason": reason, "result_length": len(value)}
+        )
+        return value
+
     client = _get_langfuse_client()
     if client is None:
-        return _apply_fallback_vars(fallback, vars_)
+        return _finish(
+            _apply_fallback_vars(fallback, vars_),
+            source="fallback",
+            reason="client_unavailable",
+        )
 
     if _is_temporarily_missing(name):
-        return _apply_fallback_vars(fallback, vars_)
+        return _finish(
+            _apply_fallback_vars(fallback, vars_),
+            source="fallback",
+            reason="missing_cache_ttl",
+        )
 
     if not _is_temporarily_known(name):
         available = _probe_prompt_available(client, name)
@@ -89,7 +113,11 @@ def get_prompt(
                 name,
                 cache_ttl,
             )
-            return _apply_fallback_vars(fallback, vars_)
+            return _finish(
+                _apply_fallback_vars(fallback, vars_),
+                source="fallback",
+                reason="probe_not_found",
+            )
         if available is True:
             _known_prompts_until[name] = time.monotonic() + cache_ttl
 
@@ -99,8 +127,12 @@ def get_prompt(
         prompt = client.get_prompt(name, cache_ttl_seconds=cache_ttl)
         _missing_prompts_until.pop(name, None)
         if vars_:
-            return str(prompt.compile(**vars_))
-        return str(prompt.compile())
+            return _finish(
+                str(prompt.compile(**vars_)),
+                source="langfuse",
+                reason="compiled_with_variables",
+            )
+        return _finish(str(prompt.compile()), source="langfuse", reason="compiled")
     except Exception as e:
         if _is_prompt_not_found(e):
             # Avoid hitting Langfuse on every request when prompt/label is absent.
@@ -110,9 +142,18 @@ def get_prompt(
                 name,
                 cache_ttl,
             )
-        else:
-            logger.warning("Failed to fetch prompt '%s', using fallback", name, exc_info=True)
-        return _apply_fallback_vars(fallback, vars_)
+            return _finish(
+                _apply_fallback_vars(fallback, vars_),
+                source="fallback",
+                reason="prompt_not_found",
+            )
+
+        logger.warning("Failed to fetch prompt '%s', using fallback", name, exc_info=True)
+        return _finish(
+            _apply_fallback_vars(fallback, vars_),
+            source="fallback",
+            reason="fetch_error",
+        )
 
 
 def _apply_fallback_vars(fallback: str, compile_vars: dict[str, str]) -> str:
