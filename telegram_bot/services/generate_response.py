@@ -33,7 +33,7 @@ class StreamingPartialDeliveryError(Exception):
         super().__init__(f"Streaming failed after delivering {len(partial_text)} chars")
 
 
-_MAX_CONTEXT_DOCS = 5
+_MAX_CONTEXT_DOCS = 3
 _STREAM_EDIT_INTERVAL = 0.5  # 500ms throttle for Telegram edit_text
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
 _MAX_HISTORY_MESSAGES = 12
