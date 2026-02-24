@@ -124,7 +124,7 @@ class TestGraphConfig:
         from telegram_bot.graph.config import GraphConfig
 
         cfg = GraphConfig()
-        assert cfg.generate_max_tokens == 4096
+        assert cfg.generate_max_tokens == 1024
 
     def test_from_env_defaults(self):
         from telegram_bot.graph.config import GraphConfig
