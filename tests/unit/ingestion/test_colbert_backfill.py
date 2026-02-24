@@ -220,6 +220,30 @@ class TestColbertBackfillRunner:
         assert len(bge.calls) == 2
         assert qdrant_fail_once["calls"] == 2
 
+    def test_backfill_respects_retry_attempts_setting(self, tmp_path: Path):
+        from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
+
+        qdrant = _StubQdrantClient(pages=[([_record("p1", page_content="doc")], None)])
+        bge = _StubBGEClient(
+            responses=[
+                RuntimeError("temporary bge timeout"),
+            ]
+        )
+        runner = ColbertBackfillRunner(
+            qdrant_client=qdrant,
+            bge_client=bge,
+            collection_name="test_col",
+            checkpoint_path=tmp_path / "checkpoint.json",
+            retry_attempts=1,
+            retry_backoff_seconds=0.0,
+        )
+
+        stats = runner.run(batch_size=1)
+        assert stats.processed == 0
+        assert stats.failed == 1
+        assert len(bge.calls) == 1
+        assert "batch update failed" in stats.errors[0]
+
     def test_backfill_fails_fast_when_colbert_schema_missing(self, tmp_path: Path):
         from src.ingestion.unified.colbert_backfill import ColbertBackfillRunner
 
