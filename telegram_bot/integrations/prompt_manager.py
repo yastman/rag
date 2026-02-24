@@ -19,38 +19,9 @@ logger = logging.getLogger(__name__)
 # 1h TTL: prompts change via Langfuse UI deploy, not runtime. Reduces API calls.
 DEFAULT_CACHE_TTL = 3600
 
-# Module-level Langfuse client (lazy-initialized singleton)
-_langfuse_client: Any | None = None
-_langfuse_init_attempted: bool = False
+# Module-level TTL caches for prompt existence
 _missing_prompts_until: dict[str, float] = {}
 _known_prompts_until: dict[str, float] = {}
-
-
-def _get_langfuse_client() -> Any | None:
-    """Get or create a Langfuse client singleton.
-
-    Returns None if LANGFUSE_SECRET_KEY is not set or initialization fails.
-    """
-    global _langfuse_client, _langfuse_init_attempted
-
-    if _langfuse_init_attempted:
-        return _langfuse_client
-
-    _langfuse_init_attempted = True
-
-    if not os.environ.get("LANGFUSE_SECRET_KEY"):
-        logger.debug("Langfuse Prompt Management disabled: LANGFUSE_SECRET_KEY not set")
-        return None
-
-    try:
-        from langfuse import Langfuse
-
-        _langfuse_client = Langfuse()
-        logger.info("Langfuse Prompt Management client initialized")
-        return _langfuse_client
-    except Exception:
-        logger.warning("Failed to initialize Langfuse client", exc_info=True)
-        return None
 
 
 @observe(name="get-prompt", capture_input=False, capture_output=False)
@@ -89,13 +60,7 @@ def get_prompt(
         )
         return value
 
-    client = _get_langfuse_client()
-    if client is None:
-        return _finish(
-            _apply_fallback_vars(fallback, vars_),
-            source="fallback",
-            reason="client_unavailable",
-        )
+    client = get_client()
 
     if _is_temporarily_missing(name):
         return _finish(
@@ -223,9 +188,6 @@ def _probe_prompt_available(client: Any, name: str) -> bool | None:
 
 
 def _reset_client() -> None:
-    """Reset the Langfuse client singleton (for testing)."""
-    global _langfuse_client, _langfuse_init_attempted
-    _langfuse_client = None
-    _langfuse_init_attempted = False
+    """Reset the prompt TTL caches (for testing)."""
     _missing_prompts_until.clear()
     _known_prompts_until.clear()
