@@ -182,6 +182,9 @@ class TestThrottlingMiddleware:
         handler = AsyncMock(return_value="result")
         event = MagicMock(spec=CallbackQuery)
         event.answer = AsyncMock()
+        # Callback key uses user_id + message_id
+        event.message = MagicMock()
+        event.message.message_id = 100
         user = MagicMock()
         user.id = 789
         data = {"event_from_user": user}
@@ -232,7 +235,8 @@ class TestSetupThrottlingMiddleware:
             setup_throttling_middleware(mock_dp, rate_limit=2.0, admin_ids=[111])
 
         mock_dp.message.middleware.register.assert_called_once()
-        mock_dp.callback_query.middleware.register.assert_called_once()
+        # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
+        assert mock_dp.callback_query.middleware.register.call_count == 2
 
     def test_setup_uses_defaults(self):
         """Test that setup works with default parameters."""
@@ -244,4 +248,5 @@ class TestSetupThrottlingMiddleware:
             setup_throttling_middleware(mock_dp)
 
         mock_dp.message.middleware.register.assert_called_once()
-        mock_dp.callback_query.middleware.register.assert_called_once()
+        # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
+        assert mock_dp.callback_query.middleware.register.call_count == 2
