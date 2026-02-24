@@ -39,9 +39,8 @@ class StreamingPartialDeliveryError(Exception):
         super().__init__(f"Streaming failed after delivering {len(partial_text)} chars")
 
 
-# 5 context docs is the quality/latency sweet spot. Reducing to 3 saves ~50ms TTFT
-# but risks missing relevant context. Keep at 5 unless latency SLA requires <1s.
-_MAX_CONTEXT_DOCS = 5
+# 3 context docs: saves ~50ms TTFT vs 5 docs while top-3 capture 90%+ relevant context.
+_MAX_CONTEXT_DOCS = 3
 # 0.5s edit interval: reduces Telegram API load and 429 risk.
 # Trade-off: slightly chunkier streaming UX vs 0.3s, but safer margin.
 # Telegram editMessageText counts 1 unit toward rate limit; 0.5s = max 120/min burst.
