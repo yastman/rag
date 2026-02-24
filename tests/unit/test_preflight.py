@@ -11,6 +11,7 @@ from telegram_bot.preflight import (
     PreflightError,
     _check_redis_deep,
     _check_single_dep,
+    _read_colbert_coverage_warn_threshold,
     _verify_cache_synthetic,
     check_dependencies,
 )
@@ -62,6 +63,25 @@ class TestPreflightError:
     def test_message_mentions_retry_count(self):
         err = PreflightError(["redis"])
         assert str(CRITICAL_RETRIES) in str(err)
+
+
+class TestColbertCoverageWarnThreshold:
+    """Threshold parser tolerates invalid env values with fallback."""
+
+    def test_invalid_env_uses_default(self, monkeypatch, caplog):
+        import logging
+
+        monkeypatch.setenv("COLBERT_COVERAGE_WARN_THRESHOLD", "oops")
+        with caplog.at_level(logging.WARNING):
+            value = _read_colbert_coverage_warn_threshold()
+
+        assert value == pytest.approx(0.995)
+        assert "invalid colbert_coverage_warn_threshold" in caplog.text.lower()
+
+    def test_valid_env_value_is_used(self, monkeypatch):
+        monkeypatch.setenv("COLBERT_COVERAGE_WARN_THRESHOLD", "0.87")
+        value = _read_colbert_coverage_warn_threshold()
+        assert value == pytest.approx(0.87)
 
 
 # ===========================================================================
