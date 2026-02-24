@@ -36,7 +36,12 @@ class GraphConfig:
     domain_language: str = "ru"
 
     max_rewrite_attempts: int = 1
+    # RRF score scale: 1/(rank+k), k=60 default. Top-1 = ~0.016, Top-20 last = ~0.012.
+    # skip_rerank_threshold >= 0.018 means top-1 result already has very high rank — safe to skip
+    # ColBERT rerank. Must be > 1/61≈0.016 to ensure ColBERT runs on borderline cases.
     skip_rerank_threshold: float = 0.018
+    # RRF score scale: threshold 0.005 accepts all top-20 results (~0.012..0.016 typical range).
+    # This is intentional — loose filter that only rejects truly irrelevant results (score < 0.005).
     relevance_threshold_rrf: float = 0.005
     score_improvement_delta: float = 0.001
     streaming_enabled: bool = True
