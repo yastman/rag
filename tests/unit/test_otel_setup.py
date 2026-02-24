@@ -27,33 +27,19 @@ _OTEL_MODULE_NAMES = (
 
 
 @pytest.fixture(autouse=True)
-def fresh_otel_setup_module():
-    """Clear src.observability.otel_setup from cache to ensure fresh import.
+def fresh_otel_setup_module(monkeypatch):
+    """Install opentelemetry mocks and clear src.observability cache per-test.
 
-    Keep cleanup scoped to our module to avoid cross-test leakage.
+    Uses monkeypatch.setitem so all sys.modules changes are auto-reverted after
+    each test — no persistent module-level pollution (#612).
     """
-    sys.modules.pop("src.observability.otel_setup", None)
-    sys.modules.pop("src.observability", None)
-    yield
-    sys.modules.pop("src.observability.otel_setup", None)
-    sys.modules.pop("src.observability", None)
-
-
-@pytest.fixture(autouse=True)
-def isolated_otel_modules():
-    """Provide missing opentelemetry modules per-test and teardown safely.
-
-    Nightly marker runs collect all test modules; import-time sys.modules mutation
-    here can leak into unrelated voice tests. Keep this fixture-scoped.
-    """
-    injected: list[str] = []
     for name in _OTEL_MODULE_NAMES:
-        if name not in sys.modules:
-            sys.modules[name] = MagicMock()
-            injected.append(name)
+        monkeypatch.setitem(sys.modules, name, MagicMock())
+    sys.modules.pop("src.observability.otel_setup", None)
+    sys.modules.pop("src.observability", None)
     yield
-    for name in injected:
-        sys.modules.pop(name, None)
+    sys.modules.pop("src.observability.otel_setup", None)
+    sys.modules.pop("src.observability", None)
 
 
 def test_setup_opentelemetry():
