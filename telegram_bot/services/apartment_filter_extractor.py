@@ -118,13 +118,19 @@ class ApartmentFilterExtractor:
     def _extract_price(
         self, text: str, consumed: list[tuple[int, int]]
     ) -> tuple[float | None, float | None]:
-        # Range first: "от 100к до 300к"
-        m = re.search(r"от\s+(\d[\d\s]*к?)\s+до\s+(\d[\d\s]*к?)", text)
+        # Range first: "от 100к до 300к" / "от 100000 до 300000 евро"
+        # Guard against area/floor phrases like "от 60 до 120 м²".
+        m = re.search(r"от\s+(\d[\d\s]*к?)\s+до\s+(\d[\d\s]*к?)\s*(евро|€|eur)?", text)
         if m:
-            consumed.append(m.span())
-            mn = self._parse_number(m.group(1))
-            mx = self._parse_number(m.group(2))
-            return (float(mn) if mn else None, float(mx) if mx else None)
+            mn_raw = m.group(1)
+            mx_raw = m.group(2)
+            mn = self._parse_number(mn_raw)
+            mx = self._parse_number(mx_raw)
+            has_currency = bool(m.group(3))
+            has_k_suffix = "к" in mn_raw.lower() or "к" in mx_raw.lower()
+            if mn and mx and (has_currency or has_k_suffix or mn >= 1000 or mx >= 1000):
+                consumed.append(m.span())
+                return (float(mn), float(mx))
 
         min_p: float | None = None
         max_p: float | None = None
