@@ -2,7 +2,8 @@
 
 from typing import Any
 
-from anthropic import Anthropic, AsyncAnthropic
+from anthropic import Anthropic, APIStatusError, AsyncAnthropic, RateLimitError
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from src.config import Settings
 
@@ -69,6 +70,11 @@ class ClaudeContextualizer(ContextualizeProvider):
                 )
         return results
 
+    @retry(
+        retry=retry_if_exception_type((RateLimitError, APIStatusError)),
+        wait=wait_random_exponential(multiplier=1, max=60),
+        stop=stop_after_attempt(4),
+    )
     async def contextualize_single(
         self,
         text: str,
@@ -124,6 +130,11 @@ class ClaudeContextualizer(ContextualizeProvider):
             context_method="claude",
         )
 
+    @retry(
+        retry=retry_if_exception_type((RateLimitError, APIStatusError)),
+        wait=wait_random_exponential(multiplier=1, max=60),
+        stop=stop_after_attempt(4),
+    )
     def contextualize_sync(
         self,
         text: str,

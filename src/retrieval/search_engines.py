@@ -243,9 +243,10 @@ class BaselineSearchEngine(BaseSearchEngine):
             estimated_selectivity=estimated_selectivity,
         )
 
-        results = self.client.search(
+        response = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
+            using="dense",
             query_filter=query_filter,
             limit=top_k,
             score_threshold=score_threshold,
@@ -259,7 +260,7 @@ class BaselineSearchEngine(BaseSearchEngine):
                 score=result.score,
                 metadata=(result.payload or {}).get("metadata", {}),
             )
-            for result in results
+            for result in response.points
         ]
 
     def get_name(self) -> str:
@@ -334,9 +335,10 @@ class HybridRRFSearchEngine(BaseSearchEngine):
             )
 
         # Backward compatibility: if embedding provided, use dense-only search
-        dense_results = self.client.search(
+        response = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
+            using="dense",
             limit=top_k,
             score_threshold=score_threshold,
         )
@@ -348,7 +350,7 @@ class HybridRRFSearchEngine(BaseSearchEngine):
                 score=result.score,
                 metadata=(result.payload or {}).get("metadata", {}),
             )
-            for result in dense_results
+            for result in response.points
         ]
 
     def _search_hybrid(
@@ -514,9 +516,10 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
             )
 
         # Backward compatibility: if embedding provided, use dense-only search
-        dense_results = self.client.search(
+        response = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
+            using="dense",
             limit=top_k,
             score_threshold=score_threshold,
         )
@@ -528,7 +531,7 @@ class HybridRRFColBERTSearchEngine(BaseSearchEngine):
                 score=result.score,
                 metadata=(result.payload or {}).get("metadata", {}),
             )
-            for result in dense_results
+            for result in response.points
         ]
 
     def _search_hybrid_colbert(
@@ -689,9 +692,10 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
             )
 
         # Backward compatibility: if embedding provided, use dense-only search
-        dense_results = self.client.search(
+        response = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
+            using="dense",
             limit=top_k,
             score_threshold=score_threshold,
         )
@@ -703,7 +707,7 @@ class DBSFColBERTSearchEngine(BaseSearchEngine):
                 score=result.score,
                 metadata=(result.payload or {}).get("metadata", {}),
             )
-            for result in dense_results
+            for result in response.points
         ]
 
     def _search_hybrid_colbert(
