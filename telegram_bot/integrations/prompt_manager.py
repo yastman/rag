@@ -61,6 +61,12 @@ def get_prompt(
         return value
 
     client = get_client()
+    if client is None:
+        return _finish(
+            _apply_fallback_vars(fallback, vars_),
+            source="fallback",
+            reason="client_unavailable",
+        )
 
     if _is_temporarily_missing(name):
         return _finish(
