@@ -97,9 +97,16 @@ class TestDetectAgentIntent:
         assert detect_agent_intent("Итог дня") == "daily_summary"
         assert detect_agent_intent("Отчёт за день") == "daily_summary"
 
+    def test_detect_agent_intent_apartment(self):
+        assert detect_agent_intent("хочу двушку с видом на море") == "apartment"
+        assert detect_agent_intent("подобрать квартиру") == "apartment"
+        assert detect_agent_intent("студия до 80000") == "apartment"
+        assert detect_agent_intent("трёхкомнатная квартира") == "apartment"
+        assert detect_agent_intent("апартаменты в Несебре") == "apartment"
+
     def test_detect_agent_intent_empty(self):
-        assert detect_agent_intent("Какие квартиры есть в центре?") == ""
-        assert detect_agent_intent("Цена на однушку") == ""
+        assert detect_agent_intent("как оформить ВНЖ") == ""
+        assert detect_agent_intent("какие документы нужны") == ""
         assert detect_agent_intent("") == ""
 
 
@@ -882,7 +889,7 @@ class TestCacheStoreGuards:
             patch("telegram_bot.pipelines.client.score"),
         ):
             await run_client_pipeline(
-                user_text="Найди двушку до 10 млн в Москве",
+                user_text="Найди объект до 10 млн в Москве",
                 user_id=1,
                 session_id="s1",
                 message=msg,
