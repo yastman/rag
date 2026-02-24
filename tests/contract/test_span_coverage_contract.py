@@ -36,6 +36,7 @@ SENSITIVE_SPANS = [
     # Agent tools
     "tool-rag-search",
     "tool-history-search",
+    "tool-apartment-search",
     # History graph
     "history-retrieve",
     "history-summarize",
@@ -83,6 +84,7 @@ SENSITIVE_SPANS = [
     "get-prompt",
     "kommo-token-get",
     "kommo-token-refresh",
+    "apartments-hybrid-search",
     # Entry points
     "voice-session",
     "rag-api-query",
