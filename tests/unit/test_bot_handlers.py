@@ -3036,6 +3036,98 @@ class TestPreAgentCacheCheck:
         assert stashed_store.get("cache_key_sparse") == sparse
         assert stashed_store.get("cache_key_colbert") is None
 
+    async def test_pre_agent_uses_hybrid_with_colbert_and_stashes_all_three(self, mock_config):
+        """When aembed_hybrid_with_colbert exists, pre-agent stashes dense+sparse+colbert."""
+        bot, _ = _create_bot(mock_config)
+
+        dense = [0.5] * 10
+        sparse = {"indices": [1], "values": [0.7]}
+        colbert = [[0.2] * 10, [0.3] * 10]
+
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=(dense, sparse, colbert)
+        )
+        bot._embeddings.aembed_hybrid = AsyncMock()  # should NOT be called
+        bot._embeddings.aembed_query = AsyncMock()  # should NOT be called
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("документы для ВНЖ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        # aembed_hybrid_with_colbert called; hybrid and query NOT called
+        bot._embeddings.aembed_hybrid_with_colbert.assert_awaited_once()
+        bot._embeddings.aembed_hybrid.assert_not_called()
+        bot._embeddings.aembed_query.assert_not_called()
+        # All three vectors stashed
+        assert stashed_store.get("cache_key_embedding") == dense
+        assert stashed_store.get("cache_key_sparse") == sparse
+        assert stashed_store.get("cache_key_colbert") == colbert
+
+    async def test_pre_agent_hybrid_colbert_fallback_to_hybrid_when_no_colbert(self, mock_config):
+        """When aembed_hybrid_with_colbert is absent, falls back to aembed_hybrid (no colbert)."""
+        bot, _ = _create_bot(mock_config)
+
+        dense = [0.5] * 10
+        sparse = {"indices": [1], "values": [0.7]}
+
+        bot._embeddings.aembed_hybrid_with_colbert = None  # not available
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
+        bot._embeddings.aembed_query = AsyncMock()
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("документы для ВНЖ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        # aembed_hybrid called; colbert NOT stashed
+        bot._embeddings.aembed_hybrid.assert_awaited_once()
+        assert stashed_store.get("cache_key_embedding") == dense
+        assert stashed_store.get("cache_key_sparse") == sparse
+        assert stashed_store.get("cache_key_colbert") is None
+
     async def test_pre_agent_fallback_to_aembed_query_when_no_hybrid(self, mock_config):
         """Fallback to aembed_query when aembed_hybrid is not available."""
         bot, _ = _create_bot(mock_config)
