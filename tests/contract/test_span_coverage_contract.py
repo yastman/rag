@@ -160,7 +160,7 @@ def collect_observe_decorators(
     return results
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def observed_spans() -> dict[str, dict]:
     return collect_observe_decorators(SCAN_DIRS, EXCLUDE_DIRS)
 
@@ -213,4 +213,20 @@ def test_all_observed_spans_accounted_for(observed_spans: dict[str, dict]) -> No
         "The following spans have capture_input=False but are not in SENSITIVE_SPANS.\n"
         "Add them to SENSITIVE_SPANS in tests/contract/test_span_coverage_contract.py:\n"
         + "\n".join(unaccounted)
+    )
+
+
+def test_sensitive_spans_match_yaml_contract(sensitive_spans: list[str]) -> None:
+    """Ensure SENSITIVE_SPANS constant matches trace_contract.yaml sensitive_spans.
+
+    Catches drift between the hardcoded test list and the canonical YAML contract.
+    """
+    python_set = set(SENSITIVE_SPANS)
+    yaml_set = set(sensitive_spans)
+    only_python = python_set - yaml_set
+    only_yaml = yaml_set - python_set
+    assert python_set == yaml_set, (
+        f"SENSITIVE_SPANS drift between test and YAML contract.\n"
+        f"Only in Python constant: {sorted(only_python)}\n"
+        f"Only in YAML contract: {sorted(only_yaml)}"
     )

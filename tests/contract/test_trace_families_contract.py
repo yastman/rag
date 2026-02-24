@@ -50,7 +50,8 @@ def collect_observe_names(
 ) -> set[str]:
     """AST-scan directories and return all @observe(name=...) values."""
     names: set[str] = set()
-    exclude_patterns = exclude_patterns or []
+    always_exclude = [".venv/"]
+    exclude_patterns = (exclude_patterns or []) + always_exclude
     for directory in directories:
         if not directory.exists():
             continue
