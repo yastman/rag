@@ -302,6 +302,27 @@ prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain
 - Graceful fallback to hardcoded templates when Langfuse unavailable or prompt absent
 - Variable substitution via `prompt.compile(**variables)`
 
+## Trace Contract (#626)
+
+Canonical contract file: `tests/observability/trace_contract.yaml`
+
+Defines:
+- `required_families`: root trace names that must exist
+- `spans`: all `@observe` span names grouped by domain
+- `sensitive_spans`: spans requiring `capture_input=False`, `capture_output=False`
+- `scores`: required Langfuse score keys
+- `error_allowlist`: permitted ERROR/WARNING spans
+
+Contract tests (static analysis, no Docker needed):
+
+| Test | Validates |
+|------|-----------|
+| `test_trace_families_contract.py` | All families + spans exist in codebase |
+| `test_span_coverage_contract.py` | Sensitive spans disable auto-capture |
+| `test_error_contract.py` | ERROR spans only in allowed locations |
+
+Run: `make test-contract` or `uv run pytest tests/contract/ -v`
+
 ## Trace Validation (#110, #143)
 
 `scripts/validate_traces.py` uses `@observe`, `propagate_attributes`, `update_current_trace` for headless LangGraph runs. After flush, `enrich_results_from_langfuse()` fetches scores + node spans by trace_id via Langfuse API.
