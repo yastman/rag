@@ -112,6 +112,13 @@ class TestArea:
         assert result.min_area_m2 == min_area
         assert result.max_area_m2 == max_area
 
+    def test_area_range_not_interpreted_as_price(self) -> None:
+        result = _ext.parse("площадь от 60 до 120 м²")
+        assert result.min_area_m2 == 60.0
+        assert result.max_area_m2 == 120.0
+        assert result.min_price_eur is None
+        assert result.max_price_eur is None
+
 
 class TestCombined:
     def test_full_query(self) -> None:

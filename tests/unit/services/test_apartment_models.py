@@ -138,6 +138,26 @@ class TestApartmentRecord:
         assert "sea" in payload["view_tags"]
         assert payload["view_primary"] == "pool"
 
+    def test_from_raw_parses_string_booleans(self) -> None:
+        row = {
+            "complex_name": "Test",
+            "section": "A-1",
+            "apartment_number": "10",
+            "rooms": 2,
+            "floor_label": "3",
+            "area_m2": 70.0,
+            "view_raw": "pool/sea",
+            "price_eur": 150000.0,
+            "price_bgn": 293000.0,
+            "is_furnished": "False",
+            "has_floor_plan": "True",
+            "has_photo": "0",
+        }
+        rec = ApartmentRecord.from_raw(row)
+        assert rec.is_furnished is False
+        assert rec.has_floor_plan is True
+        assert rec.has_photo is False
+
 
 class TestApartmentQueryParseResult:
     def test_defaults(self) -> None:
