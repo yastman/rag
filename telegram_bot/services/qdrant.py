@@ -111,6 +111,77 @@ class QdrantService:
         self._collection_validated = False
         logger.info(f"QdrantService: switched to {self._collection_name} (mode={mode})")
 
+    async def _apply_strict_mode(self) -> None:
+        """Apply conservative strict mode limits to the current collection.
+
+        Sets server-side guardrails to prevent runaway queries:
+          - max_query_limit=100  — caps result set size per query
+          - max_timeout=30       — prevents queries from blocking too long
+          - search_max_hnsw_ef=512 — caps HNSW graph traversal depth
+
+        Called after ensure_collection() during initialization. Non-blocking:
+        if the server does not support StrictModeConfig (older version or error),
+        a warning is logged and startup continues.
+        """
+        try:
+            strict_config = models.StrictModeConfig(
+                enabled=True,
+                max_query_limit=100,
+                max_timeout=30,
+                search_max_hnsw_ef=512,
+            )
+            await self._client.update_collection(
+                collection_name=self._collection_name,
+                strict_mode_config=strict_config,
+            )
+            logger.info(
+                "QdrantService: strict mode applied to '%s' "
+                "(max_query_limit=100, max_timeout=30, search_max_hnsw_ef=512)",
+                self._collection_name,
+            )
+        except Exception as exc:
+            logger.warning(
+                "QdrantService: strict mode not applied to '%s': %s",
+                self._collection_name,
+                exc,
+            )
+
+    async def _ensure_alias(self) -> None:
+        """Ensure the collection alias '{name}_active' points to the current collection.
+
+        Creates or updates alias '{collection_name}_active' → current collection name.
+
+        Blue/green cutover pattern: to cut over to a new collection without downtime,
+        call update_collection_aliases() to atomically switch the alias from the old
+        collection to the new one. Bot reads via alias after the switch.
+
+        Called after ensure_collection() during initialization. Non-blocking:
+        alias creation failure is logged as a warning and does not block startup.
+        """
+        alias_name = f"{self._collection_name}_active"
+        try:
+            await self._client.update_collection_aliases(
+                change_aliases_operations=[
+                    models.CreateAliasOperation(
+                        create_alias=models.CreateAlias(
+                            collection_name=self._collection_name,
+                            alias_name=alias_name,
+                        )
+                    )
+                ]
+            )
+            logger.info(
+                "QdrantService: alias '%s' → '%s' ensured",
+                alias_name,
+                self._collection_name,
+            )
+        except Exception as exc:
+            logger.warning(
+                "QdrantService: alias '%s' creation failed: %s",
+                alias_name,
+                exc,
+            )
+
     async def ensure_collection(self) -> None:
         """Ensure the configured collection exists; fallback to base collection if needed.
 
@@ -133,6 +204,8 @@ class QdrantService:
         if self._collection_name in names:
             self._collection_validated = True
             await self._refresh_collection_capabilities()
+            await self._apply_strict_mode()
+            await self._ensure_alias()
             return
 
         # Fallback: use base collection if it exists.
@@ -146,6 +219,8 @@ class QdrantService:
             self._quantization_mode = "off"
             self._collection_validated = True
             await self._refresh_collection_capabilities()
+            await self._apply_strict_mode()
+            await self._ensure_alias()
             return
 
         raise RuntimeError(
@@ -424,9 +499,17 @@ class QdrantService:
             )
             results = self._format_results(result.points)
             if not results:
+                logger.info(
+                    "metric",
+                    extra={"metric_name": "colbert_rerank_empty", "value": 1},
+                )
                 logger.warning(
                     "Qdrant ColBERT returned 0 docs for collection %s, falling back to RRF",
                     self._collection_name,
+                )
+                logger.info(
+                    "metric",
+                    extra={"metric_name": "colbert_fallback_to_rrf", "value": 1},
                 )
                 fallback = await self.hybrid_search_rrf(
                     dense_vector=dense_vector,
@@ -583,6 +666,10 @@ class QdrantService:
         Uses FormulaQuery with exp_decay for freshness boosting (Qdrant 1.14+).
         Formula: $score + 0.1 * exp_decay(metadata.{field}, scale=N days)
         Note: payload field used in formula benefits from a payload index.
+
+        FormulaQuery freshness boosting: implemented and tested but not wired into
+        rag_pipeline. Decision (2026-02-24): Keep as opt-in capability. Wire into
+        pipeline when product decides freshness ranking is needed. See #590.
 
         Args:
             dense_vector: Query embedding
