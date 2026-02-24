@@ -26,13 +26,16 @@ class PIIRedactor:
     }
 
     def __init__(self) -> None:
-        # Order matters: passport and tax_id before user_id to avoid overlap on 10-digit numbers;
-        # user_id before phone so 9-10 digit IDs are not consumed by the broader phone pattern.
+        # Order matters: phone before tax_id so 0-prefixed Ukrainian local numbers (0XXXXXXXXX)
+        # are matched as phone rather than tax_id; tax_id before user_id to avoid overlap on
+        # 10-digit numbers without prefix.
         self.patterns: dict[str, re.Pattern[str]] = {
             "passport": re.compile(r"\b[А-ЯІЇЄҐ]{2}\d{6}\b"),
-            "tax_id": re.compile(r"\b\d{10}\b"),  # РНОКПП (10 digits, applied before user_id)
+            "phone": re.compile(
+                r"\+\d{9,14}|\b0\d{9}\b"
+            ),  # + prefix international or 0 prefix Ukrainian local
+            "tax_id": re.compile(r"\b\d{10}\b"),  # РНОКПП (10 digits, applied after phone)
             "user_id": re.compile(r"\b\d{9,10}\b"),  # Telegram user IDs (9-10 digits)
-            "phone": re.compile(r"\+?\d{10,15}"),  # International phone numbers
             "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
         }
 
