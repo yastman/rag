@@ -241,6 +241,7 @@ def _get_chitchat_response(query: str) -> str:
     return random.choice(CHITCHAT_RESPONSES["greeting"])
 
 
+@observe(name="classify-query")
 def classify_query(query: str) -> str:
     """Classify query into one of 6 types using regex patterns.
 

@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from telegram_bot.observability import observe
+
 
 ResponseStyle = Literal["short", "balanced", "detailed"]
 Difficulty = Literal["easy", "medium", "hard"]
@@ -52,6 +54,7 @@ class ResponseStyleDetector:
             re.compile(r"до.*евро", re.IGNORECASE),
         ]
 
+    @observe(name="detect-response-style")
     def detect(self, query: str) -> StyleInfo:
         """Detect response style from query text.
 
