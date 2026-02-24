@@ -32,12 +32,12 @@ class TestMaskPii:
         assert "[EMAIL]" in result
 
     def test_truncate_long_text(self):
-        """Truncate texts longer than 500 chars."""
+        """Truncate texts longer than 4000 chars."""
         from telegram_bot.observability import mask_pii
 
-        long_text = "x" * 1000
+        long_text = "x" * 5000
         result = mask_pii(long_text)
-        assert len(result) <= 520  # 500 + "... [TRUNCATED]"
+        assert len(result) <= 4015  # 4000 + "... [TRUNCATED]"
         assert "[TRUNCATED]" in result
 
     def test_mask_dict_recursively(self):

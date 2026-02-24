@@ -13,16 +13,18 @@ model_list:
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
-      max_tokens: 4096
+      max_completion_tokens: 1024
       merge_reasoning_content_in_choices: true
+      reasoning_effort: low
 
   # Standalone alias for benchmarking
   - model_name: gpt-oss-120b
     litellm_params:
       model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
-      max_tokens: 4096
+      max_completion_tokens: 1024
       merge_reasoning_content_in_choices: true
+      reasoning_effort: low
 
   # Fallback 1: Cerebras GLM 4.7 (бывшая primary)
   - model_name: gpt-4o-mini-cerebras-glm
@@ -30,8 +32,7 @@ model_list:
       model: openai/zai-glm-4.7
       api_base: https://api.cerebras.ai/v1
       api_key: os.environ/CEREBRAS_API_KEY
-      max_tokens: 4096
-      merge_reasoning_content_in_choices: true
+      max_completion_tokens: 1024
 
   # Fallback 2: Groq (fast, free tier)
   - model_name: gpt-4o-mini-fallback
