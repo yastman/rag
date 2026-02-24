@@ -82,7 +82,7 @@ class TestLLMServiceFormatContext:
 
         assert "Test Title" in result
         assert "Test content" in result
-        assert "0.95" in result
+        assert "[Объект 1]" in result
 
     def test_format_context_multiple_chunks(self):
         """Multiple chunks format with separators."""

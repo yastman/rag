@@ -41,6 +41,7 @@ spans:
   agent_tools:
     - tool-rag-search
     - tool-history-search
+    - tool-apartment-search
     - tool-mortgage-calculator
     - tool-daily-summary
     - tool-handoff
@@ -122,6 +123,8 @@ spans:
     - client-direct-pipeline
 
   services:
+    - apartments-hybrid-search
+    - apartments-filtered-search
     - service-generate-response
     - detect-response-style
     - get-prompt
@@ -188,6 +191,7 @@ sensitive_spans:
   # agent_tools
   - tool-rag-search
   - tool-history-search
+  - tool-apartment-search
   # history_graph
   - history-retrieve
   - history-summarize
@@ -233,6 +237,7 @@ sensitive_spans:
   - get-prompt
   - kommo-token-get
   - kommo-token-refresh
+  - apartments-hybrid-search
   # voice + api entry points
   - voice-session
   - rag-api-query
