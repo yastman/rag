@@ -28,6 +28,10 @@ class QdrantService:
     - Quantization mode-based collection selection
     """
 
+    # ACORN filtered search (Feb 2026): Code ready in src/retrieval/search_engines.py
+    # but AcornSearchParams not yet exported by qdrant-client SDK.
+    # Track: waiting for qdrant-client 1.18+ release. See #590.
+
     def __init__(
         self,
         url: str,
@@ -696,8 +700,10 @@ class QdrantService:
         Note: payload field used in formula benefits from a payload index.
 
         FormulaQuery freshness boosting: implemented and tested but not wired into
-        rag_pipeline. Decision (2026-02-24): Keep as opt-in capability. Wire into
-        pipeline when product decides freshness ranking is needed. See #590.
+        rag_pipeline. Decision (2026-02-24, #590): Keep as opt-in capability.
+        NOT connected to production pipeline -- requires product decision on freshness
+        ranking. ACORN also blocked pending qdrant-client export of AcornSearchParams.
+        See #590 for full audit. Strict mode + aliases are active (see ensure_collection).
 
         Args:
             dense_vector: Query embedding
