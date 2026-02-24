@@ -301,9 +301,15 @@ error_allowlist:
   - span: rag-pipeline
     level: ERROR
     trigger: "Agent pipeline step failed"
-  - span: history-graph-nodes
+  - span: history-retrieve
     level: ERROR
-    trigger: "History graph node failed"
+    trigger: "History search failed"
+  - span: history-rewrite
+    level: ERROR
+    trigger: "History rewrite failed"
+  - span: history-summarize
+    level: ERROR
+    trigger: "History summarize failed"
   # Services — curated error spans for degraded operations
   - span: cache-*
     level: ERROR
