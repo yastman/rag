@@ -38,11 +38,9 @@ def isolate_otel_langfuse(monkeypatch):
     # langfuse and can corrupt module state on stop().  Instead, patch the
     # higher-level wrappers that our code actually calls.
     patches = [
-        # OTEL entry point - make setup_opentelemetry a no-op
-        patch("src.observability.otel_setup.setup_opentelemetry", mock_noop),
         # Langfuse — patch our wrapper, not the SDK class directly
         patch("telegram_bot.services.observability.get_client", lambda: mock_noop),
-        # Fallback: patch low-level OTEL exporters in case setup_opentelemetry is called
+        # Fallback: patch low-level OTEL exporters
         patch(
             "opentelemetry.exporter.otlp.proto.grpc.trace_exporter.OTLPSpanExporter",
             mock_noop,
