@@ -47,6 +47,8 @@ class RAGState(TypedDict):
     llm_provider_model: str
     llm_ttft_ms: float
     llm_response_duration_ms: float
+    llm_stream_only_ttft_ms: float | None
+    llm_ttft_drift_ms: float | None
     # Latency breakdown (#147)
     llm_decode_ms: float | None
     llm_tps: float | None
@@ -88,6 +90,9 @@ class RAGState(TypedDict):
     # Call limits (#374)
     llm_call_count: int
     max_llm_calls: int
+    # End-to-end latency alignment (pre-agent + pipeline)
+    pre_agent_ms: float
+    e2e_latency_ms: float
 
 
 def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, Any]:
@@ -127,6 +132,8 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         "llm_provider_model": "",
         "llm_ttft_ms": 0.0,
         "llm_response_duration_ms": 0.0,
+        "llm_stream_only_ttft_ms": None,
+        "llm_ttft_drift_ms": None,
         # Latency breakdown (#147)
         "llm_decode_ms": None,
         "llm_tps": None,
@@ -168,4 +175,7 @@ def make_initial_state(user_id: int, session_id: str, query: str) -> dict[str, A
         # Call limits (#374)
         "llm_call_count": 0,
         "max_llm_calls": 5,
+        # End-to-end latency alignment
+        "pre_agent_ms": 0.0,
+        "e2e_latency_ms": 0.0,
     }

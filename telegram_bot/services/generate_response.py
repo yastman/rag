@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import inspect
 import logging
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from telegram_bot.integrations.prompt_manager import get_prompt
@@ -32,7 +34,7 @@ class StreamingPartialDeliveryError(Exception):
 
 
 _MAX_CONTEXT_DOCS = 5
-_STREAM_EDIT_INTERVAL = 0.3  # 300ms throttle for Telegram edit_text
+_STREAM_EDIT_INTERVAL = 0.5  # 500ms throttle for Telegram edit_text
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
 _MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
@@ -168,7 +170,8 @@ async def _generate_streaming(
     llm_messages: list[dict[str, str]],
     message: Any,
     max_tokens: int = 0,
-) -> tuple[str, str, float, float | None, Any]:
+    lf_client: Any | None = None,
+) -> tuple[str, str, float, float | None, float | None, Any]:
     """Stream LLM response directly to Telegram via message editing."""
     sent_msg = await message.answer(_STREAM_PLACEHOLDER)
 
@@ -179,6 +182,8 @@ async def _generate_streaming(
     completion_tokens: float | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
+    # Measure TTFT from request dispatch (includes pre-stream provider wait).
+    t_request_start = time.monotonic()
     stream = await llm.chat.completions.create(
         model=config.llm_model,
         messages=llm_messages,
@@ -189,7 +194,10 @@ async def _generate_streaming(
         name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
     )
 
+    # Legacy "stream-only TTFT" starts after stream object creation.
+    # Keep it for drift diagnostics only.
     t_stream_start = time.monotonic()
+    stream_only_ttft_ms: float | None = None
     try:
         async for chunk in stream:
             if hasattr(chunk, "usage") and chunk.usage is not None:
@@ -202,7 +210,14 @@ async def _generate_streaming(
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 if ttft_ms == 0.0:
-                    ttft_ms = (time.monotonic() - t_stream_start) * 1000
+                    first_token_at = time.monotonic()
+                    ttft_ms = (first_token_at - t_request_start) * 1000
+                    stream_only_ttft_ms = (first_token_at - t_stream_start) * 1000
+                    if lf_client is not None:
+                        with contextlib.suppress(Exception):
+                            lf_client.update_current_generation(
+                                completion_start_time=datetime.now(UTC)
+                            )
                 accumulated += delta.content
                 now = time.monotonic()
                 if now - last_edit >= _STREAM_EDIT_INTERVAL:
@@ -234,7 +249,7 @@ async def _generate_streaming(
         except Exception:
             logger.warning("Failed to finalize streaming message")
 
-    return accumulated, actual_model, ttft_ms, completion_tokens, sent_msg
+    return accumulated, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg
 
 
 def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float | None:
@@ -340,6 +355,7 @@ async def generate_response(
     response_sent = False
     actual_model = config.llm_model
     ttft_ms = 0.0
+    stream_only_ttft_ms: float | None = None
     response_obj: Any | None = None
     completion_tokens: float | None = None
     stream_recovery = False
@@ -363,19 +379,36 @@ async def generate_response(
         # Streaming path: deliver directly to Telegram
         if message is not None and config.streaming_enabled:
             try:
-                (
-                    answer,
-                    actual_model,
-                    ttft_ms,
-                    completion_tokens,
-                    sent_msg,
-                ) = await generate_streaming(
+                stream_kwargs: dict[str, Any] = {}
+                params = inspect.signature(generate_streaming).parameters
+                if "lf_client" in params:
+                    stream_kwargs["lf_client"] = lf_client
+                stream_result = await generate_streaming(
                     llm,
                     config,
                     llm_messages,
                     message,
                     max_tokens,
+                    **stream_kwargs,
                 )
+                if len(stream_result) == 5:
+                    (
+                        answer,
+                        actual_model,
+                        ttft_ms,
+                        completion_tokens,
+                        sent_msg,
+                    ) = stream_result
+                    stream_only_ttft_ms = None
+                else:
+                    (
+                        answer,
+                        actual_model,
+                        ttft_ms,
+                        completion_tokens,
+                        stream_only_ttft_ms,
+                        sent_msg,
+                    ) = stream_result
                 response_sent = True
             except Exception as stream_exc:
                 if hasattr(stream_exc, "sent_msg") and hasattr(stream_exc, "partial_text"):
@@ -495,6 +528,7 @@ async def generate_response(
         "response_length": len(answer),
         "llm_provider_model": actual_model,
         "llm_ttft_ms": ttft_ms if ttft_ms > 0 else None,
+        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
         "llm_response_duration_ms": round(elapsed * 1000, 1),
         "fallback_used": actual_model == "fallback",
         "response_sent": response_sent,
@@ -530,6 +564,19 @@ async def generate_response(
         if completion_tokens is not None and ttft_ms > 0:
             llm_tps = completion_tokens / (ttft_ms / 1000)
 
+    llm_ttft_drift_ms: float | None = None
+    if streaming_was_enabled and stream_only_ttft_ms is not None and ttft_ms > 0:
+        llm_ttft_drift_ms = max(0.0, ttft_ms - stream_only_ttft_ms)
+        if llm_ttft_drift_ms > 150:
+            with contextlib.suppress(Exception):
+                lf_client.update_current_span(
+                    level="WARNING",
+                    status_message=(
+                        f"TTFT drift detected: {llm_ttft_drift_ms:.1f}ms "
+                        "(request-based vs stream-only)"
+                    ),
+                )
+
     # Response length metrics (#129)
     answer_words = len(answer.split())
     answer_chars = len(answer)
@@ -550,6 +597,8 @@ async def generate_response(
         "llm_provider_model": actual_model,
         "llm_ttft_ms": ttft_ms,
         "llm_response_duration_ms": elapsed * 1000,
+        "llm_stream_only_ttft_ms": stream_only_ttft_ms,
+        "llm_ttft_drift_ms": llm_ttft_drift_ms,
         "llm_call_count": current_llm_calls + 1,
         "latency_stages": {**current_latency, "generate": elapsed},
         # Latency breakdown (#147)
