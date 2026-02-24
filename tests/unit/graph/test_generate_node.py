@@ -46,11 +46,56 @@ class _MockStreamChunk:
         self.usage = None
 
 
+class _MockReasoningStreamChunk:
+    """Mock streaming chunk with reasoning content instead of delta.content.
+
+    Simulates Cerebras gpt-oss-120b behavior where LiteLLM's
+    merge_reasoning_content_in_choices fails in streaming mode —
+    delta.content is None while reasoning tokens arrive via
+    delta.reasoning_content or delta.reasoning.
+    """
+
+    def __init__(
+        self,
+        *,
+        reasoning_content: str | None = None,
+        reasoning: str | None = None,
+        model: str | None = None,
+    ):
+        delta = MagicMock(spec=[])  # spec=[] prevents auto-attribute creation
+        delta.content = None
+        delta.reasoning_content = reasoning_content
+        delta.reasoning = reasoning
+        choice = MagicMock()
+        choice.delta = delta
+        self.choices = [choice]
+        self.model = model
+        self.usage = None
+
+
 class _MockAsyncStream:
     """Async iterator that yields mock stream chunks."""
 
     def __init__(self, texts: list[str]):
         self._chunks = [_MockStreamChunk(t) for t in texts]
+        self._index = 0
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._index >= len(self._chunks):
+            raise StopAsyncIteration
+        chunk = self._chunks[self._index]
+        self._index += 1
+        return chunk
+
+
+class _MockAsyncStreamFromChunks:
+    """Async iterator over pre-built chunk objects (supports mixed chunk types)."""
+
+    def __init__(self, chunks: list):
+        self._chunks = chunks
         self._index = 0
 
     def __aiter__(self):
@@ -1300,3 +1345,118 @@ def test_format_context_no_raw_score():
     # Must contain object markers
     assert "[Объект 1]" in result
     assert "[Объект 2]" in result
+
+
+# --- Reasoning content streaming tests (Cerebras gpt-oss-120b via LiteLLM) ---
+
+
+async def test_streaming_reasoning_content_merged(monkeypatch):
+    """Streaming with delta.reasoning_content (LiteLLM standardized) produces response.
+
+    When LiteLLM merge_reasoning_content_in_choices is buggy in streaming mode,
+    delta.content is None but delta.reasoning_content carries the tokens.
+    """
+    from telegram_bot.graph.nodes.generate import generate_node
+
+    mock_config, mock_client = _make_mock_config()
+
+    chunks = [
+        _MockReasoningStreamChunk(reasoning_content="Рассуждение "),
+        _MockReasoningStreamChunk(reasoning_content="и ответ"),
+    ]
+    stream = _MockAsyncStreamFromChunks(chunks)
+    mock_client.chat.completions.create = AsyncMock(return_value=stream)
+
+    mock_lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    state = _make_state_with_docs(query="Тест reasoning_content")
+
+    with (
+        patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+        patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+    ):
+        result = await generate_node(state, message=message)
+
+    assert result["response"] == "Рассуждение и ответ"
+    assert result["response_sent"] is True
+
+
+async def test_streaming_raw_cerebras_reasoning_merged(monkeypatch):
+    """Streaming with delta.reasoning (raw Cerebras field) produces response.
+
+    Raw Cerebras gpt-oss-120b uses delta.reasoning (not reasoning_content).
+    Our client-side merge must handle this as a second fallback.
+    """
+    from telegram_bot.graph.nodes.generate import generate_node
+
+    mock_config, mock_client = _make_mock_config()
+
+    chunks = [
+        _MockReasoningStreamChunk(reasoning="Cerebras "),
+        _MockReasoningStreamChunk(reasoning="рассуждение"),
+    ]
+    stream = _MockAsyncStreamFromChunks(chunks)
+    mock_client.chat.completions.create = AsyncMock(return_value=stream)
+
+    mock_lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    state = _make_state_with_docs(query="Тест reasoning")
+
+    with (
+        patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+        patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+    ):
+        result = await generate_node(state, message=message)
+
+    assert result["response"] == "Cerebras рассуждение"
+    assert result["response_sent"] is True
+
+
+async def test_streaming_mixed_content_and_reasoning(monkeypatch):
+    """Streaming with mixed delta.content and delta.reasoning_content works.
+
+    Some chunks have delta.content (LiteLLM merge works), others have
+    delta.reasoning_content (merge fails mid-stream). All must be accumulated.
+    """
+    from telegram_bot.graph.nodes.generate import generate_node
+
+    mock_config, mock_client = _make_mock_config()
+
+    chunks = [
+        _MockReasoningStreamChunk(reasoning_content="Думаю... "),
+        _MockStreamChunk("Ответ: "),
+        _MockStreamChunk("Болгария"),
+    ]
+    stream = _MockAsyncStreamFromChunks(chunks)
+    mock_client.chat.completions.create = AsyncMock(return_value=stream)
+
+    mock_lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    state = _make_state_with_docs(query="Тест mixed")
+
+    with (
+        patch("telegram_bot.graph.nodes.generate._get_config", return_value=mock_config),
+        patch("telegram_bot.graph.nodes.generate.get_client", return_value=mock_lf),
+    ):
+        result = await generate_node(state, message=message)
+
+    assert result["response"] == "Думаю... Ответ: Болгария"
+    assert result["response_sent"] is True
