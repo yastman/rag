@@ -5,7 +5,7 @@ domain from GraphConfig, includes conversation history, and calls LLM.
 Falls back to a summary of retrieved docs if LLM is unavailable.
 
 Supports streaming delivery to Telegram: sends placeholder message,
-edits with accumulated chunks (throttled 300ms), finalizes with Markdown.
+edits with accumulated chunks (throttled 500ms), finalizes with Markdown.
 """
 
 from __future__ import annotations
@@ -38,8 +38,13 @@ class StreamingPartialDeliveryError(Exception):
         super().__init__(f"Streaming failed after delivering {len(partial_text)} chars")
 
 
+# 5 context docs is the quality/latency sweet spot. Reducing to 3 saves ~50ms TTFT
+# but risks missing relevant context. Keep at 5 unless latency SLA requires <1s.
 _MAX_CONTEXT_DOCS = 5
-_STREAM_EDIT_INTERVAL = 0.3  # 300ms throttle for Telegram edit_text
+# 0.5s edit interval: reduces Telegram API load and 429 risk.
+# Trade-off: slightly chunkier streaming UX vs 0.3s, but safer margin.
+# Telegram editMessageText counts 1 unit toward rate limit; 0.5s = max 120/min burst.
+_STREAM_EDIT_INTERVAL = 0.5
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
 _MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
@@ -71,6 +76,8 @@ def _get_config() -> Any:
     return GraphConfig.from_env()
 
 
+# Fallback system prompt: ~130 tokens (Russian). Main token cost comes from
+# context docs (~5 * 500 chars) and history, not system prompt.
 _GENERATE_FALLBACK = (
     "Ты — ассистент по {{domain}}.\n\n"
     "Отвечай на вопросы пользователя на основе предоставленного контекста.\n"
