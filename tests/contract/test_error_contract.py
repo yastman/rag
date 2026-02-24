@@ -16,16 +16,26 @@ SCAN_DIRS = [
     REPO_ROOT / "telegram_bot",
     REPO_ROOT / "src",
 ]
-EXCLUDE_DIRS = ["tests/"]
+EXCLUDE_DIRS = ["tests/", ".venv/"]
 
 # Only these files are permitted to call update_current_span(level="ERROR"/"WARNING")
 ERROR_SPAN_ALLOWLIST: dict[str, list[str]] = {
+    # Graph nodes — core pipeline error/fallback paths
     "telegram_bot/graph/nodes/generate.py": ["ERROR", "WARNING"],
     "telegram_bot/graph/nodes/rewrite.py": ["ERROR"],
     "telegram_bot/graph/nodes/rerank.py": ["ERROR"],
     "telegram_bot/graph/nodes/respond.py": ["ERROR"],
+    "telegram_bot/graph/nodes/cache.py": ["ERROR"],
+    # Agent tools — pipeline wrapper error paths
     "telegram_bot/agents/rag_tool.py": ["ERROR"],
     "telegram_bot/agents/history_tool.py": ["ERROR"],
+    "telegram_bot/agents/rag_pipeline.py": ["ERROR"],
+    "telegram_bot/agents/history_graph/nodes.py": ["ERROR"],
+    # Services — curated error spans for degraded operations
+    "telegram_bot/integrations/cache.py": ["ERROR", "WARNING"],
+    "telegram_bot/services/generate_response.py": ["ERROR", "WARNING"],
+    "telegram_bot/services/qdrant.py": ["ERROR", "WARNING"],
+    "telegram_bot/services/history_service.py": ["ERROR"],
 }
 
 

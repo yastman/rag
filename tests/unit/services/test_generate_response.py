@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -36,14 +37,14 @@ def _make_non_streaming_config(answer: str = "Ответ модели") -> tuple
 
 
 class _StreamChunk:
-    def __init__(self, content: str):
+    def __init__(self, content: str, usage: Any | None = None):
         delta = MagicMock()
         delta.content = content
         choice = MagicMock()
         choice.delta = delta
         self.choices = [choice]
         self.model = "gpt-4o-mini"
-        self.usage = None
+        self.usage = usage
 
 
 class _ReasoningStreamChunk:
@@ -225,7 +226,9 @@ async def test_generate_response_non_streaming_computes_tps_from_usage() -> None
     mock_response.choices = [mock_choice]
     mock_response.model = "gpt-4o-mini"
     mock_usage = MagicMock()
+    mock_usage.prompt_tokens = 20
     mock_usage.completion_tokens = 10
+    mock_usage.total_tokens = 30
     mock_response.usage = mock_usage
 
     mock_client = MagicMock()
@@ -257,6 +260,47 @@ async def test_generate_response_non_streaming_computes_tps_from_usage() -> None
     assert result["llm_tps"] > 0
     # decode_ms is None for non-streaming
     assert result["llm_decode_ms"] is None
+    lf.update_current_generation.assert_any_call(
+        model="gpt-4o-mini",
+        usage_details={"input": 20, "output": 10, "total": 30},
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_response_streaming_updates_generation_usage_details() -> None:
+    """Streaming path should persist usage_details to Langfuse generation."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    usage = MagicMock()
+    usage.prompt_tokens = 11
+    usage.completion_tokens = 7
+    usage.total_tokens = 18
+    stream = _AsyncStream([_StreamChunk("Потоковый ответ", usage=usage)])
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=555)
+    sent_msg.message_id = 777
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    await generate_response(
+        query="Стриминг usage",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Стриминг usage"}],
+    )
+
+    lf.update_current_generation.assert_any_call(
+        model="gpt-4o-mini",
+        usage_details={"input": 11, "output": 7, "total": 18},
+    )
 
 
 @pytest.mark.asyncio
