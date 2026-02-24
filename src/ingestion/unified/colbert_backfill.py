@@ -6,18 +6,17 @@ import json
 import logging
 import time
 import uuid
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 from qdrant_client import QdrantClient, models
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from telegram_bot.services.bge_m3_client import BGEM3SyncClient
 
 
 logger = logging.getLogger(__name__)
-T = TypeVar("T")
 
 
 @dataclass
@@ -148,6 +147,7 @@ class ColbertBackfillRunner:
             if page_size <= 0:
                 break
 
+            @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=60))
             def _scroll_page(
                 page_size_value: int = page_size,
                 scroll_offset: Any = offset,
@@ -160,7 +160,7 @@ class ColbertBackfillRunner:
                     with_vectors=["colbert"],
                 )
 
-            records, next_offset = self._call_with_retry("qdrant.scroll", _scroll_page)
+            records, next_offset = _scroll_page()
 
             if not records:
                 if next_offset is None:
@@ -196,12 +196,15 @@ class ColbertBackfillRunner:
                     try:
                         bge_started = time.perf_counter()
 
+                        @retry(
+                            stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=60)
+                        )
                         def _encode_batch(
                             texts_batch: list[str] = texts,
                         ) -> list[list[list[float]]]:
                             return self._encode_colbert(texts_batch)
 
-                        colbert_vecs = self._call_with_retry("bge.encode_colbert", _encode_batch)
+                        colbert_vecs = _encode_batch()
                         stats.bge_latency_ms += (time.perf_counter() - bge_started) * 1000
 
                         if len(colbert_vecs) != len(ids_to_update):
@@ -218,13 +221,16 @@ class ColbertBackfillRunner:
                         ]
                         qdrant_started = time.perf_counter()
 
+                        @retry(
+                            stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=60)
+                        )
                         def _update_batch(points_batch: list[Any] = points) -> Any:
                             return self._qdrant.update_vectors(
                                 collection_name=self.collection_name,
                                 points=points_batch,
                             )
 
-                        self._call_with_retry("qdrant.update_vectors", _update_batch)
+                        _update_batch()
                         stats.qdrant_latency_ms += (time.perf_counter() - qdrant_started) * 1000
                         stats.processed += len(points)
                     except Exception as exc:
@@ -289,25 +295,6 @@ class ColbertBackfillRunner:
             return cast(list[list[list[float]]], colbert_vecs)
 
         raise RuntimeError("BGE-M3 client does not provide encode_colbert or encode_hybrid")
-
-    def _call_with_retry(self, name: str, fn: Callable[[], T]) -> T:
-        for attempt in range(1, self.retry_attempts + 1):
-            try:
-                return fn()
-            except Exception:
-                if attempt >= self.retry_attempts:
-                    raise
-                delay = self.retry_backoff_seconds * (2 ** (attempt - 1))
-                logger.warning(
-                    "%s failed (attempt %d/%d), retrying in %.2fs",
-                    name,
-                    attempt,
-                    self.retry_attempts,
-                    delay,
-                )
-                if delay > 0:
-                    time.sleep(delay)
-        raise RuntimeError(f"{name} retry loop ended unexpectedly")
 
     @staticmethod
     def _append_error(stats: BackfillStats, message: str) -> None:
