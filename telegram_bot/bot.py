@@ -290,6 +290,16 @@ class PropertyBot:
             timeout=config.qdrant_timeout,
         )
 
+        # Apartments collection (#629)
+        from .services.apartments_service import ApartmentsService
+
+        self._qdrant_apartments = QdrantService(
+            url=config.qdrant_url,
+            api_key=config.qdrant_api_key,
+            collection_name="apartments",
+        )
+        self._apartments_service = ApartmentsService(qdrant=self._qdrant_apartments)
+
         # Rerank provider (feature flag)
         self._reranker = None
         if config.rerank_provider == "colbert":
@@ -951,6 +961,64 @@ class PropertyBot:
                     logger.exception("Failed to send text response chunk")
                     await message.answer(chunk)
 
+    async def _handle_apartment_fast_path(
+        self,
+        *,
+        user_text: str,
+        message: Message,
+    ) -> str | None:
+        """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
+        from .services.apartment_filter_extractor import ApartmentFilterExtractor
+        from .services.apartments_service import check_escalation
+
+        extractor = ApartmentFilterExtractor()
+        parsed = extractor.parse(user_text)
+
+        if parsed.confidence == "LOW":
+            return None  # escalate to agent
+
+        dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(
+            parsed.semantic_query or user_text
+        )
+
+        filters = parsed.to_filters_dict()
+        results, returned_count = await self._apartments_service.search_with_filters(
+            dense_vector=dense,
+            colbert_query=colbert or None,
+            sparse_vector=sparse,
+            filters=filters or None,
+            top_k=10,
+        )
+
+        score_spread = (results[0]["score"] - results[-1]["score"]) if len(results) > 1 else 0
+        escalation = check_escalation(
+            returned_count=returned_count,
+            top_k=10,
+            score_spread=score_spread,
+            confidence=parsed.confidence,
+        )
+        if escalation:
+            return None  # escalate to agent
+
+        from .agents.apartment_tools import _format_apartment_results
+        from .services.generate_response import generate_response
+
+        context = _format_apartment_results(results)
+
+        generated = await generate_response(
+            query=user_text,
+            documents=[],
+            retrieved_context=[{"content": context, "source": "apartments_catalog"}],
+            raw_messages=[{"role": "user", "content": user_text}],
+            config=self._graph_config,
+            message=message,
+        )
+
+        response_text = str(generated.get("response", "") or context)
+        if not generated.get("response_sent"):
+            await self._send_markdown_chunks(message, response_text)
+        return response_text
+
     async def _handle_client_direct_pipeline(
         self,
         *,
@@ -968,6 +1036,18 @@ class PropertyBot:
             Response text if the pipeline handled the request.
             None if the pipeline signals needs_agent=True (caller falls through to sdk_agent).
         """
+        # Apartment fast path: intent check → regex filters → hybrid search → generate (#629)
+        from .pipelines.client import detect_agent_intent
+
+        if detect_agent_intent(user_text) == "apartment":
+            apt_answer = await self._handle_apartment_fast_path(
+                user_text=user_text,
+                message=message,
+            )
+            if apt_answer is not None:
+                return apt_answer
+            return None  # escalate to agent path
+
         result = await run_client_pipeline(
             user_text=user_text,
             user_id=user_id,
@@ -999,6 +1079,7 @@ class PropertyBot:
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
         from .agents.agent import LOCALE_TO_LANGUAGE
+        from .agents.apartment_tools import apartment_search
         from .agents.history_tool import history_search
         from .agents.rag_tool import rag_search
 
@@ -1233,7 +1314,7 @@ class PropertyBot:
                     )
 
             # Build base tools list (client-only: rag_search)
-            base_tools: list[Any] = [rag_search]
+            base_tools: list[Any] = [rag_search, apartment_search]
 
             manager_tools: list[Any] = []
             if role == "manager":
@@ -1319,6 +1400,7 @@ class PropertyBot:
                 original_user_query=message.text or "",
                 bot=bot,
                 manager_ids=list(self.config.manager_ids),
+                apartments_service=self._apartments_service,
             )
 
             # Initialize handler inside propagation context so it inherits session/user/tags.
@@ -1858,13 +1940,14 @@ class PropertyBot:
             await callback.message.edit_reply_markup(reply_markup=None)
 
         # Rebuild agent with same tools and checkpointer (mirrors _handle_query_supervisor)
+        from .agents.apartment_tools import apartment_search
         from .agents.rag_tool import rag_search
         from .agents.utility_tools import get_utility_tools
 
         role = await self._resolve_user_role(user_id)
         session_id = make_session_id("chat", chat_id)
 
-        base_tools: list[Any] = [rag_search]
+        base_tools: list[Any] = [rag_search, apartment_search]
         manager_tools: list[Any] = []
         if role == "manager":
             from .agents.manager_tools import (
@@ -1937,6 +2020,7 @@ class PropertyBot:
             guard_mode=self.config.guard_mode,
             role=role,
             manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
+            apartments_service=self._apartments_service,
         )
 
         with propagate_attributes(
@@ -2075,6 +2159,7 @@ class PropertyBot:
         Reuses _ainvoke_supervisor_with_recovery for consistency with handle_query.
         """
         from .agents.agent import LOCALE_TO_LANGUAGE
+        from .agents.apartment_tools import apartment_search
         from .agents.rag_tool import rag_search
 
         if callback.from_user is None or callback.message is None:
@@ -2089,7 +2174,7 @@ class PropertyBot:
         session_id = make_session_id("chat", chat_id)
 
         # Build tools list (mirrors _handle_query_supervisor tool assembly)
-        base_tools: list[Any] = [rag_search]
+        base_tools: list[Any] = [rag_search, apartment_search]
         manager_tools: list[Any] = []
         if role == "manager":
             from .agents.manager_tools import (
@@ -2171,6 +2256,7 @@ class PropertyBot:
             original_user_query=query_text,
             bot=bot,
             manager_ids=list(self.config.manager_ids),
+            apartments_service=self._apartments_service,
         )
 
         rag_result_store: dict[str, Any] = {}
