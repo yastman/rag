@@ -1,0 +1,292 @@
+# Canonical trace contract for RAG pipeline observability.
+# Defines required trace families, all known @observe spans, sensitive spans,
+# score keys, and expected error allowlist entries.
+# Used by tests/contract/test_trace_families_contract.py for static verification.
+
+required_families:
+  - telegram-rag-query
+  - telegram-rag-supervisor
+  - telegram-history-search
+  - telegram-rag-voice
+  - telegram-hitl-callback
+  - rag-api-query
+  - voice-session
+  - ingestion-cli-run
+
+spans:
+  graph_nodes:
+    - node-guard
+    - transcribe
+    - node-classify
+    - classify-query
+    - node-cache-check
+    - node-cache-store
+    - node-retrieve
+    - node-grade
+    - node-rerank
+    - node-generate
+    - node-rewrite
+    - node-respond
+    - node-summarize
+
+  agent_pipeline:
+    - rag-pipeline
+    - cache-check
+    - hybrid-retrieve
+    - grade-documents
+    - rerank
+    - query-rewrite
+    - cache-store
+
+  agent_tools:
+    - tool-rag-search
+    - tool-history-search
+    - tool-mortgage-calculator
+    - tool-daily-summary
+    - tool-handoff
+
+  history_graph:
+    - history-guard
+    - history-retrieve
+    - history-grade
+    - history-rewrite
+    - history-summarize
+
+  crm_tools:
+    - crm-get-deal
+    - crm-get-contacts
+    - crm-create-lead
+    - crm-update-lead
+    - crm-upsert-contact
+    - crm-add-note
+    - crm-create-task
+    - crm-link-contact-to-deal
+    - crm-search-leads
+    - crm-get-my-leads
+    - crm-get-my-tasks
+    - crm-update-contact
+
+  manager_tools:
+    - manager-get-funnel-analytics
+    - manager-run-nurturing-batch
+    - tool-crm-sync-lead-score
+
+  cache:
+    - cache-semantic-check
+    - cache-semantic-store
+    - cache-exact-get
+    - cache-exact-store
+    - cache-embedding-get
+    - cache-embedding-store
+    - cache-sparse-get
+    - cache-sparse-store
+    - cache-search-get
+    - cache-search-store
+    - cache-rerank-get
+    - cache-rerank-store
+
+  bge_m3_client:
+    - bge-m3-encode-dense
+    - bge-m3-encode-sparse
+    - bge-m3-encode-hybrid
+    - bge-m3-rerank
+    - bge-m3-encode-colbert
+
+  bge_m3_embeddings:
+    - bge-m3-dense-embed
+    - bge-m3-sparse-embed
+    - bge-m3-sparse-embed-batch
+    - bge-m3-hybrid-embed
+    - bge-m3-hybrid-colbert-embed
+    - bge-m3-colbert-query-embed
+    - bge-m3-hybrid-embed-batch
+
+  qdrant:
+    - qdrant-ensure-collection
+    - qdrant-apply-strict-mode
+    - qdrant-ensure-alias
+    - qdrant-hybrid-search-rrf
+    - qdrant-hybrid-search-rrf-colbert
+    - qdrant-batch-search-rrf
+    - qdrant-search-score-boosting
+    - qdrant-mmr-rerank
+
+  history_service:
+    - history-save
+    - history-search
+    - history-delete
+    - history-get-session-turns
+
+  pipeline:
+    - detect-agent-intent
+    - client-direct-pipeline
+
+  services:
+    - service-generate-response
+    - detect-response-style
+    - get-prompt
+    - kommo-token-get
+    - kommo-token-refresh
+    - colbert-rerank
+    - session-summary-check
+    - lead-score-upsert
+    - funnel-rollup
+    - funnel-store-upsert
+    - nurturing-batch-run
+    - nurturing-scheduler-tick
+
+  kommo_client:
+    - kommo-create-lead
+    - kommo-get-lead
+    - kommo-update-lead
+    - kommo-search-leads
+    - kommo-get-tasks
+    - kommo-upsert-contact
+    - kommo-get-contacts
+    - kommo-update-contact
+    - kommo-add-note
+    - kommo-create-task
+    - kommo-link-contact
+    - kommo-list-pipelines
+    - kommo-update-lead-score
+
+  voyage:
+    - voyage-embed-documents
+    - voyage-embed-query
+    - voyage-rerank
+    - voyage-embed-documents-matryoshka
+    - voyage-embed-query-matryoshka
+    - voyage-contextualized-embed-documents
+    - voyage-contextualized-embed-query
+    - voyage-contextualized-embed-queries
+
+  ingestion:
+    - ingestion-cli-run
+    - ingestion-cli-preflight
+    - ingestion-flow-run-once
+    - ingestion-flow-watch
+    - ingestion-qdrant-delete-file
+    - ingestion-qdrant-upsert-chunks
+
+# Spans that must set capture_input=False, capture_output=False in production.
+# These spans handle PII, raw embeddings, or security-sensitive payloads.
+sensitive_spans:
+  # graph_nodes (excluding node-guard, node-classify, node-grade, node-rerank, node-rewrite)
+  - transcribe
+  - classify-query
+  - node-cache-check
+  - node-cache-store
+  - node-retrieve
+  - node-generate
+  - node-respond
+  - node-summarize
+  # agent_pipeline
+  - rag-pipeline
+  - cache-check
+  - hybrid-retrieve
+  - cache-store
+  # agent_tools
+  - tool-rag-search
+  - tool-history-search
+  # history_graph
+  - history-retrieve
+  - history-summarize
+  # cache (all tiers handle raw vectors / PII responses)
+  - cache-semantic-check
+  - cache-semantic-store
+  - cache-exact-get
+  - cache-exact-store
+  - cache-embedding-get
+  - cache-embedding-store
+  - cache-sparse-get
+  - cache-sparse-store
+  - cache-search-get
+  - cache-search-store
+  - cache-rerank-get
+  - cache-rerank-store
+  # bge_m3_client (raw vectors)
+  - bge-m3-encode-dense
+  - bge-m3-encode-sparse
+  - bge-m3-encode-hybrid
+  - bge-m3-rerank
+  - bge-m3-encode-colbert
+  # qdrant (raw search payloads)
+  - qdrant-hybrid-search-rrf
+  - qdrant-hybrid-search-rrf-colbert
+  - qdrant-batch-search-rrf
+  - qdrant-search-score-boosting
+  - qdrant-mmr-rerank
+  # history_service (conversation PII)
+  - history-save
+  - history-search
+  - history-delete
+  - history-get-session-turns
+  # pipeline
+  - detect-agent-intent
+  - client-direct-pipeline
+  # services
+  - service-generate-response
+  - detect-response-style
+  - get-prompt
+  - kommo-token-get
+  - kommo-token-refresh
+  # voice + api entry points
+  - voice-session
+  - rag-api-query
+  # ingestion
+  - ingestion-cli-run
+  - ingestion-cli-preflight
+  - ingestion-flow-run-once
+  - ingestion-flow-watch
+  - ingestion-qdrant-delete-file
+  - ingestion-qdrant-upsert-chunks
+
+scores:
+  core_rag:
+    - query_type
+    - latency_total_ms
+    - semantic_cache_hit
+    - embeddings_cache_hit
+    - search_cache_hit
+    - rerank_applied
+    - rerank_cache_hit
+    - results_count
+    - no_results
+    - llm_used
+    - confidence_score
+    - hyde_used
+    - llm_ttft_ms
+    - llm_response_duration_ms
+  history:
+    - history_search_count
+    - history_search_empty
+    - history_backend
+    - history_search_latency_ms
+  crm:
+    - crm_tool_used
+    - crm_tools_count
+    - crm_tools_success
+    - crm_tools_error
+
+error_allowlist:
+  - span: node-generate
+    level: ERROR
+    trigger: "LLM call failed"
+  - span: node-generate
+    level: WARNING
+    trigger: "Streaming failed"
+  - span: node-rewrite
+    level: ERROR
+    trigger: "LLM rewrite failed"
+  - span: node-rerank
+    level: ERROR
+    trigger: "ColBERT failed"
+  - span: node-respond
+    level: ERROR
+    trigger: "Telegram send failed"
+  - span: tool-rag-search
+    level: ERROR
+    trigger: "RAG pipeline failed"
+  - span: tool-history-search
+    level: ERROR
+    trigger: "History search failed"
