@@ -55,7 +55,7 @@ def detect_agent_intent(user_text: str) -> str:
         user_text: Raw user message.
 
     Returns:
-        Intent string: "mortgage" | "handoff" | "daily_summary" | "".
+        Intent string: "mortgage" | "handoff" | "daily_summary" | "apartment" | "".
     """
     text = user_text.lower()
     lf = get_client()
@@ -66,6 +66,21 @@ def detect_agent_intent(user_text: str) -> str:
         intent = "handoff"
     elif any(kw in text for kw in ("сводк", "отчёт", "итог дня", "итоги дня")):
         intent = "daily_summary"
+    elif any(
+        kw in text
+        for kw in (
+            "апартамент",
+            "двушк",
+            "трёшк",
+            "трешк",
+            "трёхкомнат",
+            "трехкомнат",
+            "студи",
+            "подобрать",
+            "подбор",
+        )
+    ):
+        intent = "apartment"
     else:
         intent = ""
     lf.update_current_span(output={"intent": intent or "none"})
