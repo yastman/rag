@@ -196,7 +196,7 @@ class TestQdrantServiceUnit:
     """Unit tests for QdrantService (no actual Qdrant calls)."""
 
     def test_init_creates_async_client(self):
-        """Test initialization creates AsyncQdrantClient with gRPC."""
+        """HTTP URL should strip api_key and create AsyncQdrantClient with gRPC."""
         from telegram_bot.services.qdrant import QdrantService
 
         with patch("telegram_bot.services.qdrant.AsyncQdrantClient") as mock_client_class:
@@ -208,7 +208,7 @@ class TestQdrantServiceUnit:
 
             mock_client_class.assert_called_once_with(
                 url="http://localhost:6333",
-                api_key="test-key",
+                api_key=None,
                 prefer_grpc=True,
                 timeout=30,
             )

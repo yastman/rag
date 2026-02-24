@@ -1174,10 +1174,24 @@ class PropertyBot:
                     embedding = await self._cache.get_embedding(user_text)
                     sparse = await self._cache.get_sparse_embedding(user_text)
                     if embedding is None:
+                        _has_hybrid_colbert = callable(
+                            getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
+                        ) and asyncio.iscoroutinefunction(
+                            self._embeddings.aembed_hybrid_with_colbert
+                        )
                         _has_hybrid = callable(
                             getattr(self._embeddings, "aembed_hybrid", None)
                         ) and asyncio.iscoroutinefunction(self._embeddings.aembed_hybrid)
-                        if _has_hybrid:
+                        if _has_hybrid_colbert:
+                            (
+                                embedding,
+                                sparse,
+                                colbert,
+                            ) = await self._embeddings.aembed_hybrid_with_colbert(user_text)
+                            await self._cache.store_embedding(user_text, embedding)
+                            await self._cache.store_sparse_embedding(user_text, sparse)
+                            rag_result_store["cache_key_colbert"] = colbert
+                        elif _has_hybrid:
                             embedding, sparse = await self._embeddings.aembed_hybrid(user_text)
                             await self._cache.store_embedding(user_text, embedding)
                             await self._cache.store_sparse_embedding(user_text, sparse)

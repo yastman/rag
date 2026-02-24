@@ -89,11 +89,8 @@ async def _cache_check(
         )
         embedding = pre_computed_embedding
         embeddings_cache_hit = False  # embedding came from caller, not Redis
-        # Still warm the embedding cache so downstream hits benefit
-        await cache.store_embedding(query, embedding)
-        # Reuse pre-computed sparse + colbert so rag_pipeline avoids redundant BGE-M3 calls (#571)
+        # Pre-agent already stored embeddings in cache — no need to re-store (#633)
         if pre_computed_sparse is not None:
-            await cache.store_sparse_embedding(query, pre_computed_sparse)
             sparse = pre_computed_sparse
         if pre_computed_colbert is not None:
             colbert_query = pre_computed_colbert

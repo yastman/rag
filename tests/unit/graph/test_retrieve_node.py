@@ -228,13 +228,13 @@ class TestRetrieveNode:
 
         async def mock_dense_embed(query):
             call_order.append("dense_start")
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0)
             call_order.append("dense_end")
             return [0.1] * 1024
 
         async def mock_sparse_embed(query):
             call_order.append("sparse_start")
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0)
             call_order.append("sparse_end")
             return {"indices": [1, 2], "values": [0.5, 0.3]}
 

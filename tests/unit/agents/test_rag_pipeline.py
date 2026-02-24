@@ -1155,7 +1155,7 @@ async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache
 
 
 async def test_cache_check_uses_pre_computed_sparse(mock_cache):
-    """_cache_check stores pre_computed_sparse in Redis and returns it as sparse_embedding."""
+    """_cache_check reuses pre_computed_sparse without re-storing (pre-agent already stored)."""
     from unittest.mock import AsyncMock
 
     from telegram_bot.agents.rag_pipeline import _cache_check
@@ -1179,7 +1179,9 @@ async def test_cache_check_uses_pre_computed_sparse(mock_cache):
     )
 
     assert result["sparse_embedding"] == sparse
-    mock_cache.store_sparse_embedding.assert_awaited_once_with("test query", sparse)
+    # Pre-agent already stored embeddings — _cache_check must NOT re-store (#633)
+    mock_cache.store_sparse_embedding.assert_not_awaited()
+    mock_cache.store_embedding.assert_not_awaited()
     assert result["cache_hit"] is False
     assert result["query_embedding"] == dense
 

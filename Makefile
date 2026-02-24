@@ -213,7 +213,14 @@ test-nightly: ## Run heavy test suites (chaos, smoke, slow unit) — schedule ov
 	@echo "$(BLUE)Running nightly test suite...$(NC)"
 	uv run pytest tests/chaos/ -v --timeout=60 -n auto -m "not legacy_api"
 	uv run pytest tests/smoke/ -v --timeout=60 -m "not legacy_api"
-	uv run pytest tests/unit/ -n auto --timeout=30 -m "slow" -q
+	@set +e; \
+	uv run pytest tests/unit/ -n auto --timeout=30 -m "slow" -q; \
+	rc=$$?; \
+	if [ $$rc -eq 5 ]; then \
+		echo "$(YELLOW)No slow-marked unit tests collected; treating as success.$(NC)"; \
+	elif [ $$rc -ne 0 ]; then \
+		exit $$rc; \
+	fi
 	@echo "$(GREEN)✓ Nightly tests complete$(NC)"
 
 test-store-durations: ## Update .test_durations for pytest-split CI sharding
