@@ -8,7 +8,8 @@
 	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
 	qdrant-backup \
-	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force
+	git-hygiene git-hygiene-fix repo-cleanup repo-cleanup-force \
+	test-contract
 
 # Configurable container names & thresholds
 REDIS_CONTAINER ?= dev-redis
@@ -167,6 +168,11 @@ test-unit-full: ## Run all unit tests including optional-dep tests (nightly/main
 	@echo "$(BLUE)Running full unit tests (all extras)...$(NC)"
 	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
 	@echo "$(GREEN)✓ Full unit tests complete$(NC)"
+
+test-contract: ## Run trace contract tests (static analysis, no Docker)
+	@echo "$(BLUE)Running trace contract tests...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/contract/ -n auto --dist=worksteal -q --timeout=30
+	@echo "$(GREEN)Trace contract tests complete$(NC)"
 
 test-fast: ## Run unit tests in parallel (xdist, loadscope)
 	@echo "$(BLUE)Running unit tests in parallel...$(NC)"
