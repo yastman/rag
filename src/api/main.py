@@ -146,6 +146,7 @@ async def query(req: QueryRequest) -> QueryResponse:
         # Set wall-time fields so write_langfuse_scores reports real latency
         elapsed_ms = (time.perf_counter() - start) * 1000
         result["pipeline_wall_ms"] = elapsed_ms
+        result["e2e_latency_ms"] = elapsed_ms
         summarize_s = result.get("latency_stages", {}).get("summarize", 0)
         result["user_perceived_wall_ms"] = elapsed_ms - (summarize_s * 1000)
 

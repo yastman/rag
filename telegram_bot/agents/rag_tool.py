@@ -114,6 +114,7 @@ async def rag_search(
                     "injection_pattern": guard_result.get("injection_pattern"),
                 }
                 result["pipeline_wall_ms"] = pipeline_wall_ms
+                result["e2e_latency_ms"] = pipeline_wall_ms
                 result["user_perceived_wall_ms"] = pipeline_wall_ms
 
                 trace_id = lf.get_current_trace_id() or ""
@@ -180,6 +181,7 @@ async def rag_search(
                 }
 
         result["pipeline_wall_ms"] = pipeline_wall_ms
+        result["e2e_latency_ms"] = pipeline_wall_ms
         summarize_s = result.get("latency_stages", {}).get("summarize", 0)
         result["user_perceived_wall_ms"] = pipeline_wall_ms - (summarize_s * 1000)
 

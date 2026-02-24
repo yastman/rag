@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from telegram_bot.graph.state import RAGState
@@ -173,7 +174,8 @@ async def _generate_streaming(
     llm_messages: list[dict[str, str]],
     message: Any,
     max_tokens: int = 0,
-) -> tuple[str, str, float, int | None, Any]:
+    lf_client: Any | None = None,
+) -> tuple[str, str, float, int | None, float | None, Any]:
     """Stream LLM response directly to Telegram via message editing.
 
     Sends a placeholder message, then edits it with accumulated text as chunks
@@ -201,6 +203,8 @@ async def _generate_streaming(
     completion_tokens: int | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
+    # Measure TTFT from request dispatch (includes provider pre-stream wait).
+    t_request_start = time.monotonic()
     stream = await llm.chat.completions.create(
         model=config.llm_model,
         messages=llm_messages,
@@ -211,7 +215,9 @@ async def _generate_streaming(
         name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
     )
 
+    # Legacy stream-only TTFT baseline kept for drift diagnostics.
     t_stream_start = time.monotonic()
+    stream_only_ttft_ms: float | None = None
     try:
         async for chunk in stream:
             if hasattr(chunk, "usage") and chunk.usage is not None:
@@ -223,7 +229,14 @@ async def _generate_streaming(
             delta = chunk.choices[0].delta
             if delta and delta.content:
                 if ttft_ms == 0.0:
-                    ttft_ms = (time.monotonic() - t_stream_start) * 1000
+                    first_token_at = time.monotonic()
+                    ttft_ms = (first_token_at - t_request_start) * 1000
+                    stream_only_ttft_ms = (first_token_at - t_stream_start) * 1000
+                    if lf_client is not None:
+                        with contextlib.suppress(Exception):
+                            lf_client.update_current_generation(
+                                completion_start_time=datetime.now(UTC)
+                            )
                 accumulated += delta.content
                 now = time.monotonic()
                 if now - last_edit >= _STREAM_EDIT_INTERVAL:
@@ -255,7 +268,7 @@ async def _generate_streaming(
         except Exception:
             logger.warning("Failed to finalize streaming message")
 
-    return accumulated, actual_model, ttft_ms, completion_tokens, sent_msg
+    return accumulated, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg
 
 
 def _extract_queue_ms_from_provider_headers(response_obj: Any | None) -> float | None:

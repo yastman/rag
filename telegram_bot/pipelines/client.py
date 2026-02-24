@@ -221,6 +221,15 @@ async def run_client_pipeline(
     pre_computed = _store.get("cache_key_embedding")
     pre_computed_sparse = _store.get("cache_key_sparse")
     pre_computed_colbert = _store.get("cache_key_colbert")
+    pre_agent_ms = float(_store.get("pre_agent_ms", 0.0) or 0.0)
+    pre_agent_embed_ms = _store.get("pre_agent_embed_ms")
+    pre_agent_cache_check_ms = _store.get("pre_agent_cache_check_ms")
+    if pre_agent_ms > 0:
+        result["pre_agent_ms"] = pre_agent_ms
+    if isinstance(pre_agent_embed_ms, Real):
+        result["pre_agent_embed_ms"] = float(pre_agent_embed_ms)
+    if isinstance(pre_agent_cache_check_ms, Real):
+        result["pre_agent_cache_check_ms"] = float(pre_agent_cache_check_ms)
 
     pipeline_result = await rag_pipeline(
         user_text,
@@ -284,6 +293,7 @@ async def run_client_pipeline(
 
     # --- Step f) Post-process ---
     wall_ms = (time.perf_counter() - pipeline_start) * 1000
+    e2e_wall_ms = wall_ms + pre_agent_ms
 
     # Cache store — apply guards: type, contextual, confidence, source presence.
     store_vector = result.get("cache_key_embedding") or result.get("query_embedding")
@@ -326,15 +336,20 @@ async def run_client_pipeline(
         metadata={
             "pipeline_mode": "client_direct",
             "pipeline_wall_ms": wall_ms,
+            "pre_agent_ms": pre_agent_ms,
+            "e2e_latency_ms": e2e_wall_ms,
         },
     )
     tid = trace_id or (lf.get_current_trace_id() or "")
+    _store["pipeline_wall_ms"] = wall_ms
+    _store["e2e_latency_ms"] = e2e_wall_ms
     if tid:
         score(lf, tid, name="user_role", value=role, data_type="CATEGORICAL")
         result.update(
             {
                 "pipeline_wall_ms": wall_ms,
-                "user_perceived_wall_ms": wall_ms,
+                "user_perceived_wall_ms": e2e_wall_ms,
+                "e2e_latency_ms": e2e_wall_ms,
                 "query_type": query_type,
                 "input_type": "text",
                 "messages": [
