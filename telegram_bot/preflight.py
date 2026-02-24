@@ -2,6 +2,7 @@
 
 import contextlib
 import logging
+import os
 from enum import StrEnum
 from urllib.parse import urlparse
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Retry settings for critical deps
 CRITICAL_RETRIES = 3
 CRITICAL_RETRY_DELAY = 5.0  # seconds
-COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
+COLBERT_COVERAGE_WARN_THRESHOLD = float(os.getenv("COLBERT_COVERAGE_WARN_THRESHOLD", "0.995"))
 
 # Cache key prefixes used by CacheService (see telegram_bot/services/cache.py)
 # Used for synthetic write/read/ttl/delete verification at startup.
