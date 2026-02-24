@@ -391,12 +391,14 @@ class CacheLayerManager:
 
     # ========== Convenience: Sparse Embeddings ==========
 
+    @observe(name="cache-sparse-get")
     async def get_sparse_embedding(
         self, text: str, model: str = "bge_m3_sparse"
     ) -> dict[str, Any] | None:
         """Get cached sparse embedding."""
         return await self.get_exact("sparse", _hash(f"{model}:{_normalize_query_for_cache(text)}"))
 
+    @observe(name="cache-sparse-store")
     async def store_sparse_embedding(
         self, text: str, sparse_vector: dict[str, Any], model: str = "bge_m3_sparse"
     ) -> None:
@@ -407,6 +409,7 @@ class CacheLayerManager:
 
     # ========== Convenience: Search Results ==========
 
+    @observe(name="cache-search-get")
     async def get_search_results(
         self, embedding_prefix: list[float], filters: dict | None = None
     ) -> list[dict] | None:
@@ -414,6 +417,7 @@ class CacheLayerManager:
         key = _hash(str(embedding_prefix[:10]) + json.dumps(filters, sort_keys=True, default=str))
         return await self.get_exact("search", key)
 
+    @observe(name="cache-search-store")
     async def store_search_results(
         self,
         embedding_prefix: list[float],
@@ -441,6 +445,7 @@ class CacheLayerManager:
         }
         return _hash(json.dumps(payload, sort_keys=True, ensure_ascii=False))
 
+    @observe(name="cache-rerank-get")
     async def get_rerank_results(
         self, query: str, documents: list[dict[str, Any]], top_k: int
     ) -> list[dict[str, Any]] | None:
@@ -448,6 +453,7 @@ class CacheLayerManager:
         key = self._build_rerank_key(query, documents, top_k)
         return await self.get_exact("rerank", key)
 
+    @observe(name="cache-rerank-store")
     async def store_rerank_results(
         self,
         query: str,

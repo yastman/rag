@@ -47,6 +47,7 @@ _CONFIDENCE_THRESHOLD = 0.005
 # ---------------------------------------------------------------------------
 
 
+@observe(name="detect-agent-intent")
 def detect_agent_intent(user_text: str) -> str:
     """Detect if the user intent requires agent routing.
 

@@ -174,7 +174,7 @@ except Exception as e:
 
 **Graceful degradation:** `_NullLangfuseClient.update_current_span()` is a no-op when Langfuse disabled.
 
-### Cache (9 methods)
+### Cache (15 methods)
 
 | Method | Span Name |
 |--------|-----------|
@@ -184,6 +184,12 @@ except Exception as e:
 | store_exact | `cache-exact-store` |
 | get_embedding | `cache-embedding-get` |
 | store_embedding | `cache-embedding-store` |
+| get_sparse_embedding | `cache-sparse-get` |
+| store_sparse_embedding | `cache-sparse-store` |
+| get_search_results | `cache-search-get` |
+| store_search_results | `cache-search-store` |
+| get_rerank_results | `cache-rerank-get` |
+| store_rerank_results | `cache-rerank-store` |
 | get_conversation | `cache-conversation-get` |
 | store_conversation | `cache-conversation-store` |
 | store_conversation_batch | `cache-conversation-batch-store` |
@@ -196,10 +202,29 @@ except Exception as e:
 | BGEM3HybridEmbeddings.aembed_hybrid_batch | `bge-m3-hybrid-embed-batch` | span |
 | BGEM3Embeddings.aembed_documents | `bge-m3-dense-embed` | span |
 | BGEM3SparseEmbeddings.aembed_query | `bge-m3-sparse-embed` | span |
+| BGEM3Client.encode_dense | `bge-m3-encode-dense` | span |
+| BGEM3Client.encode_sparse | `bge-m3-encode-sparse` | span |
+| BGEM3Client.encode_hybrid | `bge-m3-encode-hybrid` | span |
+| BGEM3Client.rerank | `bge-m3-rerank` | span |
+| BGEM3Client.encode_colbert | `bge-m3-encode-colbert` | span |
 | ColbertRerankerService.rerank | `colbert-rerank` | span |
-| QdrantService.hybrid_search_rrf | `qdrant-hybrid-search-rrf` | span |
-| QdrantService.batch_search_rrf | `qdrant-batch-search-rrf` | span |
-| QdrantService.search_with_score_boosting | `qdrant-search-score-boosting` | span |
+| QdrantService.ensure_collection | `qdrant-ensure-collection` | span |
+| QdrantService._apply_strict_mode | `qdrant-apply-strict-mode` | span |
+| QdrantService._ensure_alias | `qdrant-ensure-alias` | span |
+| QdrantService.hybrid_search_rrf | `qdrant-hybrid-search-rrf` | span (curated I/O) |
+| QdrantService.hybrid_search_rrf_colbert | `qdrant-hybrid-search-rrf-colbert` | span (curated I/O) |
+| QdrantService.batch_search_rrf | `qdrant-batch-search-rrf` | span (curated I/O) |
+| QdrantService.search_with_score_boosting | `qdrant-search-score-boosting` | span (curated I/O) |
+| QdrantService.mmr_rerank | `qdrant-mmr-rerank` | span (no auto-capture) |
+| HistoryService.search_user_history | `history-search` | span (no auto-capture) |
+| HistoryService.delete_user_history | `history-delete` | span |
+| HistoryService.get_session_turns | `history-get-session-turns` | span (no auto-capture) |
+| ResponseStyleDetector.detect | `detect-response-style` | span |
+| classify_query | `classify-query` | span |
+| detect_agent_intent | `detect-agent-intent` | span |
+| get_prompt | `get-prompt` | span |
+| KommoTokenStore.get_valid_token | `kommo-token-get` | span |
+| KommoTokenStore.force_refresh | `kommo-token-refresh` | span |
 | VoyageService (5 methods) | `voyage-*` | generation |
 | KommoClient (9 methods) | `kommo-*` (create-lead, get-lead, update-lead, upsert-contact, get-contacts, add-note, create-task, link-contact, list-pipelines) | span |
 

@@ -98,6 +98,7 @@ class HistoryService:
             logger.warning("Failed to save history turn", exc_info=True)
             return False
 
+    @observe(name="history-search", capture_input=False, capture_output=False)
     async def search_user_history(
         self,
         user_id: int,
@@ -149,6 +150,7 @@ class HistoryService:
             logger.warning("Failed to search history", exc_info=True)
             return []
 
+    @observe(name="history-delete")
     async def delete_user_history(self, user_id: int) -> bool:
         """Delete all history points for a given user (e.g. on /clear).
 
@@ -174,6 +176,7 @@ class HistoryService:
             logger.warning("Failed to delete Qdrant history for user_id=%s", user_id, exc_info=True)
             return False
 
+    @observe(name="history-get-session-turns", capture_input=False, capture_output=False)
     async def get_session_turns(
         self,
         user_id: int,
