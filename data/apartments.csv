@@ -1,0 +1,17 @@
+complex_name,section,apartment_number,rooms,floor_label,area_m2,view_raw,price_eur,price_bgn,is_furnished,has_floor_plan,has_photo
+Premier Fort Beach,D-1,248,2,4,78.66,sea,215000.0,420503.45,True,True,True
+Premier Fort Beach,A-2,101,1,1,42.5,garden,89000.0,174025.55,False,True,True
+Premier Fort Beach,B-3,315,3,5,105.3,ultra sea panorama,380000.0,743062.0,True,True,True
+Prestige Fort Beach,C-1,122,2,3,74.8,sea,195000.0,381274.5,True,True,False
+Prestige Fort Beach,A-4,205,1,gr.,38.9,garden,78000.0,152517.9,False,True,True
+Panorama Fort Beach,E-2,430,3,6,112.0,sea panorama,420000.0,821022.0,True,True,True
+Panorama Fort Beach,D-3,318,2,4,80.5,sea,210000.0,410623.5,False,True,True
+Marina View Fort Beach,B-1,150,1,2,45.2,sea,95000.0,185778.5,True,True,True
+Marina View Fort Beach,C-2,267,4,7,140.0,ultra sea panorama,580000.0,1133978.0,True,True,True
+Messambria Fort Beach,A-1,88,2,3,76.4,pool/sea,185000.0,361675.5,True,True,False
+Messambria Fort Beach,B-2,174,1,1,40.0,garden,82000.0,160299.1,False,True,True
+Imperial Fort Club,F-3,502,3,5,108.0,sea,355000.0,694142.5,True,True,True
+Crown Fort Club,F-2,547,1,gr.,37.92,garden,81500.0,159400.15,True,True,False
+Green Fort Suites,G-1,601,2,4,72.0,pool,170000.0,332343.0,True,True,True
+Premier Fort Suites,H-2,712,1,2,39.5,garden,76000.0,148643.0,False,True,True
+Nessebar Fort Residence,I-1,801,3,6,118.5,sea panorama,450000.0,879682.5,True,True,True
