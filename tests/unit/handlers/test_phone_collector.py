@@ -32,3 +32,49 @@ def test_create_phone_router_returns_fresh_instance():
     assert router_a is not router_b
     assert router_a.name == "phone_collector"
     assert router_b.name == "phone_collector"
+
+
+# --- CRM integration tests ---
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import telegram_bot.handlers.phone_collector as mod
+
+
+async def test_on_phone_received_creates_crm_lead():
+    """Valid phone with kommo_client triggers contact + lead creation in CRM."""
+    mock_kommo = AsyncMock()
+    mock_kommo.upsert_contact.return_value = SimpleNamespace(id=101)
+    mock_kommo.create_lead.return_value = SimpleNamespace(id=201)
+
+    state = AsyncMock()
+    state.get_data.return_value = {"lead_source": "viewing", "lead_detail": "prop-42"}
+
+    message = AsyncMock()
+    message.text = "+359896759292"
+    message.from_user = SimpleNamespace(id=12345, first_name="Иван", last_name="Петров")
+
+    await mod.on_phone_received(message, state, kommo_client=mock_kommo)
+
+    mock_kommo.upsert_contact.assert_awaited_once()
+    mock_kommo.create_lead.assert_awaited_once()
+    mock_kommo.link_contact_to_lead.assert_awaited_once_with(201, 101)
+    answer_text = message.answer.call_args[0][0]
+    assert "Спасибо" in answer_text
+
+
+async def test_on_phone_received_works_without_kommo():
+    """Valid phone without kommo_client still replies to user and does not raise."""
+    state = AsyncMock()
+    state.get_data.return_value = {"lead_source": "viewing", "lead_detail": ""}
+
+    message = AsyncMock()
+    message.text = "+359896759292"
+    message.from_user = SimpleNamespace(id=12345, first_name="Test", last_name=None)
+
+    await mod.on_phone_received(message, state, kommo_client=None)
+
+    message.answer.assert_awaited_once()
+    answer_text = message.answer.call_args[0][0]
+    assert "Спасибо" in answer_text
