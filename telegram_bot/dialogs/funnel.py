@@ -15,6 +15,51 @@ from aiogram_dialog.widgets.text import Format
 from .states import FunnelSG
 
 
+# --- Filter building helpers ---
+
+_ROOMS_MAP: dict[str, int] = {"studio": 1, "1bed": 2, "2bed": 3, "3bed": 4}
+
+_BUDGET_MAP: dict[str, dict[str, int]] = {
+    "low": {"lte": 50000},
+    "mid": {"gte": 50000, "lte": 100000},
+    "high": {"gte": 100000, "lte": 150000},
+    "premium": {"gte": 150000, "lte": 200000},
+    "luxury": {"gte": 200000},
+}
+
+_FLOOR_MAP: dict[str, dict[str, int]] = {
+    "low": {"gte": 0, "lte": 1},
+    "mid": {"gte": 2, "lte": 3},
+    "high": {"gte": 4, "lte": 5},
+    "top": {"gte": 6},
+}
+
+_ROOMS_DISPLAY: dict[int, str] = {1: "Студия", 2: "1-спальня", 3: "2-спальни", 4: "3-спальни"}
+
+
+def build_funnel_filters(
+    *,
+    rooms: str = "any",
+    budget: str = "any",
+    complex_name: str | None = None,
+    floor: str | None = None,
+    view: str | None = None,
+) -> dict[str, Any]:
+    """Build Qdrant payload filter dict from funnel dialog selections."""
+    filters: dict[str, Any] = {}
+    if rooms in _ROOMS_MAP:
+        filters["rooms"] = _ROOMS_MAP[rooms]
+    if budget in _BUDGET_MAP:
+        filters["price_eur"] = _BUDGET_MAP[budget]
+    if complex_name:
+        filters["complex_name"] = complex_name
+    if floor and floor != "any" and floor in _FLOOR_MAP:
+        filters["floor"] = _FLOOR_MAP[floor]
+    if view and view != "any":
+        filters["view_tags"] = [view]
+    return filters
+
+
 logger = logging.getLogger(__name__)
 _BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
 
@@ -120,16 +165,54 @@ async def get_results_data(
     dialog_manager: DialogManager,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Getter for results window — compiles funnel answers."""
+    """Getter for results window — fetches real apartments from Qdrant (#660)."""
+    from telegram_bot.keyboards.property_card import format_property_card
+
     data = dialog_manager.dialog_data
+    rooms = data.get("property_type", "any")
+    budget = data.get("budget", "any")
+    floor = data.get("floor")
+    view = data.get("view")
+
+    filters = build_funnel_filters(rooms=rooms, budget=budget, floor=floor, view=view)
+
+    property_bot = dialog_manager.middleware_data.get("property_bot")
+    svc = getattr(property_bot, "_apartments_service", None) if property_bot else None
+
+    results_text = ""
+    if svc:
+        try:
+            results, _count, _ = await svc.scroll_with_filters(filters=filters, limit=5)
+            if results:
+                cards = []
+                for apt in results:
+                    p = apt["payload"]
+                    rooms_num = p.get("rooms", 1)
+                    rooms_display = _ROOMS_DISPLAY.get(rooms_num, str(rooms_num))
+                    cards.append(
+                        format_property_card(
+                            property_id=apt["id"],
+                            complex_name=p.get("complex_name", ""),
+                            location=data.get("location", ""),
+                            property_type=rooms_display,
+                            floor=p.get("floor", 0),
+                            area_m2=p.get("area_m2", 0),
+                            view=p.get("view_primary", ""),
+                            price_eur=p.get("price_eur", 0),
+                        )
+                    )
+                results_text = "\n\n".join(cards)
+            else:
+                results_text = "К сожалению, по вашим критериям ничего не найдено."
+        except Exception:
+            logger.exception("Failed to fetch funnel results from Qdrant")
+            results_text = "К сожалению, по вашим критериям ничего не найдено."
+    else:
+        results_text = "Пока не нашли вариантов."
+
     return {
         "title": "Подобрали для вас:",
-        "location": data.get("location", ""),
-        "property_type": data.get("property_type", ""),
-        "budget": data.get("budget", ""),
-        "floor": data.get("floor", ""),
-        "view": data.get("view", ""),
-        "results_text": "Пока не нашли вариантов.",  # Phase 2: RAG integration
+        "results_text": results_text,
         "btn_back": "Назад",
     }
 
