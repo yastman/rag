@@ -27,12 +27,12 @@ Text (sdk_agent — manager role, fallback for client on fast-path error):
              → Langfuse: CallbackHandler + @observe spans (pipeline_mode="sdk_agent")
 
 Menu:   ReplyKeyboard button → handle_menu_button() → dispatch:
-             🔍 Подобрать → _handle_search → handle_query("Подбери апартаменты")
-             📋 Услуги → _handle_services → inline services menu (svc:/cta: callbacks)
-             👁 Просмотр → _handle_viewing → phone_collector FSM
-             ⭐ Избранное → _handle_bookmarks → FavoritesService (fav: callbacks)
-             🎯 Акции → _handle_promotions → handle_query("Покажи актуальные акции")
-             👤 Менеджер → _handle_manager → handle_query("Соедини с менеджером")
+             🏠 Подбор апартаментов → _handle_search → handle_query("Подбери апартаменты")
+             🔑 Услуги → _handle_services → inline services menu (svc:/cta: callbacks)
+             📅 Запись на осмотр → _handle_viewing → phone_collector FSM
+             📌 Мои закладки → _handle_bookmarks → FavoritesService (fav: callbacks)
+             🎁 Акции → _handle_promotions → handle_query("Покажи актуальные акции")
+             👤 Связь с менеджером → _handle_manager → handle_query("Соедини с менеджером")
         Inline callbacks: svc:*/cta:* → service cards | fav:* → favorites CRUD | results:* → pagination/viewing
 
 Voice: Voice Message → PropertyBot.handle_voice()
@@ -74,7 +74,7 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 | `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection, injects `i18n`, `locale`, `property_bot`, `apartments_service` (#660) |
-| `telegram_bot/dialogs/` | aiogram-dialog menus: `client_menu`, `crm_submenu`, `faq`, `funnel`, `manager_menu`, `settings` |
+| `telegram_bot/dialogs/` | aiogram-dialog menus: `crm_submenu`, `faq`, `funnel`, `manager_menu`, `settings` |
 | `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler |
 | `telegram_bot/keyboards/client_keyboard.py` | Client ReplyKeyboard — `build_client_keyboard(i18n=)`, `get_menu_button_texts(i18n_hub=)`, `parse_menu_button(text, i18n_hub=)` with .ftl keys (#660) |
 | `telegram_bot/keyboards/property_card.py` | Property listing card with bookmark + results footer |
@@ -171,12 +171,12 @@ Visible labels are localized from `.ftl` keys (`kb-search`, `kb-services`, `kb-v
 
 | Button | Handler | Action |
 |--------|---------|--------|
-| 🔍 Подобрать | `_handle_search` | `handle_menu_action_text(msg, "Подбери апартаменты")` |
-| 📋 Услуги | `_handle_services` | Shows inline services menu (`build_services_menu`) |
-| 👁 Просмотр | `_handle_viewing` | `start_phone_collection(msg, state, source="viewing_main_menu")` |
-| ⭐ Избранное | `_handle_bookmarks` | FavoritesService list → property cards or empty message |
-| 🎯 Акции | `_handle_promotions` | `handle_menu_action_text(msg, "Покажи актуальные акции")` |
-| 👤 Менеджер | `_handle_manager` | `handle_menu_action_text(msg, "Соедини с менеджером")` |
+| 🏠 Подбор апартаментов | `_handle_search` | `handle_menu_action_text(msg, "Подбери апартаменты")` |
+| 🔑 Услуги | `_handle_services` | Shows inline services menu (`build_services_menu`) |
+| 📅 Запись на осмотр | `_handle_viewing` | `start_phone_collection(msg, state, source="viewing_main_menu")` |
+| 📌 Мои закладки | `_handle_bookmarks` | FavoritesService list → property cards or empty message |
+| 🎁 Акции | `_handle_promotions` | `handle_menu_action_text(msg, "Покажи актуальные акции")` |
+| 👤 Связь с менеджером | `_handle_manager` | `handle_menu_action_text(msg, "Соедини с менеджером")` |
 
 **`handle_menu_action_text(message, query_text)`**: DRY helper — patches message text via `model_copy(update={"text": query_text})` and delegates to `handle_query`.
 
