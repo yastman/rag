@@ -68,6 +68,17 @@ Bug:    /systematic-debugging → TDD → fix
 | `qdrant-client .search()` AttributeError | Migrated to `.query_points()` in v1.17 — never use `.search()` |
 | ColBERT rerank 16s on CPU | Use server-side ColBERT via Qdrant nested prefetch (#569), or `RERANK_PROVIDER=none` |
 
+## Parallel Sessions
+
+**NEVER** run 2+ sessions in one directory — branches collide. Use worktrees:
+
+```bash
+claude --worktree feature-auth    # Session 1: .claude/worktrees/feature-auth/
+claude --worktree bugfix-123      # Session 2: .claude/worktrees/bugfix-123/
+```
+
+Details: `.claude/rules/git-workflow.md`
+
 ## Environment
 
 `cp .env.example .env` → `uv sync && make local-up && make run-bot`
