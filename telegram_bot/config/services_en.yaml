@@ -1,0 +1,162 @@
+# telegram_bot/config/services_en.yaml — English
+welcome:
+  text: |
+    Welcome to FortNoks Estate! 🇧🇬
+
+    19 residential complexes on the Bulgarian coast.
+    We work directly — no middlemen or realtors.
+
+    • Apartments from €38,900
+    • Developer installment plan (down payment from 5%)
+    • Purchase with Ukrainian passport
+    • Remote deal processing
+    • All payment types (Cash / Card / Crypto)
+    • Free transfer and info tour
+
+    Ask any question — I'll answer 💬
+
+menu:
+  search: "🏠 Find Apartments"
+  services: "🔑 Services"
+  viewing: "📅 Book a Viewing"
+  bookmarks: "📌 My Bookmarks"
+  promotions: "🎁 Promotions"
+  manager: "👤 Contact Manager"
+
+funnel:
+  step_rooms: "Select number of rooms:"
+  step_budget: "Set your budget:"
+  step_refine: "Would you like to refine the parameters?"
+  show_results: "🔍 Show Options"
+  refine_more: "⚙️ Refine Further"
+  rooms_studio: "Studio"
+  rooms_1bed: "1 room"
+  rooms_2bed: "2 rooms"
+  rooms_3bed: "3+ rooms"
+  rooms_any: "Any"
+  budget_50k: "up to €50,000"
+  budget_50_100: "€50,000 — €100,000"
+  budget_100_200: "€100,000 — €200,000"
+  budget_200plus: "from €200,000"
+  budget_any: "Any"
+
+card:
+  rooms_template: "{rooms} rooms"
+  price_template: "💰 {price} €"
+
+results:
+  shown_of: "Showing {shown} of {total} options"
+  show_more: "Show more"
+  refine: "Refine search"
+  book_viewing: "📅 Book a viewing"
+  no_results: "Nothing found for your criteria. Try adjusting the parameters."
+
+phone:
+  prompt: "Please enter your phone number:"
+  invalid: "Invalid phone number. Please try again."
+  success: "Thank you! A manager will contact you shortly."
+
+promotions:
+  title: "🎁 Current Promotions"
+  empty: "No promotions right now. Stay tuned!"
+
+bookmarks:
+  title: "📌 My Bookmarks"
+  empty: "You have no saved properties yet."
+  remove: "❌ Remove"
+
+services_menu_text: "Choose a service to learn more:"
+
+services:
+  passive_income:
+    emoji: "💰"
+    title: "Passive Income"
+    callback_id: "svc:passive_income"
+    card_text: |
+      💰 Passive Income — We rent out your property
+
+      We take full responsibility for managing your property:
+      from finding tenants to maintenance.
+
+      You receive stable income without the hassle.
+
+      ⭐ "Renting through FortNoks for 2 years,
+      income is stable" — Andrey, Odessa
+
+  online_deals:
+    emoji: "🌐"
+    title: "Online Deals"
+    callback_id: "svc:online_deals"
+    card_text: |
+      🌐 Remote Deal Processing
+
+      Buy without leaving home!
+      25% of our deals are completed fully remotely.
+
+      • Purchase with Ukrainian passport
+      • All payment types (Cash / Card / Bank transfer / Crypto)
+      • Full legal support
+
+  vnzh:
+    emoji: "📋"
+    title: "Residency & Legalization"
+    callback_id: "svc:vnzh"
+    card_text: |
+      📋 Residency permit and legalization in Bulgaria
+
+      Full document support for obtaining
+      a residence permit in Bulgaria.
+
+      Assistance with paperwork and consultations at every step.
+
+  installment:
+    emoji: "💳"
+    title: "Installment Plan"
+    callback_id: "svc:installment"
+    card_text: |
+      💳 Flexible installment plan from the developer
+
+      No banks or middlemen!
+      Only a passport required.
+
+      • Down payment — from 5%
+      • Interest rate — 0%
+      • Installment term — up to 3 years
+
+      📊 Example: apartment €50,000 →
+      down payment €2,500 → €1,300/month
+
+      ⭐ "Done in 2 weeks, only needed
+      a passport" — Elena, Kyiv
+
+      ❓ FAQ:
+      • What documents are needed?
+      • Can it be done remotely?
+
+  infotour:
+    emoji: "✈️"
+    title: "Info Tour"
+    callback_id: "svc:infotour"
+    card_text: |
+      ✈️ Info Tour "Real Estate in Bulgaria"
+
+      Until June 15 — special price of just €150 per family.
+      After purchasing a property we'll refund the info tour cost!
+
+      Now is the perfect time to combine leisure with business —
+      relax and choose your property by the sea.
+
+      📑 Only a passport needed to purchase!
+
+      ✅ Installment in 1 day — no banks, no extra paperwork —
+      directly from Bulgaria's largest developer 🔆
+
+      🏖 Locations: Sunny Beach, Sveti Vlas, Elenite,
+      Nessebar — the best resorts of the southern coast!
+
+      🏢 Properties: 18 complexes completed, 2 more under construction.
+
+      💰 Purchase conditions:
+      🔹 Down payment — from 10%
+      🔹 Apartments from €38,900
+      🔹 Favorable installment terms
