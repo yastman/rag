@@ -1157,7 +1157,7 @@ class PropertyBot:
             return
 
         if action == "add" and property_id:
-            # Build property_data from saved apartment results (#655)
+            # Build property_data from saved apartment results (#655, #664)
             state_data = await state.get_data()
             raw_results = state_data.get("apartment_results")
             apt_results = raw_results if isinstance(raw_results, list) else []
@@ -1167,16 +1167,19 @@ class PropertyBot:
             )
             if matched:
                 payload = matched.get("payload")
-                p = payload if isinstance(payload, dict) else {}
-                property_data: dict[str, Any] = {
-                    "complex_name": p.get("complex_name", ""),
-                    "location": p.get("city", ""),
-                    "property_type": p.get("property_type", ""),
-                    "floor": p.get("floor", 0),
-                    "area_m2": p.get("area_m2", 0),
-                    "view": ", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-                    "price_eur": p.get("price_eur", 0),
-                }
+                if not isinstance(payload, dict):
+                    property_data: dict[str, Any] = {}
+                else:
+                    p = payload
+                    property_data = {
+                        "complex_name": p.get("complex_name", ""),
+                        "location": p.get("city", ""),
+                        "property_type": p.get("property_type", ""),
+                        "floor": p.get("floor", 0),
+                        "area_m2": p.get("area_m2", 0),
+                        "view": ", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
+                        "price_eur": p.get("price_eur", 0),
+                    }
             else:
                 property_data = {}
             result = await favorites_service.add(
