@@ -32,3 +32,20 @@ def get_promotions() -> list[dict[str, Any]]:
     """Get promotions list from config."""
     config = load_services_config()
     return config.get("promotions", [])
+
+
+def get_entry_point_config(key: str) -> dict[str, Any] | None:
+    """Get entry point config by key (viewing, manager)."""
+    config = load_services_config()
+    return config.get("entry_points", {}).get(key)
+
+
+def get_phone_config(service_key: str) -> dict[str, Any] | None:
+    """Get phone collector config — checks services first, then entry_points.
+
+    Returns dict with crm_title, phone_prompt, phone_success keys.
+    """
+    svc = get_service_card(service_key)
+    if svc:
+        return svc
+    return get_entry_point_config(service_key)
