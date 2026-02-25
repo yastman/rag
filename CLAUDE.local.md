@@ -36,10 +36,20 @@ Check done: `grep '\[COMPLETE\]' logs/docker-build.log`
 
 **Never run directly:** docker build, npm install, pytest (full suite), deployments.
 
-## Parallel Agent Work
+## Parallel Sessions & Agent Work
+
+**User sessions (2+ terminals):** Always use `claude --worktree`:
+```bash
+claude --worktree feature-auth    # Terminal 1
+claude --worktree bugfix-123      # Terminal 2
+```
+- Worktrees: `.claude/worktrees/<name>/`, ветка `worktree-<name>`
+- Без изменений — автоудаление при выходе
+- С изменениями — спросит: оставить или удалить
 
 **Agent Teams (`/agent-teams`):** For 2+ agents working on different PRs/branches:
 - Each agent MUST use its own git worktree (see `.claude/rules/git-workflow.md`)
+- Subagents: `isolation: worktree` в frontmatter агента
 - Without worktrees, agents switch branches under each other → lost edits, false test failures
 
 **tmux Swarm (`/tmux-swarm-orchestration`):** For 3+ independent tasks:
