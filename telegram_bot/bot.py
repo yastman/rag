@@ -1024,7 +1024,7 @@ class PropertyBot:
         """Start viewing appointment flow — collect phone (#628)."""
         from .handlers.phone_collector import start_phone_collection
 
-        await start_phone_collection(message, state, source="viewing_main_menu")
+        await start_phone_collection(message, state, service_key="viewing")
 
     async def _handle_bookmarks(self, message: Message) -> None:
         """Show user's saved favorites (#628)."""
@@ -1166,9 +1166,7 @@ class PropertyBot:
         action, param = parsed
 
         if action == "get_offer":
-            await start_phone_collection(
-                callback, state, source="service", source_detail=param or ""
-            )
+            await start_phone_collection(callback, state, service_key=param or "manager")
         elif action == "manager":
             if callback.message:
                 await callback.message.answer("Менеджер свяжется с вами в ближайшее время.")
@@ -1237,19 +1235,10 @@ class PropertyBot:
                 await callback.message.delete()
             await callback.answer("Удалено из закладок")
 
-        elif action == "viewing" and property_id:
+        elif (action == "viewing" and property_id) or action == "viewing_all":
             from .handlers.phone_collector import start_phone_collection
 
-            await start_phone_collection(
-                callback, state, source="viewing", source_detail=property_id
-            )
-
-        elif action == "viewing_all":
-            from .handlers.phone_collector import start_phone_collection
-
-            await start_phone_collection(
-                callback, state, source="viewing_all", source_detail="all_favorites"
-            )
+            await start_phone_collection(callback, state, service_key="viewing")
 
         else:
             await callback.answer()
@@ -1311,7 +1300,7 @@ class PropertyBot:
         elif data == "results:viewing":
             from .handlers.phone_collector import start_phone_collection
 
-            await start_phone_collection(callback, state, source="results")
+            await start_phone_collection(callback, state, service_key="viewing")
         else:
             await callback.answer()
 
