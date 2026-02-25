@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
@@ -579,7 +579,7 @@ class PropertyBot:
         from .keyboards.client_keyboard import MENU_BUTTONS
 
         self.dp.message(F.text.in_(MENU_BUTTONS.keys()))(self.handle_menu_button)
-        self.dp.message(F.text)(self.handle_query)
+        self.dp.message(StateFilter(None), F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
         self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
@@ -587,6 +587,7 @@ class PropertyBot:
         self.dp.callback_query(F.data.startswith("svc:"))(self.handle_service_callback)
         self.dp.callback_query(F.data.startswith("cta:"))(self.handle_cta_callback)
         self.dp.callback_query(F.data.startswith("fav:"))(self.handle_favorite_callback)
+        self.dp.callback_query(F.data.startswith("results:"))(self.handle_results_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -945,10 +946,14 @@ class PropertyBot:
             else:
                 await handler(message)
 
+    async def handle_menu_action_text(self, message: Message, query_text: str) -> None:
+        """Dispatch text query to agent pipeline (from ReplyKeyboard context) (#628)."""
+        patched = message.model_copy(update={"text": query_text})
+        await self.handle_query(patched)
+
     async def _handle_search(self, message: Message) -> None:
         """Start property search funnel (#628)."""
-        patched = message.model_copy(update={"text": "Подбери апартаменты"})
-        await self.handle_query(patched, locale="ru")
+        await self.handle_menu_action_text(message, "Подбери апартаменты")
 
     async def _handle_services(self, message: Message) -> None:
         """Show services inline menu (#628)."""
@@ -1033,13 +1038,11 @@ class PropertyBot:
 
     async def _handle_promotions(self, message: Message) -> None:
         """Show current promotions (#628)."""
-        patched = message.model_copy(update={"text": "Покажи актуальные акции"})
-        await self.handle_query(patched, locale="ru")
+        await self.handle_menu_action_text(message, "Покажи актуальные акции")
 
     async def _handle_manager(self, message: Message) -> None:
         """Handoff to manager (#628)."""
-        patched = message.model_copy(update={"text": "Соедини с менеджером"})
-        await self.handle_query(patched, locale="ru")
+        await self.handle_menu_action_text(message, "Соедини с менеджером")
 
     async def handle_service_callback(self, callback: CallbackQuery) -> None:
         """Handle service menu inline button clicks (#628)."""
@@ -1153,6 +1156,22 @@ class PropertyBot:
                 callback, state, source="viewing_all", source_detail="all_favorites"
             )
 
+        else:
+            await callback.answer()
+
+    async def handle_results_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+        """Handle property results callbacks (more/refine/viewing) (#628)."""
+        data = callback.data or ""
+        if data == "results:more":
+            # Placeholder — будет показывать следующую порцию
+            await callback.answer("Загрузка...")
+        elif data == "results:refine":
+            # Placeholder — возвращает в воронку
+            await callback.answer("Изменение параметров...")
+        elif data == "results:viewing":
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(callback, state, source="results")
         else:
             await callback.answer()
 
