@@ -76,3 +76,72 @@ crm-create-contact = Create contact
 crm-add-note = Add note
 crm-create-task = Create task
 crm-pipelines = Pipelines
+
+# Client ReplyKeyboard (#660)
+kb-search = 🏠 Find Apartments
+kb-services = 🔑 Services
+kb-viewing = 📅 Book a Viewing
+kb-bookmarks = 📌 My Bookmarks
+kb-promotions = 🎁 Promotions
+kb-manager = 👤 Contact Manager
+
+# Welcome (#660)
+welcome-text =
+    Welcome to FortNoks Estate! 🇧🇬
+
+    19 residential complexes on the Bulgarian coast.
+    We work directly — no intermediaries or realtors.
+
+    • Apartments from €38,900
+    • Installment plan from the developer (from 5% down)
+    • Purchase with Ukrainian passport
+    • Remote transaction processing
+    • All payment types (Cash / Card / Crypto)
+    • Free transfer and info tour
+
+    Ask any question — I'll answer 💬
+
+# Funnel steps (#660)
+funnel-step-rooms = Choose the number of rooms:
+funnel-rooms-studio = Studio
+funnel-rooms-1bed = 1 bedroom
+funnel-rooms-2bed = 2 bedrooms
+funnel-rooms-3bed = 3 bedrooms
+funnel-rooms-any = Any
+funnel-step-budget = Enter your budget:
+funnel-budget-50k = up to €50,000
+funnel-budget-50-100 = €50,000–100,000
+funnel-budget-100-200 = €100,000–200,000
+funnel-budget-200plus = €200,000+
+funnel-budget-any = Any
+funnel-step-refine = Would you like to refine your search?
+funnel-show-results = 🔍 Show options
+funnel-refine-more = ⚙️ Refine more
+
+# Results (#660)
+results-shown = Showing { $shown } of { $total } options
+results-show-more = 🔄 Show more
+results-refine = ⚙️ Change filters
+results-book-viewing = 📅 Book a viewing
+results-no-results =
+    Unfortunately, no results match your criteria.
+    Try adjusting your search parameters.
+
+# Phone (#660)
+phone-prompt = Enter your phone number:
+phone-invalid = Please enter a valid phone number (7-15 digits).
+phone-success = Thank you! A manager will contact you shortly.
+
+# Promotions (#660)
+promotions-title = 🎁 Current promotions
+promotions-empty = No active promotions at the moment.
+
+# Bookmarks (#660)
+bookmarks-title = 📌 Your bookmarks ({ $count }):
+bookmarks-empty =
+    📌 You have no bookmarks yet.
+    Press «🏠 Find Apartments» to find a property.
+bookmarks-remove = 🗑 Remove
+
+# Services (#660)
+services-menu-text = Choose a service to learn more:
