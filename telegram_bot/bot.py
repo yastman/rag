@@ -612,6 +612,7 @@ class PropertyBot:
         self.dp.callback_query(F.data.startswith("cta:"))(self.handle_cta_callback)
         self.dp.callback_query(F.data.startswith("fav:"))(self.handle_favorite_callback)
         self.dp.callback_query(F.data.startswith("results:"))(self.handle_results_callback)
+        self.dp.callback_query(F.data.startswith("viewing:"))(self.handle_viewing_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -1021,10 +1022,24 @@ class PropertyBot:
         await message.answer(text, reply_markup=kb)
 
     async def _handle_viewing(self, message: Message, state: FSMContext) -> None:
-        """Start viewing appointment flow — collect phone (#628)."""
-        from .handlers.phone_collector import start_phone_collection
+        """Viewing appointment — fork: choose objects or phone (#628)."""
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-        await start_phone_collection(message, state, source="viewing_main_menu")
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🏠 Выбрать объекты", callback_data="viewing:choose_objects"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="📞 Обсудим по телефону", callback_data="viewing:phone"
+                    )
+                ],
+            ]
+        )
+        await message.answer("Вас интересуют конкретные объекты?", reply_markup=keyboard)
 
     async def _handle_bookmarks(self, message: Message) -> None:
         """Show user's saved favorites (#628)."""
@@ -1166,13 +1181,9 @@ class PropertyBot:
         action, param = parsed
 
         if action == "get_offer":
-            await start_phone_collection(
-                callback, state, source="service", source_detail=param or ""
-            )
+            await start_phone_collection(callback, state, service_key=param or "unknown")
         elif action == "manager":
-            if callback.message:
-                await callback.message.answer("Менеджер свяжется с вами в ближайшее время.")
-            await callback.answer()
+            await start_phone_collection(callback, state, service_key="manager")
         else:
             await callback.answer()
 
@@ -1240,15 +1251,44 @@ class PropertyBot:
         elif action == "viewing" and property_id:
             from .handlers.phone_collector import start_phone_collection
 
+            # Загрузить данные объекта из favorites
+            fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
+            viewing_objs = []
+            for fav in fav_items:
+                if fav.property_id == property_id:
+                    d = fav.property_data
+                    viewing_objs.append(
+                        {
+                            "id": fav.property_id,
+                            "complex_name": d.get("complex_name", ""),
+                            "property_type": d.get("property_type", ""),
+                            "area_m2": d.get("area_m2", 0),
+                            "price_eur": d.get("price_eur", 0),
+                        }
+                    )
+                    break
             await start_phone_collection(
-                callback, state, source="viewing", source_detail=property_id
+                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
             )
 
         elif action == "viewing_all":
             from .handlers.phone_collector import start_phone_collection
 
+            fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
+            viewing_objs = []
+            for fav in fav_items:
+                d = fav.property_data
+                viewing_objs.append(
+                    {
+                        "id": fav.property_id,
+                        "complex_name": d.get("complex_name", ""),
+                        "property_type": d.get("property_type", ""),
+                        "area_m2": d.get("area_m2", 0),
+                        "price_eur": d.get("price_eur", 0),
+                    }
+                )
             await start_phone_collection(
-                callback, state, source="viewing_all", source_detail="all_favorites"
+                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
             )
 
         else:
@@ -1311,7 +1351,42 @@ class PropertyBot:
         elif data == "results:viewing":
             from .handlers.phone_collector import start_phone_collection
 
-            await start_phone_collection(callback, state, source="results")
+            state_data = await state.get_data()
+            results = state_data.get("apartment_results", [])
+            # Первые 5 результатов как контекст для CRM заметки
+            viewing_objs = []
+            for r in results[:5]:
+                if isinstance(r, dict):
+                    p = r.get("payload", {})
+                    viewing_objs.append(
+                        {
+                            "id": r.get("id", ""),
+                            "complex_name": p.get("complex_name", ""),
+                            "property_type": p.get("property_type", ""),
+                            "area_m2": p.get("area_m2", 0),
+                            "price_eur": p.get("price_eur", 0),
+                        }
+                    )
+            await start_phone_collection(
+                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+            )
+        else:
+            await callback.answer()
+
+    async def handle_viewing_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+        """Handle viewing fork callbacks (choose_objects, phone)."""
+        data = callback.data or ""
+        if data == "viewing:choose_objects":
+            # Перенаправить в воронку подбора апартаментов
+            if callback.message:
+                await callback.message.answer(
+                    "Опишите, какие апартаменты вас интересуют, и я подберу варианты."
+                )
+            await callback.answer()
+        elif data == "viewing:phone":
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(callback, state, service_key="viewing")
         else:
             await callback.answer()
 

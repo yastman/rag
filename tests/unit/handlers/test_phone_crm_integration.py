@@ -36,11 +36,9 @@ def mock_message():
 
 @pytest.fixture
 def mock_state():
-    """AsyncMock FSMContext returning lead_source and lead_detail."""
+    """AsyncMock FSMContext returning service_key and viewing_objects."""
     state = AsyncMock()
-    state.get_data = AsyncMock(
-        return_value={"lead_source": "test_source", "lead_detail": "квартира 2к"}
-    )
+    state.get_data = AsyncMock(return_value={"service_key": "test_source", "viewing_objects": []})
     state.clear = AsyncMock()
     return state
 
