@@ -36,6 +36,21 @@ def validate_phone(text: str) -> bool:
     return bool(_PHONE_PATTERN.match(cleaned))
 
 
+def _get_int_env(name: str, default: int = 0) -> int:
+    """Safely parse integer env var; empty/invalid values fall back to default."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    raw = raw.strip()
+    if raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid integer env value for %s=%r; using default=%s", name, raw, default)
+        return default
+
+
 def build_display_name(user: Any | None, phone: str) -> str:
     """Build human-readable display name with fallback chain."""
     if user and getattr(user, "first_name", None):
@@ -53,10 +68,10 @@ def _build_custom_fields(
 ) -> list[dict]:
     """Build Kommo custom_fields_values for lead."""
     fields: list[dict] = []
-    svc_field = int(os.getenv("KOMMO_SERVICE_FIELD_ID", "0"))
-    src_field = int(os.getenv("KOMMO_SOURCE_FIELD_ID", "0"))
-    tg_id_field = int(os.getenv("KOMMO_TELEGRAM_FIELD_ID", "0"))
-    tg_user_field = int(os.getenv("KOMMO_TELEGRAM_USERNAME_FIELD_ID", "0"))
+    svc_field = _get_int_env("KOMMO_SERVICE_FIELD_ID")
+    src_field = _get_int_env("KOMMO_SOURCE_FIELD_ID")
+    tg_id_field = _get_int_env("KOMMO_TELEGRAM_FIELD_ID")
+    tg_user_field = _get_int_env("KOMMO_TELEGRAM_USERNAME_FIELD_ID")
 
     if svc_field:
         fields.append({"field_id": svc_field, "values": [{"value": crm_title}]})
@@ -188,9 +203,9 @@ async def on_phone_received(
             )
             contact = await kommo_client.upsert_contact(phone, contact_data)
 
-            pipeline_id = int(os.getenv("KOMMO_DEFAULT_PIPELINE_ID", "0")) or None
-            status_id = int(os.getenv("KOMMO_NEW_STATUS_ID", "0")) or None
-            responsible = int(os.getenv("KOMMO_RESPONSIBLE_USER_ID", "0")) or None
+            pipeline_id = _get_int_env("KOMMO_DEFAULT_PIPELINE_ID") or None
+            status_id = _get_int_env("KOMMO_NEW_STATUS_ID") or None
+            responsible = _get_int_env("KOMMO_RESPONSIBLE_USER_ID") or None
 
             custom_fields = _build_custom_fields(crm_title, user_id, username)
 
