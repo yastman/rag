@@ -1159,10 +1159,15 @@ class PropertyBot:
         if action == "add" and property_id:
             # Build property_data from saved apartment results (#655)
             state_data = await state.get_data()
-            apt_results = state_data.get("apartment_results", [])
-            matched = next((r for r in apt_results if r.get("id") == property_id), None)
+            raw_results = state_data.get("apartment_results")
+            apt_results = raw_results if isinstance(raw_results, list) else []
+            matched = next(
+                (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
+                None,
+            )
             if matched:
-                p = matched["payload"]
+                payload = matched.get("payload")
+                p = payload if isinstance(payload, dict) else {}
                 property_data: dict[str, Any] = {
                     "complex_name": p.get("complex_name", ""),
                     "location": p.get("city", ""),
