@@ -15,6 +15,51 @@ from aiogram_dialog.widgets.text import Format
 from .states import FunnelSG
 
 
+# --- Filter building helpers ---
+
+_ROOMS_MAP: dict[str, int] = {"studio": 1, "1bed": 2, "2bed": 3, "3bed": 4}
+
+_BUDGET_MAP: dict[str, dict[str, int]] = {
+    "low": {"lte": 50000},
+    "mid": {"gte": 50000, "lte": 100000},
+    "high": {"gte": 100000, "lte": 150000},
+    "premium": {"gte": 150000, "lte": 200000},
+    "luxury": {"gte": 200000},
+}
+
+_FLOOR_MAP: dict[str, dict[str, int]] = {
+    "low": {"gte": 0, "lte": 1},
+    "mid": {"gte": 2, "lte": 3},
+    "high": {"gte": 4, "lte": 5},
+    "top": {"gte": 6},
+}
+
+_ROOMS_DISPLAY: dict[int, str] = {1: "Студия", 2: "1-спальня", 3: "2-спальни", 4: "3-спальни"}
+
+
+def build_funnel_filters(
+    *,
+    rooms: str = "any",
+    budget: str = "any",
+    complex_name: str | None = None,
+    floor: str | None = None,
+    view: str | None = None,
+) -> dict[str, Any]:
+    """Build Qdrant payload filter dict from funnel dialog selections."""
+    filters: dict[str, Any] = {}
+    if rooms in _ROOMS_MAP:
+        filters["rooms"] = _ROOMS_MAP[rooms]
+    if budget in _BUDGET_MAP:
+        filters["price_eur"] = _BUDGET_MAP[budget]
+    if complex_name:
+        filters["complex_name"] = complex_name
+    if floor and floor != "any" and floor in _FLOOR_MAP:
+        filters["floor"] = _FLOOR_MAP[floor]
+    if view and view != "any":
+        filters["view_tags"] = [view]
+    return filters
+
+
 logger = logging.getLogger(__name__)
 _BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
 
@@ -41,6 +86,7 @@ def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
 
 async def get_location_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for location (district) selection."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Солнечный Берег", "sunny_beach"),
         ("Святой Влас", "sveti_vlas"),
@@ -55,11 +101,13 @@ async def get_location_options(**kwargs: Any) -> dict[str, Any]:
         ("София", "sofia"),
         ("Любой район", "any"),
     ]
-    return {"title": "В каком районе ищете?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "В каком районе ищете?", "items": items, "btn_back": btn_back}
 
 
 async def get_property_types(**kwargs: Any) -> dict[str, Any]:
     """Getter for property type selection."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Студия", "studio"),
         ("1-спальня", "1bed"),
@@ -67,11 +115,13 @@ async def get_property_types(**kwargs: Any) -> dict[str, Any]:
         ("3-спальни", "3bed"),
         ("Любой тип", "any"),
     ]
-    return {"title": "Какой тип жилья?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Какой тип жилья?", "items": items, "btn_back": btn_back}
 
 
 async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for budget selection."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("До 50 000 €", "low"),
         ("50 000 – 100 000 €", "mid"),
@@ -80,20 +130,24 @@ async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
         ("Более 200 000 €", "luxury"),
         ("Любой бюджет", "any"),
     ]
-    return {"title": "Какой бюджет?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Какой бюджет?", "items": items, "btn_back": btn_back}
 
 
 async def get_refine_or_show_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for refine-or-show decision step."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Показать результаты", "show"),
         ("Уточнить параметры", "refine"),
     ]
-    return {"title": "Что делаем дальше?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Что делаем дальше?", "items": items, "btn_back": btn_back}
 
 
 async def get_floor_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for floor selection (optional refinement)."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("0-1 этаж", "low"),
         ("2-3 этаж", "mid"),
@@ -101,11 +155,13 @@ async def get_floor_options(**kwargs: Any) -> dict[str, Any]:
         ("6+ этаж", "top"),
         ("Любой этаж", "any"),
     ]
-    return {"title": "Какой этаж предпочитаете?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Какой этаж предпочитаете?", "items": items, "btn_back": btn_back}
 
 
 async def get_view_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for view selection (optional refinement)."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Море", "sea"),
         ("Бассейн", "pool"),
@@ -113,24 +169,71 @@ async def get_view_options(**kwargs: Any) -> dict[str, Any]:
         ("Лес/горы", "forest"),
         ("Любой вид", "any"),
     ]
-    return {"title": "Какой вид предпочитаете?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Какой вид предпочитаете?", "items": items, "btn_back": btn_back}
 
 
 async def get_results_data(
     dialog_manager: DialogManager,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Getter for results window — compiles funnel answers."""
+    """Getter for results window — fetches real apartments from Qdrant (#660)."""
+    from telegram_bot.keyboards.property_card import format_property_card
+
+    i18n = dialog_manager.middleware_data.get("i18n")
     data = dialog_manager.dialog_data
+    rooms = data.get("property_type", "any")
+    budget = data.get("budget", "any")
+    floor = data.get("floor")
+    view = data.get("view")
+
+    filters = build_funnel_filters(rooms=rooms, budget=budget, floor=floor, view=view)
+
+    svc = dialog_manager.middleware_data.get("apartments_service")
+
+    no_results_text = (
+        i18n.get("results-no-results")
+        if i18n
+        else "К сожалению, по вашим критериям ничего не найдено."
+    )
+    results_title = i18n.get("funnel-results-title") if i18n else "Подобрали для вас:"
+    btn_back = i18n.get("back") if i18n else "Назад"
+
+    results_text = ""
+    if svc:
+        try:
+            results, _count, _ = await svc.scroll_with_filters(filters=filters, limit=5)
+            if results:
+                cards = []
+                for apt in results:
+                    p = apt["payload"]
+                    rooms_num = p.get("rooms", 1)
+                    rooms_display = _ROOMS_DISPLAY.get(rooms_num, str(rooms_num))
+                    cards.append(
+                        format_property_card(
+                            property_id=apt["id"],
+                            complex_name=p.get("complex_name", ""),
+                            location=data.get("location", ""),
+                            property_type=rooms_display,
+                            floor=p.get("floor", 0),
+                            area_m2=p.get("area_m2", 0),
+                            view=p.get("view_primary", ""),
+                            price_eur=p.get("price_eur", 0),
+                        )
+                    )
+                results_text = "\n\n".join(cards)
+            else:
+                results_text = no_results_text
+        except Exception:
+            logger.exception("Failed to fetch funnel results from Qdrant")
+            results_text = no_results_text
+    else:
+        results_text = "Пока не нашли вариантов."
+
     return {
-        "title": "Подобрали для вас:",
-        "location": data.get("location", ""),
-        "property_type": data.get("property_type", ""),
-        "budget": data.get("budget", ""),
-        "floor": data.get("floor", ""),
-        "view": data.get("view", ""),
-        "results_text": "Пока не нашли вариантов.",  # Phase 2: RAG integration
-        "btn_back": "Назад",
+        "title": results_title,
+        "results_text": results_text,
+        "btn_back": btn_back,
     }
 
 
