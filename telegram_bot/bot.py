@@ -1157,21 +1157,29 @@ class PropertyBot:
             return
 
         if action == "add" and property_id:
-            # Build property_data from saved apartment results (#655)
+            # Build property_data from saved apartment results (#655, #664)
             state_data = await state.get_data()
-            apt_results = state_data.get("apartment_results", [])
-            matched = next((r for r in apt_results if r.get("id") == property_id), None)
+            raw_results = state_data.get("apartment_results")
+            apt_results = raw_results if isinstance(raw_results, list) else []
+            matched = next(
+                (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
+                None,
+            )
             if matched:
-                p = matched["payload"]
-                property_data: dict[str, Any] = {
-                    "complex_name": p.get("complex_name", ""),
-                    "location": p.get("city", ""),
-                    "property_type": p.get("property_type", ""),
-                    "floor": p.get("floor", 0),
-                    "area_m2": p.get("area_m2", 0),
-                    "view": ", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-                    "price_eur": p.get("price_eur", 0),
-                }
+                payload = matched.get("payload")
+                if not isinstance(payload, dict):
+                    property_data: dict[str, Any] = {}
+                else:
+                    p = payload
+                    property_data = {
+                        "complex_name": p.get("complex_name", ""),
+                        "location": p.get("city", ""),
+                        "property_type": p.get("property_type", ""),
+                        "floor": p.get("floor", 0),
+                        "area_m2": p.get("area_m2", 0),
+                        "view": ", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
+                        "price_eur": p.get("price_eur", 0),
+                    }
             else:
                 property_data = {}
             result = await favorites_service.add(
