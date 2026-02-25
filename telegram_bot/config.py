@@ -403,6 +403,24 @@ class BotConfig(BaseSettings):
         default=0,
         validation_alias=AliasChoices("kommo_lead_band_field_id", "KOMMO_LEAD_BAND_FIELD_ID"),
     )
+    kommo_new_status_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_new_status_id", "KOMMO_NEW_STATUS_ID"),
+    )
+    kommo_service_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_service_field_id", "KOMMO_SERVICE_FIELD_ID"),
+    )
+    kommo_source_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices("kommo_source_field_id", "KOMMO_SOURCE_FIELD_ID"),
+    )
+    kommo_telegram_username_field_id: int = Field(
+        default=0,
+        validation_alias=AliasChoices(
+            "kommo_telegram_username_field_id", "KOMMO_TELEGRAM_USERNAME_FIELD_ID"
+        ),
+    )
 
     # Nurturing + funnel analytics (#390)
     nurturing_enabled: bool = Field(
