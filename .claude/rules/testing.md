@@ -4,7 +4,7 @@ paths: "tests/**/*.py"
 
 # Testing Guide
 
-Coverage: ~85% unit. Full audit: `logs/full-pipeline-coverage-audit.txt`
+Coverage: ~85% unit, 3657 tests passing. Full audit: `logs/full-pipeline-coverage-audit.txt`
 
 **Markers:**
 
@@ -13,6 +13,13 @@ Coverage: ~85% unit. Full audit: `logs/full-pipeline-coverage-audit.txt`
 | `legacy_api` | Pre-LangGraph API tests — excluded from CI |
 | `requires_extras` | Needs optional extras (voice, ingest, eval) |
 | `slow` | Heavy tests — nightly only |
+| `chaos` | Service failure/resilience tests |
+| `load` | Concurrency/load tests |
+| `e2e` | End-to-end live service tests |
+| `smoke` | Smoke/health check tests |
+| `benchmark` | Performance comparison tests |
+| `kommo` | Live Kommo API (requires token) |
+| `xdist_group` | Prevent parallelization collisions |
 
 ## Unit Tests
 
@@ -136,6 +143,37 @@ uv run pytest tests/unit/ --splits 4 --group 2 -n auto --dist loadscope --timeou
 ```
 
 Commit updated `.test_durations` after regeneration.
+
+## Contract Tests
+
+SLA/contract verification without Docker:
+
+```bash
+make test-contract   # Trace contract validation
+uv run pytest tests/contract/ -v
+```
+
+| File | Covers |
+|------|--------|
+| `test_error_contract.py` | Error handling contracts |
+| `test_span_coverage_contract.py` | Span coverage validation |
+| `test_trace_families_contract.py` | Required trace families |
+
+**Contract file:** `tests/observability/trace_contract.yaml` — defines required spans, sensitive spans, score keys.
+
+## Baseline Tests
+
+Performance regression detection:
+
+```bash
+uv run pytest tests/baseline/ -v
+```
+
+`BaselineManager` compares sessions via `session_id` tag. Thresholds in `tests/baseline/thresholds.yaml`:
+- LLM p95 latency: +20%
+- Total cost: +10%
+- Cache hit rate: -10%
+- LLM calls: +15%
 
 ## Notes
 

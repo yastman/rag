@@ -10,7 +10,7 @@ uv run pytest tests/unit/ -n auto  # Parallel (4x faster)
 uv run pytest tests/integration/ -v  # Integration (~5s)
 make local-up              # Dev services (redis, qdrant, bge-m3, litellm)
 make run-bot               # Bot natively (no Docker)
-make docker-full-up        # All services (17 containers)
+make docker-full-up        # All services (23 containers)
 make ingest-unified        # Unified ingestion (CocoIndex)
 ```
 
@@ -24,13 +24,14 @@ make ingest-unified        # Unified ingestion (CocoIndex)
 
 ```
 Ingestion:  Docling → Chunker → BGE-M3 Dense+Sparse → Qdrant
-Text:       Query → [client] pipelines/client.py → guard → classify → cache → rag → generate
-                  → [manager] create_agent SDK → rag_search | history_search | 8 CRM tools
+Text:       Query → [client] pipelines/client.py → classify → intent → cache → rag → generate
+                  → [manager] create_agent SDK → rag_search | history_search | apartment_search | 8 CRM tools
+Apartments: Query → regex filters (0 LLM) → hybrid search → response | LOW conf → agent escalation
 Voice STT:  .ogg → LangGraph (11 nodes) → transcribe → RAG pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 ```
 
-**Services:** Qdrant:6333, Redis:6379, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
+**Services:** Postgres:5432, Qdrant:6333, Redis:6379, BGE-M3:8000, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
 ## Code Style
 
@@ -64,6 +65,8 @@ Bug:    /systematic-debugging → TDD → fix
 | `Model gpt-4o-mini not found` (404) | `LLM_BASE_URL` must point to LiteLLM, not directly to Cerebras |
 | Langfuse traces missing locally | `make run-bot` uses `uv run --env-file .env` to load env vars |
 | Cache never stores / always MISS | Store guard threshold must be on RRF scale (~0.005), not cosine [0-1] |
+| `qdrant-client .search()` AttributeError | Migrated to `.query_points()` in v1.17 — never use `.search()` |
+| ColBERT rerank 16s on CPU | Use server-side ColBERT via Qdrant nested prefetch (#569), or `RERANK_PROVIDER=none` |
 
 ## Environment
 
