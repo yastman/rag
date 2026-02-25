@@ -218,3 +218,34 @@ funnel = FunnelAnalyticsService(store=FunnelAnalyticsStore(pool))
 - **Search Engines (src/retrieval)**: Sync Qdrant SDK for evaluation benchmarks
 - **Redis**: Async pipelines for batch operations (`async with redis.pipeline()`)
 - No blocking calls in async context for bot handlers
+
+## Apartments Domain (#632)
+
+```
+telegram_bot/services/
+├── apartment_models.py           # ApartmentRecord, view normalization, confidence scoring
+├── apartment_filter_extractor.py # Regex parser: rooms, price, complex, view, floor, area
+├── apartments_service.py         # ApartmentsService — hybrid search with payload filtering
+├── favorites_service.py          # User apartment favorites (asyncpg)
+├── content_loader.py             # Services YAML config loader (cached)
+```
+
+**Two-stage routing:**
+1. **Fast path** (0 LLM calls): `ApartmentFilterExtractor` → regex → payload-filtered hybrid search → direct response
+2. **Agent escalation**: LOW confidence or special signals → agent with `apartment_search` @tool
+
+**Qdrant:** Collection with 10 payload indexes. Top-level filters (no `metadata.` prefix). Payload: rooms, price_usd, complex_name, city, district, view, floor, area_m2, property_type, status.
+
+**Scripts:** `scripts/apartments/ingest.py` (CSV → BGE-M3 → Qdrant), `scripts/apartments/setup_collection.py`
+
+## Hot Lead Notifier
+
+`telegram_bot/services/hot_lead_notifier.py` — sends Telegram notifications to `MANAGER_IDS` when `lead_score >= MANAGER_HOT_LEAD_THRESHOLD` (default 60). Redis deduplication with TTL (default 3600s).
+
+## Session Summary Worker
+
+`telegram_bot/services/session_summary.py` + `session_summary_worker.py` — LLM-generated structured CRM note from conversation dialog. Pydantic output schema. Async background processing.
+
+## Response Style Detector
+
+`telegram_bot/services/response_style_detector.py` — zero-latency regex-based style/difficulty classifier. Determines response format (simple, detailed, structured) without LLM call. Used in `generate_response()`.

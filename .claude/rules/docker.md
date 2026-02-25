@@ -10,9 +10,9 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 
 | Container | Port | Purpose |
 |-----------|------|---------|
-| dev-postgres | 5432 | PostgreSQL + pgvector |
-| dev-redis | 6379 | App cache (volatile-lfu, 512MB) |
-| dev-qdrant | 6333, 6334 | Vector DB (gRPC on 6334) |
+| dev-postgres | 5432 | PostgreSQL 17 + pgvector (pgvector/pgvector:pg17) |
+| dev-redis | 6379 | App cache (redis:8.6.0, volatile-lfu, 512MB) |
+| dev-qdrant | 6333, 6334 | Vector DB (qdrant:v1.17.0, gRPC on 6334) |
 | dev-bge-m3 | 8000 | BGE-M3 dense+sparse+ColBERT (4GB) |
 | dev-user-base | 8003 | USER2-base Russian embeddings (2GB) |
 | dev-docling | 5001 | Document parsing PDF/DOCX/CSV (4GB) |
@@ -131,6 +131,8 @@ Bot → LiteLLM Proxy (:4000) → Cerebras/Groq → Langfuse OTEL tracing
 | `gpt-oss-120b` | Cerebras `gpt-oss-120b` | Standalone alias for benchmarking |
 | `gpt-4o-mini-cerebras-glm` | Cerebras `zai-glm-4.7` | Legacy fallback |
 | `gpt-4o-mini-fallback` | Groq `llama-3.1-70b-versatile` | Groq fallback |
+| `gpt-4o-mini-openai` | OpenAI `gpt-4o-mini` | OpenAI fallback |
+| `whisper` | OpenAI `whisper-1` | STT (audio_transcription mode) |
 
 Note: `gpt-oss-120b` uses `merge_reasoning_content_in_choices: true` (reasoning model delta fix).
 
@@ -215,3 +217,18 @@ TELEGRAM_BOT_TOKEN= make docker-bot-up  # Must fail with "is required"
 ```bash
 make verify-compose-images   # Check running containers match pinned digests
 ```
+
+## PostgreSQL Schema (Init Scripts)
+
+`docker/postgres/init/` scripts run on first container start:
+
+| Script | Purpose |
+|--------|---------|
+| `00-init-databases.sql` | Creates databases: langfuse, mlflow, litellm, realestate |
+| `02-cocoindex.sql` | CocoIndex internal tables |
+| `03-unified-ingestion-alter.sql` | Ingestion state extensions |
+| `04-voice-schema.sql` | Call transcripts |
+| `05-realestate-schema.sql` | Apartments, projects, price history |
+| `06-lead-scoring-sync.sql` | lead_scores, lead_score_sync_audit |
+| `07-nurturing-funnel-analytics.sql` | nurturing_jobs, funnel_metrics_daily, scheduler_leases |
+| `08-user-favorites.sql` | User favorite listings |
