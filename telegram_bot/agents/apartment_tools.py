@@ -112,6 +112,8 @@ async def apartment_search(
     try:
         # Embed query
         dense, sparse, colbert = await ctx.embeddings.aembed_hybrid_with_colbert(query)
+        await ctx.cache.store_embedding(query, dense)
+        await ctx.cache.store_sparse_embedding(query, sparse)
 
         results, total = await ctx.apartments_service.search_with_filters(
             dense_vector=dense,
