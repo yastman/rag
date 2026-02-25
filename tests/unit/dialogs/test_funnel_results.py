@@ -71,6 +71,16 @@ def test_complex_name_filter():
     assert filters["complex_name"] == "Sunrise"
 
 
+def test_city_filter_maps_location_to_city():
+    filters = build_funnel_filters(rooms="any", budget="any", city="sunny_beach")
+    assert filters["city"] == "Sunny Beach"
+
+
+def test_city_any_not_included():
+    filters = build_funnel_filters(rooms="any", budget="any", city="any")
+    assert "city" not in filters
+
+
 # --- get_results_data integration (mocked svc) ---
 
 
