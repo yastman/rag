@@ -1257,9 +1257,10 @@ class PropertyBot:
         if parsed.confidence == "LOW":
             return None  # escalate to agent
 
-        dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(
-            parsed.semantic_query or user_text
-        )
+        semantic_query = parsed.semantic_query or user_text
+        dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(semantic_query)
+        await self._cache.store_embedding(semantic_query, dense)
+        await self._cache.store_sparse_embedding(semantic_query, sparse)
 
         filters = parsed.to_filters_dict()
         results, returned_count = await self._apartments_service.search_with_filters(
@@ -1453,6 +1454,7 @@ class PropertyBot:
                     embed_start = time.perf_counter()
                     embedding = await self._cache.get_embedding(user_text)
                     sparse = await self._cache.get_sparse_embedding(user_text)
+                    colbert = None
                     if embedding is None:
                         _has_hybrid_colbert = callable(
                             getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
@@ -1478,6 +1480,27 @@ class PropertyBot:
                         else:
                             embedding = await self._embeddings.aembed_query(user_text)
                             await self._cache.store_embedding(user_text, embedding)
+                    else:
+                        # Embedding cached but sparse may have expired (#637)
+                        if sparse is None:
+                            _has_hybrid_colbert = callable(
+                                getattr(self._embeddings, "aembed_hybrid_with_colbert", None)
+                            ) and asyncio.iscoroutinefunction(
+                                self._embeddings.aembed_hybrid_with_colbert
+                            )
+                            _has_hybrid = callable(
+                                getattr(self._embeddings, "aembed_hybrid", None)
+                            ) and asyncio.iscoroutinefunction(self._embeddings.aembed_hybrid)
+                            if _has_hybrid_colbert:
+                                (
+                                    _,
+                                    sparse,
+                                    colbert,
+                                ) = await self._embeddings.aembed_hybrid_with_colbert(user_text)
+                                await self._cache.store_sparse_embedding(user_text, sparse)
+                            elif _has_hybrid:
+                                _, sparse = await self._embeddings.aembed_hybrid(user_text)
+                                await self._cache.store_sparse_embedding(user_text, sparse)
                     rag_result_store["pre_agent_embed_ms"] = (
                         time.perf_counter() - embed_start
                     ) * 1000
@@ -1559,6 +1582,17 @@ class PropertyBot:
                     rag_result_store["cache_key_embedding"] = embedding
                     rag_result_store["cache_key_sparse"] = sparse
                     rag_result_store["query_type"] = query_type
+                    # Compute colbert if not yet available to avoid double embed in rag_pipeline (#634)
+                    if colbert is None:
+                        _has_colbert_only = callable(
+                            getattr(self._embeddings, "aembed_colbert_query", None)
+                        ) and asyncio.iscoroutinefunction(self._embeddings.aembed_colbert_query)
+                        if _has_colbert_only:
+                            try:
+                                colbert = await self._embeddings.aembed_colbert_query(user_text)
+                            except Exception:
+                                logger.debug("Pre-agent ColBERT encode failed, skipping")
+                    rag_result_store["cache_key_colbert"] = colbert
                 except Exception:
                     logger.warning(
                         "Pre-agent cache check failed, proceeding to agent", exc_info=True
