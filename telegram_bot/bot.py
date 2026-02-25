@@ -339,8 +339,18 @@ class PropertyBot:
         # History service (initialized in start())
         self._history_service: HistoryService | None = None
 
-        # i18n hub (fluentogram) — initialized in start()
+        # i18n hub (fluentogram) — initialize early for localized menu filters.
         self._i18n_hub: Any = None
+        try:
+            from .middlewares.i18n import create_translator_hub
+
+            self._i18n_hub = create_translator_hub()
+        except Exception:
+            logger.warning(
+                "Failed to initialize i18n hub during startup preflight; "
+                "falling back to RU-only menu filters",
+                exc_info=True,
+            )
 
         # User service (asyncpg) — initialized in start()
         self._user_service: Any = None
@@ -589,9 +599,10 @@ class PropertyBot:
         self.dp.message(Command("clearcache"))(self.cmd_clearcache)
         self.dp.message(F.voice)(self.handle_voice)
         # ReplyKeyboard buttons — registered before catch-all F.text (#628)
-        from .keyboards.client_keyboard import MENU_BUTTONS
+        from .keyboards.client_keyboard import get_menu_button_texts
 
-        self.dp.message(F.text.in_(MENU_BUTTONS.keys()))(self.handle_menu_button)
+        menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
+        self.dp.message(F.text.in_(menu_button_texts))(self.handle_menu_button)
         self.dp.message(StateFilter(None), F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
@@ -621,7 +632,7 @@ class PropertyBot:
             return "manager"
         return db_role or "client"
 
-    async def cmd_start(self, message: Message, dialog_manager: Any = None):
+    async def cmd_start(self, message: Message, dialog_manager: Any = None, i18n: Any = None):
         """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
         assert message.from_user is not None
         role = await self._resolve_user_role(message.from_user.id)
@@ -635,10 +646,14 @@ class PropertyBot:
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Client: persistent ReplyKeyboard (#628)
-            from .services.content_loader import get_welcome_text
+            if i18n is not None:
+                welcome = i18n.get("welcome-text")
+            else:
+                from .services.content_loader import load_services_config
 
-            welcome = get_welcome_text()
-            await message.answer(welcome, reply_markup=build_client_keyboard())
+                cfg = load_services_config()
+                welcome = cfg.get("welcome", {}).get("text", "Добро пожаловать!")
+            await message.answer(welcome, reply_markup=build_client_keyboard(i18n=i18n))
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -943,9 +958,13 @@ class PropertyBot:
         message: Message,
         state: FSMContext,
         dialog_manager: Any = None,
+        i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
-        action_id = parse_menu_button(message.text or "")
+        action_id = parse_menu_button(
+            message.text or "",
+            i18n_hub=getattr(self, "_i18n_hub", None),
+        )
         if action_id is None:
             return
 
@@ -968,6 +987,8 @@ class PropertyBot:
                 await handler(message, dialog_manager)
             elif action_id == "viewing":
                 await handler(message, state)
+            elif action_id == "services":
+                await handler(message, i18n=i18n)
             else:
                 await handler(message)
 
@@ -988,12 +1009,14 @@ class PropertyBot:
             # Fallback when dialog_manager not available (e.g., tests)
             await self.handle_menu_action_text(message, "Подбери апартаменты")
 
-    async def _handle_services(self, message: Message) -> None:
+    async def _handle_services(self, message: Message, i18n: Any = None) -> None:
         """Show services inline menu (#628)."""
         from .keyboards.services_keyboard import build_services_menu
-        from .services.content_loader import get_services_menu_text
 
-        text = get_services_menu_text()
+        if i18n is not None:
+            text = i18n.get("services-menu-text")
+        else:
+            text = "Выберите услугу, чтобы узнать подробнее:"
         kb = build_services_menu()
         await message.answer(text, reply_markup=kb)
 
@@ -1070,21 +1093,53 @@ class PropertyBot:
         await message.answer(f"Всего в закладках: {len(items)}", reply_markup=footer_kb)
 
     async def _handle_promotions(self, message: Message) -> None:
-        """Show current promotions (#628)."""
+        """Show current promotions — real cards from Qdrant, fallback to RAG (#660)."""
+        from .keyboards.property_card import format_promotion_card
+
+        if self._apartments_service:
+            try:
+                results, _count, _ = await self._apartments_service.scroll_with_filters(
+                    filters={"is_promotion": True}, limit=5
+                )
+                if results:
+                    cards = []
+                    for apt in results:
+                        p = apt["payload"]
+                        old_price = p.get("old_price_eur")
+                        if not old_price:
+                            continue
+                        cards.append(
+                            format_promotion_card(
+                                property_id=apt["id"],
+                                complex_name=p.get("complex_name", ""),
+                                rooms=p.get("rooms", 1),
+                                floor=p.get("floor", 0),
+                                area_m2=p.get("area_m2", 0),
+                                view=p.get("view_primary", ""),
+                                price_eur=p.get("price_eur", 0),
+                                old_price_eur=old_price,
+                            )
+                        )
+                    if cards:
+                        await message.answer("\n\n".join(cards))
+                        return
+            except Exception:
+                logger.exception("Failed to fetch promotions from Qdrant")
+
         await self.handle_menu_action_text(message, "Покажи актуальные акции")
 
     async def _handle_manager(self, message: Message) -> None:
         """Handoff to manager (#628)."""
         await self.handle_menu_action_text(message, "Соедини с менеджером")
 
-    async def handle_service_callback(self, callback: CallbackQuery) -> None:
+    async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
         """Handle service menu inline button clicks (#628)."""
         from .keyboards.services_keyboard import (
             build_service_card_buttons,
             build_services_menu,
             parse_service_callback,
         )
-        from .services.content_loader import get_service_card, get_services_menu_text
+        from .services.content_loader import get_service_card
 
         parsed = parse_service_callback(callback.data or "")
         if parsed is None:
@@ -1099,7 +1154,10 @@ class PropertyBot:
             await callback.answer()
 
         elif action == "menu":
-            text = get_services_menu_text()
+            if i18n is not None:
+                text = i18n.get("services-menu-text")
+            else:
+                text = "Выберите услугу, чтобы узнать подробнее:"
             kb = build_services_menu()
             if callback.message:
                 await callback.message.edit_text(text, reply_markup=kb)
@@ -2973,7 +3031,8 @@ class PropertyBot:
         # Initialize i18n (fluentogram)
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
 
-        self._i18n_hub = create_translator_hub()
+        if self._i18n_hub is None:
+            self._i18n_hub = create_translator_hub()
         setup_i18n_middleware(
             self.dp,
             self._i18n_hub,
