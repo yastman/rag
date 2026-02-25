@@ -937,11 +937,21 @@ class PropertyBot:
 
             await message.answer("\n".join(lines))
 
-    async def handle_menu_button(self, message: Message, state: FSMContext) -> None:
-        """Route ReplyKeyboard button press to dedicated handler (#628)."""
+    async def handle_menu_button(
+        self,
+        message: Message,
+        state: FSMContext,
+        dialog_manager: Any = None,
+    ) -> None:
+        """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
         action_id = parse_menu_button(message.text or "")
         if action_id is None:
             return
+
+        # Clear stale FSM state so user doesn't stay stuck in phone collection (#658)
+        current = await state.get_state()
+        if current is not None:
+            await state.clear()
 
         handlers: dict[str, Any] = {
             "search": self._handle_search,
@@ -953,7 +963,9 @@ class PropertyBot:
         }
         handler = handlers.get(action_id)
         if handler:
-            if action_id == "viewing":
+            if action_id == "search":
+                await handler(message, dialog_manager)
+            elif action_id == "viewing":
                 await handler(message, state)
             else:
                 await handler(message)
@@ -963,9 +975,17 @@ class PropertyBot:
         patched = message.model_copy(update={"text": query_text})
         await self.handle_query(patched)
 
-    async def _handle_search(self, message: Message) -> None:
-        """Start property search funnel (#628)."""
-        await self.handle_menu_action_text(message, "Подбери апартаменты")
+    async def _handle_search(self, message: Message, dialog_manager: Any = None) -> None:
+        """Start property search funnel via aiogram-dialog (#628, #658)."""
+        if dialog_manager is not None:
+            from aiogram_dialog import StartMode
+
+            from .dialogs.states import FunnelSG
+
+            await dialog_manager.start(FunnelSG.location, mode=StartMode.RESET_STACK)
+        else:
+            # Fallback when dialog_manager not available (e.g., tests)
+            await self.handle_menu_action_text(message, "Подбери апартаменты")
 
     async def _handle_services(self, message: Message) -> None:
         """Show services inline menu (#628)."""
@@ -2853,17 +2873,15 @@ class PropertyBot:
         )
         logger.info("i18n middleware ready")
 
-        # Setup aiogram-dialog
+        # Setup aiogram-dialog (#658: removed dead client_menu_dialog)
         from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
 
-        from .dialogs.client_menu import client_menu_dialog
         from .dialogs.crm_submenu import crm_submenu_dialog
         from .dialogs.faq import faq_dialog
         from .dialogs.funnel import funnel_dialog
         from .dialogs.manager_menu import manager_menu_dialog
         from .dialogs.settings import settings_dialog
 
-        self.dp.include_router(client_menu_dialog)
         self.dp.include_router(manager_menu_dialog)
         self.dp.include_router(crm_submenu_dialog)
         self.dp.include_router(settings_dialog)

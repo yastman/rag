@@ -27,7 +27,10 @@ def _iter_model_entries(cfg: dict, provider_model: str) -> list[dict]:
 
 
 def _fallback_model_groups(cfg: dict) -> set[str]:
-    fallbacks = cfg.get("router_settings", {}).get("fallbacks", [])
+    # Prefer modern LiteLLM location, keep legacy fallback for compatibility.
+    fallbacks = cfg.get("litellm_settings", {}).get("fallbacks")
+    if not fallbacks:
+        fallbacks = cfg.get("router_settings", {}).get("fallbacks", [])
     return {next(iter(item.keys())) for item in fallbacks if isinstance(item, dict) and item}
 
 
@@ -45,10 +48,15 @@ class TestLiteLLMConfigSync:
         )
 
         for name in docker_models:
-            for key in ("model", "max_tokens", "merge_reasoning_content_in_choices"):
+            for key in (
+                "model",
+                "max_tokens",
+                "max_completion_tokens",
+                "merge_reasoning_content_in_choices",
+            ):
                 docker_val = docker_models[name].get(key)
                 k8s_val = k8s_models[name].get(key)
-                if docker_val is not None:
+                if key in docker_models[name] or key in k8s_models[name]:
                     assert docker_val == k8s_val, (
                         f"Model '{name}' param '{key}': docker={docker_val}, k8s={k8s_val}"
                     )
@@ -87,3 +95,22 @@ class TestLiteLLMConfigSync:
 
         assert "gpt-oss-120b" in _fallback_model_groups(docker)
         assert "gpt-oss-120b" in _fallback_model_groups(k8s)
+
+    def test_drop_params_enabled_to_avoid_unsupported_params_error(self):
+        """Guard against provider UnsupportedParamsError (e.g. reasoning_effort)."""
+        docker = _load_docker_config()
+        k8s = _load_k8s_config()
+
+        assert docker["litellm_settings"].get("drop_params") is True
+        assert k8s["litellm_settings"].get("drop_params") is True
+
+    def test_fallbacks_defined_in_litellm_settings(self):
+        """Guard against missing fallback groups in runtime routing config."""
+        docker = _load_docker_config()
+        k8s = _load_k8s_config()
+
+        docker_groups = _fallback_model_groups(docker)
+        k8s_groups = _fallback_model_groups(k8s)
+
+        assert {"gpt-4o-mini", "gpt-oss-120b"}.issubset(docker_groups)
+        assert {"gpt-4o-mini", "gpt-oss-120b"}.issubset(k8s_groups)
