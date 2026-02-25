@@ -86,6 +86,7 @@ def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
 
 async def get_location_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for location (district) selection."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Солнечный Берег", "sunny_beach"),
         ("Святой Влас", "sveti_vlas"),
@@ -100,11 +101,13 @@ async def get_location_options(**kwargs: Any) -> dict[str, Any]:
         ("София", "sofia"),
         ("Любой район", "any"),
     ]
-    return {"title": "В каком районе ищете?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "В каком районе ищете?", "items": items, "btn_back": btn_back}
 
 
 async def get_property_types(**kwargs: Any) -> dict[str, Any]:
     """Getter for property type selection."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Студия", "studio"),
         ("1-спальня", "1bed"),
@@ -112,11 +115,13 @@ async def get_property_types(**kwargs: Any) -> dict[str, Any]:
         ("3-спальни", "3bed"),
         ("Любой тип", "any"),
     ]
-    return {"title": "Какой тип жилья?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Какой тип жилья?", "items": items, "btn_back": btn_back}
 
 
 async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for budget selection."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("До 50 000 €", "low"),
         ("50 000 – 100 000 €", "mid"),
@@ -125,20 +130,24 @@ async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
         ("Более 200 000 €", "luxury"),
         ("Любой бюджет", "any"),
     ]
-    return {"title": "Какой бюджет?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Какой бюджет?", "items": items, "btn_back": btn_back}
 
 
 async def get_refine_or_show_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for refine-or-show decision step."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Показать результаты", "show"),
         ("Уточнить параметры", "refine"),
     ]
-    return {"title": "Что делаем дальше?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Что делаем дальше?", "items": items, "btn_back": btn_back}
 
 
 async def get_floor_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for floor selection (optional refinement)."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("0-1 этаж", "low"),
         ("2-3 этаж", "mid"),
@@ -146,11 +155,13 @@ async def get_floor_options(**kwargs: Any) -> dict[str, Any]:
         ("6+ этаж", "top"),
         ("Любой этаж", "any"),
     ]
-    return {"title": "Какой этаж предпочитаете?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Какой этаж предпочитаете?", "items": items, "btn_back": btn_back}
 
 
 async def get_view_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for view selection (optional refinement)."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Море", "sea"),
         ("Бассейн", "pool"),
@@ -158,7 +169,8 @@ async def get_view_options(**kwargs: Any) -> dict[str, Any]:
         ("Лес/горы", "forest"),
         ("Любой вид", "any"),
     ]
-    return {"title": "Какой вид предпочитаете?", "items": items, "btn_back": "Назад"}
+    btn_back = i18n.get("back") if i18n else "Назад"
+    return {"title": "Какой вид предпочитаете?", "items": items, "btn_back": btn_back}
 
 
 async def get_results_data(
@@ -168,6 +180,7 @@ async def get_results_data(
     """Getter for results window — fetches real apartments from Qdrant (#660)."""
     from telegram_bot.keyboards.property_card import format_property_card
 
+    i18n = dialog_manager.middleware_data.get("i18n")
     data = dialog_manager.dialog_data
     rooms = data.get("property_type", "any")
     budget = data.get("budget", "any")
@@ -178,6 +191,14 @@ async def get_results_data(
 
     property_bot = dialog_manager.middleware_data.get("property_bot")
     svc = getattr(property_bot, "_apartments_service", None) if property_bot else None
+
+    no_results_text = (
+        i18n.get("results-no-results")
+        if i18n
+        else "К сожалению, по вашим критериям ничего не найдено."
+    )
+    results_title = i18n.get("funnel-results-title") if i18n else "Подобрали для вас:"
+    btn_back = i18n.get("back") if i18n else "Назад"
 
     results_text = ""
     if svc:
@@ -203,17 +224,17 @@ async def get_results_data(
                     )
                 results_text = "\n\n".join(cards)
             else:
-                results_text = "К сожалению, по вашим критериям ничего не найдено."
+                results_text = no_results_text
         except Exception:
             logger.exception("Failed to fetch funnel results from Qdrant")
-            results_text = "К сожалению, по вашим критериям ничего не найдено."
+            results_text = no_results_text
     else:
         results_text = "Пока не нашли вариантов."
 
     return {
-        "title": "Подобрали для вас:",
+        "title": results_title,
         "results_text": results_text,
-        "btn_back": "Назад",
+        "btn_back": btn_back,
     }
 
 
