@@ -76,7 +76,7 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection, injects `i18n`, `locale`, `property_bot`, `apartments_service` (#660) |
 | `telegram_bot/dialogs/` | aiogram-dialog menus: `client_menu`, `crm_submenu`, `faq`, `funnel`, `manager_menu`, `settings` |
 | `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler |
-| `telegram_bot/keyboards/client_keyboard.py` | Client ReplyKeyboard — `build_client_keyboard(i18n=)`, `parse_menu_button(text, i18n_hub=)` with .ftl keys (#660) |
+| `telegram_bot/keyboards/client_keyboard.py` | Client ReplyKeyboard — `build_client_keyboard(i18n=)`, `get_menu_button_texts(i18n_hub=)`, `parse_menu_button(text, i18n_hub=)` with .ftl keys (#660) |
 | `telegram_bot/keyboards/property_card.py` | Property listing card with bookmark + results footer |
 | `telegram_bot/keyboards/services_keyboard.py` | Services inline menu (5 services) |
 | `telegram_bot/services/apartments_service.py` | ApartmentsService — hybrid search + `scroll_with_filters()` payload-only queries (#632, #660) |
@@ -150,7 +150,7 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 | Command | Handler | Description |
 |---------|---------|-------------|
-| `/start` | cmd_start | Welcome message via `get_welcome_text()` + ReplyKeyboard (#628) |
+| `/start` | cmd_start | Welcome via i18n key `welcome-text` (fallback: `services.yaml`) + localized ReplyKeyboard (#660) |
 | `/help` | cmd_help | Usage instructions |
 | `/clear` | cmd_clear | Clear conversation history |
 | `/clearcache` | cmd_clearcache | Inline keyboard to clear individual Redis cache tiers (#566) |
@@ -166,7 +166,8 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 ## Client Menu Flow (#628)
 
-ReplyKeyboard (persistent 3x2 grid) → `handle_menu_button()` dispatches to dedicated handlers:
+ReplyKeyboard (persistent 3x2 grid) → `handle_menu_button()` dispatches to dedicated handlers.
+Visible labels are localized from `.ftl` keys (`kb-search`, `kb-services`, `kb-viewing`, `kb-bookmarks`, `kb-promotions`, `kb-manager`), while routing stays action-ID based:
 
 | Button | Handler | Action |
 |--------|---------|--------|
@@ -195,13 +196,18 @@ Service keys from `config/services.yaml`: `passive_income`, `online_deals`, `vnz
 ```
 1. phone_router (FSM) — included via dp.include_router()
 2. /start, /help, /clear, /clearcache, /stats, /metrics — command handlers
-3. MENU_BUTTONS filter — handle_menu_button (before catch-all)
+3. `F.text.in_(get_menu_button_texts(self._i18n_hub))` → `handle_menu_button` (before catch-all)
 4. StateFilter(None) + F.text — handle_query (catch-all, only when no FSM state active)
 5. svc:/cta:/fav:/results: — callback_query handlers
 6. feedback/clearcache — other callback handlers
 ```
 
 **StateFilter(None)**: Critical guard on `handle_query` — prevents catch-all from intercepting text during phone_collector FSM (`waiting_phone` state).
+
+### SDK-backed Constraints (aiogram 3)
+
+- **Filter resolution is first-match:** aiogram stops searching handlers after the first filter set that passes. Therefore, menu handler registration must remain above catch-all `StateFilter(None), F.text` handlers.
+- **Middleware data is DI context:** middleware/filter-added context keys are mapped to handler keyword parameters by name. This is why handler signatures can safely accept injected args like `i18n`, `locale`, `kommo_client`, `state`.
 
 ## Configuration (BotConfig)
 
