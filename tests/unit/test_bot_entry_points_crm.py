@@ -149,17 +149,30 @@ async def test_viewing_phone_callback_starts_phone_collection() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_viewing_choose_objects_redirects() -> None:
-    """viewing:choose_objects -> sends redirect message and answers callback."""
+async def test_viewing_choose_objects_starts_search() -> None:
+    """viewing:choose_objects -> routes to apartment search pipeline."""
     bot = _create_bot()
     state = _make_state()
     cb = _make_callback("viewing:choose_objects")
 
-    await bot.handle_viewing_callback(cb, state)
+    with patch.object(bot, "handle_menu_action_text", new=AsyncMock()) as mock_action:
+        await bot.handle_viewing_callback(cb, state)
 
-    cb.message.answer.assert_awaited_once()
-    text = cb.message.answer.call_args[0][0]
-    assert "апартамент" in text.lower() or "опиш" in text.lower()
+    mock_action.assert_awaited_once_with(cb.message, "Подбери апартаменты")
+    cb.answer.assert_awaited_once()
+
+
+async def test_viewing_choose_objects_no_message() -> None:
+    """viewing:choose_objects with message=None -> handle_menu_action_text not called, answer still called."""
+    bot = _create_bot()
+    state = _make_state()
+    cb = _make_callback("viewing:choose_objects")
+    cb.message = None
+
+    with patch.object(bot, "handle_menu_action_text", new=AsyncMock()) as mock_action:
+        await bot.handle_viewing_callback(cb, state)
+
+    mock_action.assert_not_awaited()
     cb.answer.assert_awaited_once()
 
 
