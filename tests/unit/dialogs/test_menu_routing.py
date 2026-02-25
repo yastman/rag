@@ -21,12 +21,13 @@ def mock_config():
 
 
 async def test_cmd_start_client_starts_client_menu(mock_config):
-    """cmd_start routes client user to ClientMenuSG.main."""
-    from telegram_bot.dialogs.states import ClientMenuSG
+    """cmd_start sends ReplyKeyboard for client users."""
+    from aiogram.types import ReplyKeyboardMarkup
 
     dialog_manager = AsyncMock()
     message = MagicMock()
     message.from_user.id = 42
+    message.from_user.first_name = "Test"
     message.answer = AsyncMock()
 
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
@@ -43,9 +44,10 @@ async def test_cmd_start_client_starts_client_menu(mock_config):
 
         await bot.cmd_start(message, dialog_manager=dialog_manager)
 
-    dialog_manager.start.assert_called_once()
-    call_args = dialog_manager.start.call_args
-    assert call_args.args[0] == ClientMenuSG.main
+    dialog_manager.start.assert_not_called()
+    message.answer.assert_called_once()
+    _, kwargs = message.answer.call_args
+    assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
 
 
 async def test_cmd_start_manager_with_kommo_starts_manager_menu(mock_config):
@@ -78,13 +80,14 @@ async def test_cmd_start_manager_with_kommo_starts_manager_menu(mock_config):
 
 
 async def test_cmd_start_manager_without_kommo_starts_client_menu(mock_config):
-    """cmd_start routes manager (kommo disabled) to ClientMenuSG.main."""
-    from telegram_bot.dialogs.states import ClientMenuSG
+    """cmd_start sends ReplyKeyboard for manager when kommo is disabled."""
+    from aiogram.types import ReplyKeyboardMarkup
 
     mock_config.kommo_enabled = False
     dialog_manager = AsyncMock()
     message = MagicMock()
     message.from_user.id = 99
+    message.from_user.first_name = "Test"
     message.answer = AsyncMock()
 
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
@@ -101,21 +104,22 @@ async def test_cmd_start_manager_without_kommo_starts_client_menu(mock_config):
 
         await bot.cmd_start(message, dialog_manager=dialog_manager)
 
-    dialog_manager.start.assert_called_once()
-    call_args = dialog_manager.start.call_args
-    assert call_args.args[0] == ClientMenuSG.main
+    dialog_manager.start.assert_not_called()
+    message.answer.assert_called_once()
+    _, kwargs = message.answer.call_args
+    assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
 
 
 async def test_cmd_start_fallback_without_dialog_manager(mock_config):
-    """cmd_start falls back to text response when dialog_manager is None."""
+    """cmd_start sends ReplyKeyboard when dialog_manager is absent."""
+    from aiogram.types import ReplyKeyboardMarkup
+
     message = MagicMock()
     message.from_user.id = 42
+    message.from_user.first_name = "Test"
     message.answer = AsyncMock()
 
-    with (
-        patch("telegram_bot.bot.PropertyBot.__init__", return_value=None),
-        patch("telegram_bot.bot.render_start_menu", return_value="Welcome!"),
-    ):
+    with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
         from telegram_bot.bot import PropertyBot
 
         bot = PropertyBot.__new__(PropertyBot)
@@ -129,4 +133,6 @@ async def test_cmd_start_fallback_without_dialog_manager(mock_config):
 
         await bot.cmd_start(message, dialog_manager=None)
 
-    message.answer.assert_called_once_with("Welcome!")
+    message.answer.assert_called_once()
+    _, kwargs = message.answer.call_args
+    assert isinstance(kwargs["reply_markup"], ReplyKeyboardMarkup)
