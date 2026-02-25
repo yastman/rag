@@ -1,6 +1,6 @@
 """Tests for content_loader."""
 
-from telegram_bot.services.content_loader import load_services_config
+from telegram_bot.services.content_loader import get_service_card, load_services_config
 
 
 def test_load_services_config():
@@ -27,3 +27,7 @@ def test_welcome_text_exists():
 def test_services_menu_text_exists():
     config = load_services_config()
     assert "services_menu_text" in config
+
+
+def test_get_service_card_missing_key():
+    assert get_service_card("nonexistent_key") is None
