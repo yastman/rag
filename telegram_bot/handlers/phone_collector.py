@@ -37,13 +37,13 @@ async def start_phone_collection(
     message_or_callback: Message | CallbackQuery,
     state: FSMContext,
     *,
-    source: str,
-    source_detail: str = "",
+    service_key: str,
+    viewing_objects: list[dict[str, Any]] | None = None,
     i18n: Any | None = None,
 ) -> None:
     """Start phone collection flow. Called from various handlers."""
     await state.set_state(PhoneCollectorStates.waiting_phone)
-    await state.update_data(lead_source=source, lead_detail=source_detail)
+    await state.update_data(service_key=service_key, viewing_objects=viewing_objects or [])
 
     text = i18n.get("phone-prompt") if i18n else "Введите ваш номер телефона:"
     if isinstance(message_or_callback, CallbackQuery) and message_or_callback.message:
@@ -71,18 +71,18 @@ async def on_phone_received(
 
     phone = message.text
     data = await state.get_data()
-    source = data.get("lead_source", "unknown")
-    source_detail = data.get("lead_detail", "")
+    service_key = data.get("service_key", "unknown")
+    viewing_objects = data.get("viewing_objects", [])
     user_id = message.from_user.id if message.from_user else "unknown"
     user_name = message.from_user.first_name if message.from_user else ""
 
     await state.clear()
 
     logger.info(
-        "Lead captured: phone=%s source=%s detail=%s user=%s",
+        "Lead captured: phone=%s service_key=%s viewing_objects=%s user=%s",
         phone,
-        source,
-        source_detail,
+        service_key,
+        viewing_objects,
         user_id,
     )
 
@@ -90,13 +90,13 @@ async def on_phone_received(
         try:
             contact = await kommo_client.upsert_contact(phone, ContactCreate(first_name=user_name))
             lead = await kommo_client.create_lead(
-                LeadCreate(name=f"Заявка: {source} — {user_name}")
+                LeadCreate(name=f"Заявка: {service_key} — {user_name}")
             )
             await kommo_client.link_contact_to_lead(lead.id, contact.id)
             await kommo_client.add_note(
                 "leads",
                 lead.id,
-                f"Источник: {source}\nДетали: {source_detail}\nTelegram ID: {user_id}",
+                f"Источник: {service_key}\nОбъекты: {viewing_objects}\nTelegram ID: {user_id}",
             )
             await kommo_client.create_task(
                 TaskCreate(
