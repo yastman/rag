@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-import os
 import re
 import time
 from typing import Any
@@ -36,21 +35,6 @@ def validate_phone(text: str) -> bool:
     return bool(_PHONE_PATTERN.match(cleaned))
 
 
-def _get_int_env(name: str, default: int = 0) -> int:
-    """Safely parse integer env var; empty/invalid values fall back to default."""
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    raw = raw.strip()
-    if raw == "":
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        logger.warning("Invalid integer env value for %s=%r; using default=%s", name, raw, default)
-        return default
-
-
 def build_display_name(user: Any | None, phone: str) -> str:
     """Build human-readable display name with fallback chain."""
     if user and getattr(user, "first_name", None):
@@ -65,22 +49,25 @@ def _build_custom_fields(
     crm_title: str,
     telegram_id: int | str,
     username: str | None,
+    *,
+    service_field_id: int = 0,
+    source_field_id: int = 0,
+    telegram_field_id: int = 0,
+    telegram_username_field_id: int = 0,
 ) -> list[dict]:
     """Build Kommo custom_fields_values for lead."""
     fields: list[dict] = []
-    svc_field = _get_int_env("KOMMO_SERVICE_FIELD_ID")
-    src_field = _get_int_env("KOMMO_SOURCE_FIELD_ID")
-    tg_id_field = _get_int_env("KOMMO_TELEGRAM_FIELD_ID")
-    tg_user_field = _get_int_env("KOMMO_TELEGRAM_USERNAME_FIELD_ID")
 
-    if svc_field:
-        fields.append({"field_id": svc_field, "values": [{"value": crm_title}]})
-    if src_field:
-        fields.append({"field_id": src_field, "values": [{"value": "Telegram-бот"}]})
-    if tg_id_field and telegram_id:
-        fields.append({"field_id": tg_id_field, "values": [{"value": str(telegram_id)}]})
-    if tg_user_field and username:
-        fields.append({"field_id": tg_user_field, "values": [{"value": f"@{username}"}]})
+    if service_field_id:
+        fields.append({"field_id": service_field_id, "values": [{"value": crm_title}]})
+    if source_field_id:
+        fields.append({"field_id": source_field_id, "values": [{"value": "Telegram-бот"}]})
+    if telegram_field_id and telegram_id:
+        fields.append({"field_id": telegram_field_id, "values": [{"value": str(telegram_id)}]})
+    if telegram_username_field_id and username:
+        fields.append(
+            {"field_id": telegram_username_field_id, "values": [{"value": f"@{username}"}]}
+        )
     return fields
 
 
@@ -156,6 +143,7 @@ async def on_phone_received(
     state: FSMContext,
     kommo_client: Any | None = None,
     i18n: Any | None = None,
+    bot_config: Any | None = None,
 ) -> None:
     """Handle phone number input."""
     if not message.text or not validate_phone(message.text):
@@ -203,11 +191,21 @@ async def on_phone_received(
             )
             contact = await kommo_client.upsert_contact(phone, contact_data)
 
-            pipeline_id = _get_int_env("KOMMO_DEFAULT_PIPELINE_ID") or None
-            status_id = _get_int_env("KOMMO_NEW_STATUS_ID") or None
-            responsible = _get_int_env("KOMMO_RESPONSIBLE_USER_ID") or None
+            pipeline_id = (bot_config.kommo_default_pipeline_id if bot_config else 0) or None
+            status_id = (bot_config.kommo_new_status_id if bot_config else 0) or None
+            responsible = (bot_config.kommo_responsible_user_id if bot_config else None) or None
 
-            custom_fields = _build_custom_fields(crm_title, user_id, username)
+            custom_fields = _build_custom_fields(
+                crm_title,
+                user_id,
+                username,
+                service_field_id=bot_config.kommo_service_field_id if bot_config else 0,
+                source_field_id=bot_config.kommo_source_field_id if bot_config else 0,
+                telegram_field_id=bot_config.kommo_telegram_field_id if bot_config else 0,
+                telegram_username_field_id=bot_config.kommo_telegram_username_field_id
+                if bot_config
+                else 0,
+            )
 
             lead = await kommo_client.create_lead(
                 LeadCreate(
