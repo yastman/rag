@@ -151,8 +151,35 @@ async def test_get_results_data_calls_apartments_service():
 
     result = await funnel_module.get_results_data(manager)
 
+    mock_embeddings.aembed_hybrid.assert_awaited_once_with("Sunny Beach студия")
     mock_svc.search.assert_awaited_once()
     assert "Sunrise" in result["results_text"]
+    assert "Sunny Beach" in result["results_text"]
+    assert "sunny_beach" not in result["results_text"]
+
+
+@pytest.mark.asyncio
+async def test_get_results_data_any_any_uses_fallback_query():
+    mock_search = AsyncMock(return_value=[])
+    mock_aembed = AsyncMock(return_value=([0.1] * 1024, {"indices": [], "values": []}))
+
+    mock_svc = MagicMock()
+    mock_svc.search = mock_search
+    mock_embeddings = MagicMock()
+    mock_embeddings.aembed_hybrid = mock_aembed
+
+    manager = SimpleNamespace(
+        dialog_data={"location": "any", "property_type": "any", "budget": "any"},
+        middleware_data={
+            "apartments_service": mock_svc,
+            "hybrid_embeddings": mock_embeddings,
+        },
+    )
+
+    await funnel_module.get_results_data(manager)
+
+    mock_embeddings.aembed_hybrid.assert_awaited_once_with("апартаменты в Болгарии")
+    mock_svc.search.assert_awaited_once()
 
 
 @pytest.mark.asyncio
