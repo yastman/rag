@@ -621,7 +621,7 @@ class PropertyBot:
             return "manager"
         return db_role or "client"
 
-    async def cmd_start(self, message: Message, dialog_manager: Any = None):
+    async def cmd_start(self, message: Message, dialog_manager: Any = None, i18n: Any = None):
         """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
         assert message.from_user is not None
         role = await self._resolve_user_role(message.from_user.id)
@@ -635,10 +635,14 @@ class PropertyBot:
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Client: persistent ReplyKeyboard (#628)
-            from .services.content_loader import get_welcome_text
+            if i18n is not None:
+                welcome = i18n.get("welcome-text")
+            else:
+                from .services.content_loader import load_services_config
 
-            welcome = get_welcome_text()
-            await message.answer(welcome, reply_markup=build_client_keyboard())
+                cfg = load_services_config()
+                welcome = cfg.get("welcome", {}).get("text", "Добро пожаловать!")
+            await message.answer(welcome, reply_markup=build_client_keyboard(i18n=i18n))
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -943,6 +947,7 @@ class PropertyBot:
         message: Message,
         state: FSMContext,
         dialog_manager: Any = None,
+        i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
         action_id = parse_menu_button(message.text or "")
@@ -968,6 +973,8 @@ class PropertyBot:
                 await handler(message, dialog_manager)
             elif action_id == "viewing":
                 await handler(message, state)
+            elif action_id == "services":
+                await handler(message, i18n=i18n)
             else:
                 await handler(message)
 
@@ -988,12 +995,14 @@ class PropertyBot:
             # Fallback when dialog_manager not available (e.g., tests)
             await self.handle_menu_action_text(message, "Подбери апартаменты")
 
-    async def _handle_services(self, message: Message) -> None:
+    async def _handle_services(self, message: Message, i18n: Any = None) -> None:
         """Show services inline menu (#628)."""
         from .keyboards.services_keyboard import build_services_menu
-        from .services.content_loader import get_services_menu_text
 
-        text = get_services_menu_text()
+        if i18n is not None:
+            text = i18n.get("services-menu-text")
+        else:
+            text = "Выберите услугу, чтобы узнать подробнее:"
         kb = build_services_menu()
         await message.answer(text, reply_markup=kb)
 
@@ -1109,14 +1118,14 @@ class PropertyBot:
         """Handoff to manager (#628)."""
         await self.handle_menu_action_text(message, "Соедини с менеджером")
 
-    async def handle_service_callback(self, callback: CallbackQuery) -> None:
+    async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
         """Handle service menu inline button clicks (#628)."""
         from .keyboards.services_keyboard import (
             build_service_card_buttons,
             build_services_menu,
             parse_service_callback,
         )
-        from .services.content_loader import get_service_card, get_services_menu_text
+        from .services.content_loader import get_service_card
 
         parsed = parse_service_callback(callback.data or "")
         if parsed is None:
@@ -1131,7 +1140,10 @@ class PropertyBot:
             await callback.answer()
 
         elif action == "menu":
-            text = get_services_menu_text()
+            if i18n is not None:
+                text = i18n.get("services-menu-text")
+            else:
+                text = "Выберите услугу, чтобы узнать подробнее:"
             kb = build_services_menu()
             if callback.message:
                 await callback.message.edit_text(text, reply_markup=kb)
