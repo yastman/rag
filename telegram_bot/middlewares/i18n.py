@@ -122,6 +122,8 @@ class I18nMiddleware(BaseMiddleware):
         data["pg_pool"] = self._pg_pool
         data["bot_config"] = self._bot_config
         data["property_bot"] = self._property_bot
+        if self._property_bot is not None:
+            data["apartments_service"] = getattr(self._property_bot, "_apartments_service", None)
         return await handler(event, data)
 
 
