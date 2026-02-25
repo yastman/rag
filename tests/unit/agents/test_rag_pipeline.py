@@ -1259,6 +1259,65 @@ async def test_cache_check_no_redundant_stores_or_embeds_with_all_precomputed(mo
     assert result["cache_hit"] is False
 
 
+async def test_cache_check_stores_sparse_when_not_pre_computed(mock_cache):
+    """When pre_computed_sparse is None, store_sparse_embedding IS called after hybrid_with_colbert."""
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    dense = [0.1] * 1024
+    sparse_from_hybrid = {"indices": [2], "values": [0.9]}
+    colbert_from_hybrid = [[0.2] * 1024]
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(dense, sparse_from_hybrid, colbert_from_hybrid)
+    )
+    mock_embeddings.aembed_colbert_query = None
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        pre_computed_embedding=dense,
+        pre_computed_sparse=None,
+    )
+
+    assert result["cache_hit"] is False
+    mock_cache.store_sparse_embedding.assert_awaited_once_with("test query", sparse_from_hybrid)
+
+
+async def test_cache_check_skips_sparse_store_when_pre_computed(mock_cache):
+    """When pre_computed_sparse is truthy, store_sparse_embedding is NOT called."""
+    from telegram_bot.agents.rag_pipeline import _cache_check
+
+    dense = [0.1] * 1024
+    existing_sparse = {"indices": [1], "values": [0.5]}
+    sparse_from_hybrid = {"indices": [2], "values": [0.9]}
+    colbert_from_hybrid = [[0.2] * 1024]
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(dense, sparse_from_hybrid, colbert_from_hybrid)
+    )
+    mock_embeddings.aembed_colbert_query = None
+
+    result = await _cache_check(
+        "test query",
+        "GENERAL",
+        42,
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        latency_stages={},
+        pre_computed_embedding=dense,
+        pre_computed_sparse=existing_sparse,
+    )
+
+    assert result["cache_hit"] is False
+    mock_cache.store_sparse_embedding.assert_not_awaited()
+
+
 async def test_cache_check_returns_sparse_embedding_in_all_paths(mock_cache):
     """_cache_check returns sparse_embedding key in result for both HIT and MISS."""
     from unittest.mock import AsyncMock
