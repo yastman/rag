@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 
 _PHONE_PATTERN = re.compile(r"^\+?\d{7,15}$")
 
-phone_router = Router(name="phone_collector")
-
 
 class PhoneCollectorStates(StatesGroup):
     """FSM states for phone collection."""
@@ -50,7 +48,6 @@ async def start_phone_collection(
         await message_or_callback.answer(text)  # type: ignore[union-attr]
 
 
-@phone_router.message(PhoneCollectorStates.waiting_phone, F.text)
 async def on_phone_received(message: Message, state: FSMContext) -> None:
     """Handle phone number input."""
     if not message.text or not validate_phone(message.text):
@@ -77,3 +74,10 @@ async def on_phone_received(message: Message, state: FSMContext) -> None:
     await message.answer(
         "Спасибо за заявку! Менеджер свяжется с вами для уточнения деталей в ближайшее время."
     )
+
+
+def create_phone_router() -> Router:
+    """Create a fresh router instance for phone FSM handlers."""
+    router = Router(name="phone_collector")
+    router.message(PhoneCollectorStates.waiting_phone, F.text)(on_phone_received)
+    return router
