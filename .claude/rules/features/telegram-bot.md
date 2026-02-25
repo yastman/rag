@@ -1,5 +1,5 @@
 ---
-paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, telegram_bot/agents/**, telegram_bot/services/generate_response.py, telegram_bot/pipelines/**, telegram_bot/services/types.py"
+paths: "telegram_bot/*.py, telegram_bot/middlewares/**, telegram_bot/graph/**, telegram_bot/agents/**, telegram_bot/services/generate_response.py, telegram_bot/pipelines/**, telegram_bot/services/types.py, telegram_bot/keyboards/**, telegram_bot/handlers/**"
 ---
 
 # Telegram Bot
@@ -25,6 +25,15 @@ Text (sdk_agent — manager role, fallback for client on fast-path error):
                → history_search → build_history_graph() (4-node LangGraph)
                → 8 CRM tools (Kommo API) | direct response
              → Langfuse: CallbackHandler + @observe spans (pipeline_mode="sdk_agent")
+
+Menu:   ReplyKeyboard button → handle_menu_button() → dispatch:
+             🔍 Подобрать → _handle_search → handle_query("Подбери апартаменты")
+             📋 Услуги → _handle_services → inline services menu (svc:/cta: callbacks)
+             👁 Просмотр → _handle_viewing → phone_collector FSM
+             ⭐ Избранное → _handle_bookmarks → FavoritesService (fav: callbacks)
+             🎯 Акции → _handle_promotions → handle_query("Покажи актуальные акции")
+             👤 Менеджер → _handle_manager → handle_query("Соедини с менеджером")
+        Inline callbacks: svc:*/cta:* → service cards | fav:* → favorites CRUD | results:* → pagination/viewing
 
 Voice: Voice Message → PropertyBot.handle_voice()
                     → download .ogg → make_initial_state(voice_audio=bytes)
@@ -141,15 +150,58 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 
 | Command | Handler | Description |
 |---------|---------|-------------|
-| `/start` | cmd_start | Welcome message (domain from config) |
+| `/start` | cmd_start | Welcome message via `get_welcome_text()` + ReplyKeyboard (#628) |
 | `/help` | cmd_help | Usage instructions |
 | `/clear` | cmd_clear | Clear conversation history |
-| `/clearcache` | cmd_clearcache | Inline keyboard to select cache tier for clearing (semantic/embeddings/sparse/analysis/search+rerank/all) |
+| `/clearcache` | cmd_clearcache | Inline keyboard to clear individual Redis cache tiers (#566) |
 | `/stats` | cmd_stats | Cache tier hit rates |
 | `/metrics` | cmd_metrics | Pipeline p50/p95 timing |
-| `/clearcache` | cmd_clearcache | Inline keyboard to clear individual Redis cache tiers (#566) |
+| (menu button) | handle_menu_button | Routes 6 ReplyKeyboard buttons to dedicated handlers (#628) |
+| (callback `svc:`) | handle_service_callback | Service cards, back/menu navigation (#628) |
+| (callback `cta:`) | handle_cta_callback | CTA actions: get_offer → phone FSM, manager (#628) |
+| (callback `fav:`) | handle_favorite_callback | Favorites: add/remove/viewing/viewing_all (#628) |
+| (callback `results:`) | handle_results_callback | Results: more/refine/viewing (#628) |
 | (callback) | handle_feedback | Like/dislike feedback (#229) |
 | (callback `cc:`) | handle_clearcache_callback | Clear selected cache tier (#566) |
+
+## Client Menu Flow (#628)
+
+ReplyKeyboard (persistent 3x2 grid) → `handle_menu_button()` dispatches to dedicated handlers:
+
+| Button | Handler | Action |
+|--------|---------|--------|
+| 🔍 Подобрать | `_handle_search` | `handle_menu_action_text(msg, "Подбери апартаменты")` |
+| 📋 Услуги | `_handle_services` | Shows inline services menu (`build_services_menu`) |
+| 👁 Просмотр | `_handle_viewing` | `start_phone_collection(msg, state, source="viewing_main_menu")` |
+| ⭐ Избранное | `_handle_bookmarks` | FavoritesService list → property cards or empty message |
+| 🎯 Акции | `_handle_promotions` | `handle_menu_action_text(msg, "Покажи актуальные акции")` |
+| 👤 Менеджер | `_handle_manager` | `handle_menu_action_text(msg, "Соедини с менеджером")` |
+
+**`handle_menu_action_text(message, query_text)`**: DRY helper — patches message text via `model_copy(update={"text": query_text})` and delegates to `handle_query`.
+
+### Callback Routing (inline keyboards)
+
+| Prefix | Handler | Actions |
+|--------|---------|---------|
+| `svc:` | `handle_service_callback` | `svc:back` (delete msg), `svc:menu` (edit to menu), `svc:{key}` (show service card) |
+| `cta:` | `handle_cta_callback` | `cta:get_offer` (phone FSM), `cta:manager` (manager message) |
+| `fav:` | `handle_favorite_callback` | `fav:add:{id}`, `fav:remove:{id}`, `fav:viewing:{id}`, `fav:viewing_all` |
+| `results:` | `handle_results_callback` | `results:more`, `results:refine`, `results:viewing` (phone FSM) |
+
+Service keys from `config/services.yaml`: `passive_income`, `online_deals`, `vnzh`, `installment`, `infotour`.
+
+### Handler Registration Order (`_register_handlers`)
+
+```
+1. phone_router (FSM) — included via dp.include_router()
+2. /start, /help, /clear, /clearcache, /stats, /metrics — command handlers
+3. MENU_BUTTONS filter — handle_menu_button (before catch-all)
+4. StateFilter(None) + F.text — handle_query (catch-all, only when no FSM state active)
+5. svc:/cta:/fav:/results: — callback_query handlers
+6. feedback/clearcache — other callback handlers
+```
+
+**StateFilter(None)**: Critical guard on `handle_query` — prevents catch-all from intercepting text during phone_collector FSM (`waiting_phone` state).
 
 ## Configuration (BotConfig)
 
@@ -303,16 +355,23 @@ When `STREAMING_ENABLED=true` (default), `generate_response` streams LLM output 
 
 ```bash
 pytest tests/unit/test_bot_handlers.py -v                # Bot handlers + client direct pipeline routing
+pytest tests/unit/test_bot_menu_handlers.py -v           # Client menu: 47 tests for buttons, callbacks, FSM guard (#628)
 pytest tests/unit/pipelines/test_client_pipeline.py -v   # Client pipeline: classify, intent, cache, RAG, generate
 pytest tests/unit/test_middlewares.py -v
 pytest tests/unit/graph/ -v                              # All graph tests (incl. test_transcribe_node.py)
 pytest tests/unit/agents/ -v                             # Agent tests (factory, context, tools, CRM, history, streaming, skip_rewrite)
 pytest tests/unit/services/test_generate_response.py -v  # Shared generation service
+pytest tests/unit/dialogs/test_menu_routing.py -v        # Menu routing dialog tests
+pytest tests/unit/keyboards/ -v                          # Keyboard builder tests
+pytest tests/unit/handlers/test_phone_collector.py -v    # Phone collector FSM tests
+pytest tests/unit/services/test_favorites_service.py -v  # Favorites service tests
 pytest tests/integration/test_graph_paths.py -v          # Graph path tests incl. voice flow (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
 ```
 
 **Graph path tests** (`test_graph_paths.py`): Cover all 6 `route_grade` branches with mocked services. No Docker required.
+
+**phone_router singleton**: `phone_collector.py` has module-level `Router(name="phone_collector")`. Tests creating multiple PropertyBot instances need autouse fixture resetting `phone_router._parent_router = None`.
 
 ## Troubleshooting
 
