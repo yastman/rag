@@ -18,6 +18,16 @@ from telegram_bot.bot import PropertyBot, make_session_id
 from telegram_bot.config import BotConfig
 
 
+@pytest.fixture(autouse=True)
+def _reset_phone_router():
+    """Detach phone_router between tests so include_router() succeeds on fresh Dispatcher."""
+    from telegram_bot.handlers.phone_collector import phone_router
+
+    phone_router._parent_router = None
+    yield
+    phone_router._parent_router = None
+
+
 @pytest.fixture
 def mock_config(monkeypatch):
     """Create mock bot config."""
@@ -157,8 +167,8 @@ class TestCommandHandlers:
         message.answer.assert_called_once()
         call_args = message.answer.call_args
         text = call_args[0][0]
-        assert "Привет" in text
-        assert "Выберите действие" in text
+        # Welcome text now comes from content_loader (#628)
+        assert "Добро пожаловать" in text or "Привет" in text
         # Verify ReplyKeyboardMarkup is sent
         from aiogram.types import ReplyKeyboardMarkup
 
