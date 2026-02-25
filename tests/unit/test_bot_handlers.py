@@ -3336,6 +3336,238 @@ class TestPreAgentCacheCheck:
         assert len(check_calls) >= 1
         assert check_calls[0].kwargs.get("agent_role") == "client"
 
+    async def test_pre_agent_ttl_desync_heals_sparse_via_hybrid_colbert(self, mock_config):
+        """When embedding cached but sparse expired, heals via aembed_hybrid_with_colbert (#637)."""
+        bot, _ = _create_bot(mock_config)
+
+        cached_dense = [0.5] * 10
+        healed_sparse = {"indices": [2], "values": [0.9]}
+        healed_colbert = [[0.3] * 10]
+
+        bot._cache.get_embedding = AsyncMock(return_value=cached_dense)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=(cached_dense, healed_sparse, healed_colbert)
+        )
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("квартиры у моря")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._cache.store_sparse_embedding.assert_awaited_once()
+        assert stashed_store.get("cache_key_sparse") == healed_sparse
+
+    async def test_pre_agent_ttl_desync_heals_sparse_via_hybrid_fallback(self, mock_config):
+        """When hybrid_colbert absent, falls back to aembed_hybrid for desync healing (#637)."""
+        bot, _ = _create_bot(mock_config)
+
+        cached_dense = [0.5] * 10
+        healed_sparse = {"indices": [3], "values": [0.8]}
+
+        bot._cache.get_embedding = AsyncMock(return_value=cached_dense)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._embeddings.aembed_hybrid_with_colbert = None
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(cached_dense, healed_sparse))
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("квартиры у моря")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._cache.store_sparse_embedding.assert_awaited_once()
+        assert stashed_store.get("cache_key_sparse") == healed_sparse
+
+    async def test_pre_agent_ttl_desync_both_cached_skips_recompute(self, mock_config):
+        """When both embedding and sparse are cached, no recompute or store happens."""
+        bot, _ = _create_bot(mock_config)
+
+        cached_dense = [0.5] * 10
+        cached_sparse = {"indices": [1], "values": [0.5]}
+
+        bot._cache.get_embedding = AsyncMock(return_value=cached_dense)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=cached_sparse)
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock()
+        bot._embeddings.aembed_hybrid = AsyncMock()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("квартиры у моря")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._embeddings.aembed_hybrid_with_colbert.assert_not_called()
+        bot._embeddings.aembed_hybrid.assert_not_called()
+        bot._cache.store_sparse_embedding.assert_not_awaited()
+        bot._cache.store_embedding.assert_not_awaited()
+
+    async def test_pre_agent_miss_computes_colbert_via_colbert_query(self, mock_config):
+        """On MISS path, colbert is computed via lightweight aembed_colbert_query (#634)."""
+        bot, _ = _create_bot(mock_config)
+
+        dense = [0.5] * 10
+        sparse = {"indices": [1], "values": [0.7]}
+        colbert_result = [[0.2] * 10]
+
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._embeddings.aembed_hybrid_with_colbert = None
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
+        bot._embeddings.aembed_colbert_query = AsyncMock(return_value=colbert_result)
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("документы для ВНЖ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        bot._embeddings.aembed_colbert_query.assert_awaited_once()
+        assert stashed_store.get("cache_key_colbert") == colbert_result
+
+    async def test_pre_agent_miss_colbert_query_exception_graceful(self, mock_config):
+        """When aembed_colbert_query raises, colbert stays None (graceful degradation)."""
+        bot, _ = _create_bot(mock_config)
+
+        dense = [0.5] * 10
+        sparse = {"indices": [1], "values": [0.7]}
+
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._embeddings.aembed_hybrid_with_colbert = None
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
+        bot._embeddings.aembed_colbert_query = AsyncMock(side_effect=RuntimeError("BGE-M3 down"))
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("документы для ВНЖ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        assert stashed_store.get("cache_key_colbert") is None
+
+    async def test_pre_agent_miss_colbert_unavailable_stays_none(self, mock_config):
+        """When aembed_colbert_query is not available, colbert stays None."""
+        bot, _ = _create_bot(mock_config)
+
+        dense = [0.5] * 10
+        sparse = {"indices": [1], "values": [0.7]}
+
+        bot._cache.get_embedding = AsyncMock(return_value=None)
+        bot._cache.get_sparse_embedding = AsyncMock(return_value=None)
+        bot._cache.store_embedding = AsyncMock()
+        bot._cache.store_sparse_embedding = AsyncMock()
+        bot._cache.check_semantic = AsyncMock(return_value=None)
+        bot._embeddings.aembed_hybrid_with_colbert = None
+        bot._embeddings.aembed_hybrid = AsyncMock(return_value=(dense, sparse))
+        bot._embeddings.aembed_colbert_query = None
+
+        stashed_store: dict = {}
+
+        async def _capture_invoke(*args, **kwargs):
+            stashed_store.update(kwargs["config"]["configurable"]["rag_result_store"])
+            return _mock_agent_result()
+
+        mock_agent = AsyncMock()
+        mock_agent.ainvoke = _capture_invoke
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+            patch("telegram_bot.bot.classify_query", return_value="FAQ"),
+        ):
+            message = _make_text_message("документы для ВНЖ")
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                await bot.handle_query(message)
+
+        assert stashed_store.get("cache_key_colbert") is None
+
 
 def _make_cc_callback_query(data: str, user_id: int = 12345):
     """Create a mock CallbackQuery for clearcache tests."""
