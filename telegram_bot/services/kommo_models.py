@@ -22,6 +22,7 @@ class LeadCreate(BaseModel):
     budget: int | None = Field(None, serialization_alias="price", validation_alias="price")
     pipeline_id: int | None = None
     status_id: int | None = None
+    responsible_user_id: int | None = None
     custom_fields_values: list[dict] | None = None
 
 
