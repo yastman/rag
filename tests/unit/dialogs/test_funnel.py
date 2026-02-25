@@ -193,6 +193,46 @@ async def test_get_results_data_uses_property_bot_fallback():
 
 
 @pytest.mark.asyncio
+async def test_location_selected_saves_and_switches():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+
+    await funnel_module.on_location_selected(MagicMock(), SimpleNamespace(), manager, "sunny_beach")
+
+    assert manager.dialog_data["location"] == "sunny_beach"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.property_type)
+
+
+@pytest.mark.asyncio
+async def test_property_type_selected_saves_and_switches():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+
+    await funnel_module.on_property_type_selected(MagicMock(), SimpleNamespace(), manager, "studio")
+
+    assert manager.dialog_data["property_type"] == "studio"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.budget)
+
+
+@pytest.mark.asyncio
+async def test_budget_selected_saves_and_switches():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+
+    await funnel_module.on_budget_selected(MagicMock(), SimpleNamespace(), manager, "mid")
+
+    assert manager.dialog_data["budget"] == "mid"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.refine_or_show)
+
+
+@pytest.mark.asyncio
+async def test_floor_selected_saves_and_switches():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+
+    await funnel_module.on_floor_selected(MagicMock(), SimpleNamespace(), manager, "mid")
+
+    assert manager.dialog_data["floor"] == "mid"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.view)
+
+
+@pytest.mark.asyncio
 async def test_view_selected_schedules_persist_and_switches(monkeypatch):
     spawn_mock = MagicMock()
     monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", spawn_mock)
