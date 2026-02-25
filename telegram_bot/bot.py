@@ -545,6 +545,16 @@ class PropertyBot:
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
             )
             """,
+            """
+            CREATE TABLE IF NOT EXISTS user_favorites (
+                id BIGSERIAL PRIMARY KEY,
+                telegram_id BIGINT NOT NULL,
+                property_id TEXT NOT NULL,
+                property_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (telegram_id, property_id)
+            )
+            """,
             "ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT",
             "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
             "CREATE INDEX IF NOT EXISTS idx_leads_user_id ON leads(user_id)",
@@ -555,6 +565,8 @@ class PropertyBot:
             "CREATE INDEX IF NOT EXISTS idx_lead_scores_pending_sync ON lead_scores (sync_status, updated_at DESC)",
             "CREATE INDEX IF NOT EXISTS idx_lead_scores_band_sync ON lead_scores (score_band, sync_status, updated_at DESC)",
             "CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending ON nurturing_jobs (status, scheduled_for ASC)",
+            "CREATE INDEX IF NOT EXISTS idx_user_favorites_telegram_id ON user_favorites (telegram_id)",
+            "CREATE INDEX IF NOT EXISTS idx_user_favorites_created_at ON user_favorites (created_at DESC)",
         ]
         for stmt in schema_statements:
             await self._pg_pool.execute(stmt)
@@ -562,9 +574,9 @@ class PropertyBot:
     def _register_handlers(self):
         """Register message handlers."""
         # Phone collector FSM — include before catch-all handlers (#628)
-        from .handlers.phone_collector import phone_router
+        from .handlers.phone_collector import create_phone_router
 
-        self.dp.include_router(phone_router)
+        self.dp.include_router(create_phone_router())
 
         self.dp.message(Command("start"))(self.cmd_start)
         self.dp.message(Command("help"))(self.cmd_help)
