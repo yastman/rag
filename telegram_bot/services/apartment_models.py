@@ -176,6 +176,18 @@ class ApartmentRecord:
             "description": self.to_description(),
         }
 
+    def to_hybrid_description(self) -> str:
+        """Hybrid text for BGE-M3: structured prefix + NL body.
+
+        Prefix helps sparse/lexical retrieval (exact numbers).
+        Body helps dense/semantic retrieval (conceptual queries).
+        """
+        price_k = int(self.price_eur / 1000)
+        prefix = f"[{self.rooms}BR|{self.area_m2}m2|{price_k}kEUR]"
+        body = self.to_description()
+        promo = " Акция!" if self.is_promotion else ""
+        return f"{prefix} {body}{promo}"
+
 
 # --- Query parse result ---
 
