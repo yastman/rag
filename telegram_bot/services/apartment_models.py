@@ -104,6 +104,8 @@ class ApartmentRecord:
     is_furnished: bool
     has_floor_plan: bool
     has_photo: bool
+    is_promotion: bool = False
+    old_price_eur: float | None = None
 
     @classmethod
     def from_raw(cls, row: dict) -> ApartmentRecord:
@@ -128,6 +130,8 @@ class ApartmentRecord:
             is_furnished=_parse_bool(row.get("is_furnished", False)),
             has_floor_plan=_parse_bool(row.get("has_floor_plan", False)),
             has_photo=_parse_bool(row.get("has_photo", False)),
+            is_promotion=_parse_bool(row.get("is_promotion", False)),
+            old_price_eur=float(row["old_price_eur"]) if row.get("old_price_eur") else None,
         )
 
     def to_description(self) -> str:
@@ -167,6 +171,8 @@ class ApartmentRecord:
             "is_furnished": self.is_furnished,
             "has_floor_plan": self.has_floor_plan,
             "has_photo": self.has_photo,
+            "is_promotion": self.is_promotion,
+            "old_price_eur": self.old_price_eur,
             "description": self.to_description(),
         }
 
