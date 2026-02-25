@@ -128,6 +128,21 @@ async def test_fav_add_no_state_fallback() -> None:
     assert call_kwargs["property_data"] == {}
 
 
+async def test_fav_add_none_state_fallback() -> None:
+    """apartment_results=None in state → property_data={} (no crash)."""
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.add = AsyncMock(return_value={"id": 1, "property_id": "prop-42"})
+
+    state = _make_state({"apartment_results": None})
+    callback = _make_callback("fav:add:prop-42")
+
+    await bot.handle_favorite_callback(callback, state)
+
+    call_kwargs = bot._favorites_service.add.call_args.kwargs
+    assert call_kwargs["property_data"] == {}
+
+
 async def test_fav_add_property_not_found() -> None:
     """Results in state but no matching id → property_data={}."""
     bot = _create_bot()
