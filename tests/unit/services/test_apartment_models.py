@@ -210,3 +210,68 @@ class TestComputeConfidence:
         )
         result = compute_confidence(r)
         assert result.confidence == expected
+
+
+class TestHybridDescription:
+    def test_has_structured_prefix(self) -> None:
+        record = ApartmentRecord(
+            complex_name="Test",
+            section="A",
+            apartment_number="1",
+            rooms=2,
+            floor=3,
+            floor_label="3",
+            area_m2=65.0,
+            view_primary="sea",
+            view_tags=["sea"],
+            price_eur=120000.0,
+            price_bgn=234000.0,
+            is_furnished=False,
+            has_floor_plan=False,
+            has_photo=False,
+        )
+        text = record.to_hybrid_description()
+        assert text.startswith("[2BR|65.0m2|120kEUR]")
+
+    def test_has_natural_language_body(self) -> None:
+        record = ApartmentRecord(
+            complex_name="Premier Fort Beach",
+            section="D-1",
+            apartment_number="248",
+            rooms=2,
+            floor=4,
+            floor_label="4",
+            area_m2=78.66,
+            view_primary="sea",
+            view_tags=["sea"],
+            price_eur=215000.0,
+            price_bgn=420503.45,
+            is_furnished=False,
+            has_floor_plan=False,
+            has_photo=False,
+        )
+        text = record.to_hybrid_description()
+        assert "Premier Fort Beach" in text
+        assert "2 комнаты" in text
+
+    def test_promotion_marker(self) -> None:
+        record = ApartmentRecord(
+            complex_name="Test",
+            section="A",
+            apartment_number="1",
+            rooms=1,
+            floor=2,
+            floor_label="2",
+            area_m2=30.0,
+            view_primary="pool",
+            view_tags=["pool"],
+            price_eur=50000.0,
+            price_bgn=97000.0,
+            is_furnished=True,
+            has_floor_plan=False,
+            has_photo=False,
+            is_promotion=True,
+            old_price_eur=60000.0,
+        )
+        text = record.to_hybrid_description()
+        assert "Акция" in text
