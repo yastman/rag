@@ -176,8 +176,7 @@ async def get_results_data(
 
     filters = build_funnel_filters(rooms=rooms, budget=budget, floor=floor, view=view)
 
-    property_bot = dialog_manager.middleware_data.get("property_bot")
-    svc = getattr(property_bot, "_apartments_service", None) if property_bot else None
+    svc = dialog_manager.middleware_data.get("apartments_service")
 
     results_text = ""
     if svc:
