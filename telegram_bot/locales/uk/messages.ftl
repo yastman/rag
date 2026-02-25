@@ -76,3 +76,72 @@ crm-create-contact = Створити контакт
 crm-add-note = Додати нотатку
 crm-create-task = Створити завдання
 crm-pipelines = Pipelines
+
+***REMOVED*** Клієнтська ReplyKeyboard (***REMOVED***660)
+kb-search = 🏠 Підбір апартаментів
+kb-services = 🔑 Послуги
+kb-viewing = 📅 Запис на огляд
+kb-bookmarks = 📌 Мої закладки
+kb-promotions = 🎁 Акції
+kb-manager = 👤 Зв'язок з менеджером
+
+***REMOVED*** Welcome (***REMOVED***660)
+welcome-text =
+    Ласкаво просимо до FortNoks Estate! 🇧🇬
+
+    19 житлових комплексів на узбережжі Болгарії.
+    Працюємо напряму — без посередників та ріелторів.
+
+    • Апартаменти від 38 900 €
+    • Розстрочка від забудовника (внесок від 5%)
+    • Оформлення за українським паспортом
+    • Дистанційне оформлення угоди
+    • Всі види оплат (Cash / Card / Crypto)
+    • Безкоштовний трансфер та інфотур
+
+    Задайте будь-яке питання — я відповім 💬
+
+***REMOVED*** Воронка — кроки (***REMOVED***660)
+funnel-step-rooms = Виберіть кількість кімнат:
+funnel-rooms-studio = Студіо
+funnel-rooms-1bed = 1 спальня
+funnel-rooms-2bed = 2 спальні
+funnel-rooms-3bed = 3 спальні
+funnel-rooms-any = Будь-який
+funnel-step-budget = Вкажіть бюджет:
+funnel-budget-50k = до 50 000€
+funnel-budget-50-100 = 50-100 000€
+funnel-budget-100-200 = 100-200 000€
+funnel-budget-200plus = 200 000€+
+funnel-budget-any = Будь-який
+funnel-step-refine = Бажаєте уточнити параметри?
+funnel-show-results = 🔍 Показати варіанти
+funnel-refine-more = ⚙️ Уточнити ще
+
+***REMOVED*** Результати (***REMOVED***660)
+results-shown = Показано { $shown } з { $total } варіантів
+results-show-more = 🔄 Показати ще
+results-refine = ⚙️ Змінити параметри
+results-book-viewing = 📅 Запис на огляд
+results-no-results =
+    На жаль, за вашими критеріями нічого не знайдено.
+    Спробуйте змінити параметри.
+
+***REMOVED*** Телефон (***REMOVED***660)
+phone-prompt = Введіть ваш номер телефону:
+phone-invalid = Будь ласка, введіть коректний номер телефону (7-15 цифр).
+phone-success = Дякуємо за заявку! Менеджер зв'яжеться з вами найближчим часом.
+
+***REMOVED*** Акції (***REMOVED***660)
+promotions-title = 🎁 Актуальні акції
+promotions-empty = Зараз немає активних акцій.
+
+***REMOVED*** Закладки (***REMOVED***660)
+bookmarks-title = 📌 Ваші закладки ({ $count }):
+bookmarks-empty =
+    📌 У вас поки немає закладок.
+    Натисніть «🏠 Підбір апартаментів» щоб знайти квартиру.
+bookmarks-remove = 🗑 Видалити
+
+***REMOVED*** Послуги (***REMOVED***660)
+services-menu-text = Оберіть послугу, щоб дізнатися детальніше:
