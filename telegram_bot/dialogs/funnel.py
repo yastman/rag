@@ -18,6 +18,12 @@ from .states import FunnelSG
 # --- Filter building helpers ---
 
 _ROOMS_MAP: dict[str, int] = {"studio": 1, "1bed": 2, "2bed": 3, "3bed": 4}
+_PROPERTY_TYPE_QUERY_TEXT: dict[str, str] = {
+    "studio": "студия",
+    "1bed": "1 спальня",
+    "2bed": "2 спальни",
+    "3bed": "3 спальни",
+}
 
 _BUDGET_MAP: dict[str, dict[str, int]] = {
     "low": {"lte": 50000},
@@ -60,6 +66,22 @@ def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
         floor=data.get("floor"),
         view=data.get("view"),
     )
+
+
+def _build_query_text(data: dict[str, Any]) -> str:
+    """Build semantic query text without internal placeholder tokens like 'any'."""
+    location_key = data.get("location")
+    city = _LOCATION_TO_CITY.get(location_key, location_key) if location_key != "any" else ""
+
+    property_type = data.get("property_type")
+    prop_text = (
+        _PROPERTY_TYPE_QUERY_TEXT.get(property_type, property_type)
+        if property_type and property_type != "any"
+        else ""
+    )
+
+    query_parts = [part.strip() for part in (city or "", prop_text or "") if str(part).strip()]
+    return " ".join(query_parts) or "апартаменты в Болгарии"
 
 
 def build_funnel_filters(
@@ -235,8 +257,7 @@ async def get_results_data(
         try:
             location = data.get("location", "")
             city = _LOCATION_TO_CITY.get(location, location)
-            prop_type = data.get("property_type", "")
-            query_text = f"{city} {prop_type}".strip() or "апартаменты"
+            query_text = _build_query_text(data)
 
             dense, sparse = await embeddings.aembed_hybrid(query_text)
             filters = _build_funnel_filters(data)
@@ -256,7 +277,7 @@ async def get_results_data(
                         format_property_card(
                             property_id=apt["id"],
                             complex_name=p.get("complex_name", ""),
-                            location=location,
+                            location=p.get("city") or (city if city != "any" else "Болгария"),
                             property_type=rooms_display,
                             floor=p.get("floor", 0),
                             area_m2=p.get("area_m2", 0),
