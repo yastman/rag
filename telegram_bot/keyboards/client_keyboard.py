@@ -32,6 +32,24 @@ _ACTION_IDS: dict[str, str] = {
 }
 
 
+def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
+    """Return all supported menu labels for handler filters."""
+    texts = set(MENU_BUTTONS.keys())
+    if i18n_hub is None:
+        return texts
+
+    for locale in ("ru", "uk", "en"):
+        try:
+            translator = i18n_hub.get_translator_by_locale(locale)
+            for ftl_key in _ACTION_IDS:
+                label = translator.get(ftl_key)
+                if isinstance(label, str) and label:
+                    texts.add(label)
+        except Exception:
+            continue
+    return texts
+
+
 def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
     """Build persistent 3x2 ReplyKeyboard for client.
 
