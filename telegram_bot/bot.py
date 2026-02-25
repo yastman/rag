@@ -1093,40 +1093,19 @@ class PropertyBot:
         await message.answer(f"Всего в закладках: {len(items)}", reply_markup=footer_kb)
 
     async def _handle_promotions(self, message: Message) -> None:
-        """Show current promotions — real cards from Qdrant, fallback to RAG (#660)."""
-        from .keyboards.property_card import format_promotion_card
+        """Show promotions from config (#628)."""
+        from .services.content_loader import get_promotions
 
-        if self._apartments_service:
-            try:
-                results, _count, _ = await self._apartments_service.scroll_with_filters(
-                    filters={"is_promotion": True}, limit=5
-                )
-                if results:
-                    cards = []
-                    for apt in results:
-                        p = apt["payload"]
-                        old_price = p.get("old_price_eur")
-                        if not old_price:
-                            continue
-                        cards.append(
-                            format_promotion_card(
-                                property_id=apt["id"],
-                                complex_name=p.get("complex_name", ""),
-                                rooms=p.get("rooms", 1),
-                                floor=p.get("floor", 0),
-                                area_m2=p.get("area_m2", 0),
-                                view=p.get("view_primary", ""),
-                                price_eur=p.get("price_eur", 0),
-                                old_price_eur=old_price,
-                            )
-                        )
-                    if cards:
-                        await message.answer("\n\n".join(cards))
-                        return
-            except Exception:
-                logger.exception("Failed to fetch promotions from Qdrant")
+        promos = get_promotions()
+        if not promos:
+            await message.answer("Актуальных акций пока нет.")
+            return
 
-        await self.handle_menu_action_text(message, "Покажи актуальные акции")
+        lines = []
+        for p in promos:
+            lines.append(f"{p['emoji']} {p['title']}\n{p['text']}")
+        text = "\n\n".join(lines)
+        await message.answer(text)
 
     async def _handle_manager(self, message: Message) -> None:
         """Handoff to manager (#628)."""
