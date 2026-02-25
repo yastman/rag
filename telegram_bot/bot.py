@@ -34,6 +34,7 @@ from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
 from .graph.nodes.classify import classify_query
 from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
+from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import (
     create_callback_handler,
@@ -50,7 +51,6 @@ from .scoring import (
     write_langfuse_scores,
 )
 from .services.history_service import HistoryService
-from .services.manager_menu import render_start_menu
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 
@@ -566,6 +566,10 @@ class PropertyBot:
         self.dp.message(Command("history"))(self.cmd_history)
         self.dp.message(Command("clearcache"))(self.cmd_clearcache)
         self.dp.message(F.voice)(self.handle_voice)
+        # ReplyKeyboard buttons — registered before catch-all F.text (#628)
+        from .keyboards.client_keyboard import MENU_BUTTONS
+
+        self.dp.message(F.text.in_(MENU_BUTTONS.keys()))(self.handle_menu_button)
         self.dp.message(F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
@@ -591,23 +595,27 @@ class PropertyBot:
         return db_role or "client"
 
     async def cmd_start(self, message: Message, dialog_manager: Any = None):
-        """Handle /start command — launch menu dialog (role-aware routing)."""
+        """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
         assert message.from_user is not None
         role = await self._resolve_user_role(message.from_user.id)
 
-        if dialog_manager is not None:
+        kommo_enabled = getattr(self.config, "kommo_enabled", False)
+        if role == "manager" and kommo_enabled and dialog_manager is not None:
             from aiogram_dialog import StartMode
 
-            from .dialogs.states import ClientMenuSG, ManagerMenuSG
+            from .dialogs.states import ManagerMenuSG
 
-            kommo_enabled = getattr(self.config, "kommo_enabled", False)
-            if role == "manager" and kommo_enabled:
-                await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
-            else:
-                await dialog_manager.start(ClientMenuSG.main, mode=StartMode.RESET_STACK)
+            await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
         else:
-            # Fallback (dialog not initialized)
-            await message.answer(render_start_menu(role=role, domain=self.config.domain))
+            # Client: persistent ReplyKeyboard (#628)
+            name = ""
+            if message.from_user:
+                name = message.from_user.first_name or ""
+            greeting = f"Привет, {name}! 👋" if name else "Привет! 👋"
+            await message.answer(
+                f"{greeting}\nВыберите действие из меню:",
+                reply_markup=build_client_keyboard(),
+            )
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -906,6 +914,27 @@ class PropertyBot:
                 lines.append(f"   О: {resp_preview}\n")
 
             await message.answer("\n".join(lines))
+
+    # ReplyKeyboard button text → agent query mapping (#628)
+    _MENU_BUTTON_QUERIES: dict[str, str] = {
+        "search": "Подбери апартаменты",
+        "services": "Покажи услуги",
+        "viewing": "Хочу записаться на осмотр недвижимости",
+        "bookmarks": "Покажи мои закладки",
+        "promotions": "Покажи актуальные акции",
+        "manager": "Соедини с менеджером",
+    }
+
+    async def handle_menu_button(self, message: Message, locale: str = "ru"):
+        """Handle ReplyKeyboard button press — translate to agent query (#628)."""
+        action_id = parse_menu_button(message.text or "")
+        if action_id is None:
+            return
+        # Replace button emoji text with natural-language query for pipeline
+        query = self._MENU_BUTTON_QUERIES.get(action_id, message.text or "")
+        # Use model_copy to avoid mutating the original message
+        patched = message.model_copy(update={"text": query})
+        await self.handle_query(patched, locale=locale)
 
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message, locale: str = "ru"):
@@ -2572,6 +2601,11 @@ class PropertyBot:
                 BotCommand(command="clearcache", description="Очистить кеш Redis"),
             ]
         )
+
+        # Set default Menu Button → opens commands list (#628)
+        from aiogram.types import MenuButtonCommands
+
+        await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
         await self.dp.start_polling(self.bot)
 
