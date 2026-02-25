@@ -27,3 +27,20 @@ def test_welcome_text_exists():
 def test_services_menu_text_exists():
     config = load_services_config()
     assert "services_menu_text" in config
+
+
+def test_load_services_config_file_not_found(monkeypatch, tmp_path):
+    """FileNotFoundError when services.yaml is missing."""
+    import telegram_bot.services.content_loader as mod
+
+    # Clear lru_cache so the patched path is used
+    mod.load_services_config.cache_clear()
+    monkeypatch.setattr(mod, "_CONFIG_DIR", tmp_path / "nonexistent")
+
+    import pytest
+
+    with pytest.raises(FileNotFoundError):
+        mod.load_services_config()
+
+    # Restore cache for other tests
+    mod.load_services_config.cache_clear()
