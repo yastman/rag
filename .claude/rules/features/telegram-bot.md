@@ -66,6 +66,14 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 | `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection from user DB record |
 | `telegram_bot/dialogs/` | aiogram-dialog menus: `client_menu`, `crm_submenu`, `faq`, `funnel`, `manager_menu`, `settings` |
+| `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler |
+| `telegram_bot/keyboards/client_keyboard.py` | Client actions ReplyKeyboard (3x2 persistent buttons) |
+| `telegram_bot/keyboards/property_card.py` | Property listing card with bookmark + results footer |
+| `telegram_bot/keyboards/services_keyboard.py` | Services inline menu (5 services) |
+| `telegram_bot/services/apartments_service.py` | ApartmentsService — hybrid search with payload filtering (#632) |
+| `telegram_bot/services/apartment_filter_extractor.py` | Regex filter parser: rooms, price, complex, view, floor, area (#632) |
+| `telegram_bot/services/favorites_service.py` | User apartment favorites (asyncpg, add/remove/list/count) |
+| `telegram_bot/agents/apartment_tools.py` | `apartment_search` @tool — agent escalation for complex queries (#632) |
 
 ## Text RAG Pipeline (6 async steps, #442)
 
