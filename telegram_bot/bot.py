@@ -1377,11 +1377,8 @@ class PropertyBot:
         """Handle viewing fork callbacks (choose_objects, phone)."""
         data = callback.data or ""
         if data == "viewing:choose_objects":
-            # Перенаправить в воронку подбора апартаментов
             if callback.message:
-                await callback.message.answer(
-                    "Опишите, какие апартаменты вас интересуют, и я подберу варианты."
-                )
+                await self.handle_menu_action_text(callback.message, "Подбери апартаменты")
             await callback.answer()
         elif data == "viewing:phone":
             from .handlers.phone_collector import start_phone_collection
