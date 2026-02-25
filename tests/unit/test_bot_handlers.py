@@ -67,7 +67,7 @@ def _make_text_message(text="test", user_id=12345, chat_id=12345):
     """Create a mock text message with typing action support."""
     message = MagicMock()
     message.text = text
-    message.from_user = MagicMock(id=user_id)
+    message.from_user = MagicMock(id=user_id, first_name="Test")
     message.chat = MagicMock(id=chat_id)
     message.bot = MagicMock()
     message.bot.send_chat_action = AsyncMock()
@@ -147,35 +147,46 @@ class TestPropertyBotInit:
 class TestCommandHandlers:
     """Test command handlers."""
 
-    @pytest.mark.parametrize(
-        ("handler_name", "expected_fragments"),
-        [
-            ("cmd_start", ["assistant", "недвижимость"]),
-            ("cmd_help", ["Примеры запросов", "/clear", "/stats"]),
-        ],
-    )
-    async def test_simple_commands(self, mock_config, handler_name, expected_fragments):
-        """Test /start and /help produce expected response text."""
+    async def test_cmd_start_sends_reply_keyboard(self, mock_config):
+        """Test /start sends ReplyKeyboard with greeting (#628)."""
         bot, _ = _create_bot(mock_config)
         message = _make_text_message()
 
-        await getattr(bot, handler_name)(message)
+        await bot.cmd_start(message)
+
+        message.answer.assert_called_once()
+        call_args = message.answer.call_args
+        text = call_args[0][0]
+        assert "Привет" in text
+        assert "Выберите действие" in text
+        # Verify ReplyKeyboardMarkup is sent
+        from aiogram.types import ReplyKeyboardMarkup
+
+        assert isinstance(call_args[1]["reply_markup"], ReplyKeyboardMarkup)
+
+    async def test_cmd_help(self, mock_config):
+        """Test /help produces expected response text."""
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message()
+
+        await bot.cmd_help(message)
 
         message.answer.assert_called_once()
         call_args = message.answer.call_args[0][0]
-        for fragment in expected_fragments:
+        for fragment in ["Примеры запросов", "/clear", "/stats"]:
             assert fragment in call_args
 
     async def test_cmd_start_manager_receives_manager_menu(self, mock_config):
-        """Manager user receives manager-specific start menu (#388)."""
+        """Manager user receives manager dialog when kommo enabled (#388, #628)."""
         mock_config.manager_ids = [12345]
+        mock_config.kommo_enabled = True
         bot, _ = _create_bot(mock_config)
         message = _make_text_message(user_id=12345)
+        dialog_manager = AsyncMock()
 
-        await bot.cmd_start(message)
+        await bot.cmd_start(message, dialog_manager=dialog_manager)
 
-        sent = message.answer.call_args[0][0]
-        assert "Manager menu" in sent
+        dialog_manager.start.assert_called_once()
 
     async def test_resolve_user_role_prefers_config_manager_ids_on_db_client(self, mock_config):
         """manager_ids fallback should elevate manager even when DB returns client (#388)."""
