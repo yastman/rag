@@ -27,6 +27,7 @@ Ingestion:  Docling → Chunker → BGE-M3 Dense+Sparse → Qdrant
 Text:       Query → [client] pipelines/client.py → classify → intent → cache → rag → generate
                   → [manager] create_agent SDK → rag_search | history_search | apartment_search | 8 CRM tools
 Apartments: Query → regex filters (0 LLM) → hybrid search → response | LOW conf → agent escalation
+Menu:       ReplyKeyboard → handle_menu_button → dedicated handlers → svc:/cta:/fav:/results: callbacks
 Voice STT:  .ogg → LangGraph (11 nodes) → transcribe → RAG pipeline
 Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 ```
