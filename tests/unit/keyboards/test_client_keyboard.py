@@ -1,53 +1,17 @@
 # tests/unit/keyboards/test_client_keyboard.py
 """Tests for client ReplyKeyboard."""
 
+from unittest.mock import MagicMock
+
 from telegram_bot.keyboards.client_keyboard import (
+    _ACTION_IDS,
     MENU_BUTTONS,
     build_client_keyboard,
     parse_menu_button,
 )
 
 
-# --- Locale-aware tests ---
-
-
-def test_build_default_ru():
-    from aiogram.types import ReplyKeyboardMarkup
-
-    kb = build_client_keyboard(locale="ru")
-    assert isinstance(kb, ReplyKeyboardMarkup)
-    buttons = [btn.text for row in kb.keyboard for btn in row]
-    assert len(buttons) == 6
-    assert any("апарт" in b.lower() or "apartments" in b.lower() or "апарт" in b for b in buttons)
-
-
-def test_build_uk():
-    from aiogram.types import ReplyKeyboardMarkup
-
-    kb = build_client_keyboard(locale="uk")
-    assert isinstance(kb, ReplyKeyboardMarkup)
-    buttons = [btn.text for row in kb.keyboard for btn in row]
-    assert len(buttons) == 6
-    assert any("апартамент" in b.lower() for b in buttons)
-
-
-def test_parse_ru_button():
-    assert parse_menu_button("🏠 Подбор апартаментов") == "search"
-    assert parse_menu_button("🔑 Услуги") == "services"
-
-
-def test_parse_uk_button():
-    assert parse_menu_button("🏠 Підбір апартаментів") == "search"
-    assert parse_menu_button("🔑 Послуги") == "services"
-
-
-def test_parse_en_button():
-    assert parse_menu_button("🏠 Find Apartments") == "search"
-    assert parse_menu_button("🔑 Services") == "services"
-
-
-def test_parse_unknown_returns_none():
-    assert parse_menu_button("totally unknown text xyz") is None
+# --- Fallback (no i18n) tests ---
 
 
 def test_build_client_keyboard_returns_markup():
@@ -74,8 +38,69 @@ def test_keyboard_is_persistent():
     assert kb.resize_keyboard is True
 
 
+def test_build_no_i18n_uses_ru_fallback():
+    from aiogram.types import ReplyKeyboardMarkup
+
+    kb = build_client_keyboard()
+    assert isinstance(kb, ReplyKeyboardMarkup)
+    buttons = [btn.text for row in kb.keyboard for btn in row]
+    assert any("апарт" in b.lower() for b in buttons)
+
+
 def test_menu_buttons_has_6_entries():
     assert len(MENU_BUTTONS) == 6
+
+
+def test_action_ids_has_6_entries():
+    assert len(_ACTION_IDS) == 6
+
+
+# --- i18n-aware tests ---
+
+
+def _make_mock_i18n(translations: dict[str, str]) -> MagicMock:
+    """Create a mock FluentTranslator that returns translations by key."""
+    i18n = MagicMock()
+    i18n.get.side_effect = lambda key, **_kw: translations.get(key, key)
+    return i18n
+
+
+def test_build_with_i18n():
+    from aiogram.types import ReplyKeyboardMarkup
+
+    i18n = _make_mock_i18n(
+        {
+            "kb-search": "🏠 Search",
+            "kb-services": "🔑 Services",
+            "kb-viewing": "📅 Viewing",
+            "kb-bookmarks": "📌 Bookmarks",
+            "kb-promotions": "🎁 Promotions",
+            "kb-manager": "👤 Manager",
+        }
+    )
+    kb = build_client_keyboard(i18n=i18n)
+    assert isinstance(kb, ReplyKeyboardMarkup)
+    buttons = [btn.text for row in kb.keyboard for btn in row]
+    assert len(buttons) == 6
+    assert "🏠 Search" in buttons
+    assert "🔑 Services" in buttons
+
+
+def test_build_with_i18n_calls_all_keys():
+    i18n = MagicMock()
+    i18n.get.return_value = "test"
+    build_client_keyboard(i18n=i18n)
+    called_keys = [call.args[0] for call in i18n.get.call_args_list]
+    for key in _ACTION_IDS:
+        assert key in called_keys
+
+
+# --- parse_menu_button tests ---
+
+
+def test_parse_ru_button_fallback():
+    assert parse_menu_button("🏠 Подбор апартаментов") == "search"
+    assert parse_menu_button("🔑 Услуги") == "services"
 
 
 def test_parse_menu_button_known():
@@ -87,5 +112,46 @@ def test_parse_menu_button_known():
     assert parse_menu_button("👤 Связь с менеджером") == "manager"
 
 
+def test_parse_unknown_returns_none():
+    assert parse_menu_button("totally unknown text xyz") is None
+
+
 def test_parse_menu_button_unknown():
     assert parse_menu_button("random text") is None
+
+
+def test_parse_with_i18n_hub():
+    mock_hub = MagicMock()
+    mock_translator = MagicMock()
+    mock_translator.get.side_effect = lambda key: {
+        "kb-search": "🏠 Підбір апартаментів",
+        "kb-services": "🔑 Послуги",
+        "kb-viewing": "📅 Запис на огляд",
+        "kb-bookmarks": "📌 Мої закладки",
+        "kb-promotions": "🎁 Акції",
+        "kb-manager": "👤 Зв'язок з менеджером",
+    }.get(key, key)
+    mock_hub.get_translator_by_locale.return_value = mock_translator
+
+    assert parse_menu_button("🏠 Підбір апартаментів", i18n_hub=mock_hub) == "search"
+    assert parse_menu_button("🔑 Послуги", i18n_hub=mock_hub) == "services"
+
+
+def test_parse_with_i18n_hub_fallback_to_menu_buttons():
+    mock_hub = MagicMock()
+    mock_translator = MagicMock()
+    mock_translator.get.return_value = "something else"
+    mock_hub.get_translator_by_locale.return_value = mock_translator
+
+    # Russian text not in i18n translations but matches MENU_BUTTONS
+    result = parse_menu_button("🏠 Подбор апартаментов", i18n_hub=mock_hub)
+    assert result == "search"
+
+
+def test_parse_with_i18n_hub_unknown():
+    mock_hub = MagicMock()
+    mock_translator = MagicMock()
+    mock_translator.get.return_value = "unrelated"
+    mock_hub.get_translator_by_locale.return_value = mock_translator
+
+    assert parse_menu_button("totally unknown", i18n_hub=mock_hub) is None
