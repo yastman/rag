@@ -195,7 +195,8 @@ async def _cache_check(
                 )
                 if sparse is None and sparse_from_hybrid is not None:
                     sparse = sparse_from_hybrid
-                    await cache.store_sparse_embedding(query, sparse_from_hybrid)
+                    if not pre_computed_sparse:
+                        await cache.store_sparse_embedding(query, sparse_from_hybrid)
             except Exception:
                 logger.debug("ColBERT query encode failed (non-critical), skipping")
 
