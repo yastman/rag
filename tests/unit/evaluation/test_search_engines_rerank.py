@@ -34,19 +34,14 @@ class TestRerankSearchEngineInit:
     @patch("src.evaluation.search_engines_rerank.BaselineSearchEngine")
     def test_init_raises_import_error_without_flag_embedding(self, mock_baseline_cls):
         """Test ImportError when FlagEmbedding is not installed."""
-        import sys
-
         from src.evaluation.search_engines_rerank import RerankSearchEngine
 
-        # Remove FlagEmbedding from sys.modules so the import inside __init__ fails
-        saved = sys.modules.pop("FlagEmbedding", None)
-        try:
+        # Setting module to None in sys.modules makes Python raise ImportError
+        # immediately without attempting a real import (which would download the model)
+        with patch.dict("sys.modules", {"FlagEmbedding": None}):
             mock_model = MagicMock()
             with pytest.raises(ImportError, match="FlagEmbedding is not installed"):
                 RerankSearchEngine("test_collection", mock_model)
-        finally:
-            if saved is not None:
-                sys.modules["FlagEmbedding"] = saved
 
     @patch("src.evaluation.search_engines_rerank.BaselineSearchEngine")
     def test_init_uses_default_reranker_model(self, mock_baseline_cls):
