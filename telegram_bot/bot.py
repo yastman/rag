@@ -948,9 +948,9 @@ class PropertyBot:
         if action_id is None:
             return
 
-        # Clear stale FSM state so user doesn't stay stuck in phone collection (#658)
+        # Clear only phone-collection FSM state to avoid wiping unrelated flows (#658)
         current = await state.get_state()
-        if current is not None:
+        if isinstance(current, str) and current.startswith("PhoneCollectorStates:"):
             await state.clear()
 
         handlers: dict[str, Any] = {
