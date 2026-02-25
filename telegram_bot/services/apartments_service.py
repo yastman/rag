@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 
 from qdrant_client import models
 
@@ -179,3 +180,41 @@ class ApartmentsService:
             )
 
         return formatted, len(result.points)
+
+    async def scroll_with_filters(
+        self,
+        filters: dict | None = None,
+        limit: int = 5,
+        offset: str | uuid.UUID | None = None,
+    ) -> tuple[list[dict], int, str | uuid.UUID | None]:
+        """Payload-only scroll (no vectors), ordered by price_eur.
+
+        Returns: (results, total_count, next_offset)
+        """
+        qdrant_filter = _build_apartment_filter(filters)
+
+        records, next_offset = await self._qdrant.client.scroll(
+            collection_name=self._qdrant.collection_name,
+            scroll_filter=qdrant_filter,
+            limit=limit,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+            order_by=models.OrderBy(key="price_eur"),
+        )
+
+        count_result = await self._qdrant.client.count(
+            collection_name=self._qdrant.collection_name,
+            count_filter=qdrant_filter,
+            exact=True,
+        )
+
+        formatted = [
+            {
+                "id": str(r.id),
+                "payload": r.payload or {},
+            }
+            for r in records
+        ]
+
+        return formatted, count_result.count, next_offset

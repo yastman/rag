@@ -26,6 +26,31 @@ def format_property_card(
     )
 
 
+def format_promotion_card(
+    *,
+    property_id: str,
+    complex_name: str,
+    rooms: int,
+    floor: int,
+    area_m2: int | float,
+    view: str,
+    price_eur: int | float,
+    old_price_eur: int | float,
+) -> str:
+    """Format apartment with active promotion, showing old/new price and discount %."""
+    discount_pct = round((1 - price_eur / old_price_eur) * 100) if old_price_eur else 0
+    price_new = f"{int(price_eur):,}".replace(",", " ")
+    price_old = f"{int(old_price_eur):,}".replace(",", " ")
+    rooms_text = {1: "Студия", 2: "1-спальня", 3: "2-спальни", 4: "3-спальни"}.get(
+        rooms, str(rooms)
+    )
+    return (
+        f"🔥 {complex_name}\n"
+        f"{rooms_text} · {floor} этаж · {area_m2} м² · {view}\n"
+        f"💰 {price_old} € → {price_new} € (-{discount_pct}%)"
+    )
+
+
 def build_card_buttons(property_id: str) -> InlineKeyboardMarkup:
     """Build inline buttons for a property card."""
     return InlineKeyboardMarkup(
