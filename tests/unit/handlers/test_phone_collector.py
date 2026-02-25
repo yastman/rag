@@ -71,7 +71,7 @@ def test_build_custom_fields_with_env_vars(monkeypatch):
     monkeypatch.setenv("KOMMO_TELEGRAM_FIELD_ID", "300")
     monkeypatch.setenv("KOMMO_TELEGRAM_USERNAME_FIELD_ID", "400")
 
-    fields = _build_custom_fields("viewing", "Осмотр объектов", 12345, "ivan")
+    fields = _build_custom_fields("Осмотр объектов", 12345, "ivan")
 
     assert {"field_id": 100, "values": [{"value": "Осмотр объектов"}]} in fields
     assert {"field_id": 200, "values": [{"value": "Telegram-бот"}]} in fields
@@ -85,7 +85,7 @@ def test_build_custom_fields_no_env_vars(monkeypatch):
     monkeypatch.delenv("KOMMO_TELEGRAM_FIELD_ID", raising=False)
     monkeypatch.delenv("KOMMO_TELEGRAM_USERNAME_FIELD_ID", raising=False)
 
-    fields = _build_custom_fields("viewing", "Осмотр объектов", 12345, "ivan")
+    fields = _build_custom_fields("Осмотр объектов", 12345, "ivan")
     assert fields == []
 
 
@@ -93,7 +93,7 @@ def test_build_custom_fields_no_username(monkeypatch):
     monkeypatch.setenv("KOMMO_SERVICE_FIELD_ID", "100")
     monkeypatch.setenv("KOMMO_TELEGRAM_USERNAME_FIELD_ID", "400")
 
-    fields = _build_custom_fields("viewing", "Осмотр объектов", 12345, None)
+    fields = _build_custom_fields("Осмотр объектов", 12345, None)
     field_ids = [f["field_id"] for f in fields]
     assert 100 in field_ids
     assert 400 not in field_ids
