@@ -113,3 +113,30 @@ class TestPromotionCard:
             old_price_eur=70000,
         )
         assert "-0%" in card
+
+
+# --- Edge-case regression tests ---
+
+
+def test_format_property_card_zero_price():
+    card = format_property_card(
+        property_id="p0",
+        complex_name="Zero Price",
+        location="Sofia",
+        property_type="Студия",
+        floor=1,
+        area_m2=30,
+        view="Двор",
+        price_eur=0,
+    )
+    assert "0" in card
+
+
+def test_build_results_footer_no_more():
+    from aiogram.types import InlineKeyboardMarkup
+
+    kb = build_results_footer(shown=3, total=3, has_more=False)
+    assert isinstance(kb, InlineKeyboardMarkup)
+    callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    assert "results:more" not in callbacks
+    assert "results:refine" in callbacks

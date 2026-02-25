@@ -31,7 +31,7 @@ Menu:   ReplyKeyboard button → handle_menu_button() → dispatch:
              🔑 Услуги → _handle_services → inline services menu (svc:/cta: callbacks)
              📅 Запись на осмотр → _handle_viewing → phone_collector FSM
              📌 Мои закладки → _handle_bookmarks → FavoritesService (fav: callbacks)
-             🎁 Акции → _handle_promotions → handle_query("Покажи актуальные акции")
+             🎁 Акции → _handle_promotions → get_promotions() from services.yaml (#628)
              👤 Связь с менеджером → _handle_manager → handle_query("Соедини с менеджером")
         Inline callbacks: svc:*/cta:* → service cards | fav:* → favorites CRUD | results:* → pagination/viewing
 
@@ -75,11 +75,11 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 | `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection, injects `i18n`, `locale`, `property_bot`, `apartments_service` (#660) |
 | `telegram_bot/dialogs/` | aiogram-dialog menus: `crm_submenu`, `faq`, `funnel`, `manager_menu`, `settings` |
-| `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler |
+| `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler + Kommo CRM lead creation (#628) |
 | `telegram_bot/keyboards/client_keyboard.py` | Client ReplyKeyboard — `build_client_keyboard(i18n=)`, `get_menu_button_texts(i18n_hub=)`, `parse_menu_button(text, i18n_hub=)` with .ftl keys (#660) |
 | `telegram_bot/keyboards/property_card.py` | Property listing card with bookmark + results footer |
 | `telegram_bot/keyboards/services_keyboard.py` | Services inline menu (5 services) |
-| `telegram_bot/services/apartments_service.py` | ApartmentsService — hybrid search + `scroll_with_filters()` payload-only queries (#632, #660) |
+| `telegram_bot/services/apartments_service.py` | ApartmentsService — hybrid search + `scroll_with_filters()` + funnel `search()` (#632, #660, #628) |
 | `telegram_bot/services/apartment_filter_extractor.py` | Regex filter parser: rooms, price, complex, view, floor, area (#632) |
 | `telegram_bot/services/favorites_service.py` | User apartment favorites (asyncpg, add/remove/list/count) |
 | `telegram_bot/agents/apartment_tools.py` | `apartment_search` @tool — agent escalation for complex queries (#632) |
@@ -175,7 +175,7 @@ Visible labels are localized from `.ftl` keys (`kb-search`, `kb-services`, `kb-v
 | 🔑 Услуги | `_handle_services` | Shows inline services menu (`build_services_menu`) |
 | 📅 Запись на осмотр | `_handle_viewing` | `start_phone_collection(msg, state, source="viewing_main_menu")` |
 | 📌 Мои закладки | `_handle_bookmarks` | FavoritesService list → property cards or empty message |
-| 🎁 Акции | `_handle_promotions` | `handle_menu_action_text(msg, "Покажи актуальные акции")` |
+| 🎁 Акции | `_handle_promotions` | `get_promotions()` from `services.yaml` (#628) |
 | 👤 Связь с менеджером | `_handle_manager` | `handle_menu_action_text(msg, "Соедини с менеджером")` |
 
 **`handle_menu_action_text(message, query_text)`**: DRY helper — patches message text via `model_copy(update={"text": query_text})` and delegates to `handle_query`.
@@ -190,6 +190,24 @@ Visible labels are localized from `.ftl` keys (`kb-search`, `kb-services`, `kb-v
 | `results:` | `handle_results_callback` | `results:more`, `results:refine`, `results:viewing` (phone FSM) |
 
 Service keys from `config/services.yaml`: `passive_income`, `online_deals`, `vnzh`, `installment`, `infotour`.
+Promotions section: `config/services.yaml` → `promotions:` list with `emoji`, `title`, `text` per item (#628).
+
+### Funnel → Hybrid Search (#628)
+
+`get_results_data()` in `dialogs/funnel.py` calls `ApartmentsService.search()` with BGE-M3 embeddings:
+1. Resolves `apartments_service` + `hybrid_embeddings` from `middleware_data` (fallback: `property_bot._apartments_service`)
+2. Builds query text from dialog_data (city + property_type)
+3. `embeddings.aembed_hybrid(query_text)` → dense + sparse vectors
+4. `_build_funnel_filters(dialog_data)` → Qdrant payload filters (rooms, price_eur, city, floor, view_tags)
+5. `svc.search(dense_vector, sparse_vector, filters, top_k=5)` → results
+6. Formats via `format_property_card()` or returns fallback text
+
+### PhoneCollector → Kommo CRM (#628)
+
+`on_phone_received()` accepts `kommo_client` via middleware DI (not FSM state):
+1. Validates phone → clears FSM state
+2. If `kommo_client is not None`: `upsert_contact` → `create_lead` → `link_contact_to_lead` → `create_task`
+3. Graceful degradation: `try/except` with `logger.exception`, user always gets confirmation
 
 ### Handler Registration Order (`_register_handlers`)
 
@@ -369,7 +387,11 @@ pytest tests/unit/agents/ -v                             # Agent tests (factory,
 pytest tests/unit/services/test_generate_response.py -v  # Shared generation service
 pytest tests/unit/dialogs/test_menu_routing.py -v        # Menu routing dialog tests
 pytest tests/unit/keyboards/ -v                          # Keyboard builder tests
-pytest tests/unit/handlers/test_phone_collector.py -v    # Phone collector FSM tests
+pytest tests/unit/handlers/test_phone_collector.py -v    # Phone collector FSM + CRM lead tests
+pytest tests/unit/handlers/test_phone_crm_integration.py -v  # CRM integration tests (#628)
+pytest tests/unit/dialogs/test_funnel.py -v              # Funnel dialog + hybrid search tests (#628)
+pytest tests/unit/dialogs/test_funnel_results.py -v      # Funnel filter building + results getter (#628)
+pytest tests/unit/services/test_content_loader_promotions.py -v  # Promotions config tests (#628)
 pytest tests/unit/services/test_favorites_service.py -v  # Favorites service tests
 pytest tests/integration/test_graph_paths.py -v          # Graph path tests incl. voice flow (~5s, no Docker)
 pytest tests/smoke/test_langgraph_pipeline.py -v         # Smoke tests
