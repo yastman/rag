@@ -99,6 +99,16 @@ def test_build_custom_fields_no_username(monkeypatch):
     assert 400 not in field_ids
 
 
+def test_build_custom_fields_blank_env_vars(monkeypatch):
+    monkeypatch.setenv("KOMMO_SERVICE_FIELD_ID", "")
+    monkeypatch.setenv("KOMMO_SOURCE_FIELD_ID", "")
+    monkeypatch.setenv("KOMMO_TELEGRAM_FIELD_ID", "")
+    monkeypatch.setenv("KOMMO_TELEGRAM_USERNAME_FIELD_ID", "")
+
+    fields = _build_custom_fields("Осмотр объектов", 12345, "ivan")
+    assert fields == []
+
+
 # --- _build_note_text tests ---
 
 
@@ -255,3 +265,34 @@ async def test_on_phone_received_sends_personalized_success():
 
     answer_text = message.answer.call_args[0][0]
     assert "бронирования инфотура" in answer_text
+
+
+async def test_on_phone_received_blank_responsible_id_does_not_break_crm(monkeypatch):
+    """Empty KOMMO_RESPONSIBLE_USER_ID should not abort lead creation."""
+    monkeypatch.setenv("KOMMO_RESPONSIBLE_USER_ID", "")
+    monkeypatch.setenv("KOMMO_DEFAULT_PIPELINE_ID", "0")
+    monkeypatch.setenv("KOMMO_NEW_STATUS_ID", "0")
+
+    mock_kommo = AsyncMock()
+    mock_kommo.upsert_contact.return_value = SimpleNamespace(id=7)
+    mock_kommo.create_lead.return_value = SimpleNamespace(id=8)
+
+    state = AsyncMock()
+    state.get_data.return_value = {"service_key": "manager", "viewing_objects": []}
+
+    message = AsyncMock()
+    message.text = "+380501234567"
+    message.from_user = SimpleNamespace(id=321, first_name="Иван", last_name=None, username=None)
+
+    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+        mock_cfg.return_value = {
+            "entry_points": {
+                "manager": {
+                    "crm_title": "Консультация",
+                    "phone_success": "Спасибо! Менеджер свяжется с вами в ближайшее время",
+                }
+            }
+        }
+        await mod.on_phone_received(message, state, kommo_client=mock_kommo)
+
+    mock_kommo.create_lead.assert_awaited_once()
