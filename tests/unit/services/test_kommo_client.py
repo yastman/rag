@@ -227,3 +227,39 @@ async def test_update_contact_with_custom_fields(kommo_client, httpx_mock):
     update = ContactUpdate(custom_fields_values=fields)
     contact = await kommo_client.update_contact(789, update)
     assert contact.id == 789
+
+
+# --- Phase 3: create_task, link_contact_to_lead (#660) ---
+
+
+async def test_create_task(kommo_client, httpx_mock):
+    """create_task sends POST /api/v4/tasks and returns Task."""
+    from telegram_bot.services.kommo_models import TaskCreate
+
+    httpx_mock.add_response(
+        url="https://test-co.kommo.com/api/v4/tasks",
+        method="POST",
+        json={
+            "_embedded": {
+                "tasks": [{"id": 300, "text": "Перезвонить: +380501234567", "entity_id": 101}]
+            }
+        },
+    )
+
+    task = await kommo_client.create_task(
+        TaskCreate(text="Перезвонить: +380501234567", entity_id=101, complete_till=9999999999)
+    )
+    assert task.id == 300
+    assert task.entity_id == 101
+
+
+async def test_link_contact_to_lead(kommo_client, httpx_mock):
+    """link_contact_to_lead sends POST /api/v4/leads/{id}/link without error."""
+    httpx_mock.add_response(
+        url="https://test-co.kommo.com/api/v4/leads/101/link",
+        method="POST",
+        json={},
+    )
+
+    # Should complete without raising an exception
+    await kommo_client.link_contact_to_lead(101, 456)
