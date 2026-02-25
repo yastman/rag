@@ -18,16 +18,6 @@ from telegram_bot.bot import PropertyBot, make_session_id
 from telegram_bot.config import BotConfig
 
 
-@pytest.fixture(autouse=True)
-def _reset_phone_router():
-    """Detach phone_router between tests so include_router() succeeds on fresh Dispatcher."""
-    from telegram_bot.handlers.phone_collector import phone_router
-
-    phone_router._parent_router = None
-    yield
-    phone_router._parent_router = None
-
-
 @pytest.fixture
 def mock_config(monkeypatch):
     """Create mock bot config."""
@@ -1816,6 +1806,20 @@ class TestPostgresPoolInit:
         assert mock_connect.await_args_list[1].kwargs["database"] == "postgres"
         admin_conn.execute.assert_awaited_once_with('CREATE DATABASE "realestate"')
         test_conn.close.assert_awaited_once()
+
+    async def test_ensure_realestate_schema_creates_user_favorites(self, mock_config):
+        """Schema bootstrap must include user_favorites for FavoritesService runtime."""
+        bot, _ = _create_bot(mock_config)
+        bot._pg_pool = AsyncMock()
+
+        await bot._ensure_realestate_schema()
+
+        statements = [call.args[0] for call in bot._pg_pool.execute.await_args_list]
+        ddl = "\n".join(statements)
+        assert "CREATE TABLE IF NOT EXISTS user_favorites" in ddl
+        assert "UNIQUE (telegram_id, property_id)" in ddl
+        assert "idx_user_favorites_telegram_id" in ddl
+        assert "idx_user_favorites_created_at" in ddl
 
 
 class TestKommoGracefulInit:
