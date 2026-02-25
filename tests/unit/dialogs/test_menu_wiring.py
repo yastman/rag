@@ -48,7 +48,7 @@ async def test_handle_menu_button_clears_stale_fsm_state():
         await bot.handle_menu_button(message, state)
 
         state.clear.assert_called_once()
-        bot._handle_services.assert_called_once_with(message)
+        bot._handle_services.assert_called_once_with(message, i18n=None)
 
 
 async def test_handle_menu_button_no_clear_when_state_is_none():
@@ -71,7 +71,7 @@ async def test_handle_menu_button_no_clear_when_state_is_none():
         await bot.handle_menu_button(message, state)
 
         state.clear.assert_not_called()
-        bot._handle_services.assert_called_once_with(message)
+        bot._handle_services.assert_called_once_with(message, i18n=None)
 
 
 async def test_handle_menu_button_no_clear_for_unrelated_state():
@@ -94,7 +94,7 @@ async def test_handle_menu_button_no_clear_for_unrelated_state():
         await bot.handle_menu_button(message, state)
 
         state.clear.assert_not_called()
-        bot._handle_services.assert_called_once_with(message)
+        bot._handle_services.assert_called_once_with(message, i18n=None)
 
 
 async def test_handle_search_starts_funnel_dialog():
