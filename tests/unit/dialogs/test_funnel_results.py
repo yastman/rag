@@ -141,3 +141,30 @@ async def test_get_results_data_no_service():
     result = await get_results_data(dialog_manager=manager)
     assert result["results_text"]  # non-empty fallback
     assert result["btn_back"] == "Назад"
+
+
+@pytest.mark.asyncio
+async def test_get_results_data_malformed_payload():
+    """get_results_data must not crash when search returns items without payload key."""
+    from telegram_bot.dialogs.funnel import get_results_data
+
+    mock_svc = MagicMock()
+    mock_svc.search = AsyncMock(
+        return_value=[
+            {"id": "apt-bad"},  # missing "payload" key
+        ],
+    )
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = AsyncMock(
+        return_value=([0.1] * 16, {"indices": [], "values": []})
+    )
+
+    manager = SimpleNamespace(
+        dialog_data={"property_type": "any", "budget": "any"},
+        middleware_data={"apartments_service": mock_svc, "hybrid_embeddings": mock_embeddings},
+    )
+
+    result = await get_results_data(dialog_manager=manager)
+    # Must not crash — falls through to no_results_text via exception handler
+    assert result["results_text"]

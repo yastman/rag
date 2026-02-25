@@ -158,6 +158,17 @@ def test_parse_with_i18n_hub_unknown():
     assert parse_menu_button("totally unknown", i18n_hub=mock_hub) is None
 
 
+def test_parse_menu_button_i18n_hub_raises_fallback():
+    """When i18n_hub.get_translator_by_locale raises, fallback to MENU_BUTTONS."""
+    mock_hub = MagicMock()
+    mock_hub.get_translator_by_locale.side_effect = RuntimeError("hub broken")
+
+    # Still resolves via MENU_BUTTONS fallback
+    assert parse_menu_button("🏠 Подбор апартаментов", i18n_hub=mock_hub) == "search"
+    # Unknown text still returns None
+    assert parse_menu_button("random", i18n_hub=mock_hub) is None
+
+
 def test_get_menu_button_texts_includes_localized_labels():
     mock_hub = MagicMock()
 
