@@ -65,14 +65,30 @@ make git-hygiene-fix      ***REMOVED*** Auto-cleanup merged branches
 - Stale feature branches (> 30 days, no activity): close PR with comment, delete branch
 - Worktrees: clean up after feature completion (`git worktree remove <path>`)
 
-***REMOVED******REMOVED*** Parallel Agents & Git Worktrees
+***REMOVED******REMOVED*** Parallel Sessions & Git Worktrees
 
-**Problem:** Multiple agents sharing one repo switch branches simultaneously → files change under each other, tests fail on wrong code, edits get lost.
+**Problem:** Multiple sessions/agents sharing one repo switch branches simultaneously → files change under each other, tests fail on wrong code, edits get lost.
 
-**Rule:** When 2+ agents work on different branches in parallel — each agent MUST use its own worktree.
+**Rule:** When 2+ sessions or agents work on different branches — each MUST use its own worktree.
+
+***REMOVED******REMOVED******REMOVED*** Method 1: `claude --worktree` (recommended)
 
 ```bash
-***REMOVED*** Create worktree for agent
+***REMOVED*** User sessions — each terminal gets isolated worktree
+claude --worktree feature-auth    ***REMOVED*** → .claude/worktrees/feature-auth/, branch worktree-feature-auth
+claude --worktree bugfix-123      ***REMOVED*** → .claude/worktrees/bugfix-123/, branch worktree-bugfix-123
+claude --worktree                 ***REMOVED*** → random name (e.g. bright-running-fox)
+```
+
+- Worktrees: `<repo>/.claude/worktrees/<name>/` (in .gitignore)
+- Branch: `worktree-<name>`, based on default remote branch
+- Cleanup: auto-remove if no changes; prompt if changes exist
+- Subagents: `isolation: worktree` in agent frontmatter
+
+***REMOVED******REMOVED******REMOVED*** Method 2: Manual `git worktree` (custom paths/branches)
+
+```bash
+***REMOVED*** Create worktree for agent with specific branch
 git worktree add /repo-wt-{name} {branch}
 
 ***REMOVED*** Agent works in its own directory — no branch conflicts
@@ -80,12 +96,15 @@ git worktree add /repo-wt-{name} {branch}
 git worktree remove /repo-wt-{name}
 ```
 
+***REMOVED******REMOVED******REMOVED*** When to use what
+
 | Scenario | Approach |
 |----------|----------|
-| 1 agent, 1 PR | Normal checkout in main repo |
-| 2+ agents, different PRs | Each agent in own worktree |
+| 1 session, 1 task | Normal checkout in main repo |
+| 2+ user sessions | `claude --worktree <name>` per terminal |
+| 2+ agents, different PRs | Each agent: `isolation: worktree` or manual worktree |
 | Lead + workers | Lead in main repo, workers in worktrees |
-| Sequential PR fixes | Normal checkout, switch between branches |
+| Specific existing branch | Manual: `git worktree add <path> <branch>` |
 
 **In agent team prompts:** Include working directory path explicitly:
 ```
