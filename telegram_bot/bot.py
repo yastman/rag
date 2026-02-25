@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 # --- Checkpoint namespace constants (versioned for safe migration) ---
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
+_APARTMENT_PAGE_SIZE = 5
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -1156,10 +1157,27 @@ class PropertyBot:
             return
 
         if action == "add" and property_id:
+            # Build property_data from saved apartment results (#655)
+            state_data = await state.get_data()
+            apt_results = state_data.get("apartment_results", [])
+            matched = next((r for r in apt_results if r.get("id") == property_id), None)
+            if matched:
+                p = matched["payload"]
+                property_data: dict[str, Any] = {
+                    "complex_name": p.get("complex_name", ""),
+                    "location": p.get("city", ""),
+                    "property_type": p.get("property_type", ""),
+                    "floor": p.get("floor", 0),
+                    "area_m2": p.get("area_m2", 0),
+                    "view": ", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
+                    "price_eur": p.get("price_eur", 0),
+                }
+            else:
+                property_data = {}
             result = await favorites_service.add(
                 telegram_id=callback.from_user.id,
                 property_id=property_id,
-                property_data={},
+                property_data=property_data,
             )
             if result:
                 await callback.answer("Добавлено в закладки")
@@ -1192,14 +1210,59 @@ class PropertyBot:
             await callback.answer()
 
     async def handle_results_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
-        """Handle property results callbacks (more/refine/viewing) (#628)."""
+        """Handle property results callbacks (more/refine/viewing) (#654)."""
+        from .keyboards.property_card import (
+            build_card_buttons,
+            build_results_footer,
+            format_property_card,
+        )
+
         data = callback.data or ""
         if data == "results:more":
-            # Placeholder — будет показывать следующую порцию
-            await callback.answer("Загрузка...")
+            state_data = await state.get_data()
+            results = state_data.get("apartment_results")
+            offset = state_data.get("apartment_offset", 0)
+            if not results:
+                await callback.answer("Нет сохранённых результатов")
+                return
+            new_offset = offset + _APARTMENT_PAGE_SIZE
+            if new_offset >= len(results):
+                await callback.answer("Все результаты уже показаны")
+                return
+            page = results[new_offset : new_offset + _APARTMENT_PAGE_SIZE]
+            for result in page:
+                p = result.get("payload", {})
+                card = format_property_card(
+                    property_id=result["id"],
+                    complex_name=p.get("complex_name", ""),
+                    location=p.get("city", ""),
+                    property_type=p.get("property_type", ""),
+                    floor=p.get("floor", 0),
+                    area_m2=p.get("area_m2", 0),
+                    view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
+                    price_eur=p.get("price_eur", 0),
+                )
+                if callback.message:
+                    await callback.message.answer(
+                        card, reply_markup=build_card_buttons(result["id"])
+                    )
+            shown = len(page)
+            total = len(results)
+            has_more = new_offset + _APARTMENT_PAGE_SIZE < total
+            if callback.message:
+                await callback.message.answer(
+                    f"Показано {new_offset + 1}–{new_offset + shown} из {total}",
+                    reply_markup=build_results_footer(shown=shown, total=total, has_more=has_more),
+                )
+            await state.update_data(apartment_offset=new_offset)
+            await callback.answer()
         elif data == "results:refine":
-            # Placeholder — возвращает в воронку
-            await callback.answer("Изменение параметров...")
+            await state.update_data(apartment_results=None, apartment_offset=0)
+            if callback.message:
+                await callback.message.answer(
+                    "Опишите, какие апартаменты вы ищете, и я подберу варианты."
+                )
+            await callback.answer()
         elif data == "results:viewing":
             from .handlers.phone_collector import start_phone_collection
 
@@ -1208,7 +1271,9 @@ class PropertyBot:
             await callback.answer()
 
     @observe(name="telegram-rag-query")
-    async def handle_query(self, message: Message, locale: str = "ru"):
+    async def handle_query(
+        self, message: Message, locale: str = "ru", state: FSMContext | None = None
+    ):
         """Handle user query via supervisor graph (#310: supervisor-only)."""
         pipeline_start = time.perf_counter()
         assert message.bot is not None
@@ -1222,6 +1287,7 @@ class PropertyBot:
             pipeline_start,
             locale=locale,
             root_trace_metadata=root_trace_metadata,
+            state=state,
         )
         update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
         if root_trace_metadata:
@@ -1266,6 +1332,7 @@ class PropertyBot:
         *,
         user_text: str,
         message: Message,
+        state: FSMContext | None = None,
     ) -> str | None:
         """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
         from .services.apartment_filter_extractor import ApartmentFilterExtractor
@@ -1318,6 +1385,41 @@ class PropertyBot:
         response_text = str(generated.get("response", "") or context)
         if not generated.get("response_sent"):
             await self._send_markdown_chunks(message, response_text)
+
+        # Store results in FSMContext and send property cards (#654)
+        if state is not None and results:
+            from .keyboards.property_card import (
+                build_card_buttons,
+                build_results_footer,
+                format_property_card,
+            )
+
+            await state.update_data(
+                apartment_results=results, apartment_query=user_text, apartment_offset=0
+            )
+            page = results[:_APARTMENT_PAGE_SIZE]
+            for result in page:
+                p = result.get("payload", {})
+                card = format_property_card(
+                    property_id=result["id"],
+                    complex_name=p.get("complex_name", ""),
+                    location=p.get("city", ""),
+                    property_type=p.get("property_type", ""),
+                    floor=p.get("floor", 0),
+                    area_m2=p.get("area_m2", 0),
+                    view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
+                    price_eur=p.get("price_eur", 0),
+                )
+                await message.answer(card, reply_markup=build_card_buttons(result["id"]))
+            shown = len(page)
+            total = len(results)
+            await message.answer(
+                f"Показано {shown} из {total}",
+                reply_markup=build_results_footer(
+                    shown=shown, total=total, has_more=total > _APARTMENT_PAGE_SIZE
+                ),
+            )
+
         return response_text
 
     async def _handle_client_direct_pipeline(
@@ -1330,6 +1432,7 @@ class PropertyBot:
         role: str,
         query_type: str,
         rag_result_store: dict[str, Any],
+        state: FSMContext | None = None,
     ) -> str | None:
         """Thin wrapper: delegates to run_client_pipeline (see pipelines/client.py).
 
@@ -1344,6 +1447,7 @@ class PropertyBot:
             apt_answer = await self._handle_apartment_fast_path(
                 user_text=user_text,
                 message=message,
+                state=state,
             )
             if apt_answer is not None:
                 return apt_answer
@@ -1377,6 +1481,7 @@ class PropertyBot:
         pipeline_start: float,
         locale: str = "ru",
         root_trace_metadata: dict[str, Any] | None = None,
+        state: FSMContext | None = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
         from .agents.agent import LOCALE_TO_LANGUAGE
@@ -1643,6 +1748,7 @@ class PropertyBot:
                             role=role,
                             query_type=query_type,
                             rag_result_store=rag_result_store,
+                            state=state,
                         )
                         if pipeline_answer is not None:
                             if root_trace_metadata is not None:
