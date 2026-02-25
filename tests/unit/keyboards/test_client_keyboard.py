@@ -158,6 +158,10 @@ def test_parse_with_i18n_hub_unknown():
     assert parse_menu_button("totally unknown", i18n_hub=mock_hub) is None
 
 
+def test_parse_menu_button_empty_returns_none():
+    assert parse_menu_button("") is None
+
+
 def test_get_menu_button_texts_includes_localized_labels():
     mock_hub = MagicMock()
 
