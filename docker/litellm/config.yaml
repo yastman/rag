@@ -15,7 +15,6 @@ model_list:
       api_key: os.environ/CEREBRAS_API_KEY
       max_completion_tokens: 1024
       merge_reasoning_content_in_choices: true
-      reasoning_effort: low
 
   # Standalone alias for benchmarking
   - model_name: gpt-oss-120b
@@ -24,7 +23,6 @@ model_list:
       api_key: os.environ/CEREBRAS_API_KEY
       max_completion_tokens: 1024
       merge_reasoning_content_in_choices: true
-      reasoning_effort: low
 
   # Fallback 1: Cerebras GLM 4.7 (бывшая primary)
   - model_name: gpt-4o-mini-cerebras-glm
@@ -65,6 +63,7 @@ general_settings:
 router_settings:
   fallbacks:
     - gpt-4o-mini: [gpt-4o-mini-cerebras-glm, gpt-4o-mini-fallback, gpt-4o-mini-openai]
+    - gpt-oss-120b: [gpt-4o-mini-cerebras-glm, gpt-4o-mini-fallback, gpt-4o-mini-openai]
   retry_policy:
     retry_count: 2
 
