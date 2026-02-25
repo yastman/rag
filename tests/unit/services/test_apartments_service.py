@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from telegram_bot.services.apartments_service import (
+    ApartmentsService,
     _build_apartment_filter,
     check_escalation,
 )
@@ -66,3 +71,59 @@ class TestCheckEscalation:
         result = check_escalation(returned_count=5, top_k=10, score_spread=0.3, confidence="LOW")
         assert result is not None
         assert "low_confidence" in result
+
+
+class TestScrollWithFilters:
+    """Test payload-only scroll without vectors."""
+
+    @pytest.fixture
+    def mock_qdrant(self) -> MagicMock:
+        q = MagicMock()
+        q.client = MagicMock()
+        q.collection_name = "apartments"
+        q.client.scroll = AsyncMock(return_value=([], None))
+        q.client.count = AsyncMock(return_value=MagicMock(count=0))
+        return q
+
+    async def test_scroll_builds_rooms_filter(self, mock_qdrant: MagicMock) -> None:
+        svc = ApartmentsService(mock_qdrant)
+        await svc.scroll_with_filters({"rooms": 2})
+        assert mock_qdrant.client.scroll.called
+        call_kwargs = mock_qdrant.client.scroll.call_args.kwargs
+        assert call_kwargs.get("scroll_filter") is not None
+
+    async def test_scroll_returns_formatted_results(self, mock_qdrant: MagicMock) -> None:
+        record = MagicMock()
+        record.id = "abc-123"
+        record.payload = {"rooms": 2, "price_eur": 150000.0, "complex_name": "Test"}
+        mock_qdrant.client.scroll = AsyncMock(return_value=([record], None))
+        mock_qdrant.client.count = AsyncMock(return_value=MagicMock(count=1))
+
+        svc = ApartmentsService(mock_qdrant)
+        results, total, _offset = await svc.scroll_with_filters({"rooms": 2})
+
+        assert len(results) == 1
+        assert results[0]["payload"]["rooms"] == 2
+        assert results[0]["id"] == "abc-123"
+        assert total == 1
+
+    async def test_scroll_with_promotion_filter(self, mock_qdrant: MagicMock) -> None:
+        svc = ApartmentsService(mock_qdrant)
+        await svc.scroll_with_filters({"is_promotion": True})
+
+        assert mock_qdrant.client.scroll.called
+        call_kwargs = mock_qdrant.client.scroll.call_args.kwargs
+        assert call_kwargs.get("scroll_filter") is not None
+
+    async def test_scroll_no_filter_passes_none(self, mock_qdrant: MagicMock) -> None:
+        svc = ApartmentsService(mock_qdrant)
+        await svc.scroll_with_filters({})
+
+        call_kwargs = mock_qdrant.client.scroll.call_args.kwargs
+        assert call_kwargs.get("scroll_filter") is None
+
+    async def test_scroll_returns_next_offset(self, mock_qdrant: MagicMock) -> None:
+        mock_qdrant.client.scroll = AsyncMock(return_value=([], "offset-token"))
+        svc = ApartmentsService(mock_qdrant)
+        _, _, next_offset = await svc.scroll_with_filters({})
+        assert next_offset == "offset-token"
