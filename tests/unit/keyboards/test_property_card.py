@@ -80,3 +80,36 @@ class TestPromotionCard:
             old_price_eur=100000,
         )
         assert "-20%" in card
+
+    def test_zero_old_price_no_crash(self):
+        """ZeroDivisionError guard: old_price_eur=0 must not crash."""
+        from telegram_bot.keyboards.property_card import format_promotion_card
+
+        card = format_promotion_card(
+            property_id="p4",
+            complex_name="Test",
+            rooms=1,
+            floor=1,
+            area_m2=30,
+            view="",
+            price_eur=50000,
+            old_price_eur=0,
+        )
+        assert "-0%" in card
+        assert "50 000" in card
+
+    def test_equal_prices_zero_discount(self):
+        """Equal prices must show -0% discount, not crash."""
+        from telegram_bot.keyboards.property_card import format_promotion_card
+
+        card = format_promotion_card(
+            property_id="p5",
+            complex_name="Same",
+            rooms=2,
+            floor=3,
+            area_m2=55,
+            view="Море",
+            price_eur=70000,
+            old_price_eur=70000,
+        )
+        assert "-0%" in card
