@@ -1,6 +1,6 @@
 """Tests for content_loader."""
 
-from telegram_bot.services.content_loader import load_services_config
+from telegram_bot.services.content_loader import get_service_card, load_services_config
 
 
 def test_load_services_config():
@@ -44,3 +44,7 @@ def test_load_services_config_file_not_found(monkeypatch, tmp_path):
 
     # Restore cache for other tests
     mod.load_services_config.cache_clear()
+
+
+def test_get_service_card_missing_key():
+    assert get_service_card("nonexistent_key") is None

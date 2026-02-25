@@ -26,3 +26,9 @@ def get_service_card(service_key: str) -> dict[str, Any] | None:
     """Get single service config by key."""
     config = load_services_config()
     return config.get("services", {}).get(service_key)
+
+
+def get_promotions() -> list[dict[str, Any]]:
+    """Get promotions list from config."""
+    config = load_services_config()
+    return config.get("promotions", [])
