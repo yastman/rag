@@ -18,6 +18,19 @@ def _load_k8s_config() -> dict:
     return yaml.safe_load(cm["data"]["config.yaml"])
 
 
+def _iter_model_entries(cfg: dict, provider_model: str) -> list[dict]:
+    return [
+        entry
+        for entry in cfg["model_list"]
+        if entry.get("litellm_params", {}).get("model") == provider_model
+    ]
+
+
+def _fallback_model_groups(cfg: dict) -> set[str]:
+    fallbacks = cfg.get("router_settings", {}).get("fallbacks", [])
+    return {next(iter(item.keys())) for item in fallbacks if isinstance(item, dict) and item}
+
+
 class TestLiteLLMConfigSync:
     def test_model_list_matches(self):
         """Docker and k8s model_list have same models with same params."""
@@ -51,3 +64,26 @@ class TestLiteLLMConfigSync:
         docker = _load_docker_config()
         k8s = _load_k8s_config()
         assert docker["litellm_settings"] == k8s["litellm_settings"]
+
+    def test_cerebras_gpt_oss_models_do_not_set_reasoning_effort(self):
+        """Guard against UnsupportedParamsError on cerebras/gpt-oss-120b."""
+        docker = _load_docker_config()
+        k8s = _load_k8s_config()
+
+        for source, cfg in (("docker", docker), ("k8s", k8s)):
+            entries = _iter_model_entries(cfg, "cerebras/gpt-oss-120b")
+            assert entries, f"No cerebras/gpt-oss-120b entries in {source} config"
+            for entry in entries:
+                params = entry["litellm_params"]
+                assert "reasoning_effort" not in params, (
+                    f"{source}:{entry['model_name']} must not set reasoning_effort for "
+                    "cerebras/gpt-oss-120b"
+                )
+
+    def test_gpt_oss_120b_has_fallback_group(self):
+        """Ensure gpt-oss-120b requests can fallback instead of hard-failing."""
+        docker = _load_docker_config()
+        k8s = _load_k8s_config()
+
+        assert "gpt-oss-120b" in _fallback_model_groups(docker)
+        assert "gpt-oss-120b" in _fallback_model_groups(k8s)
