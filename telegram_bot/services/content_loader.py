@@ -28,6 +28,15 @@ def get_service_card(service_key: str) -> dict[str, Any] | None:
     return config.get("services", {}).get(service_key)
 
 
+def get_phone_config(service_key: str) -> dict[str, Any] | None:
+    """Get phone collection config by service or entry point key."""
+    config = load_services_config()
+    svc = config.get("services", {}).get(service_key)
+    if svc:
+        return svc
+    return config.get("entry_points", {}).get(service_key)
+
+
 def get_promotions() -> list[dict[str, Any]]:
     """Get promotions list from config."""
     config = load_services_config()
