@@ -76,3 +76,72 @@ crm-create-contact = Создать контакт
 crm-add-note = Добавить заметку
 crm-create-task = Создать задачу
 crm-pipelines = Pipelines
+
+# Клиентское ReplyKeyboard (#660)
+kb-search = 🏠 Подбор апартаментов
+kb-services = 🔑 Услуги
+kb-viewing = 📅 Запись на осмотр
+kb-bookmarks = 📌 Мои закладки
+kb-promotions = 🎁 Акции
+kb-manager = 👤 Связь с менеджером
+
+# Welcome (#660)
+welcome-text =
+    Добро пожаловать в FortNoks Estate! 🇧🇬
+
+    19 жилых комплексов на побережье Болгарии.
+    Работаем напрямую — без посредников и риелторов.
+
+    • Апартаменты от 38 900 €
+    • Рассрочка от застройщика (взнос от 5%)
+    • Оформление по украинскому паспорту
+    • Дистанционное оформление сделки
+    • Все виды оплат (Cash / Card / Crypto)
+    • Бесплатный трансфер и инфотур
+
+    Задайте любой вопрос — я отвечу 💬
+
+# Воронка — шаги (#660)
+funnel-step-rooms = Выберите количество комнат:
+funnel-rooms-studio = Студио
+funnel-rooms-1bed = 1 спальня
+funnel-rooms-2bed = 2 спальни
+funnel-rooms-3bed = 3 спальни
+funnel-rooms-any = Любой
+funnel-step-budget = Укажите бюджет:
+funnel-budget-50k = до 50 000€
+funnel-budget-50-100 = 50-100 000€
+funnel-budget-100-200 = 100-200 000€
+funnel-budget-200plus = 200 000€+
+funnel-budget-any = Любой
+funnel-step-refine = Хотите уточнить параметры?
+funnel-show-results = 🔍 Показать варианты
+funnel-refine-more = ⚙️ Уточнить ещё
+
+# Результаты (#660)
+results-shown = Показано { $shown } из { $total } вариантов
+results-show-more = 🔄 Показать ещё
+results-refine = ⚙️ Изменить параметры
+results-book-viewing = 📅 Запись на осмотр
+results-no-results =
+    К сожалению, по вашим критериям ничего не найдено.
+    Попробуйте изменить параметры.
+
+# Телефон (#660)
+phone-prompt = Введите ваш номер телефона:
+phone-invalid = Пожалуйста, введите корректный номер телефона (7-15 цифр).
+phone-success = Спасибо за заявку! Менеджер свяжется с вами в ближайшее время.
+
+# Акции (#660)
+promotions-title = 🎁 Актуальные акции
+promotions-empty = Сейчас нет активных акций.
+
+# Закладки (#660)
+bookmarks-title = 📌 Ваши закладки ({ $count }):
+bookmarks-empty =
+    📌 У вас пока нет закладок.
+    Нажмите «🏠 Подбор апартаментов» чтобы найти квартиру.
+bookmarks-remove = 🗑 Убрать
+
+# Услуги (#660)
+services-menu-text = Выберите услугу, чтобы узнать подробнее:
