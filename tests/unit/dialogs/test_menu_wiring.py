@@ -152,6 +152,29 @@ async def test_handle_menu_button_passes_dialog_manager_to_search():
         bot._handle_search.assert_called_once_with(message, dialog_manager)
 
 
+async def test_handle_menu_button_parses_localized_labels_with_hub():
+    """handle_menu_button should pass i18n_hub to parse_menu_button for non-RU labels."""
+    with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
+        from telegram_bot.bot import PropertyBot
+
+        bot = PropertyBot.__new__(PropertyBot)
+        bot._i18n_hub = MagicMock()
+        bot._handle_services = AsyncMock()
+
+        message = MagicMock()
+        message.text = "🔑 Послуги"
+        message.answer = AsyncMock()
+
+        state = AsyncMock()
+        state.get_state = AsyncMock(return_value=None)
+
+        with patch("telegram_bot.bot.parse_menu_button", return_value="services") as parse_mock:
+            await bot.handle_menu_button(message, state, i18n=MagicMock())
+
+        parse_mock.assert_called_once_with("🔑 Послуги", i18n_hub=bot._i18n_hub)
+        bot._handle_services.assert_called_once()
+
+
 def test_client_menu_dialog_not_in_register_handlers():
     """client_menu_dialog should NOT be registered on the dispatcher (#658)."""
     import ast
