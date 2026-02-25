@@ -74,6 +74,29 @@ async def test_handle_menu_button_no_clear_when_state_is_none():
         bot._handle_services.assert_called_once_with(message)
 
 
+async def test_handle_menu_button_no_clear_for_unrelated_state():
+    """Only PhoneCollectorStates should be cleared by menu handler."""
+    with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
+        from telegram_bot.bot import PropertyBot
+
+        bot = PropertyBot.__new__(PropertyBot)
+
+        message = MagicMock()
+        message.text = "🔑 Услуги"
+        message.answer = AsyncMock()
+
+        state = AsyncMock()
+        state.get_state = AsyncMock(return_value="FunnelSG:budget")
+        state.clear = AsyncMock()
+
+        bot._handle_services = AsyncMock()
+
+        await bot.handle_menu_button(message, state)
+
+        state.clear.assert_not_called()
+        bot._handle_services.assert_called_once_with(message)
+
+
 async def test_handle_search_starts_funnel_dialog():
     """_handle_search starts FunnelSG.location dialog when dialog_manager available (#658)."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
