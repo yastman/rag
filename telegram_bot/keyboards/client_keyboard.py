@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
-from telegram_bot.services.content_loader import get_menu_buttons
 
-
-# Fallback button text -> action ID mapping (used when YAML not yet loaded)
+# Fallback button text -> action ID mapping (used when i18n not available)
 MENU_BUTTONS: dict[str, str] = {
     "🏠 Подбор апартаментов": "search",
     "🔑 Услуги": "services",
@@ -21,18 +21,34 @@ MENU_BUTTONS: dict[str, str] = {
 # Reverse lookup: action_id -> button text (ru fallback)
 ACTIONS_TO_TEXT: dict[str, str] = {v: k for k, v in MENU_BUTTONS.items()}
 
+# FTL key -> action ID mapping
+_ACTION_IDS: dict[str, str] = {
+    "kb-search": "search",
+    "kb-services": "services",
+    "kb-viewing": "viewing",
+    "kb-bookmarks": "bookmarks",
+    "kb-promotions": "promotions",
+    "kb-manager": "manager",
+}
 
-def build_client_keyboard(locale: str = "ru") -> ReplyKeyboardMarkup:
-    """Build persistent 3x2 ReplyKeyboard for client in the given locale."""
-    buttons_map = get_menu_buttons(locale)
-    if not buttons_map:
-        # Fallback to hardcoded Russian buttons
-        buttons_map = {v: k for k, v in MENU_BUTTONS.items()}
-    texts = list(buttons_map.values())
-    # Ensure exactly 6 buttons (pad or trim if YAML is malformed)
+
+def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
+    """Build persistent 3x2 ReplyKeyboard for client.
+
+    Args:
+        i18n: FluentTranslator instance. When provided, button texts are
+            resolved from .ftl keys. Falls back to hardcoded Russian text.
+    """
+    if i18n is not None:
+        texts = [i18n.get(key) for key in _ACTION_IDS]
+    else:
+        texts = list(MENU_BUTTONS.keys())  # fallback to hardcoded Russian
+
+    # Ensure exactly 6 buttons (pad or trim if needed)
     while len(texts) < 6:
         texts.append("")
     texts = texts[:6]
+
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=texts[0]), KeyboardButton(text=texts[1])],
@@ -44,16 +60,26 @@ def build_client_keyboard(locale: str = "ru") -> ReplyKeyboardMarkup:
     )
 
 
-def parse_menu_button(text: str) -> str | None:
+def parse_menu_button(text: str, i18n_hub: Any = None) -> str | None:
     """Parse button text to action ID, checking all supported locales.
 
-    Returns None if the text doesn't match any known menu button.
-    Searches ru/uk/en so the user can send buttons in any language.
+    Args:
+        text: Button text from the user message.
+        i18n_hub: TranslatorHub instance. When provided, looks up translations
+            in all locales via hub.get_translator_by_locale().
+
+    Returns:
+        Action ID string or None if text doesn't match any known button.
     """
-    for locale in ("ru", "uk", "en"):
-        buttons_map = get_menu_buttons(locale)  # {action_id: button_text}
-        for action_id, btn_text in buttons_map.items():
-            if btn_text == text:
-                return action_id
+    if i18n_hub is not None:
+        for locale in ("ru", "uk", "en"):
+            try:
+                t = i18n_hub.get_translator_by_locale(locale)
+                for ftl_key, action_id in _ACTION_IDS.items():
+                    if t.get(ftl_key) == text:
+                        return action_id
+            except Exception:
+                pass
+
     # Fallback: check hardcoded MENU_BUTTONS (text -> action)
     return MENU_BUTTONS.get(text)
