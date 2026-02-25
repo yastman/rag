@@ -213,7 +213,7 @@ class TestViewingPhoneCollector:
     """Contract: viewing delegates to phone_collector with correct kwargs."""
 
     async def test_results_viewing_passes_source_results(self) -> None:
-        """results:viewing -> start_phone_collection(source='results')."""
+        """results:viewing -> start_phone_collection(service_key='viewing')."""
         bot = _create_bot()
         state = _make_state()
         cb = _make_callback("results:viewing")
@@ -224,10 +224,10 @@ class TestViewingPhoneCollector:
         ) as mock_collect:
             await bot.handle_results_callback(cb, state)
 
-        mock_collect.assert_awaited_once_with(cb, state, source="results")
+        mock_collect.assert_awaited_once_with(cb, state, service_key="viewing")
 
     async def test_fav_viewing_passes_property_id(self) -> None:
-        """fav:viewing:prop-42 -> source='viewing', source_detail='prop-42'."""
+        """fav:viewing:prop-42 -> service_key='viewing'."""
         bot = _fav_bot()
         state = _make_state()
         cb = _make_callback("fav:viewing:prop-42")
@@ -238,10 +238,10 @@ class TestViewingPhoneCollector:
         ) as mock_collect:
             await bot.handle_favorite_callback(cb, state)
 
-        mock_collect.assert_awaited_once_with(cb, state, source="viewing", source_detail="prop-42")
+        mock_collect.assert_awaited_once_with(cb, state, service_key="viewing")
 
     async def test_fav_viewing_all_passes_correct_kwargs(self) -> None:
-        """fav:viewing_all -> source='viewing_all', source_detail='all_favorites'."""
+        """fav:viewing_all -> service_key='viewing'."""
         bot = _fav_bot()
         state = _make_state()
         cb = _make_callback("fav:viewing_all")
@@ -252,9 +252,7 @@ class TestViewingPhoneCollector:
         ) as mock_collect:
             await bot.handle_favorite_callback(cb, state)
 
-        mock_collect.assert_awaited_once_with(
-            cb, state, source="viewing_all", source_detail="all_favorites"
-        )
+        mock_collect.assert_awaited_once_with(cb, state, service_key="viewing")
 
 
 # ---------------------------------------------------------------------------
