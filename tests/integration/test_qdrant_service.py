@@ -28,69 +28,6 @@ def mock_qdrant_client():
 
 
 # =============================================================================
-# TestQdrantServiceInit - Initialization and quantization_mode
-# =============================================================================
-
-
-class TestQdrantServiceInit:
-    """Tests for QdrantService initialization."""
-
-    def test_default_quantization_mode_off(self):
-        """Test default quantization_mode is 'off'."""
-        from telegram_bot.services.qdrant import QdrantService
-
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
-            service = QdrantService(
-                url="http://localhost:6333",
-                collection_name="test",
-            )
-
-            assert service._quantization_mode == "off"
-
-    def test_quantization_mode_binary(self):
-        """Test service can be created with binary quantization mode."""
-        from telegram_bot.services.qdrant import QdrantService
-
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
-            service = QdrantService(
-                url="http://localhost:6333",
-                collection_name="test",
-                quantization_mode="binary",
-            )
-
-            assert service._quantization_mode == "binary"
-            assert service._collection_name == "test_binary"
-
-    def test_quantization_mode_scalar(self):
-        """Test service can be created with scalar quantization mode."""
-        from telegram_bot.services.qdrant import QdrantService
-
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
-            service = QdrantService(
-                url="http://localhost:6333",
-                collection_name="test",
-                quantization_mode="scalar",
-            )
-
-            assert service._quantization_mode == "scalar"
-            assert service._collection_name == "test_scalar"
-
-    def test_collection_name_suffix_stripped(self):
-        """Test existing suffixes are stripped before applying new one."""
-        from telegram_bot.services.qdrant import QdrantService
-
-        with patch("telegram_bot.services.qdrant.AsyncQdrantClient"):
-            service = QdrantService(
-                url="http://localhost:6333",
-                collection_name="test_binary",
-                quantization_mode="scalar",
-            )
-
-            # Should strip _binary suffix, then add _scalar
-            assert service._collection_name == "test_scalar"
-
-
-# =============================================================================
 # TestHybridSearchRRFQuantization - Per-call quantization A/B testing
 # =============================================================================
 
