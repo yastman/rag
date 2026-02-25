@@ -6,6 +6,8 @@ Prevents regressions similar to PR #661/#663.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 
@@ -94,12 +96,26 @@ def _make_results(n: int) -> list[dict]:
     ]
 
 
-def _fav_bot() -> PropertyBot:
+def _make_favorite(property_id: str, **data: object) -> SimpleNamespace:
+    """Create a fake Favorite object for tests."""
+    return SimpleNamespace(
+        property_id=property_id,
+        property_data={
+            "complex_name": data.get("complex_name", "Test Complex"),
+            "property_type": data.get("property_type", "Apartment"),
+            "area_m2": data.get("area_m2", 60),
+            "price_eur": data.get("price_eur", 200000),
+        },
+    )
+
+
+def _fav_bot(favorites: list | None = None) -> PropertyBot:
     """Create bot with favorites_service mock pre-wired."""
     bot = _create_bot()
     bot._favorites_service = MagicMock()
     bot._favorites_service.add = AsyncMock(return_value={"id": 1, "property_id": "prop-0"})
     bot._favorites_service.remove = AsyncMock()
+    bot._favorites_service.list = AsyncMock(return_value=favorites or [])
     return bot
 
 
@@ -213,9 +229,9 @@ class TestViewingPhoneCollector:
     """Contract: viewing delegates to phone_collector with correct kwargs."""
 
     async def test_results_viewing_passes_source_results(self) -> None:
-        """results:viewing -> start_phone_collection(service_key='viewing')."""
+        """results:viewing -> start_phone_collection(service_key='viewing', viewing_objects=None)."""
         bot = _create_bot()
-        state = _make_state()
+        state = _make_state()  # empty state -> no apartment_results
         cb = _make_callback("results:viewing")
 
         with patch(
@@ -224,11 +240,14 @@ class TestViewingPhoneCollector:
         ) as mock_collect:
             await bot.handle_results_callback(cb, state)
 
-        mock_collect.assert_awaited_once_with(cb, state, service_key="viewing")
+        mock_collect.assert_awaited_once_with(
+            cb, state, service_key="viewing", viewing_objects=None
+        )
 
     async def test_fav_viewing_passes_property_id(self) -> None:
-        """fav:viewing:prop-42 -> service_key='viewing'."""
-        bot = _fav_bot()
+        """fav:viewing:prop-42 -> service_key='viewing', viewing_objects with matched favorite."""
+        fav = _make_favorite("prop-42", complex_name="Ocean View", area_m2=75, price_eur=300000)
+        bot = _fav_bot(favorites=[fav])
         state = _make_state()
         cb = _make_callback("fav:viewing:prop-42")
 
@@ -238,11 +257,28 @@ class TestViewingPhoneCollector:
         ) as mock_collect:
             await bot.handle_favorite_callback(cb, state)
 
-        mock_collect.assert_awaited_once_with(cb, state, service_key="viewing")
+        mock_collect.assert_awaited_once_with(
+            cb,
+            state,
+            service_key="viewing",
+            viewing_objects=[
+                {
+                    "id": "prop-42",
+                    "complex_name": "Ocean View",
+                    "property_type": "Apartment",
+                    "area_m2": 75,
+                    "price_eur": 300000,
+                }
+            ],
+        )
 
     async def test_fav_viewing_all_passes_correct_kwargs(self) -> None:
-        """fav:viewing_all -> service_key='viewing'."""
-        bot = _fav_bot()
+        """fav:viewing_all -> service_key='viewing', viewing_objects with all favorites."""
+        favs = [
+            _make_favorite("prop-1", complex_name="Complex A", area_m2=60, price_eur=200000),
+            _make_favorite("prop-2", complex_name="Complex B", area_m2=80, price_eur=350000),
+        ]
+        bot = _fav_bot(favorites=favs)
         state = _make_state()
         cb = _make_callback("fav:viewing_all")
 
@@ -252,7 +288,27 @@ class TestViewingPhoneCollector:
         ) as mock_collect:
             await bot.handle_favorite_callback(cb, state)
 
-        mock_collect.assert_awaited_once_with(cb, state, service_key="viewing")
+        mock_collect.assert_awaited_once_with(
+            cb,
+            state,
+            service_key="viewing",
+            viewing_objects=[
+                {
+                    "id": "prop-1",
+                    "complex_name": "Complex A",
+                    "property_type": "Apartment",
+                    "area_m2": 60,
+                    "price_eur": 200000,
+                },
+                {
+                    "id": "prop-2",
+                    "complex_name": "Complex B",
+                    "property_type": "Apartment",
+                    "area_m2": 80,
+                    "price_eur": 350000,
+                },
+            ],
+        )
 
 
 # ---------------------------------------------------------------------------
