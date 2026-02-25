@@ -193,7 +193,7 @@ async def on_phone_received(
 
             pipeline_id = (bot_config.kommo_default_pipeline_id if bot_config else 0) or None
             status_id = (bot_config.kommo_new_status_id if bot_config else 0) or None
-            responsible = bot_config.kommo_responsible_user_id if bot_config else None
+            responsible = (bot_config.kommo_responsible_user_id if bot_config else None) or None
 
             custom_fields = _build_custom_fields(
                 crm_title,
