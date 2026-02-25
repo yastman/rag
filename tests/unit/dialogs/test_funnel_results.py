@@ -100,10 +100,9 @@ async def test_get_results_data_returns_cards():
         )
     )
 
-    mock_bot = SimpleNamespace(_apartments_service=mock_svc)
     manager = SimpleNamespace(
         dialog_data={"property_type": "studio", "budget": "low", "location": "sunny_beach"},
-        middleware_data={"property_bot": mock_bot},
+        middleware_data={"apartments_service": mock_svc},
     )
 
     result = await get_results_data(dialog_manager=manager)
@@ -120,10 +119,9 @@ async def test_get_results_data_no_results():
     mock_svc = MagicMock()
     mock_svc.scroll_with_filters = AsyncMock(return_value=([], 0, None))
 
-    mock_bot = SimpleNamespace(_apartments_service=mock_svc)
     manager = SimpleNamespace(
         dialog_data={"property_type": "3bed", "budget": "luxury"},
-        middleware_data={"property_bot": mock_bot},
+        middleware_data={"apartments_service": mock_svc},
     )
 
     result = await get_results_data(dialog_manager=manager)
@@ -137,7 +135,7 @@ async def test_get_results_data_no_service():
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "any", "budget": "any"},
-        middleware_data={"property_bot": None},
+        middleware_data={},
     )
 
     result = await get_results_data(dialog_manager=manager)
