@@ -16,6 +16,7 @@ from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
     CallbackQuery,
@@ -352,6 +353,9 @@ class PropertyBot:
         # Lead scoring store (initialized in start() with pg_pool)
         self._lead_scoring_store: Any | None = None
 
+        # Favorites service (initialized in start() with pg_pool)
+        self._favorites_service: Any = None
+
         # Nurturing scheduler (initialized in start() if enabled)
         self._nurturing_scheduler: Any | None = None
 
@@ -557,6 +561,11 @@ class PropertyBot:
 
     def _register_handlers(self):
         """Register message handlers."""
+        # Phone collector FSM — include before catch-all handlers (#628)
+        from .handlers.phone_collector import phone_router
+
+        self.dp.include_router(phone_router)
+
         self.dp.message(Command("start"))(self.cmd_start)
         self.dp.message(Command("help"))(self.cmd_help)
         self.dp.message(Command("clear"))(self.cmd_clear)
@@ -574,6 +583,10 @@ class PropertyBot:
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
         self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
+        # Client menu inline callbacks (#628)
+        self.dp.callback_query(F.data.startswith("svc:"))(self.handle_service_callback)
+        self.dp.callback_query(F.data.startswith("cta:"))(self.handle_cta_callback)
+        self.dp.callback_query(F.data.startswith("fav:"))(self.handle_favorite_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -608,14 +621,10 @@ class PropertyBot:
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Client: persistent ReplyKeyboard (#628)
-            name = ""
-            if message.from_user:
-                name = message.from_user.first_name or ""
-            greeting = f"Привет, {name}! 👋" if name else "Привет! 👋"
-            await message.answer(
-                f"{greeting}\nВыберите действие из меню:",
-                reply_markup=build_client_keyboard(),
-            )
+            from .services.content_loader import get_welcome_text
+
+            welcome = get_welcome_text()
+            await message.answer(welcome, reply_markup=build_client_keyboard())
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -915,26 +924,237 @@ class PropertyBot:
 
             await message.answer("\n".join(lines))
 
-    # ReplyKeyboard button text → agent query mapping (#628)
-    _MENU_BUTTON_QUERIES: dict[str, str] = {
-        "search": "Подбери апартаменты",
-        "services": "Покажи услуги",
-        "viewing": "Хочу записаться на осмотр недвижимости",
-        "bookmarks": "Покажи мои закладки",
-        "promotions": "Покажи актуальные акции",
-        "manager": "Соедини с менеджером",
-    }
-
-    async def handle_menu_button(self, message: Message, locale: str = "ru"):
-        """Handle ReplyKeyboard button press — translate to agent query (#628)."""
+    async def handle_menu_button(self, message: Message, state: FSMContext) -> None:
+        """Route ReplyKeyboard button press to dedicated handler (#628)."""
         action_id = parse_menu_button(message.text or "")
         if action_id is None:
             return
-        # Replace button emoji text with natural-language query for pipeline
-        query = self._MENU_BUTTON_QUERIES.get(action_id, message.text or "")
-        # Use model_copy to avoid mutating the original message
-        patched = message.model_copy(update={"text": query})
-        await self.handle_query(patched, locale=locale)
+
+        handlers: dict[str, Any] = {
+            "search": self._handle_search,
+            "services": self._handle_services,
+            "viewing": self._handle_viewing,
+            "bookmarks": self._handle_bookmarks,
+            "promotions": self._handle_promotions,
+            "manager": self._handle_manager,
+        }
+        handler = handlers.get(action_id)
+        if handler:
+            if action_id == "viewing":
+                await handler(message, state)
+            else:
+                await handler(message)
+
+    async def _handle_search(self, message: Message) -> None:
+        """Start property search funnel (#628)."""
+        patched = message.model_copy(update={"text": "Подбери апартаменты"})
+        await self.handle_query(patched, locale="ru")
+
+    async def _handle_services(self, message: Message) -> None:
+        """Show services inline menu (#628)."""
+        from .keyboards.services_keyboard import build_services_menu
+        from .services.content_loader import get_services_menu_text
+
+        text = get_services_menu_text()
+        kb = build_services_menu()
+        await message.answer(text, reply_markup=kb)
+
+    async def _handle_viewing(self, message: Message, state: FSMContext) -> None:
+        """Start viewing appointment flow — collect phone (#628)."""
+        from .handlers.phone_collector import start_phone_collection
+
+        await start_phone_collection(message, state, source="viewing_main_menu")
+
+    async def _handle_bookmarks(self, message: Message) -> None:
+        """Show user's saved favorites (#628)."""
+        if not message.from_user:
+            return
+
+        favorites_service = getattr(self, "_favorites_service", None)
+        if favorites_service is None:
+            await message.answer("Закладки временно недоступны.")
+            return
+
+        items = await favorites_service.list(telegram_id=message.from_user.id)
+        if not items:
+            await message.answer(
+                "📌 У вас пока нет закладок.\n\n"
+                "Нажмите «🏠 Подбор апартаментов» чтобы найти квартиру."
+            )
+            return
+
+        from .keyboards.property_card import format_property_card
+
+        for fav in items:
+            data = fav.property_data
+            card_text = format_property_card(
+                property_id=fav.property_id,
+                complex_name=data.get("complex_name", ""),
+                location=data.get("location", ""),
+                property_type=data.get("property_type", ""),
+                floor=data.get("floor", 0),
+                area_m2=data.get("area_m2", 0),
+                view=data.get("view", ""),
+                price_eur=data.get("price_eur", 0),
+            )
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="На осмотр",
+                            callback_data=f"fav:viewing:{fav.property_id}",
+                        ),
+                        InlineKeyboardButton(
+                            text="Убрать",
+                            callback_data=f"fav:remove:{fav.property_id}",
+                        ),
+                    ],
+                ]
+            )
+            await message.answer(card_text, reply_markup=kb)
+
+        footer_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Запись на осмотр всех",
+                        callback_data="fav:viewing_all",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Связь с менеджером",
+                        callback_data="cta:manager",
+                    )
+                ],
+            ]
+        )
+        await message.answer(f"Всего в закладках: {len(items)}", reply_markup=footer_kb)
+
+    async def _handle_promotions(self, message: Message) -> None:
+        """Show current promotions (#628)."""
+        patched = message.model_copy(update={"text": "Покажи актуальные акции"})
+        await self.handle_query(patched, locale="ru")
+
+    async def _handle_manager(self, message: Message) -> None:
+        """Handoff to manager (#628)."""
+        patched = message.model_copy(update={"text": "Соедини с менеджером"})
+        await self.handle_query(patched, locale="ru")
+
+    async def handle_service_callback(self, callback: CallbackQuery) -> None:
+        """Handle service menu inline button clicks (#628)."""
+        from .keyboards.services_keyboard import (
+            build_service_card_buttons,
+            build_services_menu,
+            parse_service_callback,
+        )
+        from .services.content_loader import get_service_card, get_services_menu_text
+
+        parsed = parse_service_callback(callback.data or "")
+        if parsed is None:
+            await callback.answer()
+            return
+
+        action, param = parsed
+
+        if action == "back":
+            if callback.message:
+                await callback.message.delete()
+            await callback.answer()
+
+        elif action == "menu":
+            text = get_services_menu_text()
+            kb = build_services_menu()
+            if callback.message:
+                await callback.message.edit_text(text, reply_markup=kb)
+            await callback.answer()
+
+        elif action == "service" and param:
+            svc = get_service_card(param)
+            if svc:
+                kb = build_service_card_buttons(param)
+                if callback.message:
+                    await callback.message.edit_text(svc["card_text"], reply_markup=kb)
+            await callback.answer()
+
+        else:
+            await callback.answer()
+
+    async def handle_cta_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+        """Handle CTA button clicks (get_offer, manager) (#628)."""
+        from .handlers.phone_collector import start_phone_collection
+        from .keyboards.services_keyboard import parse_service_callback
+
+        parsed = parse_service_callback(callback.data or "")
+        if parsed is None:
+            await callback.answer()
+            return
+
+        action, param = parsed
+
+        if action == "get_offer":
+            await start_phone_collection(
+                callback, state, source="service", source_detail=param or ""
+            )
+        elif action == "manager":
+            if callback.message:
+                await callback.message.answer("Менеджер свяжется с вами в ближайшее время.")
+            await callback.answer()
+        else:
+            await callback.answer()
+
+    async def handle_favorite_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+        """Handle favorite add/remove/viewing callbacks (#628)."""
+        data = callback.data or ""
+        parts = data.split(":", 2)
+
+        if len(parts) < 2 or not callback.from_user:
+            await callback.answer()
+            return
+
+        action = parts[1]
+        property_id = parts[2] if len(parts) > 2 else ""
+
+        favorites_service = getattr(self, "_favorites_service", None)
+        if favorites_service is None:
+            await callback.answer("Закладки недоступны")
+            return
+
+        if action == "add" and property_id:
+            result = await favorites_service.add(
+                telegram_id=callback.from_user.id,
+                property_id=property_id,
+                property_data={},
+            )
+            if result:
+                await callback.answer("Добавлено в закладки")
+            else:
+                await callback.answer("Уже в закладках")
+
+        elif action == "remove" and property_id:
+            await favorites_service.remove(
+                telegram_id=callback.from_user.id, property_id=property_id
+            )
+            if callback.message:
+                await callback.message.delete()
+            await callback.answer("Удалено из закладок")
+
+        elif action == "viewing" and property_id:
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(
+                callback, state, source="viewing", source_detail=property_id
+            )
+
+        elif action == "viewing_all":
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(
+                callback, state, source="viewing_all", source_detail="all_favorites"
+            )
+
+        else:
+            await callback.answer()
 
     @observe(name="telegram-rag-query")
     async def handle_query(self, message: Message, locale: str = "ru"):
@@ -2481,6 +2701,12 @@ class PropertyBot:
 
             self._lead_scoring_store = LeadScoringStore(pool=self._pg_pool)
             logger.info("Lead scoring store ready")
+
+            # Initialize favorites service (#628)
+            from .services.favorites_service import FavoritesService
+
+            self._favorites_service = FavoritesService(pool=self._pg_pool)
+            logger.info("Favorites service ready")
 
             # Initialize hot lead notifier (#402)
             if self.config.manager_ids and self._cache.redis is not None:
