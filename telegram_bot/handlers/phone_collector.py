@@ -47,7 +47,6 @@ def build_display_name(user: Any | None, phone: str) -> str:
 
 
 def _build_custom_fields(
-    service_key: str,
     crm_title: str,
     telegram_id: int | str,
     username: str | None,
@@ -118,7 +117,6 @@ async def start_phone_collection(
     *,
     service_key: str,
     viewing_objects: list[dict[str, Any]] | None = None,
-    i18n: Any | None = None,
 ) -> None:
     """Start phone collection flow. Called from various handlers."""
     config = get_phone_config(service_key)
@@ -194,7 +192,7 @@ async def on_phone_received(
             status_id = int(os.getenv("KOMMO_NEW_STATUS_ID", "0")) or None
             responsible = int(os.getenv("KOMMO_RESPONSIBLE_USER_ID", "0")) or None
 
-            custom_fields = _build_custom_fields(service_key, crm_title, user_id, username)
+            custom_fields = _build_custom_fields(crm_title, user_id, username)
 
             lead = await kommo_client.create_lead(
                 LeadCreate(
