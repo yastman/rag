@@ -36,6 +36,30 @@ _FLOOR_MAP: dict[str, dict[str, int]] = {
 
 _ROOMS_DISPLAY: dict[int, str] = {1: "Студия", 2: "1-спальня", 3: "2-спальни", 4: "3-спальни"}
 
+_LOCATION_TO_CITY: dict[str, str] = {
+    "sunny_beach": "Sunny Beach",
+    "sveti_vlas": "Sveti Vlas",
+    "elenite": "Elenite",
+    "nessebar": "Nesebar",
+    "ravda": "Ravda",
+    "burgas": "Burgas",
+    "pomorie": "Pomorie",
+    "sozopol": "Sozopol",
+    "primorsko": "Primorsko",
+    "bansko": "Bansko",
+    "sofia": "Sofia",
+}
+
+
+def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
+    """Build Qdrant filters from dialog_data dict."""
+    return build_funnel_filters(
+        rooms=data.get("property_type", "any"),
+        budget=data.get("budget", "any"),
+        floor=data.get("floor"),
+        view=data.get("view"),
+    )
+
 
 def build_funnel_filters(
     *,
@@ -177,19 +201,11 @@ async def get_results_data(
     dialog_manager: DialogManager,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Getter for results window — fetches real apartments from Qdrant (#660)."""
+    """Getter for results window — fetches real apartments via hybrid search (#628)."""
     from telegram_bot.keyboards.property_card import format_property_card
 
     i18n = dialog_manager.middleware_data.get("i18n")
     data = dialog_manager.dialog_data
-    rooms = data.get("property_type", "any")
-    budget = data.get("budget", "any")
-    floor = data.get("floor")
-    view = data.get("view")
-
-    filters = build_funnel_filters(rooms=rooms, budget=budget, floor=floor, view=view)
-
-    svc = dialog_manager.middleware_data.get("apartments_service")
 
     no_results_text = (
         i18n.get("results-no-results")
@@ -199,10 +215,33 @@ async def get_results_data(
     results_title = i18n.get("funnel-results-title") if i18n else "Подобрали для вас:"
     btn_back = i18n.get("back") if i18n else "Назад"
 
-    results_text = ""
-    if svc:
+    # Resolve apartments_service and hybrid_embeddings with property_bot fallback
+    svc = dialog_manager.middleware_data.get("apartments_service")
+    embeddings = dialog_manager.middleware_data.get("hybrid_embeddings")
+    if svc is None or embeddings is None:
+        property_bot = dialog_manager.middleware_data.get("property_bot")
+        if property_bot is not None:
+            if svc is None:
+                svc = getattr(property_bot, "_apartments_service", None)
+            if embeddings is None:
+                embeddings = getattr(property_bot, "_embeddings", None)
+
+    results_text: str
+    if svc is not None and embeddings is not None:
         try:
-            results, _count, _ = await svc.scroll_with_filters(filters=filters, limit=5)
+            location = data.get("location", "")
+            city = _LOCATION_TO_CITY.get(location, location)
+            prop_type = data.get("property_type", "")
+            query_text = f"{city} {prop_type}".strip() or "апартаменты"
+
+            dense, sparse = await embeddings.aembed_hybrid(query_text)
+            filters = _build_funnel_filters(data)
+            results = await svc.search(
+                dense_vector=dense,
+                sparse_vector=sparse,
+                filters=filters,
+                top_k=5,
+            )
             if results:
                 cards = []
                 for apt in results:
@@ -213,7 +252,7 @@ async def get_results_data(
                         format_property_card(
                             property_id=apt["id"],
                             complex_name=p.get("complex_name", ""),
-                            location=data.get("location", ""),
+                            location=location,
                             property_type=rooms_display,
                             floor=p.get("floor", 0),
                             area_m2=p.get("area_m2", 0),
@@ -228,7 +267,7 @@ async def get_results_data(
             logger.exception("Failed to fetch funnel results from Qdrant")
             results_text = no_results_text
     else:
-        results_text = "Пока не нашли вариантов."
+        results_text = "Не нашли подходящих вариантов."
 
     return {
         "title": results_title,
