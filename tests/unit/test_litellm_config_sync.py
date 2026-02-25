@@ -34,13 +34,24 @@ def _fallback_model_groups(cfg: dict) -> set[str]:
     return {next(iter(item.keys())) for item in fallbacks if isinstance(item, dict) and item}
 
 
-_TOKEN_LIMIT_KEYS = {"max_tokens", "max_completion_tokens"}
+_TOKEN_LIMIT_KEYS = ("max_completion_tokens", "max_tokens")
+
+
+def _token_limit_key(params: dict) -> str | None:
+    keys = [key for key in _TOKEN_LIMIT_KEYS if key in params]
+    if not keys:
+        return None
+    if len(keys) > 1:
+        raise AssertionError(
+            f"Model params must use a single token limit key, got {keys} in {params!r}"
+        )
+    return keys[0]
 
 
 def _normalize_token_limit(params: dict) -> int | None:
-    for key in _TOKEN_LIMIT_KEYS:
-        if key in params:
-            return int(params[key])
+    key = _token_limit_key(params)
+    if key is not None:
+        return int(params[key])
     return None
 
 
@@ -180,8 +191,8 @@ class TestLiteLLMConfigSync:
 
         mismatches = []
         for name in set(docker_models) & set(k8s_models):
-            docker_key = next((k for k in _TOKEN_LIMIT_KEYS if k in docker_models[name]), None)
-            k8s_key = next((k for k in _TOKEN_LIMIT_KEYS if k in k8s_models[name]), None)
+            docker_key = _token_limit_key(docker_models[name])
+            k8s_key = _token_limit_key(k8s_models[name])
 
             if docker_key is None and k8s_key is None:
                 continue  # both absent — OK
