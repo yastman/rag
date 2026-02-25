@@ -188,6 +188,7 @@ services/bge-m3-api/models/
 *.safetensors
 reports/
 .worktrees/
+.claude/worktrees/
 drive-sync/
 CLAUDE.local.md
 
