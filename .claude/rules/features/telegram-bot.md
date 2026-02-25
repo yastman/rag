@@ -73,13 +73,13 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/services/response_style_detector.py` | `ResponseStyleDetector` — zero-latency regex style/difficulty classifier (#129) |
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
-| `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection from user DB record |
+| `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection, injects `i18n`, `locale`, `property_bot`, `apartments_service` (#660) |
 | `telegram_bot/dialogs/` | aiogram-dialog menus: `client_menu`, `crm_submenu`, `faq`, `funnel`, `manager_menu`, `settings` |
 | `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler |
-| `telegram_bot/keyboards/client_keyboard.py` | Client actions ReplyKeyboard (3x2 persistent buttons) |
+| `telegram_bot/keyboards/client_keyboard.py` | Client ReplyKeyboard — `build_client_keyboard(i18n=)`, `parse_menu_button(text, i18n_hub=)` with .ftl keys (#660) |
 | `telegram_bot/keyboards/property_card.py` | Property listing card with bookmark + results footer |
 | `telegram_bot/keyboards/services_keyboard.py` | Services inline menu (5 services) |
-| `telegram_bot/services/apartments_service.py` | ApartmentsService — hybrid search with payload filtering (#632) |
+| `telegram_bot/services/apartments_service.py` | ApartmentsService — hybrid search + `scroll_with_filters()` payload-only queries (#632, #660) |
 | `telegram_bot/services/apartment_filter_extractor.py` | Regex filter parser: rooms, price, complex, view, floor, area (#632) |
 | `telegram_bot/services/favorites_service.py` | User apartment favorites (asyncpg, add/remove/list/count) |
 | `telegram_bot/agents/apartment_tools.py` | `apartment_search` @tool — agent escalation for complex queries (#632) |
@@ -349,7 +349,7 @@ When `STREAMING_ENABLED=true` (default), `generate_response` streams LLM output 
 
 - **ThrottlingMiddleware:** `cachetools.TTLCache(maxsize=10_000, ttl=1.5s)`, admins bypass.
 - **ErrorHandlerMiddleware:** Catches all exceptions, logs with `exc_info=True`, returns user-friendly message.
-- **I18nMiddleware:** Loads user locale from DB (via `UserService`), sets `i18n` context for Fluent translations.
+- **I18nMiddleware:** Loads user locale from DB (via `UserService`), injects `i18n` (FluentTranslator), `locale`, `property_bot`, `apartments_service` into handler data. i18n keys in `locales/{ru,uk,en}/messages.ftl`.
 
 ## Testing
 
