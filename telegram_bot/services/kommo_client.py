@@ -164,11 +164,21 @@ class KommoClient:
 
     @observe(name="kommo-upsert-contact")
     async def upsert_contact(self, phone: str, contact: ContactCreate) -> Contact:
-        """Find by phone or create new contact."""
+        """Find by phone or create new contact. Smart update: fills empty name fields."""
         data = await self._request("GET", "/contacts", params={"query": phone})
         contacts = data.get("_embedded", {}).get("contacts", [])
         if contacts:
-            return Contact(**contacts[0])
+            existing = Contact(**contacts[0])
+            updates: dict[str, str] = {}
+            if not existing.first_name and contact.first_name:
+                updates["first_name"] = contact.first_name
+            if not existing.last_name and contact.last_name:
+                updates["last_name"] = contact.last_name
+            if updates:
+                from .kommo_models import ContactUpdate
+
+                await self.update_contact(existing.id, ContactUpdate(**updates))
+            return existing
 
         data = await self._request(
             "POST", "/contacts", json=[contact.model_dump(exclude_none=True)]
