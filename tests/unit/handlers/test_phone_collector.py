@@ -308,6 +308,45 @@ async def test_on_phone_received_none_responsible_id_does_not_break_crm():
     mock_kommo.create_lead.assert_awaited_once()
 
 
+async def test_on_phone_received_zero_responsible_id_normalized_to_none():
+    """bot_config.kommo_responsible_user_id=0 should be normalized to None."""
+    bot_config = SimpleNamespace(
+        kommo_default_pipeline_id=0,
+        kommo_new_status_id=0,
+        kommo_responsible_user_id=0,
+        kommo_service_field_id=0,
+        kommo_source_field_id=0,
+        kommo_telegram_field_id=0,
+        kommo_telegram_username_field_id=0,
+    )
+
+    mock_kommo = AsyncMock()
+    mock_kommo.upsert_contact.return_value = SimpleNamespace(id=17)
+    mock_kommo.create_lead.return_value = SimpleNamespace(id=18)
+
+    state = AsyncMock()
+    state.get_data.return_value = {"service_key": "manager", "viewing_objects": []}
+
+    message = AsyncMock()
+    message.text = "+380501234567"
+    message.from_user = SimpleNamespace(id=654, first_name="Иван", last_name=None, username=None)
+
+    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+        mock_cfg.return_value = {
+            "entry_points": {
+                "manager": {
+                    "crm_title": "Консультация",
+                    "phone_success": "Спасибо! Менеджер свяжется с вами в ближайшее время",
+                }
+            }
+        }
+        await mod.on_phone_received(message, state, kommo_client=mock_kommo, bot_config=bot_config)
+
+    mock_kommo.create_lead.assert_awaited_once()
+    lead_arg = mock_kommo.create_lead.call_args[0][0]
+    assert lead_arg.responsible_user_id is None
+
+
 # --- BotConfig injection tests (new API, RED first) ---
 
 
