@@ -42,3 +42,41 @@ def test_build_results_footer():
     assert "results:more" in callbacks
     assert "results:refine" in callbacks
     assert "results:viewing" in callbacks
+
+
+# --- format_promotion_card ---
+
+
+class TestPromotionCard:
+    def test_format_with_discount(self):
+        from telegram_bot.keyboards.property_card import format_promotion_card
+
+        card = format_promotion_card(
+            property_id="p2",
+            complex_name="Royal Beach",
+            rooms=2,
+            floor=3,
+            area_m2=65,
+            view="Море",
+            price_eur=79000,
+            old_price_eur=89000,
+        )
+        assert "Royal Beach" in card
+        assert "79 000" in card
+        assert "89 000" in card
+        assert "🔥" in card
+
+    def test_discount_percentage(self):
+        from telegram_bot.keyboards.property_card import format_promotion_card
+
+        card = format_promotion_card(
+            property_id="p3",
+            complex_name="Sunrise",
+            rooms=1,
+            floor=1,
+            area_m2=40,
+            view="Бассейн",
+            price_eur=80000,
+            old_price_eur=100000,
+        )
+        assert "-20%" in card
