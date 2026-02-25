@@ -76,39 +76,40 @@ def test_complex_name_filter():
 
 @pytest.mark.asyncio
 async def test_get_results_data_returns_cards():
-    """get_results_data calls scroll_with_filters and formats cards."""
+    """get_results_data calls search with embeddings and formats cards."""
     from telegram_bot.dialogs.funnel import get_results_data
 
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(
-        return_value=(
-            [
-                {
-                    "id": "apt-1",
-                    "payload": {
-                        "complex_name": "Sunrise Complex",
-                        "rooms": 1,
-                        "floor": 2,
-                        "area_m2": 42.0,
-                        "view_primary": "Море",
-                        "price_eur": 48500,
-                    },
-                }
-            ],
-            1,
-            None,
-        )
+    mock_svc.search = AsyncMock(
+        return_value=[
+            {
+                "id": "apt-1",
+                "payload": {
+                    "complex_name": "Sunrise Complex",
+                    "rooms": 1,
+                    "floor": 2,
+                    "area_m2": 42.0,
+                    "view_primary": "Море",
+                    "price_eur": 48500,
+                },
+            }
+        ],
+    )
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]})
     )
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "studio", "budget": "low", "location": "sunny_beach"},
-        middleware_data={"apartments_service": mock_svc},
+        middleware_data={"apartments_service": mock_svc, "hybrid_embeddings": mock_embeddings},
     )
 
     result = await get_results_data(dialog_manager=manager)
     assert result["title"] == "Подобрали для вас:"
     assert "Sunrise Complex" in result["results_text"]
-    mock_svc.scroll_with_filters.assert_awaited_once()
+    mock_svc.search.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -117,11 +118,16 @@ async def test_get_results_data_no_results():
     from telegram_bot.dialogs.funnel import get_results_data
 
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 0, None))
+    mock_svc.search = AsyncMock(return_value=[])
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = AsyncMock(
+        return_value=([0.1] * 1024, {"indices": [], "values": []})
+    )
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "3bed", "budget": "luxury"},
-        middleware_data={"apartments_service": mock_svc},
+        middleware_data={"apartments_service": mock_svc, "hybrid_embeddings": mock_embeddings},
     )
 
     result = await get_results_data(dialog_manager=manager)
