@@ -339,8 +339,18 @@ class PropertyBot:
         # History service (initialized in start())
         self._history_service: HistoryService | None = None
 
-        # i18n hub (fluentogram) — initialized in start()
+        # i18n hub (fluentogram) — initialize early for localized menu filters.
         self._i18n_hub: Any = None
+        try:
+            from .middlewares.i18n import create_translator_hub
+
+            self._i18n_hub = create_translator_hub()
+        except Exception:
+            logger.warning(
+                "Failed to initialize i18n hub during startup preflight; "
+                "falling back to RU-only menu filters",
+                exc_info=True,
+            )
 
         # User service (asyncpg) — initialized in start()
         self._user_service: Any = None
@@ -589,9 +599,10 @@ class PropertyBot:
         self.dp.message(Command("clearcache"))(self.cmd_clearcache)
         self.dp.message(F.voice)(self.handle_voice)
         # ReplyKeyboard buttons — registered before catch-all F.text (#628)
-        from .keyboards.client_keyboard import MENU_BUTTONS
+        from .keyboards.client_keyboard import get_menu_button_texts
 
-        self.dp.message(F.text.in_(MENU_BUTTONS.keys()))(self.handle_menu_button)
+        menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
+        self.dp.message(F.text.in_(menu_button_texts))(self.handle_menu_button)
         self.dp.message(StateFilter(None), F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
@@ -950,7 +961,10 @@ class PropertyBot:
         i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
-        action_id = parse_menu_button(message.text or "")
+        action_id = parse_menu_button(
+            message.text or "",
+            i18n_hub=getattr(self, "_i18n_hub", None),
+        )
         if action_id is None:
             return
 
@@ -3017,7 +3031,8 @@ class PropertyBot:
         # Initialize i18n (fluentogram)
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
 
-        self._i18n_hub = create_translator_hub()
+        if self._i18n_hub is None:
+            self._i18n_hub = create_translator_hub()
         setup_i18n_middleware(
             self.dp,
             self._i18n_hub,

@@ -7,6 +7,7 @@ from telegram_bot.keyboards.client_keyboard import (
     _ACTION_IDS,
     MENU_BUTTONS,
     build_client_keyboard,
+    get_menu_button_texts,
     parse_menu_button,
 )
 
@@ -155,3 +156,45 @@ def test_parse_with_i18n_hub_unknown():
     mock_hub.get_translator_by_locale.return_value = mock_translator
 
     assert parse_menu_button("totally unknown", i18n_hub=mock_hub) is None
+
+
+def test_get_menu_button_texts_includes_localized_labels():
+    mock_hub = MagicMock()
+
+    def _translator_for(locale: str) -> MagicMock:
+        translator = MagicMock()
+        mapping = {
+            "ru": {
+                "kb-search": "🏠 Подбор апартаментов",
+                "kb-services": "🔑 Услуги",
+                "kb-viewing": "📅 Запись на осмотр",
+                "kb-bookmarks": "📌 Мои закладки",
+                "kb-promotions": "🎁 Акции",
+                "kb-manager": "👤 Связь с менеджером",
+            },
+            "uk": {
+                "kb-search": "🏠 Підбір апартаментів",
+                "kb-services": "🔑 Послуги",
+                "kb-viewing": "📅 Запис на огляд",
+                "kb-bookmarks": "📌 Мої закладки",
+                "kb-promotions": "🎁 Акції",
+                "kb-manager": "👤 Зв'язок з менеджером",
+            },
+            "en": {
+                "kb-search": "🏠 Find Apartments",
+                "kb-services": "🔑 Services",
+                "kb-viewing": "📅 Book a Viewing",
+                "kb-bookmarks": "📌 My Bookmarks",
+                "kb-promotions": "🎁 Promotions",
+                "kb-manager": "👤 Contact Manager",
+            },
+        }[locale]
+        translator.get.side_effect = lambda key, **_kw: mapping.get(key, key)
+        return translator
+
+    mock_hub.get_translator_by_locale.side_effect = _translator_for
+
+    texts = get_menu_button_texts(i18n_hub=mock_hub)
+    assert "🔑 Послуги" in texts
+    assert "🏠 Find Apartments" in texts
+    assert "🔑 Услуги" in texts
