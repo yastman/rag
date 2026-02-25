@@ -39,12 +39,13 @@ async def start_phone_collection(
     *,
     source: str,
     source_detail: str = "",
+    i18n: Any | None = None,
 ) -> None:
     """Start phone collection flow. Called from various handlers."""
     await state.set_state(PhoneCollectorStates.waiting_phone)
     await state.update_data(lead_source=source, lead_detail=source_detail)
 
-    text = "Введите ваш номер телефона:"
+    text = i18n.get("phone-prompt") if i18n else "Введите ваш номер телефона:"
     if isinstance(message_or_callback, CallbackQuery) and message_or_callback.message:
         await message_or_callback.message.answer(text)
         await message_or_callback.answer()
@@ -56,12 +57,16 @@ async def on_phone_received(
     message: Message,
     state: FSMContext,
     kommo_client: Any | None = None,
+    i18n: Any | None = None,
 ) -> None:
     """Handle phone number input."""
     if not message.text or not validate_phone(message.text):
-        await message.answer(
-            "Пожалуйста, введите корректный номер телефона (например +380501234567):"
+        phone_invalid = (
+            i18n.get("phone-invalid")
+            if i18n
+            else "Пожалуйста, введите корректный номер телефона (например +380501234567):"
         )
+        await message.answer(phone_invalid)
         return
 
     phone = message.text
@@ -103,7 +108,12 @@ async def on_phone_received(
         except Exception:
             logger.exception("CRM lead creation failed for phone=%s", phone)
 
-    await message.answer("Спасибо за заявку! Менеджер свяжется с вами в ближайшее время.")
+    phone_success = (
+        i18n.get("phone-success")
+        if i18n
+        else "Спасибо за заявку! Менеджер свяжется с вами в ближайшее время."
+    )
+    await message.answer(phone_success)
 
 
 def create_phone_router() -> Router:
