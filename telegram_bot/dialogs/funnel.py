@@ -56,6 +56,7 @@ def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
     return build_funnel_filters(
         rooms=data.get("property_type", "any"),
         budget=data.get("budget", "any"),
+        city=data.get("location"),
         floor=data.get("floor"),
         view=data.get("view"),
     )
@@ -66,6 +67,7 @@ def build_funnel_filters(
     rooms: str = "any",
     budget: str = "any",
     complex_name: str | None = None,
+    city: str | None = None,
     floor: str | None = None,
     view: str | None = None,
 ) -> dict[str, Any]:
@@ -77,6 +79,8 @@ def build_funnel_filters(
         filters["price_eur"] = _BUDGET_MAP[budget]
     if complex_name:
         filters["complex_name"] = complex_name
+    if city and city != "any":
+        filters["city"] = _LOCATION_TO_CITY.get(city, city)
     if floor and floor != "any" and floor in _FLOOR_MAP:
         filters["floor"] = _FLOOR_MAP[floor]
     if view and view != "any":
