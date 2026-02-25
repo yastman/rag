@@ -38,7 +38,7 @@ def format_promotion_card(
     old_price_eur: int | float,
 ) -> str:
     """Format apartment with active promotion, showing old/new price and discount %."""
-    discount_pct = round((1 - price_eur / old_price_eur) * 100)
+    discount_pct = round((1 - price_eur / old_price_eur) * 100) if old_price_eur else 0
     price_new = f"{int(price_eur):,}".replace(",", " ")
     price_old = f"{int(old_price_eur):,}".replace(",", " ")
     rooms_text = {1: "Студия", 2: "1-спальня", 3: "2-спальни", 4: "3-спальни"}.get(
@@ -47,7 +47,7 @@ def format_promotion_card(
     return (
         f"🔥 {complex_name}\n"
         f"{rooms_text} · {floor} этаж · {area_m2} м² · {view}\n"
-        f"~~{price_old} €~~ → {price_new} € (-{discount_pct}%)"
+        f"💰 {price_old} € → {price_new} € (-{discount_pct}%)"
     )
 
 
