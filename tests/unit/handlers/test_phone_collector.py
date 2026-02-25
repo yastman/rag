@@ -49,7 +49,10 @@ async def test_on_phone_received_creates_crm_lead():
     mock_kommo.create_lead.return_value = SimpleNamespace(id=201)
 
     state = AsyncMock()
-    state.get_data.return_value = {"lead_source": "viewing", "lead_detail": "prop-42"}
+    state.get_data.return_value = {
+        "service_key": "viewing",
+        "viewing_objects": [{"id": "prop-42", "complex_name": "Test"}],
+    }
 
     message = AsyncMock()
     message.text = "+359896759292"
@@ -67,7 +70,7 @@ async def test_on_phone_received_creates_crm_lead():
 async def test_on_phone_received_works_without_kommo():
     """Valid phone without kommo_client still replies to user and does not raise."""
     state = AsyncMock()
-    state.get_data.return_value = {"lead_source": "viewing", "lead_detail": ""}
+    state.get_data.return_value = {"service_key": "viewing", "viewing_objects": []}
 
     message = AsyncMock()
     message.text = "+359896759292"
