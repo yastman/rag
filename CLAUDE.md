@@ -12,6 +12,7 @@ make local-up              # Dev services (redis, qdrant, bge-m3, litellm)
 make run-bot               # Bot natively (no Docker)
 make docker-full-up        # All services (23 containers)
 make ingest-unified        # Unified ingestion (CocoIndex)
+python -m src.ingestion.apartments.runner --incremental  # Apartments (297 rows, change tracking)
 ```
 
 ## Project Overview
