@@ -14,12 +14,13 @@ persists state to file, and constructs all tmux commands correctly.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scripts.tmux_orch_identity import OrchIdentity
+from scripts.tmux_orch_identity import DEFAULT_IDENTITY_PATH, OrchIdentity, _main_repo_root
 
 
 class TestGenerateOrchId:
@@ -397,3 +398,85 @@ class TestKillWindowCommand:
         ident.session = "claude"
         cmd = ident.kill_window_command("W-FIX")
         assert cmd == 'TMUX="" tmux kill-window -t "claude:W-FIX" 2>/dev/null'
+
+
+class TestMainRepoRoot:
+    """_main_repo_root() finds main repo even when called from a git worktree."""
+
+    def test_returns_parent_of_git_common_dir(self):
+        with patch("scripts.tmux_orch_identity.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="/some/repo/.git\n", returncode=0)
+            result = _main_repo_root()
+        assert result == Path("/some/repo")
+
+    def test_relative_git_dir_resolved_to_cwd(self):
+        with patch("scripts.tmux_orch_identity.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout=".git\n", returncode=0)
+            result = _main_repo_root()
+        assert result == Path.cwd()
+
+    def test_worktree_resolves_to_main_repo(self):
+        with patch("scripts.tmux_orch_identity.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="/main/repo/.git\n", returncode=0)
+            result = _main_repo_root()
+        assert result == Path("/main/repo")
+
+    def test_fallback_to_cwd_on_error(self):
+        with patch("scripts.tmux_orch_identity.subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(1, "git")
+            result = _main_repo_root()
+        assert result == Path.cwd()
+
+    def test_fallback_to_cwd_on_oserror(self):
+        with patch("scripts.tmux_orch_identity.subprocess.run") as mock_run:
+            mock_run.side_effect = OSError("git not found")
+            result = _main_repo_root()
+        assert result == Path.cwd()
+
+
+class TestDefaultIdentityPath:
+    """DEFAULT_IDENTITY_PATH must be absolute and point to main repo .claude dir."""
+
+    def test_default_path_is_absolute(self):
+        assert DEFAULT_IDENTITY_PATH.is_absolute()
+
+    def test_default_path_ends_with_orch_identity(self):
+        assert str(DEFAULT_IDENTITY_PATH).endswith(".claude/orch-identity.json")
+
+
+class TestWorktreeIntegration:
+    """OrchIdentity.load/save use DEFAULT_IDENTITY_PATH (main repo root)."""
+
+    def test_load_from_worktree_uses_main_repo_path(self, tmp_path: Path):
+        """Given _main_repo_root → tmp, load() finds file in tmp/.claude/."""
+        orch_dir = tmp_path / ".claude"
+        orch_dir.mkdir()
+        orch_file = orch_dir / "orch-identity.json"
+        data = {
+            "session": "claude",
+            "window_index": "3",
+            "orch_id": "ORCH-test1234",
+            "webhook_target": "claude:ORCH-test1234",
+        }
+        orch_file.write_text(json.dumps(data) + "\n")
+
+        load_path = tmp_path / ".claude" / "orch-identity.json"
+        with patch("scripts.tmux_orch_identity.DEFAULT_IDENTITY_PATH", load_path):
+            ident = OrchIdentity.load()
+
+        assert ident.orch_id == "ORCH-test1234"
+
+    def test_save_to_worktree_creates_in_main_repo(self, tmp_path: Path):
+        """Given _main_repo_root → tmp, save() creates file in tmp/.claude/."""
+        ident = OrchIdentity()
+        ident.session = "claude"
+        ident.window_index = "3"
+        ident.orch_id = "ORCH-save5678"
+
+        save_path = tmp_path / ".claude" / "orch-identity.json"
+        with patch("scripts.tmux_orch_identity.DEFAULT_IDENTITY_PATH", save_path):
+            ident.save()
+
+        assert save_path.exists()
+        data = json.loads(save_path.read_text())
+        assert data["orch_id"] == "ORCH-save5678"
