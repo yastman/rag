@@ -602,7 +602,9 @@ class PropertyBot:
         from .keyboards.client_keyboard import get_menu_button_texts
 
         menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
-        self.dp.message(F.text.in_(menu_button_texts))(self.handle_menu_button)
+        self.dp.message(F.text.in_(menu_button_texts), flags={"menu_nav": True})(
+            self.handle_menu_button
+        )
         self.dp.message(StateFilter(None), F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
