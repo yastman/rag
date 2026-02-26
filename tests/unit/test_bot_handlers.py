@@ -22,6 +22,7 @@ from telegram_bot.config import BotConfig
 def mock_config(monkeypatch):
     """Create mock bot config."""
     monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
+    monkeypatch.delenv("KOMMO_ACCESS_TOKEN", raising=False)
     return BotConfig(
         _env_file=None,
         telegram_token="test-token",
