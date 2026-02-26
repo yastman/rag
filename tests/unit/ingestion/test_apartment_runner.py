@@ -67,6 +67,23 @@ class TestIncrementalIngester:
         assert stats["changed"] == 1
         assert stats["unchanged"] == 0
 
+    def test_dry_run_does_not_persist_state(self, tmp_path: Path) -> None:
+        csv_path = tmp_path / "apartments.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        state_path = tmp_path / ".ingestion_state.json"
+
+        ingester = IncrementalApartmentIngester(
+            csv_path=str(csv_path),
+            state_path=str(state_path),
+        )
+
+        stats_first = ingester.run_incremental(dry_run=True)
+        stats_second = ingester.run_incremental(dry_run=True)
+
+        assert stats_first["changed"] == 1
+        assert stats_second["changed"] == 1
+        assert not state_path.exists()
+
     def test_second_run_skips_unchanged(self, tmp_path: Path) -> None:
         csv_path = tmp_path / "apartments.csv"
         _write_csv([SAMPLE_ROW], csv_path)
@@ -79,11 +96,15 @@ class TestIncrementalIngester:
             state_path=str(state_path),
         )
 
-        # First run — saves state
-        ingester.run_incremental(dry_run=True)
+        # First run — ingests and saves state
+        with patch.object(ingester, "_embed_and_upsert"):
+            ingester.run_incremental(dry_run=False)
 
         # Second run — same data, nothing changed
-        stats = ingester.run_incremental(dry_run=True)
+        with patch.object(ingester, "_embed_and_upsert") as mock_embed:
+            stats = ingester.run_incremental(dry_run=False)
+
+        mock_embed.assert_not_called()
         assert stats["changed"] == 0
         assert stats["unchanged"] == 1
 
@@ -100,11 +121,43 @@ class TestIncrementalIngester:
         )
 
         # First run
-        ingester.run_incremental(dry_run=True)
+        with patch.object(ingester, "_embed_and_upsert"):
+            ingester.run_incremental(dry_run=False)
 
         # Change price
         changed_row = {**SAMPLE_ROW, "price_eur": "130000"}
         _write_csv([changed_row], csv_path)
 
-        stats = ingester.run_incremental(dry_run=True)
+        with patch.object(ingester, "_embed_and_upsert") as mock_embed:
+            stats = ingester.run_incremental(dry_run=False)
+
+        mock_embed.assert_called_once()
         assert stats["changed"] == 1
+
+    def test_removed_row_triggers_delete(self, tmp_path: Path) -> None:
+        csv_path = tmp_path / "apartments.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        state_path = tmp_path / ".ingestion_state.json"
+
+        ingester = IncrementalApartmentIngester(
+            csv_path=str(csv_path),
+            state_path=str(state_path),
+        )
+
+        with (
+            patch.object(ingester, "_embed_and_upsert"),
+            patch.object(ingester, "_delete_removed_points") as delete_mock,
+        ):
+            ingester.run_incremental(dry_run=False)
+        delete_mock.assert_not_called()
+
+        _write_csv([], csv_path)
+
+        with (
+            patch.object(ingester, "_embed_and_upsert"),
+            patch.object(ingester, "_delete_removed_points") as delete_mock,
+        ):
+            stats = ingester.run_incremental(dry_run=False)
+
+        delete_mock.assert_called_once()
+        assert stats["removed"] == 1
