@@ -632,7 +632,9 @@ class PropertyBot:
         from .keyboards.client_keyboard import get_menu_button_texts
 
         menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
-        self.dp.message(F.text.in_(menu_button_texts))(self.handle_menu_button)
+        self.dp.message(F.text.in_(menu_button_texts), flags={"menu_nav": True})(
+            self.handle_menu_button
+        )
         self.dp.message(StateFilter(None), F.text)(self.handle_query)
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
@@ -2977,18 +2979,18 @@ class PropertyBot:
                     auth_code = self.config.kommo_auth_code or None
                     should_init_kommo = True
                     if auth_code is None:
-                        # Fallback: seed Redis from KOMMO_ACCESS_TOKEN (#678)
-                        seeded = await _seed_kommo_access_token(
-                            redis=self._cache.redis,
-                            access_token=self.config.kommo_access_token.get_secret_value(),
-                            subdomain=self.config.kommo_subdomain,
-                        )
-                        if not seeded:
-                            existing = await self._cache.redis.hgetall(REDIS_KEY)
-                            if not existing:
+                        existing = await self._cache.redis.hgetall(REDIS_KEY)
+                        if not existing:
+                            env_token = self.config.kommo_access_token.get_secret_value()
+                            if env_token:
+                                await token_store.seed_env_token(env_token)
                                 logger.info(
-                                    "Kommo CRM disabled: no stored tokens, "
-                                    "no KOMMO_AUTH_CODE, no KOMMO_ACCESS_TOKEN"
+                                    "Kommo: seeded access token from KOMMO_ACCESS_TOKEN env var"
+                                )
+                            else:
+                                logger.info(
+                                    "Kommo CRM disabled: no stored tokens and no KOMMO_AUTH_CODE "
+                                    "(set env var for first-time setup)"
                                 )
                                 self._kommo_client = None
                                 should_init_kommo = False
