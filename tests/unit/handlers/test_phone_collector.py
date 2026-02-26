@@ -495,3 +495,18 @@ async def test_on_phone_received_normalizes_phone_to_e164():
     upsert_call = mock_kommo.upsert_contact.call_args
     phone_arg = upsert_call[0][0]  # first positional arg is phone string
     assert phone_arg == "+380501234567"  # E164 normalized
+
+
+async def test_on_phone_received_rejects_fake_phone_even_if_regex_matches():
+    """Numbers rejected by phonenumbers must not pass through raw fallback."""
+    mock_kommo = AsyncMock()
+    state = AsyncMock()
+    message = AsyncMock()
+    message.text = "+11111111111"
+    message.from_user = SimpleNamespace(id=1, first_name="Иван", last_name=None, username=None)
+
+    await mod.on_phone_received(message, state, kommo_client=mock_kommo)
+
+    mock_kommo.upsert_contact.assert_not_awaited()
+    message.answer.assert_awaited_once()
+    assert "корректный номер телефона" in message.answer.call_args[0][0]
