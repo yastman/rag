@@ -439,3 +439,106 @@ async def test_streaming_mixed_content_and_reasoning() -> None:
 
     assert result["response"] == "Думаю... Ответ: Болгария"
     assert result["response_sent"] is True
+
+
+@pytest.mark.asyncio
+async def test_streaming_placeholder_and_llm_called_in_parallel() -> None:
+    """Placeholder send and LLM stream creation run in parallel via asyncio.gather."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    stream = _AsyncStream([_StreamChunk("Параллельный ответ")])
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=10)
+    sent_msg.message_id = 20
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Параллельный тест",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Параллельный тест"}],
+    )
+
+    # Both placeholder send and LLM create must have been called
+    message.answer.assert_awaited_once()
+    client.chat.completions.create.assert_awaited_once()
+    assert result["response_sent"] is True
+
+
+@pytest.mark.asyncio
+async def test_generate_response_uses_provided_llm_without_creating_new() -> None:
+    """When llm is passed explicitly, config.create_llm must NOT be called."""
+    config, _unused_client = _make_non_streaming_config()
+
+    # Build a separate explicit client
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Синглтон ответ"
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_response.model = "gpt-4o-mini"
+    mock_response.usage = None
+
+    explicit_client = MagicMock()
+    explicit_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="Тест синглтона",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        llm=explicit_client,
+    )
+
+    # config.create_llm must NOT have been called — singleton was provided
+    config.create_llm.assert_not_called()
+    explicit_client.chat.completions.create.assert_awaited_once()
+    assert result["response"] == "Синглтон ответ"
+
+
+@pytest.mark.asyncio
+async def test_drift_below_threshold_does_not_warn() -> None:
+    """Drift below _DRIFT_WARN_THRESHOLD_MS (500ms) must not set WARNING level on span."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    # Stream that produces a small TTFT drift (well below 500ms)
+    stream = _AsyncStream([_StreamChunk("Ответ без дрифта")])
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    # Reset call tracking to check update_current_span calls
+    lf.update_current_span.reset_mock()
+
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    await generate_response(
+        query="Тест порога дрифта",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест порога дрифта"}],
+    )
+
+    # No update_current_span call with level="WARNING" should have occurred
+    for call in lf.update_current_span.call_args_list:
+        kwargs = call.kwargs or (call.args[0] if call.args else {})
+        assert kwargs.get("level") != "WARNING", (
+            "Expected no WARNING level for small drift, but got one"
+        )
