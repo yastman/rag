@@ -15,7 +15,7 @@ from telegram_bot.services.apartment_models import ApartmentRecord
 
 
 # Mutable fields — changes in these trigger re-embedding
-_CHANGE_FIELDS = ("price_eur", "area_m2", "is_furnished", "is_promotion", "view_raw")
+_CHANGE_FIELDS = ("price_eur", "area_m2", "is_furnished", "is_promotion", "view_raw", "city")
 
 
 def row_change_key(row: dict) -> str:

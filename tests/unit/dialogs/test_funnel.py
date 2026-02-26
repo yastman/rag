@@ -16,6 +16,30 @@ def test_funnel_dialog_exists():
     assert isinstance(funnel_dialog, Dialog)
 
 
+@pytest.mark.asyncio
+async def test_location_options_has_exactly_3_cities_plus_any():
+    """Funnel must only offer cities that exist in data: Sunny Beach, Elenite, Nesebar + Any."""
+    result = await funnel_module.get_location_options()
+    items = result["items"]
+    keys = [key for _, key in items]
+    # Only real cities + any
+    assert "sunny_beach" in keys
+    assert "elenite" in keys
+    assert "nessebar" in keys
+    assert "any" in keys
+    # Removed phantom cities
+    assert "sveti_vlas" not in keys
+    assert "ravda" not in keys
+    assert "burgas" not in keys
+    assert "pomorie" not in keys
+    assert "sozopol" not in keys
+    assert "primorsko" not in keys
+    assert "bansko" not in keys
+    assert "sofia" not in keys
+    # Total: 3 real + 1 any = 4
+    assert len(items) == 4
+
+
 def test_funnel_has_all_windows():
     windows = funnel_dialog.windows
     states = [w.get_state() for w in windows.values()]

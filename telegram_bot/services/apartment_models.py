@@ -91,6 +91,7 @@ class ApartmentRecord:
     """Single apartment listing for Qdrant ingestion."""
 
     complex_name: str
+    city: str
     section: str
     apartment_number: str
     rooms: int
@@ -117,6 +118,7 @@ class ApartmentRecord:
 
         return cls(
             complex_name=str(row["complex_name"]),
+            city=str(row.get("city", "")),
             section=str(row["section"]),
             apartment_number=str(row["apartment_number"]),
             rooms=int(row["rooms"]),
@@ -140,6 +142,7 @@ class ApartmentRecord:
         floor_str = "цокольный этаж" if self.floor == 0 else f"{self.floor} этаж"
         price_fmt = f"{self.price_eur:,.0f}".replace(",", " ")
         view_str = ", ".join(self.view_tags) if self.view_tags else "не указан"
+        city_str = f"{self.city}, " if self.city else ""
         rooms_word = {
             1: "Студио",
             2: "2 комнаты (1 спальня)",
@@ -148,7 +151,7 @@ class ApartmentRecord:
         }.get(self.rooms, f"{self.rooms} комнат")
 
         return (
-            f"{self.complex_name}, секция {self.section}, "
+            f"{city_str}{self.complex_name}, секция {self.section}, "
             f"апартамент {self.apartment_number}. "
             f"{rooms_word}, {floor_str}, {self.area_m2} м². "
             f"Вид: {view_str}. Цена: {price_fmt} €. {furnished}."
@@ -158,6 +161,7 @@ class ApartmentRecord:
         """Build Qdrant point payload (top-level fields, no metadata. prefix)."""
         return {
             "complex_name": self.complex_name,
+            "city": self.city,
             "section": self.section,
             "apartment_number": self.apartment_number,
             "rooms": self.rooms,
