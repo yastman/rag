@@ -220,6 +220,7 @@ ignore = [
     # NEW 2025 rules - selective ignores
     "RUF001",  # ambiguous-unicode (false positives for Cyrillic/Ukrainian text)
     "RUF002",  # ambiguous-unicode-docstring (false positives for Cyrillic)
+    "RUF003",  # ambiguous-unicode-comment (false positives for Cyrillic comments)
     "PERF203", # try-except-in-loop (acceptable for error handling in async)
     "PERF401", # manual-list-comprehension (readability over micro-optimization)
     "RUF012",  # mutable-class-default (dataclasses handle this correctly)
