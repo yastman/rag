@@ -149,3 +149,31 @@ async def test_stream_failure_raises() -> None:
 
     # Placeholder must be cleaned up when stream creation fails (#685 safety)
     mock_sent_msg.delete.assert_called_once()
+
+
+async def test_streaming_retries_without_name_kwarg_for_plain_openai() -> None:
+    """Voice-path streaming retries without Langfuse `name` kwarg when unsupported."""
+    mock_llm, mock_config, mock_message, _ = _make_mocks(chunks=["Voice ", "ok"])
+    mock_stream = _MockAsyncStream(["Voice ", "ok"])
+    mock_llm.chat.completions.create = AsyncMock(
+        side_effect=[
+            TypeError("create() got an unexpected keyword argument 'name'"),
+            mock_stream,
+        ]
+    )
+
+    from telegram_bot.graph.nodes.generate import _generate_streaming
+
+    result = await _generate_streaming(
+        llm=mock_llm,
+        config=mock_config,
+        llm_messages=[{"role": "user", "content": "test"}],
+        message=mock_message,
+    )
+
+    assert result[0] == "Voice ok"
+    assert mock_llm.chat.completions.create.await_count == 2
+    first_call = mock_llm.chat.completions.create.await_args_list[0].kwargs
+    second_call = mock_llm.chat.completions.create.await_args_list[1].kwargs
+    assert first_call.get("name") == "generate-answer"
+    assert "name" not in second_call
