@@ -6,7 +6,7 @@ import pytest
 # Skip entire module if aiogram not installed
 pytest.importorskip("aiogram", reason="aiogram not installed")
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram import Dispatcher
 from aiogram.types import Message, User
@@ -180,6 +180,73 @@ class TestThrottlingMiddleware:
 
         assert result == "success"
         handler.assert_called_once()
+
+    async def test_menu_buttons_use_shorter_rate_limit(self):
+        """Test that handlers with menu_nav flag use menu_rate_limit (shorter)."""
+        middleware = ThrottlingMiddleware(rate_limit=1.5, menu_rate_limit=0.3)
+
+        handler = AsyncMock(return_value="success")
+
+        user = MagicMock(spec=User)
+        user.id = 12345
+
+        event = MagicMock(spec=Message)
+        event.answer = AsyncMock()
+        # Simulate aiogram flags: get_flag(data, "menu_nav") returns True
+        data = {"event_from_user": user, "handler": MagicMock(flags={"menu_nav": True})}
+
+        # First menu button press
+        with patch(
+            "telegram_bot.middlewares.throttling.get_flag",
+            side_effect=lambda data, name, **_kw: data.get(
+                "handler", MagicMock(flags={})
+            ).flags.get(name),
+        ):
+            result1 = await middleware(handler, event, data)
+            assert result1 == "success"
+
+            # Second rapid press — should be throttled (within 0.3s)
+            result2 = await middleware(handler, event, data)
+            assert result2 is None
+
+    async def test_menu_buttons_not_throttled_by_message_cache(self):
+        """Menu button presses use separate cache from regular messages."""
+        middleware = ThrottlingMiddleware(rate_limit=1.5, menu_rate_limit=0.3)
+
+        handler = AsyncMock(return_value="success")
+
+        user = MagicMock(spec=User)
+        user.id = 12345
+
+        event = MagicMock(spec=Message)
+        event.answer = AsyncMock()
+
+        # First: regular message (fills message cache)
+        data_regular = {"event_from_user": user}
+        with patch(
+            "telegram_bot.middlewares.throttling.get_flag",
+            return_value=None,
+        ):
+            await middleware(handler, event, data_regular)
+
+        # Second: menu button press — should NOT be throttled by message cache
+        data_menu = {"event_from_user": user, "handler": MagicMock(flags={"menu_nav": True})}
+        with patch(
+            "telegram_bot.middlewares.throttling.get_flag",
+            side_effect=lambda data, name, **_kw: data.get(
+                "handler", MagicMock(flags={})
+            ).flags.get(name),
+        ):
+            result = await middleware(handler, event, data_menu)
+            assert result == "success", (
+                "Menu button should use separate cache from regular messages"
+            )
+
+    async def test_middleware_creation_with_menu_rate(self):
+        """Test middleware creation with custom menu_rate_limit."""
+        middleware = ThrottlingMiddleware(rate_limit=2.0, menu_rate_limit=0.5, admin_ids=[123])
+        assert middleware.rate_limit == 2.0
+        assert middleware.menu_rate_limit == 0.5
 
 
 class TestSetupThrottlingMiddleware:
