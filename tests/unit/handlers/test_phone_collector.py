@@ -10,6 +10,7 @@ from telegram_bot.handlers.phone_collector import (
     _build_note_text,
     build_display_name,
     create_phone_router,
+    normalize_phone,
     validate_phone,
 )
 
@@ -24,6 +25,34 @@ def test_validate_phone_invalid():
     assert validate_phone("hello") is False
     assert validate_phone("") is False
     assert validate_phone("123") is False
+
+
+# --- normalize_phone tests (Task 3: phonenumbers validation) ---
+
+
+def test_normalize_phone_returns_e164_for_valid_international():
+    assert normalize_phone("+380501234567") == "+380501234567"
+    assert normalize_phone("+359896759292") == "+359896759292"
+
+
+def test_normalize_phone_returns_none_for_all_same_digits():
+    """Fake numbers like 0000000000 or 1111111 must be rejected."""
+    assert normalize_phone("+00000000000") is None
+    assert normalize_phone("+11111111111") is None
+
+
+def test_normalize_phone_returns_none_for_non_numeric():
+    assert normalize_phone("hello") is None
+    assert normalize_phone("") is None
+
+
+def test_normalize_phone_returns_none_for_too_short():
+    assert normalize_phone("+123") is None
+
+
+def test_normalize_phone_normalizes_formatting():
+    """Spaces and dashes are cleaned before parsing."""
+    assert normalize_phone("+38 050 123-45-67") == "+380501234567"
 
 
 def test_states_defined():
@@ -413,3 +442,71 @@ async def test_on_phone_received_uses_bot_config_for_pipeline_ids():
     assert lead_arg.pipeline_id == 55
     assert lead_arg.status_id == 77
     assert lead_arg.responsible_user_id == 88
+
+
+# --- Task 4: normalize_phone in on_phone_received ---
+
+
+async def test_on_phone_received_passes_phone_to_contact_create():
+    """on_phone_received must pass phone to ContactCreate so it reaches Kommo."""
+    mock_kommo = AsyncMock()
+    mock_kommo.upsert_contact.return_value = SimpleNamespace(id=5)
+    mock_kommo.create_lead.return_value = SimpleNamespace(id=6)
+
+    state = AsyncMock()
+    state.get_data.return_value = {"service_key": "viewing", "viewing_objects": []}
+
+    message = AsyncMock()
+    message.text = "+380501234567"
+    message.from_user = SimpleNamespace(id=1, first_name="Иван", last_name=None, username=None)
+
+    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+        mock_cfg.return_value = {
+            "entry_points": {"viewing": {"crm_title": "X", "phone_success": "OK"}}
+        }
+        await mod.on_phone_received(message, state, kommo_client=mock_kommo)
+
+    upsert_call = mock_kommo.upsert_contact.call_args
+    contact_create_arg = upsert_call[0][1]  # second positional arg is ContactCreate
+    # phone must be passed so upsert_contact can put it in custom_fields_values
+    assert contact_create_arg.phone == "+380501234567"
+
+
+async def test_on_phone_received_normalizes_phone_to_e164():
+    """Phone is normalized to E164 before storing in CRM."""
+    mock_kommo = AsyncMock()
+    mock_kommo.upsert_contact.return_value = SimpleNamespace(id=5)
+    mock_kommo.create_lead.return_value = SimpleNamespace(id=6)
+
+    state = AsyncMock()
+    state.get_data.return_value = {"service_key": "viewing", "viewing_objects": []}
+
+    message = AsyncMock()
+    # Phone with spaces/dashes — normalize_phone should clean it to E164
+    message.text = "+38 050 123-45-67"
+    message.from_user = SimpleNamespace(id=1, first_name="Иван", last_name=None, username=None)
+
+    with patch("telegram_bot.services.content_loader.load_services_config") as mock_cfg:
+        mock_cfg.return_value = {
+            "entry_points": {"viewing": {"crm_title": "X", "phone_success": "OK"}}
+        }
+        await mod.on_phone_received(message, state, kommo_client=mock_kommo)
+
+    upsert_call = mock_kommo.upsert_contact.call_args
+    phone_arg = upsert_call[0][0]  # first positional arg is phone string
+    assert phone_arg == "+380501234567"  # E164 normalized
+
+
+async def test_on_phone_received_rejects_fake_phone_even_if_regex_matches():
+    """Numbers rejected by phonenumbers must not pass through raw fallback."""
+    mock_kommo = AsyncMock()
+    state = AsyncMock()
+    message = AsyncMock()
+    message.text = "+11111111111"
+    message.from_user = SimpleNamespace(id=1, first_name="Иван", last_name=None, username=None)
+
+    await mod.on_phone_received(message, state, kommo_client=mock_kommo)
+
+    mock_kommo.upsert_contact.assert_not_awaited()
+    message.answer.assert_awaited_once()
+    assert "корректный номер телефона" in message.answer.call_args[0][0]
