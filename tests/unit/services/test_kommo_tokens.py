@@ -57,6 +57,18 @@ class TestKommoTokenStore:
             assert token == "new_token"
             mock_refresh.assert_called_once_with("refresh_123")
 
+    async def test_get_valid_token_seeded_without_refresh_token(self, token_store, mock_redis):
+        """Seeded access_token without refresh token should be returned as-is."""
+        mock_redis.hgetall.return_value = {
+            b"access_token": b"seeded_access",
+            b"refresh_token": b"",
+            b"expires_at": b"0",
+        }
+        with patch.object(token_store, "_refresh_tokens", new_callable=AsyncMock) as mock_refresh:
+            token = await token_store.get_valid_token()
+            assert token == "seeded_access"
+            mock_refresh.assert_not_called()
+
     async def test_get_valid_token_raises_when_no_tokens(self, token_store, mock_redis):
         """Raise when no tokens stored and no auth code."""
         mock_redis.hgetall.return_value = {}
@@ -110,3 +122,60 @@ class TestKommoTokenStore:
         mock_redis.hset.assert_called_once()
         call_kwargs = mock_redis.hset.call_args
         assert call_kwargs[0][0] == "kommo:oauth:tokens"  # key
+
+    # --- #682: empty refresh_token must not trigger refresh ---
+
+    async def test_get_valid_token_with_empty_refresh_returns_token_without_refresh(
+        self, token_store, mock_redis
+    ):
+        """#682: expires_at=0 + empty refresh_token → return access_token as-is, no refresh call."""
+        mock_redis.hgetall.return_value = {
+            b"access_token": b"seeded_env_token",
+            b"refresh_token": b"",
+            b"expires_at": b"0",
+        }
+        with patch.object(token_store, "_refresh_tokens", new_callable=AsyncMock) as mock_refresh:
+            token = await token_store.get_valid_token()
+            assert token == "seeded_env_token"
+            mock_refresh.assert_not_called()
+
+    # --- #678 Task 3: seed_env_token method ---
+
+    async def test_seed_env_token_writes_correct_mapping_to_redis(self, token_store, mock_redis):
+        """#678 Task 3: seed_env_token writes access_token, empty refresh, expires_at=0."""
+        await token_store.seed_env_token("env_access_token_abc")
+        mock_redis.hset.assert_called_once()
+        call_args = mock_redis.hset.call_args
+        assert call_args[0][0] == "kommo:oauth:tokens"
+        mapping = call_args[1]["mapping"]
+        assert mapping["access_token"] == "env_access_token_abc"
+        assert mapping["refresh_token"] == ""
+        assert mapping["expires_at"] == "0"
+        assert mapping["subdomain"] == "testcompany"
+
+    async def test_get_valid_token_after_seed_env_token_returns_seeded_token(
+        self, token_store, mock_redis
+    ):
+        """#678+#682: after seeding, get_valid_token returns seeded token without refresh attempt."""
+        # Simulate seed written to Redis (expires_at=0, refresh_token="")
+        mock_redis.hgetall.return_value = {
+            b"access_token": b"live_env_token",
+            b"refresh_token": b"",
+            b"expires_at": b"0",
+        }
+        with patch.object(token_store, "_refresh_tokens", new_callable=AsyncMock) as mock_refresh:
+            token = await token_store.get_valid_token()
+            assert token == "live_env_token"
+            mock_refresh.assert_not_called()
+
+    async def test_initialize_with_seeded_token_does_not_raise(self, token_store, mock_redis):
+        """#678+#682: initialize() with seeded token (no auth_code) succeeds without refresh."""
+        mock_redis.hgetall.return_value = {
+            b"access_token": b"seeded_token",
+            b"refresh_token": b"",
+            b"expires_at": b"0",
+        }
+        with patch.object(token_store, "_refresh_tokens", new_callable=AsyncMock) as mock_refresh:
+            token = await token_store.initialize(authorization_code=None)
+            assert token == "seeded_token"
+            mock_refresh.assert_not_called()
