@@ -187,6 +187,10 @@ await kommo.link_contact_to_lead(lead.id, contact.id)
 await kommo.close()  # close httpx client
 ```
 
+**Token init fallback (#678):** `bot.py` init chain: `KOMMO_AUTH_CODE` → `token_store.seed_env_token()` (seeds Redis from `KOMMO_ACCESS_TOKEN` env) → check existing Redis → disable. Env vars: `KOMMO_CLIENT_ID`, `KOMMO_CLIENT_SECRET`, `KOMMO_REDIRECT_URI`, `KOMMO_ACCESS_TOKEN`.
+
+**get_valid_token() guard (#682):** Skips token refresh if `refresh_token` empty — returns `access_token` as-is. Prevents 401 errors on seeded tokens without refresh capability.
+
 **Traced spans:** `kommo-create-lead`, `kommo-get-lead`, `kommo-update-lead`, `kommo-upsert-contact`, `kommo-get-contacts`, `kommo-add-note`, `kommo-create-task`, `kommo-link-contact`, `kommo-list-pipelines`
 
 **Token seed fallback (#678, #686):** Init chain order: `KOMMO_AUTH_CODE` present → exchange; else check Redis → tokens exist → proceed; else `KOMMO_ACCESS_TOKEN` set → `token_store.seed_env_token(token)` → proceed; else disable CRM. `seed_env_token()` stores access token with empty refresh_token and expires_at=0 so `get_valid_token()` returns it as-is (no refresh attempted).
