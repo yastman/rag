@@ -2951,11 +2951,7 @@ class PropertyBot:
                     if auth_code is None:
                         existing = await self._cache.redis.hgetall(REDIS_KEY)
                         if not existing:
-                            env_token = (
-                                self.config.kommo_access_token.get_secret_value()
-                                if self.config.kommo_access_token
-                                else ""
-                            )
+                            env_token = self.config.kommo_access_token.get_secret_value()
                             if env_token:
                                 await token_store.seed_env_token(env_token)
                                 logger.info(
