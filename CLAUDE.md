@@ -57,6 +57,27 @@ Bug:    /systematic-debugging → TDD → fix
 
 **Details:** `.claude/rules/skills.md`
 
+## Subagent Models
+
+**Default to cheapest model that fits the task.** Opus дорогой — используй только когда реально нужен.
+
+| Model | When | Examples |
+|-------|------|----------|
+| `haiku` | Поиск, чтение, grep, простые вопросы | Explore codebase, find files, read docs |
+| `sonnet` | Код-ревью, планирование, средний код | Plan agent, code-reviewer, write tests |
+| `opus` | Только сложная архитектура, критический код | Не указывай model — наследует родителя |
+
+```python
+# Explore — всегда haiku
+Task(subagent_type="Explore", model="haiku", ...)
+
+# Plan/review — sonnet
+Task(subagent_type="Plan", model="sonnet", ...)
+
+# general-purpose код — sonnet по умолчанию
+Task(subagent_type="general-purpose", model="sonnet", ...)
+```
+
 ## Troubleshooting
 
 | Error | Fix |
