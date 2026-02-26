@@ -70,6 +70,7 @@ gpt-4o-mini (Cerebras/gpt-oss-120b) → cerebras-glm → Groq → OpenAI
 | `REWRITE_MODEL` | gpt-4o-mini | Separate model for rewrite_node (defaults to LLM_MODEL) |
 | `REWRITE_MAX_TOKENS` | 200 | Max tokens for query rewrite (short output) |
 | `STREAMING_ENABLED` | true | Stream generate_node output to Telegram (feature flag) |
+| `TTFT_DRIFT_WARN_MS` | 500 | TTFT drift warning threshold (ms); raise for reasoning models behind proxy (#675) |
 
 ## Local Dev (`make run-bot`)
 

@@ -439,3 +439,28 @@ async def test_streaming_mixed_content_and_reasoning() -> None:
 
     assert result["response"] == "Думаю... Ответ: Болгария"
     assert result["response_sent"] is True
+
+
+@pytest.mark.asyncio
+async def test_streaming_placeholder_failure_calls_llm_once_for_fallback() -> None:
+    """If placeholder send fails, only fallback non-streaming LLM call should run once."""
+    config, client = _make_non_streaming_config(answer="Ответ после fallback")
+    config.streaming_enabled = True
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(side_effect=RuntimeError("telegram send failed"))
+
+    result = await generate_response(
+        query="Тест placeholder fail",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест placeholder fail"}],
+    )
+
+    assert result["response"] == "Ответ после fallback"
+    assert result["llm_stream_recovery"] is True
+    assert client.chat.completions.create.await_count == 1

@@ -70,10 +70,15 @@ class IncrementalApartmentIngester:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
-    def run_incremental(self, dry_run: bool = False) -> dict:
-        """Run incremental ingestion. Returns stats dict."""
+    def run_incremental(self, dry_run: bool = False, *, force_full: bool = False) -> dict:
+        """Run ingestion and return stats.
+
+        By default, compares against persisted state (incremental mode).
+        When ``force_full`` is True, treats all rows as changed without mutating
+        state in dry-run mode.
+        """
         rows = read_apartments_csv(self.csv_path)
-        prev_state = self._load_state()
+        prev_state = {} if force_full else self._load_state()
 
         changed: list[ApartmentRecord] = []
         new_state: dict[str, str] = {}
@@ -92,8 +97,10 @@ class IncrementalApartmentIngester:
             "removed": len(removed_keys),
         }
 
+        mode = "full" if force_full else "incremental"
         logger.info(
-            "Incremental scan: %d total, %d changed, %d unchanged, %d removed",
+            "%s scan: %d total, %d changed, %d unchanged, %d removed",
+            mode.capitalize(),
             stats["total"],
             stats["changed"],
             stats["unchanged"],
@@ -201,7 +208,5 @@ if __name__ == "__main__":
         stats = ingester.run_incremental(dry_run=args.dry_run)
         print(f"Stats: {stats}")
     else:
-        # Full re-index: clear state and run
-        Path(ingester.state_path).unlink(missing_ok=True)
-        stats = ingester.run_incremental(dry_run=args.dry_run)
+        stats = ingester.run_incremental(dry_run=args.dry_run, force_full=True)
         print(f"Full re-index stats: {stats}")
