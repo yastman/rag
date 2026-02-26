@@ -68,10 +68,33 @@ class KommoTokenStore:
             return access_token
 
         if time.time() + REFRESH_BUFFER_SEC >= expires_at:
+            if not refresh_token:
+                logger.info(
+                    "Kommo token near expiry but no refresh_token — using access_token as-is"
+                )
+                return access_token
             logger.info("Kommo token near expiry, refreshing")
             return await self._refresh_tokens(refresh_token)
 
         return access_token
+
+    async def seed_env_token(self, access_token: str) -> None:
+        """Seed Redis with a manually-provided access token when no OAuth flow ran yet.
+
+        Used on first startup when only KOMMO_ACCESS_TOKEN env var is available.
+        Stores empty refresh_token and expires_at=0 so get_valid_token() returns
+        the token as-is (no refresh attempted) until a proper OAuth exchange occurs.
+        """
+        await self._redis.hset(
+            REDIS_KEY,
+            mapping={
+                "access_token": access_token,
+                "refresh_token": "",
+                "expires_at": "0",
+                "subdomain": self._subdomain,
+            },
+        )
+        logger.info("Kommo access token seeded from env var (subdomain=%s)", self._subdomain)
 
     async def force_refresh(self) -> str:
         """Force token refresh (e.g. after 401)."""
