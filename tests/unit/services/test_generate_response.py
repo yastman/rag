@@ -583,6 +583,57 @@ async def test_streaming_placeholder_failure_closes_precreated_stream() -> None:
 
 
 @pytest.mark.asyncio
+async def test_streaming_placeholder_telegram_retry_after_falls_through_to_non_streaming() -> None:
+    """TelegramRetryAfter from message.answer falls through to non-streaming fallback.
+
+    Regression guard: without return_exceptions=True in asyncio.gather, the rate-limit
+    exception would cancel the LLM stream task and leave sent_msg undefined in cleanup
+    (UnboundLocalError). With return_exceptions=True the exception is caught, the stream
+    is closed via aclose(), and the outer handler performs non-streaming fallback.
+    """
+    from aiogram.exceptions import TelegramRetryAfter
+
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    stream = _AsyncStream([_StreamChunk("Не должен быть отправлен")])
+    stream.aclose = AsyncMock()
+
+    fallback_choice = MagicMock()
+    fallback_choice.message.content = "Фолбэк после rate-limit"
+    fallback_response = MagicMock()
+    fallback_response.choices = [fallback_choice]
+    fallback_response.model = "gpt-4o-mini"
+    fallback_response.usage = None
+
+    client.chat.completions.create = AsyncMock(side_effect=[stream, fallback_response])
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(
+        side_effect=TelegramRetryAfter(MagicMock(), "Too many requests: retry after 10", 10)
+    )
+
+    result = await generate_response(
+        query="Тест rate-limit placeholder",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест rate-limit placeholder"}],
+    )
+
+    # Fallback non-streaming path taken; response delivered but not via streaming
+    assert result["response"] == "Фолбэк после rate-limit"
+    assert result["response_sent"] is False
+    # Stream was cleaned up despite placeholder failure (requires return_exceptions=True)
+    stream.aclose.assert_awaited_once()
+    # LLM called twice: stream object + non-streaming fallback
+    assert client.chat.completions.create.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_streaming_create_failure_deletes_placeholder_before_fallback() -> None:
     """If stream creation fails, remove placeholder before non-streaming fallback."""
     config, client = _make_non_streaming_config()
