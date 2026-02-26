@@ -442,10 +442,17 @@ async def test_streaming_mixed_content_and_reasoning() -> None:
 
 
 @pytest.mark.asyncio
-async def test_streaming_placeholder_failure_calls_llm_once_for_fallback() -> None:
-    """If placeholder send fails, only fallback non-streaming LLM call should run once."""
-    config, client = _make_non_streaming_config(answer="Ответ после fallback")
+async def test_streaming_placeholder_failure_degrades_gracefully() -> None:
+    """Placeholder failure → sent_msg=None, LLM stream still runs (#675, #683).
+
+    With asyncio.gather(return_exceptions=True) both tasks complete before results
+    are inspected. Placeholder exception is non-critical: stream continues and
+    returns the response without Telegram message editing.
+    """
+    config, client = _make_non_streaming_config()
     config.streaming_enabled = True
+    stream = _AsyncStream([_StreamChunk("Ответ несмотря на ошибку плейсхолдера")])
+    client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
     lf = MagicMock()
@@ -461,6 +468,145 @@ async def test_streaming_placeholder_failure_calls_llm_once_for_fallback() -> No
         raw_messages=[{"role": "user", "content": "Тест placeholder fail"}],
     )
 
-    assert result["response"] == "Ответ после fallback"
-    assert result["llm_stream_recovery"] is True
+    # Stream ran successfully — no non-streaming recovery needed
+    assert result["response"] == "Ответ несмотря на ошибку плейсхолдера"
+    assert result["llm_stream_recovery"] is False
+    # LLM was called exactly once (streaming path, no separate fallback call)
     assert client.chat.completions.create.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_placeholder_and_stream_run_in_parallel() -> None:
+    """asyncio.gather used so message.answer and llm.create start simultaneously (#675).
+
+    Uses cross-waiting asyncio.Events: each task waits until the other has started.
+    Sequential execution would deadlock; parallel execution completes normally.
+    """
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    answer_started = asyncio.Event()
+    create_started = asyncio.Event()
+
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
+    sent_msg.edit_text = AsyncMock()
+    stream = _AsyncStream([_StreamChunk("Параллельный ответ")])
+
+    async def parallel_answer(*_args: object, **_kwargs: object) -> AsyncMock:
+        answer_started.set()
+        await create_started.wait()
+        return sent_msg
+
+    async def parallel_create(*_args: object, **_kwargs: object) -> _AsyncStream:
+        create_started.set()
+        await answer_started.wait()
+        return stream
+
+    client.chat.completions.create = parallel_create
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    message = AsyncMock()
+    message.answer = parallel_answer
+
+    result = await generate_response(
+        query="Тест параллелизма",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест параллелизма"}],
+    )
+
+    assert result["response"] == "Параллельный ответ"
+    assert answer_started.is_set()
+    assert create_started.is_set()
+
+
+@pytest.mark.asyncio
+async def test_stream_failure_raises_and_triggers_fallback() -> None:
+    """LLM stream exception propagates from gather → triggers non-streaming fallback (#683)."""
+    config, client = _make_non_streaming_config(answer="Нестриминговый fallback")
+    config.streaming_enabled = True
+    # First call (stream=True) raises; second call (non-streaming fallback) succeeds
+    mock_fallback_response = MagicMock()
+    mock_fallback_response.choices = [MagicMock()]
+    mock_fallback_response.choices[0].message.content = "Нестриминговый fallback"
+    mock_fallback_response.model = "gpt-4o-mini"
+    mock_fallback_response.usage = None
+    client.chat.completions.create = AsyncMock(
+        side_effect=[RuntimeError("LLM сервис недоступен"), mock_fallback_response]
+    )
+    config.create_llm.return_value = client
+
+    sent_msg = AsyncMock()
+    lf = MagicMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Тест ошибки стрима",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест ошибки стрима"}],
+    )
+
+    assert result["response"] == "Нестриминговый fallback"
+    assert result["llm_stream_recovery"] is True
+
+
+@pytest.mark.asyncio
+async def test_ttft_drift_warn_ms_config() -> None:
+    """TTFT drift warning threshold is read from config.ttft_drift_warn_ms (#675)."""
+    from telegram_bot.graph.config import GraphConfig
+
+    # Default value
+    gc = GraphConfig()
+    assert gc.ttft_drift_warn_ms == 500
+
+    # Reads from env
+    gc_env = GraphConfig.from_env()
+    assert isinstance(gc_env.ttft_drift_warn_ms, int)
+
+    # Low threshold (0) triggers warning for any drift
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    config.ttft_drift_warn_ms = 0  # any drift triggers warning
+
+    stream = _AsyncStream([_StreamChunk("Ответ")])
+
+    async def _delayed_create(*_args: object, **_kwargs: object) -> _AsyncStream:
+        await asyncio.sleep(0.05)
+        return stream
+
+    client.chat.completions.create = AsyncMock(side_effect=_delayed_create)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    await generate_response(
+        query="Тест TTFT drift",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест TTFT drift"}],
+    )
+
+    warning_calls = [
+        c
+        for c in lf.update_current_span.call_args_list
+        if c.kwargs.get("level") == "WARNING"
+        and "TTFT drift" in (c.kwargs.get("status_message") or "")
+    ]
+    assert len(warning_calls) >= 1
