@@ -2951,12 +2951,23 @@ class PropertyBot:
                     if auth_code is None:
                         existing = await self._cache.redis.hgetall(REDIS_KEY)
                         if not existing:
-                            logger.info(
-                                "Kommo CRM disabled: no stored tokens and no KOMMO_AUTH_CODE "
-                                "(set env var for first-time setup)"
+                            env_token = (
+                                self.config.kommo_access_token.get_secret_value()
+                                if self.config.kommo_access_token
+                                else ""
                             )
-                            self._kommo_client = None
-                            should_init_kommo = False
+                            if env_token:
+                                await token_store.seed_env_token(env_token)
+                                logger.info(
+                                    "Kommo: seeded access token from KOMMO_ACCESS_TOKEN env var"
+                                )
+                            else:
+                                logger.info(
+                                    "Kommo CRM disabled: no stored tokens and no KOMMO_AUTH_CODE "
+                                    "(set env var for first-time setup)"
+                                )
+                                self._kommo_client = None
+                                should_init_kommo = False
 
                     if should_init_kommo:
                         await token_store.initialize(authorization_code=auth_code)
