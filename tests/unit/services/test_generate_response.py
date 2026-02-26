@@ -542,3 +542,81 @@ async def test_drift_below_threshold_does_not_warn() -> None:
         assert kwargs.get("level") != "WARNING", (
             "Expected no WARNING level for small drift, but got one"
         )
+
+
+@pytest.mark.asyncio
+async def test_streaming_placeholder_failure_closes_precreated_stream() -> None:
+    """If placeholder send fails, close pre-created stream before fallback path."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    stream = _AsyncStream([_StreamChunk("Не должен быть отправлен")])
+    stream.aclose = AsyncMock()
+
+    fallback_choice = MagicMock()
+    fallback_choice.message.content = "Фолбэк после ошибки placeholder"
+    fallback_response = MagicMock()
+    fallback_response.choices = [fallback_choice]
+    fallback_response.model = "gpt-4o-mini"
+    fallback_response.usage = None
+
+    client.chat.completions.create = AsyncMock(side_effect=[stream, fallback_response])
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(side_effect=RuntimeError("telegram down"))
+
+    result = await generate_response(
+        query="Тест ошибки placeholder",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест ошибки placeholder"}],
+    )
+
+    assert result["response"] == "Фолбэк после ошибки placeholder"
+    assert result["response_sent"] is False
+    stream.aclose.assert_awaited_once()
+    assert client.chat.completions.create.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_streaming_create_failure_deletes_placeholder_before_fallback() -> None:
+    """If stream creation fails, remove placeholder before non-streaming fallback."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    fallback_choice = MagicMock()
+    fallback_choice.message.content = "Фолбэк после ошибки stream create"
+    fallback_response = MagicMock()
+    fallback_response.choices = [fallback_choice]
+    fallback_response.model = "gpt-4o-mini"
+    fallback_response.usage = None
+
+    client.chat.completions.create = AsyncMock(
+        side_effect=[RuntimeError("stream create failed"), fallback_response]
+    )
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.delete = AsyncMock()
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Тест ошибки stream create",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест ошибки stream create"}],
+    )
+
+    assert result["response"] == "Фолбэк после ошибки stream create"
+    assert result["response_sent"] is False
+    sent_msg.delete.assert_awaited_once()
+    assert client.chat.completions.create.await_count == 2
