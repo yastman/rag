@@ -109,6 +109,36 @@ async def test_generate_response_non_streaming_returns_llm_answer() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_response_retries_without_name_kwarg_non_streaming() -> None:
+    """Fallback for plain OpenAI clients that reject Langfuse `name` kwarg."""
+    config, client = _make_non_streaming_config(answer="Ответ plain-openai")
+    lf = MagicMock()
+    response_obj = client.chat.completions.create.return_value
+    client.chat.completions.create = AsyncMock(
+        side_effect=[
+            TypeError("create() got an unexpected keyword argument 'name'"),
+            response_obj,
+        ]
+    )
+    config.create_llm.return_value = client
+
+    result = await generate_response(
+        query="Тест plain openai",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        raw_messages=[{"role": "user", "content": "Тест plain openai"}],
+    )
+
+    assert result["response"] == "Ответ plain-openai"
+    assert client.chat.completions.create.await_count == 2
+    first_call = client.chat.completions.create.await_args_list[0].kwargs
+    second_call = client.chat.completions.create.await_args_list[1].kwargs
+    assert first_call.get("name") == "generate-answer"
+    assert "name" not in second_call
+
+
+@pytest.mark.asyncio
 async def test_generate_response_fallback_on_llm_error() -> None:
     config, _ = _make_non_streaming_config()
     config.create_llm.side_effect = RuntimeError("provider down")
@@ -155,6 +185,46 @@ async def test_generate_response_streaming_sets_response_sent_and_message_ref() 
     assert result["response"] == "Часть 1 Часть 2"
     assert result["response_sent"] is True
     assert result["sent_message"] == {"chat_id": 555, "message_id": 777}
+
+
+@pytest.mark.asyncio
+async def test_generate_response_retries_without_name_kwarg_streaming() -> None:
+    """Streaming path retries without Langfuse `name` for plain OpenAI clients."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    stream = _AsyncStream([_StreamChunk("Поток "), _StreamChunk("без name")])
+    client.chat.completions.create = AsyncMock(
+        side_effect=[
+            TypeError("create() got an unexpected keyword argument 'name'"),
+            stream,
+        ]
+    )
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=111)
+    sent_msg.message_id = 222
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Стрим plain-openai",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Стрим plain-openai"}],
+    )
+
+    assert result["response"] == "Поток без name"
+    assert result["response_sent"] is True
+    assert client.chat.completions.create.await_count == 2
+    first_call = client.chat.completions.create.await_args_list[0].kwargs
+    second_call = client.chat.completions.create.await_args_list[1].kwargs
+    assert first_call.get("name") == "generate-answer"
+    assert "name" not in second_call
 
 
 @pytest.mark.asyncio
