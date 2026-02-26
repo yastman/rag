@@ -139,6 +139,7 @@ class TestKommoTokenStore:
         assert mapping["access_token"] == "env_access_token_abc"
         assert mapping["refresh_token"] == ""
         assert mapping["expires_at"] == "0"
+        assert mapping["subdomain"] == "testcompany"
 
     async def test_get_valid_token_after_seed_env_token_returns_seeded_token(
         self, token_store, mock_redis
