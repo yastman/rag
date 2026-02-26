@@ -58,7 +58,7 @@ Plan inline -> /tmux-swarm-orchestration (Sonnet workers) -> merge -> verify
 
 1. ПЛАНИРОВАНИЕ: Координатор пишет план inline (~5-10K tokens)
 2. ВЫПОЛНЕНИЕ: /tmux-swarm-orchestration (2-4 Sonnet workers, worktrees, webhooks)
-3. КАЧЕСТВО: Worker skills (/executing-plans, /test-driven-development, /verification-before-completion) + orchestrator /requesting-code-review после merge
+3. КАЧЕСТВО: Worker self-review (ruff + diff + тесты) + orch git diff --stat (> 100 LOC)
 4. ЗАВЕРШЕНИЕ: Merge worker branches + make check + make test-unit + merge to main
 
 ### Dispatch
@@ -119,7 +119,7 @@ Plan inline -> /tmux-swarm-orchestration (Sonnet workers) -> merge -> verify
 | — | /systematic-debugging | Только для debug workers (root cause first) |
 
 Воркер делает light self-review перед коммитом: ruff + diff + тесты.
-Глубокий code review делает ОРКЕСТРАТОР через /requesting-code-review после merge.
+Orch делает light review через git diff --stat после merge (> 100 LOC).
 
 ---
 
