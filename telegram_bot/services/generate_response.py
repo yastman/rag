@@ -194,6 +194,33 @@ def _ensure_history_instruction(system_prompt: str) -> str:
     return f"{system_prompt}{separator}{_HISTORY_INSTRUCTION}"
 
 
+def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
+    """Return True if client rejected Langfuse-specific `name` kwarg."""
+    message = str(exc)
+    return "unexpected keyword argument" in message and "'name'" in message
+
+
+async def _chat_create_with_optional_name(
+    llm: Any,
+    *,
+    observation_name: str,
+    **kwargs: Any,
+) -> Any:
+    """Call chat.completions.create with Langfuse `name` when supported.
+
+    Some clients (plain OpenAI SDK) reject `name` as an unexpected kwarg.
+    Langfuse-wrapped clients accept it and use it for generation naming.
+    """
+    create_fn = llm.chat.completions.create
+    try:
+        return await create_fn(name=observation_name, **kwargs)
+    except TypeError as exc:
+        if not _is_unsupported_name_kwarg(exc):
+            raise
+        logger.debug("LLM client does not support `name`; retrying without it")
+        return await create_fn(**kwargs)
+
+
 async def _generate_streaming(
     llm: Any,
     config: Any,
@@ -220,14 +247,15 @@ async def _generate_streaming(
     # preventing background LLM tasks from leaking on placeholder failure (#683).
     gather_results = await asyncio.gather(
         message.answer(_STREAM_PLACEHOLDER),
-        llm.chat.completions.create(
+        _chat_create_with_optional_name(
+            llm,
+            observation_name="generate-answer",
             model=config.llm_model,
             messages=llm_messages,
             temperature=config.llm_temperature,
             max_tokens=effective_max_tokens,
             stream=True,
             stream_options={"include_usage": True},
-            name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
         ),
         return_exceptions=True,
     )
@@ -509,12 +537,13 @@ async def generate_response(
                     )
                     sent_msg = getattr(stream_exc, "sent_msg", None)
                     t_llm_start = time.monotonic()
-                    response_obj = await llm.chat.completions.create(
+                    response_obj = await _chat_create_with_optional_name(
+                        llm,
+                        observation_name="generate-answer",
                         model=config.llm_model,
                         messages=llm_messages,
                         temperature=config.llm_temperature,
                         max_tokens=max_tokens,
-                        name="generate-answer",  # type: ignore[call-overload]
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
@@ -552,12 +581,13 @@ async def generate_response(
                         status_message="Streaming failed, using non-streaming fallback",
                     )
                     t_llm_start = time.monotonic()
-                    response_obj = await llm.chat.completions.create(
+                    response_obj = await _chat_create_with_optional_name(
+                        llm,
+                        observation_name="generate-answer",
                         model=config.llm_model,
                         messages=llm_messages,
                         temperature=config.llm_temperature,
                         max_tokens=max_tokens,
-                        name="generate-answer",  # type: ignore[call-overload]
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
@@ -575,12 +605,13 @@ async def generate_response(
         else:
             # Non-streaming path
             t_llm_start = time.monotonic()
-            response_obj = await llm.chat.completions.create(
+            response_obj = await _chat_create_with_optional_name(
+                llm,
+                observation_name="generate-answer",
                 model=config.llm_model,
                 messages=llm_messages,
                 temperature=config.llm_temperature,
                 max_tokens=max_tokens,
-                name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
             t_llm_end = time.monotonic()
             answer = response_obj.choices[0].message.content or ""
