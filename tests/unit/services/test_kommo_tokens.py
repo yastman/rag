@@ -57,6 +57,22 @@ class TestKommoTokenStore:
             assert token == "new_token"
             mock_refresh.assert_called_once_with("refresh_123")
 
+    async def test_get_valid_token_without_refresh_token_uses_cached_access_token(
+        self,
+        token_store,
+        mock_redis,
+    ):
+        """Access-only token mode should not try OAuth refresh."""
+        mock_redis.hgetall.return_value = {
+            b"access_token": b"seeded_access",
+            b"refresh_token": b"",
+            b"expires_at": b"0",
+        }
+        with patch.object(token_store, "_refresh_tokens", new_callable=AsyncMock) as mock_refresh:
+            token = await token_store.get_valid_token()
+            assert token == "seeded_access"
+            mock_refresh.assert_not_called()
+
     async def test_get_valid_token_raises_when_no_tokens(self, token_store, mock_redis):
         """Raise when no tokens stored and no auth code."""
         mock_redis.hgetall.return_value = {}
