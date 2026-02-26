@@ -270,7 +270,7 @@ async def _generate_streaming(
                             )
                 accumulated += text
                 now = time.monotonic()
-                if now - last_edit >= _STREAM_EDIT_INTERVAL:
+                if sent_msg is not None and now - last_edit >= _STREAM_EDIT_INTERVAL:
                     with contextlib.suppress(Exception):
                         await sent_msg.edit_text(accumulated)
                     last_edit = now
@@ -280,24 +280,27 @@ async def _generate_streaming(
         if accumulated:
             raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
         # No real content delivered — clean up placeholder
-        with contextlib.suppress(Exception):
-            await sent_msg.delete()
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
         raise
 
     if not accumulated:
         # Stream produced no content — clean up placeholder
-        with contextlib.suppress(Exception):
-            await sent_msg.delete()
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
         raise ValueError("Streaming produced empty response")
 
     # Final edit with Markdown formatting
-    try:
-        await sent_msg.edit_text(accumulated, parse_mode="Markdown")
-    except Exception:
+    if sent_msg is not None:
         try:
-            await sent_msg.edit_text(accumulated)
+            await sent_msg.edit_text(accumulated, parse_mode="Markdown")
         except Exception:
-            logger.warning("Failed to finalize streaming message")
+            try:
+                await sent_msg.edit_text(accumulated)
+            except Exception:
+                logger.warning("Failed to finalize streaming message")
 
     return accumulated, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg
 
