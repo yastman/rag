@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import inspect
 import logging
+import os
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -37,6 +39,7 @@ _MAX_CONTEXT_DOCS = 3
 _STREAM_EDIT_INTERVAL = 0.5  # 500ms throttle for Telegram edit_text
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
 _MAX_HISTORY_MESSAGES = 12
+_DRIFT_WARN_THRESHOLD_MS = float(os.getenv("TTFT_DRIFT_WARN_MS", "500"))
 _detector = ResponseStyleDetector()
 _HISTORY_INSTRUCTION = (
     "Учитывай историю диалога. Если пользователь ссылается на предыдущие "
@@ -202,8 +205,6 @@ async def _generate_streaming(
     lf_client: Any | None = None,
 ) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
     """Stream LLM response directly to Telegram via message editing."""
-    sent_msg = await message.answer(_STREAM_PLACEHOLDER)
-
     accumulated = ""
     last_edit = 0.0
     ttft_ms = 0.0
@@ -212,17 +213,40 @@ async def _generate_streaming(
     usage_details: dict[str, int] | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
-    # Measure TTFT from request dispatch (includes pre-stream provider wait).
+    # t_request_start must be before gather for correct TTFT measurement.
     t_request_start = time.monotonic()
-    stream = await llm.chat.completions.create(
-        model=config.llm_model,
-        messages=llm_messages,
-        temperature=config.llm_temperature,
-        max_tokens=effective_max_tokens,
-        stream=True,
-        stream_options={"include_usage": True},
-        name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+    # Parallelize LLM stream creation and Telegram placeholder send to reduce TTFT.
+    stream_result: Any
+    sent_result: Any
+    stream_result, sent_result = await asyncio.gather(
+        llm.chat.completions.create(
+            model=config.llm_model,
+            messages=llm_messages,
+            temperature=config.llm_temperature,
+            max_tokens=effective_max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
+            name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+        ),
+        message.answer(_STREAM_PLACEHOLDER),
+        return_exceptions=True,
     )
+    if isinstance(stream_result, Exception) or isinstance(sent_result, Exception):
+        if not isinstance(sent_result, Exception):
+            with contextlib.suppress(Exception):
+                await sent_result.delete()
+        if not isinstance(stream_result, Exception):
+            aclose = getattr(stream_result, "aclose", None)
+            if callable(aclose):
+                with contextlib.suppress(Exception):
+                    maybe_awaitable = aclose()
+                    if inspect.isawaitable(maybe_awaitable):
+                        await maybe_awaitable
+        if isinstance(stream_result, Exception):
+            raise stream_result
+        raise sent_result
+    stream = stream_result
+    sent_msg = sent_result
 
     # Legacy "stream-only TTFT" starts after stream object creation.
     # Keep it for drift diagnostics only.
@@ -321,6 +345,7 @@ async def generate_response(
     config: Any | None = None,
     get_config: Callable[[], Any] | None = None,
     lf_client: Any | None = None,
+    llm: Any | None = None,
     get_lf_client: Callable[[], Any] | None = None,
     max_context_docs: int = _MAX_CONTEXT_DOCS,
     format_context: Callable[[list[dict[str, Any]], int], str] = _format_context,
@@ -426,7 +451,8 @@ async def generate_response(
     )
 
     try:
-        llm = config.create_llm()
+        if llm is None:
+            llm = config.create_llm()
 
         # Streaming path: deliver directly to Telegram
         if message is not None and config.streaming_enabled:
@@ -647,7 +673,7 @@ async def generate_response(
     llm_ttft_drift_ms: float | None = None
     if streaming_was_enabled and stream_only_ttft_ms is not None and ttft_ms > 0:
         llm_ttft_drift_ms = max(0.0, ttft_ms - stream_only_ttft_ms)
-        if llm_ttft_drift_ms > 150:
+        if llm_ttft_drift_ms > _DRIFT_WARN_THRESHOLD_MS:
             with contextlib.suppress(Exception):
                 lf_client.update_current_span(
                     level="WARNING",

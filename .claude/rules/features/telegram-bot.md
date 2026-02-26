@@ -350,15 +350,19 @@ run_client_pipeline(user_text, user_id, session_id, message, cache, ...) → Pip
 Called by both client direct pipeline (via bot.py) and voice LangGraph (via `generate_node` adapter in `graph/nodes/generate.py`).
 
 ```
-generate_response(query, documents, message?, config?, ...) →
+generate_response(query, documents, message?, config?, llm?, ...) →
   1. Style detection (ResponseStyleDetector, ~0ms)
   2. System prompt (Langfuse Prompt Manager + style/citation/history injection)
   3. Build OpenAI-format messages (system + history + context + query)
-  4. Streaming path: placeholder → stream chunks (300ms throttle) → finalize Markdown
+  4. Streaming path: asyncio.gather(LLM stream create, placeholder send) → stream chunks (500ms throttle) → finalize Markdown
      Non-streaming path: single completion call
   5. Fallback: document summary if LLM unavailable
   → Returns dict: response, response_sent, sent_message, latency_stages, style metrics
 ```
+
+**`llm` param (#675):** Optional pre-created `AsyncOpenAI` client. Client pipeline passes singleton to avoid per-call `create_llm()`. If `None`, creates internally.
+
+**TTFT measurement (#675):** Parallel `asyncio.gather` for placeholder + LLM stream reduces TTFT. Drift warning threshold configurable via `TTFT_DRIFT_WARN_MS` (default 500ms).
 
 **Dependency injection:** All core functions passed as kwargs (format_context, build_system_prompt, generate_streaming, etc.) for testability. `generate_node` passes its own local implementations.
 
