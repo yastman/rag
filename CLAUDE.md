@@ -69,6 +69,8 @@ Bug:    /systematic-debugging → TDD → fix
 | Cache never stores / always MISS | Store guard threshold must be on RRF scale (~0.005), not cosine [0-1] |
 | `qdrant-client .search()` AttributeError | Migrated to `.query_points()` in v1.17 — never use `.search()` |
 | ColBERT rerank 16s on CPU | Use server-side ColBERT via Qdrant nested prefetch (#569), or `RERANK_PROVIDER=none` |
+| Kommo `kommo_client = None` at startup | Ensure `KOMMO_CLIENT_ID` (not `KOMMO_INTEGRATION_ID`), `KOMMO_CLIENT_SECRET`, `KOMMO_REDIRECT_URI` in `.env`; fallback seeds Redis from `KOMMO_ACCESS_TOKEN` (#678) |
+| TTFT drift warnings spam logs | `TTFT_DRIFT_WARN_MS=500` (default); raise for reasoning models behind proxy (#675) |
 
 ## Parallel Sessions
 
@@ -86,6 +88,8 @@ Details: `.claude/rules/git-workflow.md`
 `cp .env.example .env` → `uv sync && make local-up && make run-bot`
 
 **Required:** `TELEGRAM_BOT_TOKEN`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY`, `LANGFUSE_*`, `REDIS_PASSWORD`
+
+**Optional tuning:** `TTFT_DRIFT_WARN_MS` (default 500), `KOMMO_ACCESS_TOKEN` (fallback seed)
 
 ## Deployment
 
