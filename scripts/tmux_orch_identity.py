@@ -32,7 +32,46 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_IDENTITY_PATH = Path(".claude/orch-identity.json")
+_IDENTITY_RELATIVE = ".claude/orch-identity.json"
+
+
+def _main_repo_root() -> Path:
+    """Return main repo root, works from worktrees too.
+
+    Uses git-common-dir which always points to the main repo's .git/,
+    even when called from a worktree. This ensures orch-identity.json
+    is always read/written in the main repo, not per-worktree.
+    """
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        # common = /path/to/main-repo/.git → parent = /path/to/main-repo
+        return Path(common).parent
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        # Fallback: current git toplevel (might be worktree root)
+        try:
+            toplevel = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            return Path(toplevel)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return Path.cwd()
+
+
+def _resolve_identity_path() -> Path:
+    """Resolve orch-identity.json to absolute path in main repo root."""
+    return _main_repo_root() / _IDENTITY_RELATIVE
+
+
+# Keep for backward compat with tests that reference it
+DEFAULT_IDENTITY_PATH = Path(_IDENTITY_RELATIVE)
 
 
 class OrchIdentity:
@@ -134,9 +173,9 @@ class OrchIdentity:
             raise RuntimeError(msg)
         return f'TMUX="" tmux kill-window -t "{self.session}:{name}" 2>/dev/null'
 
-    def save(self, path: Path | str = DEFAULT_IDENTITY_PATH) -> None:
-        """Persist identity to JSON file."""
-        path = Path(path)
+    def save(self, path: Path | str | None = None) -> None:
+        """Persist identity to JSON file in main repo root."""
+        path = Path(path) if path is not None else _resolve_identity_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "session": self.session,
@@ -147,9 +186,9 @@ class OrchIdentity:
         path.write_text(json.dumps(data, indent=2) + "\n")
 
     @classmethod
-    def load(cls, path: Path | str = DEFAULT_IDENTITY_PATH) -> OrchIdentity:
-        """Load identity from JSON file."""
-        path = Path(path)
+    def load(cls, path: Path | str | None = None) -> OrchIdentity:
+        """Load identity from JSON file in main repo root."""
+        path = Path(path) if path is not None else _resolve_identity_path()
         if not path.exists():
             raise FileNotFoundError(path)
         data = json.loads(path.read_text())
@@ -160,7 +199,7 @@ class OrchIdentity:
         return ident
 
     @classmethod
-    def init(cls, save_path: Path | str = DEFAULT_IDENTITY_PATH) -> OrchIdentity:
+    def init(cls, save_path: Path | str | None = None) -> OrchIdentity:
         """Full flow: discover → generate → rename → save."""
         ident = cls()
         ident.discover()
@@ -210,7 +249,11 @@ def _cli() -> None:
             sys.exit(1)
         worker_name = sys.argv[2]
         message = sys.argv[3] if len(sys.argv) > 3 else f"{worker_name} COMPLETE"
-        ident = OrchIdentity.load()
+        try:
+            ident = OrchIdentity.load()
+        except FileNotFoundError:
+            print("No orchestrator session active (missing .claude/orch-identity.json)")
+            sys.exit(2)
         target = ident.webhook_target()
         env = {**os.environ, "TMUX": ""}
         subprocess.run(
@@ -221,7 +264,11 @@ def _cli() -> None:
 
     elif cmd == "worker-enter":
         # Worker sends Enter to orchestrator (call 3 of 3)
-        ident = OrchIdentity.load()
+        try:
+            ident = OrchIdentity.load()
+        except FileNotFoundError:
+            print("No orchestrator session active (missing .claude/orch-identity.json)")
+            sys.exit(2)
         target = ident.webhook_target()
         env = {**os.environ, "TMUX": ""}
         subprocess.run(
