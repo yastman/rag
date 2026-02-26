@@ -189,6 +189,8 @@ await kommo.close()  ***REMOVED*** close httpx client
 
 **Traced spans:** `kommo-create-lead`, `kommo-get-lead`, `kommo-update-lead`, `kommo-upsert-contact`, `kommo-get-contacts`, `kommo-add-note`, `kommo-create-task`, `kommo-link-contact`, `kommo-list-pipelines`
 
+**Token seed fallback (***REMOVED***678):** `_seed_kommo_access_token()` in `bot.py` seeds Redis from `KOMMO_ACCESS_TOKEN` env var when no `KOMMO_AUTH_CODE` and Redis empty. Enables Kommo CRM without OAuth flow for pre-existing tokens.
+
 ***REMOVED******REMOVED******REMOVED*** CRM Services (***REMOVED***384, ***REMOVED***390)
 
 ```python
