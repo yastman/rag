@@ -439,3 +439,235 @@ async def test_streaming_mixed_content_and_reasoning() -> None:
 
     assert result["response"] == "Думаю... Ответ: Болгария"
     assert result["response_sent"] is True
+
+
+@pytest.mark.asyncio
+async def test_streaming_placeholder_and_llm_called_in_parallel() -> None:
+    """Placeholder send and LLM stream creation run in parallel via asyncio.gather."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    stream = _AsyncStream([_StreamChunk("Параллельный ответ")])
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=10)
+    sent_msg.message_id = 20
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Параллельный тест",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Параллельный тест"}],
+    )
+
+    # Both placeholder send and LLM create must have been called
+    message.answer.assert_awaited_once()
+    client.chat.completions.create.assert_awaited_once()
+    assert result["response_sent"] is True
+
+
+@pytest.mark.asyncio
+async def test_generate_response_uses_provided_llm_without_creating_new() -> None:
+    """When llm is passed explicitly, config.create_llm must NOT be called."""
+    config, _unused_client = _make_non_streaming_config()
+
+    # Build a separate explicit client
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Синглтон ответ"
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_response.model = "gpt-4o-mini"
+    mock_response.usage = None
+
+    explicit_client = MagicMock()
+    explicit_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    lf = MagicMock()
+
+    result = await generate_response(
+        query="Тест синглтона",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        llm=explicit_client,
+    )
+
+    # config.create_llm must NOT have been called — singleton was provided
+    config.create_llm.assert_not_called()
+    explicit_client.chat.completions.create.assert_awaited_once()
+    assert result["response"] == "Синглтон ответ"
+
+
+@pytest.mark.asyncio
+async def test_drift_below_threshold_does_not_warn() -> None:
+    """Drift below _DRIFT_WARN_THRESHOLD_MS (500ms) must not set WARNING level on span."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    # Stream that produces a small TTFT drift (well below 500ms)
+    stream = _AsyncStream([_StreamChunk("Ответ без дрифта")])
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    # Reset call tracking to check update_current_span calls
+    lf.update_current_span.reset_mock()
+
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    await generate_response(
+        query="Тест порога дрифта",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест порога дрифта"}],
+    )
+
+    # No update_current_span call with level="WARNING" should have occurred
+    for call in lf.update_current_span.call_args_list:
+        kwargs = call.kwargs or (call.args[0] if call.args else {})
+        assert kwargs.get("level") != "WARNING", (
+            "Expected no WARNING level for small drift, but got one"
+        )
+
+
+@pytest.mark.asyncio
+async def test_streaming_placeholder_failure_closes_precreated_stream() -> None:
+    """If placeholder send fails, close pre-created stream before fallback path."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    stream = _AsyncStream([_StreamChunk("Не должен быть отправлен")])
+    stream.aclose = AsyncMock()
+
+    fallback_choice = MagicMock()
+    fallback_choice.message.content = "Фолбэк после ошибки placeholder"
+    fallback_response = MagicMock()
+    fallback_response.choices = [fallback_choice]
+    fallback_response.model = "gpt-4o-mini"
+    fallback_response.usage = None
+
+    client.chat.completions.create = AsyncMock(side_effect=[stream, fallback_response])
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(side_effect=RuntimeError("telegram down"))
+
+    result = await generate_response(
+        query="Тест ошибки placeholder",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест ошибки placeholder"}],
+    )
+
+    assert result["response"] == "Фолбэк после ошибки placeholder"
+    assert result["response_sent"] is False
+    stream.aclose.assert_awaited_once()
+    assert client.chat.completions.create.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_streaming_placeholder_telegram_retry_after_falls_through_to_non_streaming() -> None:
+    """TelegramRetryAfter from message.answer falls through to non-streaming fallback.
+
+    Regression guard: without return_exceptions=True in asyncio.gather, the rate-limit
+    exception would cancel the LLM stream task and leave sent_msg undefined in cleanup
+    (UnboundLocalError). With return_exceptions=True the exception is caught, the stream
+    is closed via aclose(), and the outer handler performs non-streaming fallback.
+    """
+    from aiogram.exceptions import TelegramRetryAfter
+
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    stream = _AsyncStream([_StreamChunk("Не должен быть отправлен")])
+    stream.aclose = AsyncMock()
+
+    fallback_choice = MagicMock()
+    fallback_choice.message.content = "Фолбэк после rate-limit"
+    fallback_response = MagicMock()
+    fallback_response.choices = [fallback_choice]
+    fallback_response.model = "gpt-4o-mini"
+    fallback_response.usage = None
+
+    client.chat.completions.create = AsyncMock(side_effect=[stream, fallback_response])
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(
+        side_effect=TelegramRetryAfter(MagicMock(), "Too many requests: retry after 10", 10)
+    )
+
+    result = await generate_response(
+        query="Тест rate-limit placeholder",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест rate-limit placeholder"}],
+    )
+
+    # Fallback non-streaming path taken; response delivered but not via streaming
+    assert result["response"] == "Фолбэк после rate-limit"
+    assert result["response_sent"] is False
+    # Stream was cleaned up despite placeholder failure (requires return_exceptions=True)
+    stream.aclose.assert_awaited_once()
+    # LLM called twice: stream object + non-streaming fallback
+    assert client.chat.completions.create.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_streaming_create_failure_deletes_placeholder_before_fallback() -> None:
+    """If stream creation fails, remove placeholder before non-streaming fallback."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+
+    fallback_choice = MagicMock()
+    fallback_choice.message.content = "Фолбэк после ошибки stream create"
+    fallback_response = MagicMock()
+    fallback_response.choices = [fallback_choice]
+    fallback_response.model = "gpt-4o-mini"
+    fallback_response.usage = None
+
+    client.chat.completions.create = AsyncMock(
+        side_effect=[RuntimeError("stream create failed"), fallback_response]
+    )
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    sent_msg = AsyncMock()
+    sent_msg.delete = AsyncMock()
+    sent_msg.edit_text = AsyncMock()
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Тест ошибки stream create",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест ошибки stream create"}],
+    )
+
+    assert result["response"] == "Фолбэк после ошибки stream create"
+    assert result["response_sent"] is False
+    sent_msg.delete.assert_awaited_once()
+    assert client.chat.completions.create.await_count == 2

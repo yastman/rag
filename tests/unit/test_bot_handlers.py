@@ -22,6 +22,7 @@ from telegram_bot.config import BotConfig
 def mock_config(monkeypatch):
     """Create mock bot config."""
     monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
+    monkeypatch.delenv("KOMMO_ACCESS_TOKEN", raising=False)
     return BotConfig(
         _env_file=None,
         telegram_token="test-token",
@@ -1827,9 +1828,12 @@ class TestKommoGracefulInit:
 
     async def test_kommo_missing_tokens_logs_info_not_warning(self, mock_config, caplog):
         """INFO log (no traceback) when no Redis tokens and no KOMMO_AUTH_CODE."""
+        from pydantic import SecretStr
+
         mock_config.kommo_enabled = True
         mock_config.kommo_subdomain = "test"
         mock_config.kommo_auth_code = ""
+        mock_config.kommo_access_token = SecretStr("")
 
         bot, _ = _create_bot(mock_config)
         bot._cache = MagicMock()
