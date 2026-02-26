@@ -23,20 +23,9 @@ def generate_point_id(complex_name: str, section: str, apartment_number: str) ->
 def format_apartment_text(record: ApartmentRecord) -> str:
     """Hybrid text serialization for BGE-M3: structured prefix + NL description.
 
-    Structured prefix helps sparse/lexical retrieval (exact match on numbers).
-    NL body helps dense/semantic retrieval (conceptual queries like "уютная у моря").
+    Delegates to ApartmentRecord.to_hybrid_description() — single source of truth.
     """
-    # Structured prefix for sparse retrieval
-    price_k = int(record.price_eur / 1000)
-    prefix = f"[{record.rooms}BR|{record.area_m2}m2|{price_k}kEUR]"
-
-    # NL body (Russian) for dense retrieval — reuses existing to_description()
-    body = record.to_description()
-
-    # Promotion marker
-    promo = " Акция!" if record.is_promotion else ""
-
-    return f"{prefix} {body}{promo}"
+    return record.to_hybrid_description()
 
 
 def build_ingestion_batch(
