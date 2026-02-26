@@ -1018,7 +1018,7 @@ class PropertyBot:
             text = i18n.get("services-menu-text")
         else:
             text = "Выберите услугу, чтобы узнать подробнее:"
-        kb = build_services_menu()
+        kb = build_services_menu(i18n=i18n)
         await message.answer(text, reply_markup=kb)
 
     async def _handle_viewing(self, message: Message, state: FSMContext) -> None:
@@ -1152,7 +1152,7 @@ class PropertyBot:
                 text = i18n.get("services-menu-text")
             else:
                 text = "Выберите услугу, чтобы узнать подробнее:"
-            kb = build_services_menu()
+            kb = build_services_menu(i18n=i18n)
             if callback.message:
                 await callback.message.edit_text(text, reply_markup=kb)
             await callback.answer()
@@ -1160,9 +1160,13 @@ class PropertyBot:
         elif action == "service" and param:
             svc = get_service_card(param)
             if svc:
-                kb = build_service_card_buttons(param)
+                kb = build_service_card_buttons(param, i18n=i18n)
+                ftl_key = f"svc-{param.replace('_', '-')}-card"
+                card_text = (i18n.get(ftl_key) if i18n is not None else None) or svc.get(
+                    "card_text", ""
+                )
                 if callback.message:
-                    await callback.message.edit_text(svc["card_text"], reply_markup=kb)
+                    await callback.message.edit_text(card_text, reply_markup=kb)
             await callback.answer()
 
         else:
