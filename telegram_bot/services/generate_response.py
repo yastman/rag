@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import inspect
@@ -202,8 +203,6 @@ async def _generate_streaming(
     lf_client: Any | None = None,
 ) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
     """Stream LLM response directly to Telegram via message editing."""
-    sent_msg = await message.answer(_STREAM_PLACEHOLDER)
-
     accumulated = ""
     last_edit = 0.0
     ttft_ms = 0.0
@@ -212,22 +211,45 @@ async def _generate_streaming(
     usage_details: dict[str, int] | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
-    # Measure TTFT from request dispatch (includes pre-stream provider wait).
-    t_request_start = time.monotonic()
-    stream = await llm.chat.completions.create(
-        model=config.llm_model,
-        messages=llm_messages,
-        temperature=config.llm_temperature,
-        max_tokens=effective_max_tokens,
-        stream=True,
-        stream_options={"include_usage": True},
-        name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
-    )
 
-    # Legacy "stream-only TTFT" starts after stream object creation.
-    # Keep it for drift diagnostics only.
+    # Measure TTFT from before parallel dispatch (includes pre-stream provider wait).
+    t_request_start = time.monotonic()
+
+    # Parallelize placeholder send + LLM stream creation to reduce TTFT drift (#675).
+    # return_exceptions=True ensures both tasks complete before results are inspected,
+    # preventing background LLM tasks from leaking on placeholder failure (#683).
+    gather_results = await asyncio.gather(
+        message.answer(_STREAM_PLACEHOLDER),
+        llm.chat.completions.create(
+            model=config.llm_model,
+            messages=llm_messages,
+            temperature=config.llm_temperature,
+            max_tokens=effective_max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
+            name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+        ),
+        return_exceptions=True,
+    )
+    sent_msg, stream = gather_results[0], gather_results[1]
+
+    # Placeholder failure is non-critical: degrade gracefully (skip message edits).
+    if isinstance(sent_msg, BaseException):
+        logger.warning("Placeholder send failed, continuing without edit: %s", sent_msg)
+        sent_msg = None
+
+    # LLM stream failure is critical: clean up and propagate.
+    if isinstance(stream, BaseException):
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
+        raise stream
+
+    # t_stream_start: when stream object is available (after parallel gather).
+    # Used for "stream-only TTFT" drift diagnostics.
     t_stream_start = time.monotonic()
     stream_only_ttft_ms: float | None = None
+
     try:
         async for chunk in stream:
             if hasattr(chunk, "usage") and chunk.usage is not None:
@@ -263,7 +285,7 @@ async def _generate_streaming(
                             )
                 accumulated += text
                 now = time.monotonic()
-                if now - last_edit >= _STREAM_EDIT_INTERVAL:
+                if sent_msg is not None and now - last_edit >= _STREAM_EDIT_INTERVAL:
                     with contextlib.suppress(Exception):
                         await sent_msg.edit_text(accumulated)
                     last_edit = now
@@ -273,24 +295,27 @@ async def _generate_streaming(
         if accumulated:
             raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
         # No real content delivered — clean up placeholder
-        with contextlib.suppress(Exception):
-            await sent_msg.delete()
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
         raise
 
     if not accumulated:
         # Stream produced no content — clean up placeholder
-        with contextlib.suppress(Exception):
-            await sent_msg.delete()
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
         raise ValueError("Streaming produced empty response")
 
-    # Final edit with Markdown formatting
-    try:
-        await sent_msg.edit_text(accumulated, parse_mode="Markdown")
-    except Exception:
+    # Final edit with Markdown formatting (only if placeholder was sent successfully)
+    if sent_msg is not None:
         try:
-            await sent_msg.edit_text(accumulated)
+            await sent_msg.edit_text(accumulated, parse_mode="Markdown")
         except Exception:
-            logger.warning("Failed to finalize streaming message")
+            try:
+                await sent_msg.edit_text(accumulated)
+            except Exception:
+                logger.warning("Failed to finalize streaming message")
 
     return (
         accumulated,
@@ -647,7 +672,10 @@ async def generate_response(
     llm_ttft_drift_ms: float | None = None
     if streaming_was_enabled and stream_only_ttft_ms is not None and ttft_ms > 0:
         llm_ttft_drift_ms = max(0.0, ttft_ms - stream_only_ttft_ms)
-        if llm_ttft_drift_ms > 150:
+        _drift_warn_threshold = getattr(config, "ttft_drift_warn_ms", None)
+        if not isinstance(_drift_warn_threshold, (int, float)):
+            _drift_warn_threshold = 500
+        if llm_ttft_drift_ms > _drift_warn_threshold:
             with contextlib.suppress(Exception):
                 lf_client.update_current_span(
                     level="WARNING",
