@@ -78,7 +78,7 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler + Kommo CRM lead creation (***REMOVED***628) |
 | `telegram_bot/keyboards/client_keyboard.py` | Client ReplyKeyboard — `build_client_keyboard(i18n=)`, `get_menu_button_texts(i18n_hub=)`, `parse_menu_button(text, i18n_hub=)` with .ftl keys (***REMOVED***660) |
 | `telegram_bot/keyboards/property_card.py` | Property listing card with bookmark + results footer |
-| `telegram_bot/keyboards/services_keyboard.py` | Services inline menu (5 services) |
+| `telegram_bot/keyboards/services_keyboard.py` | Services inline menu — `build_services_menu(i18n=)`, `build_service_card_buttons(key, i18n=)` with .ftl keys, yaml fallback (***REMOVED***677) |
 | `telegram_bot/services/apartments_service.py` | ApartmentsService — hybrid search + `scroll_with_filters()` + funnel `search()` (***REMOVED***632, ***REMOVED***660, ***REMOVED***628) |
 | `telegram_bot/services/apartment_filter_extractor.py` | Regex filter parser: rooms, price, complex, view, floor, area (***REMOVED***632) |
 | `telegram_bot/services/favorites_service.py` | User apartment favorites (asyncpg, add/remove/list/count) |
@@ -167,12 +167,13 @@ START → classify → [CHITCHAT/OFF_TOPIC] → respond → END
 ***REMOVED******REMOVED*** Client Menu Flow (***REMOVED***628)
 
 ReplyKeyboard (persistent 3x2 grid) → `handle_menu_button()` dispatches to dedicated handlers.
-Visible labels are localized from `.ftl` keys (`kb-search`, `kb-services`, `kb-viewing`, `kb-bookmarks`, `kb-promotions`, `kb-manager`), while routing stays action-ID based:
+Visible labels are localized from `.ftl` keys (`kb-search`, `kb-services`, `kb-viewing`, `kb-bookmarks`, `kb-promotions`, `kb-manager`), while routing stays action-ID based.
+Service titles/cards also localized via `.ftl` keys (`svc-passive-income-title`, `svc-*-card`, `svc-get-offer`, `svc-contact-manager`, `svc-back-to-services`) with `services.yaml` fallback (***REMOVED***677):
 
 | Button | Handler | Action |
 |--------|---------|--------|
 | 🏠 Подбор апартаментов | `_handle_search` | `handle_menu_action_text(msg, "Подбери апартаменты")` |
-| 🔑 Услуги | `_handle_services` | Shows inline services menu (`build_services_menu`) |
+| 🔑 Услуги | `_handle_services` | Shows inline services menu (`build_services_menu(i18n=)`) |
 | 📅 Запись на осмотр | `_handle_viewing` | `start_phone_collection(msg, state, source="viewing_main_menu")` |
 | 📌 Мои закладки | `_handle_bookmarks` | FavoritesService list → property cards or empty message |
 | 🎁 Акции | `_handle_promotions` | `get_promotions()` from `services.yaml` (***REMOVED***628) |
