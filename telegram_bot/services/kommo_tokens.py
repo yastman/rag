@@ -58,6 +58,14 @@ class KommoTokenStore:
         access_token = data.get("access_token", "")
         refresh_token = data.get("refresh_token", "")
         expires_at = int(data.get("expires_at", 0))
+        if not access_token:
+            msg = "Kommo token store has no access_token."
+            raise RuntimeError(msg)
+
+        # Fallback seed mode (#678): access token was pre-provisioned via env and
+        # may not have refresh metadata. Try it as-is instead of forcing refresh.
+        if not refresh_token:
+            return access_token
 
         if time.time() + REFRESH_BUFFER_SEC >= expires_at:
             logger.info("Kommo token near expiry, refreshing")
