@@ -61,6 +61,8 @@ class GraphConfig:
     guard_mode: str = "hard"  # "hard" = block, "soft" = flag + continue, "log" = log only
     guard_ml_enabled: bool = False  # opt-in ML classifier layer (llm-guard)
     llm_guard_url: str = "http://llm-guard:8100"  # URL of llm-guard Docker service
+    # TTFT drift warning threshold in ms (#675); raise for reasoning models behind proxy
+    ttft_drift_warn_ms: int = 500
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -117,6 +119,7 @@ class GraphConfig:
             guard_mode=os.getenv("GUARD_MODE", "hard"),
             guard_ml_enabled=os.getenv("GUARD_ML_ENABLED", "false").lower() == "true",
             llm_guard_url=os.getenv("LLM_GUARD_URL", "http://llm-guard:8100"),
+            ttft_drift_warn_ms=int(os.getenv("TTFT_DRIFT_WARN_MS", "500")),
         )
 
     def create_llm(self, model_override: str | None = None) -> Any:
