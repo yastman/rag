@@ -44,16 +44,8 @@ _ROOMS_DISPLAY: dict[int, str] = {1: "Студия", 2: "1-спальня", 3: "
 
 _LOCATION_TO_CITY: dict[str, str] = {
     "sunny_beach": "Sunny Beach",
-    "sveti_vlas": "Sveti Vlas",
     "elenite": "Elenite",
     "nessebar": "Nesebar",
-    "ravda": "Ravda",
-    "burgas": "Burgas",
-    "pomorie": "Pomorie",
-    "sozopol": "Sozopol",
-    "primorsko": "Primorsko",
-    "bansko": "Bansko",
-    "sofia": "Sofia",
 }
 
 
@@ -139,16 +131,8 @@ async def get_location_options(**kwargs: Any) -> dict[str, Any]:
     i18n = kwargs.get("middleware_data", {}).get("i18n")
     items = [
         ("Солнечный Берег", "sunny_beach"),
-        ("Святой Влас", "sveti_vlas"),
         ("Елените", "elenite"),
         ("Несебр", "nessebar"),
-        ("Равда", "ravda"),
-        ("Бургас", "burgas"),
-        ("Поморие", "pomorie"),
-        ("Созополь", "sozopol"),
-        ("Приморско", "primorsko"),
-        ("Банско", "bansko"),
-        ("София", "sofia"),
         ("Любой район", "any"),
     ]
     btn_back = i18n.get("back") if i18n else "Назад"
