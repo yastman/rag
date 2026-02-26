@@ -11,44 +11,56 @@ _SVC_PREFIX = "svc:"
 _CTA_PREFIX = "cta:"
 
 
-def build_services_menu() -> InlineKeyboardMarkup:
+def build_services_menu(i18n: object = None) -> InlineKeyboardMarkup:
     """Build inline keyboard with service list."""
     config = load_services_config()
     services = config.get("services", {})
 
     rows = []
-    for svc in services.values():
+    for key, svc in services.items():
+        ftl_key = f"svc-{key.replace('_', '-')}-title"
+        title = (i18n.get(ftl_key) if i18n is not None else None) or svc["title"]  # type: ignore[union-attr]
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=f"{svc['emoji']} {svc['title']}",
+                    text=f"{svc['emoji']} {title}",
                     callback_data=svc["callback_id"],
                 )
             ]
         )
-    rows.append([InlineKeyboardButton(text="← Назад", callback_data=f"{_SVC_PREFIX}back")])
+    back_text = (i18n.get("svc-back") if i18n is not None else None) or "Назад"  # type: ignore[union-attr]
+    rows.append([InlineKeyboardButton(text=f"← {back_text}", callback_data=f"{_SVC_PREFIX}back")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def build_service_card_buttons(service_key: str) -> InlineKeyboardMarkup:
+def build_service_card_buttons(service_key: str, i18n: object = None) -> InlineKeyboardMarkup:
     """Build CTA buttons for a service card."""
+    get_offer_text = (
+        i18n.get("svc-get-offer") if i18n is not None else None
+    ) or "Получить предложение"  # type: ignore[union-attr]
+    manager_text = (
+        i18n.get("svc-contact-manager") if i18n is not None else None
+    ) or "Связаться с менеджером"  # type: ignore[union-attr]
+    back_text = (
+        i18n.get("svc-back-to-services") if i18n is not None else None
+    ) or "Назад к услугам"  # type: ignore[union-attr]
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📩 Получить предложение",
+                    text=f"📩 {get_offer_text}",
                     callback_data=f"{_CTA_PREFIX}get_offer:{service_key}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="👤 Связаться с менеджером",
+                    text=f"👤 {manager_text}",
                     callback_data=f"{_CTA_PREFIX}manager",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="← Назад к услугам",
+                    text=f"← {back_text}",
                     callback_data=f"{_SVC_PREFIX}menu",
                 )
             ],
