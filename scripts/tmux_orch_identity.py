@@ -32,7 +32,24 @@ import sys
 from pathlib import Path
 
 
-DEFAULT_IDENTITY_PATH = Path(".claude/orch-identity.json")
+def _main_repo_root() -> Path:
+    """Return main repo root, even when called from a git worktree."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        git_common = Path(result.stdout.strip())
+        if not git_common.is_absolute():
+            git_common = Path.cwd() / git_common
+        return git_common.resolve().parent  # strip /.git
+    except (subprocess.CalledProcessError, OSError):
+        return Path.cwd()
+
+
+DEFAULT_IDENTITY_PATH = _main_repo_root() / ".claude" / "orch-identity.json"
 
 
 class OrchIdentity:
@@ -134,9 +151,9 @@ class OrchIdentity:
             raise RuntimeError(msg)
         return f'TMUX="" tmux kill-window -t "{self.session}:{name}" 2>/dev/null'
 
-    def save(self, path: Path | str = DEFAULT_IDENTITY_PATH) -> None:
+    def save(self, path: Path | str | None = None) -> None:
         """Persist identity to JSON file."""
-        path = Path(path)
+        path = Path(path) if path is not None else DEFAULT_IDENTITY_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "session": self.session,
@@ -147,9 +164,9 @@ class OrchIdentity:
         path.write_text(json.dumps(data, indent=2) + "\n")
 
     @classmethod
-    def load(cls, path: Path | str = DEFAULT_IDENTITY_PATH) -> OrchIdentity:
+    def load(cls, path: Path | str | None = None) -> OrchIdentity:
         """Load identity from JSON file."""
-        path = Path(path)
+        path = Path(path) if path is not None else DEFAULT_IDENTITY_PATH
         if not path.exists():
             raise FileNotFoundError(path)
         data = json.loads(path.read_text())
@@ -160,7 +177,7 @@ class OrchIdentity:
         return ident
 
     @classmethod
-    def init(cls, save_path: Path | str = DEFAULT_IDENTITY_PATH) -> OrchIdentity:
+    def init(cls, save_path: Path | str | None = None) -> OrchIdentity:
         """Full flow: discover → generate → rename → save."""
         ident = cls()
         ident.discover()
