@@ -168,7 +168,15 @@ async def on_phone_received(
         await message.answer(phone_invalid)
         return
 
-    phone = normalize_phone(message.text) or message.text
+    phone = normalize_phone(message.text)
+    if phone is None:
+        phone_invalid = (
+            i18n.get("phone-invalid")
+            if i18n
+            else "Пожалуйста, введите корректный номер телефона (например +380501234567):"
+        )
+        await message.answer(phone_invalid)
+        return
     data = await state.get_data()
     service_key = data.get("service_key", "unknown")
     viewing_objects: list[dict[str, Any]] = data.get("viewing_objects", [])
