@@ -10,6 +10,7 @@ edits with accumulated chunks (throttled 500ms), finalizes with Markdown.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import time
@@ -197,8 +198,6 @@ async def _generate_streaming(
     Raises:
         Exception: On any streaming failure (caller handles fallback).
     """
-    sent_msg = await message.answer(_STREAM_PLACEHOLDER)
-
     accumulated = ""
     last_edit = 0.0
     ttft_ms = 0.0
@@ -206,17 +205,37 @@ async def _generate_streaming(
     completion_tokens: int | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
-    # Measure TTFT from request dispatch (includes provider pre-stream wait).
+    # t_request_start must be before gather for correct TTFT measurement.
     t_request_start = time.monotonic()
-    stream = await llm.chat.completions.create(
-        model=config.llm_model,
-        messages=llm_messages,
-        temperature=config.llm_temperature,
-        max_tokens=effective_max_tokens,
-        stream=True,
-        stream_options={"include_usage": True},
-        name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+    # Parallelize LLM stream creation and Telegram placeholder send to reduce TTFT (#685).
+    stream_result, sent_result = await asyncio.gather(
+        llm.chat.completions.create(
+            model=config.llm_model,
+            messages=llm_messages,
+            temperature=config.llm_temperature,
+            max_tokens=effective_max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
+            name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+        ),
+        message.answer(_STREAM_PLACEHOLDER),
+        return_exceptions=True,
     )
+    if isinstance(stream_result, BaseException):
+        # LLM unavailable — clean up placeholder and propagate.
+        if not isinstance(sent_result, BaseException):
+            with contextlib.suppress(Exception):
+                await sent_result.delete()
+        raise stream_result
+    if isinstance(sent_result, BaseException):
+        # Telegram rate-limited or unavailable — degrade gracefully, stream without indicator.
+        logger.warning(
+            "Placeholder send failed, streaming without progress indicator: %s", sent_result
+        )
+        sent_msg = None
+    else:
+        sent_msg = sent_result
+    stream = stream_result
 
     # Legacy stream-only TTFT baseline kept for drift diagnostics.
     t_stream_start = time.monotonic()
