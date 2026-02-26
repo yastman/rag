@@ -471,6 +471,8 @@ async def test_streaming_placeholder_failure_degrades_gracefully() -> None:
     # Stream ran successfully — no non-streaming recovery needed
     assert result["response"] == "Ответ несмотря на ошибку плейсхолдера"
     assert result["llm_stream_recovery"] is False
+    # Placeholder was never delivered, so downstream sender must deliver final response.
+    assert result["response_sent"] is False
     # LLM was called exactly once (streaming path, no separate fallback call)
     assert client.chat.completions.create.await_count == 1
 
