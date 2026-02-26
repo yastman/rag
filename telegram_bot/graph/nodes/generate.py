@@ -10,6 +10,7 @@ edits with accumulated chunks (throttled 500ms), finalizes with Markdown.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import time
@@ -171,6 +172,29 @@ def _ensure_history_instruction(system_prompt: str) -> str:
     return f"{system_prompt}{separator}{_HISTORY_INSTRUCTION}"
 
 
+def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
+    """Return True if client rejected Langfuse-specific `name` kwarg."""
+    message = str(exc)
+    return "unexpected keyword argument" in message and "'name'" in message
+
+
+async def _chat_create_with_optional_name(
+    llm: Any,
+    *,
+    observation_name: str,
+    **kwargs: Any,
+) -> Any:
+    """Call chat.completions.create with Langfuse `name` when supported."""
+    create_fn = llm.chat.completions.create
+    try:
+        return await create_fn(name=observation_name, **kwargs)
+    except TypeError as exc:
+        if not _is_unsupported_name_kwarg(exc):
+            raise
+        logger.debug("LLM client does not support `name`; retrying without it")
+        return await create_fn(**kwargs)
+
+
 async def _generate_streaming(
     llm: Any,
     config: Any,
@@ -197,8 +221,6 @@ async def _generate_streaming(
     Raises:
         Exception: On any streaming failure (caller handles fallback).
     """
-    sent_msg = await message.answer(_STREAM_PLACEHOLDER)
-
     accumulated = ""
     last_edit = 0.0
     ttft_ms = 0.0
@@ -206,17 +228,40 @@ async def _generate_streaming(
     completion_tokens: int | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
-    # Measure TTFT from request dispatch (includes provider pre-stream wait).
+    # t_request_start must be before gather for correct TTFT measurement.
     t_request_start = time.monotonic()
-    stream = await llm.chat.completions.create(
-        model=config.llm_model,
-        messages=llm_messages,
-        temperature=config.llm_temperature,
-        max_tokens=effective_max_tokens,
-        stream=True,
-        stream_options={"include_usage": True},
-        name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
+    # Parallelize LLM stream creation and Telegram placeholder send to reduce TTFT (#685).
+    results = await asyncio.gather(
+        _chat_create_with_optional_name(
+            llm,
+            observation_name="generate-answer",
+            model=config.llm_model,
+            messages=llm_messages,
+            temperature=config.llm_temperature,
+            max_tokens=effective_max_tokens,
+            stream=True,
+            stream_options={"include_usage": True},
+        ),
+        message.answer(_STREAM_PLACEHOLDER),
+        return_exceptions=True,
     )
+    stream_result: Any = results[0]
+    sent_result: Any = results[1]
+    if isinstance(stream_result, BaseException):
+        # LLM unavailable — clean up placeholder and propagate.
+        if not isinstance(sent_result, BaseException):
+            with contextlib.suppress(Exception):
+                await sent_result.delete()
+        raise stream_result
+    if isinstance(sent_result, BaseException):
+        # Telegram rate-limited or unavailable — degrade gracefully, stream without indicator.
+        logger.warning(
+            "Placeholder send failed, streaming without progress indicator: %s", sent_result
+        )
+        sent_msg = None
+    else:
+        sent_msg = sent_result
+    stream = stream_result
 
     # Legacy stream-only TTFT baseline kept for drift diagnostics.
     t_stream_start = time.monotonic()
@@ -251,7 +296,7 @@ async def _generate_streaming(
                             )
                 accumulated += text
                 now = time.monotonic()
-                if now - last_edit >= _STREAM_EDIT_INTERVAL:
+                if sent_msg is not None and now - last_edit >= _STREAM_EDIT_INTERVAL:
                     with contextlib.suppress(Exception):
                         await sent_msg.edit_text(accumulated)
                     last_edit = now
@@ -261,24 +306,27 @@ async def _generate_streaming(
         if accumulated:
             raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
         # No real content delivered — clean up placeholder
-        with contextlib.suppress(Exception):
-            await sent_msg.delete()
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
         raise
 
     if not accumulated:
         # Stream produced no content — clean up placeholder
-        with contextlib.suppress(Exception):
-            await sent_msg.delete()
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
         raise ValueError("Streaming produced empty response")
 
     # Final edit with Markdown formatting
-    try:
-        await sent_msg.edit_text(accumulated, parse_mode="Markdown")
-    except Exception:
+    if sent_msg is not None:
         try:
-            await sent_msg.edit_text(accumulated)
+            await sent_msg.edit_text(accumulated, parse_mode="Markdown")
         except Exception:
-            logger.warning("Failed to finalize streaming message")
+            try:
+                await sent_msg.edit_text(accumulated)
+            except Exception:
+                logger.warning("Failed to finalize streaming message")
 
     return accumulated, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg
 
