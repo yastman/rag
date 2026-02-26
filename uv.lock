@@ -755,6 +755,7 @@ dependencies = [
     { name = "langmem" },
     { name = "numpy" },
     { name = "openai" },
+    { name = "phonenumbers" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "qdrant-client" },
@@ -897,6 +898,7 @@ requires-dist = [
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'voice'", specifier = ">=1.39.0" },
     { name = "opentelemetry-sdk", marker = "extra == 'voice'", specifier = ">=1.39.0" },
     { name = "pandas", marker = "extra == 'eval'", specifier = ">=2.0.0" },
+    { name = "phonenumbers", specifier = ">=9.0.25" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "pymupdf", marker = "extra == 'ingest'", specifier = ">=1.26.0" },
     { name = "python-dotenv" },
@@ -4694,6 +4696,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d8/48/147b3ea999560b40a34fd78724c7777aa9d18409c2250bdcaf9c4f2db7fc/peft-0.18.1.tar.gz", hash = "sha256:2dd0d6bfce936d1850e48aaddbd250941c5c02fc8ef3237cd8fd5aac35e0bae2", size = 635030, upload-time = "2026-01-09T13:08:01.136Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/14/b4e3f574acf349ae6f61f9c000a77f97a3b315b4bb6ad03791e79ae4a568/peft-0.18.1-py3-none-any.whl", hash = "sha256:0bf06847a3551e3019fc58c440cffc9a6b73e6e2962c95b52e224f77bbdb50f1", size = 556960, upload-time = "2026-01-09T13:07:55.865Z" },
+]
+
+[[package]]
+name = "phonenumbers"
+version = "9.0.25"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2f/13/c1310103d1a8c61486bd507aafd864252927e8ea2c3133459ddabd23ec34/phonenumbers-9.0.25.tar.gz", hash = "sha256:a5f236fa384c6a77378d7836c8e486ade5f984ad2e8e6cc0dbe5124315cdc81b", size = 2298295, upload-time = "2026-02-26T10:24:47.372Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/29/03/c6e12d36b307cdf8d886f1471de2dc95d807b331465fa828ec7fb4830594/phonenumbers-9.0.25-py2.py3-none-any.whl", hash = "sha256:b1fd6c20d588f5bcd40af3899d727a9f536364211ec6eac554fcd75ca58992a3", size = 2584287, upload-time = "2026-02-26T10:24:44.58Z" },
 ]
 
 [[package]]
