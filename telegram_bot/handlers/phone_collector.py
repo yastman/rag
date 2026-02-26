@@ -9,6 +9,7 @@ import re
 import time
 from typing import Any
 
+import phonenumbers
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -27,6 +28,18 @@ class PhoneCollectorStates(StatesGroup):
     """FSM states for phone collection."""
 
     waiting_phone = State()
+
+
+def normalize_phone(raw: str) -> str | None:
+    """Parse and validate phone via phonenumbers; return E164 or None if invalid."""
+    cleaned = re.sub(r"[\s\-\(\)]", "", raw)
+    try:
+        parsed = phonenumbers.parse(cleaned, None)
+        if phonenumbers.is_valid_number(parsed):
+            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+    except phonenumbers.NumberParseException:
+        pass
+    return None
 
 
 def validate_phone(text: str) -> bool:
@@ -155,7 +168,7 @@ async def on_phone_received(
         await message.answer(phone_invalid)
         return
 
-    phone = message.text
+    phone = normalize_phone(message.text) or message.text
     data = await state.get_data()
     service_key = data.get("service_key", "unknown")
     viewing_objects: list[dict[str, Any]] = data.get("viewing_objects", [])
@@ -188,6 +201,7 @@ async def on_phone_received(
             contact_data = ContactCreate(
                 first_name=user.first_name if user else "",
                 last_name=getattr(user, "last_name", None) if user else None,
+                phone=phone,
             )
             contact = await kommo_client.upsert_contact(phone, contact_data)
 
