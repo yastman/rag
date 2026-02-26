@@ -56,6 +56,7 @@ def create_payload_indexes(client: QdrantClient) -> None:
     indexes = {
         # Keyword (facets + exact match)
         "complex_name": "keyword",
+        "city": "keyword",
         "section": "keyword",
         "apartment_number": "keyword",
         "view_primary": "keyword",
