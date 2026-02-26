@@ -70,6 +70,7 @@ gpt-4o-mini (Cerebras/gpt-oss-120b) → cerebras-glm → Groq → OpenAI
 | `REWRITE_MODEL` | gpt-4o-mini | Separate model for rewrite_node (defaults to LLM_MODEL) |
 | `REWRITE_MAX_TOKENS` | 200 | Max tokens for query rewrite (short output) |
 | `STREAMING_ENABLED` | true | Stream generate_node output to Telegram (feature flag) |
+| `TTFT_DRIFT_WARN_MS` | 500 | TTFT drift warning threshold (ms); raise for reasoning models behind proxy (#675) |
 
 ## Local Dev (`make run-bot`)
 
@@ -136,7 +137,8 @@ Enriches document chunks with LLM-generated summaries before indexing to improve
 - Builds system prompt with domain from `GraphConfig.from_env().domain`
 - Formats top-5 documents as context (title, city, price, score)
 - Includes conversation history from `state["messages"]`
-- **Streaming path** (when `message` injected + `streaming_enabled`): sends placeholder → streams via `stream=True` → edits Telegram message every 300ms → finalizes with Markdown → sets `response_sent=True`
+- **Streaming path** (when `message` injected + `streaming_enabled`): `asyncio.gather(llm.create(stream=True), message.answer(placeholder), return_exceptions=True)` → parallel dispatch → chunks (300ms throttle) → finalize Markdown → `response_sent=True`
+- **Placeholder failure**: `sent_msg = None`, stream continues (graceful degradation, #675/#685)
 - **Non-streaming path**: calls `create_llm().chat.completions.create()` (OpenAI SDK)
 - Falls back to non-streaming if streaming fails, then to document summary if LLM unavailable
 - Records `latency_stages["generate"]` (seconds)
@@ -184,7 +186,7 @@ Handled by `classify_node` (6-type taxonomy) in the LangGraph pipeline.
 pytest tests/unit/test_llm_service.py -v
 pytest tests/unit/services/test_query_analyzer.py -v
 pytest tests/unit/test_hyde.py -v
-pytest tests/unit/graph/test_generate_node.py -v
+pytest tests/unit/graph/nodes/test_generate.py -v
 ```
 
 ## Troubleshooting

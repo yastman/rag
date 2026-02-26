@@ -57,8 +57,12 @@ class TestKommoTokenStore:
             assert token == "new_token"
             mock_refresh.assert_called_once_with("refresh_123")
 
-    async def test_get_valid_token_seeded_without_refresh_token(self, token_store, mock_redis):
-        """Seeded access_token without refresh token should be returned as-is."""
+    async def test_get_valid_token_without_refresh_token_uses_cached_access_token(
+        self,
+        token_store,
+        mock_redis,
+    ):
+        """Access-only token mode should not try OAuth refresh."""
         mock_redis.hgetall.return_value = {
             b"access_token": b"seeded_access",
             b"refresh_token": b"",
