@@ -208,7 +208,7 @@ async def _generate_streaming(
     # t_request_start must be before gather for correct TTFT measurement.
     t_request_start = time.monotonic()
     # Parallelize LLM stream creation and Telegram placeholder send to reduce TTFT (#685).
-    stream_result, sent_result = await asyncio.gather(
+    results = await asyncio.gather(
         llm.chat.completions.create(
             model=config.llm_model,
             messages=llm_messages,
@@ -221,6 +221,8 @@ async def _generate_streaming(
         message.answer(_STREAM_PLACEHOLDER),
         return_exceptions=True,
     )
+    stream_result: Any = results[0]
+    sent_result: Any = results[1]
     if isinstance(stream_result, BaseException):
         # LLM unavailable — clean up placeholder and propagate.
         if not isinstance(sent_result, BaseException):
