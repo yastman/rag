@@ -35,6 +35,7 @@ dependencies = [
     "langmem>=0.0.30",                    ***REMOVED*** SummarizationNode for conversation compression
     ***REMOVED*** Scheduled nurturing + analytics (***REMOVED***390)
     "apscheduler>=3.11.2,<4.0",           ***REMOVED*** Async job scheduling (v3 API)
+    "phonenumbers>=9.0.25",
 ]
 
 [project.optional-dependencies]
