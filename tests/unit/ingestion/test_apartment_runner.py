@@ -161,3 +161,22 @@ class TestIncrementalIngester:
 
         delete_mock.assert_called_once()
         assert stats["removed"] == 1
+
+    def test_force_full_dry_run_keeps_existing_state_file(self, tmp_path: Path) -> None:
+        csv_path = tmp_path / "apartments.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        state_path = tmp_path / ".ingestion_state.json"
+        original_state = {"legacy::row::1": "oldhash"}
+        state_path.write_text('{"legacy::row::1": "oldhash"}', encoding="utf-8")
+
+        ingester = IncrementalApartmentIngester(
+            csv_path=str(csv_path),
+            state_path=str(state_path),
+        )
+
+        stats = ingester.run_incremental(dry_run=True, force_full=True)
+
+        assert stats["changed"] == 1
+        assert stats["removed"] == 0
+        assert state_path.exists()
+        assert ingester._load_state() == original_state
