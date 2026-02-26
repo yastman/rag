@@ -151,6 +151,17 @@ class OrchIdentity:
         """Load identity from JSON file."""
         path = Path(path)
         if not path.exists():
+            # Worktree fallback: resolve via git common-dir to main repo
+            common = subprocess.run(
+                ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            if common:
+                fallback = Path(common).parent / path
+                if fallback.exists():
+                    path = fallback
+        if not path.exists():
             raise FileNotFoundError(path)
         data = json.loads(path.read_text())
         ident = cls()
@@ -210,7 +221,11 @@ def _cli() -> None:
             sys.exit(1)
         worker_name = sys.argv[2]
         message = sys.argv[3] if len(sys.argv) > 3 else f"{worker_name} COMPLETE"
-        ident = OrchIdentity.load()
+        try:
+            ident = OrchIdentity.load()
+        except FileNotFoundError:
+            print("No orchestrator session active (missing .claude/orch-identity.json)")
+            sys.exit(2)
         target = ident.webhook_target()
         env = {**os.environ, "TMUX": ""}
         subprocess.run(
@@ -221,7 +236,11 @@ def _cli() -> None:
 
     elif cmd == "worker-enter":
         # Worker sends Enter to orchestrator (call 3 of 3)
-        ident = OrchIdentity.load()
+        try:
+            ident = OrchIdentity.load()
+        except FileNotFoundError:
+            print("No orchestrator session active (missing .claude/orch-identity.json)")
+            sys.exit(2)
         target = ident.webhook_target()
         env = {**os.environ, "TMUX": ""}
         subprocess.run(
