@@ -22,6 +22,7 @@ def _write_csv(rows: list[dict], path: Path) -> None:
         "has_photo",
         "is_promotion",
         "old_price_eur",
+        "city",
     ]
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -46,9 +47,11 @@ class TestParseApartmentRow:
             "has_photo": "False",
             "is_promotion": "False",
             "old_price_eur": "",
+            "city": "Sunny Beach",
         }
         record = parse_apartment_row(row)
         assert record.complex_name == "Premier Fort Beach"
+        assert record.city == "Sunny Beach"
         assert record.rooms == 2
         assert record.price_eur == 215000.0
 
