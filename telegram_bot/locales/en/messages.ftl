@@ -145,3 +145,58 @@ bookmarks-remove = 🗑 Remove
 
 # Services (#660)
 services-menu-text = Choose a service to learn more:
+
+# Services — titles
+svc-passive-income-title = Passive Income
+svc-online-deals-title = Online Deals
+svc-vnzh-title = Residence Permit
+svc-installment-title = Installment Plan
+svc-infotour-title = Info Tour
+
+# Services — card text
+svc-passive-income-card =
+    Passive Income — we manage your property
+
+    We take care of your property management:
+    full cycle from finding tenants to maintenance.
+
+    You receive stable income with no hassle.
+svc-online-deals-card =
+    Remote Transaction Processing
+
+    Buy without leaving home!
+    25% of our deals are completed entirely remotely.
+
+    Purchase with Ukrainian passport
+    All payment types (Cash / Card / Bank transfer / Crypto)
+    Full legal support
+svc-vnzh-card =
+    Residence Permit in Bulgaria
+
+    Full support with documents for obtaining
+    a residence permit in Bulgaria.
+
+    Help with paperwork, consultations at every step.
+svc-installment-card =
+    Flexible Installment Plan from Developer
+
+    No banks or intermediaries!
+    Only a passport is needed.
+
+    Down payment — from 5%
+    Interest rate — 0%
+    Term — up to 3 years
+svc-infotour-card =
+    Info Tour "Real Estate in Bulgaria"
+
+    Until June 15 — special price of just 150 EUR per family.
+    We refund the tour cost upon property purchase!
+
+    Now is the best time to combine leisure with business —
+    relax and choose seaside property.
+
+# Services — buttons
+svc-back = Back
+svc-get-offer = Get an Offer
+svc-contact-manager = Contact Manager
+svc-back-to-services = Back to Services
