@@ -175,14 +175,18 @@ class KommoClient:
             if not existing.last_name and contact.last_name:
                 updates["last_name"] = contact.last_name
             if updates:
-                from .kommo_models import ContactUpdate
-
                 await self.update_contact(existing.id, ContactUpdate(**updates))
             return existing
 
-        data = await self._request(
-            "POST", "/contacts", json=[contact.model_dump(exclude_none=True)]
-        )
+        contact_dict = contact.model_dump(exclude_none=True)
+        phone_val = contact_dict.pop("phone", None)
+        email_val = contact_dict.pop("email", None)
+        extra_fields = ContactUpdate.build_contact_fields(phone=phone_val, email=email_val)
+        if extra_fields:
+            existing_cfv: list[dict] = contact_dict.get("custom_fields_values") or []
+            contact_dict["custom_fields_values"] = existing_cfv + extra_fields
+
+        data = await self._request("POST", "/contacts", json=[contact_dict])
         item = data["_embedded"]["contacts"][0]
         return Contact(**item)
 
