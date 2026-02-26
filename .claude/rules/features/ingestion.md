@@ -166,6 +166,66 @@ ssh vps "cd /opt/rag-fresh && \
   docker compose --compatibility -f docker-compose.vps.yml --profile ingest up -d ingestion"
 ```
 
+## Apartments Ingestion (incremental)
+
+Separate pipeline for 297 apartment listings in `apartments` collection. Row-level change tracking via SHA-256 hash — only re-embeds changed rows.
+
+### Quick Commands
+
+```bash
+# Full re-index
+python -m src.ingestion.apartments.runner
+
+# Incremental (only changed rows)
+python -m src.ingestion.apartments.runner --incremental
+
+# Dry run (show what would change)
+python -m src.ingestion.apartments.runner --incremental --dry-run
+```
+
+### Architecture
+
+```
+data/apartments.csv (297 rows)
+  → source.read_apartments_csv() → (unique_key, change_key, ApartmentRecord)
+  → runner.run_incremental() → diff vs .apartments_ingestion_state.json
+  → flow.format_apartment_text() → hybrid text: [2BR|78m2|215kEUR] + NL body
+  → BGEM3SyncClient.encode_dense/sparse/colbert()
+  → flow.build_ingestion_batch() → Qdrant upsert (apartments collection)
+```
+
+### Key Files
+
+| File | Description |
+|------|-------------|
+| `src/ingestion/apartments/source.py` | CSV parser + `row_change_key()` for change detection |
+| `src/ingestion/apartments/flow.py` | `format_apartment_text()`, `build_ingestion_batch()`, UUID5 point IDs |
+| `src/ingestion/apartments/runner.py` | `IncrementalApartmentIngester` — CLI with --incremental/--dry-run |
+| `scripts/apartments/ingest.py` | Legacy batch script (one-shot, no change tracking) |
+| `scripts/apartments/setup_collection.py` | Collection creation + 11 payload indexes |
+
+### Testing
+
+```bash
+uv run pytest tests/unit/ingestion/test_apartment_source.py -v   # CSV parsing, change keys
+uv run pytest tests/unit/ingestion/test_apartment_flow.py -v     # Hybrid text format
+uv run pytest tests/unit/ingestion/test_apartment_runner.py -v   # Incremental logic
+RUN_INTEGRATION=1 uv run pytest tests/integration/test_apartments_ingestion.py -v  # Live Qdrant
+```
+
+### Collection
+
+| Collection | Vectors | Points |
+|------------|---------|--------|
+| `apartments` | dense (1024) + bm42 (sparse) + colbert (multi-vec) | 297 |
+
+### Hybrid Text Format
+
+`format_apartment_text()` delegates to `ApartmentRecord.to_hybrid_description()`:
+- **Structured prefix** `[2BR|78.66m2|215kEUR]` — helps sparse/lexical retrieval
+- **NL body** (Russian) — helps dense/semantic retrieval
+- **Promotion marker** `Акция!` — if `is_promotion=True`
+
 ## Legacy (deprecated)
 
 Legacy files in `src/ingestion/` (gdrive_flow.py, voyage_indexer.py) are superseded by unified pipeline.
