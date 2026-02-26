@@ -172,6 +172,29 @@ def _ensure_history_instruction(system_prompt: str) -> str:
     return f"{system_prompt}{separator}{_HISTORY_INSTRUCTION}"
 
 
+def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
+    """Return True if client rejected Langfuse-specific `name` kwarg."""
+    message = str(exc)
+    return "unexpected keyword argument" in message and "'name'" in message
+
+
+async def _chat_create_with_optional_name(
+    llm: Any,
+    *,
+    observation_name: str,
+    **kwargs: Any,
+) -> Any:
+    """Call chat.completions.create with Langfuse `name` when supported."""
+    create_fn = llm.chat.completions.create
+    try:
+        return await create_fn(name=observation_name, **kwargs)
+    except TypeError as exc:
+        if not _is_unsupported_name_kwarg(exc):
+            raise
+        logger.debug("LLM client does not support `name`; retrying without it")
+        return await create_fn(**kwargs)
+
+
 async def _generate_streaming(
     llm: Any,
     config: Any,
@@ -209,14 +232,15 @@ async def _generate_streaming(
     t_request_start = time.monotonic()
     # Parallelize LLM stream creation and Telegram placeholder send to reduce TTFT (#685).
     results = await asyncio.gather(
-        llm.chat.completions.create(
+        _chat_create_with_optional_name(
+            llm,
+            observation_name="generate-answer",
             model=config.llm_model,
             messages=llm_messages,
             temperature=config.llm_temperature,
             max_tokens=effective_max_tokens,
             stream=True,
             stream_options={"include_usage": True},
-            name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
         ),
         message.answer(_STREAM_PLACEHOLDER),
         return_exceptions=True,
