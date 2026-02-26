@@ -245,6 +245,36 @@ def _is_checkpointer_runtime_error(exc: Exception) -> bool:
     return False
 
 
+async def _seed_kommo_access_token(
+    *,
+    redis: Any,
+    access_token: str,
+    subdomain: str,
+) -> bool:
+    """Seed Redis with access_token from env when no auth_code and Redis empty.
+
+    Returns True if seeded, False if skipped.
+    """
+    from .services.kommo_tokens import REDIS_KEY
+
+    if not access_token:
+        return False
+    existing = await redis.hgetall(REDIS_KEY)
+    if existing:
+        return False
+    await redis.hset(
+        REDIS_KEY,
+        mapping={
+            "access_token": access_token,
+            "refresh_token": "",
+            "expires_at": "0",
+            "subdomain": subdomain,
+        },
+    )
+    logger.info("Kommo: seeded Redis from KOMMO_ACCESS_TOKEN (no refresh_token)")
+    return True
+
+
 class PropertyBot:
     """Telegram bot for domain-specific search (configurable via BOT_DOMAIN)."""
 
@@ -2951,12 +2981,19 @@ class PropertyBot:
                     if auth_code is None:
                         existing = await self._cache.redis.hgetall(REDIS_KEY)
                         if not existing:
-                            logger.info(
-                                "Kommo CRM disabled: no stored tokens and no KOMMO_AUTH_CODE "
-                                "(set env var for first-time setup)"
-                            )
-                            self._kommo_client = None
-                            should_init_kommo = False
+                            env_token = self.config.kommo_access_token.get_secret_value()
+                            if env_token:
+                                await token_store.seed_env_token(env_token)
+                                logger.info(
+                                    "Kommo: seeded access token from KOMMO_ACCESS_TOKEN env var"
+                                )
+                            else:
+                                logger.info(
+                                    "Kommo CRM disabled: no stored tokens and no KOMMO_AUTH_CODE "
+                                    "(set env var for first-time setup)"
+                                )
+                                self._kommo_client = None
+                                should_init_kommo = False
 
                     if should_init_kommo:
                         await token_store.initialize(authorization_code=auth_code)
