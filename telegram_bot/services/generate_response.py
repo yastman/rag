@@ -496,7 +496,9 @@ async def generate_response(
                         usage_details,
                         sent_msg,
                     ) = stream_result
-                response_sent = True
+                # Placeholder send may fail in parallel mode (sent_msg=None). In that case
+                # streaming generated the text, but delivery must continue in respond path.
+                response_sent = sent_msg is not None
             except Exception as stream_exc:
                 if hasattr(stream_exc, "sent_msg") and hasattr(stream_exc, "partial_text"):
                     logger.warning(
