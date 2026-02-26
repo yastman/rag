@@ -20,6 +20,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.ingestion.apartments.flow import (
     COLLECTION,
@@ -27,7 +28,10 @@ from src.ingestion.apartments.flow import (
     format_apartment_text,
 )
 from src.ingestion.apartments.source import read_apartments_csv
-from telegram_bot.services.apartment_models import ApartmentRecord
+
+
+if TYPE_CHECKING:
+    from telegram_bot.services.apartment_models import ApartmentRecord
 
 
 logger = logging.getLogger(__name__)
