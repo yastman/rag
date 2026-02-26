@@ -56,23 +56,22 @@ class KommoTokenStore:
             raise RuntimeError(msg)
 
         access_token = data.get("access_token", "")
-        refresh_token = data.get("refresh_token", "")
-        expires_at = int(data.get("expires_at", 0))
         if not access_token:
-            msg = "Kommo token store has no access_token."
+            msg = "No Kommo access_token found in Redis."
             raise RuntimeError(msg)
+        refresh_token = data.get("refresh_token", "")
+        try:
+            expires_at = int(data.get("expires_at", 0))
+        except (TypeError, ValueError):
+            expires_at = 0
 
-        # Fallback seed mode (#678): access token was pre-provisioned via env and
-        # may not have refresh metadata. Try it as-is instead of forcing refresh.
+        ***REMOVED*** OAuth refresh flow requires refresh_token. If only access_token is
+        # available (seed/manual mode), use it as-is and let API 401 trigger handling.
         if not refresh_token:
+            logger.info("Kommo token has no refresh_token; using cached access_token as-is")
             return access_token
 
         if time.time() + REFRESH_BUFFER_SEC >= expires_at:
-            if not refresh_token:
-                logger.info(
-                    "Kommo token near expiry but no refresh_token — using access_token as-is"
-                )
-                return access_token
             logger.info("Kommo token near expiry, refreshing")
             return await self._refresh_tokens(refresh_token)
 

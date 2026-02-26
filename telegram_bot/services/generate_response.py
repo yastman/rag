@@ -7,7 +7,6 @@ import contextlib
 import hashlib
 import inspect
 import logging
-import os
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -39,7 +38,6 @@ _MAX_CONTEXT_DOCS = 3
 _STREAM_EDIT_INTERVAL = 0.5  # 500ms throttle for Telegram edit_text
 _STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
 _MAX_HISTORY_MESSAGES = 12
-_DRIFT_WARN_THRESHOLD_MS = float(os.getenv("TTFT_DRIFT_WARN_MS", "500"))
 _detector = ResponseStyleDetector()
 _HISTORY_INSTRUCTION = (
     "Учитывай историю диалога. Если пользователь ссылается на предыдущие "
@@ -196,6 +194,33 @@ def _ensure_history_instruction(system_prompt: str) -> str:
     return f"{system_prompt}{separator}{_HISTORY_INSTRUCTION}"
 
 
+def _is_unsupported_name_kwarg(exc: TypeError) -> bool:
+    """Return True if client rejected Langfuse-specific `name` kwarg."""
+    message = str(exc)
+    return "unexpected keyword argument" in message and "'name'" in message
+
+
+async def _chat_create_with_optional_name(
+    llm: Any,
+    *,
+    observation_name: str,
+    **kwargs: Any,
+) -> Any:
+    """Call chat.completions.create with Langfuse `name` when supported.
+
+    Some clients (plain OpenAI SDK) reject `name` as an unexpected kwarg.
+    Langfuse-wrapped clients accept it and use it for generation naming.
+    """
+    create_fn = llm.chat.completions.create
+    try:
+        return await create_fn(name=observation_name, **kwargs)
+    except TypeError as exc:
+        if not _is_unsupported_name_kwarg(exc):
+            raise
+        logger.debug("LLM client does not support `name`; retrying without it")
+        return await create_fn(**kwargs)
+
+
 async def _generate_streaming(
     llm: Any,
     config: Any,
@@ -213,45 +238,46 @@ async def _generate_streaming(
     usage_details: dict[str, int] | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
-    # t_request_start must be before gather for correct TTFT measurement.
+
+    # Measure TTFT from before parallel dispatch (includes pre-stream provider wait).
     t_request_start = time.monotonic()
-    # Parallelize LLM stream creation and Telegram placeholder send to reduce TTFT.
-    stream_result: Any
-    sent_result: Any
-    stream_result, sent_result = await asyncio.gather(
-        llm.chat.completions.create(
+
+    # Parallelize placeholder send + LLM stream creation to reduce TTFT drift (#675).
+    # return_exceptions=True ensures both tasks complete before results are inspected,
+    # preventing background LLM tasks from leaking on placeholder failure (#683).
+    gather_results = await asyncio.gather(
+        message.answer(_STREAM_PLACEHOLDER),
+        _chat_create_with_optional_name(
+            llm,
+            observation_name="generate-answer",
             model=config.llm_model,
             messages=llm_messages,
             temperature=config.llm_temperature,
             max_tokens=effective_max_tokens,
             stream=True,
             stream_options={"include_usage": True},
-            name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
         ),
-        message.answer(_STREAM_PLACEHOLDER),
         return_exceptions=True,
     )
-    if isinstance(stream_result, Exception) or isinstance(sent_result, Exception):
-        if not isinstance(sent_result, Exception):
-            with contextlib.suppress(Exception):
-                await sent_result.delete()
-        if not isinstance(stream_result, Exception):
-            aclose = getattr(stream_result, "aclose", None)
-            if callable(aclose):
-                with contextlib.suppress(Exception):
-                    maybe_awaitable = aclose()
-                    if inspect.isawaitable(maybe_awaitable):
-                        await maybe_awaitable
-        if isinstance(stream_result, Exception):
-            raise stream_result
-        raise sent_result
-    stream = stream_result
-    sent_msg = sent_result
+    sent_msg, stream = gather_results[0], gather_results[1]
 
-    # Legacy "stream-only TTFT" starts after stream object creation.
-    # Keep it for drift diagnostics only.
+    # Placeholder failure is non-critical: degrade gracefully (skip message edits).
+    if isinstance(sent_msg, BaseException):
+        logger.warning("Placeholder send failed, continuing without edit: %s", sent_msg)
+        sent_msg = None
+
+    # LLM stream failure is critical: clean up and propagate.
+    if isinstance(stream, BaseException):
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
+        raise stream
+
+    # t_stream_start: when stream object is available (after parallel gather).
+    # Used for "stream-only TTFT" drift diagnostics.
     t_stream_start = time.monotonic()
     stream_only_ttft_ms: float | None = None
+
     try:
         async for chunk in stream:
             if hasattr(chunk, "usage") and chunk.usage is not None:
@@ -287,7 +313,7 @@ async def _generate_streaming(
                             )
                 accumulated += text
                 now = time.monotonic()
-                if now - last_edit >= _STREAM_EDIT_INTERVAL:
+                if sent_msg is not None and now - last_edit >= _STREAM_EDIT_INTERVAL:
                     with contextlib.suppress(Exception):
                         await sent_msg.edit_text(accumulated)
                     last_edit = now
@@ -297,24 +323,27 @@ async def _generate_streaming(
         if accumulated:
             raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
         # No real content delivered — clean up placeholder
-        with contextlib.suppress(Exception):
-            await sent_msg.delete()
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
         raise
 
     if not accumulated:
         # Stream produced no content — clean up placeholder
-        with contextlib.suppress(Exception):
-            await sent_msg.delete()
+        if sent_msg is not None:
+            with contextlib.suppress(Exception):
+                await sent_msg.delete()
         raise ValueError("Streaming produced empty response")
 
-    # Final edit with Markdown formatting
-    try:
-        await sent_msg.edit_text(accumulated, parse_mode="Markdown")
-    except Exception:
+    # Final edit with Markdown formatting (only if placeholder was sent successfully)
+    if sent_msg is not None:
         try:
-            await sent_msg.edit_text(accumulated)
+            await sent_msg.edit_text(accumulated, parse_mode="Markdown")
         except Exception:
-            logger.warning("Failed to finalize streaming message")
+            try:
+                await sent_msg.edit_text(accumulated)
+            except Exception:
+                logger.warning("Failed to finalize streaming message")
 
     return (
         accumulated,
@@ -345,7 +374,6 @@ async def generate_response(
     config: Any | None = None,
     get_config: Callable[[], Any] | None = None,
     lf_client: Any | None = None,
-    llm: Any | None = None,
     get_lf_client: Callable[[], Any] | None = None,
     max_context_docs: int = _MAX_CONTEXT_DOCS,
     format_context: Callable[[list[dict[str, Any]], int], str] = _format_context,
@@ -451,8 +479,7 @@ async def generate_response(
     )
 
     try:
-        if llm is None:
-            llm = config.create_llm()
+        llm = config.create_llm()
 
         # Streaming path: deliver directly to Telegram
         if message is not None and config.streaming_enabled:
@@ -497,7 +524,9 @@ async def generate_response(
                         usage_details,
                         sent_msg,
                     ) = stream_result
-                response_sent = True
+                # Placeholder send may fail in parallel mode (sent_msg=None). In that case
+                # streaming generated the text, but delivery must continue in respond path.
+                response_sent = sent_msg is not None
             except Exception as stream_exc:
                 if hasattr(stream_exc, "sent_msg") and hasattr(stream_exc, "partial_text"):
                     logger.warning(
@@ -508,12 +537,13 @@ async def generate_response(
                     )
                     sent_msg = getattr(stream_exc, "sent_msg", None)
                     t_llm_start = time.monotonic()
-                    response_obj = await llm.chat.completions.create(
+                    response_obj = await _chat_create_with_optional_name(
+                        llm,
+                        observation_name="generate-answer",
                         model=config.llm_model,
                         messages=llm_messages,
                         temperature=config.llm_temperature,
                         max_tokens=max_tokens,
-                        name="generate-answer",  # type: ignore[call-overload]
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
@@ -551,12 +581,13 @@ async def generate_response(
                         status_message="Streaming failed, using non-streaming fallback",
                     )
                     t_llm_start = time.monotonic()
-                    response_obj = await llm.chat.completions.create(
+                    response_obj = await _chat_create_with_optional_name(
+                        llm,
+                        observation_name="generate-answer",
                         model=config.llm_model,
                         messages=llm_messages,
                         temperature=config.llm_temperature,
                         max_tokens=max_tokens,
-                        name="generate-answer",  # type: ignore[call-overload]
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
@@ -574,12 +605,13 @@ async def generate_response(
         else:
             # Non-streaming path
             t_llm_start = time.monotonic()
-            response_obj = await llm.chat.completions.create(
+            response_obj = await _chat_create_with_optional_name(
+                llm,
+                observation_name="generate-answer",
                 model=config.llm_model,
                 messages=llm_messages,
                 temperature=config.llm_temperature,
                 max_tokens=max_tokens,
-                name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
             )
             t_llm_end = time.monotonic()
             answer = response_obj.choices[0].message.content or ""
@@ -673,7 +705,10 @@ async def generate_response(
     llm_ttft_drift_ms: float | None = None
     if streaming_was_enabled and stream_only_ttft_ms is not None and ttft_ms > 0:
         llm_ttft_drift_ms = max(0.0, ttft_ms - stream_only_ttft_ms)
-        if llm_ttft_drift_ms > _DRIFT_WARN_THRESHOLD_MS:
+        _drift_warn_threshold = getattr(config, "ttft_drift_warn_ms", None)
+        if not isinstance(_drift_warn_threshold, (int, float)):
+            _drift_warn_threshold = 500
+        if llm_ttft_drift_ms > _drift_warn_threshold:
             with contextlib.suppress(Exception):
                 lf_client.update_current_span(
                     level="WARNING",
