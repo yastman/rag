@@ -216,7 +216,9 @@ async def _generate_streaming(
     # t_request_start must be before gather for correct TTFT measurement.
     t_request_start = time.monotonic()
     # Parallelize LLM stream creation and Telegram placeholder send to reduce TTFT.
-    stream, sent_msg = await asyncio.gather(
+    stream_result: Any
+    sent_result: Any
+    stream_result, sent_result = await asyncio.gather(
         llm.chat.completions.create(
             model=config.llm_model,
             messages=llm_messages,
@@ -227,7 +229,24 @@ async def _generate_streaming(
             name="generate-answer",  # type: ignore[call-overload]  # langfuse kwarg
         ),
         message.answer(_STREAM_PLACEHOLDER),
+        return_exceptions=True,
     )
+    if isinstance(stream_result, Exception) or isinstance(sent_result, Exception):
+        if not isinstance(sent_result, Exception):
+            with contextlib.suppress(Exception):
+                await sent_result.delete()
+        if not isinstance(stream_result, Exception):
+            aclose = getattr(stream_result, "aclose", None)
+            if callable(aclose):
+                with contextlib.suppress(Exception):
+                    maybe_awaitable = aclose()
+                    if inspect.isawaitable(maybe_awaitable):
+                        await maybe_awaitable
+        if isinstance(stream_result, Exception):
+            raise stream_result
+        raise sent_result
+    stream = stream_result
+    sent_msg = sent_result
 
     # Legacy "stream-only TTFT" starts after stream object creation.
     # Keep it for drift diagnostics only.
