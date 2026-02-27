@@ -1,5 +1,25 @@
 # CLAUDE.md
 
+## TLDR-First Workflow (ОБЯЗАТЕЛЬНО)
+
+**Приоритет инструментов для исследования кода:**
+
+```
+1. tldr semantic search "что ищем" --k 10   # Первый шаг — семантический поиск (~200ms)
+2. tldr search "pattern" src/                # Точный текстовый поиск
+3. tldr extract file.py                      # Структура файла (вместо Read)
+4. tldr context func --project . --depth 2   # LLM-ready контекст функции
+5. Read file.py offset=N limit=M             # ТОЛЬКО конкретные строки, когда точно знаешь что читать
+```
+
+**ЗАПРЕЩЕНО:**
+- НЕ запускать scout/Explore агентов для поиска файлов — `tldr semantic search` делает это за 200ms
+- НЕ делать Read целых файлов — `tldr extract` даёт структуру за 95% экономии токенов
+- НЕ использовать Grep когда есть `tldr search` — структурированные результаты лучше
+- НЕ спавнить суб-агентов для "исследования кодбейза" — tldr + Read конкретных строк
+
+**Правило:** `tldr semantic search` для обнаружения. `tldr extract` для навигации. `Read offset limit` для чтения кода. `tldr impact` перед рефакторингом. `tldr warm .` для переиндексации.
+
 ## Commands
 
 ```bash
@@ -187,8 +207,6 @@ tldr importers module_name src/         # Кто импортирует моду
 tldr diagnostics .                      # Type check + lint (pyright/ruff)
 tldr change-impact --git                # Какие тесты затронуты изменениями
 ```
-
-**Правило:** `tldr structure` перед чтением файлов. `tldr search` вместо grep. `tldr impact` перед рефакторингом. `tldr warm .` для переиндексации.
 
 ## Troubleshooting
 
