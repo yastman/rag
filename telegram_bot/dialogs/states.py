@@ -23,15 +23,19 @@ class SettingsSG(StatesGroup):
 
 
 class FunnelSG(StatesGroup):
-    """Property search funnel (***REMOVED***628)."""
+    """Property search funnel (***REMOVED***628, refactored ***REMOVED***697)."""
 
-    location = State()  ***REMOVED*** Step 1: район
+    complex = State()  ***REMOVED*** Step 1: комплекс
     property_type = State()  ***REMOVED*** Step 2: тип квартиры
     budget = State()  ***REMOVED*** Step 3: бюджет
-    refine_or_show = State()  ***REMOVED*** Step 4: показать / уточнить
-    floor = State()  ***REMOVED*** Step 4a: этаж (optional)
-    view = State()  ***REMOVED*** Step 4b: вид (optional)
-    results = State()  ***REMOVED*** Step 5: результаты
+    preferences = State()  ***REMOVED*** Step 4: доп. пожелания (multi-select menu)
+    pref_floor = State()  ***REMOVED*** Step 4a: этаж sub-options
+    pref_view = State()  ***REMOVED*** Step 4b: вид sub-options
+    pref_furnished = State()  ***REMOVED*** Step 4c: мебель sub-options
+    pref_promotion = State()  ***REMOVED*** Step 4d: акции sub-options
+    summary = State()  ***REMOVED*** Step 5: саммари + confirmation
+    change_filter = State()  ***REMOVED*** Step 5a: выбор фильтра для изменения
+    results = State()  ***REMOVED*** Step 6: результаты
 
 
 class FaqSG(StatesGroup):
