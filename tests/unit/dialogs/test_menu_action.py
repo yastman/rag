@@ -69,27 +69,14 @@ async def test_on_manager_action_calls_manager_done_and_handle_menu_action():
     )
 
 
-async def test_on_crm_action_calls_manager_done_and_handle_menu_action():
-    """on_crm_action closes dialog, then calls handle_menu_action with mapped query and locale."""
-    from telegram_bot.dialogs.crm_submenu import _BUTTON_QUERIES, on_crm_action
+def test_crm_submenu_is_navigation_hub():
+    """CRM submenu (#697 refactor) uses Start buttons — no action dispatching."""
+    from telegram_bot.dialogs.crm_submenu import crm_submenu_dialog
+    from telegram_bot.dialogs.states import CRMMenuSG
 
-    mock_bot = AsyncMock()
-    mock_bot.handle_menu_action = AsyncMock()
-
-    callback = MagicMock()
-    button = MagicMock()
-    button.widget_id = "crm_create_deal"
-
-    manager = AsyncMock()
-    manager.done = AsyncMock()
-    manager.middleware_data = {"property_bot": mock_bot, "locale": "ru"}
-
-    await on_crm_action(callback, button, manager)
-
-    manager.done.assert_called_once()
-    mock_bot.handle_menu_action.assert_called_once_with(
-        callback, _BUTTON_QUERIES["crm_create_deal"], locale="ru"
-    )
+    # Verify dialog uses CRMMenuSG.main state (not old CrmSubmenuSG)
+    states = [w.get_state() for w in crm_submenu_dialog.windows.values()]
+    assert CRMMenuSG.main in states
 
 
 def test_handle_menu_action_exists_on_property_bot():
