@@ -100,6 +100,38 @@ class SearchSG(StatesGroup):
     results = State()  # Step 2: результаты
 
 
+class LeadsMenuSG(StatesGroup):
+    """Leads navigation submenu (#697)."""
+
+    main = State()
+
+
+class MyLeadsSG(StatesGroup):
+    """My leads list view (#697)."""
+
+    main = State()
+
+
+class SearchLeadsSG(StatesGroup):
+    """Lead search dialog (#697)."""
+
+    query = State()
+    results = State()
+
+
+class ContactsMenuSG(StatesGroup):
+    """Contacts navigation submenu (#697)."""
+
+    main = State()
+
+
+class SearchContactsSG(StatesGroup):
+    """Contact search dialog (#697)."""
+
+    query = State()
+    results = State()
+
+
 class AIAdvisorSG(StatesGroup):
     """AI advisor dialog (#697)."""
 
