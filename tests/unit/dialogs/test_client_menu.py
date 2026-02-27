@@ -75,10 +75,10 @@ def test_client_menu_launch_mode_root():
     assert client_menu_dialog.launch_mode == LaunchMode.ROOT
 
 
-def test_client_menu_search_starts_funnel_from_location():
-    """Search button must start funnel from the first location step."""
+def test_client_menu_search_starts_funnel_from_complex():
+    """Search button must start funnel from the complex selection step (#697)."""
     window = client_menu_dialog.windows[ClientMenuSG.main]
     buttons = getattr(window.keyboard, "buttons", ())
     funnel_start = next((btn for btn in buttons if getattr(btn, "widget_id", "") == "funnel"), None)
     assert funnel_start is not None
-    assert getattr(funnel_start, "state", None) == FunnelSG.location
+    assert getattr(funnel_start, "state", None) == FunnelSG.complex
