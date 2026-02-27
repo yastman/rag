@@ -17,7 +17,7 @@ from .states import FunnelSG
 
 # --- Filter building helpers ---
 
-_ROOMS_MAP: dict[str, int] = {"studio": 1, "1bed": 2, "2bed": 3, "3bed": 4}
+_ROOMS_MAP: dict[str, int | list[int]] = {"studio": [0, 1], "1bed": 2, "2bed": 3, "3bed": 4}
 _PROPERTY_TYPE_QUERY_TEXT: dict[str, str] = {
     "studio": "студия",
     "1bed": "1 спальня",
@@ -40,7 +40,13 @@ _FLOOR_MAP: dict[str, dict[str, int]] = {
     "top": {"gte": 6},
 }
 
-_ROOMS_DISPLAY: dict[int, str] = {1: "Студия", 2: "1-спальня", 3: "2-спальни", 4: "3-спальни"}
+_ROOMS_DISPLAY: dict[int, str] = {
+    0: "Студия",
+    1: "Студия",
+    2: "1-спальня",
+    3: "2-спальни",
+    4: "3-спальни",
+}
 
 _LOCATION_TO_CITY: dict[str, str] = {
     "sunny_beach": "Sunny Beach",
