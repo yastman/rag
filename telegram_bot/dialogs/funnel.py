@@ -667,6 +667,50 @@ async def on_results_more(
     data["scroll_page"] = data.get("scroll_page", 1) + 1
 
 
+async def on_zero_suggestion_selected(
+    callback: CallbackQuery,
+    widget: Select,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """Apply zero-results recovery suggestion and refresh results/new search."""
+    data = manager.dialog_data
+
+    if item_id == "rm_floor":
+        data.pop("floor", None)
+    elif item_id == "rm_view":
+        data.pop("view", None)
+    elif item_id == "rm_furnished":
+        data.pop("is_furnished", None)
+    elif item_id == "rm_promotion":
+        data.pop("is_promotion", None)
+    elif item_id == "rm_budget":
+        data["budget"] = "any"
+    elif item_id == "new_search":
+        for key in (
+            "complex",
+            "property_type",
+            "budget",
+            "floor",
+            "view",
+            "is_furnished",
+            "is_promotion",
+            "scroll_offset",
+            "scroll_next_offset",
+            "scroll_page",
+        ):
+            data.pop(key, None)
+        await manager.switch_to(FunnelSG.complex)
+        return
+    else:
+        return
+
+    data.pop("scroll_offset", None)
+    data.pop("scroll_next_offset", None)
+    data["scroll_page"] = 1
+    await manager.switch_to(FunnelSG.results)
+
+
 # --- Dialog ---
 
 
@@ -841,6 +885,16 @@ funnel_dialog = Dialog(
     # Step 6: Results (SDK scroll with pagination)
     Window(
         Format("{title}\n\n{results_text}"),
+        Column(
+            Select(
+                Format("{item[0]}"),
+                id="zero_suggestions",
+                item_id_getter=operator.itemgetter(1),
+                items="zero_suggestions",
+                on_click=on_zero_suggestion_selected,
+            ),
+            when="zero_suggestions",
+        ),
         Button(
             Format("{btn_more}"),
             id="more",
