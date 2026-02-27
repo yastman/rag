@@ -98,7 +98,7 @@ async def test_handle_menu_button_no_clear_for_unrelated_state():
 
 
 async def test_handle_search_starts_funnel_dialog():
-    """_handle_search starts FunnelSG.location dialog when dialog_manager available (#658)."""
+    """_handle_search starts FunnelSG.complex dialog when dialog_manager available (#658, #697)."""
     with patch("telegram_bot.bot.PropertyBot.__init__", return_value=None):
         from telegram_bot.bot import PropertyBot
         from telegram_bot.dialogs.states import FunnelSG
@@ -113,7 +113,7 @@ async def test_handle_search_starts_funnel_dialog():
 
         dialog_manager.start.assert_called_once()
         call_args = dialog_manager.start.call_args
-        assert call_args[0][0] == FunnelSG.location
+        assert call_args[0][0] == FunnelSG.complex
 
 
 async def test_handle_search_fallback_without_dialog_manager():
