@@ -13,7 +13,7 @@ from telegram_bot.dialogs.funnel import build_funnel_filters
 
 def test_rooms_studio():
     filters = build_funnel_filters(rooms="studio", budget="any")
-    assert filters.get("rooms") == 1
+    assert filters.get("rooms") == [0, 1]
     assert "price_eur" not in filters
 
 
