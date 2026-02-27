@@ -297,3 +297,48 @@ async def test_pref_promotion_any_clears_value():
     await funnel_module.on_pref_promotion_selected(MagicMock(), SimpleNamespace(), manager, "any")
     assert manager.dialog_data["is_promotion"] is None
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_zero_suggestion_removes_floor_and_refreshes_results():
+    manager = SimpleNamespace(
+        dialog_data={"floor": "mid", "scroll_offset": "off1", "scroll_next_offset": "off2"},
+        switch_to=AsyncMock(),
+    )
+    await funnel_module.on_zero_suggestion_selected(
+        MagicMock(),
+        SimpleNamespace(),
+        manager,
+        "rm_floor",
+    )
+    assert "floor" not in manager.dialog_data
+    assert manager.dialog_data.get("scroll_offset") is None
+    assert manager.dialog_data.get("scroll_next_offset") is None
+    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+
+
+@pytest.mark.asyncio
+async def test_zero_suggestion_new_search_clears_filters_and_goes_to_complex():
+    manager = SimpleNamespace(
+        dialog_data={
+            "complex": "Premier Fort Beach",
+            "property_type": "2bed",
+            "budget": "high",
+            "floor": "mid",
+            "view": "sea",
+            "is_furnished": "yes",
+            "is_promotion": "yes",
+            "scroll_offset": "off1",
+            "scroll_next_offset": "off2",
+            "scroll_page": 2,
+        },
+        switch_to=AsyncMock(),
+    )
+    await funnel_module.on_zero_suggestion_selected(
+        MagicMock(),
+        SimpleNamespace(),
+        manager,
+        "new_search",
+    )
+    assert manager.dialog_data == {}
+    manager.switch_to.assert_awaited_once_with(FunnelSG.complex)
