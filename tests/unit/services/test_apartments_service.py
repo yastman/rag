@@ -42,6 +42,39 @@ class TestBuildApartmentFilter:
         # Key should be "rooms" not "metadata.rooms"
         assert f.must[0].key == "rooms"
 
+    def test_build_filter_is_furnished_true(self) -> None:
+        f = _build_apartment_filter({"is_furnished": True})
+        assert f is not None
+        assert len(f.must) == 1
+        assert f.must[0].key == "is_furnished"
+        assert f.must[0].match.value is True
+
+    def test_build_filter_is_furnished_false(self) -> None:
+        f = _build_apartment_filter({"is_furnished": False})
+        assert f is not None
+        assert len(f.must) == 1
+        assert f.must[0].key == "is_furnished"
+        assert f.must[0].match.value is False
+
+    def test_build_filter_is_promotion_true(self) -> None:
+        f = _build_apartment_filter({"is_promotion": True})
+        assert f is not None
+        assert len(f.must) == 1
+        assert f.must[0].key == "is_promotion"
+        assert f.must[0].match.value is True
+
+    def test_build_filter_combined_bool_and_range(self) -> None:
+        """Bool must use MatchValue, not Range — isinstance(True, int) == True in Python."""
+        f = _build_apartment_filter({"is_furnished": True, "price_eur": {"gte": 50000}})
+        assert f is not None
+        assert len(f.must) == 2
+        # Bool condition should use MatchValue, not Range
+        for cond in f.must:
+            if cond.key == "is_furnished":
+                assert cond.match is not None
+                assert cond.match.value is True
+                assert cond.range is None
+
 
 class TestCheckEscalation:
     def test_no_escalation(self) -> None:
