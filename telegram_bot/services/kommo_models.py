@@ -82,6 +82,14 @@ class TaskCreate(BaseModel):
     task_type_id: int | None = None
 
 
+class TaskUpdate(BaseModel):
+    """PATCH /api/v4/tasks/{id} payload (#697)."""
+
+    text: str | None = None
+    complete_till: int | None = None  # Unix timestamp
+    responsible_user_id: int | None = None
+
+
 # --- Response models ---
 
 
