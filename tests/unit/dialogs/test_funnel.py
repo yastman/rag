@@ -139,71 +139,54 @@ async def test_refine_path_switches_to_floor(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_get_results_data_calls_apartments_service():
-    mock_search = AsyncMock(
-        return_value=[
-            {
-                "id": "p1",
-                "score": 0.95,
-                "payload": {
-                    "complex_name": "Sunrise",
-                    "city": "Sunny Beach",
-                    "property_type": "studio",
-                    "floor": 2,
-                    "area_m2": 42,
-                    "view_primary": "sea",
-                    "view_tags": ["sea"],
-                    "price_eur": 48500,
-                    "rooms": 1,
-                },
-            }
-        ]
-    )
-    mock_aembed = AsyncMock(return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}))
-
+    results = [
+        {
+            "id": "p1",
+            "payload": {
+                "complex_name": "Sunrise",
+                "city": "Sunny Beach",
+                "property_type": "studio",
+                "floor": 2,
+                "area_m2": 42,
+                "view_primary": "sea",
+                "view_tags": ["sea"],
+                "price_eur": 48500,
+                "rooms": 1,
+            },
+        }
+    ]
     mock_svc = MagicMock()
-    mock_svc.search = mock_search
-    mock_embeddings = MagicMock()
-    mock_embeddings.aembed_hybrid = mock_aembed
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 1, None))
 
     manager = SimpleNamespace(
         dialog_data={"location": "sunny_beach", "property_type": "studio", "budget": "low"},
-        middleware_data={
-            "apartments_service": mock_svc,
-            "hybrid_embeddings": mock_embeddings,
-        },
+        middleware_data={"apartments_service": mock_svc},
     )
 
     result = await funnel_module.get_results_data(manager)
 
-    mock_embeddings.aembed_hybrid.assert_awaited_once_with("Sunny Beach студия")
-    mock_svc.search.assert_awaited_once()
+    mock_svc.scroll_with_filters.assert_awaited_once()
     assert "Sunrise" in result["results_text"]
     assert "Sunny Beach" in result["results_text"]
     assert "sunny_beach" not in result["results_text"]
 
 
 @pytest.mark.asyncio
-async def test_get_results_data_any_any_uses_fallback_query():
-    mock_search = AsyncMock(return_value=[])
-    mock_aembed = AsyncMock(return_value=([0.1] * 1024, {"indices": [], "values": []}))
-
+async def test_get_results_data_any_any_returns_all():
     mock_svc = MagicMock()
-    mock_svc.search = mock_search
-    mock_embeddings = MagicMock()
-    mock_embeddings.aembed_hybrid = mock_aembed
+    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 0, None))
 
     manager = SimpleNamespace(
         dialog_data={"location": "any", "property_type": "any", "budget": "any"},
-        middleware_data={
-            "apartments_service": mock_svc,
-            "hybrid_embeddings": mock_embeddings,
-        },
+        middleware_data={"apartments_service": mock_svc},
     )
 
     await funnel_module.get_results_data(manager)
 
-    mock_embeddings.aembed_hybrid.assert_awaited_once_with("апартаменты в Болгарии")
-    mock_svc.search.assert_awaited_once()
+    mock_svc.scroll_with_filters.assert_awaited_once()
+    # No filters when all "any"
+    call_kwargs = mock_svc.scroll_with_filters.call_args
+    assert call_kwargs.kwargs.get("filters") == {} or call_kwargs[1].get("filters") == {}
 
 
 @pytest.mark.asyncio
@@ -215,22 +198,16 @@ async def test_get_results_data_fallback_without_service():
 
     result = await funnel_module.get_results_data(manager)
 
-    assert "не нашли" in result["results_text"].lower()
+    assert "недоступен" in result["results_text"].lower()
 
 
 @pytest.mark.asyncio
 async def test_get_results_data_uses_property_bot_fallback():
-    mock_search = AsyncMock(return_value=[])
-    mock_aembed = AsyncMock(return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]}))
-
     mock_svc = MagicMock()
-    mock_svc.search = mock_search
-    mock_embeddings = MagicMock()
-    mock_embeddings.aembed_hybrid = mock_aembed
+    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 0, None))
 
     mock_property_bot = MagicMock()
     mock_property_bot._apartments_service = mock_svc
-    mock_property_bot._embeddings = mock_embeddings
 
     manager = SimpleNamespace(
         dialog_data={"location": "sunny_beach", "property_type": "studio", "budget": "low"},
@@ -238,9 +215,7 @@ async def test_get_results_data_uses_property_bot_fallback():
     )
 
     await funnel_module.get_results_data(manager)
-
-    mock_embeddings.aembed_hybrid.assert_awaited_once()
-    mock_svc.search.assert_awaited_once()
+    mock_svc.scroll_with_filters.assert_awaited_once()
 
 
 @pytest.mark.asyncio
