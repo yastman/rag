@@ -15,11 +15,11 @@ from aiogram_dialog.widgets.text import Format
 
 from .states import (
     AIAdvisorSG,
-    CreateContactSG,
-    CreateLeadSG,
+    ContactsMenuSG,
     CreateNoteSG,
     CreateTaskSG,
     CRMMenuSG,
+    LeadsMenuSG,
     SettingsSG,
 )
 
@@ -51,12 +51,12 @@ crm_submenu_dialog = Dialog(
             Start(
                 Format("{btn_leads}"),
                 id="crm_nav_leads",
-                state=CreateLeadSG.name,
+                state=LeadsMenuSG.main,
             ),
             Start(
                 Format("{btn_contacts}"),
                 id="crm_nav_contacts",
-                state=CreateContactSG.first_name,
+                state=ContactsMenuSG.main,
             ),
             Start(
                 Format("{btn_tasks}"),
