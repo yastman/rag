@@ -121,6 +121,8 @@ funnel-refine-more = ⚙️ Refine more
 # Results (#660)
 results-shown = Showing { $shown } of { $total } options
 results-show-more = 🔄 Show more
+results-found = Found { $total } apartments
+results-service-unavailable = Search service is unavailable.
 results-refine = ⚙️ Change filters
 results-book-viewing = 📅 Book a viewing
 results-no-results =
