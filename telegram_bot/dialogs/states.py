@@ -79,9 +79,17 @@ class CreateTaskSG(StatesGroup):
     """Create task wizard (#697)."""
 
     text = State()  # Step 1: текст задачи
-    due_date = State()  # Step 2: срок выполнения
-    lead_id = State()  # Step 3: ID сделки
-    summary = State()  # Step 4: подтверждение
+    task_type = State()  # Step 2: тип задачи (звонок/встреча/другое)
+    lead_id = State()  # Step 3: привязка к сделке
+    due_date = State()  # Step 4: срок выполнения
+    summary = State()  # Step 5: подтверждение
+
+
+class MyTasksSG(StatesGroup):
+    """My Tasks view (#697)."""
+
+    filter = State()  # Step 1: выбор фильтра (все/сегодня/просроченные)
+    list = State()  # Step 2: список задач с пагинацией
 
 
 class CreateNoteSG(StatesGroup):
