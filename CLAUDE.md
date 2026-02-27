@@ -13,6 +13,10 @@ make run-bot               # Bot natively (no Docker)
 make docker-full-up        # All services (23 containers)
 make ingest-unified        # Unified ingestion (CocoIndex)
 python -m src.ingestion.apartments.runner --incremental  # Apartments (297 rows, change tracking)
+tldr structure . --lang python   # Code overview (95% token savings)
+tldr search "pattern" src/       # Structured code search
+tldr context entry_point --project .  # LLM-ready context for function
+tldr daemon start                # Background daemon (155x faster)
 ```
 
 ## Project Overview
@@ -59,23 +63,22 @@ Bug:    /systematic-debugging → TDD → fix
 
 ## Subagent Models
 
-**Default to cheapest model that fits the task.** Opus дорогой — используй только когда реально нужен.
+**Два уровня: Sonnet (default) и Opus (только сложная логика).** Haiku не используем — экономия не окупается.
 
-| Model | When | Examples |
-|-------|------|----------|
-| `haiku` | Поиск, чтение, grep, простые вопросы | Explore codebase, find files, read docs |
-| `sonnet` | Код-ревью, планирование, средний код | Plan agent, code-reviewer, write tests |
-| `opus` | Только сложная архитектура, критический код | Не указывай model — наследует родителя |
+| Model | Когда | Агенты |
+|-------|-------|--------|
+| `sonnet` | Исследование, ревью, тесты, планы, лёгкий код | scout, oracle, arbiter, atlas, spark, critic, judge, scribe, pathfinder, plan-reviewer, validate-agent, herald, onboard |
+| `opus` | Архитектура, TDD-реализация, дебаг, security, оркестрация | architect, phoenix, kraken, sleuth, profiler, maestro, aegis |
 
 ```python
-# Explore — всегда haiku
-Task(subagent_type="Explore", model="haiku", ...)
+# Исследование — sonnet
+Task(subagent_type="scout", model="sonnet", ...)
 
-# Plan/review — sonnet
-Task(subagent_type="Plan", model="sonnet", ...)
+# Ревью/тесты — sonnet
+Task(subagent_type="arbiter", model="sonnet", ...)
 
-# general-purpose код — sonnet по умолчанию
-Task(subagent_type="general-purpose", model="sonnet", ...)
+# Реализация TDD — opus (наследует родителя)
+Task(subagent_type="kraken", ...)
 ```
 
 ## Troubleshooting
