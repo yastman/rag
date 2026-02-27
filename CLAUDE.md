@@ -17,6 +17,7 @@ tldr structure . --lang python   # Code overview (95% token savings)
 tldr search "pattern" src/       # Structured code search
 tldr context entry_point --project .  # LLM-ready context for function
 tldr daemon start                # Background daemon (155x faster)
+tldr semantic search "query" --k 5   # Semantic search via daemon (~200ms, 6930 units)
 ```
 
 ## Project Overview
@@ -50,36 +51,144 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 
 **TODO.md** (active) | **.planning/STATE.md** (pause/resume between sessions)
 
-## Skills Workflow
+## Continuous Claude (v3)
+
+114 skills, 48 agents, 64 hooks. Хуки автоактивируют скиллы по естественному языку.
+
+### Workflow Dispatch
 
 ```
-Small:  inline → /test-driven-development → /verification-before-completion → commit
-Medium: branch → TDD → /requesting-code-review → merge to main
-Large:  plan → /tmux-swarm-orchestration (Sonnet workers) → merge + verify
-Bug:    /systematic-debugging → TDD → fix
+Что делать?
+├── Не знаю → /workflow (роутер спросит цель)
+├── Понять код → /explore quick|deep|architecture
+├── Спланировать → /premortem → plan-agent
+├── Построить → /build greenfield|brownfield
+├── Починить → /fix bug|hook|deps|pr-comments
+├── Тесты → /tdd
+├── Рефакторинг → /refactor
+├── Ревью → /review
+└── Релиз → /release
 ```
 
-**Details:** `.claude/rules/skills.md`
+Размер: Small → inline/tdd | Medium → branch + /build + /review | Large → /tmux-swarm-orchestration
 
-## Subagent Models
+### Skill Options
 
-**Два уровня: Sonnet (default) и Opus (только сложная логика).** Haiku не используем — экономия не окупается.
+**`/build <mode> [options]`** — greenfield | brownfield | tdd | refactor
 
-| Model | Когда | Агенты |
-|-------|-------|--------|
-| `sonnet` | Исследование, ревью, тесты, планы, лёгкий код | scout, oracle, arbiter, atlas, spark, critic, judge, scribe, pathfinder, plan-reviewer, validate-agent, herald, onboard |
-| `opus` | Архитектура, TDD-реализация, дебаг, security, оркестрация | architect, phoenix, kraken, sleuth, profiler, maestro, aegis |
+| Option | Effect |
+|--------|--------|
+| `--skip-discovery` | Пропустить интервью (есть чёткий spec) |
+| `--skip-validate` | Пропустить валидацию плана |
+| `--skip-commit` | Не коммитить автоматически |
+| `--parallel` | Параллельные research агенты |
 
-```python
-# Исследование — sonnet
-Task(subagent_type="scout", model="sonnet", ...)
+**`/fix <scope> [options]`** — bug | hook | deps | pr-comments
 
-# Ревью/тесты — sonnet
-Task(subagent_type="arbiter", model="sonnet", ...)
+| Option | Effect |
+|--------|--------|
+| `--dry-run` | Только диагностика, не фиксить |
+| `--no-test` | Пропустить регрессионные тесты |
+| `--no-commit` | Не коммитить автоматически |
 
-# Реализация TDD — opus (наследует родителя)
-Task(subagent_type="kraken", ...)
+**`/explore <depth> [options]`** — quick (~1 мин) | deep (~5 мин) | architecture (~3 мин)
+
+| Option | Effect |
+|--------|--------|
+| `--focus "area"` | Фокус на области (e.g. `--focus "auth"`) |
+| `--output handoff` | Создать handoff для реализации |
+| `--entry "func"` | Начать от entry point |
+
+### Key Skills
+
+| Skill | Когда |
+|-------|-------|
+| `/premortem` | Перед реализацией — TIGERS (угрозы) + ELEPHANTS (скрытые риски) |
+| `/discovery-interview` | Размытые требования → детальный spec |
+| `qlty-check` | 70+ linters, auto-fix |
+| `braintrust-analyze` | Анализ сессий, replay |
+| `ast-grep-find` | Структурный поиск по AST (не текстовый) |
+
+### Agents
+
+| Agent | Когда | Model |
+|-------|-------|-------|
+| **kraken** | Имплементация кода | opus |
+| **spark** | Мелкие фиксы, твики | sonnet |
+| **sleuth** | Диагностика багов | opus |
+| **scout** | Исследование кодбейза | sonnet |
+| **arbiter** | Тесты и верификация | sonnet |
+| **phoenix** | Анализ рефакторинга | opus |
+| **oracle** | Внешнее исследование | sonnet |
+| **plan-agent** | Планирование фич | sonnet |
+
+**Правило:** sonnet по умолчанию. Opus только для kraken, sleuth, phoenix, architect, profiler, maestro, aegis. Haiku не используем.
+
+### Memory
+
+**Формат:** `python -m` (не `python scripts/...`).
+
+```bash
+# Recall — перед реализацией, проверь прошлый опыт
+cd /home/user/projects/Continuous-Claude-v3/opc && uv run python -m scripts.core.recall_learnings --query "тема" --k 5 --text-only
+
+# Store — после решения проблемы, сохрани опыт
+cd /home/user/projects/Continuous-Claude-v3/opc && uv run python -m scripts.core.store_learning \
+  --session-id "id" --type WORKING_SOLUTION --content "что узнал" \
+  --context "контекст" --tags "tag1,tag2" --confidence high
 ```
+
+Типы: `WORKING_SOLUTION` | `ARCHITECTURAL_DECISION` | `CODEBASE_PATTERN` | `FAILED_APPROACH` | `ERROR_FIX`
+
+### Continuity
+
+**Внутри сессии:** `thoughts/ledgers/CONTINUITY_<topic>.md` — автотрекинг через хуки
+**Между сессиями:** `thoughts/shared/handoffs/*.yaml` — YAML handoffs
+
+- **Перед завершением:** `/create_handoff`
+- **При возобновлении:** `/resume_handoff`
+- **При 90%+ контекста:** `create_handoff` → `/clear`
+
+### TLDR Code Analysis
+
+```bash
+# Индексация (первый раз или после больших изменений)
+tldr warm .                             # Все слои + semantic embeddings
+tldr daemon start                       # Фоновый демон (100ms запросы)
+
+# Структура — вместо чтения файлов
+tldr structure . --lang python          # Обзор проекта (95% экономия токенов)
+tldr tree src/ --ext .py                # Дерево файлов
+tldr extract src/file.py                # Полный анализ одного файла
+
+# Поиск — вместо grep
+tldr search "pattern" src/              # Структурированный поиск
+tldr semantic search "что делает" --k 5 # Семантический через daemon (~200ms)
+
+# Контекст для LLM
+tldr context func_name --project . --depth 2  # LLM-ready summary (95% savings)
+
+# Анализ функций
+tldr cfg src/file.py func_name          # Control flow graph
+tldr dfg src/file.py func_name          # Data flow graph
+tldr slice src/file.py func 42          # Что влияет на строку 42
+
+# Рефакторинг
+tldr impact func_name src/ --depth 3    # Кто вызывает эту функцию
+tldr calls src/                         # Полный call graph
+tldr dead src/                          # Мёртвый код
+tldr arch src/                          # Слои архитектуры
+
+# Импорты
+tldr imports src/file.py                # Что импортирует файл
+tldr importers module_name src/         # Кто импортирует модуль
+
+# CI
+tldr diagnostics .                      # Type check + lint (pyright/ruff)
+tldr change-impact --git                # Какие тесты затронуты изменениями
+```
+
+**Правило:** `tldr structure` перед чтением файлов. `tldr search` вместо grep. `tldr impact` перед рефакторингом. `tldr warm .` для переиндексации.
 
 ## Troubleshooting
 
