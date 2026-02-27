@@ -90,7 +90,7 @@ client_menu_dialog = Dialog(
             Start(
                 Format("{btn_search}"),
                 id="funnel",
-                state=FunnelSG.location,
+                state=FunnelSG.complex,
             ),
             Button(
                 Format("{btn_catalog}"),
