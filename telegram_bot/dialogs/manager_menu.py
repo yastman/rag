@@ -10,7 +10,7 @@ from aiogram_dialog import Dialog, DialogManager, LaunchMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Start
 from aiogram_dialog.widgets.text import Format
 
-from .states import CrmSubmenuSG, ManagerMenuSG, SettingsSG
+from .states import CRMMenuSG, ManagerMenuSG, SettingsSG
 
 
 logger = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ manager_menu_dialog = Dialog(
             Start(
                 Format("{btn_crm}"),
                 id="mgr_crm",
-                state=CrmSubmenuSG.main,
+                state=CRMMenuSG.main,
             ),
             Button(
                 Format("{btn_search}"),
