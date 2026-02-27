@@ -20,6 +20,7 @@ from .states import (
     CreateNoteSG,
     CreateTaskSG,
     CRMMenuSG,
+    MyTasksSG,
     SettingsSG,
 )
 
@@ -36,7 +37,8 @@ async def get_crm_menu_data(
         "title": "CRM — Панель менеджера",
         "btn_leads": "📋 Сделки",
         "btn_contacts": "👤 Контакты",
-        "btn_tasks": "✅ Задачи",
+        "btn_tasks": "✅ Создать задачу",
+        "btn_my_tasks": "📋 Мои задачи",
         "btn_note": "📝 Заметка",
         "btn_ai_advisor": "🤖 AI-Советник",
         "btn_settings": "⚙️ Настройки",
@@ -64,9 +66,14 @@ crm_submenu_dialog = Dialog(
                 state=CreateTaskSG.text,
             ),
             Start(
+                Format("{btn_my_tasks}"),
+                id="crm_nav_my_tasks",
+                state=MyTasksSG.filter,
+            ),
+            Start(
                 Format("{btn_note}"),
                 id="crm_nav_note",
-                state=CreateNoteSG.entity_type,
+                state=CreateNoteSG.text,
             ),
             Start(
                 Format("{btn_ai_advisor}"),
