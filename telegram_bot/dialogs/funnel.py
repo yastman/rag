@@ -231,6 +231,11 @@ async def get_results_data(
         if i18n
         else "К сожалению, по вашим критериям ничего не найдено."
     )
+    results_title = i18n.get("funnel-results-title") if i18n else "Результаты"
+    btn_more = i18n.get("results-show-more") if i18n else "🔄 Показать ещё"
+    service_unavailable_text = (
+        i18n.get("results-service-unavailable") if i18n else "Сервис поиска недоступен."
+    )
     btn_back = i18n.get("back") if i18n else "Назад"
 
     # Resolve apartments_service with property_bot fallback
@@ -281,14 +286,22 @@ async def get_results_data(
             logger.exception("Failed to fetch funnel results from Qdrant")
             results_text = no_results_text
     else:
-        results_text = "Сервис поиска недоступен."
+        results_text = service_unavailable_text
 
-    title = f"Найдено {total_count} апартаментов" if total_count else "Результаты"
+    if total_count:
+        title = (
+            i18n.get("results-found", total=total_count)
+            if i18n
+            else f"Найдено {total_count} апартаментов"
+        )
+    else:
+        title = results_title
 
     return {
         "title": title,
         "results_text": results_text,
         "has_more": has_more,
+        "btn_more": btn_more,
         "btn_back": btn_back,
     }
 
@@ -537,7 +550,7 @@ funnel_dialog = Dialog(
     Window(
         Format("{title}\n\n{results_text}"),
         Button(
-            Format("🔄 Показать ещё"),
+            Format("{btn_more}"),
             id="more",
             on_click=on_results_more,
             when="has_more",
