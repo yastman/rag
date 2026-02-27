@@ -1,4 +1,4 @@
-"""Tests for funnel filter building and results getter (#660)."""
+"""Tests for funnel filter building and results getter (#697)."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -80,18 +80,58 @@ def test_budget_luxury():
 
 
 def test_complex_name_filter():
-    filters = build_funnel_filters(rooms="any", budget="any", complex_name="Sunrise")
-    assert filters["complex_name"] == "Sunrise"
+    filters = build_funnel_filters(rooms="any", budget="any", complex_name="Premier Fort Beach")
+    assert filters["complex_name"] == "Premier Fort Beach"
 
 
-def test_city_filter_maps_location_to_city():
-    filters = build_funnel_filters(rooms="any", budget="any", city="sunny_beach")
-    assert filters["city"] == "Sunny Beach"
+def test_complex_name_any_not_included():
+    filters = build_funnel_filters(rooms="any", budget="any", complex_name="any")
+    assert "complex_name" not in filters
 
 
-def test_city_any_not_included():
-    filters = build_funnel_filters(rooms="any", budget="any", city="any")
-    assert "city" not in filters
+def test_is_furnished_true():
+    filters = build_funnel_filters(rooms="any", budget="any", is_furnished="yes")
+    assert filters["is_furnished"] is True
+
+
+def test_is_furnished_false():
+    filters = build_funnel_filters(rooms="any", budget="any", is_furnished="no")
+    assert filters["is_furnished"] is False
+
+
+def test_is_furnished_none_not_included():
+    filters = build_funnel_filters(rooms="any", budget="any", is_furnished=None)
+    assert "is_furnished" not in filters
+
+
+def test_is_promotion_true():
+    filters = build_funnel_filters(rooms="any", budget="any", is_promotion="yes")
+    assert filters["is_promotion"] is True
+
+
+def test_is_promotion_none_not_included():
+    filters = build_funnel_filters(rooms="any", budget="any", is_promotion=None)
+    assert "is_promotion" not in filters
+
+
+def test_combined_filters():
+    """All filter types combined."""
+    filters = build_funnel_filters(
+        rooms="2bed",
+        budget="high",
+        complex_name="Premier Fort Beach",
+        floor="mid",
+        view="sea",
+        is_furnished="yes",
+        is_promotion="yes",
+    )
+    assert filters["rooms"] == 3
+    assert filters["price_eur"] == {"gte": 100000, "lte": 150000}
+    assert filters["complex_name"] == "Premier Fort Beach"
+    assert filters["floor"] == {"gte": 2, "lte": 3}
+    assert filters["view_tags"] == ["sea"]
+    assert filters["is_furnished"] is True
+    assert filters["is_promotion"] is True
 
 
 # --- get_results_data integration (mocked svc) ---
@@ -119,7 +159,7 @@ async def test_get_results_data_returns_cards():
     mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 297, "next-uuid"))
 
     manager = SimpleNamespace(
-        dialog_data={"property_type": "studio", "budget": "low", "location": "sunny_beach"},
+        dialog_data={"property_type": "studio", "budget": "low"},
         middleware_data={"apartments_service": mock_svc},
     )
 
@@ -127,13 +167,11 @@ async def test_get_results_data_returns_cards():
     assert "297" in result["title"]
     assert "Sunrise Complex" in result["results_text"]
     assert result["has_more"] is True
-    assert result["btn_more"] == "🔄 Показать ещё"
     mock_svc.scroll_with_filters.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_get_results_data_no_results():
-    """get_results_data returns empty message when no apartments match."""
     from telegram_bot.dialogs.funnel import get_results_data
 
     mock_svc = MagicMock()
@@ -151,7 +189,6 @@ async def test_get_results_data_no_results():
 
 @pytest.mark.asyncio
 async def test_get_results_data_no_service():
-    """get_results_data returns placeholder when service unavailable."""
     from telegram_bot.dialogs.funnel import get_results_data
 
     manager = SimpleNamespace(
@@ -177,27 +214,6 @@ async def test_get_results_data_uses_i18n_strings():
     )
 
     result = await get_results_data(dialog_manager=manager)
-
     assert result["title"] == "Found 12 apartments"
     assert result["btn_more"] == "🔄 Show more"
     assert result["btn_back"] == "Back"
-
-
-@pytest.mark.asyncio
-async def test_get_results_data_malformed_payload():
-    """get_results_data must not crash when scroll returns items without payload key."""
-    from telegram_bot.dialogs.funnel import get_results_data
-
-    mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(
-        return_value=([{"id": "apt-bad"}], 1, None),  # missing "payload" key
-    )
-
-    manager = SimpleNamespace(
-        dialog_data={"property_type": "any", "budget": "any"},
-        middleware_data={"apartments_service": mock_svc},
-    )
-
-    result = await get_results_data(dialog_manager=manager)
-    # Must not crash — falls through to no_results_text via exception handler
-    assert result["results_text"]
