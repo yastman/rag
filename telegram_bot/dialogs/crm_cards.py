@@ -137,6 +137,14 @@ def format_task_card(task: Task) -> tuple[str, InlineKeyboardMarkup]:
                     callback_data=f"{_TASK_PREFIX}:complete:{task.id}",
                 ),
                 InlineKeyboardButton(
+                    text="⏰ Отложить",
+                    callback_data=f"{_TASK_PREFIX}:postpone:{task.id}",
+                ),
+            ]
+        )
+        buttons.append(
+            [
+                InlineKeyboardButton(
                     text="✏️ Изменить",
                     callback_data=f"{_TASK_PREFIX}:edit:{task.id}",
                 ),
