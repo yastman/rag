@@ -38,6 +38,9 @@ def _build_apartment_filter(filters: dict | None) -> models.Filter | None:
                     match=models.MatchAny(any=value),
                 )
             )
+        elif isinstance(value, bool):
+            # Explicit bool check BEFORE dict/int — isinstance(True, int) is True in Python
+            conditions.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
         elif isinstance(value, dict):
             range_params = {op: value[op] for op in ("lt", "lte", "gt", "gte") if op in value}
             if range_params:
