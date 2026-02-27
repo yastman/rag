@@ -9,7 +9,7 @@ from typing import Any
 
 from aiogram.types import CallbackQuery
 from aiogram_dialog import Dialog, DialogManager, Window
-from aiogram_dialog.widgets.kbd import Back, Cancel, Column, Select
+from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select
 from aiogram_dialog.widgets.text import Format
 
 from .states import FunnelSG
@@ -213,11 +213,14 @@ async def get_view_options(**kwargs: Any) -> dict[str, Any]:
     return {"title": "Какой вид предпочитаете?", "items": items, "btn_back": btn_back}
 
 
+_SCROLL_PAGE_SIZE = 5
+
+
 async def get_results_data(
     dialog_manager: DialogManager,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Getter for results window — fetches real apartments via hybrid search (#628)."""
+    """Getter for results window — SDK scroll with pagination (no embeddings needed)."""
     from telegram_bot.keyboards.property_card import format_property_card
 
     i18n = dialog_manager.middleware_data.get("i18n")
@@ -228,35 +231,31 @@ async def get_results_data(
         if i18n
         else "К сожалению, по вашим критериям ничего не найдено."
     )
-    results_title = i18n.get("funnel-results-title") if i18n else "Подобрали для вас:"
     btn_back = i18n.get("back") if i18n else "Назад"
 
-    # Resolve apartments_service and hybrid_embeddings with property_bot fallback
+    # Resolve apartments_service with property_bot fallback
     svc = dialog_manager.middleware_data.get("apartments_service")
-    embeddings = dialog_manager.middleware_data.get("hybrid_embeddings")
-    if svc is None or embeddings is None:
+    if svc is None:
         property_bot = dialog_manager.middleware_data.get("property_bot")
         if property_bot is not None:
-            if svc is None:
-                svc = getattr(property_bot, "_apartments_service", None)
-            if embeddings is None:
-                embeddings = getattr(property_bot, "_embeddings", None)
+            svc = getattr(property_bot, "_apartments_service", None)
 
     results_text: str
-    if svc is not None and embeddings is not None:
+    has_more = False
+    total_count = 0
+    if svc is not None:
         try:
-            location = data.get("location", "")
-            city = _LOCATION_TO_CITY.get(location, location)
-            query_text = _build_query_text(data)
-
-            dense, sparse = await embeddings.aembed_hybrid(query_text)
             filters = _build_funnel_filters(data)
-            results = await svc.search(
-                dense_vector=dense,
-                sparse_vector=sparse,
+            scroll_offset = data.get("scroll_offset")
+
+            results, total_count, next_offset = await svc.scroll_with_filters(
                 filters=filters,
-                top_k=5,
+                limit=_SCROLL_PAGE_SIZE,
+                offset=scroll_offset,
             )
+            data["scroll_next_offset"] = str(next_offset) if next_offset else None
+            has_more = next_offset is not None
+
             if results:
                 cards = []
                 for apt in results:
@@ -267,7 +266,7 @@ async def get_results_data(
                         format_property_card(
                             property_id=apt["id"],
                             complex_name=p.get("complex_name", ""),
-                            location=p.get("city") or (city if city != "any" else "Болгария"),
+                            location=p.get("city", "Болгария"),
                             property_type=rooms_display,
                             floor=p.get("floor", 0),
                             area_m2=p.get("area_m2", 0),
@@ -282,11 +281,14 @@ async def get_results_data(
             logger.exception("Failed to fetch funnel results from Qdrant")
             results_text = no_results_text
     else:
-        results_text = "Не нашли подходящих вариантов."
+        results_text = "Сервис поиска недоступен."
+
+    title = f"Найдено {total_count} апартаментов" if total_count else "Результаты"
 
     return {
-        "title": results_title,
+        "title": title,
         "results_text": results_text,
+        "has_more": has_more,
         "btn_back": btn_back,
     }
 
@@ -336,6 +338,9 @@ async def on_refine_or_show_selected(
     """Branch: show results immediately or go to optional refinement steps."""
     manager.dialog_data["refine_or_show"] = item_id
     if item_id == "show":
+        manager.dialog_data.pop("scroll_offset", None)
+        manager.dialog_data.pop("scroll_next_offset", None)
+        manager.dialog_data["scroll_page"] = 1
         try:
             from telegram_bot.bot import make_session_id
 
@@ -375,6 +380,21 @@ async def on_floor_selected(
     await manager.switch_to(FunnelSG.view)
 
 
+async def on_results_more(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """Load next page of scroll results."""
+    data = manager.dialog_data
+    next_offset = data.get("scroll_next_offset")
+    if not next_offset:
+        await callback.answer("Все результаты показаны")
+        return
+    data["scroll_offset"] = next_offset
+    data["scroll_page"] = data.get("scroll_page", 1) + 1
+
+
 async def on_view_selected(
     callback: CallbackQuery,
     widget: Select,
@@ -383,6 +403,9 @@ async def on_view_selected(
 ) -> None:
     """Save view preference, persist lead score and show results."""
     manager.dialog_data["view"] = item_id
+    manager.dialog_data.pop("scroll_offset", None)
+    manager.dialog_data.pop("scroll_next_offset", None)
+    manager.dialog_data["scroll_page"] = 1
 
     try:
         from telegram_bot.bot import make_session_id
@@ -510,9 +533,15 @@ funnel_dialog = Dialog(
         getter=get_view_options,
         state=FunnelSG.view,
     ),
-    # Step 5: Results
+    # Step 5: Results (SDK scroll with pagination)
     Window(
         Format("{title}\n\n{results_text}"),
+        Button(
+            Format("🔄 Показать ещё"),
+            id="more",
+            on_click=on_results_more,
+            when="has_more",
+        ),
         Cancel(Format("{btn_back}")),
         getter=get_results_data,
         state=FunnelSG.results,
