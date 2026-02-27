@@ -20,6 +20,7 @@ class SettingsSG(StatesGroup):
 
     main = State()
     language = State()
+    crm = State()  # CRM settings section (#697 Task 10)
 
 
 class FunnelSG(StatesGroup):
@@ -144,3 +145,10 @@ class AIAdvisorSG(StatesGroup):
     """AI advisor dialog (#697)."""
 
     main = State()
+
+
+class CrmQuickActionSG(StatesGroup):
+    """Quick CRM actions triggered from card inline buttons (#697 Task 8)."""
+
+    waiting_note = State()  # waiting for note text (lead or contact)
+    waiting_task = State()  # waiting for task text (lead)
