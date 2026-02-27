@@ -8,6 +8,19 @@ import pytest
 from telegram_bot.dialogs.funnel import build_funnel_filters
 
 
+class _FakeI18n:
+    def get(self, key: str, **kwargs):
+        messages = {
+            "funnel-results-title": "We found for you:",
+            "results-show-more": "🔄 Show more",
+            "results-service-unavailable": "Search service unavailable.",
+            "results-no-results": "No matches.",
+            "results-found": f"Found {kwargs.get('total', 0)} apartments",
+            "back": "Back",
+        }
+        return messages[key]
+
+
 # --- build_funnel_filters ---
 
 
@@ -114,6 +127,7 @@ async def test_get_results_data_returns_cards():
     assert "297" in result["title"]
     assert "Sunrise Complex" in result["results_text"]
     assert result["has_more"] is True
+    assert result["btn_more"] == "🔄 Показать ещё"
     mock_svc.scroll_with_filters.assert_awaited_once()
 
 
@@ -148,6 +162,25 @@ async def test_get_results_data_no_service():
     result = await get_results_data(dialog_manager=manager)
     assert "недоступен" in result["results_text"].lower()
     assert result["btn_back"] == "Назад"
+
+
+@pytest.mark.asyncio
+async def test_get_results_data_uses_i18n_strings():
+    from telegram_bot.dialogs.funnel import get_results_data
+
+    mock_svc = MagicMock()
+    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 12, "next"))
+
+    manager = SimpleNamespace(
+        dialog_data={"property_type": "any", "budget": "any"},
+        middleware_data={"apartments_service": mock_svc, "i18n": _FakeI18n()},
+    )
+
+    result = await get_results_data(dialog_manager=manager)
+
+    assert result["title"] == "Found 12 apartments"
+    assert result["btn_more"] == "🔄 Show more"
+    assert result["btn_back"] == "Back"
 
 
 @pytest.mark.asyncio
