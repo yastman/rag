@@ -159,3 +159,76 @@ def test_build_phone_keyboard_has_contact_button():
     kb = build_phone_keyboard()
     # ReplyKeyboardMarkup with request_contact button
     assert kb.keyboard[0][0].request_contact is True
+
+
+# --- CRM integration ---
+
+
+@pytest.mark.asyncio
+async def test_on_confirm_creates_crm_entities():
+    from telegram_bot.dialogs.viewing import on_confirm
+
+    kommo = AsyncMock()
+    kommo.upsert_contact.return_value = SimpleNamespace(id=100)
+    kommo.create_lead.return_value = SimpleNamespace(id=200)
+
+    bot_config = SimpleNamespace(
+        kommo_default_pipeline_id=0,
+        kommo_new_status_id=0,
+        kommo_responsible_user_id=None,
+        kommo_service_field_id=0,
+        kommo_source_field_id=0,
+        kommo_telegram_field_id=0,
+        kommo_telegram_username_field_id=0,
+    )
+
+    callback = MagicMock()
+    callback.from_user = SimpleNamespace(
+        id=12345, first_name="Test", last_name=None, username="testuser"
+    )
+    callback.message = AsyncMock()
+    callback.answer = AsyncMock()
+
+    manager = MagicMock()
+    manager.dialog_data = {
+        "selected_objects": [],
+        "date_range": "nearest",
+        "phone": "+380990091392",
+    }
+    manager.middleware_data = {
+        "kommo_client": kommo,
+        "bot_config": bot_config,
+    }
+    manager.done = AsyncMock()
+
+    await on_confirm(callback, MagicMock(), manager)
+
+    kommo.upsert_contact.assert_awaited_once()
+    kommo.create_lead.assert_awaited_once()
+    kommo.link_contact_to_lead.assert_awaited_once_with(200, 100)
+    kommo.add_note.assert_awaited_once()
+    kommo.create_task.assert_awaited_once()
+    manager.done.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_on_confirm_graceful_when_no_kommo():
+    from telegram_bot.dialogs.viewing import on_confirm
+
+    callback = MagicMock()
+    callback.from_user = SimpleNamespace(id=12345, first_name="Test", last_name=None, username=None)
+    callback.message = AsyncMock()
+    callback.answer = AsyncMock()
+
+    manager = MagicMock()
+    manager.dialog_data = {
+        "date_range": "unknown",
+        "phone": "+380990091392",
+    }
+    manager.middleware_data = {"kommo_client": None, "bot_config": None}
+    manager.done = AsyncMock()
+
+    # Should not raise
+    await on_confirm(callback, MagicMock(), manager)
+    callback.message.answer.assert_awaited_once()
+    manager.done.assert_awaited_once()
