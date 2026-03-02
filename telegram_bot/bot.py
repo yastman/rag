@@ -1040,7 +1040,7 @@ class PropertyBot:
 
             from .dialogs.states import FunnelSG
 
-            await dialog_manager.start(FunnelSG.complex, mode=StartMode.RESET_STACK)
+            await dialog_manager.start(FunnelSG.city, mode=StartMode.RESET_STACK)
         else:
             # Fallback when dialog_manager not available (e.g., tests)
             await self.handle_menu_action_text(message, "Подбери апартаменты")
