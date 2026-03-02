@@ -65,6 +65,7 @@ def _make_callback(data: str, user_id: int = 12345) -> MagicMock:
     cb.message = MagicMock()
     cb.message.answer = AsyncMock()
     cb.message.answer_photo = AsyncMock()
+    cb.message.answer_media_group = AsyncMock()
     cb.message.delete = AsyncMock()
     return cb
 
@@ -131,13 +132,14 @@ class TestMultiPagePagination:
     async def test_page2_of_12_shows_5_cards_and_has_more(self) -> None:
         """12 results, offset=0 -> page2: 5 cards + footer, has_more=True."""
         bot = _create_bot()
+        bot._send_property_card = AsyncMock()
         results = _make_results(12)
         state = _make_state({"apartment_results": results, "apartment_offset": 0})
         cb = _make_callback("results:more")
 
         await bot.handle_results_callback(cb, state)
 
-        assert cb.message.answer_photo.await_count == 5
+        assert bot._send_property_card.await_count == 5
         assert cb.message.answer.await_count == 1
         state.update_data.assert_awaited_once_with(apartment_offset=_PAGE_SIZE)
         footer_call = cb.message.answer.call_args
@@ -146,13 +148,14 @@ class TestMultiPagePagination:
     async def test_page3_of_12_shows_2_cards_no_more(self) -> None:
         """12 results, offset=5 -> page3: 2 cards + footer, has_more=False."""
         bot = _create_bot()
+        bot._send_property_card = AsyncMock()
         results = _make_results(12)
         state = _make_state({"apartment_results": results, "apartment_offset": 5})
         cb = _make_callback("results:more")
 
         await bot.handle_results_callback(cb, state)
 
-        assert cb.message.answer_photo.await_count == 2
+        assert bot._send_property_card.await_count == 2
         assert cb.message.answer.await_count == 1
         state.update_data.assert_awaited_once_with(apartment_offset=10)
         footer_call = cb.message.answer.call_args
@@ -161,6 +164,7 @@ class TestMultiPagePagination:
     async def test_page4_of_12_exhausted(self) -> None:
         """12 results, offset=10 -> new_offset=15 >= 12 -> 'all shown'."""
         bot = _create_bot()
+        bot._send_property_card = AsyncMock()
         results = _make_results(12)
         state = _make_state({"apartment_results": results, "apartment_offset": 10})
         cb = _make_callback("results:more")
@@ -171,18 +175,19 @@ class TestMultiPagePagination:
             "\u0412\u0441\u0435 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u044b \u0443\u0436\u0435 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b"
         )
         cb.message.answer.assert_not_called()
-        cb.message.answer_photo.assert_not_called()
+        bot._send_property_card.assert_not_awaited()
 
     async def test_exact_boundary_10_results(self) -> None:
         """10 results, offset=0 -> page2: 5 cards, has_more=False."""
         bot = _create_bot()
+        bot._send_property_card = AsyncMock()
         results = _make_results(10)
         state = _make_state({"apartment_results": results, "apartment_offset": 0})
         cb = _make_callback("results:more")
 
         await bot.handle_results_callback(cb, state)
 
-        assert cb.message.answer_photo.await_count == 5
+        assert bot._send_property_card.await_count == 5
         assert cb.message.answer.await_count == 1
         footer_call = cb.message.answer.call_args
         assert "показаны 6–10" in footer_call.args[0]
@@ -429,13 +434,14 @@ class TestFooterContract:
         exp_has_more: bool,
     ) -> None:
         bot = _create_bot()
+        bot._send_property_card = AsyncMock()
         results = _make_results(total)
         state = _make_state({"apartment_results": results, "apartment_offset": offset})
         cb = _make_callback("results:more")
 
         await bot.handle_results_callback(cb, state)
 
-        assert cb.message.answer_photo.await_count == exp_cards
+        assert bot._send_property_card.await_count == exp_cards
         assert cb.message.answer.await_count == 1
         footer_call = cb.message.answer.call_args
         assert exp_range in footer_call.args[0]
@@ -449,21 +455,20 @@ class TestFooterContract:
     async def test_no_duplicate_cards_edge_page(self) -> None:
         """Each card sent exactly once on partial last page."""
         bot = _create_bot()
+        bot._send_property_card = AsyncMock()
         results = _make_results(7)
         state = _make_state({"apartment_results": results, "apartment_offset": 0})
         cb = _make_callback("results:more")
 
         await bot.handle_results_callback(cb, state)
 
-        card_calls = cb.message.answer_photo.call_args_list
-        card_texts = [c.kwargs["caption"] for c in card_calls]
-        assert len(card_texts) == 2
-        assert "Complex 5" in card_texts[0]
-        assert "Complex 6" in card_texts[1]
+        sent_ids = [call.args[1]["id"] for call in bot._send_property_card.await_args_list]
+        assert sent_ids == ["prop-5", "prop-6"]
 
     async def test_single_result_no_more_page(self) -> None:
         """1 total result, offset=0 -> 'all shown' (page 1 was initial display)."""
         bot = _create_bot()
+        bot._send_property_card = AsyncMock()
         results = _make_results(1)
         state = _make_state({"apartment_results": results, "apartment_offset": 0})
         cb = _make_callback("results:more")
@@ -475,4 +480,4 @@ class TestFooterContract:
             "\u0443\u0436\u0435 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b"
         )
         cb.message.answer.assert_not_called()
-        cb.message.answer_photo.assert_not_called()
+        bot._send_property_card.assert_not_awaited()
