@@ -1395,6 +1395,9 @@ class PropertyBot:
                 await callback.answer("Нет сохранённых результатов")
                 return
             apartment_total = state_data.get("apartment_total", len(results))
+            apartment_total_value = (
+                apartment_total if isinstance(apartment_total, int) else len(results)
+            )
             apartment_next_offset = state_data.get("apartment_next_offset")
             apartment_filters = state_data.get("apartment_filters")
             new_offset = offset + _APARTMENT_PAGE_SIZE
@@ -1405,9 +1408,18 @@ class PropertyBot:
                 can_fetch_more = (
                     apartment_filters is not None
                     and apartments_service is not None
-                    and len(results) < apartment_total
+                    and len(results) < apartment_total_value
                 )
                 if can_fetch_more:
+                    ***REMOVED*** may return None offset while more rows still exist in count().
+                    # In that case, fetch a wider prefix from start and replace cached list.
+                    backfill_from_start = apartment_next_offset is None
+                    scroll_limit = (
+                        new_offset + _APARTMENT_PAGE_SIZE
+                        if backfill_from_start
+                        else _APARTMENT_PAGE_SIZE
+                    )
+                    scroll_offset = None if backfill_from_start else apartment_next_offset
                     try:
                         (
                             extra_results,
@@ -1415,15 +1427,56 @@ class PropertyBot:
                             next_offset,
                         ) = await apartments_service.scroll_with_filters(
                             filters=apartment_filters,
-                            limit=_APARTMENT_PAGE_SIZE,
-                            offset=apartment_next_offset,
+                            limit=scroll_limit,
+                            offset=scroll_offset,
                         )
                     except Exception:
                         logger.exception("Failed to fetch next results page")
                     else:
                         if extra_results:
-                            results = [*results, *extra_results]
+                            if backfill_from_start:
+                                if len(extra_results) >= len(results):
+                                    results = list(extra_results)
+                                else:
+                                    seen_ids = {
+                                        str(item.get("id"))
+                                        for item in results
+                                        if isinstance(item, dict) and item.get("id") is not None
+                                    }
+                                    merged = [*results]
+                                    for item in extra_results:
+                                        if not isinstance(item, dict):
+                                            continue
+                                        item_id = item.get("id")
+                                        item_key = str(item_id) if item_id is not None else ""
+                                        if item_key and item_key in seen_ids:
+                                            continue
+                                        if item_key:
+                                            seen_ids.add(item_key)
+                                        merged.append(item)
+                                    results = merged
+                            else:
+                                seen_ids = {
+                                    str(item.get("id"))
+                                    for item in results
+                                    if isinstance(item, dict) and item.get("id") is not None
+                                }
+                                merged = [*results]
+                                for item in extra_results:
+                                    if not isinstance(item, dict):
+                                        continue
+                                    item_id = item.get("id")
+                                    item_key = str(item_id) if item_id is not None else ""
+                                    if item_key and item_key in seen_ids:
+                                        continue
+                                    if item_key:
+                                        seen_ids.add(item_key)
+                                    merged.append(item)
+                                results = merged
                             apartment_total = total_count
+                            apartment_total_value = (
+                                total_count if isinstance(total_count, int) else len(results)
+                            )
                             apartment_next_offset = next_offset
                             await state.update_data(
                                 apartment_results=results,
@@ -1439,7 +1492,7 @@ class PropertyBot:
                     await self._send_property_card(callback.message, result, callback.from_user.id)
             shown = len(page)
             shown_total = new_offset + shown
-            total = apartment_total if isinstance(apartment_total, int) else len(results)
+            total = apartment_total_value
             has_more = shown_total < total
             if callback.message:
                 await callback.message.answer(
