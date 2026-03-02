@@ -200,6 +200,108 @@ async def on_task_text_received(
         await message.answer("⚠️ Ошибка при создании задачи.")
 
 
+_EDIT_FIELD_PROMPT = "✏️ Что изменить?\n\n1️⃣ Текст задачи\n2️⃣ Срок выполнения\n\nОтправьте 1 или 2:"
+_EDIT_TEXT_PROMPT = "📝 Введите новый текст задачи:"
+_EDIT_DATE_PROMPT = "📅 Введите новый срок (ДД.ММ.ГГГГ ЧЧ:ММ):"
+_EDIT_SUCCESS = "✅ Задача обновлена."
+
+
+async def on_task_edit(
+    callback: CallbackQuery,
+    state: FSMContext,
+    kommo_client: Any | None = None,
+) -> None:
+    """Handle crm:task:edit:{id} — start edit field choice FSM."""
+    if kommo_client is None:
+        await callback.answer(_NO_CRM, show_alert=True)
+        return
+    assert callback.data is not None
+    task_id = int(callback.data.split(":")[3])
+    await state.set_state(CrmQuickActionSG.edit_task_choose_field)
+    await state.update_data(edit_task_id=task_id)
+    if callback.message and not isinstance(callback.message, InaccessibleMessage):
+        await callback.message.answer(_EDIT_FIELD_PROMPT)
+    await callback.answer()
+
+
+async def on_edit_field_chosen(
+    message: Message,
+    state: FSMContext,
+    kommo_client: Any | None = None,
+) -> None:
+    """Handle field choice: 1=text, 2=date."""
+    choice = (message.text or "").strip()
+    if choice == "1":
+        await state.set_state(CrmQuickActionSG.edit_task_text)
+        await message.answer(_EDIT_TEXT_PROMPT)
+    elif choice == "2":
+        await state.set_state(CrmQuickActionSG.edit_task_date)
+        await message.answer(_EDIT_DATE_PROMPT)
+    else:
+        await message.answer("⚠️ Отправьте 1 или 2.")
+
+
+async def on_edit_task_text_received(
+    message: Message,
+    state: FSMContext,
+    kommo_client: Any | None = None,
+) -> None:
+    """Handle new task text input."""
+    data = await state.get_data()
+    task_id = data.get("edit_task_id", 0)
+    text = (message.text or "").strip()
+
+    if not text:
+        await message.answer("⚠️ Текст не может быть пустым.")
+        return
+    if kommo_client is None:
+        await state.clear()
+        await message.answer(_NO_CRM)
+        return
+
+    try:
+        await kommo_client.update_task(task_id, TaskUpdate(text=text))
+        await state.clear()
+        await message.answer(_EDIT_SUCCESS)
+    except Exception:
+        logger.exception("Failed to update task %d text", task_id)
+        await state.clear()
+        await message.answer("⚠️ Ошибка при обновлении задачи.")
+
+
+async def on_edit_task_date_received(
+    message: Message,
+    state: FSMContext,
+    kommo_client: Any | None = None,
+) -> None:
+    """Handle new task due date input (DD.MM.YYYY HH:MM)."""
+    data = await state.get_data()
+    task_id = data.get("edit_task_id", 0)
+    raw = (message.text or "").strip()
+
+    if kommo_client is None:
+        await state.clear()
+        await message.answer(_NO_CRM)
+        return
+
+    try:
+        dt = datetime.datetime.strptime(raw, "%d.%m.%Y %H:%M")
+        dt = dt.replace(tzinfo=datetime.UTC)
+        due_ts = int(dt.timestamp())
+    except ValueError:
+        await message.answer("⚠️ Неверный формат. Используйте: ДД.ММ.ГГГГ ЧЧ:ММ")
+        return
+
+    try:
+        await kommo_client.update_task(task_id, TaskUpdate(complete_till=due_ts))
+        await state.clear()
+        await message.answer(_EDIT_SUCCESS)
+    except Exception:
+        logger.exception("Failed to update task %d due date", task_id)
+        await state.clear()
+        await message.answer("⚠️ Ошибка при обновлении задачи.")
+
+
 def create_crm_router() -> Router:
     """Create router with CRM card action handlers."""
     router = Router(name="crm_callbacks")
@@ -216,5 +318,13 @@ def create_crm_router() -> Router:
     # FSM text input handlers
     router.message(StateFilter(CrmQuickActionSG.waiting_note), F.text)(on_note_text_received)
     router.message(StateFilter(CrmQuickActionSG.waiting_task), F.text)(on_task_text_received)
+
+    # Task edit FSM
+    router.callback_query(F.data.regexp(r"^crm:task:edit:\d+$"))(on_task_edit)
+    router.message(StateFilter(CrmQuickActionSG.edit_task_choose_field), F.text)(
+        on_edit_field_chosen
+    )
+    router.message(StateFilter(CrmQuickActionSG.edit_task_text), F.text)(on_edit_task_text_received)
+    router.message(StateFilter(CrmQuickActionSG.edit_task_date), F.text)(on_edit_task_date_received)
 
     return router
