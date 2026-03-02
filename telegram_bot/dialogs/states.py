@@ -162,6 +162,7 @@ class AIAdvisorSG(StatesGroup):
     """AI advisor dialog (#697)."""
 
     main = State()
+    loading = State()  # "⏳ Анализирую данные..."
     result = State()  # LLM response display
 
 
