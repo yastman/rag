@@ -64,6 +64,7 @@ def _make_callback(data: str, user_id: int = 12345) -> MagicMock:
     cb.answer = AsyncMock()
     cb.message = MagicMock()
     cb.message.answer = AsyncMock()
+    cb.message.answer_photo = AsyncMock()
     cb.message.delete = AsyncMock()
     return cb
 
@@ -136,10 +137,11 @@ class TestMultiPagePagination:
 
         await bot.handle_results_callback(cb, state)
 
-        assert cb.message.answer.await_count == 6  # 5 cards + 1 footer
+        assert cb.message.answer_photo.await_count == 5
+        assert cb.message.answer.await_count == 1
         state.update_data.assert_awaited_once_with(apartment_offset=_PAGE_SIZE)
-        footer_call = cb.message.answer.call_args_list[-1]
-        assert "\u201310 \u0438\u0437 12" in footer_call.args[0]
+        footer_call = cb.message.answer.call_args
+        assert "показаны 6–10" in footer_call.args[0]
 
     async def test_page3_of_12_shows_2_cards_no_more(self) -> None:
         """12 results, offset=5 -> page3: 2 cards + footer, has_more=False."""
@@ -150,10 +152,11 @@ class TestMultiPagePagination:
 
         await bot.handle_results_callback(cb, state)
 
-        assert cb.message.answer.await_count == 3  # 2 cards + 1 footer
+        assert cb.message.answer_photo.await_count == 2
+        assert cb.message.answer.await_count == 1
         state.update_data.assert_awaited_once_with(apartment_offset=10)
-        footer_call = cb.message.answer.call_args_list[-1]
-        assert "11\u201312 \u0438\u0437 12" in footer_call.args[0]
+        footer_call = cb.message.answer.call_args
+        assert "показаны 11–12" in footer_call.args[0]
 
     async def test_page4_of_12_exhausted(self) -> None:
         """12 results, offset=10 -> new_offset=15 >= 12 -> 'all shown'."""
@@ -168,6 +171,7 @@ class TestMultiPagePagination:
             "\u0412\u0441\u0435 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u044b \u0443\u0436\u0435 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b"
         )
         cb.message.answer.assert_not_called()
+        cb.message.answer_photo.assert_not_called()
 
     async def test_exact_boundary_10_results(self) -> None:
         """10 results, offset=0 -> page2: 5 cards, has_more=False."""
@@ -178,9 +182,10 @@ class TestMultiPagePagination:
 
         await bot.handle_results_callback(cb, state)
 
-        assert cb.message.answer.await_count == 6  # 5 cards + 1 footer
-        footer_call = cb.message.answer.call_args_list[-1]
-        assert "\u201310 \u0438\u0437 10" in footer_call.args[0]
+        assert cb.message.answer_photo.await_count == 5
+        assert cb.message.answer.await_count == 1
+        footer_call = cb.message.answer.call_args
+        assert "показаны 6–10" in footer_call.args[0]
 
 
 # ---------------------------------------------------------------------------
@@ -401,11 +406,11 @@ class TestFooterContract:
     @pytest.mark.parametrize(
         "total,offset,exp_cards,exp_range,exp_has_more",
         [
-            (12, 0, 5, "6\u201310 \u0438\u0437 12", True),
-            (12, 5, 2, "11\u201312 \u0438\u0437 12", False),
-            (10, 0, 5, "6\u201310 \u0438\u0437 10", False),
-            (6, 0, 1, "6\u20136 \u0438\u0437 6", False),
-            (7, 0, 2, "6\u20137 \u0438\u0437 7", False),
+            (12, 0, 5, "показаны 6–10", True),
+            (12, 5, 2, "показаны 11–12", False),
+            (10, 0, 5, "показаны 6–10", False),
+            (6, 0, 1, "показаны 6–6", False),
+            (7, 0, 2, "показаны 6–7", False),
         ],
         ids=[
             "mid-page-has-more",
@@ -430,10 +435,16 @@ class TestFooterContract:
 
         await bot.handle_results_callback(cb, state)
 
-        # cards + 1 footer
-        assert cb.message.answer.await_count == exp_cards + 1
-        footer_call = cb.message.answer.call_args_list[-1]
+        assert cb.message.answer_photo.await_count == exp_cards
+        assert cb.message.answer.await_count == 1
+        footer_call = cb.message.answer.call_args
         assert exp_range in footer_call.args[0]
+        footer_markup = footer_call.kwargs["reply_markup"]
+        callbacks = [btn.callback_data for row in footer_markup.inline_keyboard for btn in row]
+        if exp_has_more:
+            assert "results:more" in callbacks
+        else:
+            assert "results:more" not in callbacks
 
     async def test_no_duplicate_cards_edge_page(self) -> None:
         """Each card sent exactly once on partial last page."""
@@ -444,9 +455,8 @@ class TestFooterContract:
 
         await bot.handle_results_callback(cb, state)
 
-        # 2 cards (prop-5, prop-6) + 1 footer = 3 calls
-        card_calls = cb.message.answer.call_args_list[:-1]
-        card_texts = [c.args[0] for c in card_calls]
+        card_calls = cb.message.answer_photo.call_args_list
+        card_texts = [c.kwargs["caption"] for c in card_calls]
         assert len(card_texts) == 2
         assert "Complex 5" in card_texts[0]
         assert "Complex 6" in card_texts[1]
@@ -465,3 +475,4 @@ class TestFooterContract:
             "\u0443\u0436\u0435 \u043f\u043e\u043a\u0430\u0437\u0430\u043d\u044b"
         )
         cb.message.answer.assert_not_called()
+        cb.message.answer_photo.assert_not_called()
