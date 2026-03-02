@@ -1417,18 +1417,55 @@ class PropertyBot:
             if not results:
                 await callback.answer("Нет сохранённых результатов")
                 return
+            apartment_total = state_data.get("apartment_total", len(results))
+            apartment_next_offset = state_data.get("apartment_next_offset")
+            apartment_filters = state_data.get("apartment_filters")
             new_offset = offset + _APARTMENT_PAGE_SIZE
+
+            # Funnel flow stores only the first page; lazily append more pages on demand.
             if new_offset >= len(results):
-                await callback.answer("Все результаты уже показаны")
-                return
+                apartments_service = getattr(self, "_apartments_service", None)
+                can_fetch_more = (
+                    apartment_next_offset is not None
+                    and apartment_filters is not None
+                    and apartments_service is not None
+                )
+                if can_fetch_more:
+                    try:
+                        (
+                            extra_results,
+                            total_count,
+                            next_offset,
+                        ) = await apartments_service.scroll_with_filters(
+                            filters=apartment_filters,
+                            limit=_APARTMENT_PAGE_SIZE,
+                            offset=apartment_next_offset,
+                        )
+                    except Exception:
+                        logger.exception("Failed to fetch next results page")
+                    else:
+                        if extra_results:
+                            results = [*results, *extra_results]
+                            apartment_total = total_count
+                            apartment_next_offset = next_offset
+                            await state.update_data(
+                                apartment_results=results,
+                                apartment_total=apartment_total,
+                                apartment_next_offset=apartment_next_offset,
+                            )
+                if new_offset >= len(results):
+                    await callback.answer("Все результаты уже показаны")
+                    return
             page = results[new_offset : new_offset + _APARTMENT_PAGE_SIZE]
             for result in page:
                 if callback.message:
                     await self._send_property_card(callback.message, result, callback.from_user.id)
             shown = len(page)
-            total = len(results)
-            has_more = new_offset + _APARTMENT_PAGE_SIZE < total
             shown_total = new_offset + shown
+            total = apartment_total if isinstance(apartment_total, int) else len(results)
+            has_more = (new_offset + _APARTMENT_PAGE_SIZE < len(results)) or (
+                apartment_next_offset is not None and shown_total < total
+            )
             if callback.message:
                 await callback.message.answer(
                     f"Найдено {total} апартаментов (показаны {new_offset + 1}–{shown_total})",
@@ -1681,6 +1718,9 @@ class PropertyBot:
                 apartment_query=user_text,
                 apartment_offset=0,
                 bookmarks_context=False,
+                apartment_total=len(results),
+                apartment_next_offset=None,
+                apartment_filters=None,
             )
             page = results[:_APARTMENT_PAGE_SIZE]
             for result in page:
