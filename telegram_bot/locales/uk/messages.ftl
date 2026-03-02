@@ -77,6 +77,82 @@ crm-add-note = Додати нотатку
 crm-create-task = Створити завдання
 crm-pipelines = Pipelines
 
+***REMOVED*** CRM Hub (навігаційне меню) — ***REMOVED***697
+crm-hub-title = CRM — Панель менеджера
+crm-hub-btn-leads = 📋 Угоди
+crm-hub-btn-contacts = 👤 Контакти
+crm-hub-btn-task-create = ✅ Створити завдання
+crm-hub-btn-my-tasks = 📋 Мої завдання
+crm-hub-btn-note = 📝 Нотатка
+crm-hub-btn-ai-advisor = 🤖 AI-Радник
+crm-hub-btn-back = ← Назад
+
+***REMOVED*** CRM Угоди (Leads) — ***REMOVED***697
+crm-leads-title = 📋 Угоди
+crm-leads-btn-create = ➕ Створити угоду
+crm-leads-btn-my-leads = 🗂 Мої угоди
+crm-leads-btn-search = 🔍 Пошук
+crm-leads-prompt-name = Введіть назву угоди:
+crm-leads-prompt-budget = Введіть бюджет угоди (ціле число в €, або 0 щоб пропустити):
+crm-leads-prompt-pipeline = Виберіть pipeline (воронку):
+crm-leads-btn-confirm = ✅ Створити
+crm-leads-btn-edit-name = ✏️ Змінити назву
+crm-leads-search-prompt = Введіть текст для пошуку угод:
+crm-leads-empty = Угоди не знайдено
+
+***REMOVED*** CRM Контакти (Contacts) — ***REMOVED***697
+crm-contacts-title = 👤 Контакти
+crm-contacts-btn-create = ➕ Створити контакт
+crm-contacts-btn-search = 🔍 Пошук
+crm-contacts-prompt-first-name = Введіть ім'я контакту:
+crm-contacts-prompt-last-name = Введіть прізвище контакту:
+crm-contacts-prompt-phone = Введіть телефон контакту (наприклад: +79001234567):
+crm-contacts-prompt-email = Введіть email контакту (або натисніть «Пропустити»):
+crm-contacts-btn-confirm = ✅ Створити
+crm-contacts-btn-edit-name = ✏️ Змінити ім'я
+crm-contacts-search-prompt = Введіть ім'я або телефон для пошуку контактів:
+crm-contacts-empty = Контакти не знайдено
+
+***REMOVED*** CRM Завдання (Tasks) — ***REMOVED***697
+crm-tasks-title-create = ✅ Створення завдання
+crm-tasks-step1 = Крок 1/5: Введіть опис завдання:
+crm-tasks-step2 = Крок 2/5: Виберіть тип завдання:
+crm-tasks-step3 = Крок 3/5: Виберіть угоду для прив'язки:
+crm-tasks-step4 = Крок 4/5: Вкажіть термін (днів від сьогодні):
+crm-tasks-btn-confirm = ✅ Створити
+crm-tasks-btn-skip = Пропустити
+crm-tasks-my-tasks-title = 📋 Мої завдання
+crm-tasks-filter-all = Всі завдання
+crm-tasks-filter-today = Сьогодні
+crm-tasks-filter-overdue = Прострочені
+
+***REMOVED*** CRM Нотатки (Notes) — ***REMOVED***697
+crm-notes-title = 📝 Створення нотатки
+crm-notes-step1 = Крок 1/4: Введіть текст нотатки:
+crm-notes-step2 = Крок 2/4: До чого прив'язати нотатку?
+crm-notes-btn-confirm = ✅ Зберегти
+
+***REMOVED*** CRM AI-Радник (AI Advisor) — ***REMOVED***697
+crm-advisor-title = 🤖 AI-Радник
+crm-advisor-loading = Аналізую дані...
+crm-advisor-btn-back = ← До меню радника
+crm-advisor-btn-cancel = ← CRM
+
+***REMOVED*** CRM навігація і загальні кнопки — ***REMOVED***697
+crm-btn-back = ← Назад
+crm-btn-cancel = Скасувати
+crm-btn-close = Закрити
+crm-btn-skip = Пропустити
+
+***REMOVED*** CRM помилки — ***REMOVED***697
+crm-error-no-crm = ⚠️ CRM недоступна.
+crm-error-note-empty = ⚠️ Текст нотатки не може бути порожнім.
+crm-error-task-empty = ⚠️ Текст завдання не може бути порожнім.
+crm-error-add-note = ⚠️ Помилка при додаванні нотатки.
+crm-error-create-task = ⚠️ Помилка при створенні завдання.
+crm-error-complete-task = ⚠️ Помилка при завершенні завдання.
+crm-error-postpone-task = ⚠️ Помилка при відкладанні завдання.
+
 ***REMOVED*** Клієнтська ReplyKeyboard (***REMOVED***660)
 kb-search = 🏠 Підбір апартаментів
 kb-services = 🔑 Послуги
