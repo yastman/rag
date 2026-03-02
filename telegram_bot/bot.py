@@ -645,6 +645,7 @@ class PropertyBot:
         self.dp.callback_query(F.data.startswith("fav:"))(self.handle_favorite_callback)
         self.dp.callback_query(F.data.startswith("results:"))(self.handle_results_callback)
         self.dp.callback_query(F.data.startswith("viewing:"))(self.handle_viewing_callback)
+        self.dp.callback_query(F.data.startswith("card:"))(self.handle_card_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -1421,6 +1422,53 @@ class PropertyBot:
                     )
             await start_phone_collection(
                 callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+            )
+        else:
+            await callback.answer()
+
+    async def handle_card_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+        """Handle card action callbacks: card:viewing and card:ask (#705)."""
+        from .handlers.phone_collector import start_phone_collection
+
+        data = callback.data or ""
+        parts = data.split(":", 2)
+        if len(parts) < 3 or not callback.from_user:
+            await callback.answer()
+            return
+
+        action = parts[1]  # "viewing" or "ask"
+        property_id = parts[2]
+
+        state_data = await state.get_data()
+        raw_results = state_data.get("apartment_results")
+        apt_results = raw_results if isinstance(raw_results, list) else []
+        matched = next(
+            (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
+            None,
+        )
+        viewing_objects: list[dict] = []
+        if matched:
+            p = matched.get("payload", {})
+            viewing_objects.append(
+                {
+                    "id": property_id,
+                    "complex_name": p.get("complex_name", ""),
+                    "property_type": p.get("property_type", ""),
+                    "area_m2": p.get("area_m2", 0),
+                    "price_eur": p.get("price_eur", 0),
+                }
+            )
+
+        if action == "viewing":
+            await start_phone_collection(
+                callback, state, service_key="viewing", viewing_objects=viewing_objects or None
+            )
+        elif action == "ask":
+            await start_phone_collection(
+                callback,
+                state,
+                service_key="manager_question",
+                viewing_objects=viewing_objects or None,
             )
         else:
             await callback.answer()
