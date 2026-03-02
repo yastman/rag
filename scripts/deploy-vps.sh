@@ -18,6 +18,11 @@
 
 set -euo pipefail
 
+# Always sync project root regardless of caller's current directory.
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
+
 # =============================================================================
 # VPS connection
 # =============================================================================
@@ -29,6 +34,7 @@ VPS_DIR="/opt/rag-fresh"
 COMPOSE_FILE="docker-compose.vps.yml"
 
 SSH_OPTS="-i ${VPS_KEY} -p ${VPS_PORT} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
+RSYNC_SSH_OPTS="${SSH_OPTS}"
 
 # =============================================================================
 # Colors
@@ -118,7 +124,7 @@ log "Syncing files to VPS via rsync..."
 if ! $DRY_RUN; then
     rsync -avz --delete \
         "${RSYNC_EXCLUDES[@]}" \
-        -e "ssh -i ${VPS_KEY} -p ${VPS_PORT} -o IdentitiesOnly=yes" \
+        -e "ssh ${RSYNC_SSH_OPTS}" \
         ./ \
         "${VPS_USER}@${VPS_HOST}:${VPS_DIR}/"
 else
