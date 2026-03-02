@@ -113,6 +113,14 @@ def test_task_result_field():
     assert task.result == {"text": "Completed"}
 
 
+def test_task_result_field_accepts_list_payload():
+    """Task model accepts Kommo payload where result can be an empty list."""
+    from telegram_bot.services.kommo_models import Task
+
+    task = Task(id=202, text="Open", is_completed=False, result=[])
+    assert task.result == []
+
+
 def test_contact_update_minimal():
     """ContactUpdate model with minimal fields."""
     from telegram_bot.services.kommo_models import ContactUpdate
