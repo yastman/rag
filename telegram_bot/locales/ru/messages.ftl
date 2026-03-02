@@ -57,17 +57,16 @@ menu-booking = Записаться на показ
 menu-mortgage = Рассчитать ипотеку
 menu-my-leads = Мои заявки
 
-# Меню менеджера
-mgr-hello = Привет, { $name }! Панель менеджера.
-mgr-deals = Мои сделки
-mgr-contacts = Поиск контактов
-mgr-new-deal = Новая сделка
-mgr-funnel-stats = Воронка продаж
-mgr-hot-leads = Горячие лиды
-mgr-tasks = Задачи
-mgr-crm-submenu = CRM
-mgr-search = Поиск по базе
-mgr-settings = Настройки
+# Меню менеджера (root CRM hub)
+mgr-hello = 📊 CRM — Привет, { $name }!
+mgr-leads = 📋 Сделки
+mgr-contacts = 👤 Контакты
+mgr-tasks-create = ✅ Создать задачу
+mgr-my-tasks = 📋 Мои задачи
+mgr-note = 📝 Заметка
+mgr-ai-advisor = 🤖 AI-Советник
+mgr-search = 🔍 Поиск по базе
+mgr-settings = ⚙️ Настройки
 
 # CRM подменю
 crm-title = CRM
