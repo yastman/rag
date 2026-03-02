@@ -20,8 +20,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     Message,
 )
 from aiogram.utils.chat_action import ChatActionSender
@@ -1076,8 +1078,12 @@ class PropertyBot:
         result: dict,
         telegram_id: int,
     ) -> Message:
-        """Send a single property card with action buttons (DRY helper, #705)."""
-        from .keyboards.property_card import build_card_buttons, format_property_card
+        """Send a single property card with preview photo and action buttons (#722)."""
+        from .keyboards.property_card import (
+            build_card_buttons,
+            format_property_card,
+            get_demo_photo_paths,
+        )
 
         p = result.get("payload", {})
         card = format_property_card(
@@ -1094,9 +1100,22 @@ class PropertyBot:
         is_fav = False
         if favorites_service is not None:
             is_fav = await favorites_service.is_favorited(telegram_id, result["id"])
-        return await message.answer(
-            card, reply_markup=build_card_buttons(result["id"], is_favorited=is_fav)
+        demo_photos = get_demo_photo_paths()
+        photos_count = len(demo_photos) or 3
+        reply_markup = build_card_buttons(
+            result["id"],
+            is_favorited=is_fav,
+            photos_count=photos_count,
         )
+        if demo_photos:
+            with contextlib.suppress(Exception):
+                return await message.answer_photo(
+                    photo=FSInputFile(demo_photos[0]),
+                    caption=card,
+                    reply_markup=reply_markup,
+                )
+
+        return await message.answer(card, reply_markup=reply_markup)
 
     async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
         """Show user's saved favorites (#628)."""
@@ -1407,10 +1426,15 @@ class PropertyBot:
             shown = len(page)
             total = len(results)
             has_more = new_offset + _APARTMENT_PAGE_SIZE < total
+            shown_total = new_offset + shown
             if callback.message:
                 await callback.message.answer(
-                    f"Показано {new_offset + 1}–{new_offset + shown} из {total}",
-                    reply_markup=build_results_footer(shown=shown, total=total, has_more=has_more),
+                    f"Найдено {total} апартаментов (показаны {new_offset + 1}–{shown_total})",
+                    reply_markup=build_results_footer(
+                        shown_total=shown_total,
+                        total=total,
+                        has_more=has_more,
+                    ),
                 )
             await state.update_data(apartment_offset=new_offset)
             await callback.answer()
@@ -1447,8 +1471,9 @@ class PropertyBot:
             await callback.answer()
 
     async def handle_card_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
-        """Handle card action callbacks: card:viewing and card:ask (#705)."""
+        """Handle card action callbacks: card:viewing, card:ask, card:photos (#722)."""
         from .handlers.phone_collector import start_phone_collection
+        from .keyboards.property_card import get_demo_photo_paths
 
         data = callback.data or ""
         parts = data.split(":", 2)
@@ -1507,6 +1532,22 @@ class PropertyBot:
                 service_key="manager_question",
                 viewing_objects=viewing_objects or None,
             )
+        elif action == "photos":
+            if callback.message:
+                demo_photos = get_demo_photo_paths()
+                if demo_photos:
+                    media = [
+                        InputMediaPhoto(
+                            media=FSInputFile(path),
+                            caption="📷 Все фото (демо)" if idx == 0 else None,
+                        )
+                        for idx, path in enumerate(demo_photos)
+                    ]
+                    with contextlib.suppress(Exception):
+                        await callback.message.answer_media_group(media=media)
+                else:
+                    await callback.message.answer("Фото временно недоступны.")
+            await callback.answer()
         else:
             await callback.answer()
 
@@ -1642,9 +1683,11 @@ class PropertyBot:
             shown = len(page)
             total = len(results)
             await message.answer(
-                f"Показано {shown} из {total}",
+                f"Найдено {total} апартаментов (показаны 1–{shown})",
                 reply_markup=build_results_footer(
-                    shown=shown, total=total, has_more=total > _APARTMENT_PAGE_SIZE
+                    shown_total=shown,
+                    total=total,
+                    has_more=total > _APARTMENT_PAGE_SIZE,
                 ),
             )
 
