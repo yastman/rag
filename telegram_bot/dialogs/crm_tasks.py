@@ -18,6 +18,7 @@ from aiogram_dialog.widgets.input import ManagedTextInput, TextInput
 from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select, Start
 from aiogram_dialog.widgets.text import Const, Format
 
+from telegram_bot.handlers.crm_callbacks import _EDIT_FIELD_PROMPT
 from telegram_bot.services.kommo_models import Task
 
 from .states import CreateTaskSG, CrmQuickActionSG, MyTasksSG, TasksMenuSG
@@ -301,7 +302,7 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
 
     # Edit tasks for edit select widget
     edit_tasks = [
-        (f"✏️ #{t.id}: {(t.text or '')[:25]}", str(t.id)) for t in page_tasks if not t.is_completed
+        (f"#{t.id}: {(t.text or '')[:25]}", str(t.id)) for t in page_tasks if not t.is_completed
     ]
 
     return {
@@ -477,9 +478,7 @@ async def on_task_edit_from_list(
         await fsm.update_data(edit_task_id=task_id)
     await manager.done()
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
-        await callback.message.answer(
-            "✏️ Что изменить?\n\n1️⃣ Текст задачи\n2️⃣ Срок выполнения\n\nОтправьте 1 или 2:"
-        )
+        await callback.message.answer(_EDIT_FIELD_PROMPT)
     await callback.answer()
 
 
