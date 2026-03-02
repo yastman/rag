@@ -655,16 +655,19 @@ async def on_summary_search(
     button: Button,
     manager: DialogManager,
 ) -> None:
-    """Confirm search: reset pagination, persist lead score, go to results."""
-    manager.dialog_data.pop("scroll_offset", None)
-    manager.dialog_data.pop("scroll_next_offset", None)
-    manager.dialog_data["scroll_page"] = 1
+    """Search, send photo cards, close dialog."""
+    from telegram_bot.keyboards.property_card import build_results_footer
 
+    data = manager.dialog_data
+    data.pop("scroll_offset", None)
+    data.pop("scroll_next_offset", None)
+    data["scroll_page"] = 1
+
+    # Persist lead score (fire-and-forget)
     try:
         from telegram_bot.bot import make_session_id
 
         if callback.from_user is not None:
-            data = manager.dialog_data
             _spawn_persist_funnel_lead_score(
                 telegram_user_id=callback.from_user.id,
                 session_id=make_session_id("chat", callback.message.chat.id)
@@ -683,7 +686,70 @@ async def on_summary_search(
     except Exception:
         logger.exception("Failed to schedule funnel lead score persistence")
 
-    await manager.switch_to(FunnelSG.results)
+    # Resolve services
+    svc = manager.middleware_data.get("apartments_service")
+    property_bot = manager.middleware_data.get("property_bot")
+    if svc is None and property_bot is not None:
+        svc = getattr(property_bot, "_apartments_service", None)
+
+    if svc is None or callback.message is None:
+        await manager.switch_to(FunnelSG.results)
+        return
+
+    # Search
+    try:
+        filters = _build_funnel_filters(data)
+        results, total_count, next_offset = await svc.scroll_with_filters(
+            filters=filters,
+            limit=_SCROLL_PAGE_SIZE,
+            offset=None,
+        )
+    except Exception:
+        logger.exception("Failed to fetch funnel results")
+        await manager.switch_to(FunnelSG.results)
+        return
+
+    # Close dialog before sending cards
+    await manager.done()
+
+    # Store results in FSMContext for pagination
+    state = manager.middleware_data.get("state")
+    if state is not None:
+        await state.update_data(
+            apartment_results=results,
+            apartment_query=f"funnel:{data.get('city', 'any')}",
+            apartment_offset=0,
+            bookmarks_context=False,
+            apartment_total=total_count,
+            apartment_next_offset=next_offset,
+            apartment_filters=filters,
+            funnel_data=dict(data),
+        )
+
+    if not results:
+        await callback.message.answer(
+            "К сожалению, по вашим критериям ничего не найдено.\n"
+            "Попробуйте изменить параметры поиска."
+        )
+        return
+
+    # Send photo cards
+    if property_bot is not None:
+        for result in results:
+            telegram_id = callback.from_user.id if callback.from_user else 0
+            await property_bot._send_property_card(callback.message, result, telegram_id)
+
+    # Footer
+    shown = len(results)
+    has_more = next_offset is not None
+    await callback.message.answer(
+        f"Найдено {total_count} апартаментов (показаны 1–{shown})",
+        reply_markup=build_results_footer(
+            shown_total=shown,
+            total=total_count,
+            has_more=has_more,
+        ),
+    )
 
 
 async def on_summary_refine(
