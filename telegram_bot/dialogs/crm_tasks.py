@@ -12,15 +12,16 @@ import logging
 import operator
 from typing import Any
 
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 from aiogram_dialog import Dialog, DialogManager, Window
 from aiogram_dialog.widgets.input import ManagedTextInput, TextInput
 from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select, Start
 from aiogram_dialog.widgets.text import Const, Format
 
+from telegram_bot.handlers.crm_callbacks import _EDIT_FIELD_PROMPT
 from telegram_bot.services.kommo_models import Task
 
-from .states import CreateTaskSG, MyTasksSG, TasksMenuSG
+from .states import CreateTaskSG, CrmQuickActionSG, MyTasksSG, TasksMenuSG
 
 
 logger = logging.getLogger(__name__)
@@ -299,6 +300,11 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
         (f"#{t.id}: {(t.text or '')[:30]}", str(t.id)) for t in page_tasks if not t.is_completed
     ]
 
+    # Edit tasks for edit select widget
+    edit_tasks = [
+        (f"#{t.id}: {(t.text or '')[:25]}", str(t.id)) for t in page_tasks if not t.is_completed
+    ]
+
     return {
         "title": f"📋 Мои задачи — {filter_label} ({total})",
         "tasks_text": tasks_text,
@@ -307,6 +313,7 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
         "page": page,
         "total": total,
         "active_tasks": active_tasks,
+        "edit_tasks": edit_tasks,
         "has_active": len(active_tasks) > 0,
     }
 
@@ -457,6 +464,24 @@ async def on_next_page(
     manager.dialog_data["page"] = page + 1
 
 
+async def on_task_edit_from_list(
+    callback: CallbackQuery,
+    widget: Any,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """Start task edit from dialog select — close dialog and trigger FSM."""
+    task_id = int(item_id)
+    fsm = manager.middleware_data.get("state")
+    if fsm:
+        await fsm.set_state(CrmQuickActionSG.edit_task_choose_field)
+        await fsm.update_data(edit_task_id=task_id)
+    await manager.done()
+    if callback.message and not isinstance(callback.message, InaccessibleMessage):
+        await callback.message.answer(_EDIT_FIELD_PROMPT)
+    await callback.answer()
+
+
 async def on_task_complete(
     callback: CallbackQuery,
     widget: Select,
@@ -566,7 +591,7 @@ my_tasks_dialog = Dialog(
         getter=get_filter_options,
         state=MyTasksSG.filter,
     ),
-    # Step 2: Task list with pagination and complete action
+    # Step 2: Task list with pagination and complete/edit actions
     Window(
         Format("{title}\n\n{tasks_text}"),
         # Complete task select (shown only when there are active tasks)
@@ -577,6 +602,17 @@ my_tasks_dialog = Dialog(
                 item_id_getter=operator.itemgetter(1),
                 items="active_tasks",
                 on_click=on_task_complete,
+                when="has_active",
+            ),
+        ),
+        # Edit task select (shown only when there are active tasks)
+        Column(
+            Select(
+                Format("✏️ Редактировать: {item[0]}"),
+                id="edit_task_select",
+                item_id_getter=operator.itemgetter(1),
+                items="edit_tasks",
+                on_click=on_task_edit_from_list,
                 when="has_active",
             ),
         ),
