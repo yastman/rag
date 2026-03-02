@@ -1288,6 +1288,13 @@ class PropertyBot:
             )
             if result:
                 await callback.answer("Добавлено в закладки")
+                if callback.message:
+                    from .keyboards.property_card import build_card_buttons
+
+                    with contextlib.suppress(Exception):
+                        await callback.message.edit_reply_markup(
+                            reply_markup=build_card_buttons(property_id, is_favorited=True)
+                        )
             else:
                 await callback.answer("Уже в закладках")
 
@@ -1295,9 +1302,20 @@ class PropertyBot:
             await favorites_service.remove(
                 telegram_id=callback.from_user.id, property_id=property_id
             )
-            if callback.message:
-                await callback.message.delete()
-            await callback.answer("Удалено из закладок")
+            state_data = await state.get_data()
+            in_search_results = bool(state_data.get("apartment_results"))
+            if in_search_results and callback.message:
+                from .keyboards.property_card import build_card_buttons
+
+                with contextlib.suppress(Exception):
+                    await callback.message.edit_reply_markup(
+                        reply_markup=build_card_buttons(property_id, is_favorited=False)
+                    )
+                await callback.answer("Удалено из закладок")
+            else:
+                if callback.message:
+                    await callback.message.delete()
+                await callback.answer("Удалено из закладок")
 
         elif action == "viewing" and property_id:
             from .handlers.phone_collector import start_phone_collection
