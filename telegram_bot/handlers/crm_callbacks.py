@@ -18,7 +18,7 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 
 from telegram_bot.dialogs.states import CrmQuickActionSG
 from telegram_bot.services.kommo_models import TaskCreate, TaskUpdate
@@ -42,11 +42,13 @@ async def on_lead_note(
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
+    # callback.data is guaranteed non-None by F.data.regexp filter
+    assert callback.data is not None
     # callback.data format: crm:lead:note:{id}
     lead_id = int(callback.data.split(":")[3])
     await state.set_state(CrmQuickActionSG.waiting_note)
     await state.update_data(entity_type="leads", entity_id=lead_id)
-    if callback.message:
+    if callback.message and not isinstance(callback.message, InaccessibleMessage):
         await callback.message.answer(_NOTE_PROMPT)
     await callback.answer()
 
@@ -60,11 +62,13 @@ async def on_lead_task(
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
+    # callback.data is guaranteed non-None by F.data.regexp filter
+    assert callback.data is not None
     # callback.data format: crm:lead:task:{id}
     lead_id = int(callback.data.split(":")[3])
     await state.set_state(CrmQuickActionSG.waiting_task)
     await state.update_data(entity_id=lead_id, entity_type="leads")
-    if callback.message:
+    if callback.message and not isinstance(callback.message, InaccessibleMessage):
         await callback.message.answer(_TASK_PROMPT)
     await callback.answer()
 
@@ -77,12 +81,14 @@ async def on_task_complete(
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
+    # callback.data is guaranteed non-None by F.data.regexp filter
+    assert callback.data is not None
     # callback.data format: crm:task:complete:{id}
     task_id = int(callback.data.split(":")[3])
     try:
         await kommo_client.complete_task(task_id)
         await callback.answer("✅ Задача завершена.")
-        if callback.message:
+        if callback.message and not isinstance(callback.message, InaccessibleMessage):
             await callback.message.edit_text("✅ Задача завершена.")
     except Exception:
         logger.exception("Failed to complete task %d", task_id)
@@ -97,6 +103,8 @@ async def on_task_postpone(
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
+    # callback.data is guaranteed non-None by F.data.regexp filter
+    assert callback.data is not None
     # callback.data format: crm:task:postpone:{id}
     task_id = int(callback.data.split(":")[3])
     due_ts = int(time.time()) + 86400
@@ -105,7 +113,7 @@ async def on_task_postpone(
         due_dt = datetime.datetime.fromtimestamp(due_ts, tz=datetime.UTC).strftime("%d.%m.%Y")
         msg = f"⏰ Задача отложена до {due_dt}."
         await callback.answer(msg)
-        if callback.message:
+        if callback.message and not isinstance(callback.message, InaccessibleMessage):
             await callback.message.edit_text(msg)
     except Exception:
         logger.exception("Failed to postpone task %d", task_id)
@@ -121,11 +129,13 @@ async def on_contact_note(
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
+    # callback.data is guaranteed non-None by F.data.regexp filter
+    assert callback.data is not None
     # callback.data format: crm:contact:note:{id}
     contact_id = int(callback.data.split(":")[3])
     await state.set_state(CrmQuickActionSG.waiting_note)
     await state.update_data(entity_type="contacts", entity_id=contact_id)
-    if callback.message:
+    if callback.message and not isinstance(callback.message, InaccessibleMessage):
         await callback.message.answer(_NOTE_PROMPT)
     await callback.answer()
 
