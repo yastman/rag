@@ -720,6 +720,9 @@ async def on_summary_search(
             apartment_query=f"funnel:{data.get('city', 'any')}",
             apartment_offset=0,
             bookmarks_context=False,
+            apartment_total=total_count,
+            apartment_next_offset=next_offset,
+            apartment_filters=filters,
             funnel_data=dict(data),
         )
 
