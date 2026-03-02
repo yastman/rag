@@ -59,6 +59,7 @@ def _make_callback(data: str = "results:more", user_id: int = 12345) -> MagicMoc
     cb.message = MagicMock()
     cb.message.answer = AsyncMock()
     cb.message.answer_photo = AsyncMock()
+    cb.message.answer_media_group = AsyncMock()
     cb.message.delete = AsyncMock()
     return cb
 
@@ -99,14 +100,15 @@ def _make_results(n: int = 8) -> list[dict]:
 async def test_results_more_shows_next_page() -> None:
     """8 results, offset=0 → sends 3 cards + 1 footer, updates offset to PAGE_SIZE."""
     bot = _create_bot()
+    bot._send_property_card = AsyncMock()
     results = _make_results(8)
     state = _make_state({"apartment_results": results, "apartment_offset": 0})
     callback = _make_callback("results:more")
 
     await bot.handle_results_callback(callback, state)
 
-    # 3 remaining cards via answer_photo + 1 footer message via answer
-    assert callback.message.answer_photo.await_count == 3
+    # 3 remaining cards via helper + 1 footer message via answer
+    assert bot._send_property_card.await_count == 3
     assert callback.message.answer.await_count == 1
     state.update_data.assert_awaited_once_with(apartment_offset=_PAGE_SIZE)
     callback.answer.assert_awaited_once_with()
@@ -115,6 +117,7 @@ async def test_results_more_shows_next_page() -> None:
 async def test_results_more_no_results_in_state() -> None:
     """No apartment_results in state → answer with error message."""
     bot = _create_bot()
+    bot._send_property_card = AsyncMock()
     state = _make_state({})
     callback = _make_callback("results:more")
 
@@ -122,12 +125,13 @@ async def test_results_more_no_results_in_state() -> None:
 
     callback.answer.assert_awaited_once_with("Нет сохранённых результатов")
     callback.message.answer.assert_not_called()
-    callback.message.answer_photo.assert_not_called()
+    bot._send_property_card.assert_not_awaited()
 
 
 async def test_results_more_exhausted() -> None:
     """offset == len(results) → answer 'all shown'."""
     bot = _create_bot()
+    bot._send_property_card = AsyncMock()
     results = _make_results(5)
     state = _make_state({"apartment_results": results, "apartment_offset": 5})
     callback = _make_callback("results:more")
@@ -136,12 +140,13 @@ async def test_results_more_exhausted() -> None:
 
     callback.answer.assert_awaited_once_with("Все результаты уже показаны")
     callback.message.answer.assert_not_called()
-    callback.message.answer_photo.assert_not_called()
+    bot._send_property_card.assert_not_awaited()
 
 
 async def test_results_more_fetches_next_scroll_page_for_funnel_state() -> None:
     """When funnel stored only first page, results:more loads next page from scroll API."""
     bot = _create_bot()
+    bot._send_property_card = AsyncMock()
     all_results = _make_results(8)
     first_page = all_results[:_PAGE_SIZE]
     next_page = all_results[_PAGE_SIZE:]
@@ -166,7 +171,7 @@ async def test_results_more_fetches_next_scroll_page_for_funnel_state() -> None:
         limit=_PAGE_SIZE,
         offset="offset-2",
     )
-    assert callback.message.answer_photo.await_count == 3
+    assert bot._send_property_card.await_count == 3
     assert callback.message.answer.await_count == 1
     assert state.update_data.await_count == 2
     first_call = state.update_data.await_args_list[0].kwargs
@@ -176,6 +181,39 @@ async def test_results_more_fetches_next_scroll_page_for_funnel_state() -> None:
     second_call = state.update_data.await_args_list[1].kwargs
     assert second_call == {"apartment_offset": _PAGE_SIZE}
     callback.answer.assert_awaited_once_with()
+
+
+async def test_results_more_backfills_from_start_when_next_offset_missing() -> None:
+    """If next_offset is None but total_count says more, fetch wider prefix and avoid duplicates."""
+    bot = _create_bot()
+    bot._send_property_card = AsyncMock()
+    all_results = _make_results(8)
+    first_page = all_results[:_PAGE_SIZE]
+    bot._apartments_service = MagicMock()
+    bot._apartments_service.scroll_with_filters = AsyncMock(return_value=(all_results, 8, None))
+
+    state = _make_state(
+        {
+            "apartment_results": first_page,
+            "apartment_offset": 0,
+            "apartment_total": 8,
+            "apartment_next_offset": None,
+            "apartment_filters": {"city": "Бургас"},
+        }
+    )
+    callback = _make_callback("results:more")
+
+    await bot.handle_results_callback(callback, state)
+
+    bot._apartments_service.scroll_with_filters.assert_awaited_once_with(
+        filters={"city": "Бургас"},
+        limit=_PAGE_SIZE * 2,
+        offset=None,
+    )
+    sent_ids = [call.args[1]["id"] for call in bot._send_property_card.await_args_list]
+    assert sent_ids == ["prop-5", "prop-6", "prop-7"]
+    first_call = state.update_data.await_args_list[0].kwargs
+    assert len(first_call["apartment_results"]) == 8
 
 
 # ---------------------------------------------------------------------------
