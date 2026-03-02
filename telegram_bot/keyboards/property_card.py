@@ -52,7 +52,7 @@ def format_promotion_card(
 
 
 def build_card_buttons(property_id: str, *, is_favorited: bool = False) -> InlineKeyboardMarkup:
-    """Build inline buttons for a property card (2+1 layout, #705)."""
+    """Build inline buttons for a property card (2+1 layout)."""
     if is_favorited:
         fav_btn = InlineKeyboardButton(
             text="❌ Убрать из избранного",
