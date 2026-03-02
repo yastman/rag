@@ -20,6 +20,10 @@ class GraphConfig:
     llm_temperature: float = 0.7
     llm_max_tokens: int = 4096
     generate_max_tokens: int = 1024
+    # Reasoning control for Cerebras models (#reasoning)
+    reasoning_effort: str | None = None  # "low"/"medium"/"high" (gpt-oss-120b)
+    reasoning_format: str | None = None  # "hidden"/"parsed"/"raw"/"none"
+    disable_reasoning: bool | None = None  # True/False (zai-glm-4.7)
     rewrite_model: str = "gpt-4o-mini"
     rewrite_max_tokens: int = 64
 
@@ -82,6 +86,17 @@ class GraphConfig:
         }
     )
 
+    def get_reasoning_kwargs(self) -> dict[str, Any]:
+        """Return non-None reasoning params for chat.completions.create()."""
+        kwargs: dict[str, Any] = {}
+        if self.reasoning_effort is not None:
+            kwargs["reasoning_effort"] = self.reasoning_effort
+        if self.reasoning_format is not None:
+            kwargs["reasoning_format"] = self.reasoning_format
+        if self.disable_reasoning is not None:
+            kwargs["disable_reasoning"] = self.disable_reasoning
+        return kwargs
+
     @classmethod
     def from_env(cls) -> GraphConfig:
         """Create GraphConfig from environment variables."""
@@ -120,6 +135,13 @@ class GraphConfig:
             guard_ml_enabled=os.getenv("GUARD_ML_ENABLED", "false").lower() == "true",
             llm_guard_url=os.getenv("LLM_GUARD_URL", "http://llm-guard:8100"),
             ttft_drift_warn_ms=int(os.getenv("TTFT_DRIFT_WARN_MS", "500")),
+            reasoning_effort=os.getenv("REASONING_EFFORT") or None,
+            reasoning_format=os.getenv("REASONING_FORMAT") or None,
+            disable_reasoning=(
+                os.getenv("DISABLE_REASONING", "").lower() == "true"
+                if os.getenv("DISABLE_REASONING")
+                else None
+            ),
         )
 
     def create_llm(self, model_override: str | None = None) -> Any:

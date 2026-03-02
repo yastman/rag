@@ -393,6 +393,62 @@ async def test_generate_response_non_streaming_tps_none_when_no_usage() -> None:
 
 
 @pytest.mark.asyncio
+async def test_reasoning_effort_passed_to_llm_create() -> None:
+    """reasoning_effort from config is forwarded to chat.completions.create()."""
+    config, client = _make_non_streaming_config(answer="Краткий ответ")
+    config.get_reasoning_kwargs.return_value = {"reasoning_effort": "low"}
+    lf = MagicMock()
+
+    await generate_response(
+        query="Тест reasoning",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+    )
+
+    call_kwargs = client.chat.completions.create.await_args.kwargs
+    assert call_kwargs["reasoning_effort"] == "low"
+
+
+@pytest.mark.asyncio
+async def test_disable_reasoning_passed_to_llm_create() -> None:
+    """disable_reasoning from config is forwarded to chat.completions.create()."""
+    config, client = _make_non_streaming_config(answer="Ответ без reasoning")
+    config.get_reasoning_kwargs.return_value = {"disable_reasoning": True}
+    lf = MagicMock()
+
+    await generate_response(
+        query="Тест disable reasoning",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+    )
+
+    call_kwargs = client.chat.completions.create.await_args.kwargs
+    assert call_kwargs["disable_reasoning"] is True
+
+
+@pytest.mark.asyncio
+async def test_no_reasoning_kwargs_when_none() -> None:
+    """When all reasoning fields are None, no extra kwargs are passed."""
+    config, client = _make_non_streaming_config(answer="Обычный ответ")
+    config.get_reasoning_kwargs.return_value = {}
+    lf = MagicMock()
+
+    await generate_response(
+        query="Без reasoning",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+    )
+
+    call_kwargs = client.chat.completions.create.await_args.kwargs
+    assert "reasoning_effort" not in call_kwargs
+    assert "disable_reasoning" not in call_kwargs
+    assert "reasoning_format" not in call_kwargs
+
+
+@pytest.mark.asyncio
 async def test_streaming_reasoning_content_merged_into_response() -> None:
     """Streaming with delta.reasoning_content (LiteLLM standardized) produces response.
 
