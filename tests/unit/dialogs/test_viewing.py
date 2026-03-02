@@ -66,6 +66,40 @@ async def test_get_objects_options_empty_favorites():
     assert result["has_favorites"] is False
 
 
+@pytest.mark.asyncio
+async def test_get_objects_options_reads_favorites_from_middleware_data():
+    from telegram_bot.dialogs.viewing import get_objects_options
+
+    favorites_service = SimpleNamespace(
+        list=AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    property_id="prop-1",
+                    property_data={
+                        "complex_name": "Sunset",
+                        "property_type": "1+1",
+                        "area_m2": 61,
+                        "price_eur": 95000,
+                    },
+                )
+            ]
+        )
+    )
+    manager = SimpleNamespace(dialog_data={})
+
+    result = await get_objects_options(
+        event_from_user=SimpleNamespace(id=12345),
+        middleware_data={"favorites_service": favorites_service},
+        dialog_manager=manager,
+    )
+
+    assert result["has_favorites"] is True
+    assert len(result["items"]) == 1
+    assert result["items"][0][1] == "prop-1"
+    assert "Sunset" in result["items"][0][0]
+    assert manager.dialog_data["favorites_by_id"]["prop-1"]["complex_name"] == "Sunset"
+
+
 # --- Objects skip handler ---
 
 
@@ -76,6 +110,33 @@ async def test_on_objects_skip_switches_to_date():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await on_objects_skip(MagicMock(), MagicMock(), manager)
     manager.switch_to.assert_awaited_once_with(ViewingSG.date)
+
+
+@pytest.mark.asyncio
+async def test_on_object_selected_keeps_object_metadata_for_summary_and_crm():
+    from telegram_bot.dialogs.viewing import on_object_selected
+
+    manager = SimpleNamespace(
+        dialog_data={
+            "favorites_by_id": {
+                "prop-1": {
+                    "id": "prop-1",
+                    "complex_name": "Sunset",
+                    "property_type": "1+1",
+                    "area_m2": 61,
+                    "price_eur": 95000,
+                }
+            }
+        }
+    )
+
+    await on_object_selected(MagicMock(), MagicMock(), manager, "prop-1")
+
+    selected = manager.dialog_data["selected_objects"]
+    assert len(selected) == 1
+    assert selected[0]["id"] == "prop-1"
+    assert selected[0]["complex_name"] == "Sunset"
+    assert selected[0]["price_eur"] == 95000
 
 
 # --- Summary getter ---
@@ -191,7 +252,15 @@ async def test_on_confirm_creates_crm_entities():
 
     manager = MagicMock()
     manager.dialog_data = {
-        "selected_objects": [],
+        "selected_objects": [
+            {
+                "id": "prop-1",
+                "complex_name": "Sunset",
+                "property_type": "1+1",
+                "area_m2": 61,
+                "price_eur": 95000,
+            }
+        ],
         "date_range": "nearest",
         "phone": "+380990091392",
     }
@@ -207,6 +276,9 @@ async def test_on_confirm_creates_crm_entities():
     kommo.create_lead.assert_awaited_once()
     kommo.link_contact_to_lead.assert_awaited_once_with(200, 100)
     kommo.add_note.assert_awaited_once()
+    note_text = kommo.add_note.await_args.args[2]
+    assert "Sunset" in note_text
+    assert "ID: prop-1" in note_text
     kommo.create_task.assert_awaited_once()
     manager.done.assert_awaited_once()
 
