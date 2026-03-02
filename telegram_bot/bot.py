@@ -37,7 +37,7 @@ from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
 from .graph.nodes.classify import classify_query
 from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
-from .handlers.handoff import create_handoff_router
+from .handlers.handoff import create_handoff_router, start_qualification
 from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import (
@@ -1045,7 +1045,7 @@ class PropertyBot:
                 await handler(message, state)
             elif action_id == "viewing":
                 await handler(message, state, dialog_manager)
-            elif action_id == "services":
+            elif action_id == "services" or action_id == "manager":
                 await handler(message, i18n=i18n)
             else:
                 await handler(message)
@@ -1193,9 +1193,14 @@ class PropertyBot:
         text = "\n\n".join(lines)
         await message.answer(text)
 
-    async def _handle_manager(self, message: Message) -> None:
-        """Handoff to manager (#628)."""
-        await self.handle_menu_action_text(message, "Соедини с менеджером")
+    async def _handle_manager(self, message: Message, i18n: Any = None) -> None:
+        """Handoff to manager (#628, #730)."""
+        if self._forum_bridge is not None:
+            # Forum Topics enabled — start qualification flow (#730).
+            await start_qualification(message, i18n=i18n)
+        else:
+            # Fallback — original behavior: delegate to agent pipeline.
+            await self.handle_menu_action_text(message, "Соедини с менеджером")
 
     async def _handle_group_message(self, message: Message) -> None:
         """Handle messages in managers group — relay to client (#730)."""
