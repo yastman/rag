@@ -9,17 +9,12 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 _DEMO_PHOTO_DIR = Path(__file__).resolve().parents[1] / "static" / "photos" / "demo"
-_DEMO_PHOTO_FILES = ("demo_1.png", "demo_2.png", "demo_3.png")
+_DEMO_PHOTOS: list[Path] = sorted(_DEMO_PHOTO_DIR.glob("*.jpg")) if _DEMO_PHOTO_DIR.exists() else []
 
 
-def get_demo_photo_paths() -> list[str]:
-    """Return existing demo photo paths used as temporary card images."""
-    paths: list[str] = []
-    for name in _DEMO_PHOTO_FILES:
-        path = _DEMO_PHOTO_DIR / name
-        if path.exists():
-            paths.append(str(path))
-    return paths
+def get_demo_photo_paths() -> list[Path]:
+    """Return existing demo photo paths (jpg)."""
+    return [p for p in _DEMO_PHOTOS if p.exists()]
 
 
 def format_property_card(
