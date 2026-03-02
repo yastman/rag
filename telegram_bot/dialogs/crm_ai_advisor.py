@@ -1,14 +1,17 @@
-"""AI Advisor dialog — LLM-powered manager insights (#697).
+"""AI Advisor dialog — LLM-powered manager insights (#731).
 
-Four actions available:
-- Новые лиды (leads): LLM prioritization of recent leads
-- Мои задачи (tasks): LLM prioritization of open tasks
-- Сделки в работе (stale): Analysis of deals with no activity 5+ days
-- Полный брифинг (briefing): Combined morning digest (cached 10 min)
+Two actions:
+- План на день (daily_plan): Combined briefing with action plan
+- Советы по сделкам (deal_tips): Analysis of stale deals + task tips
+
+Loading state pattern:
+  on_advisor_action → switch_to(loading) + asyncio.create_task(_fetch_result)
+  _fetch_result → bg.update(result_text) + bg.switch_to(result)
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -23,19 +26,45 @@ from .states import AIAdvisorSG
 logger = logging.getLogger(__name__)
 
 _ADVISOR_ACTIONS: list[tuple[str, str]] = [
-    ("🔥 Новые лиды", "leads"),
-    ("✅ Мои задачи", "tasks"),
-    ("📊 Сделки в работе", "stale"),
-    ("📋 Полный брифинг", "briefing"),
+    ("📋 План на день", "daily_plan"),
+    ("💡 Советы по сделкам", "deal_tips"),
 ]
 
 
 async def get_advisor_menu(**kwargs: Any) -> dict[str, Any]:
     """Getter for the AI advisor main window."""
     return {
-        "title": "🤖 AI-Советник",
+        "title": "🤖 AI-Советник\n\nВыберите действие:",
         "items": _ADVISOR_ACTIONS,
     }
+
+
+async def _fetch_advisor_result(
+    bg: Any,
+    action: str,
+    advisor: Any | None,
+    manager_id: int | None,
+) -> None:
+    """Background task: call advisor service and transition to result state."""
+    if not advisor:
+        result = "AI-Советник недоступен. Проверьте настройки CRM."
+    else:
+        try:
+            if action == "daily_plan":
+                result = await advisor.get_daily_plan(manager_id)
+            elif action == "deal_tips":
+                result = await advisor.get_deal_and_task_tips(manager_id)
+            else:
+                result = "Неизвестное действие."
+        except Exception:
+            logger.exception("AI Advisor failed for action=%s", action)
+            result = "❌ Ошибка при генерации ответа. Попробуйте позже."
+
+    try:
+        await bg.update({"result_text": result})
+        await bg.switch_to(AIAdvisorSG.result)
+    except Exception:
+        logger.exception("Failed to update advisor result via bg manager")
 
 
 async def on_advisor_action(
@@ -44,47 +73,32 @@ async def on_advisor_action(
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    """Handle advisor action selection — store action and switch to result."""
+    """Handle advisor action selection — switch to loading, fetch result in background."""
     manager.dialog_data["advisor_action"] = item_id
-    await manager.switch_to(AIAdvisorSG.result)
+    await manager.switch_to(AIAdvisorSG.loading)
+
+    advisor = manager.middleware_data.get("ai_advisor_service")
+    config = manager.middleware_data.get("bot_config")
+    manager_id: int | None = getattr(config, "kommo_responsible_user_id", None) if config else None
+
+    bg = manager.bg()
+    task = asyncio.create_task(_fetch_advisor_result(bg, item_id, advisor, manager_id))
+    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+
+
+async def get_loading_data(**kwargs: Any) -> dict[str, Any]:
+    """Getter for loading window — shows progress message."""
+    return {"loading_text": "⏳ Анализирую ваши данные...\nЭто может занять несколько секунд."}
 
 
 async def get_advisor_result(
     dialog_manager: DialogManager | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Getter for result window — invokes the appropriate advisor method."""
+    """Getter for result window — reads pre-fetched result from dialog_data."""
     if dialog_manager is None:
         return {"result_text": "—"}
-
-    action = dialog_manager.dialog_data.get("advisor_action", "")
-    advisor = dialog_manager.middleware_data.get("ai_advisor_service")
-
-    if not advisor:
-        return {"result_text": ("AI-Советник недоступен. Проверьте настройки CRM.")}
-
-    # Resolve manager_id from middleware config
-    config = dialog_manager.middleware_data.get("bot_config")
-    manager_id: int | None = getattr(config, "kommo_responsible_user_id", None) if config else None
-
-    action_map = {
-        "leads": advisor.get_prioritized_leads,
-        "tasks": advisor.get_prioritized_tasks,
-        "stale": advisor.get_stale_deals,
-        "briefing": advisor.get_full_briefing,
-    }
-    func = action_map.get(action)
-
-    try:
-        if func:
-            result = await func(manager_id)
-        else:
-            result = "Неизвестное действие."
-    except Exception:
-        logger.exception("AI Advisor failed for action=%s", action)
-        result = "❌ Ошибка при генерации ответа."
-
-    return {"result_text": result}
+    return {"result_text": dialog_manager.dialog_data.get("result_text", "—")}
 
 
 async def on_advisor_back(
@@ -111,6 +125,11 @@ advisor_dialog = Dialog(
         Cancel(Const("← Назад")),
         getter=get_advisor_menu,
         state=AIAdvisorSG.main,
+    ),
+    Window(
+        Format("{loading_text}"),
+        getter=get_loading_data,
+        state=AIAdvisorSG.loading,
     ),
     Window(
         Format("{result_text}"),
