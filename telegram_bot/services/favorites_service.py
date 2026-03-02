@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,7 +40,7 @@ class FavoritesService:
                 """,
                 telegram_id,
                 property_id,
-                property_data,
+                json.dumps(property_data, ensure_ascii=False),
             )
         except asyncpg.UniqueViolationError:
             return None
