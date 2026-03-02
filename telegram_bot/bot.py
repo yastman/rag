@@ -1403,9 +1403,9 @@ class PropertyBot:
             if new_offset >= len(results):
                 apartments_service = getattr(self, "_apartments_service", None)
                 can_fetch_more = (
-                    apartment_next_offset is not None
-                    and apartment_filters is not None
+                    apartment_filters is not None
                     and apartments_service is not None
+                    and len(results) < apartment_total
                 )
                 if can_fetch_more:
                     try:
@@ -1440,9 +1440,7 @@ class PropertyBot:
             shown = len(page)
             shown_total = new_offset + shown
             total = apartment_total if isinstance(apartment_total, int) else len(results)
-            has_more = (new_offset + _APARTMENT_PAGE_SIZE < len(results)) or (
-                apartment_next_offset is not None and shown_total < total
-            )
+            has_more = shown_total < total
             if callback.message:
                 await callback.message.answer(
                     f"Найдено {total} апартаментов (показаны {new_offset + 1}–{shown_total})",
