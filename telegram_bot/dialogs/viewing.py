@@ -65,26 +65,50 @@ def build_phone_keyboard() -> ReplyKeyboardMarkup:
 
 
 async def get_objects_options(
-    event_from_user: Any = None, favorites_service: Any = None, **kwargs: Any
+    event_from_user: Any = None,
+    favorites_service: Any = None,
+    middleware_data: dict[str, Any] | None = None,
+    dialog_manager: DialogManager | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """Load user favorites for object selection (Step 1)."""
     items: list[tuple[str, str]] = []
     has_favorites = False
+    favorites_by_id: dict[str, dict[str, Any]] = {}
 
-    if favorites_service is not None and event_from_user is not None:
+    resolved_favorites_service = favorites_service
+    if resolved_favorites_service is None:
+        resolved_favorites_service = (middleware_data or {}).get("favorites_service")
+    if resolved_favorites_service is None:
+        property_bot = (middleware_data or {}).get("property_bot")
+        if property_bot is not None:
+            resolved_favorites_service = getattr(property_bot, "_favorites_service", None)
+
+    if resolved_favorites_service is not None and event_from_user is not None:
         try:
-            favs = await favorites_service.list(event_from_user.id, limit=10)
+            favs = await resolved_favorites_service.list(event_from_user.id, limit=10)
             for fav in favs:
                 data = fav.property_data
-                label = (
-                    f"{data.get('complex_name', '?')} "
-                    f"{data.get('property_type', '')} "
-                    f"{data.get('area_m2', '')}м²"
-                ).strip()
-                items.append((label, fav.property_id))
+                property_id = str(fav.property_id)
+                complex_name = data.get("complex_name", "?")
+                property_type = data.get("property_type", "")
+                area = data.get("area_m2", "")
+                area_suffix = f"{area}м²" if area not in ("", None) else ""
+                label = (f"{complex_name} {property_type} {area_suffix}").strip()
+                items.append((label, property_id))
+                favorites_by_id[property_id] = {
+                    "id": property_id,
+                    "complex_name": complex_name,
+                    "property_type": property_type,
+                    "area_m2": data.get("area_m2", 0),
+                    "price_eur": data.get("price_eur", 0),
+                }
             has_favorites = len(items) > 0
         except Exception:
             logger.exception("Failed to load favorites for viewing wizard")
+
+    if dialog_manager is not None:
+        dialog_manager.dialog_data["favorites_by_id"] = favorites_by_id
 
     return {
         "title": "🏠 Выберите объекты для осмотра:",
@@ -178,13 +202,18 @@ async def on_object_selected(
     item_id: str,
 ) -> None:
     """Toggle object selection (multi-select via dialog_data list)."""
+    item_key = str(item_id)
     selected: list[dict[str, Any]] = manager.dialog_data.get("selected_objects", [])
     # Check if already selected → remove (toggle)
-    existing_ids = [obj.get("id", obj.get("property_id", "")) for obj in selected]
-    if item_id in existing_ids:
-        selected = [obj for obj in selected if obj.get("id", obj.get("property_id", "")) != item_id]
+    existing_ids = [str(obj.get("id", obj.get("property_id", ""))) for obj in selected]
+    if item_key in existing_ids:
+        selected = [
+            obj for obj in selected if str(obj.get("id", obj.get("property_id", ""))) != item_key
+        ]
     else:
-        selected.append({"property_id": item_id})
+        favorites_by_id = manager.dialog_data.get("favorites_by_id", {})
+        selected_obj = favorites_by_id.get(item_key, {"id": item_key})
+        selected.append(dict(selected_obj))
     manager.dialog_data["selected_objects"] = selected
 
 
