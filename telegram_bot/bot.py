@@ -645,6 +645,7 @@ class PropertyBot:
         self.dp.callback_query(F.data.startswith("fav:"))(self.handle_favorite_callback)
         self.dp.callback_query(F.data.startswith("results:"))(self.handle_results_callback)
         self.dp.callback_query(F.data.startswith("viewing:"))(self.handle_viewing_callback)
+        self.dp.callback_query(F.data.startswith("card:"))(self.handle_card_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -1016,9 +1017,11 @@ class PropertyBot:
         }
         handler = handlers.get(action_id)
         if handler:
+            if action_id != "bookmarks":
+                await state.update_data(bookmarks_context=False)
             if action_id == "search":
                 await handler(message, dialog_manager)
-            elif action_id == "viewing":
+            elif action_id == "viewing" or action_id == "bookmarks":
                 await handler(message, state)
             elif action_id == "services":
                 await handler(message, i18n=i18n)
@@ -1073,7 +1076,35 @@ class PropertyBot:
         )
         await message.answer("Вас интересуют конкретные объекты?", reply_markup=keyboard)
 
-    async def _handle_bookmarks(self, message: Message) -> None:
+    async def _send_property_card(
+        self,
+        message: Message,
+        result: dict,
+        telegram_id: int,
+    ) -> Message:
+        """Send a single property card with action buttons (DRY helper, #705)."""
+        from .keyboards.property_card import build_card_buttons, format_property_card
+
+        p = result.get("payload", {})
+        card = format_property_card(
+            property_id=result["id"],
+            complex_name=p.get("complex_name", ""),
+            location=p.get("city", ""),
+            property_type=p.get("property_type", ""),
+            floor=p.get("floor", 0),
+            area_m2=p.get("area_m2", 0),
+            view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
+            price_eur=p.get("price_eur", 0),
+        )
+        favorites_service = getattr(self, "_favorites_service", None)
+        is_fav = False
+        if favorites_service is not None:
+            is_fav = await favorites_service.is_favorited(telegram_id, result["id"])
+        return await message.answer(
+            card, reply_markup=build_card_buttons(result["id"], is_favorited=is_fav)
+        )
+
+    async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
         """Show user's saved favorites (#628)."""
         if not message.from_user:
             return
@@ -1091,35 +1122,32 @@ class PropertyBot:
             )
             return
 
-        from .keyboards.property_card import format_property_card
-
+        bookmark_message_ids: list[int] = []
         for fav in items:
-            data = fav.property_data
-            card_text = format_property_card(
-                property_id=fav.property_id,
-                complex_name=data.get("complex_name", ""),
-                location=data.get("location", ""),
-                property_type=data.get("property_type", ""),
-                floor=data.get("floor", 0),
-                area_m2=data.get("area_m2", 0),
-                view=data.get("view", ""),
-                price_eur=data.get("price_eur", 0),
+            d = fav.property_data
+            result_like = {
+                "id": fav.property_id,
+                "payload": {
+                    "complex_name": d.get("complex_name", ""),
+                    "city": d.get("location", ""),
+                    "property_type": d.get("property_type", ""),
+                    "floor": d.get("floor", 0),
+                    "area_m2": d.get("area_m2", 0),
+                    "view_tags": [],
+                    "view_primary": d.get("view", ""),
+                    "price_eur": d.get("price_eur", 0),
+                },
+            }
+            sent = await self._send_property_card(message, result_like, message.from_user.id)
+            msg_id = getattr(sent, "message_id", None)
+            if isinstance(msg_id, int):
+                bookmark_message_ids.append(msg_id)
+
+        if state is not None:
+            await state.update_data(
+                bookmarks_context=True,
+                bookmark_message_ids=bookmark_message_ids,
             )
-            kb = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="На осмотр",
-                            callback_data=f"fav:viewing:{fav.property_id}",
-                        ),
-                        InlineKeyboardButton(
-                            text="Убрать",
-                            callback_data=f"fav:remove:{fav.property_id}",
-                        ),
-                    ],
-                ]
-            )
-            await message.answer(card_text, reply_markup=kb)
 
         footer_kb = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -1273,6 +1301,13 @@ class PropertyBot:
             )
             if result:
                 await callback.answer("Добавлено в закладки")
+                if callback.message:
+                    from .keyboards.property_card import build_card_buttons
+
+                    with contextlib.suppress(Exception):
+                        await callback.message.edit_reply_markup(
+                            reply_markup=build_card_buttons(property_id, is_favorited=True)
+                        )
             else:
                 await callback.answer("Уже в закладках")
 
@@ -1280,9 +1315,34 @@ class PropertyBot:
             await favorites_service.remove(
                 telegram_id=callback.from_user.id, property_id=property_id
             )
-            if callback.message:
-                await callback.message.delete()
-            await callback.answer("Удалено из закладок")
+            state_data = await state.get_data()
+            raw_results = state_data.get("apartment_results")
+            apt_results = raw_results if isinstance(raw_results, list) else []
+            in_search_results = any(
+                isinstance(r, dict) and r.get("id") == property_id for r in apt_results
+            )
+            raw_bookmark_ids = state_data.get("bookmark_message_ids")
+            bookmark_message_ids = (
+                {mid for mid in raw_bookmark_ids if isinstance(mid, int)}
+                if isinstance(raw_bookmark_ids, list)
+                else set()
+            )
+            callback_message_id = getattr(callback.message, "message_id", None)
+            is_bookmark_message = (
+                isinstance(callback_message_id, int) and callback_message_id in bookmark_message_ids
+            )
+            if in_search_results and not is_bookmark_message and callback.message:
+                from .keyboards.property_card import build_card_buttons
+
+                with contextlib.suppress(Exception):
+                    await callback.message.edit_reply_markup(
+                        reply_markup=build_card_buttons(property_id, is_favorited=False)
+                    )
+                await callback.answer("Удалено из закладок")
+            else:
+                if callback.message:
+                    await callback.message.delete()
+                await callback.answer("Удалено из закладок")
 
         elif action == "viewing" and property_id:
             from .handlers.phone_collector import start_phone_collection
@@ -1332,11 +1392,7 @@ class PropertyBot:
 
     async def handle_results_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
-        from .keyboards.property_card import (
-            build_card_buttons,
-            build_results_footer,
-            format_property_card,
-        )
+        from .keyboards.property_card import build_results_footer
 
         data = callback.data or ""
         if data == "results:more":
@@ -1352,21 +1408,8 @@ class PropertyBot:
                 return
             page = results[new_offset : new_offset + _APARTMENT_PAGE_SIZE]
             for result in page:
-                p = result.get("payload", {})
-                card = format_property_card(
-                    property_id=result["id"],
-                    complex_name=p.get("complex_name", ""),
-                    location=p.get("city", ""),
-                    property_type=p.get("property_type", ""),
-                    floor=p.get("floor", 0),
-                    area_m2=p.get("area_m2", 0),
-                    view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-                    price_eur=p.get("price_eur", 0),
-                )
                 if callback.message:
-                    await callback.message.answer(
-                        card, reply_markup=build_card_buttons(result["id"])
-                    )
+                    await self._send_property_card(callback.message, result, callback.from_user.id)
             shown = len(page)
             total = len(results)
             has_more = new_offset + _APARTMENT_PAGE_SIZE < total
@@ -1405,6 +1448,70 @@ class PropertyBot:
                     )
             await start_phone_collection(
                 callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+            )
+        else:
+            await callback.answer()
+
+    async def handle_card_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+        """Handle card action callbacks: card:viewing and card:ask (#705)."""
+        from .handlers.phone_collector import start_phone_collection
+
+        data = callback.data or ""
+        parts = data.split(":", 2)
+        if len(parts) < 3 or not callback.from_user:
+            await callback.answer()
+            return
+
+        action = parts[1]  # "viewing" or "ask"
+        property_id = parts[2]
+
+        state_data = await state.get_data()
+        raw_results = state_data.get("apartment_results")
+        apt_results = raw_results if isinstance(raw_results, list) else []
+        matched = next(
+            (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
+            None,
+        )
+        viewing_objects: list[dict] = []
+        if matched:
+            p = matched.get("payload", {})
+            viewing_objects.append(
+                {
+                    "id": property_id,
+                    "complex_name": p.get("complex_name", ""),
+                    "property_type": p.get("property_type", ""),
+                    "area_m2": p.get("area_m2", 0),
+                    "price_eur": p.get("price_eur", 0),
+                }
+            )
+        else:
+            favorites_service = getattr(self, "_favorites_service", None)
+            if favorites_service is not None:
+                fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
+                for fav in fav_items:
+                    if fav.property_id == property_id:
+                        d = fav.property_data
+                        viewing_objects.append(
+                            {
+                                "id": fav.property_id,
+                                "complex_name": d.get("complex_name", ""),
+                                "property_type": d.get("property_type", ""),
+                                "area_m2": d.get("area_m2", 0),
+                                "price_eur": d.get("price_eur", 0),
+                            }
+                        )
+                        break
+
+        if action == "viewing":
+            await start_phone_collection(
+                callback, state, service_key="viewing", viewing_objects=viewing_objects or None
+            )
+        elif action == "ask":
+            await start_phone_collection(
+                callback,
+                state,
+                service_key="manager_question",
+                viewing_objects=viewing_objects or None,
             )
         else:
             await callback.answer()
@@ -1541,29 +1648,17 @@ class PropertyBot:
 
         # Store results in FSMContext and send property cards (#654)
         if state is not None and results:
-            from .keyboards.property_card import (
-                build_card_buttons,
-                build_results_footer,
-                format_property_card,
-            )
+            from .keyboards.property_card import build_results_footer
 
             await state.update_data(
-                apartment_results=results, apartment_query=user_text, apartment_offset=0
+                apartment_results=results,
+                apartment_query=user_text,
+                apartment_offset=0,
+                bookmarks_context=False,
             )
             page = results[:_APARTMENT_PAGE_SIZE]
             for result in page:
-                p = result.get("payload", {})
-                card = format_property_card(
-                    property_id=result["id"],
-                    complex_name=p.get("complex_name", ""),
-                    location=p.get("city", ""),
-                    property_type=p.get("property_type", ""),
-                    floor=p.get("floor", 0),
-                    area_m2=p.get("area_m2", 0),
-                    view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-                    price_eur=p.get("price_eur", 0),
-                )
-                await message.answer(card, reply_markup=build_card_buttons(result["id"]))
+                await self._send_property_card(message, result, message.from_user.id)
             shown = len(page)
             total = len(results)
             await message.answer(
