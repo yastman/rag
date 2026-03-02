@@ -1,4 +1,4 @@
-"""Tests for property search funnel dialog (#697 refactor)."""
+"""Tests for property search funnel dialog (#697 refactor, #712 city filter)."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -10,6 +10,28 @@ from telegram_bot.dialogs.funnel import funnel_dialog
 from telegram_bot.dialogs.states import FunnelSG
 
 
+# --- build_funnel_filters ---
+
+
+def test_build_funnel_filters_includes_city():
+    from telegram_bot.dialogs.funnel import build_funnel_filters
+
+    filters = build_funnel_filters(city="Санни Бич", rooms="1bed", budget="mid")
+    assert filters["city"] == "Санни Бич"
+    assert filters["rooms"] == 2
+    assert "price_eur" in filters
+
+
+def test_build_funnel_filters_skips_city_any():
+    from telegram_bot.dialogs.funnel import build_funnel_filters
+
+    filters = build_funnel_filters(city="any", rooms="1bed")
+    assert "city" not in filters
+
+
+# --- Dialog structure ---
+
+
 def test_funnel_dialog_exists():
     from aiogram_dialog import Dialog
 
@@ -19,7 +41,7 @@ def test_funnel_dialog_exists():
 def test_funnel_has_all_windows():
     windows = funnel_dialog.windows
     states = [w.get_state() for w in windows.values()]
-    assert FunnelSG.complex in states
+    assert FunnelSG.city in states
     assert FunnelSG.property_type in states
     assert FunnelSG.budget in states
     assert FunnelSG.preferences in states
@@ -27,33 +49,95 @@ def test_funnel_has_all_windows():
     assert FunnelSG.pref_view in states
     assert FunnelSG.pref_furnished in states
     assert FunnelSG.pref_promotion in states
+    assert FunnelSG.pref_complex in states
     assert FunnelSG.summary in states
     assert FunnelSG.change_filter in states
     assert FunnelSG.results in states
 
 
+# --- City getter/handler ---
+
+
 @pytest.mark.asyncio
-async def test_complex_options_has_10_complexes_plus_any():
-    result = await funnel_module.get_complex_options()
+async def test_city_options_has_3_cities_plus_any():
+    result = await funnel_module.get_city_options()
+    items = result["items"]
+    keys = [key for _, key in items]
+    assert "Санни Бич" in keys
+    assert "Свети Влас" in keys
+    assert "Элените" in keys
+    assert "any" in keys
+    assert len(items) == 4
+
+
+@pytest.mark.asyncio
+async def test_city_selected_saves_and_switches_to_property_type():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_city_selected(MagicMock(), SimpleNamespace(), manager, "Санни Бич")
+    assert manager.dialog_data["city"] == "Санни Бич"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.property_type)
+
+
+@pytest.mark.asyncio
+async def test_city_return_to_summary_when_flag_set():
+    manager = SimpleNamespace(dialog_data={"_return_to_summary": True}, switch_to=AsyncMock())
+    await funnel_module.on_city_selected(MagicMock(), SimpleNamespace(), manager, "Элените")
+    assert manager.dialog_data["city"] == "Элените"
+    assert "_return_to_summary" not in manager.dialog_data
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
+
+
+# --- pref_complex getter/handler ---
+
+
+@pytest.mark.asyncio
+async def test_pref_complex_options_has_10_complexes_plus_any():
+    result = await funnel_module.get_pref_complex_options(
+        middleware_data={},
+        dialog_manager=SimpleNamespace(dialog_data={}),
+    )
     items = result["items"]
     keys = [key for _, key in items]
     assert "Premier Fort Beach" in keys
     assert "any" in keys
-    assert len(items) == 11  # 10 complexes + "Любой комплекс"
+    assert len(items) == 11  # 10 complexes + "Любой"
 
 
 @pytest.mark.asyncio
-async def test_preferences_options_has_4_categories_plus_done():
+async def test_pref_complex_selected_saves_and_returns_to_preferences():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_complex_selected(
+        MagicMock(), SimpleNamespace(), manager, "Premier Fort Beach"
+    )
+    assert manager.dialog_data["complex"] == "Premier Fort Beach"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_pref_complex_any_clears_value():
+    manager = SimpleNamespace(dialog_data={"complex": "Premier Fort Beach"}, switch_to=AsyncMock())
+    await funnel_module.on_pref_complex_selected(MagicMock(), SimpleNamespace(), manager, "any")
+    assert manager.dialog_data["complex"] is None
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+# --- Preferences menu ---
+
+
+@pytest.mark.asyncio
+async def test_preferences_options_has_5_categories_plus_done():
     result = await funnel_module.get_preferences_options(
         middleware_data={},
         dialog_manager=SimpleNamespace(dialog_data={}),
     )
     items = result["items"]
-    labels = [label for label, _ in items]
-    assert any("Этаж" in label for label in labels)
-    assert any("Вид" in label for label in labels)
-    assert any("Мебель" in label or "мебель" in label for label in labels)
-    assert any("Акции" in label or "акции" in label for label in labels)
+    ids = [item_id for _, item_id in items]
+    assert "floor" in ids
+    assert "view" in ids
+    assert "furnished" in ids
+    assert "promotion" in ids
+    assert "complex" in ids
+    assert "done" in ids
 
 
 @pytest.mark.asyncio
@@ -69,13 +153,26 @@ async def test_preferences_options_shows_checkmark_when_selected():
 
 
 @pytest.mark.asyncio
-async def test_complex_selected_saves_and_switches():
-    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
-    await funnel_module.on_complex_selected(
-        MagicMock(), SimpleNamespace(), manager, "Premier Fort Beach"
+async def test_preferences_complex_shows_checkmark_when_selected():
+    result = await funnel_module.get_preferences_options(
+        middleware_data={},
+        dialog_manager=SimpleNamespace(dialog_data={"complex": "Premier Fort Beach"}),
     )
-    assert manager.dialog_data["complex"] == "Premier Fort Beach"
-    manager.switch_to.assert_awaited_once_with(FunnelSG.property_type)
+    items = result["items"]
+    complex_labels = [label for label, item_id in items if item_id == "complex"]
+    assert any("✓" in label for label in complex_labels)
+
+
+@pytest.mark.asyncio
+async def test_pref_category_complex_switches_to_pref_complex():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_category_selected(
+        MagicMock(), SimpleNamespace(), manager, "complex"
+    )
+    manager.switch_to.assert_awaited_once_with(FunnelSG.pref_complex)
+
+
+# --- Other step handlers (unchanged) ---
 
 
 @pytest.mark.asyncio
@@ -132,11 +229,55 @@ async def test_pref_promotion_selected_saves_and_returns():
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
 
 
+# --- Summary ---
+
+
+@pytest.mark.asyncio
+async def test_summary_data_shows_city():
+    result = await funnel_module.get_summary_data(
+        dialog_manager=SimpleNamespace(
+            dialog_data={"city": "Санни Бич", "property_type": "1bed", "budget": "mid"},
+            middleware_data={},
+        ),
+    )
+    assert "Санни Бич" in result["summary_text"]
+    assert result["can_search"] is True
+
+
+@pytest.mark.asyncio
+async def test_summary_city_any_not_shown():
+    result = await funnel_module.get_summary_data(
+        dialog_manager=SimpleNamespace(
+            dialog_data={"city": "any", "property_type": "1bed", "budget": "mid"},
+            middleware_data={},
+        ),
+    )
+    assert "Город" not in result["summary_text"]
+
+
+@pytest.mark.asyncio
+async def test_summary_shows_complex_from_preferences():
+    result = await funnel_module.get_summary_data(
+        dialog_manager=SimpleNamespace(
+            dialog_data={
+                "city": "Санни Бич",
+                "complex": "Premier Fort Beach",
+                "property_type": "2bed",
+                "budget": "high",
+            },
+            middleware_data={},
+        ),
+    )
+    assert "Premier Fort Beach" in result["summary_text"]
+    assert "Санни Бич" in result["summary_text"]
+
+
 @pytest.mark.asyncio
 async def test_summary_data_shows_selected_filters():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
             dialog_data={
+                "city": "Санни Бич",
                 "complex": "Premier Fort Beach",
                 "property_type": "2bed",
                 "budget": "high",
@@ -159,11 +300,14 @@ async def test_summary_all_any_disables_search():
     """When all filters are 'any'/empty, search should be disabled."""
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
-            dialog_data={"complex": "any", "property_type": "any", "budget": "any"},
+            dialog_data={"city": "any", "property_type": "any", "budget": "any"},
             middleware_data={},
         ),
     )
     assert result["can_search"] is False
+
+
+# --- Summary actions ---
 
 
 @pytest.mark.asyncio
@@ -175,7 +319,11 @@ async def test_on_summary_search_resets_scroll_and_goes_to_results(monkeypatch):
         message=SimpleNamespace(chat=SimpleNamespace(id=111)),
     )
     manager = SimpleNamespace(
-        dialog_data={"complex": "Premier Fort Beach", "property_type": "2bed", "budget": "high"},
+        dialog_data={
+            "city": "Санни Бич",
+            "property_type": "2bed",
+            "budget": "high",
+        },
         middleware_data={
             "user_service": object(),
             "pg_pool": object(),
@@ -205,13 +353,22 @@ async def test_on_summary_change_goes_to_change_filter():
     manager.switch_to.assert_awaited_once_with(FunnelSG.change_filter)
 
 
+# --- Change filter ---
+
+
 @pytest.mark.asyncio
-async def test_change_filter_complex_jumps_to_complex():
-    manager = SimpleNamespace(dialog_data={"_return_to_summary": True}, switch_to=AsyncMock())
-    await funnel_module.on_change_filter_selected(
-        MagicMock(), SimpleNamespace(), manager, "complex"
-    )
-    manager.switch_to.assert_awaited_once_with(FunnelSG.complex)
+async def test_change_filter_includes_city():
+    result = await funnel_module.get_change_filter_options()
+    items_ids = [item_id for _, item_id in result["items"]]
+    assert "city" in items_ids
+
+
+@pytest.mark.asyncio
+async def test_change_filter_city_jumps_to_city():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_change_filter_selected(MagicMock(), SimpleNamespace(), manager, "city")
+    assert manager.dialog_data.get("_return_to_summary") is True
+    manager.switch_to.assert_awaited_once_with(FunnelSG.city)
 
 
 @pytest.mark.asyncio
@@ -223,16 +380,7 @@ async def test_change_filter_sets_return_flag():
     manager.switch_to.assert_awaited_once_with(FunnelSG.budget)
 
 
-@pytest.mark.asyncio
-async def test_complex_return_to_summary_when_flag_set():
-    """When _return_to_summary is True, complex selection should return to summary."""
-    manager = SimpleNamespace(dialog_data={"_return_to_summary": True}, switch_to=AsyncMock())
-    await funnel_module.on_complex_selected(
-        MagicMock(), SimpleNamespace(), manager, "Green Fort Suites"
-    )
-    assert manager.dialog_data["complex"] == "Green Fort Suites"
-    assert "_return_to_summary" not in manager.dialog_data
-    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
+# --- Results ---
 
 
 @pytest.mark.asyncio
@@ -281,6 +429,9 @@ async def test_get_results_data_fallback_without_service():
     assert "недоступен" in result["results_text"].lower()
 
 
+# --- Preference any clears ---
+
+
 @pytest.mark.asyncio
 async def test_pref_furnished_any_clears_value():
     """Selecting 'any' for furnished should set is_furnished to None."""
@@ -297,6 +448,9 @@ async def test_pref_promotion_any_clears_value():
     await funnel_module.on_pref_promotion_selected(MagicMock(), SimpleNamespace(), manager, "any")
     assert manager.dialog_data["is_promotion"] is None
     manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+# --- Zero suggestions ---
 
 
 @pytest.mark.asyncio
@@ -318,9 +472,10 @@ async def test_zero_suggestion_removes_floor_and_refreshes_results():
 
 
 @pytest.mark.asyncio
-async def test_zero_suggestion_new_search_clears_filters_and_goes_to_complex():
+async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
     manager = SimpleNamespace(
         dialog_data={
+            "city": "Санни Бич",
             "complex": "Premier Fort Beach",
             "property_type": "2bed",
             "budget": "high",
@@ -341,4 +496,4 @@ async def test_zero_suggestion_new_search_clears_filters_and_goes_to_complex():
         "new_search",
     )
     assert manager.dialog_data == {}
-    manager.switch_to.assert_awaited_once_with(FunnelSG.complex)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.city)
