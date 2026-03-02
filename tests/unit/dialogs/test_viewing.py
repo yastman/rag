@@ -120,3 +120,42 @@ def test_compute_due_date_unknown_defaults_7_days():
     now = int(time.time())
     due = compute_due_date("unknown")
     assert abs(due - now - 7 * 86400) < 5
+
+
+# --- Dialog structure ---
+
+
+def test_viewing_dialog_exists():
+    from aiogram_dialog import Dialog
+
+    from telegram_bot.dialogs.viewing import viewing_dialog
+
+    assert isinstance(viewing_dialog, Dialog)
+
+
+def test_viewing_dialog_has_all_windows():
+    from telegram_bot.dialogs.viewing import viewing_dialog
+
+    windows = viewing_dialog.windows
+    states = [w.get_state() for w in windows.values()]
+    assert ViewingSG.objects in states
+    assert ViewingSG.objects_text in states
+    assert ViewingSG.date in states
+    assert ViewingSG.phone in states
+    assert ViewingSG.summary in states
+
+
+def test_viewing_dialog_importable_from_module():
+    """Verify viewing_dialog can be imported (registration sanity check)."""
+    from telegram_bot.dialogs.viewing import viewing_dialog
+
+    assert viewing_dialog is not None
+    assert len(viewing_dialog.windows) == 5
+
+
+def test_build_phone_keyboard_has_contact_button():
+    from telegram_bot.dialogs.viewing import build_phone_keyboard
+
+    kb = build_phone_keyboard()
+    # ReplyKeyboardMarkup with request_contact button
+    assert kb.keyboard[0][0].request_contact is True
