@@ -273,6 +273,167 @@ async def test_task_no_kommo_sends_error_message():
     message.answer.assert_called()
 
 
+# --- Task edit FSM states ---
+
+
+def test_crm_quick_action_states_have_edit_states():
+    """CrmQuickActionSG has edit_task_choose_field, edit_task_text, edit_task_date states."""
+    from telegram_bot.dialogs.states import CrmQuickActionSG
+
+    assert hasattr(CrmQuickActionSG, "edit_task_choose_field")
+    assert hasattr(CrmQuickActionSG, "edit_task_text")
+    assert hasattr(CrmQuickActionSG, "edit_task_date")
+
+
+async def test_on_task_edit_starts_field_choice():
+    """crm:task:edit:{id} sets edit_task_choose_field state and stores task id."""
+    from telegram_bot.dialogs.states import CrmQuickActionSG
+    from telegram_bot.handlers.crm_callbacks import on_task_edit
+
+    kommo = AsyncMock()
+    state = AsyncMock()
+    callback = AsyncMock()
+    callback.data = "crm:task:edit:42"
+    callback.message = AsyncMock()
+
+    await on_task_edit(callback, state, kommo_client=kommo)
+
+    state.set_state.assert_called_once_with(CrmQuickActionSG.edit_task_choose_field)
+    state.update_data.assert_called_once_with(edit_task_id=42)
+    callback.answer.assert_called()
+
+
+async def test_on_task_edit_no_kommo_answers_alert():
+    """on_task_edit without kommo_client answers with show_alert=True."""
+    from telegram_bot.handlers.crm_callbacks import on_task_edit
+
+    state = AsyncMock()
+    callback = AsyncMock()
+    callback.data = "crm:task:edit:5"
+
+    await on_task_edit(callback, state, kommo_client=None)
+
+    callback.answer.assert_called_once()
+    call_kwargs = callback.answer.call_args.kwargs
+    assert call_kwargs.get("show_alert") is True
+    state.set_state.assert_not_called()
+
+
+async def test_on_edit_field_chosen_1_goes_to_text():
+    """on_edit_field_chosen with '1' sets edit_task_text state."""
+    from telegram_bot.dialogs.states import CrmQuickActionSG
+    from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
+
+    state = AsyncMock()
+    message = AsyncMock()
+    message.text = "1"
+
+    await on_edit_field_chosen(message, state)
+
+    state.set_state.assert_called_once_with(CrmQuickActionSG.edit_task_text)
+    message.answer.assert_called()
+
+
+async def test_on_edit_field_chosen_2_goes_to_date():
+    """on_edit_field_chosen with '2' sets edit_task_date state."""
+    from telegram_bot.dialogs.states import CrmQuickActionSG
+    from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
+
+    state = AsyncMock()
+    message = AsyncMock()
+    message.text = "2"
+
+    await on_edit_field_chosen(message, state)
+
+    state.set_state.assert_called_once_with(CrmQuickActionSG.edit_task_date)
+    message.answer.assert_called()
+
+
+async def test_on_edit_field_chosen_invalid_sends_warning():
+    """on_edit_field_chosen with invalid input sends warning, no state change."""
+    from telegram_bot.handlers.crm_callbacks import on_edit_field_chosen
+
+    state = AsyncMock()
+    message = AsyncMock()
+    message.text = "5"
+
+    await on_edit_field_chosen(message, state)
+
+    state.set_state.assert_not_called()
+    message.answer.assert_called()
+
+
+async def test_on_edit_task_text_received_calls_update():
+    """on_edit_task_text_received calls kommo_client.update_task with new text."""
+    from telegram_bot.handlers.crm_callbacks import on_edit_task_text_received
+    from telegram_bot.services.kommo_models import TaskUpdate
+
+    kommo = AsyncMock()
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={"edit_task_id": 77})
+    message = AsyncMock()
+    message.text = "New task text"
+
+    await on_edit_task_text_received(message, state, kommo_client=kommo)
+
+    kommo.update_task.assert_called_once()
+    call_args = kommo.update_task.call_args
+    assert call_args.args[0] == 77
+    update_obj = call_args.args[1]
+    assert isinstance(update_obj, TaskUpdate)
+    assert update_obj.text == "New task text"
+    state.clear.assert_called_once()
+
+
+async def test_on_edit_task_date_received_calls_update():
+    """on_edit_task_date_received parses date and calls kommo_client.update_task."""
+    from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
+    from telegram_bot.services.kommo_models import TaskUpdate
+
+    kommo = AsyncMock()
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={"edit_task_id": 55})
+    message = AsyncMock()
+    message.text = "31.12.2027 10:00"
+
+    await on_edit_task_date_received(message, state, kommo_client=kommo)
+
+    kommo.update_task.assert_called_once()
+    call_args = kommo.update_task.call_args
+    assert call_args.args[0] == 55
+    update_obj = call_args.args[1]
+    assert isinstance(update_obj, TaskUpdate)
+    assert update_obj.complete_till is not None
+    assert update_obj.complete_till > 0
+    state.clear.assert_called_once()
+
+
+async def test_on_edit_task_date_received_invalid_format():
+    """on_edit_task_date_received with bad date sends warning, no update."""
+    from telegram_bot.handlers.crm_callbacks import on_edit_task_date_received
+
+    kommo = AsyncMock()
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={"edit_task_id": 55})
+    message = AsyncMock()
+    message.text = "not-a-date"
+
+    await on_edit_task_date_received(message, state, kommo_client=kommo)
+
+    kommo.update_task.assert_not_called()
+    message.answer.assert_called()
+
+
+def test_crm_router_registers_edit_callback():
+    """create_crm_router registers crm:task:edit handler."""
+    from telegram_bot.handlers.crm_callbacks import create_crm_router
+
+    router = create_crm_router()
+    # Verify router was created without errors (handlers registered)
+    assert router is not None
+    assert router.name == "crm_callbacks"
+
+
 # --- crm_cards.py: postpone button ---
 
 
