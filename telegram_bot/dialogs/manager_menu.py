@@ -1,4 +1,8 @@
-"""Manager main menu dialog (aiogram-dialog)."""
+"""Manager main menu dialog (aiogram-dialog).
+
+Promotes CRM navigation hub (#697) to the root manager menu.
+All wizard Start buttons are directly accessible from /start.
+"""
 
 from __future__ import annotations
 
@@ -10,19 +14,22 @@ from aiogram_dialog import Dialog, DialogManager, LaunchMode, Window
 from aiogram_dialog.widgets.kbd import Button, Column, Start
 from aiogram_dialog.widgets.text import Format
 
-from .states import CRMMenuSG, ManagerMenuSG, SettingsSG
+from .states import (
+    AIAdvisorSG,
+    ContactsMenuSG,
+    CreateNoteSG,
+    CreateTaskSG,
+    LeadsMenuSG,
+    ManagerMenuSG,
+    MyTasksSG,
+    SettingsSG,
+)
 
 
 logger = logging.getLogger(__name__)
 
 # Maps button widget_id -> query text sent to agent
 _BUTTON_QUERIES: dict[str, str] = {
-    "mgr_deals": "Покажи мои сделки",
-    "mgr_contacts": "Поиск контактов",
-    "mgr_new_deal": "Создай новую сделку",
-    "mgr_funnel_stats": "Покажи статистику воронки",
-    "mgr_hot_leads": "Покажи горячие лиды",
-    "mgr_tasks": "Покажи мои задачи",
     "mgr_search": "Поиск по базе знаний",
 }
 
@@ -39,29 +46,27 @@ async def get_manager_menu_data(
 
     if i18n is None:
         return {
-            "greeting": f"Привет, {name}! Панель менеджера.",
-            "btn_deals": "Мои сделки",
-            "btn_contacts": "Поиск контактов",
-            "btn_new_deal": "Новая сделка",
-            "btn_funnel_stats": "Воронка продаж",
-            "btn_hot_leads": "Горячие лиды",
-            "btn_tasks": "Задачи",
-            "btn_crm": "CRM",
-            "btn_search": "Поиск по базе",
-            "btn_settings": "Настройки",
+            "greeting": f"📊 CRM — Привет, {name}!",
+            "btn_leads": "📋 Сделки",
+            "btn_contacts": "👤 Контакты",
+            "btn_tasks": "✅ Создать задачу",
+            "btn_my_tasks": "📋 Мои задачи",
+            "btn_note": "📝 Заметка",
+            "btn_ai_advisor": "🤖 AI-Советник",
+            "btn_search": "🔍 Поиск по базе",
+            "btn_settings": "⚙️ Настройки",
         }
 
     return {
         "greeting": i18n.get("mgr-hello", name=name),
-        "btn_deals": i18n.get("mgr-deals"),
-        "btn_contacts": i18n.get("mgr-contacts"),
-        "btn_new_deal": i18n.get("mgr-new-deal"),
-        "btn_funnel_stats": i18n.get("mgr-funnel-stats"),
-        "btn_hot_leads": i18n.get("mgr-hot-leads"),
-        "btn_tasks": i18n.get("mgr-tasks"),
-        "btn_crm": i18n.get("mgr-crm-submenu"),
-        "btn_search": i18n.get("mgr-search"),
-        "btn_settings": i18n.get("mgr-settings"),
+        "btn_leads": i18n.get("mgr-leads", fallback="📋 Сделки"),
+        "btn_contacts": i18n.get("mgr-contacts", fallback="👤 Контакты"),
+        "btn_tasks": i18n.get("mgr-tasks-create", fallback="✅ Создать задачу"),
+        "btn_my_tasks": i18n.get("mgr-my-tasks", fallback="📋 Мои задачи"),
+        "btn_note": i18n.get("mgr-note", fallback="📝 Заметка"),
+        "btn_ai_advisor": i18n.get("mgr-ai-advisor", fallback="🤖 AI-Советник"),
+        "btn_search": i18n.get("mgr-search", fallback="🔍 Поиск по базе"),
+        "btn_settings": i18n.get("mgr-settings", fallback="⚙️ Настройки"),
     }
 
 
@@ -86,40 +91,35 @@ manager_menu_dialog = Dialog(
     Window(
         Format("{greeting}"),
         Column(
-            Button(
-                Format("{btn_deals}"),
-                id="mgr_deals",
-                on_click=on_manager_action,
-            ),
-            Button(
-                Format("{btn_contacts}"),
-                id="mgr_contacts",
-                on_click=on_manager_action,
-            ),
-            Button(
-                Format("{btn_new_deal}"),
-                id="mgr_new_deal",
-                on_click=on_manager_action,
-            ),
-            Button(
-                Format("{btn_funnel_stats}"),
-                id="mgr_funnel_stats",
-                on_click=on_manager_action,
-            ),
-            Button(
-                Format("{btn_hot_leads}"),
-                id="mgr_hot_leads",
-                on_click=on_manager_action,
-            ),
-            Button(
-                Format("{btn_tasks}"),
-                id="mgr_tasks",
-                on_click=on_manager_action,
+            Start(
+                Format("{btn_leads}"),
+                id="mgr_leads",
+                state=LeadsMenuSG.main,
             ),
             Start(
-                Format("{btn_crm}"),
-                id="mgr_crm",
-                state=CRMMenuSG.main,
+                Format("{btn_contacts}"),
+                id="mgr_contacts",
+                state=ContactsMenuSG.main,
+            ),
+            Start(
+                Format("{btn_tasks}"),
+                id="mgr_tasks",
+                state=CreateTaskSG.text,
+            ),
+            Start(
+                Format("{btn_my_tasks}"),
+                id="mgr_my_tasks",
+                state=MyTasksSG.filter,
+            ),
+            Start(
+                Format("{btn_note}"),
+                id="mgr_note",
+                state=CreateNoteSG.text,
+            ),
+            Start(
+                Format("{btn_ai_advisor}"),
+                id="mgr_ai_advisor",
+                state=AIAdvisorSG.main,
             ),
             Button(
                 Format("{btn_search}"),

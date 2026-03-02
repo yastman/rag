@@ -55,7 +55,7 @@ async def test_on_manager_action_calls_manager_done_and_handle_menu_action():
 
     callback = MagicMock()
     button = MagicMock()
-    button.widget_id = "mgr_deals"
+    button.widget_id = "mgr_search"
 
     manager = AsyncMock()
     manager.done = AsyncMock()
@@ -65,7 +65,7 @@ async def test_on_manager_action_calls_manager_done_and_handle_menu_action():
 
     manager.done.assert_called_once()
     mock_bot.handle_menu_action.assert_called_once_with(
-        callback, _BUTTON_QUERIES["mgr_deals"], locale="uk"
+        callback, _BUTTON_QUERIES["mgr_search"], locale="uk"
     )
 
 
