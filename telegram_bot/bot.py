@@ -1101,21 +1101,16 @@ class PropertyBot:
         if favorites_service is not None:
             is_fav = await favorites_service.is_favorited(telegram_id, result["id"])
         demo_photos = get_demo_photo_paths()
-        photos_count = len(demo_photos) or 3
         reply_markup = build_card_buttons(
             result["id"],
             is_favorited=is_fav,
-            photos_count=photos_count,
         )
         if demo_photos:
             try:
-                return await message.answer_photo(
-                    photo=FSInputFile(demo_photos[0]),
-                    caption=card,
-                    reply_markup=reply_markup,
-                )
+                media = [InputMediaPhoto(media=FSInputFile(path)) for path in demo_photos]
+                await message.answer_media_group(media=media)
             except Exception:
-                logger.warning("Failed to send photo card, falling back to text", exc_info=True)
+                logger.warning("Failed to send photo album, falling back to text", exc_info=True)
 
         return await message.answer(card, reply_markup=reply_markup)
 
@@ -1510,9 +1505,8 @@ class PropertyBot:
             await callback.answer()
 
     async def handle_card_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
-        """Handle card action callbacks: card:viewing, card:ask, card:photos (#722)."""
+        """Handle card action callbacks: card:viewing, card:ask (#722)."""
         from .handlers.phone_collector import start_phone_collection
-        from .keyboards.property_card import get_demo_photo_paths
 
         data = callback.data or ""
         parts = data.split(":", 2)
@@ -1571,25 +1565,6 @@ class PropertyBot:
                 service_key="manager_question",
                 viewing_objects=viewing_objects or None,
             )
-        elif action == "photos":
-            if callback.message:
-                demo_photos = get_demo_photo_paths()
-                if demo_photos:
-                    media = [
-                        InputMediaPhoto(
-                            media=FSInputFile(path),
-                            caption="📷 Все фото (демо)" if idx == 0 else None,
-                        )
-                        for idx, path in enumerate(demo_photos)
-                    ]
-                    try:
-                        await callback.message.answer_media_group(media=media)
-                    except Exception:
-                        logger.warning("Failed to send photo album", exc_info=True)
-                        await callback.message.answer("Фото временно недоступны.")
-                else:
-                    await callback.message.answer("Фото временно недоступны.")
-            await callback.answer()
         else:
             await callback.answer()
 
