@@ -77,6 +77,82 @@ crm-add-note = Add note
 crm-create-task = Create task
 crm-pipelines = Pipelines
 
+# CRM Hub (navigation menu) — #697
+crm-hub-title = CRM — Manager Dashboard
+crm-hub-btn-leads = 📋 Deals
+crm-hub-btn-contacts = 👤 Contacts
+crm-hub-btn-task-create = ✅ Create Task
+crm-hub-btn-my-tasks = 📋 My Tasks
+crm-hub-btn-note = 📝 Note
+crm-hub-btn-ai-advisor = 🤖 AI Advisor
+crm-hub-btn-back = ← Back
+
+# CRM Deals (Leads) — #697
+crm-leads-title = 📋 Deals
+crm-leads-btn-create = ➕ Create Deal
+crm-leads-btn-my-leads = 🗂 My Deals
+crm-leads-btn-search = 🔍 Search
+crm-leads-prompt-name = Enter deal name:
+crm-leads-prompt-budget = Enter deal budget (integer in €, or 0 to skip):
+crm-leads-prompt-pipeline = Select pipeline (funnel):
+crm-leads-btn-confirm = ✅ Create
+crm-leads-btn-edit-name = ✏️ Edit name
+crm-leads-search-prompt = Enter text to search deals:
+crm-leads-empty = No deals found
+
+# CRM Contacts — #697
+crm-contacts-title = 👤 Contacts
+crm-contacts-btn-create = ➕ Create Contact
+crm-contacts-btn-search = 🔍 Search
+crm-contacts-prompt-first-name = Enter contact first name:
+crm-contacts-prompt-last-name = Enter contact last name:
+crm-contacts-prompt-phone = Enter contact phone (e.g. +79001234567):
+crm-contacts-prompt-email = Enter contact email (or press Skip):
+crm-contacts-btn-confirm = ✅ Create
+crm-contacts-btn-edit-name = ✏️ Edit name
+crm-contacts-search-prompt = Enter name or phone to search contacts:
+crm-contacts-empty = No contacts found
+
+# CRM Tasks — #697
+crm-tasks-title-create = ✅ Create Task
+crm-tasks-step1 = Step 1/5: Enter task description:
+crm-tasks-step2 = Step 2/5: Select task type:
+crm-tasks-step3 = Step 3/5: Select deal to link:
+crm-tasks-step4 = Step 4/5: Enter due date (days from today):
+crm-tasks-btn-confirm = ✅ Create
+crm-tasks-btn-skip = Skip
+crm-tasks-my-tasks-title = 📋 My Tasks
+crm-tasks-filter-all = All tasks
+crm-tasks-filter-today = Today
+crm-tasks-filter-overdue = Overdue
+
+# CRM Notes — #697
+crm-notes-title = 📝 Create Note
+crm-notes-step1 = Step 1/4: Enter note text:
+crm-notes-step2 = Step 2/4: Link note to?
+crm-notes-btn-confirm = ✅ Save
+
+# CRM AI Advisor — #697
+crm-advisor-title = 🤖 AI Advisor
+crm-advisor-loading = Analyzing data...
+crm-advisor-btn-back = ← Back to advisor menu
+crm-advisor-btn-cancel = ← CRM
+
+# CRM navigation and common buttons — #697
+crm-btn-back = ← Back
+crm-btn-cancel = Cancel
+crm-btn-close = Close
+crm-btn-skip = Skip
+
+# CRM errors — #697
+crm-error-no-crm = ⚠️ CRM unavailable.
+crm-error-note-empty = ⚠️ Note text cannot be empty.
+crm-error-task-empty = ⚠️ Task text cannot be empty.
+crm-error-add-note = ⚠️ Error adding note.
+crm-error-create-task = ⚠️ Error creating task.
+crm-error-complete-task = ⚠️ Error completing task.
+crm-error-postpone-task = ⚠️ Error postponing task.
+
 # Client ReplyKeyboard (#660)
 kb-search = 🏠 Find Apartments
 kb-services = 🔑 Services
