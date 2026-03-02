@@ -57,17 +57,16 @@ menu-booking = Book a viewing
 menu-mortgage = Calculate mortgage
 menu-my-leads = My applications
 
-# Manager menu
-mgr-hello = Hi, { $name }! Manager dashboard.
-mgr-deals = My deals
-mgr-contacts = Search contacts
-mgr-new-deal = New deal
-mgr-funnel-stats = Sales funnel
-mgr-hot-leads = Hot leads
-mgr-tasks = Tasks
-mgr-crm-submenu = CRM
-mgr-search = Search knowledge base
-mgr-settings = Settings
+# Manager menu (root CRM hub)
+mgr-hello = 📊 CRM — Hi, { $name }!
+mgr-leads = 📋 Deals
+mgr-contacts = 👤 Contacts
+mgr-tasks-create = ✅ Create Task
+mgr-my-tasks = 📋 My Tasks
+mgr-note = 📝 Note
+mgr-ai-advisor = 🤖 AI Advisor
+mgr-search = 🔍 Search knowledge base
+mgr-settings = ⚙️ Settings
 
 # CRM submenu
 crm-title = CRM
