@@ -1,7 +1,7 @@
 """Manager main menu dialog (aiogram-dialog).
 
-Promotes CRM navigation hub (#697) to the root manager menu.
-All wizard Start buttons are directly accessible from /start.
+Root CRM hub — 4 entity categories + 3 tools.
+Сделки/Контакты/Задачи have sub-menus, Заметка is direct wizard.
 """
 
 from __future__ import annotations
@@ -18,11 +18,10 @@ from .states import (
     AIAdvisorSG,
     ContactsMenuSG,
     CreateNoteSG,
-    CreateTaskSG,
     LeadsMenuSG,
     ManagerMenuSG,
-    MyTasksSG,
     SettingsSG,
+    TasksMenuSG,
 )
 
 
@@ -49,8 +48,7 @@ async def get_manager_menu_data(
             "greeting": f"📊 CRM — Привет, {name}!",
             "btn_leads": "📋 Сделки",
             "btn_contacts": "👤 Контакты",
-            "btn_tasks": "✅ Создать задачу",
-            "btn_my_tasks": "📋 Мои задачи",
+            "btn_tasks": "✅ Задачи",
             "btn_note": "📝 Заметка",
             "btn_ai_advisor": "🤖 AI-Советник",
             "btn_search": "🔍 Поиск по базе",
@@ -61,8 +59,7 @@ async def get_manager_menu_data(
         "greeting": i18n.get("mgr-hello", name=name),
         "btn_leads": i18n.get("mgr-leads"),
         "btn_contacts": i18n.get("mgr-contacts"),
-        "btn_tasks": i18n.get("mgr-tasks-create"),
-        "btn_my_tasks": i18n.get("mgr-my-tasks"),
+        "btn_tasks": i18n.get("mgr-tasks"),
         "btn_note": i18n.get("mgr-note"),
         "btn_ai_advisor": i18n.get("mgr-ai-advisor"),
         "btn_search": i18n.get("mgr-search"),
@@ -91,6 +88,7 @@ manager_menu_dialog = Dialog(
     Window(
         Format("{greeting}"),
         Column(
+            # 4 CRM entity categories
             Start(
                 Format("{btn_leads}"),
                 id="mgr_leads",
@@ -104,18 +102,14 @@ manager_menu_dialog = Dialog(
             Start(
                 Format("{btn_tasks}"),
                 id="mgr_tasks",
-                state=CreateTaskSG.text,
-            ),
-            Start(
-                Format("{btn_my_tasks}"),
-                id="mgr_my_tasks",
-                state=MyTasksSG.filter,
+                state=TasksMenuSG.main,
             ),
             Start(
                 Format("{btn_note}"),
                 id="mgr_note",
                 state=CreateNoteSG.text,
             ),
+            # 3 tools
             Start(
                 Format("{btn_ai_advisor}"),
                 id="mgr_ai_advisor",
