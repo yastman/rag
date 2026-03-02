@@ -1484,7 +1484,12 @@ class PropertyBot:
         else:
             await callback.answer()
 
-    async def handle_card_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+    async def handle_card_callback(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        dialog_manager: Any = None,
+    ) -> None:
         """Handle card action callbacks: card:viewing, card:ask (#722)."""
         from .handlers.phone_collector import start_phone_collection
 
@@ -1535,9 +1540,23 @@ class PropertyBot:
                         break
 
         if action == "viewing":
-            await start_phone_collection(
-                callback, state, service_key="viewing", viewing_objects=viewing_objects or None
-            )
+            if dialog_manager is not None:
+                from aiogram_dialog import StartMode
+
+                from .dialogs.states import ViewingSG
+
+                await dialog_manager.start(
+                    ViewingSG.date,
+                    mode=StartMode.RESET_STACK,
+                    data={"selected_objects": viewing_objects},
+                )
+            else:
+                await start_phone_collection(
+                    callback,
+                    state,
+                    service_key="viewing",
+                    viewing_objects=viewing_objects or None,
+                )
         elif action == "ask":
             await start_phone_collection(
                 callback,
