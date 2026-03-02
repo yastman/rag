@@ -1073,6 +1073,34 @@ class PropertyBot:
         )
         await message.answer("Вас интересуют конкретные объекты?", reply_markup=keyboard)
 
+    async def _send_property_card(
+        self,
+        message: Message,
+        result: dict,
+        telegram_id: int,
+    ) -> None:
+        """Send a single property card with action buttons (DRY helper, #705)."""
+        from .keyboards.property_card import build_card_buttons, format_property_card
+
+        p = result.get("payload", {})
+        card = format_property_card(
+            property_id=result["id"],
+            complex_name=p.get("complex_name", ""),
+            location=p.get("city", ""),
+            property_type=p.get("property_type", ""),
+            floor=p.get("floor", 0),
+            area_m2=p.get("area_m2", 0),
+            view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
+            price_eur=p.get("price_eur", 0),
+        )
+        favorites_service = getattr(self, "_favorites_service", None)
+        is_fav = False
+        if favorites_service is not None:
+            is_fav = await favorites_service.is_favorited(telegram_id, result["id"])
+        await message.answer(
+            card, reply_markup=build_card_buttons(result["id"], is_favorited=is_fav)
+        )
+
     async def _handle_bookmarks(self, message: Message) -> None:
         """Show user's saved favorites (#628)."""
         if not message.from_user:
@@ -1091,35 +1119,22 @@ class PropertyBot:
             )
             return
 
-        from .keyboards.property_card import format_property_card
-
         for fav in items:
-            data = fav.property_data
-            card_text = format_property_card(
-                property_id=fav.property_id,
-                complex_name=data.get("complex_name", ""),
-                location=data.get("location", ""),
-                property_type=data.get("property_type", ""),
-                floor=data.get("floor", 0),
-                area_m2=data.get("area_m2", 0),
-                view=data.get("view", ""),
-                price_eur=data.get("price_eur", 0),
-            )
-            kb = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="На осмотр",
-                            callback_data=f"fav:viewing:{fav.property_id}",
-                        ),
-                        InlineKeyboardButton(
-                            text="Убрать",
-                            callback_data=f"fav:remove:{fav.property_id}",
-                        ),
-                    ],
-                ]
-            )
-            await message.answer(card_text, reply_markup=kb)
+            d = fav.property_data
+            result_like = {
+                "id": fav.property_id,
+                "payload": {
+                    "complex_name": d.get("complex_name", ""),
+                    "city": d.get("location", ""),
+                    "property_type": d.get("property_type", ""),
+                    "floor": d.get("floor", 0),
+                    "area_m2": d.get("area_m2", 0),
+                    "view_tags": [],
+                    "view_primary": d.get("view", ""),
+                    "price_eur": d.get("price_eur", 0),
+                },
+            }
+            await self._send_property_card(message, result_like, message.from_user.id)
 
         footer_kb = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -1332,11 +1347,7 @@ class PropertyBot:
 
     async def handle_results_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
-        from .keyboards.property_card import (
-            build_card_buttons,
-            build_results_footer,
-            format_property_card,
-        )
+        from .keyboards.property_card import build_results_footer
 
         data = callback.data or ""
         if data == "results:more":
@@ -1352,21 +1363,8 @@ class PropertyBot:
                 return
             page = results[new_offset : new_offset + _APARTMENT_PAGE_SIZE]
             for result in page:
-                p = result.get("payload", {})
-                card = format_property_card(
-                    property_id=result["id"],
-                    complex_name=p.get("complex_name", ""),
-                    location=p.get("city", ""),
-                    property_type=p.get("property_type", ""),
-                    floor=p.get("floor", 0),
-                    area_m2=p.get("area_m2", 0),
-                    view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-                    price_eur=p.get("price_eur", 0),
-                )
                 if callback.message:
-                    await callback.message.answer(
-                        card, reply_markup=build_card_buttons(result["id"])
-                    )
+                    await self._send_property_card(callback.message, result, callback.from_user.id)
             shown = len(page)
             total = len(results)
             has_more = new_offset + _APARTMENT_PAGE_SIZE < total
@@ -1541,29 +1539,14 @@ class PropertyBot:
 
         # Store results in FSMContext and send property cards (#654)
         if state is not None and results:
-            from .keyboards.property_card import (
-                build_card_buttons,
-                build_results_footer,
-                format_property_card,
-            )
+            from .keyboards.property_card import build_results_footer
 
             await state.update_data(
                 apartment_results=results, apartment_query=user_text, apartment_offset=0
             )
             page = results[:_APARTMENT_PAGE_SIZE]
             for result in page:
-                p = result.get("payload", {})
-                card = format_property_card(
-                    property_id=result["id"],
-                    complex_name=p.get("complex_name", ""),
-                    location=p.get("city", ""),
-                    property_type=p.get("property_type", ""),
-                    floor=p.get("floor", 0),
-                    area_m2=p.get("area_m2", 0),
-                    view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-                    price_eur=p.get("price_eur", 0),
-                )
-                await message.answer(card, reply_markup=build_card_buttons(result["id"]))
+                await self._send_property_card(message, result, message.from_user.id)
             shown = len(page)
             total = len(results)
             await message.answer(
