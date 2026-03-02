@@ -1108,12 +1108,14 @@ class PropertyBot:
             photos_count=photos_count,
         )
         if demo_photos:
-            with contextlib.suppress(Exception):
+            try:
                 return await message.answer_photo(
                     photo=FSInputFile(demo_photos[0]),
                     caption=card,
                     reply_markup=reply_markup,
                 )
+            except Exception:
+                logger.warning("Failed to send photo card, falling back to text", exc_info=True)
 
         return await message.answer(card, reply_markup=reply_markup)
 
@@ -1543,8 +1545,11 @@ class PropertyBot:
                         )
                         for idx, path in enumerate(demo_photos)
                     ]
-                    with contextlib.suppress(Exception):
+                    try:
                         await callback.message.answer_media_group(media=media)
+                    except Exception:
+                        logger.warning("Failed to send photo album", exc_info=True)
+                        await callback.message.answer("Фото временно недоступны.")
                 else:
                     await callback.message.answer("Фото временно недоступны.")
             await callback.answer()
