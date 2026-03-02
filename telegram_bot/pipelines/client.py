@@ -283,7 +283,6 @@ async def run_client_pipeline(
             llm_call_count=int(result.get("llm_call_count", 0) or 0),
             config=config,
             message=message,
-            llm=llm,
         )
         result.update(generated)
         response_text = str(generated.get("response", "") or "")
