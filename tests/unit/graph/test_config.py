@@ -165,6 +165,68 @@ class TestGraphConfig:
             cfg = GraphConfig.from_env()
         assert cfg.rerank_provider == "none"
 
+    # --- Reasoning control ---
+
+    def test_reasoning_defaults_none(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        assert cfg.reasoning_effort is None
+        assert cfg.reasoning_format is None
+        assert cfg.disable_reasoning is None
+
+    def test_get_reasoning_kwargs_all_none(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig()
+        assert cfg.get_reasoning_kwargs() == {}
+
+    def test_get_reasoning_kwargs_effort_low(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig(reasoning_effort="low")
+        assert cfg.get_reasoning_kwargs() == {"reasoning_effort": "low"}
+
+    def test_get_reasoning_kwargs_disable_reasoning(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig(disable_reasoning=True)
+        assert cfg.get_reasoning_kwargs() == {"disable_reasoning": True}
+
+    def test_get_reasoning_kwargs_combined(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        cfg = GraphConfig(reasoning_effort="high", reasoning_format="hidden")
+        assert cfg.get_reasoning_kwargs() == {
+            "reasoning_effort": "high",
+            "reasoning_format": "hidden",
+        }
+
+    def test_from_env_reasoning_effort(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        env = {"REASONING_EFFORT": "low"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.reasoning_effort == "low"
+
+    def test_from_env_disable_reasoning(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        env = {"DISABLE_REASONING": "true"}
+        with patch.dict(os.environ, env, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.disable_reasoning is True
+
+    def test_from_env_reasoning_not_set(self):
+        from telegram_bot.graph.config import GraphConfig
+
+        with patch.dict(os.environ, {}, clear=True):
+            cfg = GraphConfig.from_env()
+        assert cfg.reasoning_effort is None
+        assert cfg.reasoning_format is None
+        assert cfg.disable_reasoning is None
+
     def test_skip_rerank_threshold_requires_fusion_overlap(self):
         """Default threshold must be above single-query top-1 RRF score.
 
