@@ -47,11 +47,11 @@ class TestParseApartmentRow:
             "has_photo": "False",
             "is_promotion": "False",
             "old_price_eur": "",
-            "city": "Sunny Beach",
+            "city": "Солнечный берег",
         }
         record = parse_apartment_row(row)
         assert record.complex_name == "Premier Fort Beach"
-        assert record.city == "Sunny Beach"
+        assert record.city == "Солнечный берег"
         assert record.rooms == 2
         assert record.price_eur == 215000.0
 
