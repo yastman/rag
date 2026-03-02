@@ -23,33 +23,24 @@ def test_manager_menu_has_main_window():
 
 
 def test_manager_menu_button_queries_defined():
-    """All action button widget_ids have mapped query text."""
-    expected_ids = {
-        "mgr_deals",
-        "mgr_contacts",
-        "mgr_new_deal",
-        "mgr_funnel_stats",
-        "mgr_hot_leads",
-        "mgr_tasks",
-        "mgr_search",
-    }
+    """Only search button dispatches text to agent; rest are Start navigation."""
+    expected_ids = {"mgr_search"}
     assert set(_BUTTON_QUERIES.keys()) == expected_ids
     for widget_id, query in _BUTTON_QUERIES.items():
         assert isinstance(query, str) and len(query) > 0, f"Empty query for {widget_id}"
 
 
-async def test_manager_menu_fallback_getter_has_9_keys():
-    """Fallback getter (no i18n) returns all 9 button labels."""
+async def test_manager_menu_fallback_getter_has_8_keys():
+    """Fallback getter (no i18n) returns all 8 button labels."""
     result = await get_manager_menu_data()
     assert "greeting" in result
     for key in (
-        "btn_deals",
+        "btn_leads",
         "btn_contacts",
-        "btn_new_deal",
-        "btn_funnel_stats",
-        "btn_hot_leads",
         "btn_tasks",
-        "btn_crm",
+        "btn_my_tasks",
+        "btn_note",
+        "btn_ai_advisor",
         "btn_search",
         "btn_settings",
     ):
@@ -57,7 +48,7 @@ async def test_manager_menu_fallback_getter_has_9_keys():
 
 
 async def test_manager_menu_i18n_getter_returns_all_keys():
-    """Getter with i18n returns all 9 button labels from FTL."""
+    """Getter with i18n returns all 8 button labels from FTL."""
     from unittest.mock import MagicMock
 
     i18n = MagicMock()
@@ -65,18 +56,16 @@ async def test_manager_menu_i18n_getter_returns_all_keys():
     result = await get_manager_menu_data(i18n=i18n)
 
     for key in (
-        "btn_deals",
+        "btn_leads",
         "btn_contacts",
-        "btn_new_deal",
-        "btn_funnel_stats",
-        "btn_hot_leads",
         "btn_tasks",
-        "btn_crm",
+        "btn_my_tasks",
+        "btn_note",
+        "btn_ai_advisor",
         "btn_search",
         "btn_settings",
     ):
         assert key in result
-        assert result[key].startswith("[")
 
 
 def test_manager_menu_launch_mode_root():

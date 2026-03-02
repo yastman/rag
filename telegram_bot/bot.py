@@ -3251,7 +3251,6 @@ class PropertyBot:
             search_leads_dialog,
         )
         from .dialogs.crm_notes import create_note_dialog
-        from .dialogs.crm_submenu import crm_submenu_dialog
         from .dialogs.crm_tasks import create_task_dialog, my_tasks_dialog
         from .dialogs.faq import faq_dialog
         from .dialogs.funnel import funnel_dialog
@@ -3263,7 +3262,6 @@ class PropertyBot:
         self.dp.include_router(create_crm_router())
 
         self.dp.include_router(manager_menu_dialog)
-        self.dp.include_router(crm_submenu_dialog)
         self.dp.include_router(leads_menu_dialog)
         self.dp.include_router(create_lead_dialog)
         self.dp.include_router(my_leads_dialog)
