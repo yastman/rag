@@ -239,3 +239,85 @@ def test_render_tasks_text_multiple_tasks():
 
     assert "First task" in result
     assert "Second task" in result
+
+
+# --- get_task_list: edit_tasks data ---
+
+
+async def test_get_task_list_includes_edit_tasks():
+    """get_task_list getter returns edit_tasks for active tasks on page."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from telegram_bot.dialogs.crm_tasks import get_task_list
+    from telegram_bot.services.kommo_models import Task
+
+    kommo = AsyncMock()
+    kommo.get_tasks = AsyncMock(
+        return_value=[
+            Task(id=10, text="Edit me", is_completed=False),
+            Task(id=11, text="Also active", is_completed=False),
+        ]
+    )
+
+    manager = MagicMock()
+    manager.middleware_data = {"kommo_client": kommo}
+    manager.dialog_data = {"task_filter": "all", "page": 0}
+
+    result = await get_task_list(dialog_manager=manager)
+
+    assert "edit_tasks" in result
+    ids = [item_id for _, item_id in result["edit_tasks"]]
+    assert "10" in ids
+    assert "11" in ids
+
+
+async def test_get_task_list_edit_tasks_excludes_completed():
+    """get_task_list edit_tasks does not include completed tasks."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from telegram_bot.dialogs.crm_tasks import get_task_list
+    from telegram_bot.services.kommo_models import Task
+
+    kommo = AsyncMock()
+    kommo.get_tasks = AsyncMock(
+        return_value=[
+            Task(id=10, text="Active", is_completed=False),
+            Task(id=20, text="Done", is_completed=True),
+        ]
+    )
+
+    manager = MagicMock()
+    manager.middleware_data = {"kommo_client": kommo}
+    manager.dialog_data = {"task_filter": "all", "page": 0}
+
+    result = await get_task_list(dialog_manager=manager)
+
+    ids = [item_id for _, item_id in result["edit_tasks"]]
+    assert "10" in ids
+    assert "20" not in ids
+
+
+# --- on_task_edit_from_list ---
+
+
+async def test_on_task_edit_from_list_sets_fsm_and_closes_dialog():
+    """on_task_edit_from_list sets FSM edit state and closes dialog."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from telegram_bot.dialogs.crm_tasks import on_task_edit_from_list
+    from telegram_bot.dialogs.states import CrmQuickActionSG
+
+    fsm_state = AsyncMock()
+    callback = AsyncMock()
+    callback.message = AsyncMock()
+    widget = MagicMock()
+    manager = MagicMock()
+    manager.done = AsyncMock()
+    manager.middleware_data = {"state": fsm_state}
+
+    await on_task_edit_from_list(callback, widget, manager, item_id="42")
+
+    fsm_state.set_state.assert_called_once_with(CrmQuickActionSG.edit_task_choose_field)
+    fsm_state.update_data.assert_called_once_with(edit_task_id=42)
+    manager.done.assert_called_once()
+    callback.answer.assert_called()
