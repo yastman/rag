@@ -1159,24 +1159,6 @@ class PropertyBot:
                 bookmark_message_ids=bookmark_message_ids,
             )
 
-        footer_kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="Запись на осмотр всех",
-                        callback_data="fav:viewing_all",
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="Связь с менеджером",
-                        callback_data="cta:manager",
-                    )
-                ],
-            ]
-        )
-        await message.answer(f"Всего в закладках: {len(items)}", reply_markup=footer_kb)
-
     async def _handle_promotions(self, message: Message) -> None:
         """Show promotions from config (#628)."""
         from .services.content_loader import get_promotions
