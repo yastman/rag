@@ -133,30 +133,49 @@ class KommoClient:
         query: str | None = None,
         responsible_user_id: int | None = None,
         limit: int = 50,
+        with_contacts: bool = False,
     ) -> list[Lead]:
-        """GET /api/v4/leads with optional query or responsible_user_id filter."""
+        """GET /api/v4/leads with optional query or responsible_user_id filter.
+
+        with_contacts: include embedded contacts via Kommo ?with=contacts (#731).
+        """
         params: dict[str, Any] = {"limit": limit}
         if query is not None:
             params["query"] = query
         if responsible_user_id is not None:
             params["filter[responsible_user_id][]"] = responsible_user_id
+        if with_contacts:
+            params["with"] = "contacts"
         data = await self._request("GET", "/leads", params=params)
         items = data.get("_embedded", {}).get("leads", [])
-        return [Lead(**item) for item in items]
+        leads = []
+        for item in items:
+            embedded = item.pop("_embedded", {})
+            contacts = embedded.get("contacts") if embedded else None
+            if contacts is not None:
+                item["contacts"] = contacts
+            leads.append(Lead(**item))
+        return leads
 
     @observe(name="kommo-get-tasks")
     async def get_tasks(
         self,
         responsible_user_id: int | None = None,
         is_completed: bool | None = None,
+        entity_id: int | None = None,
         limit: int = 50,
     ) -> list[Task]:
-        """GET /api/v4/tasks with optional filters."""
+        """GET /api/v4/tasks with optional filters.
+
+        entity_id: filter tasks by lead/contact entity (#731).
+        """
         params: dict[str, Any] = {"limit": limit}
         if responsible_user_id is not None:
             params["filter[responsible_user_id][]"] = responsible_user_id
         if is_completed is not None:
             params["filter[is_completed]"] = int(is_completed)
+        if entity_id is not None:
+            params["filter[entity_id][]"] = entity_id
         data = await self._request("GET", "/tasks", params=params)
         items = data.get("_embedded", {}).get("tasks", [])
         return [Task(**item) for item in items]
