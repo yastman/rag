@@ -282,3 +282,62 @@ async def test_link_contact_to_lead(kommo_client, httpx_mock):
 
     # Should complete without raising an exception
     await kommo_client.link_contact_to_lead(101, 456)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 4: search_leads with_contacts + get_tasks entity_id filter (#731)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def test_search_leads_with_contacts_sends_with_param(kommo_client, httpx_mock):
+    """search_leads(with_contacts=True) includes 'with=contacts' in request (#731)."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/leads"),
+        json={
+            "_embedded": {
+                "leads": [
+                    {
+                        "id": 20,
+                        "name": "Deal With Contact",
+                        "_embedded": {"contacts": [{"id": 5, "name": "Мария Иванова"}]},
+                    }
+                ]
+            }
+        },
+    )
+
+    leads = await kommo_client.search_leads(with_contacts=True)
+    assert len(leads) == 1
+    assert leads[0].contacts is not None
+    assert leads[0].contacts[0]["name"] == "Мария Иванова"
+
+
+async def test_search_leads_without_contacts_no_embedded(kommo_client, httpx_mock):
+    """search_leads without with_contacts returns leads with contacts=None (#731)."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/leads"),
+        json={"_embedded": {"leads": [{"id": 21, "name": "Plain Lead"}]}},
+    )
+
+    leads = await kommo_client.search_leads()
+    assert len(leads) == 1
+    assert leads[0].contacts is None
+
+
+async def test_get_tasks_by_entity_id(kommo_client, httpx_mock):
+    """get_tasks(entity_id=...) sends filter[entity_id][] param (#731)."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/tasks"),
+        json={"_embedded": {"tasks": [{"id": 301, "text": "Entity task", "entity_id": 42}]}},
+    )
+
+    tasks = await kommo_client.get_tasks(entity_id=42)
+    assert len(tasks) == 1
+    assert tasks[0].id == 301
+    assert tasks[0].entity_id == 42
