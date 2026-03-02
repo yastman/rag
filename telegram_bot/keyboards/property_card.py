@@ -51,11 +51,33 @@ def format_promotion_card(
     )
 
 
-def build_card_buttons(property_id: str) -> InlineKeyboardMarkup:
-    """Build inline buttons for a property card."""
+def build_card_buttons(property_id: str, *, is_favorited: bool = False) -> InlineKeyboardMarkup:
+    """Build inline buttons for a property card (2+1 layout, #705)."""
+    if is_favorited:
+        fav_btn = InlineKeyboardButton(
+            text="❌ Убрать из избранного",
+            callback_data=f"fav:remove:{property_id}",
+        )
+    else:
+        fav_btn = InlineKeyboardButton(
+            text="📌 В избранное",
+            callback_data=f"fav:add:{property_id}",
+        )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="📌 В закладки", callback_data=f"fav:add:{property_id}")],
+            [
+                InlineKeyboardButton(
+                    text="📅 На осмотр",
+                    callback_data=f"card:viewing:{property_id}",
+                ),
+                fav_btn,
+            ],
+            [
+                InlineKeyboardButton(
+                    text="💬 Уточнить у менеджера",
+                    callback_data=f"card:ask:{property_id}",
+                ),
+            ],
         ]
     )
 
