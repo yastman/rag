@@ -131,6 +131,7 @@ async def test_preferences_options_has_5_categories_plus_done():
         dialog_manager=SimpleNamespace(dialog_data={}),
     )
     items = result["items"]
+    assert result["title"] == "✨ Есть ли дополнительные пожелания?"
     ids = [item_id for _, item_id in items]
     assert "floor" in ids
     assert "view" in ids
@@ -138,6 +139,24 @@ async def test_preferences_options_has_5_categories_plus_done():
     assert "promotion" in ids
     assert "complex" in ids
     assert "done" in ids
+    assert any(
+        label == "▶️ Нет, перейти к результатам" for label, item_id in items if item_id == "done"
+    )
+
+
+@pytest.mark.asyncio
+async def test_preferences_options_uses_emoji_labels_for_all_categories():
+    result = await funnel_module.get_preferences_options(
+        middleware_data={},
+        dialog_manager=SimpleNamespace(dialog_data={}),
+    )
+    labels_by_id = {item_id: label for label, item_id in result["items"]}
+
+    assert labels_by_id["floor"] == "🏢 Этаж"
+    assert labels_by_id["view"] == "🌅 Вид"
+    assert labels_by_id["furnished"] == "🛋 Мебель"
+    assert labels_by_id["promotion"] == "🏷 Акции"
+    assert labels_by_id["complex"] == "🏘 Комплекс"
 
 
 @pytest.mark.asyncio
