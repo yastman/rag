@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from asyncpg import UniqueViolationError
 
-from telegram_bot.services.favorites_service import Favorite, FavoritesService
+from telegram_bot.services.favorites_service import Favorite, FavoritesService, _parse_jsonb
 
 
 @pytest.fixture
@@ -22,8 +22,59 @@ def mock_pool() -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
+# _parse_jsonb
+# ---------------------------------------------------------------------------
+
+
+def test_parse_jsonb_from_dict() -> None:
+    result = _parse_jsonb({"price": 100000, "complex_name": "Test"})
+    assert result == {"price": 100000, "complex_name": "Test"}
+
+
+def test_parse_jsonb_from_str() -> None:
+    result = _parse_jsonb('{"price": 100000, "complex_name": "Test"}')
+    assert result == {"price": 100000, "complex_name": "Test"}
+
+
+def test_parse_jsonb_from_str_unicode() -> None:
+    result = _parse_jsonb('{"complex_name": "Солнечный берег"}')
+    assert result == {"complex_name": "Солнечный берег"}
+
+
+def test_parse_jsonb_from_none() -> None:
+    assert _parse_jsonb(None) == {}
+
+
+def test_parse_jsonb_from_int() -> None:
+    assert _parse_jsonb(42) == {}
+
+
+def test_parse_jsonb_from_empty_str() -> None:
+    result = _parse_jsonb("{}")
+    assert result == {}
+
+
+# ---------------------------------------------------------------------------
 # add
 # ---------------------------------------------------------------------------
+
+
+async def test_add_sends_json_string(mock_pool: MagicMock) -> None:
+    """add() must json.dumps property_data before sending to asyncpg."""
+    mock_pool.fetchrow.return_value = {
+        "id": 1,
+        "property_id": "prop-42",
+        "property_data": '{"price": 100000}',
+        "created_at": None,
+    }
+
+    svc = FavoritesService(pool=mock_pool)
+    await svc.add(telegram_id=123, property_id="prop-42", property_data={"price": 100000})
+
+    call_args = mock_pool.fetchrow.call_args[0]
+    # $3 argument must be a JSON string, not a dict
+    assert isinstance(call_args[3], str)
+    assert call_args[3] == '{"price": 100000}'
 
 
 async def test_add(mock_pool: MagicMock) -> None:
@@ -104,6 +155,26 @@ async def test_list(mock_pool: MagicMock) -> None:
     assert favorites[0].property_id == "prop-1"
     assert favorites[1].property_id == "prop-2"
     mock_pool.fetch.assert_awaited_once()
+
+
+async def test_list_property_data_as_str(mock_pool: MagicMock) -> None:
+    """asyncpg returns JSONB as str without registered codec — list() must handle it."""
+    now = dt.datetime(2026, 2, 24, tzinfo=dt.UTC)
+    mock_pool.fetch.return_value = [
+        {
+            "id": 1,
+            "property_id": "prop-1",
+            "property_data": '{"price": 50000, "complex_name": "Nessebar Fort"}',
+            "created_at": now,
+        },
+    ]
+
+    svc = FavoritesService(pool=mock_pool)
+    favorites = await svc.list(telegram_id=123)
+
+    assert len(favorites) == 1
+    assert favorites[0].property_data == {"price": 50000, "complex_name": "Nessebar Fort"}
+    assert isinstance(favorites[0].property_data, dict)
 
 
 async def test_list_empty(mock_pool: MagicMock) -> None:
