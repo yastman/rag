@@ -29,8 +29,20 @@ def test_build_card_buttons():
 
     kb = build_card_buttons(property_id="p1")
     assert isinstance(kb, InlineKeyboardMarkup)
+    # Row 0: viewing + favorite, Row 1: ask manager
+    assert len(kb.inline_keyboard[0]) == 2
+    assert len(kb.inline_keyboard[1]) == 1
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    assert "card:viewing:p1" in callbacks
     assert "fav:add:p1" in callbacks
+    assert "card:ask:p1" in callbacks
+
+
+def test_build_card_buttons_favorited():
+    kb = build_card_buttons(property_id="p1", is_favorited=True)
+    callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    assert "fav:remove:p1" in callbacks
+    assert "fav:add:p1" not in callbacks
 
 
 def test_build_results_footer():
