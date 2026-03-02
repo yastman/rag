@@ -44,7 +44,6 @@ async def get_leads_menu_data(**kwargs: Any) -> dict[str, str]:
         "title": "📋 Сделки",
         "btn_create": "➕ Создать сделку",
         "btn_my_leads": "🗂 Мои сделки",
-        "btn_search": "🔍 Поиск",
         "btn_back": "← Назад",
     }
 
@@ -62,11 +61,6 @@ leads_menu_dialog = Dialog(
                 Format("{btn_my_leads}"),
                 id="leads_nav_my",
                 state=MyLeadsSG.main,
-            ),
-            Start(
-                Format("{btn_search}"),
-                id="leads_nav_search",
-                state=SearchLeadsSG.query,
             ),
         ),
         Cancel(Format("{btn_back}")),
@@ -306,7 +300,7 @@ create_lead_dialog = Dialog(
 
 
 async def get_my_leads_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    """Getter: fetch manager's leads with simple pagination."""
+    """Getter: fetch manager's leads with task counts and simple pagination (#731)."""
     kommo = dialog_manager.middleware_data.get("kommo_client")
     page = dialog_manager.dialog_data.get("page", 0)
 
@@ -319,14 +313,29 @@ async def get_my_leads_data(dialog_manager: DialogManager, **kwargs: Any) -> dic
             manager_id: int | None = (
                 getattr(config, "kommo_responsible_user_id", None) if config else None
             )
-            leads = await kommo.search_leads(responsible_user_id=manager_id, limit=100)
+            leads = await kommo.search_leads(
+                responsible_user_id=manager_id, limit=100, with_contacts=True
+            )
             total = len(leads)
+
+            # Batch-fetch open tasks for all manager's leads, group by entity_id (#731)
+            task_counts: dict[int, int] = {}
+            try:
+                all_tasks = await kommo.get_tasks(
+                    responsible_user_id=manager_id, is_completed=False
+                )
+                for t in all_tasks:
+                    if t.entity_id:
+                        task_counts[t.entity_id] = task_counts.get(t.entity_id, 0) + 1
+            except Exception:
+                logger.exception("Failed to fetch tasks for lead cards")
+
             start = page * _PAGE_SIZE
             page_leads = leads[start : start + _PAGE_SIZE]
             if page_leads:
                 cards = []
                 for lead in page_leads:
-                    text, _ = format_lead_card(lead)
+                    text, _ = format_lead_card(lead, task_count=task_counts.get(lead.id, 0))
                     cards.append(text)
                 leads_text = "\n\n".join(cards)
             else:
