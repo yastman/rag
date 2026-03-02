@@ -541,6 +541,38 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("manager_hot_lead_dedupe_sec", "MANAGER_HOT_LEAD_DEDUPE_SEC"),
     )
 
+    # ── Handoff (Forum Topics) ──────────────────────────────────────
+    managers_group_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("managers_group_id", "MANAGERS_GROUP_ID"),
+    )
+    handoff_ttl_hours: int = Field(
+        default=24,
+        validation_alias=AliasChoices("handoff_ttl_hours", "HANDOFF_TTL_HOURS"),
+    )
+    handoff_summary_min_messages: int = Field(
+        default=3,
+        validation_alias=AliasChoices(
+            "handoff_summary_min_messages", "HANDOFF_SUMMARY_MIN_MESSAGES"
+        ),
+    )
+    business_hours_start: int = Field(
+        default=9,
+        validation_alias=AliasChoices("business_hours_start", "BUSINESS_HOURS_START"),
+    )
+    business_hours_end: int = Field(
+        default=18,
+        validation_alias=AliasChoices("business_hours_end", "BUSINESS_HOURS_END"),
+    )
+    business_hours_tz: str = Field(
+        default="Europe/Sofia",
+        validation_alias=AliasChoices("business_hours_tz", "BUSINESS_HOURS_TZ"),
+    )
+    handoff_wait_timeout_min: int = Field(
+        default=15,
+        validation_alias=AliasChoices("handoff_wait_timeout_min", "HANDOFF_WAIT_TIMEOUT_MIN"),
+    )
+
     @field_validator("manager_ids", mode="before")
     @classmethod
     def parse_manager_ids(cls, v: object) -> list[int]:
