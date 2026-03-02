@@ -16,8 +16,8 @@ from telegram_bot.dialogs.states import FunnelSG
 def test_build_funnel_filters_includes_city():
     from telegram_bot.dialogs.funnel import build_funnel_filters
 
-    filters = build_funnel_filters(city="Санни Бич", rooms="1bed", budget="mid")
-    assert filters["city"] == "Санни Бич"
+    filters = build_funnel_filters(city="Солнечный берег", rooms="1bed", budget="mid")
+    assert filters["city"] == "Солнечный берег"
     assert filters["rooms"] == 2
     assert "price_eur" in filters
 
@@ -63,7 +63,7 @@ async def test_city_options_has_3_cities_plus_any():
     result = await funnel_module.get_city_options()
     items = result["items"]
     keys = [key for _, key in items]
-    assert "Санни Бич" in keys
+    assert "Солнечный берег" in keys
     assert "Свети Влас" in keys
     assert "Элените" in keys
     assert "any" in keys
@@ -73,8 +73,8 @@ async def test_city_options_has_3_cities_plus_any():
 @pytest.mark.asyncio
 async def test_city_selected_saves_and_switches_to_property_type():
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
-    await funnel_module.on_city_selected(MagicMock(), SimpleNamespace(), manager, "Санни Бич")
-    assert manager.dialog_data["city"] == "Санни Бич"
+    await funnel_module.on_city_selected(MagicMock(), SimpleNamespace(), manager, "Солнечный берег")
+    assert manager.dialog_data["city"] == "Солнечный берег"
     manager.switch_to.assert_awaited_once_with(FunnelSG.property_type)
 
 
@@ -236,11 +236,11 @@ async def test_pref_promotion_selected_saves_and_returns():
 async def test_summary_data_shows_city():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
-            dialog_data={"city": "Санни Бич", "property_type": "1bed", "budget": "mid"},
+            dialog_data={"city": "Солнечный берег", "property_type": "1bed", "budget": "mid"},
             middleware_data={},
         ),
     )
-    assert "Санни Бич" in result["summary_text"]
+    assert "Солнечный берег" in result["summary_text"]
     assert result["can_search"] is True
 
 
@@ -260,7 +260,7 @@ async def test_summary_shows_complex_from_preferences():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
             dialog_data={
-                "city": "Санни Бич",
+                "city": "Солнечный берег",
                 "complex": "Premier Fort Beach",
                 "property_type": "2bed",
                 "budget": "high",
@@ -269,7 +269,7 @@ async def test_summary_shows_complex_from_preferences():
         ),
     )
     assert "Premier Fort Beach" in result["summary_text"]
-    assert "Санни Бич" in result["summary_text"]
+    assert "Солнечный берег" in result["summary_text"]
 
 
 @pytest.mark.asyncio
@@ -277,7 +277,7 @@ async def test_summary_data_shows_selected_filters():
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
             dialog_data={
-                "city": "Санни Бич",
+                "city": "Солнечный берег",
                 "complex": "Premier Fort Beach",
                 "property_type": "2bed",
                 "budget": "high",
@@ -320,7 +320,7 @@ async def test_on_summary_search_resets_scroll_and_goes_to_results(monkeypatch):
     )
     manager = SimpleNamespace(
         dialog_data={
-            "city": "Санни Бич",
+            "city": "Солнечный берег",
             "property_type": "2bed",
             "budget": "high",
         },
@@ -392,7 +392,7 @@ async def test_get_results_data_calls_apartments_service():
             "id": "p1",
             "payload": {
                 "complex_name": "Sunrise",
-                "city": "Sunny Beach",
+                "city": "Солнечный берег",
                 "property_type": "studio",
                 "floor": 2,
                 "area_m2": 42,
@@ -475,7 +475,7 @@ async def test_zero_suggestion_removes_floor_and_refreshes_results():
 async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
     manager = SimpleNamespace(
         dialog_data={
-            "city": "Санни Бич",
+            "city": "Солнечный берег",
             "complex": "Premier Fort Beach",
             "property_type": "2bed",
             "budget": "high",
