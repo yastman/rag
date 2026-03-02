@@ -22,8 +22,10 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     Message,
 )
+from aiogram.types.input_file import FSInputFile
 from aiogram.utils.chat_action import ChatActionSender
 
 from .agents.agent import create_bot_agent
@@ -1082,8 +1084,13 @@ class PropertyBot:
         result: dict,
         telegram_id: int,
     ) -> Message:
-        """Send a single property card with action buttons (DRY helper, #705)."""
-        from .keyboards.property_card import build_card_buttons, format_property_card
+        """Send a single property card with photo + caption + buttons (#705)."""
+        from .keyboards.property_card import (
+            build_card_buttons,
+            format_property_card,
+            get_demo_photos,
+            get_main_demo_photo,
+        )
 
         p = result.get("payload", {})
         card = format_property_card(
@@ -1100,9 +1107,40 @@ class PropertyBot:
         is_fav = False
         if favorites_service is not None:
             is_fav = await favorites_service.is_favorited(telegram_id, result["id"])
-        return await message.answer(
-            card, reply_markup=build_card_buttons(result["id"], is_favorited=is_fav)
+
+        demo_photos = get_demo_photos()
+        main_photo = get_main_demo_photo()
+        buttons = build_card_buttons(
+            result["id"],
+            is_favorited=is_fav,
+            photo_count=len(demo_photos),
         )
+
+        if main_photo and main_photo.exists():
+            return await message.answer_photo(
+                photo=FSInputFile(main_photo),
+                caption=card,
+                reply_markup=buttons,
+            )
+        return await message.answer(card, reply_markup=buttons)
+
+    async def _send_photo_album(self, callback: CallbackQuery, property_id: str) -> None:
+        """Send all demo photos as media group album."""
+        from .keyboards.property_card import get_demo_photos
+
+        photos = get_demo_photos()
+        if not photos or not callback.message:
+            await callback.answer("Фото недоступны")
+            return
+
+        media = [
+            InputMediaPhoto(
+                media=FSInputFile(p), caption=f"Фото {i + 1}/{len(photos)}" if i == 0 else ""
+            )
+            for i, p in enumerate(photos)
+        ]
+        await callback.message.answer_media_group(media=media)
+        await callback.answer()
 
     async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
         """Show user's saved favorites (#628)."""
@@ -1513,6 +1551,8 @@ class PropertyBot:
                 service_key="manager_question",
                 viewing_objects=viewing_objects or None,
             )
+        elif action == "photos":
+            await self._send_photo_album(callback, property_id)
         else:
             await callback.answer()
 
@@ -1662,7 +1702,7 @@ class PropertyBot:
             shown = len(page)
             total = len(results)
             await message.answer(
-                f"Показано {shown} из {total}",
+                f"Показано 1–{shown} из {total}",
                 reply_markup=build_results_footer(
                     shown=shown, total=total, has_more=total > _APARTMENT_PAGE_SIZE
                 ),

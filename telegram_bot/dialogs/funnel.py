@@ -325,6 +325,8 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     city_val = data.get("city", "any")
     if city_val and city_val != "any":
         lines.append(f"🏙 Город: {city_val}")
+    else:
+        lines.append("🏙 Город: Любой")
 
     complex_val = data.get("complex")
     if complex_val and complex_val != "any":
@@ -333,10 +335,14 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     property_type_val = data.get("property_type", "any")
     if property_type_val and property_type_val != "any":
         lines.append(f"🏠 Тип: {_PROPERTY_TYPE_DISPLAY.get(property_type_val, property_type_val)}")
+    else:
+        lines.append("🏠 Тип: Любой")
 
     budget_val = data.get("budget", "any")
     if budget_val and budget_val != "any":
         lines.append(f"💰 Бюджет: {_BUDGET_DISPLAY.get(budget_val, budget_val)}")
+    else:
+        lines.append("💰 Бюджет: Любой")
 
     floor_val = data.get("floor")
     if floor_val and floor_val != "any":
@@ -356,24 +362,10 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     if promotion_val == "yes":
         lines.append("🎁 Акции: Только акции")
 
-    has_filter = (
-        city_val not in (None, "any")
-        or (complex_val is not None and complex_val != "any")
-        or property_type_val not in (None, "any")
-        or budget_val not in (None, "any")
-        or (floor_val not in (None, "any"))
-        or (view_val not in (None, "any"))
-        or furnished_val is not None
-        or promotion_val is not None
-    )
-
-    if not has_filter:
-        lines.append("(все параметры — любые)")
-
     summary_text = "\n".join(lines)
     return {
         "summary_text": summary_text,
-        "can_search": has_filter,
+        "can_search": True,
     }
 
 
@@ -487,14 +479,23 @@ async def get_results_data(
     else:
         results_text = service_unavailable_text
 
+    shown_end = 0
     if total_count:
-        title = (
+        page = data.get("scroll_page", 1)
+        shown_end = min(page * _SCROLL_PAGE_SIZE, total_count)
+        shown_start = (page - 1) * _SCROLL_PAGE_SIZE + 1
+        base_title = (
             i18n.get("results-found", total=total_count)
             if i18n
             else f"Найдено {total_count} апартаментов"
         )
+        title = f"{base_title} (показаны {shown_start}–{shown_end})"
     else:
         title = results_title
+
+    if has_more and total_count:
+        remaining = total_count - shown_end
+        btn_more = f"🔄 Показать ещё ({remaining} осталось)"
 
     return {
         "title": title,

@@ -214,6 +214,7 @@ async def test_get_results_data_uses_i18n_strings():
     )
 
     result = await get_results_data(dialog_manager=manager)
-    assert result["title"] == "Found 12 apartments"
-    assert result["btn_more"] == "🔄 Show more"
+    assert "Found 12 apartments" in result["title"]
+    assert "показаны 1–5" in result["title"]
+    assert "осталось" in result["btn_more"]
     assert result["btn_back"] == "Back"

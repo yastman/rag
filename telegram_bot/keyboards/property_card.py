@@ -3,7 +3,25 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+
+_DEMO_PHOTOS_DIR = Path(__file__).resolve().parent.parent / "static" / "photos" / "demo"
+_DEMO_PHOTOS: list[Path] = (
+    sorted(_DEMO_PHOTOS_DIR.glob("*.jpg")) if _DEMO_PHOTOS_DIR.exists() else []
+)
+
+
+def get_demo_photos() -> list[Path]:
+    """Return list of demo photo paths (for all apartments until real photos exist)."""
+    return _DEMO_PHOTOS
+
+
+def get_main_demo_photo() -> Path | None:
+    """Return first demo photo as main card image."""
+    return _DEMO_PHOTOS[0] if _DEMO_PHOTOS else None
 
 
 def format_property_card(
@@ -51,8 +69,13 @@ def format_promotion_card(
     )
 
 
-def build_card_buttons(property_id: str, *, is_favorited: bool = False) -> InlineKeyboardMarkup:
-    """Build inline buttons for a property card (2+1 layout)."""
+def build_card_buttons(
+    property_id: str,
+    *,
+    is_favorited: bool = False,
+    photo_count: int = 0,
+) -> InlineKeyboardMarkup:
+    """Build inline buttons for a property card (photo + 2+1 layout)."""
     if is_favorited:
         fav_btn = InlineKeyboardButton(
             text="❌ Убрать из избранного",
@@ -63,23 +86,34 @@ def build_card_buttons(property_id: str, *, is_favorited: bool = False) -> Inlin
             text="📌 В избранное",
             callback_data=f"fav:add:{property_id}",
         )
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+    rows: list[list[InlineKeyboardButton]] = []
+    if photo_count > 1:
+        rows.append(
             [
                 InlineKeyboardButton(
-                    text="📅 На осмотр",
-                    callback_data=f"card:viewing:{property_id}",
+                    text=f"📷 Все фото ({photo_count})",
+                    callback_data=f"card:photos:{property_id}",
                 ),
-                fav_btn,
-            ],
-            [
-                InlineKeyboardButton(
-                    text="💬 Уточнить у менеджера",
-                    callback_data=f"card:ask:{property_id}",
-                ),
-            ],
+            ]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="📅 На осмотр",
+                callback_data=f"card:viewing:{property_id}",
+            ),
+            fav_btn,
         ]
     )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="💬 Уточнить у менеджера",
+                callback_data=f"card:ask:{property_id}",
+            ),
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_results_footer(*, shown: int, total: int, has_more: bool) -> InlineKeyboardMarkup:
