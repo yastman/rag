@@ -445,7 +445,7 @@ async def seed_crm(
 
         if dry_run:
             stats.leads_created += 1
-            logger.info("[DRY-RUN] Lead: %s (status=%d)", lead_data["name"], status_id)
+            logger.info("[DRY-RUN] Lead: %s (status=%s)", lead_data["name"], status_id)
 
             # Notes
             note_count = random.randint(1, min(3, len(scenario.note_templates)))
@@ -552,10 +552,12 @@ async def main() -> None:
         from telegram_bot.services.kommo_client import KommoClient
         from telegram_bot.services.kommo_token_store import KommoTokenStore
 
-        redis_password = os.environ.get("REDIS_PASSWORD", "")
-        redis_host = os.environ.get("REDIS_HOST", "localhost")
-        redis_port = int(os.environ.get("REDIS_PORT", "6379"))
-        redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/0"
+        redis_url = os.environ.get("REDIS_URL", "")
+        if not redis_url:
+            redis_password = os.environ.get("REDIS_PASSWORD", "")
+            redis_host = os.environ.get("REDIS_HOST", "localhost")
+            redis_port = int(os.environ.get("REDIS_PORT", "6379"))
+            redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/0"
         redis_client = aioredis.from_url(redis_url, decode_responses=False)
 
         subdomain = os.environ.get("KOMMO_SUBDOMAIN", "")
@@ -570,6 +572,16 @@ async def main() -> None:
             client_secret=os.environ.get("KOMMO_CLIENT_SECRET", ""),
             redirect_uri=os.environ.get("KOMMO_REDIRECT_URI", ""),
         )
+
+        # Seed access token from env if not yet in Redis (#678 fallback)
+        env_token = os.environ.get("KOMMO_ACCESS_TOKEN", "")
+        if env_token:
+            try:
+                await token_store.get_valid_token()
+            except (ValueError, Exception):
+                await token_store._store_tokens(env_token, "", 86400 * 365)
+                logger.info("Seeded Kommo access token from KOMMO_ACCESS_TOKEN env var")
+
         kommo = KommoClient(subdomain=subdomain, token_store=token_store)
 
         if not pipeline_id:
