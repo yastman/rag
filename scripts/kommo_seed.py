@@ -269,7 +269,7 @@ STAGE_WEIGHTS = {
 }
 
 
-def distribute_statuses(count: int, statuses: dict[str, int]) -> list[int]:
+def distribute_statuses(count: int, statuses: dict[str, int]) -> list[int | None]:
     """Distribute leads across funnel stages by weight.
 
     Args:
@@ -277,16 +277,24 @@ def distribute_statuses(count: int, statuses: dict[str, int]) -> list[int]:
         statuses: Mapping of stage_name → status_id.
 
     Returns:
-        List of status_ids, length == count.
+        List of status_ids (or None when status is unspecified), length == count.
     """
-    result: list[int] = []
+    # Ignore non-positive placeholders (0/-1) and keep only real Kommo status IDs.
+    valid_statuses = {stage: status for stage, status in statuses.items() if status > 0}
+
+    result: list[int | None] = []
     for stage, weight in STAGE_WEIGHTS.items():
-        if stage in statuses:
+        if stage in valid_statuses:
             n = round(count * weight)
-            result.extend([statuses[stage]] * n)
+            result.extend([valid_statuses[stage]] * n)
+
+    default_status = valid_statuses.get("new")
+    if default_status is None and valid_statuses:
+        default_status = next(iter(valid_statuses.values()))
+
     # Pad/trim to exact count
     while len(result) < count:
-        result.append(statuses.get("new", next(iter(statuses.values()))))
+        result.append(default_status)
     return result[:count]
 
 
@@ -294,7 +302,7 @@ def build_lead_data(
     scenario: Scenario,
     apartment: dict,
     contact_name: str,
-    status_id: int,
+    status_id: int | None,
     pipeline_id: int | None,
 ) -> dict:
     """Build a dict suitable for LeadCreate."""
@@ -380,6 +388,10 @@ async def seed_crm(
     """
     stats = SeedStats()
     sem = asyncio.Semaphore(semaphore_limit)
+
+    if num_leads > 0 and num_contacts <= 0:
+        msg = "num_contacts must be > 0 when num_leads > 0"
+        raise ValueError(msg)
 
     # --- Phase 1: Create contacts ---
     contacts: list[dict] = []
@@ -522,12 +534,12 @@ async def main() -> None:
 
     # --- Pipeline statuses ---
     statuses: dict[str, int] = {
-        "new": 0,
+        "new": int(os.environ.get("KOMMO_NEW_STATUS_ID", "0")) or 0,
         "qualified": 0,
         "negotiation": 0,
         "proposal": 0,
-        "won": 142,
-        "lost": 143,
+        "won": int(os.environ.get("KOMMO_WON_STATUS_ID", "0")) or 0,
+        "lost": int(os.environ.get("KOMMO_LOST_STATUS_ID", "0")) or 0,
     }
     pipeline_id = args.pipeline_id
 
