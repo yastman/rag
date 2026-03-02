@@ -178,8 +178,8 @@ class IncrementalApartmentIngester:
                 PointStruct(id=p["id"], vector=p["vector"], payload=p["payload"])
                 for p in point_dicts
             ]
-            for i in range(0, len(points), 100):
-                batch = points[i : i + 100]
+            for i in range(0, len(points), 20):
+                batch = points[i : i + 20]
                 client.upsert(collection_name=COLLECTION, points=batch, wait=True)
                 logger.info("Upserted %d/%d", min(i + 100, len(points)), len(points))
 
