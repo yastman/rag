@@ -76,7 +76,6 @@ class AIAdvisorService:
                     },
                 ],
                 max_tokens=1000,
-                name="advisor-prioritize-leads",  ***REMOVED*** type: ignore[call-overload]
             )
             return response.choices[0].message.content or "Нет ответа от LLM."
         except Exception:
@@ -126,7 +125,6 @@ class AIAdvisorService:
                     },
                 ],
                 max_tokens=1000,
-                name="advisor-prioritize-tasks",  ***REMOVED*** type: ignore[call-overload]
             )
             return response.choices[0].message.content or "Нет ответа от LLM."
         except Exception:
@@ -183,7 +181,6 @@ class AIAdvisorService:
                     },
                 ],
                 max_tokens=1000,
-                name="advisor-stale-deals",  ***REMOVED*** type: ignore[call-overload]
             )
             return response.choices[0].message.content or "Нет ответа от LLM."
         except Exception:
