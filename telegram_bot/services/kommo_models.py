@@ -7,6 +7,8 @@ Ref: https://www.kommo.com/developers/content/api/
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -141,7 +143,8 @@ class Task(BaseModel):
     entity_type: str | None = None
     responsible_user_id: int | None = None
     is_completed: bool | None = None
-    result: dict | None = None
+    ***REMOVED*** may return `result` as dict or empty list depending on task state.
+    result: dict[str, Any] | list[Any] | None = None
     created_at: int | None = None
     updated_at: int | None = None
 

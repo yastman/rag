@@ -94,6 +94,28 @@ async def test_get_prioritized_leads_calls_llm_with_leads():
     assert len(result) > 0
 
 
+async def test_get_prioritized_leads_does_not_pass_unsupported_name_kwarg():
+    """OpenAI chat.completions.create should be called without top-level 'name' kwarg."""
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    leads = [Lead(id=1, name="Deal A", budget=100000, created_at=1700000000)]
+    kommo = MagicMock()
+    kommo.search_leads = AsyncMock(return_value=leads)
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "ok"
+    llm = MagicMock()
+    llm.chat = MagicMock()
+    llm.chat.completions = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
+
+    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+    await svc.get_prioritized_leads(manager_id=1)
+
+    kwargs = llm.chat.completions.create.call_args.kwargs
+    assert "name" not in kwargs
+
+
 # --- get_prioritized_tasks ---
 
 
@@ -150,6 +172,30 @@ async def test_get_prioritized_tasks_calls_llm_with_tasks():
 
     llm.chat.completions.create.assert_called_once()
     assert isinstance(result, str)
+
+
+async def test_get_prioritized_tasks_does_not_pass_unsupported_name_kwarg():
+    """OpenAI chat.completions.create should be called without top-level 'name' kwarg."""
+    import time
+
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    tasks = [Task(id=1, text="Позвонить клиенту", complete_till=int(time.time()) + 3600)]
+    kommo = MagicMock()
+    kommo.get_tasks = AsyncMock(return_value=tasks)
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "ok"
+    llm = MagicMock()
+    llm.chat = MagicMock()
+    llm.chat.completions = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
+
+    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+    await svc.get_prioritized_tasks(manager_id=5)
+
+    kwargs = llm.chat.completions.create.call_args.kwargs
+    assert "name" not in kwargs
 
 
 # --- get_stale_deals ---
@@ -226,6 +272,31 @@ async def test_get_stale_deals_filters_leads_older_than_5_days():
         if isinstance(m, dict) and m.get("role") == "user":
             user_content = m.get("content", "")
     assert "Old Deal" in user_content or isinstance(result, str)
+
+
+async def test_get_stale_deals_does_not_pass_unsupported_name_kwarg():
+    """OpenAI chat.completions.create should be called without top-level 'name' kwarg."""
+    import time
+
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    now = int(time.time())
+    leads = [Lead(id=1, name="Old Deal", updated_at=now - (7 * 86400))]
+    kommo = MagicMock()
+    kommo.search_leads = AsyncMock(return_value=leads)
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "ok"
+    llm = MagicMock()
+    llm.chat = MagicMock()
+    llm.chat.completions = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
+
+    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+    await svc.get_stale_deals(manager_id=1)
+
+    kwargs = llm.chat.completions.create.call_args.kwargs
+    assert "name" not in kwargs
 
 
 async def test_get_stale_deals_returns_no_deals_message_when_empty():
