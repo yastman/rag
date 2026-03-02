@@ -101,6 +101,7 @@ class Lead(BaseModel):
     Note: POST /leads returns minimal response (id only).
     Full fields available via GET /leads/{id}.
     Kommo API field "price" maps to "budget" in Python.
+    contacts: populated from _embedded.contacts when with=contacts requested (#731).
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -114,6 +115,7 @@ class Lead(BaseModel):
     loss_reason_id: int | None = None
     created_at: int | None = None
     updated_at: int | None = None
+    contacts: list[dict[str, Any]] | None = None  # from _embedded.contacts (#731)
 
 
 class Contact(BaseModel):
