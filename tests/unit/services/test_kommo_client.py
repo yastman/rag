@@ -197,6 +197,25 @@ async def test_get_tasks_with_is_completed_filter(kommo_client, httpx_mock):
     assert tasks == []
 
 
+async def test_get_tasks_accepts_result_list_payload(kommo_client, httpx_mock):
+    """get_tasks parses Kommo tasks where result is an empty list."""
+    import re
+
+    httpx_mock.add_response(
+        url=re.compile(r".*/tasks"),
+        json={
+            "_embedded": {
+                "tasks": [{"id": 201, "text": "Open task", "is_completed": False, "result": []}]
+            }
+        },
+    )
+
+    tasks = await kommo_client.get_tasks(is_completed=False)
+    assert len(tasks) == 1
+    assert tasks[0].id == 201
+    assert tasks[0].result == []
+
+
 async def test_update_contact(kommo_client, httpx_mock):
     """update_contact sends PATCH /api/v4/contacts/{id}."""
     from telegram_bot.services.kommo_models import ContactUpdate
