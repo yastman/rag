@@ -15,12 +15,12 @@ from typing import Any
 from aiogram.types import CallbackQuery, Message
 from aiogram_dialog import Dialog, DialogManager, Window
 from aiogram_dialog.widgets.input import ManagedTextInput, TextInput
-from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select
+from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select, Start
 from aiogram_dialog.widgets.text import Const, Format
 
 from telegram_bot.services.kommo_models import Task
 
-from .states import CreateTaskSG, MyTasksSG
+from .states import CreateTaskSG, MyTasksSG, TasksMenuSG
 
 
 logger = logging.getLogger(__name__)
@@ -588,5 +588,42 @@ my_tasks_dialog = Dialog(
         Cancel(Const("✖ Закрыть")),
         getter=get_task_list,
         state=MyTasksSG.list,
+    ),
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tasks Menu — navigation hub (create + my tasks)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def get_tasks_menu_data(**kwargs: Any) -> dict[str, str]:
+    """Getter: tasks navigation hub labels."""
+    return {
+        "title": "✅ Задачи",
+        "btn_create": "➕ Создать задачу",
+        "btn_my_tasks": "📋 Мои задачи",
+        "btn_back": "← Назад",
+    }
+
+
+tasks_menu_dialog = Dialog(
+    Window(
+        Format("{title}"),
+        Column(
+            Start(
+                Format("{btn_create}"),
+                id="tasks_nav_create",
+                state=CreateTaskSG.text,
+            ),
+            Start(
+                Format("{btn_my_tasks}"),
+                id="tasks_nav_my",
+                state=MyTasksSG.filter,
+            ),
+        ),
+        Cancel(Format("{btn_back}")),
+        getter=get_tasks_menu_data,
+        state=TasksMenuSG.main,
     ),
 )

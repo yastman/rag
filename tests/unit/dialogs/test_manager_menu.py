@@ -30,15 +30,14 @@ def test_manager_menu_button_queries_defined():
         assert isinstance(query, str) and len(query) > 0, f"Empty query for {widget_id}"
 
 
-async def test_manager_menu_fallback_getter_has_8_keys():
-    """Fallback getter (no i18n) returns all 8 button labels."""
+async def test_manager_menu_fallback_getter_has_7_keys():
+    """Fallback getter (no i18n) returns 7 button labels (4 CRM + 3 tools)."""
     result = await get_manager_menu_data()
     assert "greeting" in result
     for key in (
         "btn_leads",
         "btn_contacts",
         "btn_tasks",
-        "btn_my_tasks",
         "btn_note",
         "btn_ai_advisor",
         "btn_search",
@@ -48,7 +47,7 @@ async def test_manager_menu_fallback_getter_has_8_keys():
 
 
 async def test_manager_menu_i18n_getter_returns_all_keys():
-    """Getter with i18n returns all 8 button labels from FTL."""
+    """Getter with i18n returns all 7 button labels from FTL."""
     from unittest.mock import MagicMock
 
     i18n = MagicMock()
@@ -59,7 +58,6 @@ async def test_manager_menu_i18n_getter_returns_all_keys():
         "btn_leads",
         "btn_contacts",
         "btn_tasks",
-        "btn_my_tasks",
         "btn_note",
         "btn_ai_advisor",
         "btn_search",
