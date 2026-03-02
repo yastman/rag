@@ -13,9 +13,14 @@ class _FakeI18n:
         messages = {
             "funnel-results-title": "We found for you:",
             "results-show-more": "🔄 Show more",
+            "results-show-more-remaining": f"🔄 Show more ({kwargs.get('remaining', 0)} left)",
             "results-service-unavailable": "Search service unavailable.",
             "results-no-results": "No matches.",
             "results-found": f"Found {kwargs.get('total', 0)} apartments",
+            "results-found-range": (
+                f"Found {kwargs.get('total', 0)} apartments "
+                f"(showing {kwargs.get('start', 0)}–{kwargs.get('end', 0)})"
+            ),
             "back": "Back",
         }
         return messages[key]
@@ -164,9 +169,10 @@ async def test_get_results_data_returns_cards():
     )
 
     result = await get_results_data(dialog_manager=manager)
-    assert "297" in result["title"]
+    assert result["title"] == "Найдено 297 апартаментов (показаны 1–1)"
     assert "Sunrise Complex" in result["results_text"]
     assert result["has_more"] is True
+    assert "296 осталось" in result["btn_more"]
     mock_svc.scroll_with_filters.assert_awaited_once()
 
 
@@ -217,3 +223,33 @@ async def test_get_results_data_uses_i18n_strings():
     assert result["title"] == "Found 12 apartments"
     assert result["btn_more"] == "🔄 Show more"
     assert result["btn_back"] == "Back"
+
+
+@pytest.mark.asyncio
+async def test_get_results_data_uses_i18n_range_and_remaining_when_results_exist():
+    from telegram_bot.dialogs.funnel import get_results_data
+
+    results = [
+        {
+            "id": "apt-1",
+            "payload": {
+                "complex_name": "Sunrise Complex",
+                "rooms": 1,
+                "floor": 2,
+                "area_m2": 42.0,
+                "view_primary": "Sea",
+                "price_eur": 48500,
+            },
+        }
+    ]
+    mock_svc = MagicMock()
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 12, "next"))
+
+    manager = SimpleNamespace(
+        dialog_data={"property_type": "any", "budget": "any", "scroll_page": 1},
+        middleware_data={"apartments_service": mock_svc, "i18n": _FakeI18n()},
+    )
+
+    result = await get_results_data(dialog_manager=manager)
+    assert result["title"] == "Found 12 apartments (showing 1–1)"
+    assert result["btn_more"] == "🔄 Show more (11 left)"
