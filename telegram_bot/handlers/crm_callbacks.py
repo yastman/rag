@@ -250,20 +250,22 @@ async def on_edit_task_text_received(
     data = await state.get_data()
     task_id = data.get("edit_task_id", 0)
     text = (message.text or "").strip()
-    await state.clear()
 
     if not text:
         await message.answer("⚠️ Текст не может быть пустым.")
         return
     if kommo_client is None:
+        await state.clear()
         await message.answer(_NO_CRM)
         return
 
     try:
         await kommo_client.update_task(task_id, TaskUpdate(text=text))
+        await state.clear()
         await message.answer(_EDIT_SUCCESS)
     except Exception:
         logger.exception("Failed to update task %d text", task_id)
+        await state.clear()
         await message.answer("⚠️ Ошибка при обновлении задачи.")
 
 
@@ -276,9 +278,9 @@ async def on_edit_task_date_received(
     data = await state.get_data()
     task_id = data.get("edit_task_id", 0)
     raw = (message.text or "").strip()
-    await state.clear()
 
     if kommo_client is None:
+        await state.clear()
         await message.answer(_NO_CRM)
         return
 
@@ -292,9 +294,11 @@ async def on_edit_task_date_received(
 
     try:
         await kommo_client.update_task(task_id, TaskUpdate(complete_till=due_ts))
+        await state.clear()
         await message.answer(_EDIT_SUCCESS)
     except Exception:
         logger.exception("Failed to update task %d due date", task_id)
+        await state.clear()
         await message.answer("⚠️ Ошибка при обновлении задачи.")
 
 
