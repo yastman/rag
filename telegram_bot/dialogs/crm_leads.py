@@ -315,9 +315,11 @@ async def get_my_leads_data(dialog_manager: DialogManager, **kwargs: Any) -> dic
 
     if kommo is not None:
         try:
-            from_user = getattr(dialog_manager.event, "from_user", None)
-            user_id = from_user.id if from_user is not None else None
-            leads = await kommo.search_leads(responsible_user_id=user_id, limit=100)
+            config = dialog_manager.middleware_data.get("bot_config")
+            manager_id: int | None = (
+                getattr(config, "kommo_responsible_user_id", None) if config else None
+            )
+            leads = await kommo.search_leads(responsible_user_id=manager_id, limit=100)
             total = len(leads)
             start = page * _PAGE_SIZE
             page_leads = leads[start : start + _PAGE_SIZE]
