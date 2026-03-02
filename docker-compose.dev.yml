@@ -219,7 +219,7 @@ services:
 
   # ClickHouse for Langfuse v3 analytics
   clickhouse:
-    image: clickhouse/clickhouse-server:26.1@sha256:4e4c15f3b3a4b58807113f821f34f49c0d199a879cf28ac88790fdaa8ccf32bb
+    image: clickhouse/clickhouse-server:26.1@sha256:7f6546e5e293cfcdb812675fde424dc9bce3d32ac86f18051fedc23bff75a724
     container_name: dev-clickhouse
     profiles: ["ml", "full"]
     restart: unless-stopped
