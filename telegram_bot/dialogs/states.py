@@ -20,6 +20,7 @@ class SettingsSG(StatesGroup):
 
     main = State()
     language = State()
+    crm = State()  ***REMOVED*** CRM settings section (***REMOVED***697 Task 10)
 
 
 class FunnelSG(StatesGroup):
@@ -45,6 +46,110 @@ class FaqSG(StatesGroup):
 
 
 class CrmSubmenuSG(StatesGroup):
-    """CRM submenu (manager only)."""
+    """CRM submenu (manager only) — kept for backward compatibility."""
 
     main = State()
+
+
+class CRMMenuSG(StatesGroup):
+    """CRM navigation hub (***REMOVED***697) — refactored from CrmSubmenuSG."""
+
+    main = State()
+
+
+class CreateLeadSG(StatesGroup):
+    """Create lead wizard (***REMOVED***697)."""
+
+    name = State()  ***REMOVED*** Step 1: название сделки
+    budget = State()  ***REMOVED*** Step 2: бюджет
+    pipeline = State()  ***REMOVED*** Step 3: выбор pipeline
+    summary = State()  ***REMOVED*** Step 4: подтверждение
+
+
+class CreateContactSG(StatesGroup):
+    """Create contact wizard (***REMOVED***697)."""
+
+    first_name = State()  ***REMOVED*** Step 1: имя
+    last_name = State()  ***REMOVED*** Step 2: фамилия
+    phone = State()  ***REMOVED*** Step 3: телефон
+    email = State()  ***REMOVED*** Step 4: email
+    summary = State()  ***REMOVED*** Step 5: подтверждение
+
+
+class CreateTaskSG(StatesGroup):
+    """Create task wizard (***REMOVED***697)."""
+
+    text = State()  ***REMOVED*** Step 1: текст задачи
+    task_type = State()  ***REMOVED*** Step 2: тип задачи (звонок/встреча/другое)
+    lead_id = State()  ***REMOVED*** Step 3: привязка к сделке
+    due_date = State()  ***REMOVED*** Step 4: срок выполнения
+    summary = State()  ***REMOVED*** Step 5: подтверждение
+
+
+class MyTasksSG(StatesGroup):
+    """My Tasks view (***REMOVED***697)."""
+
+    filter = State()  ***REMOVED*** Step 1: выбор фильтра (все/сегодня/просроченные)
+    list = State()  ***REMOVED*** Step 2: список задач с пагинацией
+
+
+class CreateNoteSG(StatesGroup):
+    """Create note wizard (***REMOVED***697)."""
+
+    entity_type = State()  ***REMOVED*** Step 1: тип сущности (leads/contacts)
+    entity_id = State()  ***REMOVED*** Step 2: ID сущности
+    text = State()  ***REMOVED*** Step 3: текст заметки
+    summary = State()  ***REMOVED*** Step 4: подтверждение
+
+
+class SearchSG(StatesGroup):
+    """CRM search dialog (***REMOVED***697)."""
+
+    query = State()  ***REMOVED*** Step 1: поисковый запрос
+    results = State()  ***REMOVED*** Step 2: результаты
+
+
+class LeadsMenuSG(StatesGroup):
+    """Leads navigation submenu (***REMOVED***697)."""
+
+    main = State()
+
+
+class MyLeadsSG(StatesGroup):
+    """My leads list view (***REMOVED***697)."""
+
+    main = State()
+
+
+class SearchLeadsSG(StatesGroup):
+    """Lead search dialog (***REMOVED***697)."""
+
+    query = State()
+    results = State()
+
+
+class ContactsMenuSG(StatesGroup):
+    """Contacts navigation submenu (***REMOVED***697)."""
+
+    main = State()
+
+
+class SearchContactsSG(StatesGroup):
+    """Contact search dialog (***REMOVED***697)."""
+
+    query = State()
+    results = State()
+
+
+class AIAdvisorSG(StatesGroup):
+    """AI advisor dialog (***REMOVED***697)."""
+
+    main = State()
+    result = State()  ***REMOVED*** LLM response display
+
+
+class CrmQuickActionSG(StatesGroup):
+    """Quick CRM actions triggered from card inline buttons (***REMOVED***697 Task 8)."""
+
+    waiting_note = State()  ***REMOVED*** waiting for note text (lead or contact)
+    waiting_task = State()  ***REMOVED*** waiting for task text (lead)
