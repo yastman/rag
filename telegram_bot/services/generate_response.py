@@ -245,8 +245,13 @@ async def _generate_streaming(
     # Parallelize placeholder send + LLM stream creation to reduce TTFT drift (#675).
     # return_exceptions=True ensures both tasks complete before results are inspected,
     # preventing background LLM tasks from leaking on placeholder failure (#683).
+    # NOTE: message.answer() returns a SendMessage object (awaitable but not hashable),
+    # so we wrap it in a coroutine for asyncio.gather() compatibility (Python 3.12+).
+    async def _send_placeholder() -> Any:
+        return await message.answer(_STREAM_PLACEHOLDER)
+
     gather_results = await asyncio.gather(
-        message.answer(_STREAM_PLACEHOLDER),
+        _send_placeholder(),
         _chat_create_with_optional_name(
             llm,
             observation_name="generate-answer",
@@ -256,6 +261,7 @@ async def _generate_streaming(
             max_tokens=effective_max_tokens,
             stream=True,
             stream_options={"include_usage": True},
+            **config.get_reasoning_kwargs(),
         ),
         return_exceptions=True,
     )
@@ -544,6 +550,7 @@ async def generate_response(
                         messages=llm_messages,
                         temperature=config.llm_temperature,
                         max_tokens=max_tokens,
+                        **config.get_reasoning_kwargs(),
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
@@ -588,6 +595,7 @@ async def generate_response(
                         messages=llm_messages,
                         temperature=config.llm_temperature,
                         max_tokens=max_tokens,
+                        **config.get_reasoning_kwargs(),
                     )
                     t_llm_end = time.monotonic()
                     answer = response_obj.choices[0].message.content or ""
@@ -612,6 +620,7 @@ async def generate_response(
                 messages=llm_messages,
                 temperature=config.llm_temperature,
                 max_tokens=max_tokens,
+                **config.get_reasoning_kwargs(),
             )
             t_llm_end = time.monotonic()
             answer = response_obj.choices[0].message.content or ""
