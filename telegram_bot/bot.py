@@ -1017,9 +1017,11 @@ class PropertyBot:
         }
         handler = handlers.get(action_id)
         if handler:
+            if action_id != "bookmarks":
+                await state.update_data(bookmarks_context=False)
             if action_id == "search":
                 await handler(message, dialog_manager)
-            elif action_id == "viewing":
+            elif action_id == "viewing" or action_id == "bookmarks":
                 await handler(message, state)
             elif action_id == "services":
                 await handler(message, i18n=i18n)
@@ -1079,7 +1081,7 @@ class PropertyBot:
         message: Message,
         result: dict,
         telegram_id: int,
-    ) -> None:
+    ) -> Message:
         """Send a single property card with action buttons (DRY helper, #705)."""
         from .keyboards.property_card import build_card_buttons, format_property_card
 
@@ -1098,11 +1100,11 @@ class PropertyBot:
         is_fav = False
         if favorites_service is not None:
             is_fav = await favorites_service.is_favorited(telegram_id, result["id"])
-        await message.answer(
+        return await message.answer(
             card, reply_markup=build_card_buttons(result["id"], is_favorited=is_fav)
         )
 
-    async def _handle_bookmarks(self, message: Message) -> None:
+    async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
         """Show user's saved favorites (#628)."""
         if not message.from_user:
             return
@@ -1120,6 +1122,7 @@ class PropertyBot:
             )
             return
 
+        bookmark_message_ids: list[int] = []
         for fav in items:
             d = fav.property_data
             result_like = {
@@ -1135,7 +1138,16 @@ class PropertyBot:
                     "price_eur": d.get("price_eur", 0),
                 },
             }
-            await self._send_property_card(message, result_like, message.from_user.id)
+            sent = await self._send_property_card(message, result_like, message.from_user.id)
+            msg_id = getattr(sent, "message_id", None)
+            if isinstance(msg_id, int):
+                bookmark_message_ids.append(msg_id)
+
+        if state is not None:
+            await state.update_data(
+                bookmarks_context=True,
+                bookmark_message_ids=bookmark_message_ids,
+            )
 
         footer_kb = InlineKeyboardMarkup(
             inline_keyboard=[
@@ -1304,8 +1316,22 @@ class PropertyBot:
                 telegram_id=callback.from_user.id, property_id=property_id
             )
             state_data = await state.get_data()
-            in_search_results = bool(state_data.get("apartment_results"))
-            if in_search_results and callback.message:
+            raw_results = state_data.get("apartment_results")
+            apt_results = raw_results if isinstance(raw_results, list) else []
+            in_search_results = any(
+                isinstance(r, dict) and r.get("id") == property_id for r in apt_results
+            )
+            raw_bookmark_ids = state_data.get("bookmark_message_ids")
+            bookmark_message_ids = (
+                {mid for mid in raw_bookmark_ids if isinstance(mid, int)}
+                if isinstance(raw_bookmark_ids, list)
+                else set()
+            )
+            callback_message_id = getattr(callback.message, "message_id", None)
+            is_bookmark_message = (
+                isinstance(callback_message_id, int) and callback_message_id in bookmark_message_ids
+            )
+            if in_search_results and not is_bookmark_message and callback.message:
                 from .keyboards.property_card import build_card_buttons
 
                 with contextlib.suppress(Exception):
@@ -1458,6 +1484,23 @@ class PropertyBot:
                     "price_eur": p.get("price_eur", 0),
                 }
             )
+        else:
+            favorites_service = getattr(self, "_favorites_service", None)
+            if favorites_service is not None:
+                fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
+                for fav in fav_items:
+                    if fav.property_id == property_id:
+                        d = fav.property_data
+                        viewing_objects.append(
+                            {
+                                "id": fav.property_id,
+                                "complex_name": d.get("complex_name", ""),
+                                "property_type": d.get("property_type", ""),
+                                "area_m2": d.get("area_m2", 0),
+                                "price_eur": d.get("price_eur", 0),
+                            }
+                        )
+                        break
 
         if action == "viewing":
             await start_phone_collection(
@@ -1608,7 +1651,10 @@ class PropertyBot:
             from .keyboards.property_card import build_results_footer
 
             await state.update_data(
-                apartment_results=results, apartment_query=user_text, apartment_offset=0
+                apartment_results=results,
+                apartment_query=user_text,
+                apartment_offset=0,
+                bookmarks_context=False,
             )
             page = results[:_APARTMENT_PAGE_SIZE]
             for result in page:
