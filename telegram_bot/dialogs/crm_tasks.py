@@ -264,16 +264,14 @@ async def get_task_list(dialog_manager: DialogManager, **kwargs: Any) -> dict[st
     page = data.get("page", 0)
 
     tasks: list[Task] = []
-    user_id: int | None = None
 
-    # Get current user ID from middleware
-    event_from_user = kwargs.get("event_from_user")
-    if event_from_user is not None:
-        user_id = event_from_user.id
+    # Get Kommo user ID from bot config (not Telegram ID)
+    config = kwargs.get("bot_config")
+    manager_id: int | None = getattr(config, "kommo_responsible_user_id", None) if config else None
 
     if kommo is not None:
         try:
-            raw_tasks = await kommo.get_tasks(responsible_user_id=user_id, limit=50)
+            raw_tasks = await kommo.get_tasks(responsible_user_id=manager_id, limit=50)
 
             if task_filter == "today":
                 tasks = filter_tasks_today(raw_tasks)
