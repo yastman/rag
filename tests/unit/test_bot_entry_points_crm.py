@@ -99,81 +99,40 @@ def _fav_bot(favorites: list | None = None) -> PropertyBot:
 
 
 # ---------------------------------------------------------------------------
-# Test: _handle_viewing — fork keyboard
+# Test: _handle_viewing — starts aiogram-dialog wizard (#719)
 # ---------------------------------------------------------------------------
 
 
-async def test_handle_viewing_shows_fork_keyboard() -> None:
-    """_handle_viewing sends InlineKeyboard with 2 buttons (choose_objects, phone)."""
+async def test_handle_viewing_starts_dialog_when_manager_available() -> None:
+    """_handle_viewing starts ViewingSG.objects via dialog_manager (#719)."""
+    from unittest.mock import AsyncMock
+
+    from aiogram_dialog import StartMode
+
+    from telegram_bot.dialogs.states import ViewingSG
+
+    bot = _create_bot()
+    state = _make_state()
+    msg = _make_message()
+    dialog_manager = AsyncMock()
+    dialog_manager.start = AsyncMock()
+
+    await bot._handle_viewing(msg, state, dialog_manager=dialog_manager)
+
+    dialog_manager.start.assert_awaited_once_with(ViewingSG.objects, mode=StartMode.RESET_STACK)
+
+
+async def test_handle_viewing_fallback_without_dialog_manager() -> None:
+    """_handle_viewing sends fallback message when dialog_manager is None (#719)."""
     bot = _create_bot()
     state = _make_state()
     msg = _make_message()
 
-    await bot._handle_viewing(msg, state)
+    await bot._handle_viewing(msg, state, dialog_manager=None)
 
     msg.answer.assert_awaited_once()
-    call_kwargs = msg.answer.call_args
-    # Check text
-    assert "объект" in call_kwargs[0][0].lower() or "конкретн" in call_kwargs[0][0].lower()
-    # Check keyboard has 2 rows
-    keyboard = call_kwargs[1]["reply_markup"]
-    assert len(keyboard.inline_keyboard) == 2
-    # Check callback_data values
-    button_datas = [row[0].callback_data for row in keyboard.inline_keyboard]
-    assert "viewing:choose_objects" in button_datas
-    assert "viewing:phone" in button_datas
-
-
-# ---------------------------------------------------------------------------
-# Test: viewing:phone -> start_phone_collection(service_key="viewing")
-# ---------------------------------------------------------------------------
-
-
-async def test_viewing_phone_callback_starts_phone_collection() -> None:
-    """viewing:phone -> start_phone_collection called with service_key='viewing'."""
-    bot = _create_bot()
-    state = _make_state()
-    cb = _make_callback("viewing:phone")
-
-    with patch(
-        "telegram_bot.handlers.phone_collector.start_phone_collection",
-        new=AsyncMock(),
-    ) as mock_collect:
-        await bot.handle_viewing_callback(cb, state)
-
-    mock_collect.assert_awaited_once_with(cb, state, service_key="viewing")
-
-
-# ---------------------------------------------------------------------------
-# Test: viewing:choose_objects -> redirect to apartment search
-# ---------------------------------------------------------------------------
-
-
-async def test_viewing_choose_objects_starts_search() -> None:
-    """viewing:choose_objects -> routes to apartment search pipeline."""
-    bot = _create_bot()
-    state = _make_state()
-    cb = _make_callback("viewing:choose_objects")
-
-    with patch.object(bot, "handle_menu_action_text", new=AsyncMock()) as mock_action:
-        await bot.handle_viewing_callback(cb, state)
-
-    mock_action.assert_awaited_once_with(cb.message, "Подбери апартаменты")
-    cb.answer.assert_awaited_once()
-
-
-async def test_viewing_choose_objects_no_message() -> None:
-    """viewing:choose_objects with message=None -> handle_menu_action_text not called, answer still called."""
-    bot = _create_bot()
-    state = _make_state()
-    cb = _make_callback("viewing:choose_objects")
-    cb.message = None
-
-    with patch.object(bot, "handle_menu_action_text", new=AsyncMock()) as mock_action:
-        await bot.handle_viewing_callback(cb, state)
-
-    mock_action.assert_not_awaited()
-    cb.answer.assert_awaited_once()
+    text = msg.answer.call_args[0][0]
+    assert "осмотр" in text.lower() or "меню" in text.lower()
 
 
 # ---------------------------------------------------------------------------
