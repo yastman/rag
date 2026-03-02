@@ -278,3 +278,25 @@ svc-back = Back
 svc-get-offer = Get an Offer
 svc-contact-manager = Contact Manager
 svc-back-to-services = Back to Services
+
+# ── Handoff (Forum Topics) ──────────────────────────────────────
+handoff-qual-prompt = So the manager can help right away — a couple of questions:
+handoff-goal-buy = 🏠 Purchase
+handoff-goal-rent = 🔑 Rental
+handoff-goal-consult = 📋 Consultation
+handoff-budget-prompt = Approximate budget?
+handoff-budget-low = up to 50k€
+handoff-budget-mid = 50-100k€
+handoff-budget-high = 100k€+
+handoff-budget-unknown = Not sure yet
+handoff-contact-prompt = How would you like to connect?
+handoff-contact-chat = 💬 Chat now
+handoff-contact-phone = 📞 Leave phone number
+handoff-connecting = Connecting you with a manager. While you wait — I can answer questions!
+handoff-offline = Manager will respond during business hours (9:00-18:00 EET). I can help in the meantime!
+handoff-manager-joined = Manager connected!
+handoff-timeout = Manager is currently busy. Leave your number for a callback?
+handoff-closed-client = Manager has ended the conversation. I'm back online!
+handoff-closed-topic = ✅ Conversation closed, client returned to bot.
+handoff-wait-more = ⏳ I'll wait
+handoff-leave-phone = 📞 Yes, call me back
