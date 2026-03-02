@@ -475,6 +475,61 @@ async def test_zero_suggestion_removes_floor_and_refreshes_results():
 
 
 @pytest.mark.asyncio
+async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch):
+    """on_summary_search should search, send cards via property_bot, then close dialog."""
+    spawn_mock = MagicMock()
+    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", spawn_mock)
+
+    mock_svc = MagicMock()
+    mock_svc.scroll_with_filters = AsyncMock(
+        return_value=(
+            [
+                {
+                    "id": "apt-1",
+                    "payload": {
+                        "complex_name": "Test",
+                        "city": "Бургас",
+                        "property_type": "Студия",
+                        "floor": 2,
+                        "area_m2": 45,
+                        "view_tags": [],
+                        "view_primary": "sea",
+                        "price_eur": 55000,
+                        "rooms": 1,
+                    },
+                },
+            ],
+            1,
+            None,
+        )
+    )
+    mock_bot = MagicMock()
+    mock_bot._send_property_card = AsyncMock()
+    mock_bot._apartments_service = mock_svc
+
+    callback = MagicMock()
+    callback.from_user = MagicMock(id=123)
+    callback.message = MagicMock()
+    callback.message.chat = MagicMock(id=456)
+    callback.message.answer = AsyncMock()
+    callback.answer = AsyncMock()
+
+    manager = MagicMock()
+    manager.dialog_data = {"city": "Бургас", "property_type": "1bed", "budget": "mid"}
+    manager.middleware_data = {
+        "apartments_service": mock_svc,
+        "property_bot": mock_bot,
+        "state": MagicMock(update_data=AsyncMock()),
+    }
+    manager.done = AsyncMock()
+
+    await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+    mock_bot._send_property_card.assert_awaited_once()
+    manager.done.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
     manager = SimpleNamespace(
         dialog_data={
