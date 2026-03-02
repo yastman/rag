@@ -66,10 +66,8 @@ def build_card_buttons(
     property_id: str,
     *,
     is_favorited: bool = False,
-    photos_count: int | None = None,
 ) -> InlineKeyboardMarkup:
-    """Build inline buttons for a property card (2+1+1 layout)."""
-    total_photos = photos_count if photos_count is not None else len(get_demo_photo_paths()) or 3
+    """Build inline buttons for a property card (2+1 layout)."""
     if is_favorited:
         fav_btn = InlineKeyboardButton(
             text="❌ Убрать из избранного",
@@ -93,12 +91,6 @@ def build_card_buttons(
                 InlineKeyboardButton(
                     text="💬 Уточнить у менеджера",
                     callback_data=f"card:ask:{property_id}",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=f"📷 Все фото ({total_photos})",
-                    callback_data=f"card:photos:{property_id}",
                 ),
             ],
         ]
