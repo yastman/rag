@@ -29,8 +29,9 @@ def test_build_card_buttons():
 
     kb = build_card_buttons(property_id="p1")
     assert isinstance(kb, InlineKeyboardMarkup)
-    # Row 0: viewing + favorite, Row 1: ask manager
+    # Row 1: 2 buttons (viewing + favorite)
     assert len(kb.inline_keyboard[0]) == 2
+    # Row 2: 1 button (ask manager)
     assert len(kb.inline_keyboard[1]) == 1
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "card:viewing:p1" in callbacks
@@ -38,7 +39,25 @@ def test_build_card_buttons():
     assert "card:ask:p1" in callbacks
 
 
+def test_build_card_buttons_default_not_favorited():
+    """3 buttons in 2+1 layout, favorite shows 'add'."""
+    from aiogram.types import InlineKeyboardMarkup
+
+    kb = build_card_buttons(property_id="p1")
+    assert isinstance(kb, InlineKeyboardMarkup)
+    # Row 1: 2 buttons (viewing + favorite)
+    assert len(kb.inline_keyboard[0]) == 2
+    # Row 2: 1 button (ask manager)
+    assert len(kb.inline_keyboard[1]) == 1
+
+    callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    assert "card:viewing:p1" in callbacks
+    assert "fav:add:p1" in callbacks
+    assert "card:ask:p1" in callbacks
+
+
 def test_build_card_buttons_favorited():
+    """When is_favorited=True, shows 'remove' instead of 'add'."""
     kb = build_card_buttons(property_id="p1", is_favorited=True)
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "fav:remove:p1" in callbacks
