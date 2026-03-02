@@ -18,6 +18,15 @@ class Favorite:
     created_at: dt.datetime | None
 
 
+def _parse_jsonb(val: Any) -> dict[str, Any]:
+    """Deserialize JSONB value (asyncpg returns str without a registered codec)."""
+    if isinstance(val, dict):
+        return val
+    if isinstance(val, str):
+        return json.loads(val)  # type: ignore[no-any-return]
+    return {}
+
+
 class FavoritesService:
     """Asyncpg-backed CRUD for the user_favorites table."""
 
@@ -73,7 +82,7 @@ class FavoritesService:
             Favorite(
                 id=row["id"],
                 property_id=row["property_id"],
-                property_data=dict(row["property_data"]),
+                property_data=_parse_jsonb(row["property_data"]),
                 created_at=row["created_at"],
             )
             for row in rows
