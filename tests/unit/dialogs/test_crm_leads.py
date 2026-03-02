@@ -122,11 +122,11 @@ def test_search_leads_dialog_has_query_and_results_windows():
 
 
 async def test_get_leads_menu_data_returns_required_keys():
-    """Leads menu getter returns title + button labels."""
+    """Leads menu getter returns title + button labels (no btn_search after #731)."""
     from telegram_bot.dialogs.crm_leads import get_leads_menu_data
 
     result = await get_leads_menu_data()
-    for key in ("title", "btn_create", "btn_my_leads", "btn_search", "btn_back"):
+    for key in ("title", "btn_create", "btn_my_leads", "btn_back"):
         assert key in result, f"Missing key: {key}"
         assert isinstance(result[key], str) and len(result[key]) > 0, f"Empty value for {key}"
 
@@ -203,6 +203,7 @@ async def test_get_my_leads_with_mock_kommo_client():
 
     kommo = AsyncMock()
     kommo.search_leads = AsyncMock(return_value=[fake_lead])
+    kommo.get_tasks = AsyncMock(return_value=[])
 
     dm = MagicMock()
     dm.dialog_data = {}
@@ -413,3 +414,84 @@ async def test_on_search_leads_query_saves_and_switches():
 
     assert dm.dialog_data["search_query"] == "Ivanov"
     dm.switch_to.assert_called_once_with(SearchLeadsSG.results)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 3: Search button removed from leads menu (#731)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def test_leads_menu_getter_has_no_btn_search():
+    """leads menu getter should not return btn_search after removal (#731)."""
+    from telegram_bot.dialogs.crm_leads import get_leads_menu_data
+
+    result = await get_leads_menu_data()
+    assert "btn_search" not in result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task 4: Updated lead card — contact name, task count, no raw IDs (#731)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_lead_card_no_raw_ids():
+    """format_lead_card should not show raw status_id or pipeline_id (#731)."""
+    from telegram_bot.dialogs.crm_cards import format_lead_card
+    from telegram_bot.services.kommo_models import Lead
+
+    lead = Lead(id=1, name="Test", budget=50000, status_id=123, pipeline_id=456)
+    text, _ = format_lead_card(lead)
+    assert "Статус ID" not in text
+    assert "Pipeline ID" not in text
+
+
+def test_lead_card_shows_contact_name():
+    """format_lead_card displays contact name when contacts available (#731)."""
+    from telegram_bot.dialogs.crm_cards import format_lead_card
+    from telegram_bot.services.kommo_models import Lead
+
+    lead = Lead(id=1, name="Test", budget=50000, contacts=[{"id": 10, "name": "Иван Петров"}])
+    text, _ = format_lead_card(lead)
+    assert "Иван Петров" in text
+
+
+def test_lead_card_shows_task_count():
+    """format_lead_card displays task_count when provided (#731)."""
+    from telegram_bot.dialogs.crm_cards import format_lead_card
+    from telegram_bot.services.kommo_models import Lead
+
+    lead = Lead(id=1, name="Test", budget=50000)
+    text, _ = format_lead_card(lead, task_count=3)
+    assert "3" in text
+
+
+def test_lead_card_shows_zero_tasks_by_default():
+    """format_lead_card shows 0 tasks when task_count not provided (#731)."""
+    from telegram_bot.dialogs.crm_cards import format_lead_card
+    from telegram_bot.services.kommo_models import Lead
+
+    lead = Lead(id=1, name="Test")
+    text, _ = format_lead_card(lead)
+    assert "Задач" in text
+
+
+async def test_get_my_leads_batches_task_counts():
+    """my leads getter fetches task counts and passes them to card formatter (#731)."""
+    from telegram_bot.dialogs.crm_leads import get_my_leads_data
+    from telegram_bot.services.kommo_models import Lead, Task
+
+    fake_lead = Lead(id=10, name="Deal Beta", budget=20000)
+    fake_task = Task(id=1, text="Call", entity_id=10, is_completed=False)
+
+    kommo = AsyncMock()
+    kommo.search_leads = AsyncMock(return_value=[fake_lead])
+    kommo.get_tasks = AsyncMock(return_value=[fake_task])
+
+    dm = MagicMock()
+    dm.dialog_data = {}
+    dm.middleware_data = {"kommo_client": kommo}
+
+    result = await get_my_leads_data(dialog_manager=dm)
+    # get_tasks should be called for task counts
+    kommo.get_tasks.assert_called_once()
+    assert "Deal Beta" in result["leads_text"]
