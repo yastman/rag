@@ -222,7 +222,7 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for preferences multi-select menu (Step 4).
 
     Shows 5 category buttons with ✓ checkmark when a value is selected,
-    plus a "Показать результаты" button to proceed to results via summary.
+    plus a "Нет, перейти к результатам" button to proceed to summary.
     """
     i18n = kwargs.get("middleware_data", {}).get("i18n")
     dialog_manager = kwargs.get("dialog_manager")
@@ -238,11 +238,11 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
     promotion_val = data.get("is_promotion")
     complex_val = data.get("complex")
 
-    floor_label = f"{'✓ ' if floor_val and floor_val != 'any' else ''}Этаж"
-    view_label = f"{'✓ ' if view_val and view_val != 'any' else ''}Вид"
-    furnished_label = f"{'✓ ' if furnished_val else ''}Мебель"
-    promotion_label = f"{'✓ ' if promotion_val else ''}Акции"
-    complex_label = f"{'✓ ' if complex_val and complex_val != 'any' else ''}Комплекс"
+    floor_label = f"{'✓ ' if floor_val and floor_val != 'any' else ''}🏢 Этаж"
+    view_label = f"{'✓ ' if view_val and view_val != 'any' else ''}🌅 Вид"
+    furnished_label = f"{'✓ ' if furnished_val else ''}🛋 Мебель"
+    promotion_label = f"{'✓ ' if promotion_val else ''}🏷 Акции"
+    complex_label = f"{'✓ ' if complex_val and complex_val != 'any' else ''}🏘 Комплекс"
 
     items = [
         (floor_label, "floor"),
@@ -250,9 +250,9 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
         (furnished_label, "furnished"),
         (promotion_label, "promotion"),
         (complex_label, "complex"),
-        ("🔍 Показать результаты ➜", "done"),
+        ("▶️ Нет, перейти к результатам", "done"),
     ]
-    return {"title": "Дополнительные фильтры:", "items": items, "btn_back": btn_back}
+    return {"title": "✨ Есть ли дополнительные пожелания?", "items": items, "btn_back": btn_back}
 
 
 async def get_pref_floor_options(**kwargs: Any) -> dict[str, Any]:
