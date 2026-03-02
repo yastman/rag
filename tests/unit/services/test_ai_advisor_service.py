@@ -1,10 +1,10 @@
-"""Tests for AIAdvisorService — LLM-powered CRM prioritization (#697)."""
+"""Tests for AIAdvisorService — redesigned with Langfuse prompts (#731)."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram_bot.services.kommo_models import Lead, Task
+from telegram_bot.services.kommo_models import Lead
 
 
 # --- Instantiation ---
@@ -19,9 +19,7 @@ def test_ai_advisor_service_instantiation():
     """AIAdvisorService instantiates with kommo_client and llm."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
 
-    kommo = MagicMock()
-    llm = MagicMock()
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+    svc = AIAdvisorService(kommo_client=MagicMock(), llm=MagicMock())
     assert svc is not None
 
 
@@ -29,352 +27,195 @@ def test_ai_advisor_service_instantiation_with_cache():
     """AIAdvisorService accepts optional cache parameter."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
 
-    kommo = MagicMock()
-    llm = MagicMock()
-    cache = MagicMock()
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm, cache=cache)
+    svc = AIAdvisorService(kommo_client=MagicMock(), llm=MagicMock(), cache=MagicMock())
     assert svc is not None
 
 
-# --- get_prioritized_leads ---
+# --- Method existence ---
 
 
-async def test_get_prioritized_leads_calls_search_leads():
-    """get_prioritized_leads calls kommo.search_leads with manager_id."""
+def test_get_daily_plan_method_exists():
+    """AIAdvisorService has get_daily_plan method."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    assert hasattr(AIAdvisorService, "get_daily_plan")
+
+
+def test_get_deal_and_task_tips_method_exists():
+    """AIAdvisorService has get_deal_and_task_tips method."""
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    assert hasattr(AIAdvisorService, "get_deal_and_task_tips")
+
+
+# --- get_daily_plan ---
+
+
+@patch("telegram_bot.services.ai_advisor_service.get_prompt")
+async def test_daily_plan_uses_langfuse_prompt(mock_get_prompt: MagicMock) -> None:
+    """get_daily_plan fetches prompt from Langfuse via get_prompt()."""
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    mock_get_prompt.return_value = "System prompt from Langfuse"
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "Plan"
+    llm = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
 
     kommo = MagicMock()
     kommo.search_leads = AsyncMock(return_value=[])
-    llm = MagicMock()
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-
-    result = await svc.get_prioritized_leads(manager_id=42)
-
-    kommo.search_leads.assert_called_once_with(responsible_user_id=42, limit=20)
-    assert isinstance(result, str)
-
-
-async def test_get_prioritized_leads_returns_message_when_no_leads():
-    """get_prioritized_leads returns 'no leads' message when kommo returns empty list."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=[])
-    llm = MagicMock()
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-
-    result = await svc.get_prioritized_leads(manager_id=None)
-
-    assert "лид" in result.lower() or "нет" in result.lower()
-
-
-async def test_get_prioritized_leads_calls_llm_with_leads():
-    """get_prioritized_leads passes leads to LLM for prioritization."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    leads = [
-        Lead(id=1, name="Deal A", budget=100000, created_at=1700000000),
-        Lead(id=2, name="Deal B", budget=50000, created_at=1700001000),
-    ]
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=leads)
-
-    llm_response = MagicMock()
-    llm_response.choices[0].message.content = "1. Deal A — высокий приоритет"
-    llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=llm_response)
-
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    result = await svc.get_prioritized_leads(manager_id=1)
-
-    llm.chat.completions.create.assert_called_once()
-    assert isinstance(result, str)
-    assert len(result) > 0
-
-
-async def test_get_prioritized_leads_does_not_pass_unsupported_name_kwarg():
-    """OpenAI chat.completions.create should be called without top-level 'name' kwarg."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    leads = [Lead(id=1, name="Deal A", budget=100000, created_at=1700000000)]
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=leads)
-
-    llm_response = MagicMock()
-    llm_response.choices[0].message.content = "ok"
-    llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=llm_response)
-
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    await svc.get_prioritized_leads(manager_id=1)
-
-    kwargs = llm.chat.completions.create.call_args.kwargs
-    assert "name" not in kwargs
-
-
-# --- get_prioritized_tasks ---
-
-
-async def test_get_prioritized_tasks_calls_get_tasks():
-    """get_prioritized_tasks calls kommo.get_tasks with manager_id and is_completed=False."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    kommo = MagicMock()
     kommo.get_tasks = AsyncMock(return_value=[])
-    llm = MagicMock()
+
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+    await svc.get_daily_plan(None)
 
-    await svc.get_prioritized_tasks(manager_id=10)
-
-    kommo.get_tasks.assert_called_once_with(responsible_user_id=10, is_completed=False)
+    mock_get_prompt.assert_called()
 
 
-async def test_get_prioritized_tasks_returns_message_when_no_tasks():
-    """get_prioritized_tasks returns 'no tasks' message when kommo returns empty list."""
+@patch("telegram_bot.services.ai_advisor_service.get_prompt")
+async def test_deal_tips_uses_langfuse_prompt(mock_get_prompt: MagicMock) -> None:
+    """get_deal_and_task_tips fetches prompt from Langfuse via get_prompt()."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
 
+    mock_get_prompt.return_value = "System prompt from Langfuse"
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "Tips"
+    llm = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
+
     kommo = MagicMock()
+    kommo.search_leads = AsyncMock(return_value=[])
     kommo.get_tasks = AsyncMock(return_value=[])
-    llm = MagicMock()
+
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+    await svc.get_deal_and_task_tips(None)
 
-    result = await svc.get_prioritized_tasks(manager_id=None)
-
-    assert "задач" in result.lower() or "нет" in result.lower()
+    mock_get_prompt.assert_called()
 
 
-async def test_get_prioritized_tasks_calls_llm_with_tasks():
-    """get_prioritized_tasks passes tasks to LLM for prioritization."""
-    import time
-
+async def test_get_daily_plan_returns_string() -> None:
+    """get_daily_plan returns non-empty string."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    tasks = [
-        Task(id=1, text="Позвонить клиенту", complete_till=int(time.time()) + 3600),
-        Task(id=2, text="Отправить КП", complete_till=int(time.time()) - 3600),  # overdue
-    ]
-    kommo = MagicMock()
-    kommo.get_tasks = AsyncMock(return_value=tasks)
 
     llm_response = MagicMock()
-    llm_response.choices[0].message.content = "1. Отправить КП — просрочено"
+    llm_response.choices[0].message.content = "Ваш план на день"
     llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
     llm.chat.completions.create = AsyncMock(return_value=llm_response)
-
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    result = await svc.get_prioritized_tasks(manager_id=5)
-
-    llm.chat.completions.create.assert_called_once()
-    assert isinstance(result, str)
-
-
-async def test_get_prioritized_tasks_does_not_pass_unsupported_name_kwarg():
-    """OpenAI chat.completions.create should be called without top-level 'name' kwarg."""
-    import time
-
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    tasks = [Task(id=1, text="Позвонить клиенту", complete_till=int(time.time()) + 3600)]
-    kommo = MagicMock()
-    kommo.get_tasks = AsyncMock(return_value=tasks)
-
-    llm_response = MagicMock()
-    llm_response.choices[0].message.content = "ok"
-    llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=llm_response)
-
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    await svc.get_prioritized_tasks(manager_id=5)
-
-    kwargs = llm.chat.completions.create.call_args.kwargs
-    assert "name" not in kwargs
-
-
-# --- get_stale_deals ---
-
-
-async def test_get_stale_deals_calls_search_leads():
-    """get_stale_deals calls kommo.search_leads with manager_id."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
 
     kommo = MagicMock()
     kommo.search_leads = AsyncMock(return_value=[])
-    llm = MagicMock()
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-
-    await svc.get_stale_deals(manager_id=7)
-
-    kommo.search_leads.assert_called_once_with(responsible_user_id=7, limit=50)
-
-
-async def test_get_stale_deals_returns_active_message_when_no_stale():
-    """get_stale_deals returns 'all active' message when no leads are stale."""
-    import time
-
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    # All leads updated recently (within 5 days)
-    recent_ts = int(time.time()) - (2 * 86400)  # 2 days ago
-    leads = [
-        Lead(id=1, name="Active Deal", updated_at=recent_ts),
-    ]
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=leads)
-    llm = MagicMock()
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-
-    result = await svc.get_stale_deals(manager_id=1)
-
-    assert "актив" in result.lower() or "нет" in result.lower()
-
-
-async def test_get_stale_deals_filters_leads_older_than_5_days():
-    """get_stale_deals only passes leads without activity 5+ days to LLM."""
-    import time
-
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    now = int(time.time())
-    leads = [
-        Lead(id=1, name="Old Deal", updated_at=now - (7 * 86400)),  # 7 days stale
-        Lead(id=2, name="Fresh Deal", updated_at=now - (1 * 86400)),  # 1 day fresh
-    ]
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=leads)
-
-    llm_response = MagicMock()
-    llm_response.choices[0].message.content = "Old Deal застряла"
-    llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=llm_response)
+    kommo.get_tasks = AsyncMock(return_value=[])
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    result = await svc.get_stale_deals(manager_id=1)
-
-    # LLM was called (there IS a stale deal)
-    llm.chat.completions.create.assert_called_once()
-    # The call args should reference the stale lead
-    call_kwargs = llm.chat.completions.create.call_args
-    messages = (
-        call_kwargs.kwargs.get("messages", []) or call_kwargs.args[0] if call_kwargs.args else []
-    )
-    user_content = ""
-    for m in messages if isinstance(messages, list) else []:
-        if isinstance(m, dict) and m.get("role") == "user":
-            user_content = m.get("content", "")
-    assert "Old Deal" in user_content or isinstance(result, str)
-
-
-async def test_get_stale_deals_does_not_pass_unsupported_name_kwarg():
-    """OpenAI chat.completions.create should be called without top-level 'name' kwarg."""
-    import time
-
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    now = int(time.time())
-    leads = [Lead(id=1, name="Old Deal", updated_at=now - (7 * 86400))]
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=leads)
-
-    llm_response = MagicMock()
-    llm_response.choices[0].message.content = "ok"
-    llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=llm_response)
-
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    await svc.get_stale_deals(manager_id=1)
-
-    kwargs = llm.chat.completions.create.call_args.kwargs
-    assert "name" not in kwargs
-
-
-async def test_get_stale_deals_returns_no_deals_message_when_empty():
-    """get_stale_deals returns message when kommo returns no leads at all."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=[])
-    llm = MagicMock()
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-
-    result = await svc.get_stale_deals(manager_id=None)
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        result = await svc.get_daily_plan(manager_id=1)
 
     assert isinstance(result, str)
     assert len(result) > 0
 
 
-# --- get_full_briefing ---
-
-
-async def test_get_full_briefing_returns_string():
-    """get_full_briefing returns a non-empty string."""
+async def test_get_deal_and_task_tips_returns_string() -> None:
+    """get_deal_and_task_tips returns non-empty string."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "Советы по сделкам"
+    llm = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
 
     kommo = MagicMock()
     kommo.search_leads = AsyncMock(return_value=[])
     kommo.get_tasks = AsyncMock(return_value=[])
-    llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=MagicMock())
-    llm.chat.completions.create.return_value.choices = [MagicMock()]
-    llm.chat.completions.create.return_value.choices[0].message.content = "Summary"
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    result = await svc.get_full_briefing(manager_id=1)
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        result = await svc.get_deal_and_task_tips(manager_id=1)
 
     assert isinstance(result, str)
     assert len(result) > 0
 
 
-async def test_get_full_briefing_uses_cache_on_hit():
-    """get_full_briefing returns cached value without calling LLM."""
+async def test_get_daily_plan_fetches_leads_tasks_and_stale() -> None:
+    """get_daily_plan fetches leads, tasks and stale data."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
 
-    kommo = MagicMock()
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "Plan"
     llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
-    llm.chat.completions.create = AsyncMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
+
+    kommo = MagicMock()
+    kommo.search_leads = AsyncMock(return_value=[])
+    kommo.get_tasks = AsyncMock(return_value=[])
+
+    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        await svc.get_daily_plan(manager_id=5)
+
+    # search_leads and get_tasks should both be called
+    assert kommo.search_leads.call_count >= 1
+    kommo.get_tasks.assert_called()
+
+
+async def test_get_deal_and_task_tips_fetches_tasks_and_stale() -> None:
+    """get_deal_and_task_tips fetches tasks and stale deals."""
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "Tips"
+    llm = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
+
+    kommo = MagicMock()
+    kommo.search_leads = AsyncMock(return_value=[])
+    kommo.get_tasks = AsyncMock(return_value=[])
+
+    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        await svc.get_deal_and_task_tips(manager_id=5)
+
+    kommo.get_tasks.assert_called()
+    kommo.search_leads.assert_called()
+
+
+async def test_get_daily_plan_uses_cache_on_hit() -> None:
+    """get_daily_plan returns cached value without calling LLM."""
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
 
     cache_redis = AsyncMock()
-    cache_redis.get = AsyncMock(return_value="Cached briefing")
+    cache_redis.get = AsyncMock(return_value="Cached plan")
     cache = MagicMock()
     cache.redis = cache_redis
 
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm, cache=cache)
-    result = await svc.get_full_briefing(manager_id=5)
+    llm = MagicMock()
+    llm.chat.completions.create = AsyncMock()
+    kommo = MagicMock()
 
-    assert result == "Cached briefing"
-    # LLM should NOT have been called
+    svc = AIAdvisorService(kommo_client=kommo, llm=llm, cache=cache)
+
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        result = await svc.get_daily_plan(manager_id=5)
+
+    assert result == "Cached plan"
     llm.chat.completions.create.assert_not_called()
 
 
-async def test_get_full_briefing_stores_result_in_cache():
-    """get_full_briefing stores computed result in cache for future calls."""
+async def test_get_daily_plan_stores_result_in_cache() -> None:
+    """get_daily_plan stores computed result in cache for future calls."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "Plan text"
+    llm = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
 
     kommo = MagicMock()
     kommo.search_leads = AsyncMock(return_value=[])
     kommo.get_tasks = AsyncMock(return_value=[])
-
-    llm_response = MagicMock()
-    llm_response.choices[0].message.content = "Briefing text"
-    llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
-    llm.chat.completions.create = AsyncMock(return_value=llm_response)
 
     cache_redis = AsyncMock()
     cache_redis.get = AsyncMock(return_value=None)  # cache miss
@@ -383,27 +224,25 @@ async def test_get_full_briefing_stores_result_in_cache():
     cache.redis = cache_redis
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm, cache=cache)
-    result = await svc.get_full_briefing(manager_id=3)
 
-    # Cache should have been populated
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        await svc.get_daily_plan(manager_id=3)
+
     cache_redis.setex.assert_called_once()
-    assert isinstance(result, str)
 
 
-async def test_get_full_briefing_cache_key_includes_manager_id():
-    """get_full_briefing uses manager_id in cache key for isolation."""
+async def test_get_daily_plan_cache_key_includes_manager_id() -> None:
+    """get_daily_plan uses manager_id in cache key for isolation."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    kommo = MagicMock()
-    kommo.search_leads = AsyncMock(return_value=[])
-    kommo.get_tasks = AsyncMock(return_value=[])
 
     llm_response = MagicMock()
     llm_response.choices[0].message.content = "ok"
     llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
     llm.chat.completions.create = AsyncMock(return_value=llm_response)
+
+    kommo = MagicMock()
+    kommo.search_leads = AsyncMock(return_value=[])
+    kommo.get_tasks = AsyncMock(return_value=[])
 
     cache_redis = AsyncMock()
     cache_redis.get = AsyncMock(return_value=None)
@@ -412,47 +251,70 @@ async def test_get_full_briefing_cache_key_includes_manager_id():
     cache.redis = cache_redis
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm, cache=cache)
-    await svc.get_full_briefing(manager_id=99)
 
-    # Cache get/set should include manager_id in the key
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        await svc.get_daily_plan(manager_id=99)
+
     get_call_key = cache_redis.get.call_args[0][0]
     assert "99" in str(get_call_key)
 
 
-# --- Error handling ---
+async def test_get_daily_plan_handles_kommo_error() -> None:
+    """get_daily_plan returns string when Kommo API fails."""
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    kommo = MagicMock()
+    kommo.search_leads = AsyncMock(side_effect=Exception("Kommo error"))
+    kommo.get_tasks = AsyncMock(side_effect=Exception("Kommo error"))
+
+    llm_response = MagicMock()
+    llm_response.choices[0].message.content = "Plan despite error"
+    llm = MagicMock()
+    llm.chat.completions.create = AsyncMock(return_value=llm_response)
+
+    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        result = await svc.get_daily_plan(manager_id=1)
+
+    assert isinstance(result, str)
 
 
-async def test_get_prioritized_leads_handles_llm_error():
-    """get_prioritized_leads returns error message when LLM fails."""
+async def test_get_daily_plan_handles_llm_error() -> None:
+    """get_daily_plan returns error string when LLM fails."""
+    from telegram_bot.services.ai_advisor_service import AIAdvisorService
+
+    kommo = MagicMock()
+    kommo.search_leads = AsyncMock(return_value=[])
+    kommo.get_tasks = AsyncMock(return_value=[])
+
+    llm = MagicMock()
+    llm.chat.completions.create = AsyncMock(side_effect=Exception("LLM error"))
+
+    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
+
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        result = await svc.get_daily_plan(manager_id=1)
+
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+async def test_get_prioritized_leads_handles_llm_error() -> None:
+    """Backward compat: get_daily_plan returns error message when LLM fails."""
     from telegram_bot.services.ai_advisor_service import AIAdvisorService
 
     leads = [Lead(id=1, name="Deal A", budget=100000)]
     kommo = MagicMock()
     kommo.search_leads = AsyncMock(return_value=leads)
+    kommo.get_tasks = AsyncMock(return_value=[])
 
     llm = MagicMock()
-    llm.chat = MagicMock()
-    llm.chat.completions = MagicMock()
     llm.chat.completions.create = AsyncMock(side_effect=Exception("LLM error"))
 
     svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    result = await svc.get_prioritized_leads(manager_id=1)
-
-    assert isinstance(result, str)
-    # Should return error message, not raise
-    assert "ошибка" in result.lower() or "недоступ" in result.lower() or len(result) > 0
-
-
-async def test_get_prioritized_tasks_handles_kommo_error():
-    """get_prioritized_tasks returns error message when Kommo API fails."""
-    from telegram_bot.services.ai_advisor_service import AIAdvisorService
-
-    kommo = MagicMock()
-    kommo.get_tasks = AsyncMock(side_effect=Exception("Kommo API error"))
-    llm = MagicMock()
-
-    svc = AIAdvisorService(kommo_client=kommo, llm=llm)
-    result = await svc.get_prioritized_tasks(manager_id=1)
+    with patch("telegram_bot.services.ai_advisor_service.get_prompt", return_value="prompt"):
+        result = await svc.get_daily_plan(manager_id=1)
 
     assert isinstance(result, str)
     assert len(result) > 0
