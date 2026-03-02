@@ -72,25 +72,27 @@ def _sample_result(property_id: str = "prop-1") -> dict:
 
 
 async def test_send_property_card_calls_format_and_answer() -> None:
-    """_send_property_card formats card, checks favorite, sends with 2+1 buttons."""
+    """_send_property_card sends photo card with inline actions, including all photos."""
     bot = _create_bot()
     bot._favorites_service = MagicMock()
     bot._favorites_service.is_favorited = AsyncMock(return_value=False)
 
     message = MagicMock()
     message.answer = AsyncMock()
+    message.answer_photo = AsyncMock()
 
     result = _sample_result("prop-1")
 
     await bot._send_property_card(message, result, telegram_id=123)
 
-    message.answer.assert_awaited_once()
-    call_kwargs = message.answer.call_args
+    message.answer_photo.assert_awaited_once()
+    call_kwargs = message.answer_photo.call_args
     kb = call_kwargs.kwargs.get("reply_markup") or call_kwargs[1].get("reply_markup")
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "card:viewing:prop-1" in callbacks
     assert "fav:add:prop-1" in callbacks
     assert "card:ask:prop-1" in callbacks
+    assert "card:photos:prop-1" in callbacks
 
 
 async def test_send_property_card_favorited_shows_remove() -> None:
@@ -101,12 +103,13 @@ async def test_send_property_card_favorited_shows_remove() -> None:
 
     message = MagicMock()
     message.answer = AsyncMock()
+    message.answer_photo = AsyncMock()
 
     result = _sample_result("prop-1")
 
     await bot._send_property_card(message, result, telegram_id=123)
 
-    kb = message.answer.call_args.kwargs.get("reply_markup")
+    kb = message.answer_photo.call_args.kwargs.get("reply_markup")
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "fav:remove:prop-1" in callbacks
     assert "fav:add:prop-1" not in callbacks
@@ -121,12 +124,13 @@ async def test_send_property_card_no_favorites_service() -> None:
 
     message = MagicMock()
     message.answer = AsyncMock()
+    message.answer_photo = AsyncMock()
 
     result = _sample_result("prop-99")
 
     await bot._send_property_card(message, result, telegram_id=42)
 
-    message.answer.assert_awaited_once()
-    kb = message.answer.call_args.kwargs.get("reply_markup")
+    message.answer_photo.assert_awaited_once()
+    kb = message.answer_photo.call_args.kwargs.get("reply_markup")
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "fav:add:prop-99" in callbacks
