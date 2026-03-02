@@ -56,6 +56,7 @@ def _make_callback(data: str, user_id: int = 12345) -> MagicMock:
     cb.answer = AsyncMock()
     cb.message = MagicMock()
     cb.message.answer = AsyncMock()
+    cb.message.answer_media_group = AsyncMock()
     return cb
 
 
@@ -179,6 +180,21 @@ async def test_card_callback_unknown_action_answers_empty() -> None:
 
         mock_spc.assert_not_awaited()
         callback.answer.assert_awaited()
+
+
+async def test_card_photos_sends_media_group() -> None:
+    """card:photos:{id} sends demo media group and does not start phone collection."""
+    bot = _create_bot()
+    state = _make_state({})
+    callback = _make_callback("card:photos:prop-42")
+
+    _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
+    with patch(_patch, new_callable=AsyncMock) as mock_spc:
+        await bot.handle_card_callback(callback, state)
+
+        mock_spc.assert_not_awaited()
+        callback.message.answer_media_group.assert_awaited_once()
+        callback.answer.assert_awaited_once()
 
 
 async def test_card_callback_malformed_data_answers_empty() -> None:

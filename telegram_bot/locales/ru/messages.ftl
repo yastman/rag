@@ -195,7 +195,9 @@ funnel-refine-more = ⚙️ Уточнить ещё
 # Результаты (#660)
 results-shown = Показано { $shown } из { $total } вариантов
 results-show-more = 🔄 Показать ещё
+results-show-more-remaining = 🔄 Показать ещё ({ $remaining } осталось)
 results-found = Найдено { $total } апартаментов
+results-found-range = Найдено { $total } апартаментов (показаны { $start }–{ $end })
 results-service-unavailable = Сервис поиска недоступен.
 results-refine = ⚙️ Изменить параметры
 results-book-viewing = 📅 Запись на осмотр

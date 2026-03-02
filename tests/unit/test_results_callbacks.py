@@ -58,6 +58,7 @@ def _make_callback(data: str = "results:more", user_id: int = 12345) -> MagicMoc
     cb.answer = AsyncMock()
     cb.message = MagicMock()
     cb.message.answer = AsyncMock()
+    cb.message.answer_photo = AsyncMock()
     cb.message.delete = AsyncMock()
     return cb
 
@@ -104,8 +105,9 @@ async def test_results_more_shows_next_page() -> None:
 
     await bot.handle_results_callback(callback, state)
 
-    # 3 remaining cards (results[5:8]) + 1 footer message
-    assert callback.message.answer.await_count == 4
+    # 3 remaining cards via answer_photo + 1 footer message via answer
+    assert callback.message.answer_photo.await_count == 3
+    assert callback.message.answer.await_count == 1
     state.update_data.assert_awaited_once_with(apartment_offset=_PAGE_SIZE)
     callback.answer.assert_awaited_once_with()
 
@@ -120,6 +122,7 @@ async def test_results_more_no_results_in_state() -> None:
 
     callback.answer.assert_awaited_once_with("Нет сохранённых результатов")
     callback.message.answer.assert_not_called()
+    callback.message.answer_photo.assert_not_called()
 
 
 async def test_results_more_exhausted() -> None:
@@ -133,6 +136,7 @@ async def test_results_more_exhausted() -> None:
 
     callback.answer.assert_awaited_once_with("Все результаты уже показаны")
     callback.message.answer.assert_not_called()
+    callback.message.answer_photo.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
