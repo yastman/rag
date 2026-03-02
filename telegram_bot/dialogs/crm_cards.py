@@ -22,22 +22,30 @@ _TASK_PREFIX = "crm:task"
 PAGE_SIZE = 5
 
 
-def format_lead_card(lead: Lead) -> tuple[str, InlineKeyboardMarkup]:
+def format_lead_card(lead: Lead, task_count: int = 0) -> tuple[str, InlineKeyboardMarkup]:
     """Format a Lead as a Telegram text card with inline buttons.
+
+    Args:
+        lead: Lead object from Kommo API.
+        task_count: number of open tasks linked to this lead (#731).
 
     Returns:
         (text, keyboard) — ready to use in bot.send_message() / edit_message_text().
     """
     budget_str = f"{lead.budget:,} €".replace(",", " ") if lead.budget else "не указан"
+
+    contact_name = "—"
+    if lead.contacts:
+        first = lead.contacts[0]
+        contact_name = first.get("name") or first.get("first_name") or "—"
+
     lines = [
         f"📋 *Сделка #{lead.id}*",
         f"Название: {lead.name or '—'}",
         f"Бюджет: {budget_str}",
+        f"Контакт: {contact_name}",
+        f"Задач: {task_count}",
     ]
-    if lead.status_id:
-        lines.append(f"Статус ID: {lead.status_id}")
-    if lead.pipeline_id:
-        lines.append(f"Pipeline ID: {lead.pipeline_id}")
     if lead.created_at:
         dt = datetime.datetime.fromtimestamp(lead.created_at, tz=datetime.UTC)
         lines.append(f"Создана: {dt.strftime('%d.%m.%Y')}")
