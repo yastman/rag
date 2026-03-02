@@ -278,3 +278,25 @@ svc-back = Назад
 svc-get-offer = Отримати пропозицію
 svc-contact-manager = Зв'язатися з менеджером
 svc-back-to-services = Назад до послуг
+
+# ── Handoff (Forum Topics) ──────────────────────────────────────
+handoff-qual-prompt = Щоб менеджер одразу допоміг — кілька питань:
+handoff-goal-buy = 🏠 Купівля
+handoff-goal-rent = 🔑 Оренда
+handoff-goal-consult = 📋 Консультація
+handoff-budget-prompt = Який бюджет приблизно?
+handoff-budget-low = до 50к€
+handoff-budget-mid = 50-100к€
+handoff-budget-high = 100к€+
+handoff-budget-unknown = Поки не знаю
+handoff-contact-prompt = Як зручніше зв'язатися?
+handoff-contact-chat = 💬 Написати зараз
+handoff-contact-phone = 📞 Залишити номер
+handoff-connecting = З'єдную з менеджером. Поки чекаєте — можу відповісти на питання!
+handoff-offline = Менеджер відповість у робочий час (9:00-18:00 EET). Поки можу допомогти!
+handoff-manager-joined = Менеджер підключився!
+handoff-timeout = Менеджер зараз зайнятий. Залишити номер для дзвінка?
+handoff-closed-client = Менеджер завершив діалог. Я знову на зв'язку!
+handoff-closed-topic = ✅ Діалог закрито, клієнт повернений боту.
+handoff-wait-more = ⏳ Почекаю ще
+handoff-leave-phone = 📞 Так, передзвоніть
