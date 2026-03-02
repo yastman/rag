@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 
@@ -128,12 +128,17 @@ async def on_qual_callback(
     i18n: Any | None = None,
     **kwargs: Any,
 ) -> None:
-    """Handle qual:* callback queries — advance through steps."""
+    """Handle qual:goal/budget callback queries — advance through steps."""
     parsed = parse_qual_callback(callback.data or "")
     if not parsed:
         return
     step, value = parsed
     user_id = callback.from_user.id
+
+    msg = callback.message
+    if msg is None or not hasattr(msg, "edit_text"):
+        await callback.answer()
+        return
 
     if user_id not in _qual_cache:
         _qual_cache[user_id] = {}
@@ -142,21 +147,11 @@ async def on_qual_callback(
     if step == "goal":
         text = _t(i18n, "handoff-budget-prompt", "Какой бюджет?")
         kb = build_budget_keyboard(i18n)
-        await callback.message.edit_text(text, reply_markup=kb)
+        await msg.edit_text(text, reply_markup=kb)
     elif step == "budget":
         text = _t(i18n, "handoff-contact-prompt", "Как удобнее связаться?")
         kb = build_contact_keyboard(i18n)
-        await callback.message.edit_text(text, reply_markup=kb)
-    elif step == "contact":
-        _qual_cache.pop(user_id, {})
-        if value == "chat":
-            # Trigger Forum Topics bridge — handled by bot.py integration
-            await callback.message.edit_text(
-                _t(i18n, "handoff-connecting", "Соединяю с менеджером...")
-            )
-        elif value == "phone":
-            await callback.message.edit_text("...")
-            # Delegate to PhoneCollector — handled by bot.py integration
+        await msg.edit_text(text, reply_markup=kb)
 
     await callback.answer()
 
@@ -170,7 +165,9 @@ def get_user_qualification(user_id: int) -> dict[str, str]:
 
 
 def create_handoff_router() -> Router:
-    """Create router for handoff qualification callbacks."""
+    """Create router for handoff qualification callbacks (goal + budget only)."""
     router = Router(name="handoff_qualification")
-    router.callback_query(lambda c: c.data and c.data.startswith("qual:"))(on_qual_callback)
+    router.callback_query(F.data.startswith("qual:goal:") | F.data.startswith("qual:budget:"))(
+        on_qual_callback
+    )
     return router

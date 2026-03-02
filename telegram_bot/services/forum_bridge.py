@@ -9,16 +9,14 @@ from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
-# Telegram limits topic name to 128 UTF-8 bytes.
-_MAX_TOPIC_NAME_BYTES = 128
+# Telegram API: topic name 1-128 characters.
+_MAX_TOPIC_NAME_LEN = 128
 
 
 def _truncate_topic_name(name: str) -> str:
-    encoded = name.encode("utf-8")
-    if len(encoded) <= _MAX_TOPIC_NAME_BYTES:
+    if len(name) <= _MAX_TOPIC_NAME_LEN:
         return name
-    # Truncate at byte boundary without breaking characters.
-    return encoded[:_MAX_TOPIC_NAME_BYTES].decode("utf-8", errors="ignore").rstrip()
+    return name[: _MAX_TOPIC_NAME_LEN - 1].rstrip() + "\u2026"
 
 
 class ForumBridge:
