@@ -31,6 +31,7 @@ from telegram_bot.services.kommo_models import (
     Pipeline,
     Task,
     TaskCreate,
+    TaskUpdate,
 )
 
 
@@ -228,6 +229,25 @@ class KommoClient:
         data = await self._request("POST", "/tasks", json=[task.model_dump(exclude_none=True)])
         item = data["_embedded"]["tasks"][0]
         return Task(**item)
+
+    @observe(name="kommo-update-task")
+    async def update_task(self, task_id: int, update: TaskUpdate) -> Task:
+        """PATCH /api/v4/tasks/{id} (#697)."""
+        data = await self._request(
+            "PATCH",
+            f"/tasks/{task_id}",
+            json=update.model_dump(exclude_none=True),
+        )
+        return Task(**data)
+
+    @observe(name="kommo-complete-task")
+    async def complete_task(self, task_id: int, result_text: str | None = None) -> Task:
+        """PATCH /api/v4/tasks/{id} — mark task as completed (#697)."""
+        payload: dict = {"is_completed": True}
+        if result_text is not None:
+            payload["result"] = {"text": result_text}
+        data = await self._request("PATCH", f"/tasks/{task_id}", json=payload)
+        return Task(**data)
 
     # --- Links ---
 
