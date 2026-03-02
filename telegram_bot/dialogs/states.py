@@ -86,6 +86,12 @@ class CreateTaskSG(StatesGroup):
     summary = State()  # Step 5: подтверждение
 
 
+class TasksMenuSG(StatesGroup):
+    """Tasks navigation submenu."""
+
+    main = State()
+
+
 class MyTasksSG(StatesGroup):
     """My Tasks view (#697)."""
 
