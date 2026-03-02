@@ -113,6 +113,22 @@ def test_distribute_statuses():
     assert 10 <= new_count <= 20  # ~30% of 50
 
 
+def test_distribute_statuses_ignores_non_positive_status_ids():
+    """0/-1 placeholders are ignored and fallback is None when no valid IDs exist."""
+    from scripts.kommo_seed import distribute_statuses
+
+    statuses = {
+        "new": 0,
+        "qualified": -1,
+        "negotiation": 0,
+        "proposal": 0,
+        "won": 0,
+        "lost": 0,
+    }
+    result = distribute_statuses(4, statuses)
+    assert result == [None, None, None, None]
+
+
 def test_build_lead_data():
     """build_lead_data creates LeadCreate-compatible dict."""
     from scripts.kommo_seed import Scenario, build_lead_data
@@ -252,6 +268,37 @@ async def test_seed_dry_run(capsys):
     assert stats["contacts_created"] == 3
     assert stats["leads_created"] == 5
     assert stats["api_calls"] == 0  # dry-run = 0 API calls
+
+
+@pytest.mark.asyncio
+async def test_seed_dry_run_rejects_leads_without_contacts():
+    """When leads are requested, zero contacts should fail fast with a clear error."""
+    from scripts.kommo_seed import seed_crm
+
+    apartments = [
+        {
+            "complex_name": "Test Complex",
+            "rooms": 1,
+            "price_eur": 40000,
+            "area_m2": 38.0,
+            "floor": 2,
+            "view_primary": "garden",
+            "apartment_number": "T-101",
+            "city": "Sunny Beach",
+        }
+    ]
+    statuses = {"new": 100}
+
+    with pytest.raises(ValueError, match="num_contacts must be > 0"):
+        await seed_crm(
+            kommo_client=None,
+            apartments=apartments,
+            statuses=statuses,
+            pipeline_id=1,
+            num_contacts=0,
+            num_leads=1,
+            dry_run=True,
+        )
 
 
 @pytest.mark.asyncio
