@@ -222,7 +222,7 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for preferences multi-select menu (Step 4).
 
     Shows 5 category buttons with ✓ checkmark when a value is selected,
-    plus a "Показать результаты" button to proceed to results via summary.
+    plus a "Нет, перейти к результатам" button to proceed to summary.
     """
     i18n = kwargs.get("middleware_data", {}).get("i18n")
     dialog_manager = kwargs.get("dialog_manager")
