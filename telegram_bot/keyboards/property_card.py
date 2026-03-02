@@ -3,7 +3,23 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+
+_DEMO_PHOTO_DIR = Path(__file__).resolve().parents[1] / "static" / "photos" / "demo"
+_DEMO_PHOTO_FILES = ("demo_1.png", "demo_2.png", "demo_3.png")
+
+
+def get_demo_photo_paths() -> list[str]:
+    """Return existing demo photo paths used as temporary card images."""
+    paths: list[str] = []
+    for name in _DEMO_PHOTO_FILES:
+        path = _DEMO_PHOTO_DIR / name
+        if path.exists():
+            paths.append(str(path))
+    return paths
 
 
 def format_property_card(
@@ -51,8 +67,14 @@ def format_promotion_card(
     )
 
 
-def build_card_buttons(property_id: str, *, is_favorited: bool = False) -> InlineKeyboardMarkup:
-    """Build inline buttons for a property card (2+1 layout)."""
+def build_card_buttons(
+    property_id: str,
+    *,
+    is_favorited: bool = False,
+    photos_count: int | None = None,
+) -> InlineKeyboardMarkup:
+    """Build inline buttons for a property card (2+1+1 layout)."""
+    total_photos = photos_count if photos_count is not None else len(get_demo_photo_paths()) or 3
     if is_favorited:
         fav_btn = InlineKeyboardButton(
             text="❌ Убрать из избранного",
@@ -78,15 +100,29 @@ def build_card_buttons(property_id: str, *, is_favorited: bool = False) -> Inlin
                     callback_data=f"card:ask:{property_id}",
                 ),
             ],
+            [
+                InlineKeyboardButton(
+                    text=f"📷 Все фото ({total_photos})",
+                    callback_data=f"card:photos:{property_id}",
+                ),
+            ],
         ]
     )
 
 
-def build_results_footer(*, shown: int, total: int, has_more: bool) -> InlineKeyboardMarkup:
+def build_results_footer(*, shown_total: int, total: int, has_more: bool) -> InlineKeyboardMarkup:
     """Build footer buttons after property results."""
     rows = []
     if has_more:
-        rows.append([InlineKeyboardButton(text="🔄 Показать ещё", callback_data="results:more")])
+        remaining = max(total - shown_total, 0)
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🔄 Показать ещё ({remaining} осталось)",
+                    callback_data="results:more",
+                )
+            ]
+        )
     rows.append([InlineKeyboardButton(text="⚙️ Изменить параметры", callback_data="results:refine")])
     rows.append([InlineKeyboardButton(text="📅 Запись на осмотр", callback_data="results:viewing")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
