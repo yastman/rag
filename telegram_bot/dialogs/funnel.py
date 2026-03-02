@@ -323,20 +323,28 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     lines: list[str] = ["Ваши параметры поиска:\n"]
 
     city_val = data.get("city", "any")
-    if city_val and city_val != "any":
-        lines.append(f"🏙 Город: {city_val}")
+    city_label = city_val if city_val and city_val != "any" else "Любой"
+    lines.append(f"🏙 Город: {city_label}")
 
     complex_val = data.get("complex")
     if complex_val and complex_val != "any":
         lines.append(f"🏢 Комплекс: {complex_val}")
 
     property_type_val = data.get("property_type", "any")
-    if property_type_val and property_type_val != "any":
-        lines.append(f"🏠 Тип: {_PROPERTY_TYPE_DISPLAY.get(property_type_val, property_type_val)}")
+    property_type_label = (
+        _PROPERTY_TYPE_DISPLAY.get(property_type_val, property_type_val)
+        if property_type_val and property_type_val != "any"
+        else "Любой"
+    )
+    lines.append(f"🏠 Тип: {property_type_label}")
 
     budget_val = data.get("budget", "any")
-    if budget_val and budget_val != "any":
-        lines.append(f"💰 Бюджет: {_BUDGET_DISPLAY.get(budget_val, budget_val)}")
+    budget_label = (
+        _BUDGET_DISPLAY.get(budget_val, budget_val)
+        if budget_val and budget_val != "any"
+        else "Любой"
+    )
+    lines.append(f"💰 Бюджет: {budget_label}")
 
     floor_val = data.get("floor")
     if floor_val and floor_val != "any":
@@ -356,24 +364,10 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     if promotion_val == "yes":
         lines.append("🎁 Акции: Только акции")
 
-    has_filter = (
-        city_val not in (None, "any")
-        or (complex_val is not None and complex_val != "any")
-        or property_type_val not in (None, "any")
-        or budget_val not in (None, "any")
-        or (floor_val not in (None, "any"))
-        or (view_val not in (None, "any"))
-        or furnished_val is not None
-        or promotion_val is not None
-    )
-
-    if not has_filter:
-        lines.append("(все параметры — любые)")
-
     summary_text = "\n".join(lines)
     return {
         "summary_text": summary_text,
-        "can_search": has_filter,
+        "can_search": True,
     }
 
 
@@ -423,6 +417,8 @@ async def get_results_data(
     has_more = False
     total_count = 0
     zero_suggestions: list[tuple[str, str]] = []
+    shown_start = 0
+    shown_end = 0
 
     if svc is not None:
         try:
@@ -438,6 +434,9 @@ async def get_results_data(
             has_more = next_offset is not None
 
             if results:
+                current_page = max(int(data.get("scroll_page", 1) or 1), 1)
+                shown_start = (current_page - 1) * _SCROLL_PAGE_SIZE + 1
+                shown_end = shown_start + len(results) - 1
                 cards = []
                 for apt in results:
                     p = apt["payload"]
@@ -456,6 +455,15 @@ async def get_results_data(
                         )
                     )
                 results_text = "\n\n".join(cards)
+                if has_more:
+                    remaining = max(total_count - shown_end, 0)
+                    if i18n:
+                        try:
+                            btn_more = i18n.get("results-show-more-remaining", remaining=remaining)
+                        except Exception:
+                            btn_more = f"{i18n.get('results-show-more')} ({remaining} осталось)"
+                    else:
+                        btn_more = f"🔄 Показать ещё ({remaining} осталось)"
             else:
                 results_text = no_results_text
                 # Build zero-results recovery suggestions
@@ -488,11 +496,28 @@ async def get_results_data(
         results_text = service_unavailable_text
 
     if total_count:
-        title = (
-            i18n.get("results-found", total=total_count)
-            if i18n
-            else f"Найдено {total_count} апартаментов"
-        )
+        if shown_start and shown_end:
+            if i18n:
+                try:
+                    title = i18n.get(
+                        "results-found-range",
+                        total=total_count,
+                        start=shown_start,
+                        end=shown_end,
+                    )
+                except Exception:
+                    title = (
+                        f"{i18n.get('results-found', total=total_count)} "
+                        f"(показаны {shown_start}–{shown_end})"
+                    )
+            else:
+                title = f"Найдено {total_count} апартаментов (показаны {shown_start}–{shown_end})"
+        else:
+            title = (
+                i18n.get("results-found", total=total_count)
+                if i18n
+                else f"Найдено {total_count} апартаментов"
+            )
     else:
         title = results_title
 

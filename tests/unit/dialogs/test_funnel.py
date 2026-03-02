@@ -252,7 +252,7 @@ async def test_summary_city_any_not_shown():
             middleware_data={},
         ),
     )
-    assert "Город" not in result["summary_text"]
+    assert "Город: Любой" in result["summary_text"]
 
 
 @pytest.mark.asyncio
@@ -296,15 +296,18 @@ async def test_summary_data_shows_selected_filters():
 
 
 @pytest.mark.asyncio
-async def test_summary_all_any_disables_search():
-    """When all filters are 'any'/empty, search should be disabled."""
+async def test_summary_all_any_allows_search_and_shows_explicit_any_labels():
+    """Summary always allows search and shows explicit 'Любой' core filters (#722)."""
     result = await funnel_module.get_summary_data(
         dialog_manager=SimpleNamespace(
             dialog_data={"city": "any", "property_type": "any", "budget": "any"},
             middleware_data={},
         ),
     )
-    assert result["can_search"] is False
+    assert "Город: Любой" in result["summary_text"]
+    assert "Тип: Любой" in result["summary_text"]
+    assert "Бюджет: Любой" in result["summary_text"]
+    assert result["can_search"] is True
 
 
 # --- Summary actions ---
