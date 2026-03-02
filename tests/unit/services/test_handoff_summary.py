@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -27,12 +27,14 @@ async def test_summary_calls_llm_for_sufficient_history():
         {"role": "assistant", "content": "Вот несколько вариантов..."},
         {"role": "user", "content": "А что с ипотекой?"},
     ]
-    with patch(
-        "telegram_bot.services.handoff_summary._call_llm",
-        new_callable=AsyncMock,
-        return_value="Клиент ищет квартиру в Варне, бюджет ~70к EUR. Интересуется ипотекой.",
-    ):
-        result = await generate_handoff_summary(history, min_messages=3)
+    mock_llm = AsyncMock()
+    mock_choice = MagicMock()
+    mock_choice.message.content = (
+        "Клиент ищет квартиру в Варне, бюджет ~70к EUR. Интересуется ипотекой."
+    )
+    mock_llm.chat.completions.create = AsyncMock(return_value=MagicMock(choices=[mock_choice]))
+    result = await generate_handoff_summary(history, llm=mock_llm, min_messages=3)
     assert result is not None
     assert "Варне" in result
     assert "ипотек" in result.lower()
+    mock_llm.chat.completions.create.assert_called_once()
