@@ -739,8 +739,6 @@ async def on_summary_search(
     # Footer
     shown = len(results)
     has_more = next_offset is not None
-    remaining = max(total_count - shown, 0) if has_more else 0
-    _ = remaining  # used for future "load more" logic
     await callback.message.answer(
         f"Найдено {total_count} апартаментов (показаны 1–{shown})",
         reply_markup=build_results_footer(
