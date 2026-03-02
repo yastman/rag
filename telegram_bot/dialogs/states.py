@@ -170,3 +170,6 @@ class CrmQuickActionSG(StatesGroup):
 
     waiting_note = State()  ***REMOVED*** waiting for note text (lead or contact)
     waiting_task = State()  ***REMOVED*** waiting for task text (lead)
+    edit_task_choose_field = State()  ***REMOVED*** choose what to edit (text or due date)
+    edit_task_text = State()  ***REMOVED*** waiting for new task text
+    edit_task_date = State()  ***REMOVED*** waiting for new due date
