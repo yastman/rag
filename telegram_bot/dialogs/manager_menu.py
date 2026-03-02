@@ -59,14 +59,14 @@ async def get_manager_menu_data(
 
     return {
         "greeting": i18n.get("mgr-hello", name=name),
-        "btn_leads": i18n.get("mgr-leads", fallback="📋 Сделки"),
-        "btn_contacts": i18n.get("mgr-contacts", fallback="👤 Контакты"),
-        "btn_tasks": i18n.get("mgr-tasks-create", fallback="✅ Создать задачу"),
-        "btn_my_tasks": i18n.get("mgr-my-tasks", fallback="📋 Мои задачи"),
-        "btn_note": i18n.get("mgr-note", fallback="📝 Заметка"),
-        "btn_ai_advisor": i18n.get("mgr-ai-advisor", fallback="🤖 AI-Советник"),
-        "btn_search": i18n.get("mgr-search", fallback="🔍 Поиск по базе"),
-        "btn_settings": i18n.get("mgr-settings", fallback="⚙️ Настройки"),
+        "btn_leads": i18n.get("mgr-leads"),
+        "btn_contacts": i18n.get("mgr-contacts"),
+        "btn_tasks": i18n.get("mgr-tasks-create"),
+        "btn_my_tasks": i18n.get("mgr-my-tasks"),
+        "btn_note": i18n.get("mgr-note"),
+        "btn_ai_advisor": i18n.get("mgr-ai-advisor"),
+        "btn_search": i18n.get("mgr-search"),
+        "btn_settings": i18n.get("mgr-settings"),
     }
 
 
