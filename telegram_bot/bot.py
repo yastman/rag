@@ -644,7 +644,6 @@ class PropertyBot:
         self.dp.callback_query(F.data.startswith("cta:"))(self.handle_cta_callback)
         self.dp.callback_query(F.data.startswith("fav:"))(self.handle_favorite_callback)
         self.dp.callback_query(F.data.startswith("results:"))(self.handle_results_callback)
-        self.dp.callback_query(F.data.startswith("viewing:"))(self.handle_viewing_callback)
         self.dp.callback_query(F.data.startswith("card:"))(self.handle_card_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
@@ -1021,8 +1020,10 @@ class PropertyBot:
                 await state.update_data(bookmarks_context=False)
             if action_id == "search":
                 await handler(message, dialog_manager)
-            elif action_id == "viewing" or action_id == "bookmarks":
+            elif action_id == "bookmarks":
                 await handler(message, state)
+            elif action_id == "viewing":
+                await handler(message, state, dialog_manager)
             elif action_id == "services":
                 await handler(message, i18n=i18n)
             else:
@@ -1056,25 +1057,18 @@ class PropertyBot:
         kb = build_services_menu(i18n=i18n)
         await message.answer(text, reply_markup=kb)
 
-    async def _handle_viewing(self, message: Message, state: FSMContext) -> None:
-        """Viewing appointment — fork: choose objects or phone (#628)."""
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    async def _handle_viewing(
+        self, message: Message, state: FSMContext, dialog_manager: Any = None
+    ) -> None:
+        """Start viewing appointment wizard via aiogram-dialog (#719)."""
+        if dialog_manager is not None:
+            from aiogram_dialog import StartMode
 
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="🏠 Выбрать объекты", callback_data="viewing:choose_objects"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="📞 Обсудим по телефону", callback_data="viewing:phone"
-                    )
-                ],
-            ]
-        )
-        await message.answer("Вас интересуют конкретные объекты?", reply_markup=keyboard)
+            from .dialogs.states import ViewingSG
+
+            await dialog_manager.start(ViewingSG.objects, mode=StartMode.RESET_STACK)
+        else:
+            await message.answer("📅 Для записи на осмотр используйте кнопку меню.")
 
     async def _send_property_card(
         self,
@@ -1513,20 +1507,6 @@ class PropertyBot:
                 service_key="manager_question",
                 viewing_objects=viewing_objects or None,
             )
-        else:
-            await callback.answer()
-
-    async def handle_viewing_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
-        """Handle viewing fork callbacks (choose_objects, phone)."""
-        data = callback.data or ""
-        if data == "viewing:choose_objects":
-            if callback.message:
-                await self.handle_menu_action_text(callback.message, "Подбери апартаменты")
-            await callback.answer()
-        elif data == "viewing:phone":
-            from .handlers.phone_collector import start_phone_collection
-
-            await start_phone_collection(callback, state, service_key="viewing")
         else:
             await callback.answer()
 
@@ -3272,6 +3252,7 @@ class PropertyBot:
         from .dialogs.funnel import funnel_dialog
         from .dialogs.manager_menu import manager_menu_dialog
         from .dialogs.settings import settings_dialog
+        from .dialogs.viewing import viewing_dialog
         from .handlers.crm_callbacks import create_crm_router
 
         # CRM card inline callbacks (crm:* prefix) — before aiogram-dialog setup (#697)
@@ -3293,6 +3274,7 @@ class PropertyBot:
         self.dp.include_router(settings_dialog)
         self.dp.include_router(funnel_dialog)
         self.dp.include_router(faq_dialog)
+        self.dp.include_router(viewing_dialog)
         aiogram_setup_dialogs(self.dp)
         logger.info("aiogram-dialog setup complete")
 
