@@ -55,6 +55,7 @@ def _make_callback(data: str = "fav:add:prop-42", user_id: int = 12345) -> Magic
     cb.from_user = MagicMock(id=user_id)
     cb.answer = AsyncMock()
     cb.message = MagicMock()
+    cb.message.message_id = 100
     cb.message.answer = AsyncMock()
     cb.message.delete = AsyncMock()
     return cb
@@ -236,6 +237,27 @@ async def test_fav_remove_toggles_reply_markup_in_search_results() -> None:
     kb = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "fav:add:prop-42" in callbacks
+
+
+async def test_fav_remove_deletes_when_message_is_from_bookmarks() -> None:
+    """When callback message belongs to bookmarks, remove should delete card."""
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.remove = AsyncMock()
+
+    state = _make_state(
+        {
+            "apartment_results": [_sample_result("prop-42")],
+            "bookmark_message_ids": [100],
+        }
+    )
+    callback = _make_callback("fav:remove:prop-42")
+    callback.message.edit_reply_markup = AsyncMock()
+
+    await bot.handle_favorite_callback(callback, state)
+
+    callback.message.delete.assert_awaited_once()
+    callback.message.edit_reply_markup.assert_not_awaited()
 
 
 async def test_fav_toggle_handles_message_not_modified() -> None:
