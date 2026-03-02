@@ -27,11 +27,11 @@ class TestApartmentRecord:
             "is_furnished": True,
             "has_floor_plan": True,
             "has_photo": True,
-            "city": "Sunny Beach",
+            "city": "Солнечный берег",
         }
         rec = ApartmentRecord.from_raw(row)
         assert rec.complex_name == "Premier Fort Beach"
-        assert rec.city == "Sunny Beach"
+        assert rec.city == "Солнечный берег"
         assert rec.rooms == 2
         assert rec.floor == 4
         assert rec.view_primary == "sea"
@@ -40,7 +40,7 @@ class TestApartmentRecord:
 
     def test_from_raw_row_missing_city_defaults_to_empty(self) -> None:
         row = {
-            "complex_name": "Premier Fort Beach",
+            "complex_name": "Test",
             "section": "D-1",
             "apartment_number": "248",
             "rooms": 2,
@@ -148,12 +148,12 @@ class TestApartmentRecord:
             "is_furnished": True,
             "has_floor_plan": True,
             "has_photo": True,
-            "city": "Elenite",
+            "city": "Элените",
         }
         rec = ApartmentRecord.from_raw(row)
         payload = rec.to_payload()
         assert payload["complex_name"] == "Test"
-        assert payload["city"] == "Elenite"
+        assert payload["city"] == "Элените"
         assert payload["rooms"] == 2
         assert payload["floor"] == 3
         assert payload["price_eur"] == 150000.0
