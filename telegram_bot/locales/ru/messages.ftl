@@ -77,6 +77,82 @@ crm-add-note = Добавить заметку
 crm-create-task = Создать задачу
 crm-pipelines = Pipelines
 
+# CRM Hub (навигационное меню) — #697
+crm-hub-title = CRM — Панель менеджера
+crm-hub-btn-leads = 📋 Сделки
+crm-hub-btn-contacts = 👤 Контакты
+crm-hub-btn-task-create = ✅ Создать задачу
+crm-hub-btn-my-tasks = 📋 Мои задачи
+crm-hub-btn-note = 📝 Заметка
+crm-hub-btn-ai-advisor = 🤖 AI-Советник
+crm-hub-btn-back = ← Назад
+
+# CRM Сделки (Leads) — #697
+crm-leads-title = 📋 Сделки
+crm-leads-btn-create = ➕ Создать сделку
+crm-leads-btn-my-leads = 🗂 Мои сделки
+crm-leads-btn-search = 🔍 Поиск
+crm-leads-prompt-name = Введите название сделки:
+crm-leads-prompt-budget = Введите бюджет сделки (целое число в €, или 0 чтобы пропустить):
+crm-leads-prompt-pipeline = Выберите pipeline (воронку):
+crm-leads-btn-confirm = ✅ Создать
+crm-leads-btn-edit-name = ✏️ Изменить название
+crm-leads-search-prompt = Введите текст для поиска сделок:
+crm-leads-empty = Нет сделок
+
+# CRM Контакты (Contacts) — #697
+crm-contacts-title = 👤 Контакты
+crm-contacts-btn-create = ➕ Создать контакт
+crm-contacts-btn-search = 🔍 Поиск
+crm-contacts-prompt-first-name = Введите имя контакта:
+crm-contacts-prompt-last-name = Введите фамилию контакта:
+crm-contacts-prompt-phone = Введите телефон контакта (например: +79001234567):
+crm-contacts-prompt-email = Введите email контакта (или нажмите «Пропустить»):
+crm-contacts-btn-confirm = ✅ Создать
+crm-contacts-btn-edit-name = ✏️ Изменить имя
+crm-contacts-search-prompt = Введите имя или телефон для поиска контактов:
+crm-contacts-empty = Контакты не найдены
+
+# CRM Задачи (Tasks) — #697
+crm-tasks-title-create = ✅ Создание задачи
+crm-tasks-step1 = Шаг 1/5: Введите описание задачи:
+crm-tasks-step2 = Шаг 2/5: Выберите тип задачи:
+crm-tasks-step3 = Шаг 3/5: Выберите сделку для привязки:
+crm-tasks-step4 = Шаг 4/5: Укажите срок (дней от сегодня):
+crm-tasks-btn-confirm = ✅ Создать
+crm-tasks-btn-skip = Пропустить
+crm-tasks-my-tasks-title = 📋 Мои задачи
+crm-tasks-filter-all = Все задачи
+crm-tasks-filter-today = Сегодня
+crm-tasks-filter-overdue = Просроченные
+
+# CRM Заметки (Notes) — #697
+crm-notes-title = 📝 Создание заметки
+crm-notes-step1 = Шаг 1/4: Введите текст заметки:
+crm-notes-step2 = Шаг 2/4: К чему привязать заметку?
+crm-notes-btn-confirm = ✅ Сохранить
+
+# CRM AI-Советник (AI Advisor) — #697
+crm-advisor-title = 🤖 AI-Советник
+crm-advisor-loading = Анализирую данные...
+crm-advisor-btn-back = ← К меню советника
+crm-advisor-btn-cancel = ← CRM
+
+# CRM навигация и общие кнопки — #697
+crm-btn-back = ← Назад
+crm-btn-cancel = Отмена
+crm-btn-close = Закрыть
+crm-btn-skip = Пропустить
+
+# CRM ошибки — #697
+crm-error-no-crm = ⚠️ CRM недоступна.
+crm-error-note-empty = ⚠️ Текст заметки не может быть пустым.
+crm-error-task-empty = ⚠️ Текст задачи не может быть пустым.
+crm-error-add-note = ⚠️ Ошибка при добавлении заметки.
+crm-error-create-task = ⚠️ Ошибка при создании задачи.
+crm-error-complete-task = ⚠️ Ошибка при завершении задачи.
+crm-error-postpone-task = ⚠️ Ошибка при откладывании задачи.
+
 # Клиентское ReplyKeyboard (#660)
 kb-search = 🏠 Подбор апартаментов
 kb-services = 🔑 Услуги
