@@ -77,6 +77,7 @@ class I18nMiddleware(BaseMiddleware):
         pg_pool: Any | None = None,
         bot_config: Any | None = None,
         property_bot: Any | None = None,
+        ai_advisor_service: Any | None = None,
         default_locale: str = "ru",
     ) -> None:
         super().__init__()
@@ -88,6 +89,7 @@ class I18nMiddleware(BaseMiddleware):
         self._pg_pool = pg_pool
         self._bot_config = bot_config
         self._property_bot = property_bot
+        self._ai_advisor_service = ai_advisor_service
         self._default_locale = default_locale
 
     async def __call__(
@@ -122,6 +124,7 @@ class I18nMiddleware(BaseMiddleware):
         data["pg_pool"] = self._pg_pool
         data["bot_config"] = self._bot_config
         data["property_bot"] = self._property_bot
+        data["ai_advisor_service"] = self._ai_advisor_service
         if self._property_bot is not None:
             data["apartments_service"] = getattr(self._property_bot, "_apartments_service", None)
         return await handler(event, data)
@@ -137,6 +140,7 @@ def setup_i18n_middleware(
     pg_pool: Any | None = None,
     bot_config: Any | None = None,
     property_bot: Any | None = None,
+    ai_advisor_service: Any | None = None,
 ) -> None:
     """Register i18n middleware on all routers."""
     middleware = I18nMiddleware(
@@ -148,6 +152,7 @@ def setup_i18n_middleware(
         pg_pool=pg_pool,
         bot_config=bot_config,
         property_bot=property_bot,
+        ai_advisor_service=ai_advisor_service,
     )
     dp.message.outer_middleware(middleware)
     dp.callback_query.outer_middleware(middleware)

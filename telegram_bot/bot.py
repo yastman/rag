@@ -3217,6 +3217,21 @@ class PropertyBot:
             except Exception:
                 logger.exception("Failed to start SessionSummaryWorker")
 
+        # Initialize AI Advisor service (#697)
+        self._ai_advisor_service: Any | None = None
+        if self._kommo_client is not None:
+            try:
+                from .services.ai_advisor_service import AIAdvisorService
+
+                self._ai_advisor_service = AIAdvisorService(
+                    kommo_client=self._kommo_client,
+                    llm=self._llm,
+                    cache=self._cache,
+                )
+                logger.info("AIAdvisorService initialized")
+            except Exception:
+                logger.exception("Failed to initialize AIAdvisorService")
+
         # Initialize i18n (fluentogram)
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
 
@@ -3232,6 +3247,7 @@ class PropertyBot:
             pg_pool=self._pg_pool,
             bot_config=self.config,
             property_bot=self,
+            ai_advisor_service=self._ai_advisor_service,
         )
         logger.info("i18n middleware ready")
 
