@@ -145,6 +145,7 @@ class AIAdvisorSG(StatesGroup):
     """AI advisor dialog (#697)."""
 
     main = State()
+    result = State()  # LLM response display
 
 
 class CrmQuickActionSG(StatesGroup):
