@@ -30,11 +30,20 @@ def format_property_card(
 ) -> str:
     """Format property as text card."""
     price_formatted = f"{int(price_eur):,}".replace(",", " ")
-    return (
-        f"🏠 {complex_name}, {location}\n"
-        f"{property_type} · {floor} этаж · {area_m2} м² · {view}\n"
-        f"💰 {price_formatted} €"
-    )
+    details: list[str] = []
+    if property_type:
+        details.append(property_type)
+    if floor:
+        details.append(f"{floor} этаж")
+    if area_m2:
+        details.append(f"{area_m2} м²")
+    if view:
+        details.append(view)
+    lines = [f"🏠 {complex_name}, {location}"]
+    if details:
+        lines.append(" · ".join(details))
+    lines.append(f"💰 {price_formatted} €")
+    return "\n".join(lines)
 
 
 def format_promotion_card(
