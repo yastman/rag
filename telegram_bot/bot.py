@@ -37,6 +37,7 @@ from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
 from .graph.nodes.classify import classify_query
 from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
+from .handlers.handoff import create_handoff_router
 from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import (
@@ -53,6 +54,10 @@ from .scoring import (
     write_history_scores,
     write_langfuse_scores,
 )
+from .services.business_hours import is_business_hours
+from .services.forum_bridge import ForumBridge
+from .services.handoff_state import HandoffData, HandoffState
+from .services.handoff_summary import generate_handoff_summary
 from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
@@ -409,6 +414,10 @@ class PropertyBot:
         # Hot lead notifier (initialized in start() when manager_ids configured)
         self._hot_lead_notifier: Any | None = None
 
+        # Handoff services (Forum Topics bridge + Redis state machine)
+        self._handoff_state: HandoffState | None = None
+        self._forum_bridge: ForumBridge | None = None
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -620,6 +629,16 @@ class PropertyBot:
         from .handlers.phone_collector import create_phone_router
 
         self.dp.include_router(create_phone_router())
+
+        # Handoff qualification callbacks — qual:* (#730)
+        self.dp.include_router(create_handoff_router())
+
+        # Group message handler — manager → client relay (#730)
+        if self.config.managers_group_id:
+            self.dp.message(
+                F.chat.id == self.config.managers_group_id,
+                F.message_thread_id,
+            )(self._handle_group_message)
 
         self.dp.message(Command("start"))(self.cmd_start)
         self.dp.message(Command("help"))(self.cmd_help)
@@ -1178,6 +1197,145 @@ class PropertyBot:
         """Handoff to manager (#628)."""
         await self.handle_menu_action_text(message, "Соедини с менеджером")
 
+    async def _handle_group_message(self, message: Message) -> None:
+        """Handle messages in managers group — relay to client (#730)."""
+        if not message.message_thread_id:
+            return
+        if message.from_user and self.bot and message.from_user.id == (await self.bot.me()).id:
+            return  # Skip own messages (echo).
+
+        if self._handoff_state is None:
+            return
+        handoff = await self._handoff_state.get_by_topic(message.message_thread_id)
+        if not handoff:
+            return
+
+        # /close command — return client to bot.
+        if message.text and message.text.strip().lower() == "/close":
+            await self._close_handoff(handoff)
+            return
+
+        # First manager message — transition human_waiting → human.
+        if handoff.mode == "human_waiting":
+            await self._handoff_state.update_mode(handoff.client_id, "human")
+            await self.bot.send_message(
+                chat_id=handoff.client_id,
+                text="Менеджер подключился!",
+            )
+
+        # Relay manager message to client.
+        if self._forum_bridge is not None:
+            await self._forum_bridge.relay_to_client(
+                topic_id=message.message_thread_id,
+                message_id=message.message_id,
+                client_chat_id=handoff.client_id,
+            )
+
+    async def _complete_handoff(
+        self,
+        user_id: int,
+        username: str | None,
+        display_name: str,
+        locale: str,
+        qualification: dict[str, str],
+        message: Message,
+    ) -> None:
+        """Create forum topic + Kommo lead + set handoff state (#730)."""
+        if self._forum_bridge is None:
+            return
+
+        goal_map = {"buy": "Покупка", "rent": "Аренда", "consult": "Консультация"}
+        goal_text = goal_map.get(qualification.get("goal", ""), "Консультация")
+
+        # 1. Create forum topic.
+        topic_id = await self._forum_bridge.create_topic(
+            client_name=display_name,
+            goal=goal_text,
+        )
+
+        # 2. AI summary (if sufficient history).
+        summary = None
+        history: list[Any] = []  # TODO: fetch from Redis chat history
+        if len(history) >= self.config.handoff_summary_min_messages:
+            summary = await generate_handoff_summary(history)
+
+        # 3. Kommo lead (optional).
+        lead_url = None
+        lead_id = None
+        if self._kommo_client is not None:
+            try:
+                from .services.kommo_models import LeadCreate
+
+                lead = await self._kommo_client.create_lead(
+                    LeadCreate(name=f"Handoff: {display_name}")
+                )
+                lead_id = lead.id
+                lead_url = f"https://{self.config.kommo_subdomain}.kommo.com/leads/detail/{lead.id}"
+            except Exception:
+                logger.exception("Kommo lead creation failed during handoff")
+
+        # 4. Post context pack.
+        await self._forum_bridge.post_context_pack(
+            topic_id=topic_id,
+            client_name=display_name,
+            username=username,
+            locale=locale,
+            qualification=qualification,
+            summary=summary,
+            lead_url=lead_url,
+        )
+
+        # 5. Set Redis state.
+        data = HandoffData(
+            client_id=user_id,
+            topic_id=topic_id,
+            lead_id=lead_id,
+            mode="human_waiting",
+            qualification=qualification,
+        )
+        if self._handoff_state is not None:
+            await self._handoff_state.set(data)
+
+        # 6. Business hours message.
+        in_hours = is_business_hours(
+            start=self.config.business_hours_start,
+            end=self.config.business_hours_end,
+            tz=self.config.business_hours_tz,
+        )
+        if not in_hours:
+            await message.answer(
+                "Менеджеры сейчас не в сети, но увидят ваш запрос и ответят в рабочие часы."
+            )
+
+    async def _close_handoff(self, handoff: HandoffData) -> None:
+        """Manager sends /close — return client to bot (#730)."""
+        # Notify topic.
+        if self._forum_bridge is not None:
+            await self._forum_bridge.send_to_topic(
+                topic_id=handoff.topic_id,
+                text="✅ Диалог закрыт, клиент возвращён боту.",
+            )
+            await self._forum_bridge.close_topic(topic_id=handoff.topic_id)
+
+        # Notify client.
+        await self.bot.send_message(
+            chat_id=handoff.client_id,
+            text="Менеджер завершил диалог. Я снова на связи!",
+        )
+
+        # Cleanup Redis.
+        if self._handoff_state is not None:
+            await self._handoff_state.delete(handoff.client_id)
+
+        # Update Kommo (optional).
+        if self._kommo_client is not None and handoff.lead_id is not None:
+            try:
+                await self._kommo_client.add_note(
+                    "leads", handoff.lead_id, "Диалог с клиентом завершён менеджером."
+                )
+            except Exception:
+                logger.exception("Failed to update Kommo on handoff close")
+
     async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
         """Handle service menu inline button clicks (#628)."""
         from .keyboards.services_keyboard import (
@@ -1629,6 +1787,27 @@ class PropertyBot:
         assert message.bot is not None
         assert message.from_user is not None
         bot = message.bot
+
+        # Handoff mode check (#730): relay to topic or skip bot response.
+        if self._handoff_state is not None:
+            handoff = await self._handoff_state.get_by_client(message.from_user.id)
+            if handoff and handoff.mode == "human":
+                # Full handoff: relay only, no bot response.
+                if self._forum_bridge is not None:
+                    await self._forum_bridge.relay_to_topic(
+                        from_chat_id=message.chat.id,
+                        message_id=message.message_id,
+                        topic_id=handoff.topic_id,
+                    )
+                return
+            if handoff and handoff.mode == "human_waiting" and self._forum_bridge is not None:
+                # Waiting for manager: relay + continue with normal RAG response.
+                await self._forum_bridge.relay_to_topic(
+                    from_chat_id=message.chat.id,
+                    message_id=message.message_id,
+                    topic_id=handoff.topic_id,
+                )
+
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
         root_trace_metadata: dict[str, Any] = {}
@@ -3326,6 +3505,22 @@ class PropertyBot:
                 logger.info("AIAdvisorService initialized")
             except Exception:
                 logger.exception("Failed to initialize AIAdvisorService")
+
+        # Initialize handoff services (#730)
+        if self._cache.redis is not None:
+            self._handoff_state = HandoffState(
+                self._cache.redis,
+                ttl_hours=self.config.handoff_ttl_hours,
+            )
+            if self.config.managers_group_id:
+                self._forum_bridge = ForumBridge(
+                    bot=self.bot,
+                    managers_group_id=self.config.managers_group_id,
+                )
+                logger.info(
+                    "Forum Topics bridge enabled (managers_group_id=%s)",
+                    self.config.managers_group_id,
+                )
 
         # Initialize i18n (fluentogram)
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
