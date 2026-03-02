@@ -3143,6 +3143,7 @@ class PropertyBot:
         # Setup aiogram-dialog (#658: removed dead client_menu_dialog)
         from aiogram_dialog import setup_dialogs as aiogram_setup_dialogs
 
+        from .dialogs.crm_ai_advisor import advisor_dialog
         from .dialogs.crm_contacts import (
             contacts_menu_dialog,
             create_contact_dialog,
@@ -3161,6 +3162,10 @@ class PropertyBot:
         from .dialogs.funnel import funnel_dialog
         from .dialogs.manager_menu import manager_menu_dialog
         from .dialogs.settings import settings_dialog
+        from .handlers.crm_callbacks import create_crm_router
+
+        # CRM card inline callbacks (crm:* prefix) — before aiogram-dialog setup (#697)
+        self.dp.include_router(create_crm_router())
 
         self.dp.include_router(manager_menu_dialog)
         self.dp.include_router(crm_submenu_dialog)
@@ -3174,6 +3179,7 @@ class PropertyBot:
         self.dp.include_router(create_task_dialog)
         self.dp.include_router(my_tasks_dialog)
         self.dp.include_router(create_note_dialog)
+        self.dp.include_router(advisor_dialog)
         self.dp.include_router(settings_dialog)
         self.dp.include_router(funnel_dialog)
         self.dp.include_router(faq_dialog)
