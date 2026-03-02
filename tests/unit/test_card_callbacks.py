@@ -137,6 +137,36 @@ async def test_card_callback_no_results_in_state() -> None:
         assert vo is None or vo == []
 
 
+async def test_card_callback_fallbacks_to_favorites_when_state_missing() -> None:
+    """card:viewing uses favorites data when apartment_results is absent."""
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.list = AsyncMock(
+        return_value=[
+            MagicMock(
+                property_id="prop-42",
+                property_data={
+                    "complex_name": "Ocean Vista",
+                    "property_type": "Studio",
+                    "area_m2": 55,
+                    "price_eur": 250000,
+                },
+            )
+        ]
+    )
+    state = _make_state({})
+    callback = _make_callback("card:viewing:prop-42")
+
+    _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
+    with patch(_patch, new_callable=AsyncMock) as mock_spc:
+        await bot.handle_card_callback(callback, state)
+
+        call_kwargs = mock_spc.call_args.kwargs
+        assert call_kwargs["service_key"] == "viewing"
+        assert call_kwargs["viewing_objects"][0]["id"] == "prop-42"
+        bot._favorites_service.list.assert_awaited_once_with(telegram_id=12345)
+
+
 async def test_card_callback_unknown_action_answers_empty() -> None:
     """card:unknown:{id} → just answer() without crash."""
     bot = _create_bot()
