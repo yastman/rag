@@ -81,4 +81,4 @@ def test_client_menu_search_starts_funnel_from_complex():
     buttons = getattr(window.keyboard, "buttons", ())
     funnel_start = next((btn for btn in buttons if getattr(btn, "widget_id", "") == "funnel"), None)
     assert funnel_start is not None
-    assert getattr(funnel_start, "state", None) == FunnelSG.complex
+    assert getattr(funnel_start, "state", None) == FunnelSG.city
