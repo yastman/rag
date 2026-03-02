@@ -129,8 +129,19 @@ async def get_objects_text_prompt(**kwargs: Any) -> dict[str, str]:
     }
 
 
-async def get_date_options(**kwargs: Any) -> dict[str, Any]:
+async def get_date_options(
+    dialog_manager: DialogManager | None = None, **kwargs: Any
+) -> dict[str, Any]:
     """Getter for date range selection (Step 2)."""
+    # Carry pre-selected objects from start_data (card:viewing flow)
+    if dialog_manager is not None:
+        start_data = dialog_manager.start_data or {}
+        if (
+            "selected_objects" in start_data
+            and "selected_objects" not in dialog_manager.dialog_data
+        ):
+            dialog_manager.dialog_data["selected_objects"] = start_data["selected_objects"]
+
     items = list(DATE_LABELS.items())  # [(key, label), ...]
     # Flip to (label, key) for Select widget
     return {
