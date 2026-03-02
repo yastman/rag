@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 
@@ -71,7 +73,11 @@ def _sample_result(property_id: str = "prop-1") -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def test_send_property_card_calls_format_and_answer() -> None:
+@patch(
+    "telegram_bot.keyboards.property_card.get_demo_photo_paths",
+    return_value=[Path("/tmp/demo.jpg")],
+)
+async def test_send_property_card_calls_format_and_answer(_mock_photos: MagicMock) -> None:
     """_send_property_card sends photo card with inline actions, including all photos."""
     bot = _create_bot()
     bot._favorites_service = MagicMock()
@@ -95,7 +101,11 @@ async def test_send_property_card_calls_format_and_answer() -> None:
     assert "card:photos:prop-1" in callbacks
 
 
-async def test_send_property_card_favorited_shows_remove() -> None:
+@patch(
+    "telegram_bot.keyboards.property_card.get_demo_photo_paths",
+    return_value=[Path("/tmp/demo.jpg")],
+)
+async def test_send_property_card_favorited_shows_remove(_mock_photos: MagicMock) -> None:
     """If property is favorited, button shows fav:remove."""
     bot = _create_bot()
     bot._favorites_service = MagicMock()
@@ -115,7 +125,11 @@ async def test_send_property_card_favorited_shows_remove() -> None:
     assert "fav:add:prop-1" not in callbacks
 
 
-async def test_send_property_card_no_favorites_service() -> None:
+@patch(
+    "telegram_bot.keyboards.property_card.get_demo_photo_paths",
+    return_value=[Path("/tmp/demo.jpg")],
+)
+async def test_send_property_card_no_favorites_service(_mock_photos: MagicMock) -> None:
     """If _favorites_service is not set, is_favorited defaults to False (no crash)."""
     bot = _create_bot()
     # Ensure no favorites service

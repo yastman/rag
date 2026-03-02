@@ -139,6 +139,45 @@ async def test_results_more_exhausted() -> None:
     callback.message.answer_photo.assert_not_called()
 
 
+async def test_results_more_fetches_next_scroll_page_for_funnel_state() -> None:
+    """When funnel stored only first page, results:more loads next page from scroll API."""
+    bot = _create_bot()
+    all_results = _make_results(8)
+    first_page = all_results[:_PAGE_SIZE]
+    next_page = all_results[_PAGE_SIZE:]
+    bot._apartments_service = MagicMock()
+    bot._apartments_service.scroll_with_filters = AsyncMock(return_value=(next_page, 8, None))
+
+    state = _make_state(
+        {
+            "apartment_results": first_page,
+            "apartment_offset": 0,
+            "apartment_total": 8,
+            "apartment_next_offset": "offset-2",
+            "apartment_filters": {"city": "Бургас"},
+        }
+    )
+    callback = _make_callback("results:more")
+
+    await bot.handle_results_callback(callback, state)
+
+    bot._apartments_service.scroll_with_filters.assert_awaited_once_with(
+        filters={"city": "Бургас"},
+        limit=_PAGE_SIZE,
+        offset="offset-2",
+    )
+    assert callback.message.answer_photo.await_count == 3
+    assert callback.message.answer.await_count == 1
+    assert state.update_data.await_count == 2
+    first_call = state.update_data.await_args_list[0].kwargs
+    assert first_call["apartment_total"] == 8
+    assert first_call["apartment_next_offset"] is None
+    assert len(first_call["apartment_results"]) == 8
+    second_call = state.update_data.await_args_list[1].kwargs
+    assert second_call == {"apartment_offset": _PAGE_SIZE}
+    callback.answer.assert_awaited_once_with()
+
+
 # ---------------------------------------------------------------------------
 # Tests: results:refine
 # ---------------------------------------------------------------------------
