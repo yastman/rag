@@ -15,6 +15,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -37,7 +38,12 @@ from .graph.nodes.cache import CACHEABLE_QUERY_TYPES
 from .graph.nodes.classify import classify_query
 from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
-from .handlers.handoff import create_handoff_router, start_qualification
+from .handlers.handoff import (
+    create_handoff_router,
+    get_user_qualification,
+    parse_qual_callback,
+    start_qualification,
+)
 from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
 from .middlewares import setup_error_middleware, setup_throttling_middleware
 from .observability import (
@@ -69,6 +75,26 @@ logger = logging.getLogger(__name__)
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
+
+
+def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
+    """Merge extra results into existing, deduplicating by id."""
+    seen_ids: set[str] = set()
+    for item in existing:
+        if isinstance(item, dict) and item.get("id") is not None:
+            seen_ids.add(str(item["id"]))
+    merged = list(existing)
+    for item in extra:
+        if not isinstance(item, dict):
+            continue
+        item_id = item.get("id")
+        item_key = str(item_id) if item_id is not None else ""
+        if item_key and item_key in seen_ids:
+            continue
+        if item_key:
+            seen_ids.add(item_key)
+        merged.append(item)
+    return merged
 
 
 def make_session_id(session_type: str, identifier: int | str) -> str:
@@ -417,6 +443,7 @@ class PropertyBot:
         # Handoff services (Forum Topics bridge + Redis state machine)
         self._handoff_state: HandoffState | None = None
         self._forum_bridge: ForumBridge | None = None
+        self._bot_user_id: int | None = None
 
         # Track initialization state
         self._cache_initialized = False
@@ -630,8 +657,10 @@ class PropertyBot:
 
         self.dp.include_router(create_phone_router())
 
-        # Handoff qualification callbacks — qual:* (#730)
+        # Handoff qualification callbacks — qual:goal/budget (#730)
         self.dp.include_router(create_handoff_router())
+        # Final qualification step — triggers handoff completion (#730 review)
+        self.dp.callback_query(F.data.startswith("qual:contact:"))(self._on_qual_contact)
 
         # Group message handler — manager → client relay (#730)
         if self.config.managers_group_id:
@@ -1206,7 +1235,7 @@ class PropertyBot:
         """Handle messages in managers group — relay to client (#730)."""
         if not message.message_thread_id:
             return
-        if message.from_user and self.bot and message.from_user.id == (await self.bot.me()).id:
+        if message.from_user and self._bot_user_id and message.from_user.id == self._bot_user_id:
             return  # Skip own messages (echo).
 
         if self._handoff_state is None:
@@ -1230,11 +1259,49 @@ class PropertyBot:
 
         # Relay manager message to client.
         if self._forum_bridge is not None:
-            await self._forum_bridge.relay_to_client(
-                topic_id=message.message_thread_id,
-                message_id=message.message_id,
-                client_chat_id=handoff.client_id,
+            try:
+                await self._forum_bridge.relay_to_client(
+                    topic_id=message.message_thread_id,
+                    message_id=message.message_id,
+                    client_chat_id=handoff.client_id,
+                )
+            except TelegramBadRequest:
+                logger.warning("Failed to relay message to client %s", handoff.client_id)
+
+    async def _on_qual_contact(self, callback: CallbackQuery) -> None:
+        """Handle final qualification step — create topic + state (#730 review)."""
+        await callback.answer()
+        parsed = parse_qual_callback(callback.data or "")
+        if not parsed:
+            return
+        _, value = parsed
+        user_id = callback.from_user.id
+
+        qualification = get_user_qualification(user_id)
+        qualification["contact"] = value
+
+        msg = callback.message
+        if value == "chat" and self._forum_bridge is not None:
+            if msg and hasattr(msg, "edit_text"):
+                await msg.edit_text("Соединяю с менеджером...")
+            display_name = callback.from_user.full_name or "User"
+            username = callback.from_user.username
+            locale = "ru"
+            await self._complete_handoff(
+                user_id=user_id,
+                username=username,
+                display_name=display_name,
+                locale=locale,
+                qualification=qualification,
+                message=msg,
             )
+        elif value == "phone":
+            if msg and hasattr(msg, "edit_text"):
+                await msg.edit_text("Сейчас попросим номер телефона...")
+        else:
+            # Fallback — delegate to agent pipeline.
+            if msg and hasattr(msg, "edit_text"):
+                await msg.edit_text("Соединяю с менеджером...")
 
     async def _complete_handoff(
         self,
@@ -1243,7 +1310,7 @@ class PropertyBot:
         display_name: str,
         locale: str,
         qualification: dict[str, str],
-        message: Message,
+        message: Any,
     ) -> None:
         """Create forum topic + Kommo lead + set handoff state (#730)."""
         if self._forum_bridge is None:
@@ -1253,16 +1320,31 @@ class PropertyBot:
         goal_text = goal_map.get(qualification.get("goal", ""), "Консультация")
 
         # 1. Create forum topic.
-        topic_id = await self._forum_bridge.create_topic(
-            client_name=display_name,
-            goal=goal_text,
-        )
+        try:
+            topic_id = await self._forum_bridge.create_topic(
+                client_name=display_name,
+                goal=goal_text,
+            )
+        except TelegramBadRequest:
+            logger.exception("Forum Topics unavailable — bot lacks can_manage_topics")
+            if message and hasattr(message, "answer"):
+                await message.answer("Менеджер скоро свяжется с вами!")
+            return
 
         # 2. AI summary (if sufficient history).
         summary = None
-        history: list[Any] = []  # TODO: fetch from Redis chat history
+        history: list[dict[str, str]] = []
+        if self._cache.redis is not None:
+            try:
+                raw = await self._cache.redis.lrange(f"conversation:{user_id}", 0, -1)
+                for item in raw:
+                    entry = json.loads(item) if isinstance(item, str) else item
+                    if isinstance(entry, dict) and "role" in entry and "content" in entry:
+                        history.append({"role": entry["role"], "content": entry["content"]})
+            except Exception:
+                logger.warning("Failed to fetch chat history for handoff summary")
         if len(history) >= self.config.handoff_summary_min_messages:
-            summary = await generate_handoff_summary(history)
+            summary = await generate_handoff_summary(history, llm=self._llm)
 
         # 3. Kommo lead (optional).
         lead_url = None
@@ -1597,45 +1679,10 @@ class PropertyBot:
                         logger.exception("Failed to fetch next results page")
                     else:
                         if extra_results:
-                            if backfill_from_start:
-                                if len(extra_results) >= len(results):
-                                    results = list(extra_results)
-                                else:
-                                    seen_ids = {
-                                        str(item.get("id"))
-                                        for item in results
-                                        if isinstance(item, dict) and item.get("id") is not None
-                                    }
-                                    merged = [*results]
-                                    for item in extra_results:
-                                        if not isinstance(item, dict):
-                                            continue
-                                        item_id = item.get("id")
-                                        item_key = str(item_id) if item_id is not None else ""
-                                        if item_key and item_key in seen_ids:
-                                            continue
-                                        if item_key:
-                                            seen_ids.add(item_key)
-                                        merged.append(item)
-                                    results = merged
+                            if backfill_from_start and len(extra_results) >= len(results):
+                                results = list(extra_results)
                             else:
-                                seen_ids = {
-                                    str(item.get("id"))
-                                    for item in results
-                                    if isinstance(item, dict) and item.get("id") is not None
-                                }
-                                merged = [*results]
-                                for item in extra_results:
-                                    if not isinstance(item, dict):
-                                        continue
-                                    item_id = item.get("id")
-                                    item_key = str(item_id) if item_id is not None else ""
-                                    if item_key and item_key in seen_ids:
-                                        continue
-                                    if item_key:
-                                        seen_ids.add(item_key)
-                                    merged.append(item)
-                                results = merged
+                                results = _merge_results(results, extra_results)
                             apartment_total = total_count
                             apartment_total_value = (
                                 total_count if isinstance(total_count, int) else len(results)
@@ -3510,6 +3557,13 @@ class PropertyBot:
                 logger.info("AIAdvisorService initialized")
             except Exception:
                 logger.exception("Failed to initialize AIAdvisorService")
+
+        # Cache bot user id for echo-skip in group handlers (#730 review)
+        try:
+            me = await self.bot.me()
+            self._bot_user_id = me.id
+        except Exception:
+            logger.warning("Failed to cache bot user id")
 
         # Initialize handoff services (#730)
         if self._cache.redis is not None:
