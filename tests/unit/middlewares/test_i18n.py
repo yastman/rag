@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from telegram_bot.middlewares.i18n import (
+    I18nMiddleware,
     create_translator_hub,
 )
 
@@ -59,3 +61,25 @@ def test_translator_menu_keys(hub):
         for key in keys:
             result = t.get(key)
             assert result, f"Missing key '{key}' in locale '{locale}'"
+
+
+@pytest.mark.asyncio
+async def test_i18n_middleware_injects_favorites_service(hub):
+    """Middleware injects favorites service for dialog getters via middleware_data."""
+    apartments_service = object()
+    favorites_service = object()
+    property_bot = SimpleNamespace(
+        _apartments_service=apartments_service,
+        _favorites_service=favorites_service,
+    )
+    middleware = I18nMiddleware(hub=hub, property_bot=property_bot)
+
+    event = SimpleNamespace()
+    data = {"event_from_user": SimpleNamespace(id=123, language_code="ru")}
+
+    async def handler(_event, _data):
+        return _data
+
+    result = await middleware(handler, event, data)
+    assert result["apartments_service"] is apartments_service
+    assert result["favorites_service"] is favorites_service
