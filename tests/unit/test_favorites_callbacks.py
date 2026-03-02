@@ -178,12 +178,12 @@ async def test_fav_add_duplicate() -> None:
 
 
 async def test_fav_remove_deletes_and_removes_message() -> None:
-    """fav:remove → calls remove service, deletes message, answers callback."""
+    """fav:remove from bookmarks (no apartment_results in state) → delete message."""
     bot = _create_bot()
     bot._favorites_service = MagicMock()
     bot._favorites_service.remove = AsyncMock()
 
-    state = _make_state()
+    state = _make_state()  # empty = bookmarks context
     callback = _make_callback("fav:remove:prop-42")
 
     await bot.handle_favorite_callback(callback, state)
@@ -191,3 +191,66 @@ async def test_fav_remove_deletes_and_removes_message() -> None:
     bot._favorites_service.remove.assert_awaited_once_with(telegram_id=12345, property_id="prop-42")
     callback.message.delete.assert_awaited_once()
     callback.answer.assert_awaited_once_with("Удалено из закладок")
+
+
+# ---------------------------------------------------------------------------
+# Tests: Task 4 — toggle fav via edit_reply_markup (#705)
+# ---------------------------------------------------------------------------
+
+
+async def test_fav_add_toggles_reply_markup() -> None:
+    """fav:add → edit_reply_markup с is_favorited=True."""
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.add = AsyncMock(return_value={"id": 1})
+
+    state = _make_state({"apartment_results": [_sample_result("prop-42")]})
+    callback = _make_callback("fav:add:prop-42")
+    callback.message.edit_reply_markup = AsyncMock()
+
+    await bot.handle_favorite_callback(callback, state)
+
+    callback.message.edit_reply_markup.assert_awaited_once()
+    kb = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
+    callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    assert "fav:remove:prop-42" in callbacks
+    assert "fav:add:prop-42" not in callbacks
+
+
+async def test_fav_remove_toggles_reply_markup_in_search_results() -> None:
+    """fav:remove from search results → edit_reply_markup, NOT delete message."""
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.remove = AsyncMock()
+
+    state = _make_state({"apartment_results": [_sample_result("prop-42")]})
+    callback = _make_callback("fav:remove:prop-42")
+    callback.message.edit_reply_markup = AsyncMock()
+
+    await bot.handle_favorite_callback(callback, state)
+
+    bot._favorites_service.remove.assert_awaited_once()
+    callback.message.edit_reply_markup.assert_awaited_once()
+    callback.message.delete.assert_not_awaited()
+
+    kb = callback.message.edit_reply_markup.call_args.kwargs["reply_markup"]
+    callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    assert "fav:add:prop-42" in callbacks
+
+
+async def test_fav_toggle_handles_message_not_modified() -> None:
+    """Double-tap race: MessageNotModified should not crash."""
+    from aiogram.exceptions import TelegramBadRequest
+
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.add = AsyncMock(return_value={"id": 1})
+
+    state = _make_state({"apartment_results": [_sample_result("prop-42")]})
+    callback = _make_callback("fav:add:prop-42")
+    callback.message.edit_reply_markup = AsyncMock(
+        side_effect=TelegramBadRequest(method=MagicMock(), message="message is not modified")
+    )
+
+    await bot.handle_favorite_callback(callback, state)
+    callback.answer.assert_awaited()
