@@ -1,25 +1,5 @@
 # CLAUDE.md
 
-## TLDR-First Workflow (ОБЯЗАТЕЛЬНО)
-
-**Приоритет инструментов для исследования кода:**
-
-```
-1. tldr semantic search "что ищем" --k 10   # Первый шаг — семантический поиск (~200ms)
-2. tldr search "pattern" src/                # Точный текстовый поиск
-3. tldr extract file.py                      # Структура файла (вместо Read)
-4. tldr context func --project . --depth 2   # LLM-ready контекст функции
-5. Read file.py offset=N limit=M             # ТОЛЬКО конкретные строки, когда точно знаешь что читать
-```
-
-**ЗАПРЕЩЕНО:**
-- НЕ запускать scout/Explore агентов для поиска файлов — `tldr semantic search` делает это за 200ms
-- НЕ делать Read целых файлов — `tldr extract` даёт структуру за 95% экономии токенов
-- НЕ использовать Grep когда есть `tldr search` — структурированные результаты лучше
-- НЕ спавнить суб-агентов для "исследования кодбейза" — tldr + Read конкретных строк
-
-**Правило:** `tldr semantic search` для обнаружения. `tldr extract` для навигации. `Read offset limit` для чтения кода. `tldr impact` перед рефакторингом. `tldr warm .` для переиндексации.
-
 ## Commands
 
 ```bash
@@ -33,11 +13,6 @@ make run-bot               # Bot natively (no Docker)
 make docker-full-up        # All services (23 containers)
 make ingest-unified        # Unified ingestion (CocoIndex)
 python -m src.ingestion.apartments.runner --incremental  # Apartments (297 rows, change tracking)
-tldr structure . --lang python   # Code overview (95% token savings)
-tldr search "pattern" src/       # Structured code search
-tldr context entry_point --project .  # LLM-ready context for function
-tldr daemon start                # Background daemon (155x faster)
-tldr semantic search "query" --k 5   # Semantic search via daemon (~200ms, 6930 units)
 ```
 
 ## Project Overview
@@ -168,45 +143,6 @@ cd /home/user/projects/Continuous-Claude-v3/opc && uv run python -m scripts.core
 - **Перед завершением:** `/create_handoff`
 - **При возобновлении:** `/resume_handoff`
 - **При 90%+ контекста:** `create_handoff` → `/clear`
-
-### TLDR Code Analysis
-
-```bash
-# Индексация (первый раз или после больших изменений)
-tldr warm .                             # Все слои + semantic embeddings
-tldr daemon start                       # Фоновый демон (100ms запросы)
-
-# Структура — вместо чтения файлов
-tldr structure . --lang python          # Обзор проекта (95% экономия токенов)
-tldr tree src/ --ext .py                # Дерево файлов
-tldr extract src/file.py                # Полный анализ одного файла
-
-# Поиск — вместо grep
-tldr search "pattern" src/              # Структурированный поиск
-tldr semantic search "что делает" --k 5 # Семантический через daemon (~200ms)
-
-# Контекст для LLM
-tldr context func_name --project . --depth 2  # LLM-ready summary (95% savings)
-
-# Анализ функций
-tldr cfg src/file.py func_name          # Control flow graph
-tldr dfg src/file.py func_name          # Data flow graph
-tldr slice src/file.py func 42          # Что влияет на строку 42
-
-# Рефакторинг
-tldr impact func_name src/ --depth 3    # Кто вызывает эту функцию
-tldr calls src/                         # Полный call graph
-tldr dead src/                          # Мёртвый код
-tldr arch src/                          # Слои архитектуры
-
-# Импорты
-tldr imports src/file.py                # Что импортирует файл
-tldr importers module_name src/         # Кто импортирует модуль
-
-# CI
-tldr diagnostics .                      # Type check + lint (pyright/ruff)
-tldr change-impact --git                # Какие тесты затронуты изменениями
-```
 
 ## Troubleshooting
 
