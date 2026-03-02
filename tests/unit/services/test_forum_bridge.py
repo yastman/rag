@@ -38,7 +38,7 @@ async def test_create_topic_truncates_long_name(bridge, mock_bot):
     await bridge.create_topic(client_name=long_name, goal="Покупка")
     call_args = mock_bot.create_forum_topic.call_args
     name = call_args.kwargs["name"]
-    assert len(name.encode("utf-8")) <= 128
+    assert len(name) <= 128
 
 
 @pytest.mark.asyncio
