@@ -17,6 +17,13 @@ from .states import FunnelSG
 
 # --- Constants ---
 
+_CITY_OPTIONS: list[tuple[str, str]] = [
+    ("Санни Бич", "Санни Бич"),
+    ("Свети Влас", "Свети Влас"),
+    ("Элените", "Элените"),
+    ("Любой город", "any"),
+]
+
 _COMPLEX_OPTIONS: list[tuple[str, str]] = [
     ("Crown Fort Club", "Crown Fort Club"),
     ("Green Fort Suites", "Green Fort Suites"),
@@ -92,10 +99,17 @@ _PROPERTY_TYPE_DISPLAY: dict[str, str] = {
     "3bed": "3-спальни",
 }
 
+_CITY_DISPLAY: dict[str, str] = {
+    "Санни Бич": "Санни Бич",
+    "Свети Влас": "Свети Влас",
+    "Элените": "Элените",
+}
+
 
 def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
     """Build Qdrant filters from dialog_data dict."""
     return build_funnel_filters(
+        city=data.get("city"),
         rooms=data.get("property_type", "any"),
         budget=data.get("budget", "any"),
         complex_name=data.get("complex"),
@@ -108,6 +122,7 @@ def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
 
 def build_funnel_filters(
     *,
+    city: str | None = None,
     rooms: str = "any",
     budget: str = "any",
     complex_name: str | None = None,
@@ -118,6 +133,8 @@ def build_funnel_filters(
 ) -> dict[str, Any]:
     """Build Qdrant payload filter dict from funnel dialog selections."""
     filters: dict[str, Any] = {}
+    if city and city != "any":
+        filters["city"] = city
     if rooms in _ROOMS_MAP:
         filters["rooms"] = _ROOMS_MAP[rooms]
     if budget in _BUDGET_MAP:
@@ -161,13 +178,13 @@ def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
 # --- Getters (provide data to windows) ---
 
 
-async def get_complex_options(**kwargs: Any) -> dict[str, Any]:
-    """Getter for complex (residential compound) selection."""
+async def get_city_options(**kwargs: Any) -> dict[str, Any]:
+    """Getter for city/resort selection (Step 1)."""
     i18n = kwargs.get("middleware_data", {}).get("i18n")
     btn_back = i18n.get("back") if i18n else "Назад"
     return {
-        "title": "В каком комплексе ищете?",
-        "items": _COMPLEX_OPTIONS,
+        "title": "Выберите город:",
+        "items": _CITY_OPTIONS,
         "btn_back": btn_back,
     }
 
@@ -204,8 +221,8 @@ async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
 async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for preferences multi-select menu (Step 4).
 
-    Shows 4 category buttons with ✓ checkmark when a value is selected,
-    plus a "Готово" button to proceed to summary.
+    Shows 5 category buttons with ✓ checkmark when a value is selected,
+    plus a "Показать результаты" button to proceed to results via summary.
     """
     i18n = kwargs.get("middleware_data", {}).get("i18n")
     dialog_manager = kwargs.get("dialog_manager")
@@ -219,20 +236,23 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
     view_val = data.get("view")
     furnished_val = data.get("is_furnished")
     promotion_val = data.get("is_promotion")
+    complex_val = data.get("complex")
 
     floor_label = f"{'✓ ' if floor_val and floor_val != 'any' else ''}Этаж"
     view_label = f"{'✓ ' if view_val and view_val != 'any' else ''}Вид"
     furnished_label = f"{'✓ ' if furnished_val else ''}Мебель"
     promotion_label = f"{'✓ ' if promotion_val else ''}Акции"
+    complex_label = f"{'✓ ' if complex_val and complex_val != 'any' else ''}Комплекс"
 
     items = [
         (floor_label, "floor"),
         (view_label, "view"),
         (furnished_label, "furnished"),
         (promotion_label, "promotion"),
-        ("Готово ➜", "done"),
+        (complex_label, "complex"),
+        ("🔍 Показать результаты ➜", "done"),
     ]
-    return {"title": "Дополнительные пожелания:", "items": items, "btn_back": btn_back}
+    return {"title": "Дополнительные фильтры:", "items": items, "btn_back": btn_back}
 
 
 async def get_pref_floor_options(**kwargs: Any) -> dict[str, Any]:
@@ -286,6 +306,13 @@ async def get_pref_promotion_options(**kwargs: Any) -> dict[str, Any]:
     return {"title": "Специальные акции:", "items": items, "btn_back": btn_back}
 
 
+async def get_pref_complex_options(**kwargs: Any) -> dict[str, Any]:
+    """Getter for complex sub-options in preferences."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    btn_back = i18n.get("back") if i18n else "← Назад"
+    return {"title": "Выберите комплекс:", "items": _COMPLEX_OPTIONS, "btn_back": btn_back}
+
+
 async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     """Getter for summary window — shows selected filters and can_search flag."""
     dialog_manager = kwargs.get("dialog_manager")
@@ -295,7 +322,11 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
 
     lines: list[str] = ["Ваши параметры поиска:\n"]
 
-    complex_val = data.get("complex", "any")
+    city_val = data.get("city", "any")
+    if city_val and city_val != "any":
+        lines.append(f"🏙 Город: {city_val}")
+
+    complex_val = data.get("complex")
     if complex_val and complex_val != "any":
         lines.append(f"🏢 Комплекс: {complex_val}")
 
@@ -326,7 +357,8 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
         lines.append("🎁 Акции: Только акции")
 
     has_filter = (
-        complex_val not in (None, "any")
+        city_val not in (None, "any")
+        or (complex_val is not None and complex_val != "any")
         or property_type_val not in (None, "any")
         or budget_val not in (None, "any")
         or (floor_val not in (None, "any"))
@@ -348,7 +380,7 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
 async def get_change_filter_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for change-filter selection window."""
     items = [
-        ("Комплекс", "complex"),
+        ("Город", "city"),
         ("Тип жилья", "property_type"),
         ("Бюджет", "budget"),
     ]
@@ -477,14 +509,14 @@ async def get_results_data(
 # --- Handlers (on_click) ---
 
 
-async def on_complex_selected(
+async def on_city_selected(
     callback: CallbackQuery,
     widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    """Save complex selection and advance to property type."""
-    manager.dialog_data["complex"] = item_id
+    """Save city selection and advance to property type."""
+    manager.dialog_data["city"] = item_id
     if manager.dialog_data.pop("_return_to_summary", False):
         await manager.switch_to(FunnelSG.summary)
     else:
@@ -531,6 +563,7 @@ async def on_pref_category_selected(
         "view": FunnelSG.pref_view,
         "furnished": FunnelSG.pref_furnished,
         "promotion": FunnelSG.pref_promotion,
+        "complex": FunnelSG.pref_complex,
         "done": FunnelSG.summary,
     }
     target = _PREF_STATE_MAP.get(item_id, FunnelSG.summary)
@@ -578,6 +611,17 @@ async def on_pref_promotion_selected(
 ) -> None:
     """Save promotion preference and return to preferences menu."""
     manager.dialog_data["is_promotion"] = item_id if item_id != "any" else None
+    await manager.switch_to(FunnelSG.preferences)
+
+
+async def on_pref_complex_selected(
+    callback: CallbackQuery,
+    widget: Select,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """Save complex preference and return to preferences menu."""
+    manager.dialog_data["complex"] = item_id if item_id != "any" else None
     await manager.switch_to(FunnelSG.preferences)
 
 
@@ -644,7 +688,7 @@ async def on_change_filter_selected(
     """Set return-to-summary flag and jump to selected step for editing."""
     manager.dialog_data["_return_to_summary"] = True
     _CHANGE_STATE_MAP = {
-        "complex": FunnelSG.complex,
+        "city": FunnelSG.city,
         "property_type": FunnelSG.property_type,
         "budget": FunnelSG.budget,
     }
@@ -688,6 +732,7 @@ async def on_zero_suggestion_selected(
         data["budget"] = "any"
     elif item_id == "new_search":
         for key in (
+            "city",
             "complex",
             "property_type",
             "budget",
@@ -700,7 +745,7 @@ async def on_zero_suggestion_selected(
             "scroll_page",
         ):
             data.pop(key, None)
-        await manager.switch_to(FunnelSG.complex)
+        await manager.switch_to(FunnelSG.city)
         return
     else:
         return
@@ -715,21 +760,21 @@ async def on_zero_suggestion_selected(
 
 
 funnel_dialog = Dialog(
-    # Step 1: Complex selection
+    # Step 1: City selection
     Window(
         Format("{title}"),
         Column(
             Select(
                 Format("{item[0]}"),
-                id="complex",
+                id="city",
                 item_id_getter=operator.itemgetter(1),
                 items="items",
-                on_click=on_complex_selected,
+                on_click=on_city_selected,
             ),
         ),
         Cancel(Format("{btn_back}")),
-        getter=get_complex_options,
-        state=FunnelSG.complex,
+        getter=get_city_options,
+        state=FunnelSG.city,
     ),
     # Step 2: Property type
     Window(
@@ -842,6 +887,22 @@ funnel_dialog = Dialog(
         Back(Format("{btn_back}")),
         getter=get_pref_promotion_options,
         state=FunnelSG.pref_promotion,
+    ),
+    # Step 4e: Complex sub-options
+    Window(
+        Format("{title}"),
+        Column(
+            Select(
+                Format("{item[0]}"),
+                id="pref_complex",
+                item_id_getter=operator.itemgetter(1),
+                items="items",
+                on_click=on_pref_complex_selected,
+            ),
+        ),
+        Back(Format("{btn_back}")),
+        getter=get_pref_complex_options,
+        state=FunnelSG.pref_complex,
     ),
     # Step 5: Summary + confirmation
     Window(
