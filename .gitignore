@@ -197,7 +197,7 @@ k8s/secrets/
 
 ***REMOVED*** Validation reports (generated, not committed)
 docs/reports/
-docs/plans/
+
 
 ***REMOVED*** Baseline (legacy file-based approach)
 tests/baseline/.current_baseline
