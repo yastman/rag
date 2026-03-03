@@ -522,5 +522,5 @@ async def test_phone_error_message_shows_format_mask():
     await mod.on_phone_received(message, state)
 
     call_text = message.answer.call_args[0][0]
-    assert "088" in call_text
+    assert "+359" in call_text
     assert "+380501234567" not in call_text
