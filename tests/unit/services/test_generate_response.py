@@ -166,11 +166,14 @@ async def test_generate_response_streaming_sets_response_sent_and_message_ref() 
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
     sent_msg.chat = MagicMock(id=555)
     sent_msg.message_id = 777
-    sent_msg.edit_text = AsyncMock()
     message = AsyncMock()
+    message.chat = MagicMock(id=555)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     result = await generate_response(
@@ -202,11 +205,14 @@ async def test_generate_response_retries_without_name_kwarg_streaming() -> None:
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
     sent_msg.chat = MagicMock(id=111)
     sent_msg.message_id = 222
-    sent_msg.edit_text = AsyncMock()
     message = AsyncMock()
+    message.chat = MagicMock(id=111)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     result = await generate_response(
@@ -242,11 +248,14 @@ async def test_generate_response_streaming_ttft_includes_pre_stream_wait() -> No
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
     sent_msg.chat = MagicMock(id=555)
     sent_msg.message_id = 777
-    sent_msg.edit_text = AsyncMock()
     message = AsyncMock()
+    message.chat = MagicMock(id=555)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     result = await generate_response(
@@ -351,11 +360,14 @@ async def test_generate_response_streaming_updates_generation_usage_details() ->
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
     sent_msg.chat = MagicMock(id=555)
     sent_msg.message_id = 777
-    sent_msg.edit_text = AsyncMock()
     message = AsyncMock()
+    message.chat = MagicMock(id=555)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     await generate_response(
@@ -468,11 +480,14 @@ async def test_streaming_reasoning_content_merged_into_response() -> None:
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
     sent_msg.chat = MagicMock(id=100)
     sent_msg.message_id = 200
-    sent_msg.edit_text = AsyncMock()
     message = AsyncMock()
+    message.chat = MagicMock(id=100)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     result = await generate_response(
@@ -507,11 +522,14 @@ async def test_streaming_raw_reasoning_merged_into_response() -> None:
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
     sent_msg.chat = MagicMock(id=100)
     sent_msg.message_id = 200
-    sent_msg.edit_text = AsyncMock()
     message = AsyncMock()
+    message.chat = MagicMock(id=100)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     result = await generate_response(
@@ -547,11 +565,14 @@ async def test_streaming_mixed_content_and_reasoning() -> None:
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
     sent_msg.chat = MagicMock(id=100)
     sent_msg.message_id = 200
-    sent_msg.edit_text = AsyncMock()
     message = AsyncMock()
+    message.chat = MagicMock(id=100)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     result = await generate_response(
@@ -568,89 +589,43 @@ async def test_streaming_mixed_content_and_reasoning() -> None:
 
 
 @pytest.mark.asyncio
-async def test_streaming_placeholder_failure_degrades_gracefully() -> None:
-    """Placeholder failure → sent_msg=None, LLM stream still runs (#675, #683).
+async def test_streaming_answer_failure_degrades_gracefully() -> None:
+    """When final message.answer fails, stream still completes but response_sent=False.
 
-    With asyncio.gather(return_exceptions=True) both tasks complete before results
-    are inspected. Placeholder exception is non-critical: stream continues and
-    returns the response without Telegram message editing.
+    LLM stream runs, draft updates are sent via send_message_draft, but if the
+    final message.answer() to persist the message fails, the response is still
+    generated — downstream sender must deliver it.
     """
     config, client = _make_non_streaming_config()
     config.streaming_enabled = True
-    stream = _AsyncStream([_StreamChunk("Ответ несмотря на ошибку плейсхолдера")])
+    stream = _AsyncStream([_StreamChunk("Ответ несмотря на ошибку доставки")])
     client.chat.completions.create = AsyncMock(return_value=stream)
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     message = AsyncMock()
+    message.chat = MagicMock(id=999)
+    message.bot = bot
     message.answer = AsyncMock(side_effect=RuntimeError("telegram send failed"))
 
     result = await generate_response(
-        query="Тест placeholder fail",
+        query="Тест ошибки доставки",
         documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
         config=config,
         lf_client=lf,
         message=message,
-        raw_messages=[{"role": "user", "content": "Тест placeholder fail"}],
+        raw_messages=[{"role": "user", "content": "Тест ошибки доставки"}],
     )
 
     # Stream ran successfully — no non-streaming recovery needed
-    assert result["response"] == "Ответ несмотря на ошибку плейсхолдера"
+    assert result["response"] == "Ответ несмотря на ошибку доставки"
     assert result["llm_stream_recovery"] is False
-    # Placeholder was never delivered, so downstream sender must deliver final response.
+    # Final message was never delivered, downstream sender must deliver it
     assert result["response_sent"] is False
     # LLM was called exactly once (streaming path, no separate fallback call)
     assert client.chat.completions.create.await_count == 1
-
-
-@pytest.mark.asyncio
-async def test_placeholder_and_stream_run_in_parallel() -> None:
-    """asyncio.gather used so message.answer and llm.create start simultaneously (#675).
-
-    Uses cross-waiting asyncio.Events: each task waits until the other has started.
-    Sequential execution would deadlock; parallel execution completes normally.
-    """
-    config, client = _make_non_streaming_config()
-    config.streaming_enabled = True
-
-    answer_started = asyncio.Event()
-    create_started = asyncio.Event()
-
-    sent_msg = AsyncMock()
-    sent_msg.chat = MagicMock(id=1)
-    sent_msg.message_id = 2
-    sent_msg.edit_text = AsyncMock()
-    stream = _AsyncStream([_StreamChunk("Параллельный ответ")])
-
-    async def parallel_answer(*_args: object, **_kwargs: object) -> AsyncMock:
-        answer_started.set()
-        await create_started.wait()
-        return sent_msg
-
-    async def parallel_create(*_args: object, **_kwargs: object) -> _AsyncStream:
-        create_started.set()
-        await answer_started.wait()
-        return stream
-
-    client.chat.completions.create = parallel_create
-    config.create_llm.return_value = client
-
-    lf = MagicMock()
-    message = AsyncMock()
-    message.answer = parallel_answer
-
-    result = await generate_response(
-        query="Тест параллелизма",
-        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
-        config=config,
-        lf_client=lf,
-        message=message,
-        raw_messages=[{"role": "user", "content": "Тест параллелизма"}],
-    )
-
-    assert result["response"] == "Параллельный ответ"
-    assert answer_started.is_set()
-    assert create_started.is_set()
 
 
 @pytest.mark.asyncio
@@ -669,9 +644,15 @@ async def test_stream_failure_raises_and_triggers_fallback() -> None:
     )
     config.create_llm.return_value = client
 
-    sent_msg = AsyncMock()
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=1)
+    sent_msg.message_id = 2
     message = AsyncMock()
+    message.chat = MagicMock(id=1)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     result = await generate_response(
@@ -715,11 +696,14 @@ async def test_ttft_drift_warn_ms_config() -> None:
     config.create_llm.return_value = client
 
     lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
     sent_msg = AsyncMock()
     sent_msg.chat = MagicMock(id=1)
     sent_msg.message_id = 2
-    sent_msg.edit_text = AsyncMock()
     message = AsyncMock()
+    message.chat = MagicMock(id=1)
+    message.bot = bot
     message.answer = AsyncMock(return_value=sent_msg)
 
     await generate_response(
@@ -738,3 +722,45 @@ async def test_ttft_drift_warn_ms_config() -> None:
         and "TTFT drift" in (c.kwargs.get("status_message") or "")
     ]
     assert len(warning_calls) >= 1
+
+
+@pytest.mark.asyncio
+async def test_streaming_uses_send_message_draft() -> None:
+    """Streaming path uses bot.send_message_draft instead of edit_text."""
+    config, client = _make_non_streaming_config()
+    config.streaming_enabled = True
+    stream = _AsyncStream([_StreamChunk("Часть 1 "), _StreamChunk("Часть 2")])
+    client.chat.completions.create = AsyncMock(return_value=stream)
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
+
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=555)
+    sent_msg.message_id = 777
+
+    message = AsyncMock()
+    message.chat = MagicMock(id=555)
+    message.bot = bot
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Стриминг draft?",
+        documents=[{"text": "Контекст", "score": 0.7, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Стриминг draft?"}],
+    )
+
+    assert result["response"] == "Часть 1 Часть 2"
+    assert result["response_sent"] is True
+    assert result["sent_message"] == {"chat_id": 555, "message_id": 777}
+    # Должен вызвать send_message_draft, а НЕ edit_text
+    bot.send_message_draft.assert_called()
+    # Финальный ответ через message.answer (не edit_text)
+    message.answer.assert_called_once()
+    call_kwargs = message.answer.call_args
+    assert "Часть 1 Часть 2" in str(call_kwargs)
