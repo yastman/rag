@@ -144,6 +144,46 @@ class TestLangfuseInitialization:
         sync.assert_called_once_with(fake_client)
 
 
+class TestLangfuseTracingEnvironment:
+    """Tests for LANGFUSE_TRACING_ENVIRONMENT support."""
+
+    def test_environment_passed_when_env_var_set(self, monkeypatch):
+        """When LANGFUSE_TRACING_ENVIRONMENT is set, it is forwarded to Langfuse(**kwargs)."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.setenv("LANGFUSE_TRACING_ENVIRONMENT", "staging")
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        assert result is fake_client
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs.get("environment") == "staging"
+
+    def test_environment_not_passed_when_env_var_absent(self, monkeypatch):
+        """When LANGFUSE_TRACING_ENVIRONMENT is unset, environment key is not in kwargs."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.delenv("LANGFUSE_TRACING_ENVIRONMENT", raising=False)
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        assert result is fake_client
+        kwargs = mock_cls.call_args.kwargs
+        assert "environment" not in kwargs
+
+
 class TestLangfuseModelSync:
     def test_load_model_definitions_from_env_parses_valid_payload(self, monkeypatch):
         import telegram_bot.observability as observability
