@@ -1865,13 +1865,14 @@ class PropertyBot:
 
         if action == "viewing":
             if dialog_manager is not None:
-                from aiogram_dialog import StartMode
+                from aiogram_dialog import ShowMode, StartMode
 
                 from .dialogs.states import ViewingSG
 
                 await dialog_manager.start(
                     ViewingSG.date,
                     mode=StartMode.RESET_STACK,
+                    show_mode=ShowMode.EDIT,
                     data={"selected_objects": viewing_objects},
                 )
             else:

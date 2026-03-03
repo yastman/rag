@@ -249,6 +249,8 @@ async def on_date_selected(
 
 async def on_phone_text_received(message: Message, widget: Any, manager: DialogManager) -> None:
     """Handle phone number text input."""
+    from aiogram_dialog import ShowMode
+
     from telegram_bot.handlers.phone_collector import normalize_phone, validate_phone
 
     text = message.text or ""
@@ -260,17 +262,21 @@ async def on_phone_text_received(message: Message, widget: Any, manager: DialogM
         await message.answer("❌ Некорректный номер. Формат: +380 XX XXX XXXX")
         return
     manager.dialog_data["phone"] = phone
+    manager.show_mode = ShowMode.EDIT
     await manager.switch_to(ViewingSG.summary)
 
 
 async def on_phone_contact_received(message: Message, widget: Any, manager: DialogManager) -> None:
     """Handle shared contact (request_contact button)."""
+    from aiogram_dialog import ShowMode
+
     if message.contact and message.contact.phone_number:
         from telegram_bot.handlers.phone_collector import normalize_phone
 
         raw = message.contact.phone_number
         phone = normalize_phone(raw) or raw
         manager.dialog_data["phone"] = phone
+        manager.show_mode = ShowMode.EDIT
         await manager.switch_to(ViewingSG.summary)
     else:
         await message.answer("❌ Не удалось получить номер. Введите вручную:")
