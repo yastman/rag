@@ -8,6 +8,7 @@ Use `initialize_langfuse()` after loading runtime config (e.g. BotConfig) to
 ensure credentials from `.env`/environment are applied before first tracing.
 """
 
+import atexit
 import json
 import logging
 import os
@@ -334,8 +335,6 @@ def initialize_langfuse(
         "public_key": resolved_public_key,
         "secret_key": resolved_secret_key,
         "mask": mask_pii,  # type: ignore[arg-type]  # MaskFunction typing mismatch
-        "flush_at": 50,
-        "flush_interval": 5,
     }
     if resolved_host:
         kwargs["host"] = resolved_host
@@ -344,7 +343,10 @@ def initialize_langfuse(
         kwargs["environment"] = tracing_env
 
     try:
+        kwargs["flush_at"] = int(os.environ.get("LANGFUSE_FLUSH_AT", "512"))
+        kwargs["flush_interval"] = float(os.environ.get("LANGFUSE_FLUSH_INTERVAL", "5.0"))
         _langfuse_client = Langfuse(**kwargs)
+        atexit.register(_langfuse_client.shutdown)
         _langfuse_init_attempted = True
         synced = sync_langfuse_model_definitions(_langfuse_client)
         if synced > 0:
