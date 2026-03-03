@@ -1,7 +1,7 @@
 """Score coverage contract — parametrized verification of each score name and type.
 
 Verifies scoring.py covers all documented scores:
-  - 14 core RAG scores (write_langfuse_scores)
+  - 13 core RAG scores (write_langfuse_scores) — hyde_used removed (#754)
   - Always-written supplementary scores (BOOLEAN/CATEGORICAL)
   - 4 history scores (write_history_scores)
   - 4 CRM tool scores (write_crm_scores)
@@ -78,7 +78,6 @@ def all_rag_scores() -> dict[str, dict]:
         "no_results",
         "llm_used",
         "confidence_score",
-        "hyde_used",
         "llm_ttft_ms",
         "llm_response_duration_ms",
     ],
@@ -105,7 +104,6 @@ def test_core_rag_score_is_written(score_name: str, all_rag_scores: dict) -> Non
         "no_results",
         "llm_used",
         "confidence_score",
-        "hyde_used",
         "llm_ttft_ms",
         "llm_response_duration_ms",
     ],
