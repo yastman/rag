@@ -8,7 +8,7 @@ def test_handoff_config_defaults():
         _env_file=None,
     )
     assert cfg.managers_group_id is None
-    assert cfg.handoff_ttl_hours == 24
+    assert cfg.handoff_ttl_hours == 72
     assert cfg.handoff_summary_min_messages == 3
     assert cfg.business_hours_start == 9
     assert cfg.business_hours_end == 18
