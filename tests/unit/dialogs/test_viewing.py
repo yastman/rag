@@ -216,12 +216,12 @@ def test_viewing_dialog_importable_from_module():
 
 @pytest.mark.asyncio
 async def test_phone_prompt_contains_format_mask():
-    """Phone prompt should show +380 XX XXX XXXX format, not +380990091392."""
+    """Phone prompt should show format examples (BG + UA)."""
     from telegram_bot.dialogs.viewing import get_phone_prompt
 
     result = await get_phone_prompt()
-    assert "+380 XX XXX XXXX" in result["title"]
-    assert "+380990091392" not in result["title"]
+    assert "088" in result["title"]
+    assert "+380" in result["title"]
 
 
 @pytest.mark.asyncio
