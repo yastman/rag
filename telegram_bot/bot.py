@@ -1728,13 +1728,14 @@ class PropertyBot:
                     )
                     break
             if dialog_manager is not None:
-                from aiogram_dialog import StartMode
+                from aiogram_dialog import ShowMode, StartMode
 
                 from .dialogs.states import ViewingSG
 
                 await dialog_manager.start(
                     ViewingSG.date,
                     mode=StartMode.RESET_STACK,
+                    show_mode=ShowMode.DELETE_AND_SEND,
                     data={"selected_objects": viewing_objs},
                 )
             else:
@@ -1759,13 +1760,14 @@ class PropertyBot:
                     }
                 )
             if dialog_manager is not None:
-                from aiogram_dialog import StartMode
+                from aiogram_dialog import ShowMode, StartMode
 
                 from .dialogs.states import ViewingSG
 
                 await dialog_manager.start(
                     ViewingSG.date,
                     mode=StartMode.RESET_STACK,
+                    show_mode=ShowMode.DELETE_AND_SEND,
                     data={"selected_objects": viewing_objs},
                 )
             else:
@@ -1893,13 +1895,14 @@ class PropertyBot:
                         }
                     )
             if dialog_manager is not None:
-                from aiogram_dialog import StartMode
+                from aiogram_dialog import ShowMode, StartMode
 
                 from .dialogs.states import ViewingSG
 
                 await dialog_manager.start(
                     ViewingSG.date,
                     mode=StartMode.RESET_STACK,
+                    show_mode=ShowMode.DELETE_AND_SEND,
                     data={"selected_objects": viewing_objs},
                 )
             else:

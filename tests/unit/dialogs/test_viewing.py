@@ -241,8 +241,8 @@ async def test_on_date_selected_no_extra_message():
 
 
 @pytest.mark.asyncio
-async def test_phone_text_handler_sets_edit_mode():
-    """After phone input, dialog should EDIT existing message, not SEND new."""
+async def test_phone_text_handler_sets_delete_and_send_mode():
+    """After phone input, dialog should DELETE_AND_SEND to avoid stale messages."""
     from aiogram_dialog import ShowMode
 
     from telegram_bot.dialogs.viewing import on_phone_text_received
@@ -254,12 +254,14 @@ async def test_phone_text_handler_sets_edit_mode():
 
     await on_phone_text_received(message, None, manager)
 
-    assert manager.show_mode == ShowMode.EDIT
+    assert manager.show_mode == ShowMode.DELETE_AND_SEND
+    assert manager.dialog_data["phone"] == "+380501234567"
+    manager.switch_to.assert_awaited_once_with(ViewingSG.summary)
 
 
 @pytest.mark.asyncio
-async def test_phone_contact_handler_sets_edit_mode():
-    """After contact share, dialog should EDIT existing message, not SEND new."""
+async def test_phone_contact_handler_sets_delete_and_send_mode():
+    """After contact share, dialog should DELETE_AND_SEND to avoid stale messages."""
     from aiogram_dialog import ShowMode
 
     from telegram_bot.dialogs.viewing import on_phone_contact_received
@@ -272,7 +274,7 @@ async def test_phone_contact_handler_sets_edit_mode():
 
     await on_phone_contact_received(message, None, manager)
 
-    assert manager.show_mode == ShowMode.EDIT
+    assert manager.show_mode == ShowMode.DELETE_AND_SEND
 
 
 @pytest.mark.asyncio
@@ -361,4 +363,67 @@ async def test_on_confirm_graceful_when_no_kommo():
     # Should not raise
     await on_confirm(callback, MagicMock(), manager)
     callback.bot.send_message.assert_awaited_once()
+    # Verify confirmation goes to correct chat with expected text
+    send_kwargs = callback.bot.send_message.await_args
+    assert send_kwargs.kwargs["chat_id"] == 12345
+    assert "Заявка принята" in send_kwargs.kwargs["text"]
+    manager.done.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_on_confirm_sends_confirmation_with_correct_text():
+    """Confirmation message MUST be sent to user's chat after form submission."""
+    from telegram_bot.dialogs.viewing import on_confirm
+
+    kommo = AsyncMock()
+    kommo.upsert_contact.return_value = SimpleNamespace(id=100)
+    kommo.create_lead.return_value = SimpleNamespace(id=200)
+
+    bot_config = SimpleNamespace(
+        kommo_default_pipeline_id=0,
+        kommo_new_status_id=0,
+        kommo_responsible_user_id=None,
+        kommo_service_field_id=0,
+        kommo_source_field_id=0,
+        kommo_telegram_field_id=0,
+        kommo_telegram_username_field_id=0,
+    )
+
+    callback = MagicMock()
+    callback.from_user = SimpleNamespace(
+        id=99999, first_name="Maria", last_name=None, username="maria_bg"
+    )
+    callback.bot = AsyncMock()
+
+    manager = MagicMock()
+    manager.dialog_data = {
+        "selected_objects": [
+            {
+                "id": "prop-42",
+                "complex_name": "Panorama",
+                "property_type": "2+1",
+                "area_m2": 85,
+                "price_eur": 120000,
+            }
+        ],
+        "date_range": "next_week",
+        "phone": "+359881234567",
+    }
+    manager.middleware_data = {"kommo_client": kommo, "bot_config": bot_config}
+    manager.done = AsyncMock()
+
+    await on_confirm(callback, MagicMock(), manager)
+
+    # 1. Confirmation message sent to the user
+    callback.bot.send_message.assert_awaited_once()
+    call_kwargs = callback.bot.send_message.await_args.kwargs
+    assert call_kwargs["chat_id"] == 99999
+    assert "Заявка принята" in call_kwargs["text"]
+    assert "Менеджер свяжется" in call_kwargs["text"]
+
+    # 2. Lead title contains object name
+    lead_arg = kommo.create_lead.await_args.args[0]
+    assert "Panorama" in lead_arg.name
+
+    # 3. Dialog closed
     manager.done.assert_awaited_once()

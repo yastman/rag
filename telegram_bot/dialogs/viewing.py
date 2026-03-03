@@ -252,6 +252,7 @@ async def on_phone_text_received(message: Message, widget: Any, manager: DialogM
     from telegram_bot.handlers.phone_collector import normalize_phone, validate_phone
 
     text = message.text or ""
+    logger.info("on_phone_text_received: raw=%r", text)
     if not validate_phone(text):
         await message.answer("❌ Некорректный номер. Например: +359 88 123 4567")
         return
@@ -260,7 +261,8 @@ async def on_phone_text_received(message: Message, widget: Any, manager: DialogM
         await message.answer("❌ Некорректный номер. Например: +359 88 123 4567")
         return
     manager.dialog_data["phone"] = phone
-    manager.show_mode = ShowMode.EDIT
+    manager.show_mode = ShowMode.DELETE_AND_SEND
+    logger.info("on_phone_text_received: phone=%s, switching to summary", phone)
     await manager.switch_to(ViewingSG.summary)
 
 
@@ -274,7 +276,7 @@ async def on_phone_contact_received(message: Message, widget: Any, manager: Dial
         raw = message.contact.phone_number
         phone = normalize_phone(raw) or raw
         manager.dialog_data["phone"] = phone
-        manager.show_mode = ShowMode.EDIT
+        manager.show_mode = ShowMode.DELETE_AND_SEND
         await manager.switch_to(ViewingSG.summary)
     else:
         await message.answer("❌ Не удалось получить номер. Введите вручную:")
