@@ -119,6 +119,25 @@ async def crm_create_lead(
         lead = await kommo.create_lead(
             LeadCreate(name=name, budget=budget, pipeline_id=pipeline_id)
         )
+
+        # Auto-enrich: add search summary note if search history exists
+        ctx = _get_ctx(config)
+        store = getattr(ctx, "search_event_store", None) if ctx else None
+        if store:
+            try:
+                events = await store.get_user_events(
+                    user_id=ctx.telegram_user_id,
+                    limit=20,
+                )
+                if events:
+                    from telegram_bot.services.search_event_store import format_search_summary
+
+                    summary = format_search_summary(events)
+                    if summary:
+                        await kommo.add_note("leads", lead.id, summary)
+            except Exception:
+                logger.warning("Failed to add search summary note", exc_info=True)
+
         return f"Сделка создана: ID {lead.id}, {lead.name}"
     except Exception as e:
         logger.exception("crm_create_lead failed")
