@@ -242,7 +242,7 @@ pydantic-settings `BaseSettings` with `.env` file support and `AliasChoices` for
 | `supervisor_model` | `SUPERVISOR_MODEL` | `gpt-4o-mini` | Model for agent routing decisions (#413: create_agent SDK) |
 | `client_direct_pipeline_enabled` | `CLIENT_DIRECT_PIPELINE_ENABLED` | `false` | Client fast-path: bypass create_agent, call rag_pipeline → generate_response directly |
 | `kommo_enabled` | `KOMMO_ENABLED` | `false` | Enable Kommo CRM tools in agent |
-| `streaming_enabled` | `STREAMING_ENABLED` | `true` | Stream LLM output to Telegram via edit_text |
+| `streaming_enabled` | `STREAMING_ENABLED` | `true` | Stream LLM output to Telegram via sendMessageDraft (Bot API 9.5) |
 | `show_transcription` | `SHOW_TRANSCRIPTION` | `true` | Show transcribed text before RAG response |
 | `voice_language` | `VOICE_LANGUAGE` | `ru` | Whisper language hint (ISO code) |
 | `stt_model` | `STT_MODEL` | `whisper` | LiteLLM model name for STT |
@@ -355,7 +355,7 @@ generate_response(query, documents, message?, config?, llm?, ...) →
   2. System prompt (Langfuse Prompt Manager + style/citation/history injection)
   3. Build OpenAI-format messages (system + history + context + query)
   4. LLM client: use passed `llm` singleton or fallback to `config.create_llm()` (#675)
-  5. Streaming path: asyncio.gather(LLM stream, placeholder send) → chunks (500ms throttle) → finalize Markdown
+  5. Streaming path: LLM stream → sendMessageDraft (200ms) → message.answer(final, Markdown)
      Non-streaming path: single completion call
   6. Fallback: document summary if LLM unavailable
   → Returns dict: response, response_sent, sent_message, latency_stages, style metrics
@@ -363,7 +363,7 @@ generate_response(query, documents, message?, config?, llm?, ...) →
 
 **`llm` parameter (#675):** Accepts pre-created `AsyncOpenAI` singleton from `bot.py` (`self._llm`) to avoid creating new client per call. Passed through `run_client_pipeline()`.
 
-**TTFT measurement (#675):** Parallel `asyncio.gather` for placeholder + LLM stream reduces TTFT. Drift warning threshold configurable via `TTFT_DRIFT_WARN_MS` (default 500ms).
+**TTFT measurement:** Drift warning threshold configurable via `TTFT_DRIFT_WARN_MS` (default 500ms). Normal for reasoning models behind LiteLLM proxy.
 
 **Dependency injection:** All core functions passed as kwargs (format_context, build_system_prompt, generate_streaming, etc.) for testability. `generate_node` passes its own local implementations.
 
@@ -371,11 +371,13 @@ generate_response(query, documents, message?, config?, llm?, ...) →
 
 ## Streaming Delivery
 
-When `STREAMING_ENABLED=true` (default), `generate_response` streams LLM output directly to Telegram. Placeholder send and LLM stream creation run in parallel via `asyncio.gather` (#675), saving 100-300ms Telegram round-trip. Chunks throttled at 500ms, finalized with Markdown parse_mode.
+When `STREAMING_ENABLED=true` (default), `generate_response` streams LLM output to Telegram via native `sendMessageDraft` (Bot API 9.5, #744). Draft updates sent every 200ms with smooth animation. After streaming completes, `message.answer()` persists the final message in chat history.
 
-**TTFT drift:** Drift = time inside `create(stream=True)` before first chunk. Warning threshold: `TTFT_DRIFT_WARN_MS` env var (default 500ms). Normal for reasoning models behind LiteLLM proxy.
+**Flow:** `llm.create(stream=True)` → `bot.send_message_draft(draft_id, chunk)` × N (200ms) → `message.answer(final, Markdown)`
 
-**asyncio.gather safety (#675):** Uses `return_exceptions=True` — if placeholder send fails (Telegram rate-limit), LLM stream is preserved and delivery degrades gracefully (`sent_msg=None`, `response_sent=False`). Stream creation failure still triggers existing non-streaming fallback.
+**Draft ID:** Unique per streaming session, generated from `hash(chat_id:monotonic_ns)`. Same draft_id ensures smooth animation between updates.
+
+**TTFT drift:** Drift = time inside `create(stream=True)` before first chunk. Warning threshold: `TTFT_DRIFT_WARN_MS` env var (default 500ms).
 
 **Fallback:** If streaming fails, falls back to non-streaming LLM call. **Disable:** `STREAMING_ENABLED=false`.
 
