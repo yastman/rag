@@ -103,6 +103,7 @@ fi
 ***REMOVED*** Step 2: rsync — sync local files to VPS
 ***REMOVED*** =============================================================================
 RSYNC_EXCLUDES=(
+    ***REMOVED*** VCS & tooling caches
     --exclude '.git'
     --exclude '.venv'
     --exclude '__pycache__'
@@ -110,14 +111,34 @@ RSYNC_EXCLUDES=(
     --exclude '.mypy_cache'
     --exclude '.ruff_cache'
     --exclude '.pytest_cache'
-    --exclude 'logs/'
+    --exclude '.cache'
+    --exclude '.deepeval'
+    ***REMOVED*** Env & secrets
     --exclude '.env'
     --exclude '.env.local'
     --exclude '.env.server'
-    --exclude '.claude'
+    ***REMOVED*** Dev-only data & logs
+    --exclude 'logs/'
     --exclude 'data/'
-    --exclude '.cache'
-    --exclude '.deepeval'
+    --exclude '.claude'
+    ***REMOVED*** Tests & evaluation (~5.5MB — not run on VPS)
+    --exclude 'tests/'
+    --exclude 'evaluation/'
+    --exclude 'coverage*'
+    --exclude 'test_*.py'
+    --exclude 'test_output*.txt'
+    ***REMOVED*** Documentation (~11MB — dev-only)
+    --exclude 'docs/'
+    ***REMOVED*** Unused on VPS (docker compose, not k3s)
+    --exclude 'k8s/'
+    --exclude 'legacy/'
+    --exclude 'deploy/'
+    ***REMOVED*** Planning & continuity artifacts
+    --exclude '.planning/'
+    --exclude '.signals/'
+    --exclude '*.session'
+    ***REMOVED*** Legacy dep files (project uses uv.lock)
+    --exclude 'requirements*.txt'
 )
 
 log "Syncing files to VPS via rsync..."
