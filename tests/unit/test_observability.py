@@ -184,6 +184,118 @@ class TestLangfuseTracingEnvironment:
         assert "environment" not in kwargs
 
 
+class TestLangfuseFlushConfig:
+    """Tests for LANGFUSE_FLUSH_AT and LANGFUSE_FLUSH_INTERVAL env vars."""
+
+    def test_flush_at_from_env_var(self, monkeypatch):
+        """LANGFUSE_FLUSH_AT env var is passed as flush_at to Langfuse SDK."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.setenv("LANGFUSE_FLUSH_AT", "25")
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["flush_at"] == 25
+
+    def test_flush_interval_from_env_var(self, monkeypatch):
+        """LANGFUSE_FLUSH_INTERVAL env var is passed as flush_interval to Langfuse SDK."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.setenv("LANGFUSE_FLUSH_INTERVAL", "10.5")
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["flush_interval"] == 10.5
+
+    def test_flush_at_default_is_sdk_default(self, monkeypatch):
+        """When LANGFUSE_FLUSH_AT is not set, flush_at defaults to 512."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.delenv("LANGFUSE_FLUSH_AT", raising=False)
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["flush_at"] == 512
+
+    def test_flush_interval_default_is_5_seconds(self, monkeypatch):
+        """When LANGFUSE_FLUSH_INTERVAL is not set, flush_interval defaults to 5.0."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.delenv("LANGFUSE_FLUSH_INTERVAL", raising=False)
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["flush_interval"] == 5.0
+
+    def test_atexit_shutdown_registered_on_init(self, monkeypatch):
+        """atexit.register(langfuse.shutdown) is called when Langfuse initializes."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.delenv("LANGFUSE_FLUSH_AT", raising=False)
+        monkeypatch.delenv("LANGFUSE_FLUSH_INTERVAL", raising=False)
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with (
+            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+            patch("telegram_bot.observability.atexit") as mock_atexit,
+        ):
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        mock_atexit.register.assert_called_once_with(fake_client.shutdown)
+
+    def test_atexit_not_registered_when_init_fails(self, monkeypatch):
+        """atexit.register is NOT called when Langfuse init fails."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.delenv("LANGFUSE_FLUSH_AT", raising=False)
+        monkeypatch.delenv("LANGFUSE_FLUSH_INTERVAL", raising=False)
+        observability._reset_langfuse_client_for_tests()
+        with (
+            patch("telegram_bot.observability.Langfuse", side_effect=RuntimeError("boom")),
+            patch("telegram_bot.observability.atexit") as mock_atexit,
+        ):
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        assert result is None
+        mock_atexit.register.assert_not_called()
+
+
 class TestLangfuseModelSync:
     def test_load_model_definitions_from_env_parses_valid_payload(self, monkeypatch):
         import telegram_bot.observability as observability
