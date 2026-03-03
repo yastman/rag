@@ -77,7 +77,6 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
         "no_results": 1.0 if result.get("search_results_count", 0) == 0 else 0.0,
         "llm_used": 1.0 if "generate" in latency_stages else 0.0,
         "confidence_score": float(result.get("grade_confidence", 0.0)),
-        "hyde_used": 0.0,  # HyDE not implemented in current pipeline
         "llm_ttft_ms": float(result.get("llm_ttft_ms", 0.0)),
         "llm_response_duration_ms": float(result.get("llm_response_duration_ms", 0.0)),
     }
