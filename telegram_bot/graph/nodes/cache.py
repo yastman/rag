@@ -14,13 +14,14 @@ from typing import Any
 
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.metrics import PipelineMetrics
+from telegram_bot.services.rag_core import (
+    CACHEABLE_QUERY_TYPES,
+    check_semantic_cache,
+    compute_query_embedding,
+)
 
 
 logger = logging.getLogger(__name__)
-
-# Only these query types use semantic cache (check + store).
-# GENERAL uses a stricter threshold (0.08) to avoid false positives.
-CACHEABLE_QUERY_TYPES: frozenset[str] = frozenset({"FAQ", "ENTITY", "STRUCTURED", "GENERAL"})
 
 
 @observe(name="node-cache-check", capture_input=False, capture_output=False)
@@ -61,76 +62,47 @@ async def cache_check_node(
 
     start = time.perf_counter()
 
-    # Step 1: Get or compute dense embedding (prefer hybrid for efficiency)
-    embedding = await cache.get_embedding(query)
-    embeddings_cache_hit = embedding is not None
-    embedding_error = False
-    embedding_error_type: str | None = None
-    colbert_query: list[list[float]] | None = None
-
-    _has_hybrid = callable(
-        getattr(embeddings, "aembed_hybrid", None)
-    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
-    _has_hybrid_colbert = callable(
-        getattr(embeddings, "aembed_hybrid_with_colbert", None)
-    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
-    _has_colbert_only = callable(
-        getattr(embeddings, "aembed_colbert_query", None)
-    ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
-
-    if embedding is None:
-        try:
-            if _has_hybrid:
-                # Hybrid: get both dense + sparse in one call, cache both
-                embedding, sparse = await embeddings.aembed_hybrid(query)
-                await cache.store_embedding(query, embedding)
-                await cache.store_sparse_embedding(query, sparse)
-            else:
-                embedding = await embeddings.aembed_query(query)
-                await cache.store_embedding(query, embedding)
-        except Exception as exc:
-            embedding_error = True
-            embedding_error_type = type(exc).__name__
-            logger.error("Embedding failed after retries: %s: %s", embedding_error_type, exc)
-            latency = time.perf_counter() - start
-            lf.update_current_span(
-                level="ERROR",
-                output={
-                    "embedding_error": True,
-                    "embedding_error_type": embedding_error_type,
-                    "error_message": str(exc)[:200],
-                    "duration_ms": round(latency * 1000, 1),
-                },
-            )
-            return {
-                "cache_hit": False,
-                "cached_response": None,
-                "query_embedding": None,
-                "embeddings_cache_hit": False,
+    # Step 1: Get or compute dense embedding via shared core.
+    # Voice path has no pre-computed vectors — no pre_computed args passed.
+    try:
+        embedding, _sparse, colbert_query, embeddings_cache_hit = await compute_query_embedding(
+            query, cache=cache, embeddings=embeddings
+        )
+    except Exception as exc:
+        embedding_error_type = type(exc).__name__
+        logger.error("Embedding failed after retries: %s: %s", embedding_error_type, exc)
+        latency = time.perf_counter() - start
+        lf.update_current_span(
+            level="ERROR",
+            output={
                 "embedding_error": True,
                 "embedding_error_type": embedding_error_type,
-                "response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
-                "latency_stages": {
-                    **state.get("latency_stages", {}),
-                    "cache_check": latency,
-                },
-            }
-
-    # Step 2: Check semantic cache with query-type threshold (allowlisted types only).
-    # Voice path has no user role — agent_role is intentionally omitted so that
-    # voice responses are shared across roles within the same cache_scope="rag" bucket.
-    cached = None
-    if query_type in CACHEABLE_QUERY_TYPES:
-        cached = await cache.check_semantic(
-            query=query,
-            vector=embedding,
-            query_type=query_type,
-            cache_scope="rag",
+                "error_message": str(exc)[:200],
+                "duration_ms": round(latency * 1000, 1),
+            },
         )
+        return {
+            "cache_hit": False,
+            "cached_response": None,
+            "query_embedding": None,
+            "embeddings_cache_hit": False,
+            "embedding_error": True,
+            "embedding_error_type": embedding_error_type,
+            "response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
+            "latency_stages": {
+                **state.get("latency_stages", {}),
+                "cache_check": latency,
+            },
+        }
+
+    # Step 2: Check semantic cache via shared core.
+    # Voice path has no user role — agent_role omitted so voice responses are
+    # shared across roles within the same cache_scope="rag" bucket.
+    hit, cached = await check_semantic_cache(query, embedding, query_type, cache=cache)
 
     latency = time.perf_counter() - start
 
-    if cached:
+    if hit:
         PipelineMetrics.get().inc("cache_hit")
         logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
         lf.update_current_span(
@@ -155,6 +127,13 @@ async def cache_check_node(
 
     # ColBERT vectors are only needed after semantic miss.
     if colbert_query is None:
+        _has_colbert_only = callable(
+            getattr(embeddings, "aembed_colbert_query", None)
+        ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
+        _has_hybrid_colbert = callable(
+            getattr(embeddings, "aembed_hybrid_with_colbert", None)
+        ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+
         if _has_colbert_only:
             try:
                 colbert_query = await embeddings.aembed_colbert_query(query)
@@ -182,8 +161,8 @@ async def cache_check_node(
         "cached_response": None,
         "query_embedding": embedding,
         "embeddings_cache_hit": embeddings_cache_hit,
-        "embedding_error": embedding_error,
-        "embedding_error_type": embedding_error_type,
+        "embedding_error": False,
+        "embedding_error_type": None,
         "colbert_query": colbert_query,
         "latency_stages": {**state.get("latency_stages", {}), "cache_check": latency},
     }
