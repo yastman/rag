@@ -1298,7 +1298,7 @@ class PropertyBot:
         query_text = self._ASK_QUERIES.get(callback.data or "")
         if not query_text or callback.message is None:
             return
-        await self.handle_menu_action_text(callback.message, query_text)
+        await self.handle_menu_action_text(callback.message, query_text)  # type: ignore[arg-type]
 
     async def _handle_manager(
         self, message: Message, i18n: Any = None, state: FSMContext | None = None
