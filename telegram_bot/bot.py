@@ -2133,6 +2133,31 @@ class PropertyBot:
         await self._cache.store_embedding(semantic_query, dense)
         await self._cache.store_sparse_embedding(semantic_query, sparse)
 
+        # --- Implicit retry detection (#756) ---
+        if self._cache.redis is not None and message.from_user is not None:
+            try:
+                from .implicit_feedback import is_reformulation
+
+                _uid = message.from_user.id
+                _ikey = f"implicit_retry:{_uid}"
+                _prev_raw = await self._cache.redis.get(_ikey)
+                if _prev_raw:
+                    _prev = json.loads(_prev_raw)
+                    _time_delta = time.time() - float(_prev["ts"])
+                    if is_reformulation(list(dense), _prev["vec"], _time_delta):
+                        lf = get_client()
+                        tid = lf.get_current_trace_id() or ""
+                        if tid:
+                            score(lf, tid, name="implicit_retry", value=1, data_type="BOOLEAN")
+                # Always update state so the next query can compare against this one
+                await self._cache.redis.set(
+                    _ikey,
+                    json.dumps({"vec": list(dense), "ts": time.time()}),
+                    ex=60,
+                )
+            except Exception:
+                logger.debug("Implicit retry check failed", exc_info=True)
+
         filters = parsed.to_filters_dict()
         results, returned_count = await self._apartments_service.search_with_filters(
             dense_vector=dense,
