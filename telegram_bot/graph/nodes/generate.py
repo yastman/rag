@@ -4,13 +4,13 @@ Formats top-3 retrieved documents as context, builds system prompt with
 domain from GraphConfig, includes conversation history, and calls LLM.
 Falls back to a summary of retrieved docs if LLM is unavailable.
 
-Supports streaming delivery to Telegram: sends placeholder message,
-edits with accumulated chunks (throttled 500ms), finalizes with Markdown.
+Supports streaming delivery to Telegram via native sendMessageDraft
+(Bot API 9.5): sends draft updates during generation, finalizes with
+message.answer() for chat history persistence.
 """
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import logging
 import time
@@ -42,11 +42,8 @@ class StreamingPartialDeliveryError(Exception):
 
 # 3 context docs: saves ~50ms TTFT vs 5 docs while top-3 capture 90%+ relevant context.
 _MAX_CONTEXT_DOCS = 3
-# 0.5s edit interval: reduces Telegram API load and 429 risk.
-# Trade-off: slightly chunkier streaming UX vs 0.3s, but safer margin.
-# Telegram editMessageText counts 1 unit toward rate limit; 0.5s = max 120/min burst.
-_STREAM_EDIT_INTERVAL = 0.5
-_STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
+# 200ms draft interval — sendMessageDraft has no rate limit.
+_DRAFT_INTERVAL = 0.2
 _MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
 _HISTORY_INSTRUCTION = (
@@ -203,67 +200,35 @@ async def _generate_streaming(
     max_tokens: int = 0,
     lf_client: Any | None = None,
 ) -> tuple[str, str, float, int | None, float | None, Any]:
-    """Stream LLM response directly to Telegram via message editing.
+    """Stream LLM response to Telegram via native sendMessageDraft (Bot API 9.5).
 
-    Sends a placeholder message, then edits it with accumulated text as chunks
-    arrive from the OpenAI streaming API. Throttles edits to _STREAM_EDIT_INTERVAL.
-    Finalizes with Markdown parse_mode (falls back to plain text).
-
-    Args:
-        llm: AsyncOpenAI client instance.
-        config: GraphConfig with model parameters.
-        llm_messages: OpenAI-format message list.
-        message: aiogram Message object for Telegram delivery.
-
-    Returns:
-        Tuple of (response_text, actual_model, ttft_ms, completion_tokens, sent_msg).
-
-    Raises:
-        Exception: On any streaming failure (caller handles fallback).
+    Sends draft updates as chunks arrive, then finalizes with message.answer().
     """
     accumulated = ""
-    last_edit = 0.0
+    last_draft = 0.0
     ttft_ms = 0.0
     actual_model = config.llm_model
     completion_tokens: int | None = None
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
-    # t_request_start must be before gather for correct TTFT measurement.
-    t_request_start = time.monotonic()
-    # Parallelize LLM stream creation and Telegram placeholder send to reduce TTFT (#685).
-    results = await asyncio.gather(
-        _chat_create_with_optional_name(
-            llm,
-            observation_name="generate-answer",
-            model=config.llm_model,
-            messages=llm_messages,
-            temperature=config.llm_temperature,
-            max_tokens=effective_max_tokens,
-            stream=True,
-            stream_options={"include_usage": True},
-        ),
-        message.answer(_STREAM_PLACEHOLDER),
-        return_exceptions=True,
-    )
-    stream_result: Any = results[0]
-    sent_result: Any = results[1]
-    if isinstance(stream_result, BaseException):
-        # LLM unavailable — clean up placeholder and propagate.
-        if not isinstance(sent_result, BaseException):
-            with contextlib.suppress(Exception):
-                await sent_result.delete()
-        raise stream_result
-    if isinstance(sent_result, BaseException):
-        # Telegram rate-limited or unavailable — degrade gracefully, stream without indicator.
-        logger.warning(
-            "Placeholder send failed, streaming without progress indicator: %s", sent_result
-        )
-        sent_msg = None
-    else:
-        sent_msg = sent_result
-    stream = stream_result
 
-    # Legacy stream-only TTFT baseline kept for drift diagnostics.
+    chat_id = message.chat.id
+    bot = message.bot
+    draft_id = abs(hash(f"{chat_id}:{time.monotonic_ns()}")) % (2**31) or 1
+
+    t_request_start = time.monotonic()
+
+    stream = await _chat_create_with_optional_name(
+        llm,
+        observation_name="generate-answer",
+        model=config.llm_model,
+        messages=llm_messages,
+        temperature=config.llm_temperature,
+        max_tokens=effective_max_tokens,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+
     t_stream_start = time.monotonic()
     stream_only_ttft_ms: float | None = None
     try:
@@ -296,37 +261,36 @@ async def _generate_streaming(
                             )
                 accumulated += text
                 now = time.monotonic()
-                if sent_msg is not None and now - last_edit >= _STREAM_EDIT_INTERVAL:
+                if now - last_draft >= _DRAFT_INTERVAL:
                     with contextlib.suppress(Exception):
-                        await sent_msg.edit_text(accumulated)
-                    last_edit = now
+                        await bot.send_message_draft(
+                            chat_id=chat_id,
+                            draft_id=draft_id,
+                            text=accumulated,
+                        )
+                    last_draft = now
             if hasattr(chunk, "model") and chunk.model:
                 actual_model = chunk.model
     except Exception:
         if accumulated:
-            raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
-        # No real content delivered — clean up placeholder
-        if sent_msg is not None:
+            sent_msg = None
             with contextlib.suppress(Exception):
-                await sent_msg.delete()
+                sent_msg = await message.answer(accumulated)
+            raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
         raise
 
     if not accumulated:
-        # Stream produced no content — clean up placeholder
-        if sent_msg is not None:
-            with contextlib.suppress(Exception):
-                await sent_msg.delete()
         raise ValueError("Streaming produced empty response")
 
-    # Final edit with Markdown formatting
-    if sent_msg is not None:
+    # Final message — persisted in chat history
+    try:
+        sent_msg = await message.answer(accumulated, parse_mode="Markdown")
+    except Exception:
         try:
-            await sent_msg.edit_text(accumulated, parse_mode="Markdown")
+            sent_msg = await message.answer(accumulated)
         except Exception:
-            try:
-                await sent_msg.edit_text(accumulated)
-            except Exception:
-                logger.warning("Failed to finalize streaming message")
+            logger.warning("Failed to send final streaming message")
+            sent_msg = None
 
     return accumulated, actual_model, ttft_ms, completion_tokens, stream_only_ttft_ms, sent_msg
 
