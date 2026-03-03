@@ -2,6 +2,7 @@
 
 import csv
 import re
+import warnings
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -11,9 +12,13 @@ from typing import Any
 class ChunkingStrategy(StrEnum):
     """Document chunking strategies."""
 
-    FIXED_SIZE = "fixed_size"  # Fixed chunk size with overlap
+    FIXED_SIZE = (
+        "fixed_size"  # Fixed chunk size with overlap (deprecated — use Docling HybridChunker)
+    )
     SEMANTIC = "semantic"  # Based on content structure (paragraphs, sections)
-    SLIDING_WINDOW = "sliding_window"  # Sliding window with overlap
+    SLIDING_WINDOW = (
+        "sliding_window"  # Sliding window with overlap (deprecated — use Docling HybridChunker)
+    )
 
 
 @dataclass
@@ -77,10 +82,22 @@ class DocumentChunker:
             List of chunks
         """
         if self.strategy == ChunkingStrategy.FIXED_SIZE:
+            warnings.warn(
+                "ChunkingStrategy.FIXED_SIZE is deprecated. Use CocoIndex + Docling "
+                "HybridChunker for production chunking.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._chunk_fixed_size(text, document_name, article_number)
         if self.strategy == ChunkingStrategy.SEMANTIC:
             return self._chunk_semantic(text, document_name, article_number)
         if self.strategy == ChunkingStrategy.SLIDING_WINDOW:
+            warnings.warn(
+                "ChunkingStrategy.SLIDING_WINDOW is deprecated. Use CocoIndex + Docling "
+                "HybridChunker for production chunking.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             return self._chunk_sliding_window(text, document_name, article_number)
         raise ValueError(f"Unknown strategy: {self.strategy}")
 
