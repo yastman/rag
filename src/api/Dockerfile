@@ -25,7 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --extra voice
 
 # ====== RUNTIME STAGE ======
-FROM python:3.14-slim-bookworm@sha256:5404df00cf00e6e7273375f415651837b4d192ac6859c44d3b740888ac798c99 AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 WORKDIR /app
 
