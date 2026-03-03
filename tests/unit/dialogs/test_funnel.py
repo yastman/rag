@@ -29,6 +29,27 @@ def test_build_funnel_filters_skips_city_any():
     assert "city" not in filters
 
 
+def test_build_funnel_filters_includes_area_range():
+    from telegram_bot.dialogs.funnel import build_funnel_filters
+
+    filters = build_funnel_filters(rooms="1bed", budget="mid", area="large")
+    assert filters["area_m2"] == {"gte": 60, "lte": 80}
+
+
+def test_build_funnel_filters_skips_area_any():
+    from telegram_bot.dialogs.funnel import build_funnel_filters
+
+    filters = build_funnel_filters(rooms="1bed", budget="mid", area="any")
+    assert "area_m2" not in filters
+
+
+def test_build_funnel_filters_skips_area_none():
+    from telegram_bot.dialogs.funnel import build_funnel_filters
+
+    filters = build_funnel_filters(rooms="1bed", budget="mid", area=None)
+    assert "area_m2" not in filters
+
+
 # --- Dialog structure ---
 
 
@@ -49,6 +70,7 @@ def test_funnel_has_all_windows():
     assert FunnelSG.pref_view in states
     assert FunnelSG.pref_furnished in states
     assert FunnelSG.pref_promotion in states
+    assert FunnelSG.pref_area in states
     assert FunnelSG.pref_complex in states
     assert FunnelSG.summary in states
     assert FunnelSG.change_filter in states
@@ -135,6 +157,7 @@ async def test_preferences_options_has_5_categories_plus_done():
     ids = [item_id for _, item_id in items]
     assert "floor" in ids
     assert "view" in ids
+    assert "area" in ids
     assert "furnished" in ids
     assert "promotion" in ids
     assert "complex" in ids
@@ -154,6 +177,7 @@ async def test_preferences_options_uses_emoji_labels_for_all_categories():
 
     assert labels_by_id["floor"] == "🏢 Этаж"
     assert labels_by_id["view"] == "🌅 Вид"
+    assert labels_by_id["area"] == "📐 Площадь"
     assert labels_by_id["furnished"] == "🛋 Мебель"
     assert labels_by_id["promotion"] == "🏷 Акции"
     assert labels_by_id["complex"] == "🏘 Комплекс"
@@ -189,6 +213,50 @@ async def test_pref_category_complex_switches_to_pref_complex():
         MagicMock(), SimpleNamespace(), manager, "complex"
     )
     manager.switch_to.assert_awaited_once_with(FunnelSG.pref_complex)
+
+
+# --- pref_area getter/handler ---
+
+
+@pytest.mark.asyncio
+async def test_pref_area_options_has_5_buckets_plus_any():
+    result = await funnel_module.get_pref_area_options(
+        middleware_data={},
+        dialog_manager=SimpleNamespace(dialog_data={}),
+    )
+    items = result["items"]
+    keys = [key for _, key in items]
+    assert "small" in keys
+    assert "mid" in keys
+    assert "large" in keys
+    assert "xlarge" in keys
+    assert "xxlarge" in keys
+    assert "any" in keys
+    assert len(items) == 6
+    assert result["title"] == "Какую площадь предпочитаете?"
+
+
+@pytest.mark.asyncio
+async def test_pref_area_selected_saves_and_returns_to_preferences():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_area_selected(MagicMock(), SimpleNamespace(), manager, "large")
+    assert manager.dialog_data["area"] == "large"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_pref_area_any_clears_value():
+    manager = SimpleNamespace(dialog_data={"area": "large"}, switch_to=AsyncMock())
+    await funnel_module.on_pref_area_selected(MagicMock(), SimpleNamespace(), manager, "any")
+    assert manager.dialog_data["area"] is None
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_pref_category_area_switches_to_pref_area():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_category_selected(MagicMock(), SimpleNamespace(), manager, "area")
+    manager.switch_to.assert_awaited_once_with(FunnelSG.pref_area)
 
 
 # --- Other step handlers (unchanged) ---
@@ -312,6 +380,22 @@ async def test_summary_data_shows_selected_filters():
     assert "2-3 этаж" in result["summary_text"]
     assert "Море" in result["summary_text"]
     assert result["can_search"] is True
+
+
+@pytest.mark.asyncio
+async def test_summary_shows_area():
+    result = await funnel_module.get_summary_data(
+        dialog_manager=SimpleNamespace(
+            dialog_data={
+                "city": "Солнечный берег",
+                "property_type": "1bed",
+                "budget": "mid",
+                "area": "large",
+            },
+            middleware_data={},
+        ),
+    )
+    assert "60–80 m²" in result["summary_text"]
 
 
 @pytest.mark.asyncio
@@ -476,6 +560,20 @@ async def test_pref_promotion_any_clears_value():
 
 
 @pytest.mark.asyncio
+async def test_zero_suggestion_removes_area_and_refreshes_results():
+    manager = SimpleNamespace(
+        dialog_data={"area": "large", "scroll_offset": "off1", "scroll_next_offset": "off2"},
+        switch_to=AsyncMock(),
+    )
+    await funnel_module.on_zero_suggestion_selected(
+        MagicMock(), SimpleNamespace(), manager, "rm_area"
+    )
+    assert "area" not in manager.dialog_data
+    assert manager.dialog_data.get("scroll_offset") is None
+    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+
+
+@pytest.mark.asyncio
 async def test_zero_suggestion_removes_floor_and_refreshes_results():
     manager = SimpleNamespace(
         dialog_data={"floor": "mid", "scroll_offset": "off1", "scroll_next_offset": "off2"},
@@ -558,6 +656,7 @@ async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
             "budget": "high",
             "floor": "mid",
             "view": "sea",
+            "area": "large",
             "is_furnished": "yes",
             "is_promotion": "yes",
             "scroll_offset": "off1",
