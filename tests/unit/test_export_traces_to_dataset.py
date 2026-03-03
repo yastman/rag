@@ -135,16 +135,14 @@ class TestExtractItemData:
         obs = _make_observation(
             name="node-retrieve",
             output={
-                "retrieved_context": [
-                    {"content": "doc1", "score": 0.9},
-                    {"content": "doc2", "score": 0.8},
-                ]
+                # node-retrieve writes eval_docs as a joined string, not retrieved_context
+                "eval_docs": "[0.90] doc1\n\n[0.80] doc2",
             },
         )
         data = extract_item_data(trace, [obs])
         assert data is not None
         assert len(data["context"]) == 2
-        assert "doc1" in data["context"]
+        assert any("doc1" in part for part in data["context"])
 
     def test_skips_non_retrieve_observations(self):
         trace = _make_trace()
