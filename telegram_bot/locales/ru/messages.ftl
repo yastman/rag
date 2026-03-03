@@ -293,10 +293,17 @@ handoff-contact-prompt = Как удобнее связаться?
 handoff-contact-chat = 💬 Написать сейчас
 handoff-contact-phone = 📞 Оставить номер
 handoff-connecting = Соединяю с менеджером. Пока ждёте — могу ответить на вопросы!
-handoff-offline = Менеджер ответит в рабочее время (9:00-18:00 EET). Пока могу помочь!
-handoff-manager-joined = Менеджер подключился!
+handoff-offline = 📨 Ваш запрос принят!
+
+    Менеджер ответит в рабочее время:
+    Пн–Пт, { $start }:00–{ $end }:00 (🇧🇬 София)
+
+    Мы пришлём уведомление, когда менеджер подключится.
+handoff-manager-joined = 🟢 { $name } подключился к чату
 handoff-timeout = Менеджер пока занят. Оставить номер для звонка?
-handoff-closed-client = Менеджер завершил диалог. Я снова на связи!
+handoff-closed-client = Диалог с менеджером завершён.
+
+    🤖 Вы снова общаетесь с ботом. Задавайте вопросы — помогу!
 handoff-closed-topic = ✅ Диалог закрыт, клиент возвращён боту.
 handoff-wait-more = ⏳ Подожду ещё
 handoff-leave-phone = 📞 Да, перезвоните

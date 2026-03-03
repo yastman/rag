@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 from aiogram import Bot
@@ -96,9 +97,16 @@ class ForumBridge:
             message_thread_id=topic_id,
         )
 
-    async def send_to_topic(self, *, topic_id: int, text: str) -> None:
-        await self._bot.send_message(
+    async def send_to_topic(self, *, topic_id: int, text: str) -> bool:
+        """Send text to a topic. Returns False if topic no longer exists."""
+        sent = await self._bot.send_message(
             chat_id=self._group_id,
             text=text,
             message_thread_id=topic_id,
         )
+        if sent.message_thread_id != topic_id:
+            # Message landed in General — topic was deleted. Clean up.
+            with contextlib.suppress(Exception):
+                await self._bot.delete_message(chat_id=self._group_id, message_id=sent.message_id)
+            return False
+        return True

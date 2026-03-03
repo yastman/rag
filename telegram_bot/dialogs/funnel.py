@@ -61,6 +61,14 @@ _FLOOR_MAP: dict[str, dict[str, int]] = {
     "top": {"gte": 6},
 }
 
+_AREA_MAP: dict[str, dict[str, int]] = {
+    "small": {"lte": 40},
+    "mid": {"gte": 40, "lte": 60},
+    "large": {"gte": 60, "lte": 80},
+    "xlarge": {"gte": 80, "lte": 120},
+    "xxlarge": {"gte": 120},
+}
+
 _ROOMS_DISPLAY: dict[int, str] = {
     0: "Студия",
     1: "Студия",
@@ -83,6 +91,14 @@ _FLOOR_DISPLAY: dict[str, str] = {
     "mid": "2-3 этаж",
     "high": "4-5 этаж",
     "top": "6+ этаж",
+}
+
+_AREA_DISPLAY: dict[str, str] = {
+    "small": "До 40 m²",
+    "mid": "40–60 m²",
+    "large": "60–80 m²",
+    "xlarge": "80–120 m²",
+    "xxlarge": "120+ m²",
 }
 
 _VIEW_DISPLAY: dict[str, str] = {
@@ -117,6 +133,7 @@ def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
         view=data.get("view"),
         is_furnished=data.get("is_furnished"),
         is_promotion=data.get("is_promotion"),
+        area=data.get("area"),
     )
 
 
@@ -130,6 +147,7 @@ def build_funnel_filters(
     view: str | None = None,
     is_furnished: str | None = None,
     is_promotion: str | None = None,
+    area: str | None = None,
 ) -> dict[str, Any]:
     """Build Qdrant payload filter dict from funnel dialog selections."""
     filters: dict[str, Any] = {}
@@ -151,6 +169,8 @@ def build_funnel_filters(
         filters["is_furnished"] = False
     if is_promotion == "yes":
         filters["is_promotion"] = True
+    if area and area != "any" and area in _AREA_MAP:
+        filters["area_m2"] = _AREA_MAP[area]
     return filters
 
 
@@ -234,12 +254,14 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
 
     floor_val = data.get("floor")
     view_val = data.get("view")
+    area_val = data.get("area")
     furnished_val = data.get("is_furnished")
     promotion_val = data.get("is_promotion")
     complex_val = data.get("complex")
 
     floor_label = f"{'✓ ' if floor_val and floor_val != 'any' else ''}🏢 Этаж"
     view_label = f"{'✓ ' if view_val and view_val != 'any' else ''}🌅 Вид"
+    area_label = f"{'✓ ' if area_val and area_val != 'any' else ''}📐 Площадь"
     furnished_label = f"{'✓ ' if furnished_val else ''}🛋 Мебель"
     promotion_label = f"{'✓ ' if promotion_val else ''}🏷 Акции"
     complex_label = f"{'✓ ' if complex_val and complex_val != 'any' else ''}🏘 Комплекс"
@@ -247,6 +269,7 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
     items = [
         (floor_label, "floor"),
         (view_label, "view"),
+        (area_label, "area"),
         (furnished_label, "furnished"),
         (promotion_label, "promotion"),
         (complex_label, "complex"),
@@ -306,6 +329,21 @@ async def get_pref_promotion_options(**kwargs: Any) -> dict[str, Any]:
     return {"title": "Специальные акции:", "items": items, "btn_back": btn_back}
 
 
+async def get_pref_area_options(**kwargs: Any) -> dict[str, Any]:
+    """Getter for area sub-options."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    items = [
+        ("До 40 m²", "small"),
+        ("40–60 m²", "mid"),
+        ("60–80 m²", "large"),
+        ("80–120 m²", "xlarge"),
+        ("120+ m²", "xxlarge"),
+        ("Любая площадь", "any"),
+    ]
+    btn_back = i18n.get("back") if i18n else "← Назад"
+    return {"title": "Какую площадь предпочитаете?", "items": items, "btn_back": btn_back}
+
+
 async def get_pref_complex_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for complex sub-options in preferences."""
     i18n = kwargs.get("middleware_data", {}).get("i18n")
@@ -353,6 +391,10 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     view_val = data.get("view")
     if view_val and view_val != "any":
         lines.append(f"🌅 Вид: {_VIEW_DISPLAY.get(view_val, view_val)}")
+
+    area_val = data.get("area")
+    if area_val and area_val != "any":
+        lines.append(f"📐 Площадь: {_AREA_DISPLAY.get(area_val, area_val)}")
 
     furnished_val = data.get("is_furnished")
     if furnished_val == "yes":
@@ -482,6 +524,11 @@ async def get_results_data(
                         zero_suggestions.append(
                             ("Убрать: " + _VIEW_DISPLAY.get(view_v, "вид"), "rm_view")
                         )
+                    area_v = data.get("area")
+                    if area_v and area_v != "any":
+                        zero_suggestions.append(
+                            ("Убрать: " + _AREA_DISPLAY.get(area_v, "площадь"), "rm_area")
+                        )
                     if furnished_v:
                         zero_suggestions.append(("Убрать: мебель", "rm_furnished"))
                     if promotion_v:
@@ -586,6 +633,7 @@ async def on_pref_category_selected(
     _PREF_STATE_MAP = {
         "floor": FunnelSG.pref_floor,
         "view": FunnelSG.pref_view,
+        "area": FunnelSG.pref_area,
         "furnished": FunnelSG.pref_furnished,
         "promotion": FunnelSG.pref_promotion,
         "complex": FunnelSG.pref_complex,
@@ -636,6 +684,17 @@ async def on_pref_promotion_selected(
 ) -> None:
     """Save promotion preference and return to preferences menu."""
     manager.dialog_data["is_promotion"] = item_id if item_id != "any" else None
+    await manager.switch_to(FunnelSG.preferences)
+
+
+async def on_pref_area_selected(
+    callback: CallbackQuery,
+    widget: Select,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """Save area preference and return to preferences menu."""
+    manager.dialog_data["area"] = item_id if item_id != "any" else None
     await manager.switch_to(FunnelSG.preferences)
 
 
@@ -819,6 +878,8 @@ async def on_zero_suggestion_selected(
         data.pop("is_furnished", None)
     elif item_id == "rm_promotion":
         data.pop("is_promotion", None)
+    elif item_id == "rm_area":
+        data.pop("area", None)
     elif item_id == "rm_budget":
         data["budget"] = "any"
     elif item_id == "new_search":
@@ -829,6 +890,7 @@ async def on_zero_suggestion_selected(
             "budget",
             "floor",
             "view",
+            "area",
             "is_furnished",
             "is_promotion",
             "scroll_offset",
@@ -978,6 +1040,22 @@ funnel_dialog = Dialog(
         Back(Format("{btn_back}")),
         getter=get_pref_promotion_options,
         state=FunnelSG.pref_promotion,
+    ),
+    # Step 4f: Area sub-options
+    Window(
+        Format("{title}"),
+        Column(
+            Select(
+                Format("{item[0]}"),
+                id="pref_area",
+                item_id_getter=operator.itemgetter(1),
+                items="items",
+                on_click=on_pref_area_selected,
+            ),
+        ),
+        Back(Format("{btn_back}")),
+        getter=get_pref_area_options,
+        state=FunnelSG.pref_area,
     ),
     # Step 4e: Complex sub-options
     Window(
