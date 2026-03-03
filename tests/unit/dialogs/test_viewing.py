@@ -242,6 +242,41 @@ async def test_on_date_selected_no_extra_message():
 
 
 @pytest.mark.asyncio
+async def test_phone_text_handler_sets_edit_mode():
+    """After phone input, dialog should EDIT existing message, not SEND new."""
+    from aiogram_dialog import ShowMode
+
+    from telegram_bot.dialogs.viewing import on_phone_text_received
+
+    manager = AsyncMock()
+    manager.dialog_data = {}
+    message = AsyncMock()
+    message.text = "+380501234567"
+
+    await on_phone_text_received(message, None, manager)
+
+    assert manager.show_mode == ShowMode.EDIT
+
+
+@pytest.mark.asyncio
+async def test_phone_contact_handler_sets_edit_mode():
+    """After contact share, dialog should EDIT existing message, not SEND new."""
+    from aiogram_dialog import ShowMode
+
+    from telegram_bot.dialogs.viewing import on_phone_contact_received
+
+    manager = AsyncMock()
+    manager.dialog_data = {}
+    message = AsyncMock()
+    message.contact = MagicMock()
+    message.contact.phone_number = "+380501234567"
+
+    await on_phone_contact_received(message, None, manager)
+
+    assert manager.show_mode == ShowMode.EDIT
+
+
+@pytest.mark.asyncio
 async def test_on_confirm_creates_crm_entities():
     from telegram_bot.dialogs.viewing import on_confirm
 
