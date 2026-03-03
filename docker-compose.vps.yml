@@ -7,6 +7,13 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+x-security-defaults: &security-defaults
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  read_only: true
+  tmpfs:
+    - /tmp
+
 services:
   # =============================================================================
   # DATABASES
@@ -86,10 +93,13 @@ services:
   # =============================================================================
 
   docling:
+    <<: *security-defaults
     build:
       context: ./services/docling
       dockerfile: Dockerfile
     container_name: vps-docling
+    # Docling needs write access for temp processing files
+    read_only: false
     restart: unless-stopped
     logging: *default-logging
     environment:
@@ -117,6 +127,7 @@ services:
   # =============================================================================
 
   bge-m3:
+    <<: *security-defaults
     build:
       context: ./services/bge-m3-api
       dockerfile: Dockerfile
@@ -142,6 +153,7 @@ services:
           memory: 4G
 
   user-base:
+    <<: *security-defaults
     build:
       context: ./services/user-base
       dockerfile: Dockerfile
@@ -170,6 +182,9 @@ services:
   # =============================================================================
 
   litellm:
+    <<: *security-defaults
+    # LiteLLM writes migration/UI artifacts under site-packages at startup.
+    read_only: false
     image: ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:3d80908e35230a0dfb58051ae4e2847371b2a327b44e105e79b8c4f67a65596c
     container_name: vps-litellm
     restart: unless-stopped
@@ -200,6 +215,7 @@ services:
   # =============================================================================
 
   bot:
+    <<: *security-defaults
     build:
       context: .
       dockerfile: telegram_bot/Dockerfile
@@ -253,6 +269,8 @@ services:
       # Real Estate DB
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/realestate"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       qdrant:
