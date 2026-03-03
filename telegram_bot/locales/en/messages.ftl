@@ -207,7 +207,7 @@ results-no-results =
 
 ***REMOVED*** Phone (***REMOVED***660)
 phone-prompt = Enter your phone number:
-phone-invalid = Please enter a valid phone number (7-15 digits).
+phone-invalid = Please enter a valid phone number. Format: +380 XX XXX XXXX
 phone-success = Thank you! A manager will contact you shortly.
 
 ***REMOVED*** Promotions (***REMOVED***660)
