@@ -54,11 +54,13 @@ def build_goal_keyboard(i18n: Any | None = None) -> InlineKeyboardMarkup:
                     text=_t(i18n, "handoff-goal-rent", "Аренда"),
                     callback_data="qual:goal:rent",
                 ),
+            ],
+            [
                 InlineKeyboardButton(
                     text=_t(i18n, "handoff-goal-consult", "Консультация"),
                     callback_data="qual:goal:consult",
                 ),
-            ]
+            ],
         ]
     )
 
