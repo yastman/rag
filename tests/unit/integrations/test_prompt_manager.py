@@ -152,6 +152,63 @@ class TestApplyFallbackVars:
         assert result == "{{missing}}"
 
 
+class TestSpanOutputPromptVersion:
+    def test_span_output_includes_prompt_version_from_langfuse(self):
+        """Span output must include prompt_version when prompt is fetched from Langfuse."""
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "Langfuse prompt text"
+        mock_prompt.version = 3
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            get_prompt("my-prompt", fallback="fallback text")
+
+        output_calls = [
+            c
+            for c in mock_client.update_current_span.call_args_list
+            if "output" in (c.kwargs or {})
+        ]
+        assert len(output_calls) == 1
+        assert output_calls[0].kwargs["output"]["prompt_version"] == 3
+
+    def test_span_output_includes_prompt_version_for_compiled_with_variables(self):
+        """Span output must include prompt_version when compiling with variables."""
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "Compiled with vars"
+        mock_prompt.version = 7
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            get_prompt("my-prompt", fallback="fallback", variables={"domain": "real_estate"})
+
+        output_calls = [
+            c
+            for c in mock_client.update_current_span.call_args_list
+            if "output" in (c.kwargs or {})
+        ]
+        assert len(output_calls) == 1
+        assert output_calls[0].kwargs["output"]["prompt_version"] == 7
+
+    def test_span_output_has_no_prompt_version_for_fallback(self):
+        """Span output must not include prompt_version when falling back."""
+        mock_client = MagicMock()
+        mock_client.api = None
+        mock_client.get_prompt.side_effect = Exception("Langfuse disabled")
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            get_prompt("test-prompt", fallback="default prompt text")
+
+        output_calls = [
+            c
+            for c in mock_client.update_current_span.call_args_list
+            if "output" in (c.kwargs or {})
+        ]
+        assert len(output_calls) == 1
+        assert "prompt_version" not in output_calls[0].kwargs["output"]
+
+
 class TestResetClient:
     def test_reset_clears_missing_prompt_cache(self):
         from telegram_bot.integrations.prompt_manager import _missing_prompts_until

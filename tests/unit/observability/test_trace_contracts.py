@@ -2,7 +2,7 @@
 
 Contracts tested:
   - score() must use create_score with trace_id and score_id idempotency key
-  - write_langfuse_scores must write all 14 core RAG scores on every call
+  - write_langfuse_scores must write all 13 core RAG scores on every call
   - write_history_scores must write all 4 history scores (latency conditional)
   - write_crm_scores must write all 4 CRM scores unconditionally
   - _build_trace_metadata must include required keys for voice/text paths
@@ -18,7 +18,7 @@ import pytest
 
 _TRACE_ID = "trace-contract-abc"
 
-# Minimal state dict that exercises all 14 core RAG scores.
+# Minimal state dict that exercises all 13 core RAG scores.
 _MINIMAL_RESULT: dict = {
     "query_type": "SIMPLE",
     "cache_hit": False,
@@ -37,7 +37,7 @@ _MINIMAL_RESULT: dict = {
     "messages": [],
 }
 
-# 14 core RAG scores from observability.md § "Langfuse Scores" table
+# 13 core RAG scores from observability.md § "Langfuse Scores" table (hyde_used removed #754)
 _CORE_RAG_SCORES = [
     "query_type",
     "latency_total_ms",
@@ -50,7 +50,6 @@ _CORE_RAG_SCORES = [
     "no_results",
     "llm_used",
     "confidence_score",
-    "hyde_used",
     "llm_ttft_ms",
     "llm_response_duration_ms",
 ]
@@ -129,7 +128,7 @@ class TestScoreSignatureContract:
 
 
 class TestWriteLangfuseScoresContract:
-    """write_langfuse_scores must write all 14 core RAG scores."""
+    """write_langfuse_scores must write all 13 core RAG scores."""
 
     def _written_scores(self, result: dict) -> dict[str, dict]:
         from telegram_bot.scoring import write_langfuse_scores
@@ -138,7 +137,7 @@ class TestWriteLangfuseScoresContract:
         write_langfuse_scores(lf, result, trace_id=_TRACE_ID)
         return {c.kwargs["name"]: c.kwargs for c in lf.create_score.call_args_list}
 
-    def test_all_14_core_scores_present(self):
+    def test_all_13_core_scores_present(self):
         scores = self._written_scores(_MINIMAL_RESULT)
         missing = [s for s in _CORE_RAG_SCORES if s not in scores]
         assert not missing, f"Missing core RAG scores: {missing}"
