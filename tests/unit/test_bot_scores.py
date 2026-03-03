@@ -261,7 +261,6 @@ class TestScoreWriting:
             "no_results",
             "llm_used",
             "confidence_score",
-            "hyde_used",
             "llm_ttft_ms",
             "llm_response_duration_ms",
             "streaming_enabled",
@@ -289,7 +288,7 @@ class TestScoreWriting:
             "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.create_score.call_count == 34
+        assert mock_lf.create_score.call_count == 33
 
     def test_score_values_full_pipeline(self):
         """Score values should match the graph result state."""
