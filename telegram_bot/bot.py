@@ -1156,14 +1156,18 @@ class PropertyBot:
             result["id"],
             is_favorited=is_fav,
         )
+        photo_message_ids: list[int] = []
         if demo_photos:
             try:
                 media = [InputMediaPhoto(media=FSInputFile(path)) for path in demo_photos]
-                await message.answer_media_group(media=media)
+                sent_photos = await message.answer_media_group(media=media)
+                photo_message_ids = [m.message_id for m in sent_photos]
             except Exception:
                 logger.warning("Failed to send photo album, falling back to text", exc_info=True)
 
-        return await message.answer(card, reply_markup=reply_markup)
+        card_msg = await message.answer(card, reply_markup=reply_markup)
+        card_msg._photo_message_ids = photo_message_ids  # type: ignore[attr-defined]
+        return card_msg
 
     async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
         """Show user's saved favorites (#628)."""
@@ -1184,6 +1188,7 @@ class PropertyBot:
             return
 
         bookmark_message_ids: list[int] = []
+        bookmark_photo_ids: dict[int, list[int]] = {}
         for fav in items:
             d = fav.property_data
             result_like = {
@@ -1203,11 +1208,15 @@ class PropertyBot:
             msg_id = getattr(sent, "message_id", None)
             if isinstance(msg_id, int):
                 bookmark_message_ids.append(msg_id)
+                photo_ids = getattr(sent, "_photo_message_ids", [])
+                if photo_ids:
+                    bookmark_photo_ids[msg_id] = photo_ids
 
         if state is not None:
             await state.update_data(
                 bookmarks_context=True,
                 bookmark_message_ids=bookmark_message_ids,
+                bookmark_photo_ids=bookmark_photo_ids,
             )
 
     async def _handle_promotions(self, message: Message) -> None:
@@ -1616,6 +1625,20 @@ class PropertyBot:
                 await callback.answer("Удалено из закладок")
             else:
                 if callback.message:
+                    # Delete photo album messages linked to this card
+                    raw_photo_ids = state_data.get("bookmark_photo_ids", {})
+                    photo_ids = (
+                        raw_photo_ids.get(callback_message_id, [])
+                        if isinstance(raw_photo_ids, dict) and isinstance(callback_message_id, int)
+                        else []
+                    )
+                    chat_id = callback.message.chat.id
+                    for pid in photo_ids:
+                        with contextlib.suppress(Exception):
+                            await callback.message.bot.delete_message(  # type: ignore[union-attr]
+                                chat_id=chat_id,
+                                message_id=pid,
+                            )
                     await callback.message.delete()
                 await callback.answer("Удалено из закладок")
 
