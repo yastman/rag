@@ -6,13 +6,13 @@ Otherwise, falls back to score-based sort with top-5 selection.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from typing import Any
 
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.metrics import PipelineMetrics
+from telegram_bot.services.rag_core import perform_rerank
 
 
 logger = logging.getLogger(__name__)
@@ -61,84 +61,37 @@ async def rerank_node(
         else state["messages"][-1]["content"]
     )
 
-    if reranker is not None:
-        try:
-            get_rerank = getattr(cache, "get_rerank_results", None) if cache is not None else None
-            store_rerank = (
-                getattr(cache, "store_rerank_results", None) if cache is not None else None
-            )
-            _has_get_rerank = callable(get_rerank) and asyncio.iscoroutinefunction(get_rerank)
-            _has_store_rerank = callable(store_rerank) and asyncio.iscoroutinefunction(store_rerank)
-
-            if _has_get_rerank and get_rerank is not None:
-                cached_reranked = await get_rerank(query, documents, top_k)
-                if cached_reranked is not None:
-                    elapsed = time.perf_counter() - t0
-                    PipelineMetrics.get().record("rerank", elapsed * 1000)
-                    logger.info(
-                        "rerank: HIT rerank cache %d → %d docs (%.3fs)",
-                        len(documents),
-                        len(cached_reranked),
-                        elapsed,
-                    )
-                    return {
-                        "documents": cached_reranked,
-                        "rerank_applied": True,
-                        "rerank_cache_hit": True,
-                        "llm_call_count": llm_call_count,
-                        "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
-                    }
-
-            doc_texts = [doc.get("text", "") for doc in documents]
-            rerank_results = await reranker.rerank(query=query, documents=doc_texts, top_k=top_k)
-
-            reranked: list[dict[str, Any]] = []
-            for rr in rerank_results:
-                idx = rr["index"]
-                if idx < len(documents):
-                    doc = {**documents[idx], "score": rr["score"]}
-                    reranked.append(doc)
-
-            if _has_store_rerank and store_rerank is not None:
-                await store_rerank(query, documents, top_k, reranked)
-
-            elapsed = time.perf_counter() - t0
-            PipelineMetrics.get().record("rerank", elapsed * 1000)
-            logger.info(
-                "rerank: ColBERT reranked %d → %d docs (%.3fs)",
-                len(documents),
-                len(reranked),
-                elapsed,
-            )
-            return {
-                "documents": reranked,
-                "rerank_applied": True,
-                "rerank_cache_hit": False,
-                "llm_call_count": llm_call_count,
-                "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
-            }
-        except Exception as e:
-            logger.exception("rerank: ColBERT failed, falling back to score sort")
-            get_client().update_current_span(
-                level="ERROR",
-                status_message=f"ColBERT rerank failed: {str(e)[:200]}",
-            )
-
-    # Fallback: sort by existing score, take top-k
-    sorted_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
+    try:
+        reranked_docs, rerank_applied, rerank_cache_hit = await perform_rerank(
+            query, documents, cache=cache, reranker=reranker, top_k=top_k
+        )
+        if not rerank_applied:
+            # No reranker path: sort and trim here
+            reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
+    except Exception as e:
+        logger.exception("rerank: ColBERT failed, falling back to score sort")
+        get_client().update_current_span(
+            level="ERROR",
+            status_message=f"ColBERT rerank failed: {str(e)[:200]}",
+        )
+        reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
+        rerank_applied = False
+        rerank_cache_hit = False
 
     elapsed = time.perf_counter() - t0
     PipelineMetrics.get().record("rerank", elapsed * 1000)
     logger.info(
-        "rerank: score-based sort %d → %d docs (%.3fs)",
+        "rerank: %d → %d docs, applied=%s cache_hit=%s (%.3fs)",
         len(documents),
-        len(sorted_docs),
+        len(reranked_docs),
+        rerank_applied,
+        rerank_cache_hit,
         elapsed,
     )
     return {
-        "documents": sorted_docs,
-        "rerank_applied": False,
-        "rerank_cache_hit": False,
+        "documents": reranked_docs,
+        "rerank_applied": rerank_applied,
+        "rerank_cache_hit": rerank_cache_hit,
         "llm_call_count": llm_call_count,
         "latency_stages": {**state.get("latency_stages", {}), "rerank": elapsed},
     }
