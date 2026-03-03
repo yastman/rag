@@ -214,15 +214,66 @@ def test_viewing_dialog_importable_from_module():
     assert len(viewing_dialog.windows) == 5
 
 
-def test_build_phone_keyboard_has_contact_button():
-    from telegram_bot.dialogs.viewing import build_phone_keyboard
+@pytest.mark.asyncio
+async def test_phone_prompt_contains_format_mask():
+    """Phone prompt should show +380 XX XXX XXXX format, not +380990091392."""
+    from telegram_bot.dialogs.viewing import get_phone_prompt
 
-    kb = build_phone_keyboard()
-    # ReplyKeyboardMarkup with request_contact button
-    assert kb.keyboard[0][0].request_contact is True
+    result = await get_phone_prompt()
+    assert "+380 XX XXX XXXX" in result["title"]
+    assert "+380990091392" not in result["title"]
+
+
+@pytest.mark.asyncio
+async def test_on_date_selected_no_extra_message():
+    """on_date_selected should NOT send extra reply keyboard message."""
+    from telegram_bot.dialogs.viewing import on_date_selected
+
+    callback = MagicMock()
+    callback.message = AsyncMock()
+    callback.message.answer = AsyncMock()
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await on_date_selected(callback, SimpleNamespace(), manager, "nearest")
+    # No extra message should be sent
+    callback.message.answer.assert_not_called()
 
 
 # --- CRM integration ---
+
+
+@pytest.mark.asyncio
+async def test_phone_text_handler_sets_edit_mode():
+    """After phone input, dialog should EDIT existing message, not SEND new."""
+    from aiogram_dialog import ShowMode
+
+    from telegram_bot.dialogs.viewing import on_phone_text_received
+
+    manager = AsyncMock()
+    manager.dialog_data = {}
+    message = AsyncMock()
+    message.text = "+380501234567"
+
+    await on_phone_text_received(message, None, manager)
+
+    assert manager.show_mode == ShowMode.EDIT
+
+
+@pytest.mark.asyncio
+async def test_phone_contact_handler_sets_edit_mode():
+    """After contact share, dialog should EDIT existing message, not SEND new."""
+    from aiogram_dialog import ShowMode
+
+    from telegram_bot.dialogs.viewing import on_phone_contact_received
+
+    manager = AsyncMock()
+    manager.dialog_data = {}
+    message = AsyncMock()
+    message.contact = MagicMock()
+    message.contact.phone_number = "+380501234567"
+
+    await on_phone_contact_received(message, None, manager)
+
+    assert manager.show_mode == ShowMode.EDIT
 
 
 @pytest.mark.asyncio
