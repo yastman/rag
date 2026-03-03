@@ -10,12 +10,12 @@ from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 # Fallback button text -> action ID mapping (used when i18n not available)
 MENU_BUTTONS: dict[str, str] = {
-    "🏠 Подбор апартаментов": "search",
+    "🏠 Подобрать квартиру": "search",
     "🔑 Услуги": "services",
     "📅 Запись на осмотр": "viewing",
+    "👤 Менеджер": "manager",
+    "💬 Задать вопрос": "ask",
     "📌 Мои закладки": "bookmarks",
-    "🎁 Акции": "promotions",
-    "👤 Связь с менеджером": "manager",
 }
 
 # Reverse lookup: action_id -> button text (ru fallback)
@@ -26,9 +26,9 @@ _ACTION_IDS: dict[str, str] = {
     "kb-search": "search",
     "kb-services": "services",
     "kb-viewing": "viewing",
-    "kb-bookmarks": "bookmarks",
-    "kb-promotions": "promotions",
     "kb-manager": "manager",
+    "kb-ask": "ask",
+    "kb-bookmarks": "bookmarks",
 }
 
 
