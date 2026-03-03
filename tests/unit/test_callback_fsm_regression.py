@@ -235,13 +235,27 @@ class TestRefineStaleButton:
 # ---------------------------------------------------------------------------
 
 
-class TestViewingPhoneCollector:
-    """Contract: viewing delegates to phone_collector with correct kwargs."""
+class TestViewingDialog:
+    """Contract: viewing delegates to ViewingSG dialog via dialog_manager."""
 
-    async def test_results_viewing_passes_source_results(self) -> None:
-        """results:viewing -> start_phone_collection(service_key='viewing', viewing_objects=None)."""
+    async def test_results_viewing_starts_dialog(self) -> None:
+        """results:viewing -> dialog_manager.start(ViewingSG.date, data={selected_objects})."""
         bot = _create_bot()
-        state = _make_state()  # empty state -> no apartment_results
+        state = _make_state()
+        cb = _make_callback("results:viewing")
+        dialog_manager = AsyncMock()
+
+        await bot.handle_results_callback(cb, state, dialog_manager=dialog_manager)
+
+        dialog_manager.start.assert_awaited_once()
+        from telegram_bot.dialogs.states import ViewingSG
+
+        assert dialog_manager.start.call_args.args[0] == ViewingSG.date
+
+    async def test_results_viewing_fallback_no_dialog_manager(self) -> None:
+        """results:viewing without dialog_manager -> fallback to phone_collector."""
+        bot = _create_bot()
+        state = _make_state()
         cb = _make_callback("results:viewing")
 
         with patch(
@@ -254,36 +268,30 @@ class TestViewingPhoneCollector:
             cb, state, service_key="viewing", viewing_objects=None
         )
 
-    async def test_fav_viewing_passes_property_id(self) -> None:
-        """fav:viewing:prop-42 -> service_key='viewing', viewing_objects with matched favorite."""
+    async def test_fav_viewing_starts_dialog(self) -> None:
+        """fav:viewing:prop-42 -> dialog_manager.start(ViewingSG.date, data={selected_objects})."""
         fav = _make_favorite("prop-42", complex_name="Ocean View", area_m2=75, price_eur=300000)
         bot = _fav_bot(favorites=[fav])
         state = _make_state()
         cb = _make_callback("fav:viewing:prop-42")
+        dialog_manager = AsyncMock()
 
-        with patch(
-            "telegram_bot.handlers.phone_collector.start_phone_collection",
-            new=AsyncMock(),
-        ) as mock_collect:
-            await bot.handle_favorite_callback(cb, state)
+        await bot.handle_favorite_callback(cb, state, dialog_manager=dialog_manager)
 
-        mock_collect.assert_awaited_once_with(
-            cb,
-            state,
-            service_key="viewing",
-            viewing_objects=[
-                {
-                    "id": "prop-42",
-                    "complex_name": "Ocean View",
-                    "property_type": "Apartment",
-                    "area_m2": 75,
-                    "price_eur": 300000,
-                }
-            ],
-        )
+        dialog_manager.start.assert_awaited_once()
+        from telegram_bot.dialogs.states import ViewingSG
 
-    async def test_fav_viewing_all_passes_correct_kwargs(self) -> None:
-        """fav:viewing_all -> service_key='viewing', viewing_objects with all favorites."""
+        assert dialog_manager.start.call_args.args[0] == ViewingSG.date
+        start_data = dialog_manager.start.call_args.kwargs.get("data", {})
+        viewing_objects = start_data.get("selected_objects", [])
+        assert len(viewing_objects) == 1
+        assert viewing_objects[0]["id"] == "prop-42"
+        assert viewing_objects[0]["complex_name"] == "Ocean View"
+        assert viewing_objects[0]["area_m2"] == 75
+        assert viewing_objects[0]["price_eur"] == 300000
+
+    async def test_fav_viewing_all_starts_dialog(self) -> None:
+        """fav:viewing_all -> dialog_manager.start(ViewingSG.date, data={selected_objects})."""
         favs = [
             _make_favorite("prop-1", complex_name="Complex A", area_m2=60, price_eur=200000),
             _make_favorite("prop-2", complex_name="Complex B", area_m2=80, price_eur=350000),
@@ -291,34 +299,19 @@ class TestViewingPhoneCollector:
         bot = _fav_bot(favorites=favs)
         state = _make_state()
         cb = _make_callback("fav:viewing_all")
+        dialog_manager = AsyncMock()
 
-        with patch(
-            "telegram_bot.handlers.phone_collector.start_phone_collection",
-            new=AsyncMock(),
-        ) as mock_collect:
-            await bot.handle_favorite_callback(cb, state)
+        await bot.handle_favorite_callback(cb, state, dialog_manager=dialog_manager)
 
-        mock_collect.assert_awaited_once_with(
-            cb,
-            state,
-            service_key="viewing",
-            viewing_objects=[
-                {
-                    "id": "prop-1",
-                    "complex_name": "Complex A",
-                    "property_type": "Apartment",
-                    "area_m2": 60,
-                    "price_eur": 200000,
-                },
-                {
-                    "id": "prop-2",
-                    "complex_name": "Complex B",
-                    "property_type": "Apartment",
-                    "area_m2": 80,
-                    "price_eur": 350000,
-                },
-            ],
-        )
+        dialog_manager.start.assert_awaited_once()
+        from telegram_bot.dialogs.states import ViewingSG
+
+        assert dialog_manager.start.call_args.args[0] == ViewingSG.date
+        start_data = dialog_manager.start.call_args.kwargs.get("data", {})
+        viewing_objects = start_data.get("selected_objects", [])
+        assert len(viewing_objects) == 2
+        assert viewing_objects[0]["id"] == "prop-1"
+        assert viewing_objects[1]["id"] == "prop-2"
 
 
 # ---------------------------------------------------------------------------
