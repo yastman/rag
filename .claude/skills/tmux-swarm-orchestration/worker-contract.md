@@ -17,7 +17,7 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
     - git checkout другой ветки → ЗАПРЕЩЕНО
     - pytest tests/ (широко) — только конкретные файлы
     - Спавн субагентов (Agent tool) → ЗАПРЕЩЕНО
-    - SDK исследование (Context7/Exa) → ЗАПРЕЩЕНО (orch уже сделал, контекст в промте)
+    - SDK исследование (Context7/Exa) → ЗАПРЕЩЕНО для A/B/D (orch уже сделал). Разрешено ТОЛЬКО для C.
 
     ПРИ ОШИБКЕ:
     Skill(skill="systematic-debugging") — структурная отладка, НЕ слепой повтор.
@@ -30,13 +30,15 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
     ПРОГРЕСС (для задач >10 мин):
     echo "[PROGRESS:50%] {что сделано}" >> logs/worker-{name}.log
 
-    СИГНАЛ ЗАВЕРШЕНИЯ:
+    СИГНАЛ ЗАВЕРШЕНИЯ (атомарный — write .tmp → mv):
     echo '{"status":"done","worker":"W-{NAME}","pr":"{url}","ts":"'$(date -Iseconds)'"}' \
-      > {PROJECT_ROOT}/.signals/worker-{name}.json
+      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
+      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
     СИГНАЛ ПРОВАЛА:
     echo '{"status":"failed","worker":"W-{NAME}","error":"{msg}","ts":"'$(date -Iseconds)'"}' \
-      > {PROJECT_ROOT}/.signals/worker-{name}.json
+      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
+      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
 ---
 
@@ -57,10 +59,34 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
     git push -u origin {branch_name}
     gh pr create --title "{type}({scope}): {desc}" --body "Closes #{N}"
 
-    # Сигнал:
+    # Атомарный сигнал:
     PR_URL=$(gh pr view --json url -q .url)
     echo '{"status":"done","worker":"W-{NAME}","pr":"'"$PR_URL"'","ts":"'$(date -Iseconds)'"}' \
-      > {PROJECT_ROOT}/.signals/worker-{name}.json
+      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
+      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
+
+---
+
+## Финал part-worker (контракт B-part — параллельная часть)
+
+Part-workers коммитят и пушат, но **НЕ создают PR**. PR создаёт только финальный worker.
+
+    git add {файлы}
+    git diff --cached --stat
+    git commit -m "$(cat <<'EOF'
+    {type}({scope}): {desc} (part {N})
+
+    Part of #{issue_N}
+
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+    EOF
+    )"
+    git push -u origin {branch_name}
+
+    # Атомарный сигнал (без pr, с branch):
+    echo '{"status":"done","worker":"W-{NAME}","branch":"'"${branch_name}"'","ts":"'$(date -Iseconds)'"}' \
+      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
+      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
 ---
 
@@ -234,9 +260,10 @@ Haiku НЕ классифицирует сложность — только фи
     - Зависимая группа запускается ПОСЛЕ тех, от кого зависит
     - Финальная группа (интеграция, документация) — всегда последняя
 
-    # Сигнал — включить execution решение:
+    # Атомарный сигнал — включить execution решение:
     echo '{"status":"done","worker":"W-{NAME}","plan":"{path}","execution":"{sequential|parallel}","groups":{N},"ts":"'$(date -Iseconds)'"}' \
-      > {PROJECT_ROOT}/.signals/worker-{name}.json
+      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
+      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
 ---
 
