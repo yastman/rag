@@ -191,3 +191,20 @@ async def test_card_callback_malformed_data_answers_empty() -> None:
     await bot.handle_card_callback(callback, state)
 
     callback.answer.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_card_viewing_starts_dialog_with_edit_mode() -> None:
+    """card:viewing should start ViewingSG with ShowMode.EDIT to edit card in-place."""
+    from aiogram_dialog import ShowMode
+
+    bot = _create_bot()
+    state = _make_state({"apartment_results": [_sample_result("prop-42")]})
+    callback = _make_callback("card:viewing:prop-42")
+    dialog_manager = AsyncMock()
+
+    await bot.handle_card_callback(callback, state, dialog_manager=dialog_manager)
+
+    dialog_manager.start.assert_awaited_once()
+    call_kwargs = dialog_manager.start.call_args.kwargs
+    assert call_kwargs.get("show_mode") == ShowMode.EDIT
