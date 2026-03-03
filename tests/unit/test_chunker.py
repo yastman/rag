@@ -3,6 +3,8 @@
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from src.ingestion.chunker import (
     Chunk,
     ChunkingStrategy,
@@ -62,8 +64,9 @@ class TestChunkingStrategy:
         assert ChunkingStrategy.SLIDING_WINDOW.value == "sliding_window"
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 class TestDocumentChunkerFixedSize:
-    """Test fixed-size chunking strategy."""
+    """Test fixed-size chunking strategy (deprecated — see #780)."""
 
     def test_fixed_size_basic(self):
         """Test basic fixed-size chunking."""
@@ -185,8 +188,9 @@ class TestDocumentChunkerSemantic:
         assert "115" in chunks[0].text
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 class TestDocumentChunkerSlidingWindow:
-    """Test sliding window chunking strategy."""
+    """Test sliding window chunking strategy (deprecated — see #780)."""
 
     def test_sliding_window_basic(self):
         """Test basic sliding window chunking."""
