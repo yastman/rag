@@ -3,160 +3,148 @@ name: tmux-swarm-orchestration
 description: Use when given GitHub issues to solve, problems to fix, or "review all open issues". Also for running heavy commands on VPS through user's terminal. Triggers on "реши issue", "fix #123", "изучи все открытые", "parallel workers", "swarm", "spawn-claude", "tmux воркеры", "VPS команда"
 ---
 
-# tmux Swarm Orchestration v5
+# tmux Swarm Оркестрация v8
 
 <HARD-GATE>
-ТЫ = OPUS = ОРКЕСТРАТОР. Юзер дал issues — дальше ВСЁ автоматом. Юзер ничего не делает до PR URLs.
-
-Ты — ДИСПЕТЧЕР. НЕ читаешь код, НЕ исследуешь файлы.
-Ты ТОЛЬКО: парсишь issues, принимаешь решения, пишешь промты, спавнишь workers, ждёшь.
-
-ПЕРЕД КАЖДЫМ tool call: "Вернёт > 500 chars в МОЙ контекст?" → Да → worker делает.
-Исключение: inline fix 1-5 строк, Context7 quick lookup < 500 токенов.
+ТЫ = OPUS = ДИСПЕТЧЕР. Юзер дал issues — дальше ВСЁ автоматом до PR URLs.
+НЕ читаешь код, НЕ исследуешь файлы, НЕ пишешь код.
+ЛЮБАЯ задача → worker. Opus inline = $15, Sonnet worker = $3.
 </HARD-GATE>
 
-**Принцип:** Один вызов скилла → полная автоматизация → PR URLs юзеру.
+## Конвейер
 
-## Краткий справочник
+| Сложность | Поток | Модель |
+|-----------|-------|--------|
+| TRIVIAL/CLEAR | SDK исследование? → Sonnet A → PR | `--model sonnet` |
+| MEDIUM | Haiku фильтрация → SDK исследование? → Sonnet A → PR | Haiku + `--model sonnet` |
+| COMPLEX | SDK? → Opus C → план → **Opus решает** → 1 или N Sonnet B → PR | default + `--model sonnet` |
+| VERY COMPLEX | SDK? → Opus C → план → **Opus решает** → 1 или N Sonnet B → PRs | default + N × `--model sonnet` |
 
-| Вход | Действие |
-|------|----------|
-| "реши #123" | gh issue view → feasibility → strategy → execute → PR |
-| "проблема X" | gh issue create → тот же flow |
-| "все открытые" | gh issue list → batch analysis → execute → PRs |
-| VPS команда | tmux window → ssh → command → wait |
+## Поток
 
-| Стратегия | Когда |
-|-----------|-------|
-| Inline fix (сам) | Тривиальная правка 1-5 строк |
-| Spawn worker(s) | Любая задача, требующая кода |
+```dot
+digraph flow {
+  rankdir=TB; node [shape=box, fontsize=10];
+  init [label="Фаза 0: ВВОД\ngh issue view + mkdir -p .signals"];
+  classify [label="Фаза 2: КЛАССИФИКАЦИЯ\nRead classification.md"];
+  parallel [label="Фаза 2.5: ПАРАЛЛЕЛИЗАЦИЯ\nfile overlap + резервации"];
+  sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nSonnet субагент (если нужно)"];
+  spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md"];
+  wait [label="Фаза 4: ОЖИДАНИЕ\n0 токенов, мониторинг .signals/"];
+  verify [label="Фаза 5: ВЕРИФИКАЦИЯ\nартефакты + маркеры"];
+  report [label="Фаза 6: ОТЧЁТ\nPR URLs + метрики → юзеру\nочистка"];
+
+  init -> classify -> parallel -> sdk -> spawn -> wait -> verify -> report;
+  verify -> spawn [label="провал\nэскалация 1x", style=dashed];
+}
+```
+
+**Фаза 2.7: SDK КОНТЕКСТ** — если issue затрагивает SDK/библиотеку:
+
+    Agent(model="sonnet", subagent_type="general-purpose",
+      prompt="Context7 + Exa → сигнатуры, паттерны для {library}.
+      Резюме (300 слов) верни мне. Полный контекст запиши в .claude/cache/sdk-{lib}-{N}.md")
+
+Переиспользование: одно исследование → N воркеров.
+
+**Двухволновой запуск (COMPLEX+) — Opus решает:**
+
+Opus C анализирует задачи и выдаёт в сигнале `"execution": "sequential"` или `"parallel"`.
+
+    # Orch читает сигнал:
+    execution=$(cat .signals/worker-{name}.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('execution','sequential'))")
+
+| Решение Opus | Действие orch |
+|--------------|---------------|
+| `sequential` | 1 Sonnet B с полным планом → 1 PR |
+| `parallel` | Парсить группы из плана → N Sonnet B, каждый со своей группой задач |
+
+При `parallel` orch создаёт **волны**:
+1. **Независимые группы** → параллельные Sonnet B в отдельных worktree (`{branch}-part-{N}`)
+2. **Зависимые группы** → после завершения тех, от кого зависят
+3. **Финальная группа** → последний worker ребейзит все ветки в `{branch}`, создаёт 1 PR
+
+Orch НЕ переопределяет решение Opus. Opus видел код, зависимости и файлы — он решает.
+
+**Фаза 5: ВЕРИФИКАЦИЯ** — двухуровневая:
+
+### Уровень 1: Артефактная проверка (основной)
+
+    # Для кодовых контрактов (A/B/D):
+    WT="{PROJECT_ROOT}-wt-{name}"
+
+    # 1. Тесты существуют и новые (созданы после worktree)
+    test_count=$(find "$WT" -name "test_*" -newer "$WT/.git/HEAD" 2>/dev/null | wc -l)
+
+    # 2. Lint + types чистые
+    cd "$WT" && make check 2>&1 | tail -3
+
+    # 3. PR создан
+    gh pr list --head "{branch}" --json url -q '.[0].url'
+
+    # Для контракта C (исследование):
+    # 1. План существует и содержательный
+    plan_words=$(wc -w < "docs/plans/{DATE}-issue-{N}-plan.md" 2>/dev/null)
+    [ "$plan_words" -gt 200 ]  # минимум 200 слов
+
+| Контракт | Артефакты |
+|----------|-----------|
+| A/B/D | Новые тесты + `make check` чисто + PR создан |
+| C | План >200 слов + содержит секции: файлы, подход, задачи |
+
+### Уровень 2: Маркеры скиллов (дополнительный)
+
+    grep '\[SKILL:' logs/worker-{name}.log
+
+| Контракт | Мин. маркеры |
+|----------|--------------|
+| A | tdd, review, verify (3) |
+| B | executing-plans, tdd, review, verify (4) |
+| C | writing-plans (1) |
+| D | все 5 |
+
+**Артефакты = решение.** Маркеры = быстрая проверка. Артефакты есть, маркеров нет → PASS с WARNING. Артефактов нет → FAIL независимо от маркеров.
+
+### Решение при провале
+
+    Артефакты OK + маркеры OK → PASS
+    Артефакты OK + маркеры MISSING → PASS + WARNING в отчёте
+    Артефакты FAIL + маркеры OK → FAIL (маркеры ≠ качество)
+    Артефакты FAIL + маркеры MISSING → FAIL → эскалация
+
+## Эскалация
+
+    CLEAR провалился   → MEDIUM  (Haiku контекст → перезапуск)
+    MEDIUM провалился  → COMPLEX (Opus исследование → план → Sonnet выполнение)
+    COMPLEX провалился → gh issue comment → пропуск
 
 ## Контекст-бюджет
 
-**Цель: ≤5K токенов на issue. 200K лимит = ~31 issue.**
+≤5K токенов на issue. Orch читает: `gh issue view`, `git diff --stat`, `.signals/*.json` (<1K).
 
-| Кто | Стоимость | Множитель |
-|-----|-----------|-----------|
-| Оркестратор (Opus) | $15/$75 за 1M in/out | 1x |
-| Sonnet worker | $3/$15 за 1M in/out | 5x дешевле |
+## Фаза 6: Финальный отчёт
 
-**ORCH ЧИТАЕТ САМ** (< 500 chars):
-- `gh issue list --json number,title,labels` (БЕЗ body)
-- `gh issue view {N} --json title,body` (1-2 issues, допустимо)
-- `git diff --stat`
-- `git log --oneline`
-- logs/worker-*.log (< 1K)
-- Context7 quick lookup (< 500 токенов, знакомый SDK)
+После завершения всех воркеров orch генерирует:
 
-**ORCH ДЕЛЕГИРУЕТ WORKER-У** (> 500 chars):
-- Research SDK/API (worker ресёрчит сам через Context7/Exa)
-- Implementation
-- Review (worker self-review: ruff + diff + тесты)
+    ## Отчёт сессии
 
-**Формула:** `44K (system) + N × 5K (per issue) ≤ 200K` → max 31 issues.
+    | Issue | Уровень | Контракт | Worker | Время | ~Стоимость | PR | Статус |
+    |-------|---------|----------|--------|-------|-----------|-----|--------|
+    | #{N}  | CLEAR   | A        | W-{name} | {m}m{s}s | ~$3 | #{pr} | done |
+    | #{N}  | COMPLEX | C→B      | W-{name} | {m}m | ~$8 | #{pr} | done |
+    | #{N}  | MEDIUM  | A        | W-{name} | — | ~$3 | — | timeout→escalate |
 
-## Flow
+    **Итого:** {X} issues, {Y} PRs, {Z} эскалаций, ~${total}, {wall_time} wall-time
 
-Phase 0: INPUT PARSING
-  "реши #123"          → gh issue view --json title,body
-  "проблема X"         → gh issue create → #N
-  "все открытые"       → gh issue list --json number,title,labels (БЕЗ body)
-                        → 5+ issues: 1 Haiku subagent для triage
+    **PR URLs:**
+    - #{pr1}: {title1}
+    - #{pr2}: {title2}
 
-Phase 1: FEASIBILITY (per issue)
-  1-2 issues: orch читает body сам
-  5+ issues: Haiku subagent → таблица DO/SKIP/STALE
-  SKIP → gh issue comment + label "needs-info"
+Стоимость: оценка (Sonnet A ≈ $3, Opus C ≈ $5, Opus D ≈ $15). Время: из `orch-log.jsonl`.
 
-Phase 2: DECISION MATRIX
-  Implementation: inline fix (1-5 строк) / 1 worker / N workers
-  Review: worker self-review (всегда) + orch diff --stat (> 100 LOC)
+## Вспомогательные файлы
 
-Phase 3: SMART BATCH
-  Связанные мелкие → 1 PR
-  Крупные → отдельные PR
-  Параллельные → N workers
-
-Phase 4: SPAWN WORKERS
-  git worktree add (ТОЛЬКО ручной)
-  Промт в .claude/prompts/worker-{name}.md
-  --model sonnet (ВСЕГДА явно)
-  Ожидание: tmux wait-for (true push, 0 polling, 0 tokens)
-
-Phase 5: REVIEW
-  Worker self-review — обязателен (встроен в contract)
-  Orch: git diff --stat per branch — для > 100 LOC
-
-Phase 6: MERGE + PR
-  git merge per branch → gh pr create
-  /verification-before-completion для inline fix
-  /claude-md-writer если новый API/сервис
-
-Phase 7: CLEANUP
-  git worktree remove + git branch -d + kill tmux windows
-
-<HARD-GATE>
-ПОКА ЖДЁШЬ tmux wait-for — НЕ ЧИТАЙ КОД. НЕ ИССЛЕДУЙ ФАЙЛЫ.
-Если нечего делать — жди. 0 токенов пока worker работает.
-</HARD-GATE>
-
-## Механика → Read infrastructure.md
-## Промт воркера → Read worker-contract.md § Implementation Worker
-
-## Красные флаги — СТОП
-
-**Контекст-бюджет:**
-- `Read` файла > 50 строк (worker делает)
-- `gh issue list/view` с body для 5+ issues (Haiku triage)
-- `git diff` без `--stat`
-- Research > 500 токенов (worker ресёрчит сам)
-- На 3-й issue контекст > 80K (утечка)
-
-**Стратегия:**
-- Спавнит sub-orch (УБРАНО — только workers)
-- Спавнит subagent для review (УБРАНО — worker self-review)
-- Делает research сам > 500 токенов (worker ресёрчит сам)
-- ВСЕГДА воркеры даже для 1-строчного фикса
-- Нет --model флага (дефолт = Opus)
-
-**Инфраструктура:**
-- Промт inline в send-keys
-- Воркеры без worktrees
-- `claude --worktree` для tmux workers (ТОЛЬКО `git worktree add`)
-- tmux new-session / нет TMUX=""
-- send-keys webhook вместо `tmux wait-for`
-- Polling log вместо `Bash(run_in_background)` + `tmux wait-for`
-
-**Review/Docs:**
-- Пропустил /verification-before-completion при inline fix
-- Пропустил /claude-md-writer при новом API
-- PR без Closes #N
-- Не удалены worktrees после merge
-
-## Таблица рационализаций
-
-| Отговорка | Реальность |
-|-----------|------------|
-| "Sub-orch нужен для сложных issues" | Worker с research справляется. Sub-orch = overhead. |
-| "Opus reviewer поймает баги" | Worker self-review + orch diff --stat. 50K экономия. |
-| "Explore subagent дешёвый" | gh issue view = 0 субагентов. Worker ресёрчит сам. |
-| "Worker не справится с research" | Context7/Exa в промте. Его контекст = 200K, хватит. |
-| "Быстрее сделаю сам" | Inline fix для тривиального. Остальное — worker. |
-| "Issue не нужен" | Issue = трекинг + PR reference. Создай. |
-| "Промт простой, inline OK" | Escape hell. Файл. |
-| "Feasibility — лишний шаг" | 5 секунд = 30 минут экономии. |
-| "Worktrees — overkill" | Без worktrees — конфликты веток. |
-| "Пока жду — посмотрю код" | 22K chars (ORCH-1e40f272). Жди. |
-| "Сам пофикшу failing test" | 38 calls, 43K chars. Fix-worker. |
-| "send-keys webhook надёжнее" | Claude Code не читает stdin из tmux. tmux wait-for = true push. |
-| "Polling log тоже работает" | Polling = токены. wait-for = 0 токенов, instant push. |
-
-## Чеклист
-
-- [ ] `tmux wait-for` через `Bash(run_in_background)` после каждого spawn
-- [ ] Worker сигналит `TMUX="" tmux wait-for -S worker-{name}-done` в конце
-- [ ] `--model sonnet` явно
-- [ ] `git worktree add` (не `claude --worktree`)
-- [ ] /verification-before-completion для inline fix
-- [ ] Worker self-review обязателен
-- [ ] Промт в файл, не inline
+- **classification.md** — блок-схема классификации + маркеры + file overlap + sizing
+- **worker-contract.md** — 4 контракта + общий финал + sandbox + резервации
+- **infrastructure.md** — tmux, worktree, сигналы, таймауты, orch-log, VPS
+- **red-flags.md** — чеклист + рационализации
