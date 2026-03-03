@@ -179,15 +179,32 @@ Details: `.claude/rules/git-workflow.md`
 
 **Optional tuning:** `TTFT_DRIFT_WARN_MS` (default 500), `KOMMO_ACCESS_TOKEN` (fallback seed), `KOMMO_DEFAULT_PIPELINE_ID`, `KOMMO_*_FIELD_ID` (deal creation)
 
-## Deployment
+## CI/CD Pipeline
 
-**Dev:** `make local-up && make run-bot`
+```
+Локально (мощный комп)          GitHub (ubuntu-latest)              VPS
+─────────────────────          ────────────────────              ───
+pre-commit hooks (auto)   →    PR: ruff lint + mypy (~30с)
+make test-unit / make test      │
+                                ├── fail → PR блокирован
+                                └── pass → merge в main
+                                              │
+                                              └── Deploy: SSH → git pull
+                                                  → docker build bot
+                                                  → restart (~40с)
+```
 
-**VPS (auto):** Push/merge в `main` → GitHub Actions CD → SSH → `git pull` → `docker compose build bot` → restart (~40с). Workflow: `.github/workflows/deploy.yml`
+| Этап | Где | Что запускается |
+|------|-----|-----------------|
+| **Тесты** | Локально | `make test-unit` / `make test` (pre-commit hooks автоматом) |
+| **Lint** | GitHub Actions | ruff check + ruff format + mypy (на PR и push в main) |
+| **Deploy** | GitHub → VPS | git pull → rebuild bot container → restart (только после lint pass + merge в main) |
 
-**VPS (manual):** `make deploy-bot` (push + SSH rebuild) | `gh workflow run deploy.yml` (trigger CD)
+**Workflow:** `.github/workflows/ci.yml` (lint → deploy, один файл)
 
-**VPS (full):** `./scripts/deploy-vps.sh` (rsync all + build all services) | `--clean` для полного пересоздания
+**Ручной деплой:** `make deploy-bot` | `gh workflow run ci.yml`
+
+**Полный деплой:** `./scripts/deploy-vps.sh` (rsync + все сервисы) | `--clean` для пересоздания
 
 **VPS доступ:** `ssh vps` → `/opt/rag-fresh` → see `.claude/rules/k3s.md`
 
