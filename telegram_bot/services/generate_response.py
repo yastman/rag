@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import hashlib
 import inspect
@@ -35,8 +34,7 @@ class StreamingPartialDeliveryError(Exception):
 
 
 _MAX_CONTEXT_DOCS = 3
-_STREAM_EDIT_INTERVAL = 0.5  # 500ms throttle for Telegram edit_text
-_STREAM_PLACEHOLDER = "⏳ Генерирую ответ..."
+_DRAFT_INTERVAL = 0.2  # 200ms — sendMessageDraft has no rate limit
 _MAX_HISTORY_MESSAGES = 12
 _detector = ResponseStyleDetector()
 _HISTORY_INSTRUCTION = (
@@ -229,9 +227,12 @@ async def _generate_streaming(
     max_tokens: int = 0,
     lf_client: Any | None = None,
 ) -> tuple[str, str, float, float | None, float | None, dict[str, int] | None, Any]:
-    """Stream LLM response directly to Telegram via message editing."""
+    """Stream LLM response to Telegram via native sendMessageDraft (Bot API 9.5).
+
+    Sends draft updates as chunks arrive, then finalizes with message.answer().
+    """
     accumulated = ""
-    last_edit = 0.0
+    last_draft = 0.0
     ttft_ms = 0.0
     actual_model = config.llm_model
     completion_tokens: float | None = None
@@ -239,48 +240,24 @@ async def _generate_streaming(
 
     effective_max_tokens = max_tokens if max_tokens > 0 else int(config.generate_max_tokens)
 
-    # Measure TTFT from before parallel dispatch (includes pre-stream provider wait).
+    chat_id = message.chat.id
+    bot = message.bot
+    draft_id = abs(hash(f"{chat_id}:{time.monotonic_ns()}")) % (2**31) or 1
+
     t_request_start = time.monotonic()
 
-    # Parallelize placeholder send + LLM stream creation to reduce TTFT drift (#675).
-    # return_exceptions=True ensures both tasks complete before results are inspected,
-    # preventing background LLM tasks from leaking on placeholder failure (#683).
-    # NOTE: message.answer() returns a SendMessage object (awaitable but not hashable),
-    # so we wrap it in a coroutine for asyncio.gather() compatibility (Python 3.12+).
-    async def _send_placeholder() -> Any:
-        return await message.answer(_STREAM_PLACEHOLDER)
-
-    gather_results = await asyncio.gather(
-        _send_placeholder(),
-        _chat_create_with_optional_name(
-            llm,
-            observation_name="generate-answer",
-            model=config.llm_model,
-            messages=llm_messages,
-            temperature=config.llm_temperature,
-            max_tokens=effective_max_tokens,
-            stream=True,
-            stream_options={"include_usage": True},
-            **config.get_reasoning_kwargs(),
-        ),
-        return_exceptions=True,
+    stream = await _chat_create_with_optional_name(
+        llm,
+        observation_name="generate-answer",
+        model=config.llm_model,
+        messages=llm_messages,
+        temperature=config.llm_temperature,
+        max_tokens=effective_max_tokens,
+        stream=True,
+        stream_options={"include_usage": True},
+        **config.get_reasoning_kwargs(),
     )
-    sent_msg, stream = gather_results[0], gather_results[1]
 
-    # Placeholder failure is non-critical: degrade gracefully (skip message edits).
-    if isinstance(sent_msg, BaseException):
-        logger.warning("Placeholder send failed, continuing without edit: %s", sent_msg)
-        sent_msg = None
-
-    # LLM stream failure is critical: clean up and propagate.
-    if isinstance(stream, BaseException):
-        if sent_msg is not None:
-            with contextlib.suppress(Exception):
-                await sent_msg.delete()
-        raise stream
-
-    # t_stream_start: when stream object is available (after parallel gather).
-    # Used for "stream-only TTFT" drift diagnostics.
     t_stream_start = time.monotonic()
     stream_only_ttft_ms: float | None = None
 
@@ -319,37 +296,37 @@ async def _generate_streaming(
                             )
                 accumulated += text
                 now = time.monotonic()
-                if sent_msg is not None and now - last_edit >= _STREAM_EDIT_INTERVAL:
+                if now - last_draft >= _DRAFT_INTERVAL:
                     with contextlib.suppress(Exception):
-                        await sent_msg.edit_text(accumulated)
-                    last_edit = now
+                        await bot.send_message_draft(
+                            chat_id=chat_id,
+                            draft_id=draft_id,
+                            text=accumulated,
+                        )
+                    last_draft = now
             if hasattr(chunk, "model") and chunk.model:
                 actual_model = chunk.model
     except Exception:
         if accumulated:
-            raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
-        # No real content delivered — clean up placeholder
-        if sent_msg is not None:
+            # Draft showed partial text — try to finalize as real message
+            sent_msg = None
             with contextlib.suppress(Exception):
-                await sent_msg.delete()
+                sent_msg = await message.answer(accumulated)
+            raise StreamingPartialDeliveryError(sent_msg, accumulated) from None
         raise
 
     if not accumulated:
-        # Stream produced no content — clean up placeholder
-        if sent_msg is not None:
-            with contextlib.suppress(Exception):
-                await sent_msg.delete()
         raise ValueError("Streaming produced empty response")
 
-    # Final edit with Markdown formatting (only if placeholder was sent successfully)
-    if sent_msg is not None:
+    # Final message — persisted in chat history
+    try:
+        sent_msg = await message.answer(accumulated, parse_mode="Markdown")
+    except Exception:
         try:
-            await sent_msg.edit_text(accumulated, parse_mode="Markdown")
+            sent_msg = await message.answer(accumulated)
         except Exception:
-            try:
-                await sent_msg.edit_text(accumulated)
-            except Exception:
-                logger.warning("Failed to finalize streaming message")
+            logger.warning("Failed to send final streaming message")
+            sent_msg = None
 
     return (
         accumulated,
@@ -566,20 +543,19 @@ async def generate_response(
                         )
                     stream_recovery = True
                     delivered = False
-                    if sent_msg is not None:
+                    try:
+                        sent_msg = await message.answer(answer, parse_mode="Markdown")
+                        delivered = True
+                    except Exception:
                         try:
-                            await sent_msg.edit_text(answer, parse_mode="Markdown")
+                            sent_msg = await message.answer(answer)
                             delivered = True
                         except Exception:
-                            try:
-                                await sent_msg.edit_text(answer)
-                                delivered = True
-                            except Exception:
-                                logger.warning(
-                                    "Failed to deliver fallback edit after partial stream; "
-                                    "respond_node will send final answer",
-                                    exc_info=True,
-                                )
+                            logger.warning(
+                                "Failed to deliver fallback answer after partial stream; "
+                                "respond_node will send final answer",
+                                exc_info=True,
+                            )
                     response_sent = delivered
                 else:
                     logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)
