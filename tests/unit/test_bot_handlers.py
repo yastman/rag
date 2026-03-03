@@ -159,11 +159,25 @@ class TestCommandHandlers:
         call_args = message.answer.call_args
         text = call_args[0][0]
         # Welcome text now comes from content_loader (#628)
-        assert "Добро пожаловать" in text or "Привет" in text
+        assert "Добро пожаловать" in text or "Привет" in text or "FortNoks" in text
         # Verify ReplyKeyboardMarkup is sent
         from aiogram.types import ReplyKeyboardMarkup
 
         assert isinstance(call_args[1]["reply_markup"], ReplyKeyboardMarkup)
+
+    async def test_cmd_start_sends_personalized_welcome(self, mock_config):
+        """Test /start sends welcome with user's first_name via i18n."""
+        from unittest.mock import MagicMock
+
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message()
+        i18n = MagicMock()
+        i18n.get.return_value = "Привет, Test! 👋"
+
+        await bot.cmd_start(message, i18n=i18n)
+
+        # Verify i18n.get was called with name= kwarg
+        i18n.get.assert_any_call("welcome-text", name="Test")
 
     async def test_cmd_help(self, mock_config):
         """Test /help produces expected response text."""
