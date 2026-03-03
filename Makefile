@@ -388,7 +388,7 @@ docker-ml-up: ***REMOVED******REMOVED*** Start core + ML platform (langfuse, mlf
 
 docker-ai-up: ***REMOVED******REMOVED*** Start core + heavy AI services (bge-m3, user-base)
 	@echo "$(BLUE)Starting AI services...$(NC)"
-	$(COMPOSE_CMD) --profile ai up -d
+	$(COMPOSE_CMD) up -d bge-m3 user-base
 	@echo "$(GREEN)✓ AI services started$(NC)"
 
 docker-ingest-up: ***REMOVED******REMOVED*** Start core + ingestion service
