@@ -293,10 +293,17 @@ handoff-contact-prompt = How would you like to connect?
 handoff-contact-chat = 💬 Chat now
 handoff-contact-phone = 📞 Leave phone number
 handoff-connecting = Connecting you with a manager. While you wait — I can answer questions!
-handoff-offline = Manager will respond during business hours (9:00-18:00 EET). I can help in the meantime!
-handoff-manager-joined = Manager connected!
+handoff-offline = 📨 Your request has been received!
+
+    A manager will respond during business hours:
+    Mon–Fri, { $start }:00–{ $end }:00 (🇧🇬 Sofia)
+
+    We'll notify you when a manager connects.
+handoff-manager-joined = 🟢 { $name } joined the chat
 handoff-timeout = Manager is currently busy. Leave your number for a callback?
-handoff-closed-client = Manager has ended the conversation. I'm back online!
+handoff-closed-client = The conversation with the manager has ended.
+
+    🤖 You're now chatting with the bot again. Ask me anything!
 handoff-closed-topic = ✅ Conversation closed, client returned to bot.
 handoff-wait-more = ⏳ I'll wait
 handoff-leave-phone = 📞 Yes, call me back
