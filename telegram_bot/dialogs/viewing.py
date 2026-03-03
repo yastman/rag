@@ -139,7 +139,7 @@ async def get_date_options(
 async def get_phone_prompt(**kwargs: Any) -> dict[str, str]:
     """Getter for phone input (Step 3)."""
     return {
-        "title": ("📞 Введите ваш номер телефона\nПримеры: 088 XXX XXXX, +359..., +380..."),
+        "title": "📞 Введите ваш номер телефона\n\nНапример: +359 88 123 4567 или +380 50 123 4567",
         "btn_back": "◀ Назад",
     }
 
@@ -253,11 +253,11 @@ async def on_phone_text_received(message: Message, widget: Any, manager: DialogM
 
     text = message.text or ""
     if not validate_phone(text):
-        await message.answer("❌ Некорректный номер. Примеры: 088 XXX XXXX, +359..., +380...")
+        await message.answer("❌ Некорректный номер. Например: +359 88 123 4567")
         return
     phone = normalize_phone(text)
     if phone is None:
-        await message.answer("❌ Некорректный номер. Примеры: 088 XXX XXXX, +359..., +380...")
+        await message.answer("❌ Некорректный номер. Например: +359 88 123 4567")
         return
     manager.dialog_data["phone"] = phone
     manager.show_mode = ShowMode.EDIT
@@ -378,9 +378,12 @@ async def on_confirm(callback: CallbackQuery, button: Button, manager: DialogMan
         except Exception:
             logger.exception("CRM viewing lead creation failed for phone=%s", phone)
 
-    if callback.message:
-        await callback.message.answer(
-            "✅ Заявка принята! Менеджер свяжется с вами в ближайшее время."
+    # Send confirmation to user's chat (not via callback.message which may be
+    # InaccessibleMessage after ShowMode.EDIT in aiogram-dialog)
+    if callback.bot and callback.from_user:
+        await callback.bot.send_message(
+            chat_id=callback.from_user.id,
+            text="✅ Заявка принята! Менеджер свяжется с вами в ближайшее время.",
         )
     await callback.answer()
     await manager.done()
