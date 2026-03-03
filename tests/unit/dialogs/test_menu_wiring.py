@@ -139,7 +139,7 @@ async def test_handle_menu_button_passes_dialog_manager_to_search():
         bot = PropertyBot.__new__(PropertyBot)
 
         message = MagicMock()
-        message.text = "🏠 Подбор апартаментов"
+        message.text = "🏠 Подобрать квартиру"
 
         state = AsyncMock()
         state.get_state = AsyncMock(return_value=None)
