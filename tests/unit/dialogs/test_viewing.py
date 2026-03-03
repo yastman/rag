@@ -220,8 +220,7 @@ async def test_phone_prompt_contains_format_mask():
     from telegram_bot.dialogs.viewing import get_phone_prompt
 
     result = await get_phone_prompt()
-    assert "088" in result["title"]
-    assert "+380" in result["title"]
+    assert "+359" in result["title"]
 
 
 @pytest.mark.asyncio
@@ -298,7 +297,7 @@ async def test_on_confirm_creates_crm_entities():
     callback.from_user = SimpleNamespace(
         id=12345, first_name="Test", last_name=None, username="testuser"
     )
-    callback.message = AsyncMock()
+    callback.bot = AsyncMock()
     callback.answer = AsyncMock()
 
     manager = MagicMock()
@@ -331,6 +330,7 @@ async def test_on_confirm_creates_crm_entities():
     assert "Sunset" in note_text
     assert "ID: prop-1" in note_text
     kommo.create_task.assert_awaited_once()
+    callback.bot.send_message.assert_awaited_once()
     manager.done.assert_awaited_once()
 
 
@@ -340,7 +340,7 @@ async def test_on_confirm_graceful_when_no_kommo():
 
     callback = MagicMock()
     callback.from_user = SimpleNamespace(id=12345, first_name="Test", last_name=None, username=None)
-    callback.message = AsyncMock()
+    callback.bot = AsyncMock()
     callback.answer = AsyncMock()
 
     manager = MagicMock()
@@ -353,5 +353,5 @@ async def test_on_confirm_graceful_when_no_kommo():
 
     # Should not raise
     await on_confirm(callback, MagicMock(), manager)
-    callback.message.answer.assert_awaited_once()
+    callback.bot.send_message.assert_awaited_once()
     manager.done.assert_awaited_once()
