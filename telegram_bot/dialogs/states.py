@@ -34,6 +34,7 @@ class FunnelSG(StatesGroup):
     pref_view = State()  ***REMOVED*** Step 4b: вид sub-options
     pref_furnished = State()  ***REMOVED*** Step 4c: мебель sub-options
     pref_promotion = State()  ***REMOVED*** Step 4d: акции sub-options
+    pref_area = State()  ***REMOVED*** Step 4f: площадь sub-options
     pref_complex = State()  ***REMOVED*** Step 4e: комплекс sub-options
     summary = State()  ***REMOVED*** Step 5: саммари + confirmation
     change_filter = State()  ***REMOVED*** Step 5a: выбор фильтра для изменения
