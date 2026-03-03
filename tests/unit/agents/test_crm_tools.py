@@ -567,3 +567,68 @@ async def test_get_crm_tools_count():
 
     tools = get_crm_tools()
     assert len(tools) == 12
+
+
+@pytest.fixture
+def make_config():
+    def _make(ctx):
+        return {"configurable": {"bot_context": ctx}}
+
+    return _make
+
+
+class TestCrmCreateLeadSearchSummary:
+    async def test_create_lead_adds_search_summary_note(
+        self, mock_kommo, bot_context, make_config
+    ) -> None:
+        """При наличии search_event_store — автоматически добавляет ноту."""
+        from datetime import UTC, datetime
+        from unittest.mock import patch
+
+        from telegram_bot.agents.crm_tools import crm_create_lead
+
+        mock_store = AsyncMock()
+        mock_store.get_user_events = AsyncMock(
+            return_value=[
+                {
+                    "query": "двушка у моря",
+                    "filters": {"rooms": 2},
+                    "results_count": 12,
+                    "created_at": datetime(2026, 3, 3, 14, 20, tzinfo=UTC),
+                },
+            ]
+        )
+        bot_context.search_event_store = mock_store
+
+        config = make_config(bot_context)
+
+        with patch(
+            "telegram_bot.agents.crm_tools.hitl_guard",
+            return_value={"action": "approve"},
+        ):
+            result = await crm_create_lead.ainvoke({"name": "Test lead"}, config=config)
+
+        assert "Сделка создана" in result
+        # Нота с самари должна быть добавлена
+        mock_kommo.add_note.assert_called_once()
+        note_text = mock_kommo.add_note.call_args[0][2]
+        assert "двушка у моря" in note_text
+
+    async def test_create_lead_no_store_no_note(self, mock_kommo, bot_context, make_config) -> None:
+        """Без store — ноту не добавляем."""
+        from unittest.mock import patch
+
+        from telegram_bot.agents.crm_tools import crm_create_lead
+
+        bot_context.search_event_store = None
+
+        config = make_config(bot_context)
+
+        with patch(
+            "telegram_bot.agents.crm_tools.hitl_guard",
+            return_value={"action": "approve"},
+        ):
+            result = await crm_create_lead.ainvoke({"name": "Test lead"}, config=config)
+
+        assert "Сделка создана" in result
+        mock_kommo.add_note.assert_not_called()
