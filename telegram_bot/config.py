@@ -547,7 +547,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("managers_group_id", "MANAGERS_GROUP_ID"),
     )
     handoff_ttl_hours: int = Field(
-        default=24,
+        default=72,
         validation_alias=AliasChoices("handoff_ttl_hours", "HANDOFF_TTL_HOURS"),
     )
     handoff_summary_min_messages: int = Field(

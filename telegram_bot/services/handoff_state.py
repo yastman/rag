@@ -62,7 +62,7 @@ class HandoffData:
 class HandoffState:
     """Manage handoff state in Redis."""
 
-    def __init__(self, redis: Redis, *, ttl_hours: int = 24) -> None:
+    def __init__(self, redis: Redis, *, ttl_hours: int = 72) -> None:
         self._redis = redis
         self._ttl = ttl_hours * 3600
 
