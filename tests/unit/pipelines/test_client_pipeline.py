@@ -1347,3 +1347,173 @@ class TestPipelineResultNeedsAgentFlag:
         r1 = PipelineResult()
         r2 = PipelineResult()
         assert r1.scores is not r2.scores
+
+
+# ---------------------------------------------------------------------------
+# Streaming feedback keyboard (#745)
+# ---------------------------------------------------------------------------
+
+
+class TestStreamingFeedbackKeyboard:
+    """When streaming delivers the response, feedback keyboard must still
+    be attached via edit_message_reply_markup (#745)."""
+
+    async def test_streaming_attaches_feedback_keyboard_via_edit(self):
+        """After streaming (response_sent=True), edit_message_reply_markup
+        is called on the sent message to attach the feedback keyboard."""
+        msg = _make_message()
+        msg.bot.edit_message_reply_markup = AsyncMock()
+        lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-abc-123"
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Streamed answer",
+            "response_sent": True,
+            "sent_message": {"chat_id": 12345, "message_id": 99},
+            "llm_call_count": 1,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие документы для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(streaming_enabled=True),
+                query_type="FAQ",
+            )
+
+        # message.answer must NOT be called (streaming already sent)
+        msg.answer.assert_not_called()
+        # edit_message_reply_markup must be called to attach feedback keyboard
+        msg.bot.edit_message_reply_markup.assert_called_once()
+        call_kwargs = msg.bot.edit_message_reply_markup.call_args
+        assert call_kwargs.kwargs["chat_id"] == 12345
+        assert call_kwargs.kwargs["message_id"] == 99
+        assert call_kwargs.kwargs["reply_markup"] is not None
+
+    async def test_streaming_no_sent_message_ref_skips_edit(self):
+        """When streaming delivers but sent_message ref is missing,
+        edit_message_reply_markup is not called (graceful degradation)."""
+        msg = _make_message()
+        msg.bot.edit_message_reply_markup = AsyncMock()
+        lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-abc-456"
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [{"metadata": {"title": "Doc"}, "score": 0.9}],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Streamed answer",
+            "response_sent": True,
+            # No sent_message — streaming failed to capture ref
+            "llm_call_count": 1,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие документы для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(streaming_enabled=True),
+                query_type="FAQ",
+            )
+
+        # Neither answer nor edit should be called
+        msg.answer.assert_not_called()
+        msg.bot.edit_message_reply_markup.assert_not_called()
+
+    async def test_streaming_with_sources_sends_sources_with_keyboard(self):
+        """When streaming + sources enabled, sources are sent as a separate
+        message with the feedback keyboard (existing behavior preserved)."""
+        msg = _make_message()
+        msg.bot.edit_message_reply_markup = AsyncMock()
+        lf = _make_lf_client()
+        lf.get_current_trace_id.return_value = "trace-abc-789"
+
+        rag_result = {
+            "response": "",
+            "cache_hit": False,
+            "documents": [
+                {"metadata": {"title": "Doc1", "source": "file1.pdf"}, "score": 0.9},
+            ],
+            "grade_confidence": 0.7,
+            "llm_call_count": 0,
+            "latency_stages": {},
+            "query_embedding": [0.1, 0.2],
+            "cache_key_embedding": [0.1, 0.2],
+        }
+        gen_result = {
+            "response": "Streamed answer",
+            "response_sent": True,
+            "sent_message": {"chat_id": 12345, "message_id": 99},
+            "llm_call_count": 1,
+        }
+
+        with (
+            _patch_observability(lf),
+            _patch_rag_pipeline(rag_result),
+            _patch_generate_response(gen_result),
+            patch("telegram_bot.pipelines.client.write_langfuse_scores"),
+            patch("telegram_bot.pipelines.client.score"),
+        ):
+            await run_client_pipeline(
+                user_text="Какие документы для ВНЖ?",
+                user_id=1,
+                session_id="s1",
+                message=msg,
+                cache=AsyncMock(),
+                embeddings=MagicMock(),
+                sparse_embeddings=MagicMock(),
+                qdrant=MagicMock(),
+                reranker=None,
+                llm=None,
+                config=_make_config(streaming_enabled=True, show_sources=True),
+                query_type="FAQ",
+            )
+
+        # Sources sent via message.answer (with keyboard), not via edit
+        msg.answer.assert_called()
+        msg.bot.edit_message_reply_markup.assert_not_called()
