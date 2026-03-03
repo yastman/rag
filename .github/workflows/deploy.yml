@@ -3,10 +3,6 @@ name: Deploy Bot
 on:
   push:
     branches: [main]
-    paths:
-      - 'telegram_bot/**'
-      - 'src/**'
-      - 'docker-compose.vps.yml'
   workflow_dispatch:
 
 concurrency:

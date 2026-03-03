@@ -181,7 +181,15 @@ Details: `.claude/rules/git-workflow.md`
 
 ## Deployment
 
-**Dev:** `make local-up && make run-bot` | **VPS:** `ssh vps` → `/opt/rag-fresh` → see `.claude/rules/k3s.md`
+**Dev:** `make local-up && make run-bot`
+
+**VPS (auto):** Push/merge в `main` → GitHub Actions CD → SSH → `git pull` → `docker compose build bot` → restart (~40с). Workflow: `.github/workflows/deploy.yml`
+
+**VPS (manual):** `make deploy-bot` (push + SSH rebuild) | `gh workflow run deploy.yml` (trigger CD)
+
+**VPS (full):** `./scripts/deploy-vps.sh` (rsync all + build all services) | `--clean` для полного пересоздания
+
+**VPS доступ:** `ssh vps` → `/opt/rag-fresh` → see `.claude/rules/k3s.md`
 
 ## Modular Docs
 
