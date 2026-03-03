@@ -282,110 +282,138 @@ async def on_phone_contact_received(message: Message, widget: Any, manager: Dial
 
 async def on_confirm(callback: CallbackQuery, button: Button, manager: DialogManager) -> None:
     """Submit viewing request to Kommo CRM and close dialog."""
-    from telegram_bot.handlers.phone_collector import (
-        _build_custom_fields,
-        _build_note_text,
-        build_display_name,
-    )
-    from telegram_bot.services.kommo_models import ContactCreate, LeadCreate, TaskCreate
+    try:
+        from telegram_bot.handlers.phone_collector import (
+            _build_custom_fields,
+            _build_note_text,
+            build_display_name,
+        )
+        from telegram_bot.services.kommo_models import ContactCreate, LeadCreate, TaskCreate
 
-    data = manager.dialog_data
-    phone = data.get("phone", "")
-    date_range = data.get("date_range", "unknown")
-    selected_objects = data.get("selected_objects", [])
-    manual_text = data.get("manual_text", "")
+        data = manager.dialog_data
+        phone = data.get("phone", "")
+        date_range = data.get("date_range", "unknown")
+        selected_objects = data.get("selected_objects", [])
+        manual_text = data.get("manual_text", "")
 
-    user = callback.from_user
-    display_name = build_display_name(user, phone)
-    username = getattr(user, "username", None)
-    user_id = user.id if user else 0
+        user = callback.from_user
+        display_name = build_display_name(user, phone)
+        username = getattr(user, "username", None)
+        user_id = user.id if user else 0
 
-    # Build viewing_objects for note (reuse phone_collector format)
-    viewing_objects = selected_objects or []
+        # Build viewing_objects for note (reuse phone_collector format)
+        viewing_objects = selected_objects or []
 
-    # Build note with date info
-    date_label = DATE_LABELS.get(date_range, date_range)
-    extra_note = f"\nЖелаемая дата осмотра: {date_label}"
-    if manual_text:
-        extra_note += f"\nОписание объектов: {manual_text}"
+        logger.info(
+            "on_confirm: phone=%s date=%s objects=%d manual=%r",
+            phone,
+            date_range,
+            len(viewing_objects),
+            bool(manual_text),
+        )
 
-    kommo_client = manager.middleware_data.get("kommo_client")
-    bot_config = manager.middleware_data.get("bot_config")
+        # Build object summary for lead title and task
+        obj_summary = ""
+        if viewing_objects:
+            names = [
+                o.get("complex_name", "?") + " " + o.get("property_type", "")
+                for o in viewing_objects
+            ]
+            obj_summary = ", ".join(n.strip() for n in names)
+        elif manual_text:
+            obj_summary = manual_text[:60]
 
-    if kommo_client is not None:
-        try:
-            contact_data = ContactCreate(
-                first_name=user.first_name if user else "",
-                last_name=getattr(user, "last_name", None) if user else None,
-                phone=phone,
-            )
-            contact = await kommo_client.upsert_contact(phone, contact_data)
+        # Build note with date info
+        date_label = DATE_LABELS.get(date_range, date_range)
+        extra_note = f"\nЖелаемая дата осмотра: {date_label}"
+        if manual_text:
+            extra_note += f"\nОписание объектов: {manual_text}"
 
-            pipeline_id = (bot_config.kommo_default_pipeline_id if bot_config else 0) or None
-            status_id = (bot_config.kommo_new_status_id if bot_config else 0) or None
-            responsible = (bot_config.kommo_responsible_user_id if bot_config else None) or None
+        kommo_client = manager.middleware_data.get("kommo_client")
+        bot_config = manager.middleware_data.get("bot_config")
 
-            custom_fields = _build_custom_fields(
-                "Запись на осмотр",
-                user_id,
-                username,
-                service_field_id=(bot_config.kommo_service_field_id if bot_config else 0),
-                source_field_id=(bot_config.kommo_source_field_id if bot_config else 0),
-                telegram_field_id=(bot_config.kommo_telegram_field_id if bot_config else 0),
-                telegram_username_field_id=(
-                    bot_config.kommo_telegram_username_field_id if bot_config else 0
-                ),
-            )
-
-            lead = await kommo_client.create_lead(
-                LeadCreate(
-                    name=f"Осмотр — {display_name}",
-                    pipeline_id=pipeline_id,
-                    status_id=status_id,
-                    responsible_user_id=responsible,
-                    custom_fields_values=custom_fields or None,
+        if kommo_client is not None:
+            try:
+                contact_data = ContactCreate(
+                    first_name=user.first_name if user else "",
+                    last_name=getattr(user, "last_name", None) if user else None,
+                    phone=phone,
                 )
-            )
-            await kommo_client.link_contact_to_lead(lead.id, contact.id)
+                contact = await kommo_client.upsert_contact(phone, contact_data)
 
-            note_text = _build_note_text(
-                "Запись на осмотр",
-                phone,
-                username,
-                user_id,
-                display_name,
-                viewing_objects,
-            )
-            note_text += extra_note
-            await kommo_client.add_note("leads", lead.id, note_text)
+                pipeline_id = (bot_config.kommo_default_pipeline_id if bot_config else 0) or None
+                status_id = (bot_config.kommo_new_status_id if bot_config else 0) or None
+                responsible = (bot_config.kommo_responsible_user_id if bot_config else None) or None
 
-            due_date = compute_due_date(date_range)
-            task_text = f"Осмотр: {display_name} ({date_label})"
-            await kommo_client.create_task(
-                TaskCreate(
-                    text=task_text,
-                    entity_id=lead.id,
-                    complete_till=due_date,
+                custom_fields = _build_custom_fields(
+                    "Запись на осмотр",
+                    user_id,
+                    username,
+                    service_field_id=(bot_config.kommo_service_field_id if bot_config else 0),
+                    source_field_id=(bot_config.kommo_source_field_id if bot_config else 0),
+                    telegram_field_id=(bot_config.kommo_telegram_field_id if bot_config else 0),
+                    telegram_username_field_id=(
+                        bot_config.kommo_telegram_username_field_id if bot_config else 0
+                    ),
                 )
-            )
 
-            logger.info(
-                "Viewing lead created: lead_id=%s phone=%s date=%s",
-                lead.id,
-                phone,
-                date_range,
-            )
-        except Exception:
-            logger.exception("CRM viewing lead creation failed for phone=%s", phone)
+                lead_name = f"Осмотр — {display_name}"
+                if obj_summary:
+                    lead_name = f"Осмотр {obj_summary} — {display_name}"
+                lead = await kommo_client.create_lead(
+                    LeadCreate(
+                        name=lead_name,
+                        pipeline_id=pipeline_id,
+                        status_id=status_id,
+                        responsible_user_id=responsible,
+                        custom_fields_values=custom_fields or None,
+                    )
+                )
+                await kommo_client.link_contact_to_lead(lead.id, contact.id)
 
-    # Send confirmation to user's chat (not via callback.message which may be
-    # InaccessibleMessage after ShowMode.EDIT in aiogram-dialog)
-    if callback.bot and callback.from_user:
+                note_text = _build_note_text(
+                    "Запись на осмотр",
+                    phone,
+                    username,
+                    user_id,
+                    display_name,
+                    viewing_objects,
+                )
+                note_text += extra_note
+                await kommo_client.add_note("leads", lead.id, note_text)
+
+                due_date = compute_due_date(date_range)
+                task_text = f"Осмотр: {display_name} ({date_label})"
+                if obj_summary:
+                    task_text = f"Осмотр {obj_summary}: {display_name} ({date_label})"
+                await kommo_client.create_task(
+                    TaskCreate(
+                        text=task_text,
+                        entity_id=lead.id,
+                        complete_till=due_date,
+                    )
+                )
+
+                logger.info(
+                    "Viewing lead created: lead_id=%s phone=%s date=%s",
+                    lead.id,
+                    phone,
+                    date_range,
+                )
+            except Exception:
+                logger.exception("CRM viewing lead creation failed for phone=%s", phone)
+
+        # Send confirmation to user's chat (not via callback.message which may be
+        # InaccessibleMessage after ShowMode.EDIT in aiogram-dialog)
         await callback.bot.send_message(
             chat_id=callback.from_user.id,
             text="✅ Заявка принята! Менеджер свяжется с вами в ближайшее время.",
         )
-    await callback.answer()
+        logger.info("Viewing confirmation sent to user=%s", callback.from_user.id)
+    except Exception:
+        logger.exception("on_confirm failed for user=%s", getattr(callback.from_user, "id", "?"))
+
+    # aiogram-dialog auto-answers callback; don't call callback.answer() manually
     await manager.done()
 
 
