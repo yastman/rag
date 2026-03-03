@@ -128,6 +128,7 @@ class I18nMiddleware(BaseMiddleware):
         if self._property_bot is not None:
             data["apartments_service"] = getattr(self._property_bot, "_apartments_service", None)
             data["favorites_service"] = getattr(self._property_bot, "_favorites_service", None)
+            data["search_event_store"] = getattr(self._property_bot, "_search_event_store", None)
         return await handler(event, data)
 
 
