@@ -15,32 +15,10 @@ from typing import Any
 
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.metrics import PipelineMetrics
+from telegram_bot.services.rag_core import build_retrieved_context as _build_retrieved_context
 
 
 logger = logging.getLogger(__name__)
-
-_MAX_CONTEXT_SNIPPET = 500  # chars per doc for judge evaluation
-
-
-def _build_retrieved_context(
-    results: list[dict[str, Any]],
-    limit: int = 5,
-) -> list[dict[str, str | float]]:
-    """Build curated context snippets for LLM-as-a-Judge evaluation."""
-    ctx: list[dict[str, str | float]] = []
-    for doc in results[:limit]:
-        if not isinstance(doc, dict):
-            continue
-        text = doc.get("text", "")
-        meta = doc.get("metadata", {})
-        ctx.append(
-            {
-                "content": text[:_MAX_CONTEXT_SNIPPET],
-                "score": doc.get("score", 0),
-                "chunk_location": meta.get("chunk_location", ""),
-            }
-        )
-    return ctx
 
 
 @observe(name="node-retrieve", capture_input=False, capture_output=False)
