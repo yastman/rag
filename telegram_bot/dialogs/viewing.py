@@ -10,9 +10,7 @@ from typing import Any
 from aiogram.types import (
     CallbackQuery,
     ContentType,
-    KeyboardButton,
     Message,
-    ReplyKeyboardMarkup,
 )
 from aiogram_dialog import Dialog, DialogManager, Window
 from aiogram_dialog.widgets.input import MessageInput
@@ -48,17 +46,6 @@ _DUE_OFFSETS: dict[str, int] = {
 def compute_due_date(date_range: str) -> int:
     """Compute unix timestamp for CRM task due date."""
     return int(time.time()) + _DUE_OFFSETS.get(date_range, 7 * 86400)
-
-
-def build_phone_keyboard() -> ReplyKeyboardMarkup:
-    """Build temporary ReplyKeyboard with request_contact button."""
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📱 Отправить мой номер", request_contact=True)],
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True,
-    )
 
 
 # ── Getters ──────────────────────────────────────────────────────────
@@ -154,10 +141,7 @@ async def get_date_options(
 async def get_phone_prompt(**kwargs: Any) -> dict[str, str]:
     """Getter for phone input (Step 3)."""
     return {
-        "title": (
-            "📞 Введите номер телефона в формате +380990091392\n"
-            "или нажмите кнопку «📱 Отправить мой номер» ниже."
-        ),
+        "title": ("📞 Введите ваш номер телефона\nФормат: +380 XX XXX XXXX"),
         "btn_back": "◀ Назад",
     }
 
@@ -258,42 +242,41 @@ async def on_date_selected(
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    """Save date range, send request_contact keyboard and proceed to phone."""
+    """Save date range and proceed to phone (no extra message)."""
     manager.dialog_data["date_range"] = item_id
-    # Send request_contact keyboard
-    if callback.message:
-        kb = build_phone_keyboard()
-        await callback.message.answer(
-            "📞 Введите номер в формате +380990091392\nили воспользуйтесь кнопкой:",
-            reply_markup=kb,
-        )
     await manager.switch_to(ViewingSG.phone)
 
 
 async def on_phone_text_received(message: Message, widget: Any, manager: DialogManager) -> None:
     """Handle phone number text input."""
+    from aiogram_dialog import ShowMode
+
     from telegram_bot.handlers.phone_collector import normalize_phone, validate_phone
 
     text = message.text or ""
     if not validate_phone(text):
-        await message.answer("❌ Некорректный номер. Введите в формате +380990091392:")
+        await message.answer("❌ Некорректный номер. Формат: +380 XX XXX XXXX")
         return
     phone = normalize_phone(text)
     if phone is None:
-        await message.answer("❌ Некорректный номер. Введите в формате +380990091392:")
+        await message.answer("❌ Некорректный номер. Формат: +380 XX XXX XXXX")
         return
     manager.dialog_data["phone"] = phone
+    manager.show_mode = ShowMode.EDIT
     await manager.switch_to(ViewingSG.summary)
 
 
 async def on_phone_contact_received(message: Message, widget: Any, manager: DialogManager) -> None:
     """Handle shared contact (request_contact button)."""
+    from aiogram_dialog import ShowMode
+
     if message.contact and message.contact.phone_number:
         from telegram_bot.handlers.phone_collector import normalize_phone
 
         raw = message.contact.phone_number
         phone = normalize_phone(raw) or raw
         manager.dialog_data["phone"] = phone
+        manager.show_mode = ShowMode.EDIT
         await manager.switch_to(ViewingSG.summary)
     else:
         await message.answer("❌ Не удалось получить номер. Введите вручную:")
