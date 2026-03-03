@@ -139,7 +139,7 @@ async def get_date_options(
 async def get_phone_prompt(**kwargs: Any) -> dict[str, str]:
     """Getter for phone input (Step 3)."""
     return {
-        "title": ("📞 Введите ваш номер телефона\nФормат: +380 XX XXX XXXX"),
+        "title": ("📞 Введите ваш номер телефона\nПримеры: 088 XXX XXXX, +359..., +380..."),
         "btn_back": "◀ Назад",
     }
 
@@ -253,11 +253,11 @@ async def on_phone_text_received(message: Message, widget: Any, manager: DialogM
 
     text = message.text or ""
     if not validate_phone(text):
-        await message.answer("❌ Некорректный номер. Формат: +380 XX XXX XXXX")
+        await message.answer("❌ Некорректный номер. Примеры: 088 XXX XXXX, +359..., +380...")
         return
     phone = normalize_phone(text)
     if phone is None:
-        await message.answer("❌ Некорректный номер. Формат: +380 XX XXX XXXX")
+        await message.answer("❌ Некорректный номер. Примеры: 088 XXX XXXX, +359..., +380...")
         return
     manager.dialog_data["phone"] = phone
     manager.show_mode = ShowMode.EDIT

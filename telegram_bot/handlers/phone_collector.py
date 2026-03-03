@@ -30,15 +30,20 @@ class PhoneCollectorStates(StatesGroup):
     waiting_phone = State()
 
 
-def normalize_phone(raw: str) -> str | None:
-    """Parse and validate phone via phonenumbers; return E164 or None if invalid."""
+def normalize_phone(raw: str, default_region: str = "BG") -> str | None:
+    """Parse and validate phone via phonenumbers; return E164 or None if invalid.
+
+    Tries with default_region first (for local numbers like 088...),
+    then without region (for international +380, +7, etc.).
+    """
     cleaned = re.sub(r"[\s\-\(\)]", "", raw)
-    try:
-        parsed = phonenumbers.parse(cleaned, None)
-        if phonenumbers.is_valid_number(parsed):
-            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-    except phonenumbers.NumberParseException:
-        pass
+    for region in (default_region, None):
+        try:
+            parsed = phonenumbers.parse(cleaned, region)
+            if phonenumbers.is_valid_number(parsed):
+                return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+        except phonenumbers.NumberParseException:
+            continue
     return None
 
 
@@ -163,7 +168,7 @@ async def on_phone_received(
         phone_invalid = (
             i18n.get("phone-invalid")
             if i18n
-            else "Пожалуйста, введите корректный номер телефона.\nФормат: +380 XX XXX XXXX"
+            else "Пожалуйста, введите корректный номер телефона.\nПримеры: 088 XXX XXXX, +359..., +380..."
         )
         await message.answer(phone_invalid)
         return
@@ -173,7 +178,7 @@ async def on_phone_received(
         phone_invalid = (
             i18n.get("phone-invalid")
             if i18n
-            else "Пожалуйста, введите корректный номер телефона.\nФормат: +380 XX XXX XXXX"
+            else "Пожалуйста, введите корректный номер телефона.\nПримеры: 088 XXX XXXX, +359..., +380..."
         )
         await message.answer(phone_invalid)
         return
