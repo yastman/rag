@@ -18,7 +18,7 @@
 
 | Контракт | Метод |
 |----------|-------|
-| A/B/D (код) | `git worktree add "${PROJECT_ROOT}-wt-{name}" -b {branch}` + `mkdir -p "${PROJECT_ROOT}-wt-{name}/logs"` + `uv sync --quiet` |
+| A/B/D (код) | `git worktree add "${PROJECT_ROOT}-wt-{name}" -b {branch}` + `mkdir -p "${PROJECT_ROOT}-wt-{name}/logs"` + `cd "${PROJECT_ROOT}-wt-{name}" && uv sync --quiet \|\| { echo "uv sync failed"; exit 1; }` |
 | C (исследование) | Без worktree. `${PROJECT_ROOT}` на main. |
 
 **КРИТИЧНО:** `mkdir -p logs` в worktree ОБЯЗАТЕЛЬНО — worktree не копирует gitignored директории (`logs/`).
@@ -49,7 +49,9 @@
     TMUX="" tmux send-keys -t "W-{NAME}" 'claude --dangerously-skip-permissions "$(cat {PROJECT_ROOT}/.claude/prompts/worker-{name}.md)"' Enter
 
     # Opus Соло (Контракт D) — worktree:
-    # Как Контракт C, но -c "$WT_PATH"
+    TMUX="" tmux new-window -n "W-{NAME}" -c "$WT_PATH"
+    sleep 3
+    TMUX="" tmux send-keys -t "W-{NAME}" 'claude --dangerously-skip-permissions "$(cat ${PROJECT_ROOT}/.claude/prompts/worker-{name}.md)"' Enter
 
 **КРИТИЧНО:** `sleep 3` обязателен. `--dangerously-skip-permissions` обязателен. `TMUX=""` перед `send-keys` обязателен.
 
@@ -59,27 +61,34 @@
 
 ### Файловые сигналы (основной метод)
 
-Worker → orch через JSON-файлы в `.signals/`:
+Worker → orch через JSON-файлы в `.signals/`. **Атомарная запись** (write .tmp → mv) предотвращает partial reads:
 
     # Worker пишет при завершении:
     echo '{"status":"done","worker":"W-{NAME}","pr":"{url}","ts":"'$(date -Iseconds)'"}' \
-      > {PROJECT_ROOT}/.signals/worker-{name}.json
+      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
+      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
     # Worker пишет при провале:
     echo '{"status":"failed","worker":"W-{NAME}","error":"{msg}","ts":"'$(date -Iseconds)'"}' \
-      > {PROJECT_ROOT}/.signals/worker-{name}.json
+      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
+      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
-    # Контракт C — вместо PR указывает путь к плану:
-    echo '{"status":"done","worker":"W-{NAME}","plan":"{path}","ts":"'$(date -Iseconds)'"}' \
-      > {PROJECT_ROOT}/.signals/worker-{name}.json
+    # Контракт C — путь к плану + execution решение:
+    echo '{"status":"done","worker":"W-{NAME}","plan":"{path}","execution":"{sequential|parallel}","groups":{N},"ts":"'$(date -Iseconds)'"}' \
+      > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
+      && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
 ### Orch мониторинг
 
-    # Вариант 1: inotifywait (мгновенный, если доступен)
-    Bash(command="inotifywait -m -e create .signals/ --format '%f' 2>/dev/null | while read f; do cat '.signals/$f'; done", run_in_background=true)
+Выбор метода: проверь `which inotifywait` — если есть, используй Вариант 1 (мгновенный). Иначе — Вариант 2.
 
-    # Вариант 2: polling (универсальный, 30 сек)
-    Bash(command="while true; do for f in .signals/worker-*.json; do [ -f \"$f\" ] && cat \"$f\" && mv \"$f\" \".signals/done-$(basename $f)\"; done; sleep 30; done", run_in_background=true)
+    # Вариант 1: inotifywait (мгновенный, предпочтительный)
+    Bash(command="inotifywait -m -e moved_to .signals/ --format '%f' 2>/dev/null | while read f; do [[ \"$f\" == worker-*.json ]] && cat \".signals/$f\"; done", run_in_background=true)
+
+    # Вариант 2: polling (универсальный, 10 сек)
+    Bash(command="while true; do for f in .signals/worker-*.json; do [ -f \"$f\" ] && cat \"$f\" && mv \"$f\" \".signals/done-$(basename $f)\"; done; sleep 10; done", run_in_background=true)
+
+**Примечание:** inotifywait отслеживает `moved_to` (не `create`), т.к. атомарная запись использует `mv`. Polling проверяет только `.json` (не `.tmp`).
 
 **КРИТИЧНО:** orch обработал сигнал → переименовать файл (`done-*`) чтобы не обработать повторно.
 
@@ -97,13 +106,15 @@ Watchdog запускается параллельно с каждым worker:
     # Запуск watchdog (сразу после запуска worker):
     ( sleep ${TIMEOUT} && \
       [ ! -f .signals/worker-{name}.json ] && [ ! -f .signals/done-worker-{name}.json ] && \
-      echo '{"status":"timeout","worker":"W-{NAME}","ts":"'$(date -Iseconds)'"}' > .signals/worker-{name}.json && \
+      echo '{"status":"timeout","worker":"W-{NAME}","ts":"'$(date -Iseconds)'"}' > ${PROJECT_ROOT}/.signals/worker-{name}.json && \
       TMUX="" tmux send-keys -t "W-{NAME}" C-c ) &
 
 | Контракт | Таймаут | Обоснование |
 |----------|---------|-------------|
 | A (TRIVIAL/CLEAR) | 15 мин (900) | Простая задача, TDD + review |
 | B (план → код) | 30 мин (1800) | Выполнение плана с TDD |
+| B-part (часть плана) | 20 мин (1200) | Часть плана, без PR |
+| B-final (интеграция) | 15 мин (900) | Merge + make check + PR |
 | C (исследование) | 20 мин (1200) | Только чтение + план |
 | D (Opus соло) | 45 мин (2700) | Полный цикл |
 
@@ -174,7 +185,12 @@ Orch логирует ВСЕ события в `.signals/orch-log.jsonl`:
     #   git merge --no-ff origin/fix/${issue}-part-b
     #   Разрешить конфликты если есть → make check → 1 PR
 
-**КРИТИЧНО:** каждый part-worker создаёт свои коммиты и push'ит, но НЕ создаёт PR. Только финальный worker создаёт PR.
+**КРИТИЧНО:** part-workers используют **Контракт B-part** (НЕ обычный B):
+- Коммит + push — ДА
+- `gh pr create` — НЕТ (только финальный worker создаёт PR)
+- Сигнал: `{"status":"done","worker":"W-{NAME}","branch":"{branch}"}` (без `"pr"`)
+
+В промте part-worker добавить: `ФИНАЛ: git add + commit + push. НЕ создавай PR. НЕ используй {Общий финал}.`
 
 ## Очистка
 
