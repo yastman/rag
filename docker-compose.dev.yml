@@ -607,6 +607,8 @@ services:
       # Real Estate DB
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/realestate"
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       qdrant:
