@@ -308,6 +308,21 @@ async def run_client_pipeline(
         # Streaming already delivered the main response; only send sources if applicable.
         if sources_text:
             await _send_markdown_chunks(message, sources_text, reply_markup=reply_markup)
+        elif reply_markup:
+            # Attach feedback keyboard to the streamed message (#745).
+            ref = result.get("sent_message")
+            if ref and isinstance(ref, dict):
+                try:
+                    await message.bot.edit_message_reply_markup(
+                        chat_id=ref["chat_id"],
+                        message_id=ref["message_id"],
+                        reply_markup=reply_markup,
+                    )
+                except Exception:
+                    logger.debug(
+                        "Failed to attach feedback keyboard to streamed message",
+                        exc_info=True,
+                    )
     else:
         full_response = response_text + sources_text if sources_text else response_text
         await _send_markdown_chunks(message, full_response, reply_markup=reply_markup)
