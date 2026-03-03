@@ -5,8 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 class TestColbertRerankerService:
-    """Tests for ColbertRerankerService."""
+    """Tests for ColbertRerankerService (deprecated — see #780)."""
 
     @pytest.fixture
     def service(self):
