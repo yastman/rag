@@ -339,6 +339,9 @@ def initialize_langfuse(
     }
     if resolved_host:
         kwargs["host"] = resolved_host
+    tracing_env = os.environ.get("LANGFUSE_TRACING_ENVIRONMENT")
+    if tracing_env:
+        kwargs["environment"] = tracing_env
 
     try:
         _langfuse_client = Langfuse(**kwargs)
