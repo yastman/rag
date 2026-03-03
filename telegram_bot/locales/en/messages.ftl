@@ -216,7 +216,7 @@ results-no-results =
 
 ***REMOVED*** Phone (***REMOVED***660)
 phone-prompt = Enter your phone number:
-phone-invalid = Please enter a valid phone number. Examples: 088 XXX XXXX, +359..., +380...
+phone-invalid = Please enter a valid phone number. Example: +359 88 123 4567
 phone-success = Thank you! A manager will contact you shortly.
 
 ***REMOVED*** Promotions (***REMOVED***660)
