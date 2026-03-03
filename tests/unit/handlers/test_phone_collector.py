@@ -513,7 +513,7 @@ async def test_on_phone_received_rejects_fake_phone_even_if_regex_matches():
 
 
 async def test_phone_error_message_shows_format_mask():
-    """Fallback error message should show +380 XX XXX XXXX, not +380501234567."""
+    """Fallback error message should show format examples, not raw phone numbers."""
     state = AsyncMock()
     message = AsyncMock()
     message.text = "invalid"
@@ -522,5 +522,5 @@ async def test_phone_error_message_shows_format_mask():
     await mod.on_phone_received(message, state)
 
     call_text = message.answer.call_args[0][0]
-    assert "+380 XX XXX XXXX" in call_text
+    assert "088" in call_text
     assert "+380501234567" not in call_text
