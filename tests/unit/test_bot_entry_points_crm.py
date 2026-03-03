@@ -221,23 +221,22 @@ async def test_results_viewing_passes_objects_context() -> None:
 
 
 async def test_fav_viewing_passes_single_object() -> None:
-    """fav:viewing:prop-42 -> viewing_objects contains exactly the matched favorite."""
+    """fav:viewing:prop-42 -> starts ViewingSG.date dialog with matched favorite."""
     fav = _make_favorite("prop-42", complex_name="Sunset Tower", area_m2=85, price_eur=420000)
     bot = _fav_bot(favorites=[fav, _make_favorite("prop-99")])
     state = _make_state()
     cb = _make_callback("fav:viewing:prop-42")
+    dialog_manager = AsyncMock()
 
-    with patch(
-        "telegram_bot.handlers.phone_collector.start_phone_collection",
-        new=AsyncMock(),
-    ) as mock_collect:
-        await bot.handle_favorite_callback(cb, state)
+    await bot.handle_favorite_callback(cb, state, dialog_manager=dialog_manager)
 
-    mock_collect.assert_awaited_once()
-    kwargs = mock_collect.call_args[1]
-    assert kwargs["service_key"] == "viewing"
-    viewing_objects = kwargs["viewing_objects"]
-    assert viewing_objects is not None
+    dialog_manager.start.assert_awaited_once()
+    call_args = dialog_manager.start.call_args
+    from telegram_bot.dialogs.states import ViewingSG
+
+    assert call_args.args[0] == ViewingSG.date
+    start_data = call_args.kwargs.get("data", {})
+    viewing_objects = start_data.get("selected_objects", [])
     assert len(viewing_objects) == 1
     assert viewing_objects[0]["id"] == "prop-42"
     assert viewing_objects[0]["complex_name"] == "Sunset Tower"
