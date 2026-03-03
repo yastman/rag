@@ -730,8 +730,9 @@ class PropertyBot:
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Client: persistent ReplyKeyboard (#628)
+            name = message.from_user.first_name or ""
             if i18n is not None:
-                welcome = i18n.get("welcome-text")
+                welcome = i18n.get("welcome-text", name=name)
             else:
                 from .services.content_loader import load_services_config
 
