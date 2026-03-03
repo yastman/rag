@@ -1,0 +1,232 @@
+version: "1.0"
+description: >
+  Golden set for agent tool-routing evaluation.
+  3 levels: black-box (answer quality), trajectory (tool sequence), single-step (params).
+  Routes: apartment_search | rag_search | crm_* | direct
+
+examples:
+  # ── apartment_search examples (5) ────────────────────────────────────────
+  - id: 1
+    query: "Покажи квартиры до 150 тысяч евро в Балчике"
+    route: apartment_search
+    expected_tools:
+      - apartment_search
+    tool_params:
+      apartment_search:
+        query: "квартира Балчик"
+        max_price_eur: 150000
+    answer_keywords:
+      - "€"
+      - "апартамент"
+
+  - id: 2
+    query: "Есть ли двушки с видом на море?"
+    route: apartment_search
+    expected_tools:
+      - apartment_search
+    tool_params:
+      apartment_search:
+        query: "двухкомнатная вид море"
+        rooms: 2
+    answer_keywords:
+      - "море"
+
+  - id: 3
+    query: "Сколько стоит однокомнатная квартира в Premier Fort Beach?"
+    route: apartment_search
+    expected_tools:
+      - apartment_search
+    tool_params:
+      apartment_search:
+        query: "однокомнатная Premier Fort Beach"
+        rooms: 1
+    answer_keywords:
+      - "€"
+
+  - id: 4
+    query: "Ищу студию площадью от 30 метров"
+    route: apartment_search
+    expected_tools:
+      - apartment_search
+    tool_params:
+      apartment_search:
+        query: "студия"
+        min_area_m2: 30
+    answer_keywords:
+      - "м²"
+
+  - id: 5
+    query: "Найди апартаменты на 3 этаже и выше с меблировкой"
+    route: apartment_search
+    expected_tools:
+      - apartment_search
+    tool_params:
+      apartment_search:
+        query: "апартамент"
+        min_floor: 3
+        is_furnished: true
+    answer_keywords:
+      - "мебел"
+
+  # ── rag_search examples (7) ───────────────────────────────────────────────
+  - id: 6
+    query: "Как оформить ВНЖ через покупку недвижимости в Болгарии?"
+    route: rag_search
+    expected_tools:
+      - rag_search
+    tool_params:
+      rag_search:
+        query: "ВНЖ покупка недвижимости Болгария"
+    answer_keywords:
+      - "ВНЖ"
+      - "документ"
+
+  - id: 7
+    query: "Какие налоги платят при покупке квартиры?"
+    route: rag_search
+    expected_tools:
+      - rag_search
+    tool_params:
+      rag_search:
+        query: "налоги покупка квартира"
+    answer_keywords:
+      - "налог"
+      - "%"
+
+  - id: 8
+    query: "Расскажи о процедуре нотариального оформления сделки"
+    route: rag_search
+    expected_tools:
+      - rag_search
+    tool_params:
+      rag_search:
+        query: "нотариальное оформление сделка"
+    answer_keywords:
+      - "нотариус"
+
+  - id: 9
+    query: "Что входит в расходы на сделку помимо цены квартиры?"
+    route: rag_search
+    expected_tools:
+      - rag_search
+    tool_params:
+      rag_search:
+        query: "расходы сделка помимо цены"
+    answer_keywords:
+      - "расход"
+
+  - id: 10
+    query: "Как рассчитывается ипотека в Болгарии для иностранцев?"
+    route: rag_search
+    expected_tools:
+      - rag_search
+    tool_params:
+      rag_search:
+        query: "ипотека Болгария иностранцы"
+    answer_keywords:
+      - "ипотека"
+
+  - id: 11
+    query: "Можно ли иностранцу купить землю?"
+    route: rag_search
+    expected_tools:
+      - rag_search
+    tool_params:
+      rag_search:
+        query: "иностранец земля покупка"
+    answer_keywords:
+      - "земл"
+      - "иностранц"
+
+  - id: 12
+    query: "Как работает управляющая компания в Fort Beach?"
+    route: rag_search
+    expected_tools:
+      - rag_search
+    tool_params:
+      rag_search:
+        query: "управляющая компания Fort Beach"
+    answer_keywords:
+      - "управляющ"
+
+  # ── crm_* examples (5) ───────────────────────────────────────────────────
+  - id: 13
+    query: "Создай сделку для Алексея Петрова, бюджет 100 тысяч евро"
+    route: crm_create_lead
+    expected_tools:
+      - crm_create_lead
+    tool_params:
+      crm_create_lead:
+        name: "Алексей Петров"
+    answer_keywords:
+      - "создан"
+
+  - id: 14
+    query: "Покажи мои активные сделки"
+    route: crm_get_my_leads
+    expected_tools:
+      - crm_get_my_leads
+    tool_params:
+      crm_get_my_leads:
+        query: "активные"
+    answer_keywords:
+      - "сделк"
+
+  - id: 15
+    query: "Найди контакт Иванова в CRM"
+    route: crm_get_contacts
+    expected_tools:
+      - crm_get_contacts
+    tool_params:
+      crm_get_contacts:
+        query: "Иванов"
+    answer_keywords:
+      - "Иванов"
+
+  - id: 16
+    query: "Добавь заметку к сделке #42: клиент готов к встрече"
+    route: crm_add_note
+    expected_tools:
+      - crm_add_note
+    tool_params:
+      crm_add_note:
+        entity_id: "42"
+    answer_keywords:
+      - "заметк"
+      - "добавлен"
+
+  - id: 17
+    query: "Покажи мои задачи на сегодня"
+    route: crm_get_my_tasks
+    expected_tools:
+      - crm_get_my_tasks
+    tool_params:
+      crm_get_my_tasks:
+        query: "сегодня"
+    answer_keywords:
+      - "задач"
+
+  # ── direct / chitchat examples (3) ───────────────────────────────────────
+  - id: 18
+    query: "Привет!"
+    route: direct
+    expected_tools: []
+    tool_params: {}
+    answer_keywords:
+      - "привет"
+
+  - id: 19
+    query: "Спасибо за помощь"
+    route: direct
+    expected_tools: []
+    tool_params: {}
+    answer_keywords:
+      - "пожалуйста"
+
+  - id: 20
+    query: "Ты умеешь говорить по-английски?"
+    route: direct
+    expected_tools: []
+    tool_params: {}
+    answer_keywords:
+      - "english"
