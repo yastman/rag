@@ -49,7 +49,7 @@ def sync_to_langfuse(
         langfuse.create_dataset_item(
             dataset_name=dataset_name,
             id=item_id,
-            input={"question": sample["question"]},
+            input={"query": sample["question"]},
             expected_output={"answer": sample["ground_truth"]},
             metadata={
                 "id": sample.get("id"),
