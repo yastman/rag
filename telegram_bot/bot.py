@@ -696,6 +696,7 @@ class PropertyBot:
         self.dp.callback_query(F.data.startswith("fav:"))(self.handle_favorite_callback)
         self.dp.callback_query(F.data.startswith("results:"))(self.handle_results_callback)
         self.dp.callback_query(F.data.startswith("card:"))(self.handle_card_callback)
+        self.dp.callback_query(F.data.startswith("ask:"))(self.handle_ask_callback)
 
     async def _resolve_user_role(self, user_id: int) -> str:
         """Resolve user role from DB or config fallback (#388)."""
@@ -730,8 +731,9 @@ class PropertyBot:
             await dialog_manager.start(ManagerMenuSG.main, mode=StartMode.RESET_STACK)
         else:
             # Client: persistent ReplyKeyboard (#628)
+            name = message.from_user.first_name or ""
             if i18n is not None:
-                welcome = i18n.get("welcome-text")
+                welcome = i18n.get("welcome-text", name=name)
             else:
                 from .services.content_loader import load_services_config
 
@@ -1062,7 +1064,7 @@ class PropertyBot:
             "services": self._handle_services,
             "viewing": self._handle_viewing,
             "bookmarks": self._handle_bookmarks,
-            "promotions": self._handle_promotions,
+            "ask": self._handle_ask,
             "manager": self._handle_manager,
         }
         handler = handlers.get(action_id)
@@ -1233,6 +1235,70 @@ class PropertyBot:
             lines.append(f"{p['emoji']} {p['title']}\n{p['text']}")
         text = "\n\n".join(lines)
         await message.answer(text)
+
+    # Mapping callback_data -> query text for RAG pipeline
+    _ASK_QUERIES: dict[str, str] = {
+        "ask:docs": "Какие документы нужны для покупки?",
+        "ask:costs": "Сколько стоит оформление сделки?",
+        "ask:vnzh": "Как получить ВНЖ в Болгарии?",
+        "ask:installment": "Какие условия рассрочки?",
+    }
+
+    async def _handle_ask(self, message: Message, i18n: Any = None) -> None:
+        """Show FAQ inline menu with popular questions."""
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        if i18n is not None:
+            prompt = i18n.get("ask-prompt")
+            buttons = [
+                [InlineKeyboardButton(text=i18n.get("ask-docs"), callback_data="ask:docs")],
+                [InlineKeyboardButton(text=i18n.get("ask-costs"), callback_data="ask:costs")],
+                [InlineKeyboardButton(text=i18n.get("ask-vnzh"), callback_data="ask:vnzh")],
+                [
+                    InlineKeyboardButton(
+                        text=i18n.get("ask-installment"),
+                        callback_data="ask:installment",
+                    )
+                ],
+            ]
+        else:
+            prompt = "💬 Напишите вопрос — мы с радостью ответим!\n\nИли выберите популярную тему:"
+            buttons = [
+                [
+                    InlineKeyboardButton(
+                        text="📋 Какие документы нужны для покупки?",
+                        callback_data="ask:docs",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="💰 Сколько стоит оформление сделки?",
+                        callback_data="ask:costs",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="📋 Как получить ВНЖ в Болгарии?",
+                        callback_data="ask:vnzh",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="💳 Какие условия рассрочки?",
+                        callback_data="ask:installment",
+                    )
+                ],
+            ]
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+        await message.answer(prompt, reply_markup=kb)
+
+    async def handle_ask_callback(self, callback: CallbackQuery) -> None:
+        """Handle ask:* callback — route FAQ question to RAG pipeline."""
+        await callback.answer()
+        query_text = self._ASK_QUERIES.get(callback.data or "")
+        if not query_text or callback.message is None:
+            return
+        await self.handle_menu_action_text(callback.message, query_text)  # type: ignore[arg-type]
 
     async def _handle_manager(
         self, message: Message, i18n: Any = None, state: FSMContext | None = None

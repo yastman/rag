@@ -159,11 +159,25 @@ class TestCommandHandlers:
         call_args = message.answer.call_args
         text = call_args[0][0]
         # Welcome text now comes from content_loader (#628)
-        assert "Добро пожаловать" in text or "Привет" in text
+        assert "Добро пожаловать" in text or "Привет" in text or "FortNoks" in text
         # Verify ReplyKeyboardMarkup is sent
         from aiogram.types import ReplyKeyboardMarkup
 
         assert isinstance(call_args[1]["reply_markup"], ReplyKeyboardMarkup)
+
+    async def test_cmd_start_sends_personalized_welcome(self, mock_config):
+        """Test /start sends welcome with user's first_name via i18n."""
+        from unittest.mock import MagicMock
+
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message()
+        i18n = MagicMock()
+        i18n.get.return_value = "Привет, Test! 👋"
+
+        await bot.cmd_start(message, i18n=i18n)
+
+        # Verify i18n.get was called with name= kwarg
+        i18n.get.assert_any_call("welcome-text", name="Test")
 
     async def test_cmd_help(self, mock_config):
         """Test /help produces expected response text."""
@@ -3676,3 +3690,63 @@ class TestClearCacheCommand:
         cq.answer.assert_called_once()
         edited_text = cq.message.edit_text.call_args.args[0]
         assert "Ошибка" in edited_text
+
+
+class TestHandleAsk:
+    """Tests for 💬 Ask Question button and FAQ inline menu."""
+
+    async def test_handle_ask_sends_inline_keyboard(self, mock_config):
+        """Test 💬 Задать вопрос shows FAQ inline menu."""
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message(text="💬 Задать вопрос")
+
+        await bot._handle_ask(message)
+
+        message.answer.assert_called_once()
+        call_args = message.answer.call_args
+        from aiogram.types import InlineKeyboardMarkup
+
+        assert isinstance(call_args[1]["reply_markup"], InlineKeyboardMarkup)
+
+    async def test_handle_ask_inline_keyboard_has_4_buttons(self, mock_config):
+        """Test FAQ inline menu contains exactly 4 questions."""
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message(text="💬 Задать вопрос")
+
+        await bot._handle_ask(message)
+
+        call_args = message.answer.call_args
+        from aiogram.types import InlineKeyboardMarkup
+
+        kb: InlineKeyboardMarkup = call_args[1]["reply_markup"]
+        all_buttons = [btn for row in kb.inline_keyboard for btn in row]
+        assert len(all_buttons) == 4
+
+    async def test_handle_ask_callback_triggers_query(self, mock_config):
+        """Test ask:docs callback sends query to RAG pipeline."""
+        bot, _ = _create_bot(mock_config)
+        bot.handle_menu_action_text = AsyncMock()
+
+        callback = AsyncMock()
+        callback.data = "ask:docs"
+        callback.message = _make_text_message()
+        callback.from_user = callback.message.from_user
+
+        await bot.handle_ask_callback(callback)
+
+        callback.answer.assert_called_once()
+        bot.handle_menu_action_text.assert_called_once()
+
+    async def test_handle_ask_callback_unknown_data_is_noop(self, mock_config):
+        """Test ask:unknown callback does nothing."""
+        bot, _ = _create_bot(mock_config)
+        bot.handle_menu_action_text = AsyncMock()
+
+        callback = AsyncMock()
+        callback.data = "ask:unknown_key"
+        callback.message = _make_text_message()
+
+        await bot.handle_ask_callback(callback)
+
+        callback.answer.assert_called_once()
+        bot.handle_menu_action_text.assert_not_called()
