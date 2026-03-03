@@ -18,7 +18,8 @@ description: Use when given GitHub issues to solve, problems to fix, or "review 
 | TRIVIAL/CLEAR | SDK исследование? → Sonnet A → PR | `--model sonnet` |
 | MEDIUM | Haiku фильтрация → SDK исследование? → Sonnet A → PR | Haiku + `--model sonnet` |
 | COMPLEX | SDK? → Opus C → план → **Opus решает** → 1 или N Sonnet B → PR | default + `--model sonnet` |
-| VERY COMPLEX | SDK? → Opus C → план → **Opus решает** → 1 или N Sonnet B → PRs | default + N × `--model sonnet` |
+| VERY COMPLEX (группы) | SDK? → Opus C → план → **Opus решает** → 1 или N Sonnet B → PRs | default + N × `--model sonnet` |
+| VERY COMPLEX (solo) | SDK? → Opus D → полный цикл → PR | default (Opus) |
 
 ## Поток
 
@@ -114,9 +115,10 @@ Orch НЕ переопределяет решение Opus. Opus видел ко
 
 ## Эскалация
 
-    CLEAR провалился   → MEDIUM  (Haiku контекст → перезапуск)
-    MEDIUM провалился  → COMPLEX (Opus исследование → план → Sonnet выполнение)
-    COMPLEX провалился → gh issue comment → пропуск
+    CLEAR провалился   → MEDIUM  (orch добавляет {project_scope} в промт → перезапуск)
+    MEDIUM провалился  → COMPLEX (Opus C → план → Sonnet B)
+    COMPLEX провалился → D       (Opus solo — полный цикл)
+    D провалился       → gh issue comment "needs-human" → пропуск
 
 ## Контекст-бюджет
 
@@ -140,7 +142,7 @@ Orch НЕ переопределяет решение Opus. Opus видел ко
     - #{pr1}: {title1}
     - #{pr2}: {title2}
 
-Стоимость: оценка (Sonnet A ≈ $3, Opus C ≈ $5, Opus D ≈ $15). Время: из `orch-log.jsonl`.
+Стоимость: оценка (Sonnet A ≈ $3, Opus C ≈ $5, C→B ≈ $8, C→N×B ≈ $3+N×$3, Opus D ≈ $15). Время: из `orch-log.jsonl`.
 
 ## Вспомогательные файлы
 
