@@ -324,12 +324,19 @@ async def test_on_confirm_creates_crm_entities():
 
     kommo.upsert_contact.assert_awaited_once()
     kommo.create_lead.assert_awaited_once()
+    # Lead name should contain the object name
+    lead_arg = kommo.create_lead.await_args.args[0]
+    assert "Sunset" in lead_arg.name
+    assert "1+1" in lead_arg.name
     kommo.link_contact_to_lead.assert_awaited_once_with(200, 100)
     kommo.add_note.assert_awaited_once()
     note_text = kommo.add_note.await_args.args[2]
     assert "Sunset" in note_text
     assert "ID: prop-1" in note_text
     kommo.create_task.assert_awaited_once()
+    # Task text should contain the object name
+    task_arg = kommo.create_task.await_args.args[0]
+    assert "Sunset" in task_arg.text
     callback.bot.send_message.assert_awaited_once()
     manager.done.assert_awaited_once()
 
