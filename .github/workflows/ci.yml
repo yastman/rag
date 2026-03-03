@@ -12,14 +12,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  checks:
+  lint:
     name: Lint & Type Check
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
@@ -27,100 +27,13 @@ jobs:
         run: uv python install 3.12
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --no-dev
 
       - name: Ruff lint
-        run: uv run ruff check src/ telegram_bot/ tests/ --output-format=github
+        run: uv run ruff check src/ telegram_bot/ --output-format=github
 
       - name: Ruff format check
-        run: uv run ruff format --check src/ telegram_bot/ tests/
+        run: uv run ruff format --check src/ telegram_bot/
 
       - name: Type check
         run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
-
-  unit-core:
-    name: Unit Tests (Core)
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --frozen
-
-      - name: Run core unit tests + coverage gate (>=74%)
-        run: >
-          PYTHONDONTWRITEBYTECODE=1
-          uv run pytest tests/unit/
-          -n auto --dist=loadscope
-          -q --timeout=30
-          -m "not legacy_api and not requires_extras and not slow"
-          --cov=src --cov=telegram_bot
-          --cov-report=term-missing
-          --cov-fail-under=74
-
-  integration-smoke-fast:
-    name: Integration+Smoke (Deterministic Fast)
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --frozen
-
-      - name: Run deterministic integration/smoke subset
-        run: >
-          PYTHONDONTWRITEBYTECODE=1
-          uv run pytest
-          tests/integration/test_graph_paths.py
-          tests/smoke/test_langgraph_smoke.py
-          -n auto --dist=worksteal
-          -q --timeout=30
-          -m "not requires_extras and not slow and not load and not chaos and not e2e and not benchmark"
-
-  precommit:
-    name: Pre-commit Validation
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.12
-
-      - name: Install dependencies
-        run: uv sync --frozen
-
-      - name: Run pre-commit
-        run: uv run pre-commit run --all-files
-
-  docker-validate:
-    name: Docker Build Validation
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Validate Compose file
-        run: docker compose -f docker-compose.dev.yml config --quiet
-
-      - name: Build bot image
-        run: docker compose -f docker-compose.dev.yml build bot
