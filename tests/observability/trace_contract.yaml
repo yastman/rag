@@ -137,6 +137,9 @@ spans:
     - funnel-store-upsert
     - nurturing-batch-run
     - nurturing-scheduler-tick
+    - handoff-generate-summary
+    - search-event-append
+    - search-event-get-user
 
   kommo_client:
     - kommo-create-lead
@@ -149,6 +152,8 @@ spans:
     - kommo-update-contact
     - kommo-add-note
     - kommo-create-task
+    - kommo-complete-task
+    - kommo-update-task
     - kommo-link-contact
     - kommo-list-pipelines
     - kommo-update-lead-score
@@ -262,7 +267,6 @@ scores:
     - no_results
     - llm_used
     - confidence_score
-    - hyde_used
     - llm_ttft_ms
     - llm_response_duration_ms
   history:
@@ -275,6 +279,11 @@ scores:
     - crm_tools_count
     - crm_tools_success
     - crm_tools_error
+  supervisor:
+    - supervisor_model
+    - user_role
+    - hitl_action
+    - user_feedback
 
 error_allowlist:
   # Graph nodes — core pipeline error/fallback paths

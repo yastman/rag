@@ -54,10 +54,11 @@ def get_prompt(
         }
     )
 
-    def _finish(value: str, *, source: str, reason: str) -> str:
-        lf.update_current_span(
-            output={"source": source, "reason": reason, "result_length": len(value)}
-        )
+    def _finish(value: str, *, source: str, reason: str, prompt_version: int | None = None) -> str:
+        output: dict[str, Any] = {"source": source, "reason": reason, "result_length": len(value)}
+        if prompt_version is not None:
+            output["prompt_version"] = prompt_version
+        lf.update_current_span(output=output)
         return value
 
     client = get_client()
@@ -97,13 +98,17 @@ def get_prompt(
         # We handle fallback ourselves and cache "not found" locally.
         prompt = client.get_prompt(name, cache_ttl_seconds=cache_ttl)
         _missing_prompts_until.pop(name, None)
+        version: int | None = getattr(prompt, "version", None)
         if vars_:
             return _finish(
                 str(prompt.compile(**vars_)),
                 source="langfuse",
                 reason="compiled_with_variables",
+                prompt_version=version,
             )
-        return _finish(str(prompt.compile()), source="langfuse", reason="compiled")
+        return _finish(
+            str(prompt.compile()), source="langfuse", reason="compiled", prompt_version=version
+        )
     except Exception as e:
         if _is_prompt_not_found(e):
             # Avoid hitting Langfuse on every request when prompt/label is absent.
