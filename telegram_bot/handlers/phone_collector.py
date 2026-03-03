@@ -163,7 +163,7 @@ async def on_phone_received(
         phone_invalid = (
             i18n.get("phone-invalid")
             if i18n
-            else "Пожалуйста, введите корректный номер телефона (например +380501234567):"
+            else "Пожалуйста, введите корректный номер телефона.\nФормат: +380 XX XXX XXXX"
         )
         await message.answer(phone_invalid)
         return
@@ -173,7 +173,7 @@ async def on_phone_received(
         phone_invalid = (
             i18n.get("phone-invalid")
             if i18n
-            else "Пожалуйста, введите корректный номер телефона (например +380501234567):"
+            else "Пожалуйста, введите корректный номер телефона.\nФормат: +380 XX XXX XXXX"
         )
         await message.answer(phone_invalid)
         return
