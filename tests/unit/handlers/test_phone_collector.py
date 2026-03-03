@@ -510,3 +510,17 @@ async def test_on_phone_received_rejects_fake_phone_even_if_regex_matches():
     mock_kommo.upsert_contact.assert_not_awaited()
     message.answer.assert_awaited_once()
     assert "корректный номер телефона" in message.answer.call_args[0][0]
+
+
+async def test_phone_error_message_shows_format_mask():
+    """Fallback error message should show +380 XX XXX XXXX, not +380501234567."""
+    state = AsyncMock()
+    message = AsyncMock()
+    message.text = "invalid"
+    message.from_user = SimpleNamespace(id=1, first_name="Test", last_name=None, username=None)
+
+    await mod.on_phone_received(message, state)
+
+    call_text = message.answer.call_args[0][0]
+    assert "+380 XX XXX XXXX" in call_text
+    assert "+380501234567" not in call_text
