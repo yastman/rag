@@ -8,15 +8,18 @@ digraph classify {
   q2 [label="Файлы+шаги+AC\nбез research?"];
   q3 [label="Направление ясно\nнужен API контекст?"];
   q4 [label="Архитектура?\nглубокое исследование?"];
+  q5 [label="Можно разделить\nна группы?"];
   trivial [label="TRIVIAL\nКонтракт A", shape=box, style=filled, fillcolor="#d4edda"];
   clear [label="CLEAR\nКонтракт A", shape=box, style=filled, fillcolor="#cce5ff"];
   medium [label="MEDIUM\nHaiku+Контракт A", shape=box, style=filled, fillcolor="#fff3cd"];
   complex [label="COMPLEX\nКонтракт C→B", shape=box, style=filled, fillcolor="#f8d7da"];
   vcomplex [label="VERY COMPLEX\nКонтракт C→N×B", shape=box, style=filled, fillcolor="#e2d5f1"];
+  opussolo [label="VERY COMPLEX\nКонтракт D (Opus solo)", shape=box, style=filled, fillcolor="#d5c4e2"];
   issue -> q1; q1 -> trivial [label="да"]; q1 -> q2 [label="нет"];
   q2 -> clear [label="да"]; q2 -> q3 [label="нет"];
   q3 -> medium [label="да"]; q3 -> q4 [label="нет"];
-  q4 -> complex [label="да"]; q4 -> vcomplex [label="5+ файлов"];
+  q4 -> complex [label="да"]; q4 -> q5 [label="5+ файлов"];
+  q5 -> vcomplex [label="да, независимые группы"]; q5 -> opussolo [label="нет, всё связано"];
 }
 ```
 
@@ -28,7 +31,8 @@ digraph classify {
 | **CLEAR** | Файлы + задачи + критерии приёмки | A (`--model sonnet`) | tdd, review, verify |
 | **MEDIUM** | ЧТО есть, КАК — нужен API контекст | A (`--model sonnet`) | tdd, review, verify |
 | **COMPLEX** | "migrate", "refactor", несколько подходов | C→B (default + `--model sonnet`) | C: writing-plans · B: +executing-plans |
-| **VERY COMPLEX** | 5+ файлов, мастер-план, аудит | C→N×B | то же |
+| **VERY COMPLEX** | 5+ файлов, мастер-план, независимые группы | C→N×B | то же |
+| **VERY COMPLEX (solo)** | 5+ файлов, всё связано, Sonnet не потянет | D (Opus solo) | все 5 скиллов |
 
 ## Sizing guide
 
@@ -39,7 +43,7 @@ digraph classify {
 | 1-3 | Последовательные воркеры, без параллели |
 | 4-8 | 3-4 параллельных воркера |
 | 9-15 | 5 воркеров, фазы (batch по 5) |
-| >15 | 2 фазы: Haiku фильтрация → batch по 5 |
+| >15 | 2 фазы: Haiku фильтрация (всегда при 5+) → batch по 5 |
 
 ## Обработка Haiku-фильтрации
 
@@ -99,6 +103,7 @@ Worker НЕ ДОЛЖЕН редактировать файлы вне своей
 
 ## Эскалация
 
-    CLEAR провалился   → MEDIUM  (Haiku контекст → перезапуск)
+    CLEAR провалился   → MEDIUM  (orch добавляет проектный контекст из {project_scope} в промт → перезапуск)
     MEDIUM провалился  → COMPLEX (Opus C → план → Sonnet B)
-    COMPLEX провалился → gh issue comment → пропуск
+    COMPLEX провалился → D       (Opus solo — полный цикл в одном worker)
+    D провалился       → gh issue comment "needs-human" → пропуск
