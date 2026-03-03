@@ -195,7 +195,13 @@ class KommoClient:
             if not existing.last_name and contact.last_name:
                 updates["last_name"] = contact.last_name
             if updates:
-                await self.update_contact(existing.id, ContactUpdate(**updates))
+                await self.update_contact(
+                    existing.id,
+                    ContactUpdate(
+                        first_name=updates.get("first_name"),
+                        last_name=updates.get("last_name"),
+                    ),
+                )
             return existing
 
         contact_dict = contact.model_dump(exclude_none=True)
