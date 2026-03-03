@@ -22,20 +22,21 @@ import logging
 import time
 from typing import Any
 
-from telegram_bot.graph.nodes.cache import CACHEABLE_QUERY_TYPES
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.rag_core import (
+    CACHEABLE_QUERY_TYPES,
+    check_semantic_cache,
+    compute_query_embedding,
+    perform_rerank,
+    rewrite_query_via_llm,
+)
+from telegram_bot.services.rag_core import (
+    build_retrieved_context as _build_retrieved_context,
+)
 
 
 logger = logging.getLogger(__name__)
 
-_MAX_CONTEXT_SNIPPET = 500  # chars per doc for judge evaluation
-_REWRITE_PROMPT = (
-    "Ты — помощник по поиску недвижимости. "
-    "Пользователь задал вопрос, но результаты поиска оказались нерелевантными.\n\n"
-    "Переформулируй запрос так, чтобы он лучше подходил для поиска по базе недвижимости.\n"
-    "Верни ТОЛЬКО переформулированный запрос, без пояснений.\n\n"
-    "Оригинальный запрос: {query}"
-)
 # top_k=3 for reranking. Saves ~20ms vs top_k=5 while capturing most relevant docs via ColBERT semantic similarity.
 _DEFAULT_RERANK_TOP_K = 3
 
@@ -76,88 +77,54 @@ async def _cache_check(
 
     start = time.perf_counter()
 
-    # Step 1: Get or compute dense embedding (prefer hybrid for efficiency)
-    # If caller pre-computed the embedding (pre-agent cache check), reuse it directly.
-    embedding_error: bool = False
-    embedding_error_type: str | None = None
-    colbert_query: list[list[float]] | None = None
-    sparse: Any = None  # tracked for return so _hybrid_retrieve can skip re-fetch
-
+    # Step 1: Get or compute dense embedding via shared core
     if pre_computed_embedding:
         logger.debug(
             "_cache_check: reusing pre-computed embedding (%d dims)", len(pre_computed_embedding)
         )
-        embedding = pre_computed_embedding
-        embeddings_cache_hit = False  # embedding came from caller, not Redis
-        # Pre-agent already stored embeddings in cache — no need to re-store (#633)
-        if pre_computed_sparse is not None:
-            sparse = pre_computed_sparse
-        if pre_computed_colbert is not None:
-            colbert_query = pre_computed_colbert
-    else:
-        embedding = await cache.get_embedding(query)
-        embeddings_cache_hit = embedding is not None
-
-    _has_hybrid = callable(
-        getattr(embeddings, "aembed_hybrid", None)
-    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
-    _has_hybrid_colbert = callable(
-        getattr(embeddings, "aembed_hybrid_with_colbert", None)
-    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
-    _has_colbert_only = callable(
-        getattr(embeddings, "aembed_colbert_query", None)
-    ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
-
-    if embedding is None:
-        try:
-            if _has_hybrid:
-                embedding, sparse = await embeddings.aembed_hybrid(query)
-                await cache.store_embedding(query, embedding)
-                await cache.store_sparse_embedding(query, sparse)
-            else:
-                embedding = await embeddings.aembed_query(query)
-                await cache.store_embedding(query, embedding)
-        except Exception as exc:
-            embedding_error = True
-            embedding_error_type = type(exc).__name__
-            logger.error("Embedding failed: %s: %s", embedding_error_type, exc)
-            latency = time.perf_counter() - start
-            lf.update_current_span(
-                level="ERROR",
-                output={
-                    "embedding_error": True,
-                    "embedding_error_type": embedding_error_type,
-                    "error_message": str(exc)[:200],
-                    "duration_ms": round(latency * 1000, 1),
-                },
-            )
-            return {
-                "cache_hit": False,
-                "cached_response": None,
-                "query_embedding": None,
-                "sparse_embedding": None,
-                "embeddings_cache_hit": False,
+    try:
+        embedding, sparse, colbert_query, embeddings_cache_hit = await compute_query_embedding(
+            query,
+            cache=cache,
+            embeddings=embeddings,
+            pre_computed=pre_computed_embedding,
+            pre_computed_sparse=pre_computed_sparse,
+            pre_computed_colbert=pre_computed_colbert,
+        )
+    except Exception as exc:
+        embedding_error_type = type(exc).__name__
+        logger.error("Embedding failed: %s: %s", embedding_error_type, exc)
+        latency = time.perf_counter() - start
+        lf.update_current_span(
+            level="ERROR",
+            output={
                 "embedding_error": True,
                 "embedding_error_type": embedding_error_type,
-                "error_response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
-                "colbert_query": None,
-                "latency_stages": {**latency_stages, "cache_check": latency},
-            }
-
-    # Step 2: Check semantic cache (allowlisted types only)
-    cached = None
-    if query_type in CACHEABLE_QUERY_TYPES:
-        cached = await cache.check_semantic(
-            query=query,
-            vector=embedding,
-            query_type=query_type,
-            cache_scope="rag",
-            agent_role=agent_role,
+                "error_message": str(exc)[:200],
+                "duration_ms": round(latency * 1000, 1),
+            },
         )
+        return {
+            "cache_hit": False,
+            "cached_response": None,
+            "query_embedding": None,
+            "sparse_embedding": None,
+            "embeddings_cache_hit": False,
+            "embedding_error": True,
+            "embedding_error_type": embedding_error_type,
+            "error_response": "Сервис временно недоступен. Пожалуйста, повторите через минуту.",
+            "colbert_query": None,
+            "latency_stages": {**latency_stages, "cache_check": latency},
+        }
+
+    # Step 2: Check semantic cache via shared core
+    hit, cached = await check_semantic_cache(
+        query, embedding, query_type, cache=cache, agent_role=agent_role
+    )
 
     latency = time.perf_counter() - start
 
-    if cached:
+    if hit:
         logger.info("cache_check HIT (%.3fs, type=%s)", latency, query_type)
         lf.update_current_span(
             output={
@@ -181,9 +148,14 @@ async def _cache_check(
 
     # ColBERT query vectors are only needed on semantic miss.
     if colbert_query is None:
-        if pre_computed_colbert is not None:
-            colbert_query = pre_computed_colbert
-        elif _has_colbert_only:
+        _has_colbert_only = callable(
+            getattr(embeddings, "aembed_colbert_query", None)
+        ) and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
+        _has_hybrid_colbert = callable(
+            getattr(embeddings, "aembed_hybrid_with_colbert", None)
+        ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+
+        if _has_colbert_only:
             try:
                 colbert_query = await embeddings.aembed_colbert_query(query)
             except Exception:
@@ -215,8 +187,8 @@ async def _cache_check(
         "query_embedding": embedding,
         "sparse_embedding": sparse,
         "embeddings_cache_hit": embeddings_cache_hit,
-        "embedding_error": embedding_error,
-        "embedding_error_type": embedding_error_type,
+        "embedding_error": False,
+        "embedding_error_type": None,
         "colbert_query": colbert_query,
         "latency_stages": {**latency_stages, "cache_check": latency},
     }
@@ -225,27 +197,6 @@ async def _cache_check(
 # ---------------------------------------------------------------------------
 # Step 2: Hybrid retrieve
 # ---------------------------------------------------------------------------
-
-
-def _build_retrieved_context(
-    results: list[dict[str, Any]],
-    limit: int = 5,
-) -> list[dict[str, str | float]]:
-    """Build curated context snippets for LLM-as-a-Judge evaluation."""
-    ctx: list[dict[str, str | float]] = []
-    for doc in results[:limit]:
-        if not isinstance(doc, dict):
-            continue
-        text = doc.get("text", "")
-        meta = doc.get("metadata", {})
-        ctx.append(
-            {
-                "content": text[:_MAX_CONTEXT_SNIPPET],
-                "score": doc.get("score", 0),
-                "chunk_location": meta.get("chunk_location", ""),
-            }
-        )
-    return ctx
 
 
 @observe(name="hybrid-retrieve", capture_input=False, capture_output=False)
@@ -537,83 +488,36 @@ async def _rerank(
             "latency_stages": {**latency_stages, "rerank": elapsed},
         }
 
-    if reranker is not None:
-        try:
-            _has_get_rerank = (
-                cache is not None
-                and callable(getattr(cache, "get_rerank_results", None))
-                and asyncio.iscoroutinefunction(cache.get_rerank_results)
-            )
-            _has_store_rerank = (
-                cache is not None
-                and callable(getattr(cache, "store_rerank_results", None))
-                and asyncio.iscoroutinefunction(cache.store_rerank_results)
-            )
-
-            if _has_get_rerank:
-                cached_reranked = await cache.get_rerank_results(query, documents, top_k)
-                if cached_reranked is not None:
-                    elapsed = time.perf_counter() - t0
-                    logger.info(
-                        "rerank: HIT rerank cache %d → %d docs (%.3fs)",
-                        len(documents),
-                        len(cached_reranked),
-                        elapsed,
-                    )
-                    return {
-                        "documents": cached_reranked,
-                        "rerank_applied": True,
-                        "rerank_cache_hit": True,
-                        "latency_stages": {**latency_stages, "rerank": elapsed},
-                    }
-
-            doc_texts = [doc.get("text", "") for doc in documents]
-            rerank_results = await reranker.rerank(query=query, documents=doc_texts, top_k=top_k)
-
-            reranked: list[dict[str, Any]] = []
-            for rr in rerank_results:
-                idx = rr["index"]
-                if idx < len(documents):
-                    doc = {**documents[idx], "score": rr["score"]}
-                    reranked.append(doc)
-
-            if _has_store_rerank:
-                await cache.store_rerank_results(query, documents, top_k, reranked)
-
-            elapsed = time.perf_counter() - t0
-            logger.info(
-                "rerank: ColBERT reranked %d → %d docs (%.3fs)",
-                len(documents),
-                len(reranked),
-                elapsed,
-            )
-            return {
-                "documents": reranked,
-                "rerank_applied": True,
-                "rerank_cache_hit": False,
-                "latency_stages": {**latency_stages, "rerank": elapsed},
-            }
-        except Exception as e:
-            logger.exception("rerank: ColBERT failed, falling back to score sort")
-            get_client().update_current_span(
-                level="ERROR",
-                status_message=f"ColBERT rerank failed: {str(e)[:200]}",
-            )
-
-    # Fallback: sort by existing score, take top-k
-    sorted_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
+    try:
+        reranked_docs, rerank_applied, rerank_cache_hit = await perform_rerank(
+            query, documents, cache=cache, reranker=reranker, top_k=top_k
+        )
+        if not rerank_applied:
+            # No reranker path: sort and trim here
+            reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
+    except Exception as e:
+        logger.exception("rerank: ColBERT failed, falling back to score sort")
+        get_client().update_current_span(
+            level="ERROR",
+            status_message=f"ColBERT rerank failed: {str(e)[:200]}",
+        )
+        reranked_docs = sorted(documents, key=lambda d: d.get("score", 0), reverse=True)[:top_k]
+        rerank_applied = False
+        rerank_cache_hit = False
 
     elapsed = time.perf_counter() - t0
     logger.info(
-        "rerank: score-based sort %d → %d docs (%.3fs)",
+        "rerank: %d → %d docs, applied=%s cache_hit=%s (%.3fs)",
         len(documents),
-        len(sorted_docs),
+        len(reranked_docs),
+        rerank_applied,
+        rerank_cache_hit,
         elapsed,
     )
     return {
-        "documents": sorted_docs,
-        "rerank_applied": False,
-        "rerank_cache_hit": False,
+        "documents": reranked_docs,
+        "rerank_applied": rerank_applied,
+        "rerank_cache_hit": rerank_cache_hit,
         "latency_stages": {**latency_stages, "rerank": elapsed},
     }
 
@@ -643,25 +547,7 @@ async def _rewrite_query(
         config = GraphConfig.from_env()
         if llm is None:
             llm = config.create_llm()
-
-        prompt = _REWRITE_PROMPT.format(query=query)
-        response = await llm.chat.completions.create(
-            model=config.rewrite_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=config.rewrite_max_tokens,
-            name="rewrite-query",  # type: ignore[call-overload]
-        )
-        rewritten = (response.choices[0].message.content or "").strip()
-        rewrite_actual_model = (
-            getattr(response, "model", config.rewrite_model) or config.rewrite_model
-        )
-
-        if not rewritten or rewritten == query:
-            rewritten = query
-            effective = False
-        else:
-            effective = True
+        rewritten, effective, rewrite_actual_model = await rewrite_query_via_llm(query, llm=llm)
     except Exception as e:
         logger.exception("rewrite: LLM rewrite failed, keeping original query")
         get_client().update_current_span(
