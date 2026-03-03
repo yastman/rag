@@ -152,28 +152,37 @@ crm-error-complete-task = ⚠️ Error completing task.
 crm-error-postpone-task = ⚠️ Error postponing task.
 
 # Client ReplyKeyboard (#660)
-kb-search = 🏠 Find Apartments
+kb-search = 🏠 Find Apartment
 kb-services = 🔑 Services
 kb-viewing = 📅 Book a Viewing
+kb-manager = 👤 Manager
+kb-ask = 💬 Ask a Question
 kb-bookmarks = 📌 My Bookmarks
-kb-promotions = 🎁 Promotions
-kb-manager = 👤 Contact Manager
 
 # Welcome (#660)
 welcome-text =
-    Welcome to FortNoks Estate! 🇧🇬
+    Hi, { $name }! 👋
 
-    19 residential complexes on the Bulgarian coast.
-    We work directly — no intermediaries or realtors.
+    I'm the FortNoks Estate bot — I'll help with
+    real estate in Bulgaria. Here's what I can do:
 
-    • Apartments from €38,900
-    • Installment plan from the developer (from 5% down)
-    • Purchase with Ukrainian passport
-    • Remote transaction processing
-    • All payment types (Cash / Card / Crypto)
-    • Free transfer and info tour
+    🏠 Find apartments matching your criteria
+    🔑 Tell you about our services
+    📅 Book a viewing or info tour
+    👤 Connect you with a manager
+    💬 Answer questions about buying, documents,
+       prices and living in Bulgaria
 
-    Ask any question — I'll answer 💬
+    Choose an action below or just type your question 👇
+
+ask-prompt =
+    💬 Type your question — we'll be happy to help!
+
+    Or choose a popular topic:
+ask-docs = 📋 What documents are needed to buy?
+ask-costs = 💰 How much does the transaction cost?
+ask-vnzh = 📋 How to get a residence permit in Bulgaria?
+ask-installment = 💳 What are the installment terms?
 
 # Funnel steps (#660)
 funnel-step-rooms = Choose the number of rooms:
