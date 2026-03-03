@@ -25,7 +25,8 @@ _SCAN_DIRS = [
 # Exclude non-production code from the undocumented-spans check
 _EXCLUDE_PATTERNS = ["src/evaluation", ".venv/"]
 
-# 14 core RAG scores from tests/unit/observability/test_trace_contracts.py::_CORE_RAG_SCORES
+# 13 core RAG scores from tests/unit/observability/test_trace_contracts.py::_CORE_RAG_SCORES
+# (hyde_used removed in #754 — was a stub, HyDE not implemented)
 _CORE_RAG_SCORES = [
     "query_type",
     "latency_total_ms",
@@ -38,7 +39,6 @@ _CORE_RAG_SCORES = [
     "no_results",
     "llm_used",
     "confidence_score",
-    "hyde_used",
     "llm_ttft_ms",
     "llm_response_duration_ms",
 ]
