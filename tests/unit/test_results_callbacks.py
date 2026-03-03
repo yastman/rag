@@ -249,10 +249,13 @@ async def test_results_viewing_delegates() -> None:
     await bot.handle_results_callback(callback, state, dialog_manager=dialog_manager)
 
     dialog_manager.start.assert_awaited_once()
+    from aiogram_dialog import ShowMode
+
     from telegram_bot.dialogs.states import ViewingSG
 
     call_args = dialog_manager.start.call_args
     assert call_args.args[0] == ViewingSG.date
+    assert call_args.kwargs.get("show_mode") == ShowMode.DELETE_AND_SEND
     start_data = call_args.kwargs.get("data", {})
     assert "selected_objects" in start_data
 
