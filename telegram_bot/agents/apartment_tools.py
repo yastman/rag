@@ -125,6 +125,21 @@ async def apartment_search(
 
         response = _format_apartment_results(results)
         lf.update_current_span(output={"results_count": total})
+
+        # Log search filters for CRM enrichment
+        store = getattr(ctx, "search_event_store", None)
+        if store:
+            try:
+                await store.append(
+                    user_id=ctx.telegram_user_id,
+                    session_id=ctx.session_id,
+                    query=query,
+                    filters=filters or None,
+                    results_count=total,
+                )
+            except Exception:
+                logger.warning("Failed to log search event", exc_info=True)
+
         return response
 
     except Exception:
