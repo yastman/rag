@@ -137,8 +137,7 @@ Enriches document chunks with LLM-generated summaries before indexing to improve
 - Builds system prompt with domain from `GraphConfig.from_env().domain`
 - Formats top-5 documents as context (title, city, price, score)
 - Includes conversation history from `state["messages"]`
-- **Streaming path** (when `message` injected + `streaming_enabled`): `asyncio.gather(llm.create(stream=True), message.answer(placeholder), return_exceptions=True)` → parallel dispatch → chunks (300ms throttle) → finalize Markdown → `response_sent=True`
-- **Placeholder failure**: `sent_msg = None`, stream continues (graceful degradation, #675/#685)
+- **Streaming path** (when `message` injected + `streaming_enabled`): `llm.create(stream=True)` → `bot.send_message_draft(draft_id, chunk)` × N (200ms) → `message.answer(final, Markdown)` → `response_sent=True` (#744, Bot API 9.5)
 - **Non-streaming path**: calls `create_llm().chat.completions.create()` (OpenAI SDK)
 - Falls back to non-streaming if streaming fails, then to document summary if LLM unavailable
 - Records `latency_stages["generate"]` (seconds)
