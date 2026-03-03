@@ -498,7 +498,7 @@ local-build:  ## Rebuild local Docker services
 # Deployment
 # =============================================================================
 
-.PHONY: deploy-code deploy-release
+.PHONY: deploy-code deploy-release deploy-bot
 
 deploy-code:  ## Quick deploy (git pull only)
 	git tag -d deploy-code 2>/dev/null || true
@@ -511,6 +511,18 @@ ifndef VERSION
 endif
 	git tag v$(VERSION)
 	git push origin v$(VERSION)
+
+deploy-bot:  ## Deploy bot to VPS (git push + SSH rebuild)
+	@echo "$(CYAN)Pushing to origin...$(NC)"
+	git push origin main
+	@echo "$(CYAN)Deploying bot on VPS...$(NC)"
+	ssh vps "cd /opt/rag-fresh && git pull origin main && \
+		docker compose -f docker-compose.vps.yml build bot && \
+		docker compose --compatibility -f docker-compose.vps.yml up -d --force-recreate bot"
+	@echo "$(GREEN)Bot deployed. Waiting for startup...$(NC)"
+	@sleep 15
+	ssh vps "docker ps --format '{{.Names}} {{.Status}}' | grep vps-bot"
+	@echo "$(GREEN)✓ Deploy complete$(NC)"
 
 # =============================================================================
 # E2E TESTING
