@@ -39,6 +39,7 @@ from .graph.nodes.classify import classify_query
 from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
 from .handlers.handoff import (
+    HandoffStates,
     create_handoff_router,
     get_user_qualification,
     parse_qual_callback,
@@ -1074,8 +1075,10 @@ class PropertyBot:
                 await handler(message, state)
             elif action_id == "viewing":
                 await handler(message, state, dialog_manager)
-            elif action_id == "services" or action_id == "manager":
+            elif action_id == "services":
                 await handler(message, i18n=i18n)
+            elif action_id == "manager":
+                await handler(message, i18n=i18n, state=state)
             else:
                 await handler(message)
 
@@ -1222,13 +1225,13 @@ class PropertyBot:
         text = "\n\n".join(lines)
         await message.answer(text)
 
-    async def _handle_manager(self, message: Message, i18n: Any = None) -> None:
+    async def _handle_manager(
+        self, message: Message, i18n: Any = None, state: FSMContext | None = None
+    ) -> None:
         """Handoff to manager (#628, #730)."""
         if self._forum_bridge is not None:
-            # Forum Topics enabled — start qualification flow (#730).
-            await start_qualification(message, i18n=i18n)
+            await start_qualification(message, i18n=i18n, state=state)
         else:
-            # Fallback — original behavior: delegate to agent pipeline.
             await self.handle_menu_action_text(message, "Соедини с менеджером")
 
     async def _handle_group_message(self, message: Message) -> None:
@@ -1252,9 +1255,10 @@ class PropertyBot:
         # First manager message — transition human_waiting → human.
         if handoff.mode == "human_waiting":
             await self._handoff_state.update_mode(handoff.client_id, "human")
+            manager_name = message.from_user.full_name if message.from_user else "Менеджер"
             await self.bot.send_message(
                 chat_id=handoff.client_id,
-                text="Менеджер подключился!",
+                text=f"🟢 {manager_name} подключился к чату",
             )
 
         # Relay manager message to client.
@@ -1268,18 +1272,18 @@ class PropertyBot:
             except TelegramBadRequest:
                 logger.warning("Failed to relay message to client %s", handoff.client_id)
 
-    async def _on_qual_contact(self, callback: CallbackQuery) -> None:
+    async def _on_qual_contact(self, callback: CallbackQuery, state: FSMContext) -> None:
         """Handle final qualification step — create topic + state (#730 review)."""
         await callback.answer()
         parsed = parse_qual_callback(callback.data or "")
         if not parsed:
             return
         _, value = parsed
-        user_id = callback.from_user.id
 
-        qualification = get_user_qualification(user_id)
+        qualification = get_user_qualification(callback.from_user.id)
         qualification["contact"] = value
 
+        user_id = callback.from_user.id
         msg = callback.message
         if value == "chat" and self._forum_bridge is not None:
             if msg and hasattr(msg, "edit_text"):
@@ -1294,6 +1298,7 @@ class PropertyBot:
                 locale=locale,
                 qualification=qualification,
                 message=msg,
+                state=state,
             )
         elif value == "phone":
             if msg and hasattr(msg, "edit_text"):
@@ -1311,10 +1316,27 @@ class PropertyBot:
         locale: str,
         qualification: dict[str, str],
         message: Any,
+        state: FSMContext | None = None,
     ) -> None:
         """Create forum topic + Kommo lead + set handoff state (#730)."""
         if self._forum_bridge is None:
             return
+
+        # Stale topic cleanup: if Redis has data but topic is deleted — clean up.
+        if self._handoff_state is not None:
+            existing = await self._handoff_state.get_by_client(user_id)
+            if existing is not None:
+                topic_alive = await self._forum_bridge.send_to_topic(
+                    topic_id=existing.topic_id,
+                    text="⚡ Клиент повторно запросил связь с менеджером.",
+                )
+                if topic_alive:
+                    # Topic still exists — FSM guard should have caught this, but just in case.
+                    if state is not None:
+                        await state.set_state(HandoffStates.active)
+                    return
+                logger.info("Stale handoff topic %s — recreating", existing.topic_id)
+                await self._handoff_state.delete(user_id)
 
         goal_map = {"buy": "Покупка", "rent": "Аренда", "consult": "Консультация"}
         goal_text = goal_map.get(qualification.get("goal", ""), "Консультация")
@@ -1372,7 +1394,7 @@ class PropertyBot:
             lead_url=lead_url,
         )
 
-        # 5. Set Redis state.
+        # 5. Set Redis state + FSM.
         data = HandoffData(
             client_id=user_id,
             topic_id=topic_id,
@@ -1382,16 +1404,23 @@ class PropertyBot:
         )
         if self._handoff_state is not None:
             await self._handoff_state.set(data)
+        if state is not None:
+            await state.set_state(HandoffStates.active)
 
-        # 6. Business hours message.
+        # 6. Business hours notice.
         in_hours = is_business_hours(
             start=self.config.business_hours_start,
             end=self.config.business_hours_end,
             tz=self.config.business_hours_tz,
         )
         if not in_hours:
+            start_h = self.config.business_hours_start
+            end_h = self.config.business_hours_end
             await message.answer(
-                "Менеджеры сейчас не в сети, но увидят ваш запрос и ответят в рабочие часы."
+                "📨 Ваш запрос принят!\n\n"
+                "Менеджер ответит в рабочее время:\n"
+                f"Пн–Пт, {start_h}:00–{end_h}:00 (🇧🇬 София)\n\n"
+                "Мы пришлём уведомление, когда менеджер подключится."
             )
 
     async def _close_handoff(self, handoff: HandoffData) -> None:
@@ -1407,12 +1436,17 @@ class PropertyBot:
         # Notify client.
         await self.bot.send_message(
             chat_id=handoff.client_id,
-            text="Менеджер завершил диалог. Я снова на связи!",
+            text="Диалог с менеджером завершён.\n\n🤖 Вы снова общаетесь с ботом. Задавайте вопросы — помогу!",
         )
 
-        # Cleanup Redis.
+        # Cleanup Redis + FSM state.
         if self._handoff_state is not None:
             await self._handoff_state.delete(handoff.client_id)
+        # Clear client's FSM state from group context via storage key.
+        from aiogram.fsm.storage.base import StorageKey
+
+        key = StorageKey(bot_id=self.bot.id, chat_id=handoff.client_id, user_id=handoff.client_id)
+        await self.dp.storage.set_state(key, state=None)
 
         # Update Kommo (optional).
         if self._kommo_client is not None and handoff.lead_id is not None:
@@ -1484,7 +1518,11 @@ class PropertyBot:
         if action == "get_offer":
             await start_phone_collection(callback, state, service_key=param or "unknown")
         elif action == "manager":
-            await start_phone_collection(callback, state, service_key="manager")
+            if self._forum_bridge is not None:
+                # Forum Topics enabled — same qualification flow as menu (#730).
+                await start_qualification(callback, i18n=None, state=state)
+            else:
+                await start_phone_collection(callback, state, service_key="manager")
         else:
             await callback.answer()
 
