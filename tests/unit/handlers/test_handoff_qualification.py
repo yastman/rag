@@ -28,12 +28,13 @@ def test_parse_qual_callback_invalid():
 def test_build_goal_keyboard():
     # Pass a mock i18n that returns the key as-is.
     kb = build_goal_keyboard(i18n=None)
-    # Should have 3 buttons in one row.
-    assert len(kb.inline_keyboard) == 1
-    assert len(kb.inline_keyboard[0]) == 3
+    # Row 1: buy + rent, Row 2: consult.
+    assert len(kb.inline_keyboard) == 2
+    assert len(kb.inline_keyboard[0]) == 2
+    assert len(kb.inline_keyboard[1]) == 1
     assert kb.inline_keyboard[0][0].callback_data == "qual:goal:buy"
     assert kb.inline_keyboard[0][1].callback_data == "qual:goal:rent"
-    assert kb.inline_keyboard[0][2].callback_data == "qual:goal:consult"
+    assert kb.inline_keyboard[1][0].callback_data == "qual:goal:consult"
 
 
 def test_build_budget_keyboard():
