@@ -162,6 +162,7 @@ async def on_phone_received(
     kommo_client: Any | None = None,
     i18n: Any | None = None,
     bot_config: Any | None = None,
+    search_event_store: Any | None = None,
 ) -> None:
     """Handle phone number input."""
     if not message.text or not validate_phone(message.text):
@@ -209,6 +210,8 @@ async def on_phone_received(
         user_id,
     )
 
+    await message.answer(phone_success)
+
     if kommo_client is not None:
         try:
             contact_data = ContactCreate(
@@ -248,6 +251,23 @@ async def on_phone_received(
             note_text = _build_note_text(
                 crm_title, phone, username, user_id, display_name, viewing_objects
             )
+
+            if search_event_store:
+                try:
+                    events = await search_event_store.get_user_events(
+                        user_id=int(user_id) if isinstance(user_id, int) else 0
+                    )
+                    if events:
+                        from telegram_bot.services.search_event_store import (
+                            format_search_summary,
+                        )
+
+                        summary = format_search_summary(events)
+                        if summary:
+                            note_text += "\n\n" + summary
+                except Exception:
+                    logger.warning("Failed to get search summary", exc_info=True)
+
             await kommo_client.add_note("leads", lead.id, note_text)
 
             await kommo_client.create_task(
@@ -259,8 +279,6 @@ async def on_phone_received(
             )
         except Exception:
             logger.exception("CRM lead creation failed for phone=%s", phone)
-
-    await message.answer(phone_success)
 
 
 def create_phone_router() -> Router:
