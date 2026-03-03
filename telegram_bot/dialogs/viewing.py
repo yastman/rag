@@ -22,6 +22,13 @@ from .states import ViewingSG
 
 logger = logging.getLogger(__name__)
 
+
+async def on_dialog_start(start_data: dict[str, Any], manager: DialogManager) -> None:
+    """Transfer start_data into dialog_data on dialog start."""
+    if start_data and "selected_objects" in start_data:
+        manager.dialog_data["selected_objects"] = start_data["selected_objects"]
+
+
 # --- Date range → label mapping ---
 
 DATE_LABELS: dict[str, str] = {
@@ -120,15 +127,6 @@ async def get_date_options(
     dialog_manager: DialogManager | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     """Getter for date range selection (Step 2)."""
-    # Carry pre-selected objects from start_data (card:viewing flow)
-    if dialog_manager is not None:
-        start_data = dialog_manager.start_data or {}
-        if (
-            "selected_objects" in start_data
-            and "selected_objects" not in dialog_manager.dialog_data
-        ):
-            dialog_manager.dialog_data["selected_objects"] = start_data["selected_objects"]
-
     items = list(DATE_LABELS.items())  # [(key, label), ...]
     # Flip to (label, key) for Select widget
     return {
@@ -464,4 +462,5 @@ viewing_dialog = Dialog(
         getter=get_summary_data,
         state=ViewingSG.summary,
     ),
+    on_start=on_dialog_start,
 )
