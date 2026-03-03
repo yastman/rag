@@ -686,7 +686,10 @@ class PropertyBot:
         self.dp.message(F.text.in_(menu_button_texts), flags={"menu_nav": True})(
             self.handle_menu_button
         )
-        self.dp.message(StateFilter(None), F.text)(self.handle_query)
+        # NOTE: catch-all handle_query is registered on self._catch_all_router
+        # which is included AFTER dialog routers in _setup_dialogs().
+        # This ensures dialog MessageInput (e.g. viewing phone input)
+        # is resolved before the catch-all (aiogram SDK: first-match wins).
         self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
         self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
@@ -1860,7 +1863,7 @@ class PropertyBot:
             total = apartment_total_value
             has_more = shown_total < total
             if callback.message:
-                await callback.message.answer(
+                footer_msg = await callback.message.answer(
                     f"Найдено {total} апартаментов (показаны {new_offset + 1}–{shown_total})",
                     reply_markup=build_results_footer(
                         shown_total=shown_total,
@@ -1868,7 +1871,12 @@ class PropertyBot:
                         has_more=has_more,
                     ),
                 )
-            await state.update_data(apartment_offset=new_offset)
+                await state.update_data(
+                    apartment_offset=new_offset,
+                    apartment_footer_msg_id=footer_msg.message_id,
+                )
+            else:
+                await state.update_data(apartment_offset=new_offset)
             await callback.answer()
         elif data == "results:refine":
             await state.update_data(apartment_results=None, apartment_offset=0)
@@ -1898,6 +1906,11 @@ class PropertyBot:
                 from aiogram_dialog import ShowMode, StartMode
 
                 from .dialogs.states import ViewingSG
+
+                # Delete footer message to keep chat clean
+                if callback.message:
+                    with contextlib.suppress(Exception):
+                        await callback.message.delete()
 
                 await dialog_manager.start(
                     ViewingSG.date,
@@ -1975,10 +1988,16 @@ class PropertyBot:
 
                 from .dialogs.states import ViewingSG
 
+                # Delete footer message to avoid visual clutter during dialog
+                footer_msg_id = state_data.get("apartment_footer_msg_id")
+                if footer_msg_id and callback.message and callback.message.chat:
+                    with contextlib.suppress(Exception):
+                        await callback.bot.delete_message(callback.message.chat.id, footer_msg_id)
+
                 await dialog_manager.start(
                     ViewingSG.date,
                     mode=StartMode.RESET_STACK,
-                    show_mode=ShowMode.EDIT,
+                    show_mode=ShowMode.DELETE_AND_SEND,
                     data={"selected_objects": viewing_objects},
                 )
             else:
@@ -2153,7 +2172,7 @@ class PropertyBot:
                 await self._send_property_card(message, result, message.from_user.id)
             shown = len(page)
             total = len(results)
-            await message.answer(
+            footer_msg = await message.answer(
                 f"Найдено {total} апартаментов (показаны 1–{shown})",
                 reply_markup=build_results_footer(
                     shown_total=shown,
@@ -2161,6 +2180,7 @@ class PropertyBot:
                     has_more=total > _APARTMENT_PAGE_SIZE,
                 ),
             )
+            await state.update_data(apartment_footer_msg_id=footer_msg.message_id)
 
         return response_text
 
@@ -3812,6 +3832,16 @@ class PropertyBot:
         self.dp.include_router(funnel_dialog)
         self.dp.include_router(faq_dialog)
         self.dp.include_router(viewing_dialog)
+
+        # Catch-all text handler — AFTER all dialog routers so that dialog
+        # MessageInput (e.g. viewing phone input) is resolved first.
+        # aiogram SDK: handlers match in registration order, first-match wins.
+        from aiogram import Router as _Router
+
+        self._catch_all_router = _Router(name="catch_all_query")
+        self._catch_all_router.message(StateFilter(None), F.text)(self.handle_query)
+        self.dp.include_router(self._catch_all_router)
+
         aiogram_setup_dialogs(self.dp)
         logger.info("aiogram-dialog setup complete")
 
