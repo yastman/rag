@@ -204,6 +204,9 @@ def _make_message_mock(**sent_kwargs: object) -> tuple[AsyncMock, AsyncMock]:
         setattr(sent_msg, k, v)
     message = AsyncMock()
     message.answer = AsyncMock(return_value=sent_msg)
+    message.chat = MagicMock(id=12345)
+    message.bot = MagicMock()
+    message.bot.send_message_draft = AsyncMock(return_value=True)
     return message, sent_msg
 
 
@@ -487,8 +490,8 @@ class TestGenerateNode:
 class TestGenerateNodeStreaming:
     """Test generate_node streaming delivery to Telegram."""
 
-    async def test_streaming_sends_placeholder_and_edits(self) -> None:
-        """Streaming sends placeholder, edits with chunks, finalizes with Markdown."""
+    async def test_streaming_uses_drafts_and_final_persisted_message(self) -> None:
+        """Streaming sends draft updates, then persists the final answer as a real message."""
         from telegram_bot.graph.nodes.generate import generate_node
 
         chunks = ["Квартира ", "в Несебре ", "стоит 65000€."]
@@ -502,20 +505,24 @@ class TestGenerateNodeStreaming:
         ):
             result = await generate_node(state, message=message)
 
-        # Placeholder sent
+        # Draft updates are used during generation.
+        message.bot.send_message_draft.assert_awaited()
+        draft_call = message.bot.send_message_draft.call_args
+        assert draft_call.kwargs["chat_id"] == 12345
+        assert draft_call.kwargs["text"].startswith("Квартира")
+
+        # Final persisted message uses message.answer with Markdown.
+        full_text = "Квартира в Несебре стоит 65000€."
         message.answer.assert_awaited_once()
-        placeholder_text = message.answer.call_args[0][0]
-        assert "⏳" in placeholder_text or "Генерирую" in placeholder_text
+        assert message.answer.call_args.args[0] == full_text
+        assert message.answer.call_args.kwargs["parse_mode"] == "Markdown"
 
         # Response contains all chunks
-        full_text = "Квартира в Несебре стоит 65000€."
         assert result["response"] == full_text
         assert result["response_sent"] is True
         assert "generate" in result["latency_stages"]
 
-        # Final edit_text called with Markdown (last call)
-        last_call = sent_msg.edit_text.call_args_list[-1]
-        assert last_call.args[0] == full_text
+        sent_msg.edit_text.assert_not_called()
 
         # stream=True was passed to LLM
         create_kwargs = mock_client.chat.completions.create.call_args.kwargs
@@ -648,7 +655,7 @@ class TestGenerateNodeStreaming:
         assert result["response_sent"] is False
 
     async def test_stream_error_after_visible_output(self) -> None:
-        """Stream delivers partial content then fails: edits existing msg, response_sent=True."""
+        """Visible draft output then failed stream falls back to a final persisted message."""
         from telegram_bot.graph.nodes.generate import generate_node
 
         mock_choice = MagicMock()
@@ -675,14 +682,18 @@ class TestGenerateNodeStreaming:
 
         # Fallback answer is the response
         assert result["response"] == "Fallback complete answer."
-        # KEY: response_sent=True because partial content was already visible
         assert result["response_sent"] is True
-        # Fallback was edited into existing message (last edit_text call)
-        last_edit_call = sent_msg.edit_text.call_args_list[-1]
-        assert last_edit_call.args[0] == "Fallback complete answer."
+        message.bot.send_message_draft.assert_awaited()
+        assert message.answer.await_count == 2
+        assert message.answer.await_args_list[0].args[0] == "Квартира в Несебре "
+        assert message.answer.await_args_list[-1].args[0] == "Fallback complete answer."
+        assert message.answer.await_args_list[-1].kwargs["parse_mode"] == "Markdown"
+        sent_msg.edit_text.assert_not_called()
 
-    async def test_stream_error_partial_and_edit_fails_falls_back_to_respond_node(self) -> None:
-        """If fallback edit fails after partial stream, respond_node must send final answer."""
+    async def test_stream_error_partial_and_final_delivery_fails_falls_back_to_respond_node(
+        self,
+    ) -> None:
+        """If final delivery fails after partial draft output, respond_node must send answer."""
         from telegram_bot.graph.nodes.generate import generate_node
 
         mock_choice = MagicMock()
@@ -697,9 +708,14 @@ class TestGenerateNodeStreaming:
             ],
         )
         mock_config, _ = _make_streaming_config(mock_client)
-        # First call may happen during stream; subsequent fallback edits fail.
         message, sent_msg = _make_message_mock()
-        sent_msg.edit_text = AsyncMock(side_effect=Exception("edit failed"))
+        message.answer = AsyncMock(
+            side_effect=[
+                sent_msg,
+                Exception("markdown send failed"),
+                Exception("plain send failed"),
+            ]
+        )
 
         state = _make_state_with_docs()
 
@@ -711,6 +727,7 @@ class TestGenerateNodeStreaming:
 
         assert result["response"] == "Final fallback answer."
         assert result["response_sent"] is False
+        assert message.answer.await_count == 3
 
 
 class TestGenerateNodeProviderMetadata:
@@ -999,8 +1016,8 @@ class TestGenerateNodeLatencyBreakdown:
         assert result["llm_stream_recovery"] is True
         assert result["llm_timeout"] is False
 
-    async def test_partial_stream_recovery_true_even_if_edit_delivery_fails(self) -> None:
-        """Fallback answer success counts as recovery even when edit delivery fails."""
+    async def test_partial_stream_recovery_true_even_if_final_delivery_fails(self) -> None:
+        """Fallback generation still counts as recovery when final delivery fails."""
         from telegram_bot.graph.nodes.generate import generate_node
 
         mock_choice = MagicMock()
@@ -1016,7 +1033,13 @@ class TestGenerateNodeLatencyBreakdown:
         )
         mock_config, _ = _make_streaming_config(mock_client)
         message, sent_msg = _make_message_mock()
-        sent_msg.edit_text = AsyncMock(side_effect=Exception("edit fail"))
+        message.answer = AsyncMock(
+            side_effect=[
+                sent_msg,
+                Exception("markdown send failed"),
+                Exception("plain send failed"),
+            ]
+        )
 
         state = _make_state_with_docs()
 
