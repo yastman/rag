@@ -1,12 +1,8 @@
-"""Tests for _generate_streaming parallelization in voice path (#685).
-
-Issue #685: parallelize placeholder send + LLM stream creation via asyncio.gather.
-"""
+"""Tests for _generate_streaming in voice path — native sendMessageDraft (Bot API 9.5)."""
 
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -49,7 +45,6 @@ class _MockAsyncStream:
 
 def _make_mocks(
     chunks: list[str] | None = None,
-    placeholder_error: Exception | None = None,
     stream_error: Exception | None = None,
 ) -> tuple[MagicMock, MagicMock, AsyncMock, AsyncMock]:
     """Return (llm, config, message, sent_msg) mocks for _generate_streaming tests."""
@@ -57,14 +52,16 @@ def _make_mocks(
         chunks = ["Hello ", "world!"]
 
     mock_sent_msg = AsyncMock()
-    mock_sent_msg.edit_text = AsyncMock()
-    mock_sent_msg.delete = AsyncMock()
+    mock_sent_msg.chat = MagicMock(id=123)
+    mock_sent_msg.message_id = 456
+
+    mock_bot = AsyncMock()
+    mock_bot.send_message_draft = AsyncMock(return_value=True)
 
     mock_message = AsyncMock()
-    if placeholder_error is not None:
-        mock_message.answer = AsyncMock(side_effect=placeholder_error)
-    else:
-        mock_message.answer = AsyncMock(return_value=mock_sent_msg)
+    mock_message.chat = MagicMock(id=123)
+    mock_message.bot = mock_bot
+    mock_message.answer = AsyncMock(return_value=mock_sent_msg)
 
     mock_stream = _MockAsyncStream(chunks)
     mock_llm = MagicMock()
@@ -86,34 +83,9 @@ def _make_mocks(
 # ---------------------------------------------------------------------------
 
 
-async def test_placeholder_and_stream_parallel() -> None:
-    """asyncio.gather is called to run placeholder send and LLM stream concurrently."""
+async def test_streaming_uses_send_message_draft() -> None:
+    """Voice path streaming uses bot.send_message_draft instead of edit_text."""
     mock_llm, mock_config, mock_message, _ = _make_mocks()
-
-    with patch(
-        "telegram_bot.graph.nodes.generate.asyncio.gather", wraps=asyncio.gather
-    ) as mock_gather:
-        from telegram_bot.graph.nodes.generate import _generate_streaming
-
-        await _generate_streaming(
-            llm=mock_llm,
-            config=mock_config,
-            llm_messages=[{"role": "user", "content": "test"}],
-            message=mock_message,
-        )
-
-    assert mock_gather.called, "asyncio.gather must be used for parallel execution (#685)"
-    # gather should receive exactly 2 coroutines: LLM stream create + placeholder answer
-    args = mock_gather.call_args[0]
-    assert len(args) == 2, f"Expected 2 coroutines in gather, got {len(args)}"
-
-
-async def test_placeholder_failure_graceful_degradation() -> None:
-    """Placeholder send failure degrades gracefully: stream continues, sent_msg is None."""
-    mock_llm, mock_config, mock_message, _ = _make_mocks(
-        chunks=["Response text"],
-        placeholder_error=Exception("Telegram rate limit"),
-    )
 
     from telegram_bot.graph.nodes.generate import _generate_streaming
 
@@ -124,16 +96,14 @@ async def test_placeholder_failure_graceful_degradation() -> None:
         message=mock_message,
     )
 
-    response_text = result[0]
-    sent_msg = result[-1]
-
-    assert response_text == "Response text", "Stream response must still be returned"
-    assert sent_msg is None, "sent_msg must be None when placeholder fails (graceful degradation)"
+    assert result[0] == "Hello world!"
+    mock_message.bot.send_message_draft.assert_called()
+    mock_message.answer.assert_called_once()
 
 
 async def test_stream_failure_raises() -> None:
-    """LLM stream creation failure raises the exception and cleans up placeholder."""
-    mock_llm, mock_config, mock_message, mock_sent_msg = _make_mocks(
+    """LLM stream creation failure raises the exception."""
+    mock_llm, mock_config, mock_message, _ = _make_mocks(
         stream_error=ConnectionError("LLM unavailable"),
     )
 
@@ -146,9 +116,6 @@ async def test_stream_failure_raises() -> None:
             llm_messages=[{"role": "user", "content": "test"}],
             message=mock_message,
         )
-
-    # Placeholder must be cleaned up when stream creation fails (#685 safety)
-    mock_sent_msg.delete.assert_called_once()
 
 
 async def test_streaming_retries_without_name_kwarg_for_plain_openai() -> None:
