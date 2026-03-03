@@ -44,3 +44,4 @@ class BotContext:
     bot: Any | None = None  ***REMOVED*** aiogram Bot instance (for handoff tool, ***REMOVED***445)
     manager_ids: list[int] | None = None  ***REMOVED*** Telegram IDs of managers (for handoff, ***REMOVED***445)
     apartments_service: Any | None = None  ***REMOVED*** ApartmentsService (***REMOVED***629)
+    search_event_store: Any | None = None  ***REMOVED*** SearchEventStore
