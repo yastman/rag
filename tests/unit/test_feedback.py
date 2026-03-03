@@ -38,12 +38,12 @@ class TestParseFeedbackCallback:
     def test_parses_like(self):
         from telegram_bot.feedback import parse_feedback_callback
 
-        assert parse_feedback_callback("fb:1:abc123def456") == (1.0, "abc123def456")
+        assert parse_feedback_callback("fb:1:abc123def456") == (1.0, "abc123def456", None)
 
     def test_parses_dislike(self):
         from telegram_bot.feedback import parse_feedback_callback
 
-        assert parse_feedback_callback("fb:0:abc123def456") == (0.0, "abc123def456")
+        assert parse_feedback_callback("fb:0:abc123def456") == (0.0, "abc123def456", None)
 
     def test_invalid_prefix_returns_none(self):
         from telegram_bot.feedback import parse_feedback_callback

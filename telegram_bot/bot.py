@@ -3293,8 +3293,12 @@ class PropertyBot:
         lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
 
     async def handle_feedback(self, callback: CallbackQuery):
-        """Handle feedback button callback (#229)."""
-        from .feedback import build_feedback_confirmation, parse_feedback_callback
+        """Handle feedback button callback (#229, #755)."""
+        from .feedback import (
+            build_dislike_reason_keyboard,
+            build_feedback_confirmation,
+            parse_feedback_callback,
+        )
 
         data = callback.data or ""
 
@@ -3308,12 +3312,26 @@ class PropertyBot:
             await callback.answer()
             return
 
-        value, trace_id = parsed
+        value, trace_id, reason = parsed
         user_id = callback.from_user.id if callback.from_user else 0
 
+        # Step 1 — dislike without reason: show 6-button reason keyboard
+        if value == 0.0 and reason is None:
+            await callback.answer()
+            try:
+                msg = callback.message
+                if msg is not None and hasattr(msg, "edit_reply_markup"):
+                    await msg.edit_reply_markup(
+                        reply_markup=build_dislike_reason_keyboard(trace_id)
+                    )
+            except Exception:
+                logger.debug("Failed to show dislike reason keyboard", exc_info=True)
+            return
+
+        # Step 2 — reason selected: write user_feedback=0 + user_feedback_reason={category}
+        # Also handles like (value=1.0, reason=None) — single score path
         await callback.answer("Спасибо за отзыв!")
 
-        # Write score to Langfuse (direct client, not context-dependent)
         try:
             lf_client = get_langfuse_client()
             if lf_client is not None:
@@ -3325,6 +3343,15 @@ class PropertyBot:
                     comment=f"user_id:{user_id}",
                     score_id=f"{trace_id}-user_feedback",
                 )
+                if reason is not None:
+                    lf_client.create_score(
+                        trace_id=trace_id,
+                        name="user_feedback_reason",
+                        value=reason,
+                        data_type="CATEGORICAL",
+                        comment=f"user_id:{user_id}",
+                        score_id=f"{trace_id}-user_feedback_reason",
+                    )
         except Exception:
             logger.warning("Failed to write feedback score to Langfuse", exc_info=True)
 
