@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -131,3 +132,85 @@ async def test_source_tracking_in_lead_name(mock_kommo, mock_message, mock_state
     lead_arg = mock_kommo.create_lead.call_args[0][0]
     # crm_title "Консультация" should be in the lead name
     assert "Консультация" in lead_arg.name
+
+
+class TestPhoneCollectorSearchSummary:
+    async def test_sends_success_before_crm_work(self, mock_kommo, mock_config) -> None:
+        """Юзер получает 'Спасибо' до CRM-работы."""
+        from telegram_bot.handlers.phone_collector import on_phone_received
+
+        message = AsyncMock()
+        message.text = "+359881234567"
+        message.from_user = SimpleNamespace(
+            id=42, first_name="Ivan", last_name=None, username="ivan"
+        )
+
+        state = AsyncMock()
+        state.get_data = AsyncMock(return_value={"service_key": "viewing", "viewing_objects": []})
+
+        mock_store = AsyncMock()
+        mock_store.get_user_events = AsyncMock(
+            return_value=[
+                {
+                    "query": "двушка",
+                    "filters": {"rooms": 2},
+                    "results_count": 5,
+                    "created_at": "2026-03-03 14:00:00+00",
+                },
+            ]
+        )
+
+        with patch(
+            "telegram_bot.services.content_loader.load_services_config",
+            return_value=mock_config,
+        ):
+            await on_phone_received(
+                message,
+                state,
+                kommo_client=mock_kommo,
+                search_event_store=mock_store,
+            )
+
+        # message.answer вызван — "Спасибо"
+        message.answer.assert_called_once()
+
+    async def test_note_includes_search_summary(self, mock_kommo, mock_config) -> None:
+        """Нота содержит самари поиска."""
+        from telegram_bot.handlers.phone_collector import on_phone_received
+
+        message = AsyncMock()
+        message.text = "+359881234567"
+        message.from_user = SimpleNamespace(
+            id=42, first_name="Ivan", last_name=None, username="ivan"
+        )
+
+        state = AsyncMock()
+        state.get_data = AsyncMock(return_value={"service_key": "viewing", "viewing_objects": []})
+
+        mock_store = AsyncMock()
+        mock_store.get_user_events = AsyncMock(
+            return_value=[
+                {
+                    "query": "двушка у моря",
+                    "filters": {"rooms": 2, "view_tags": ["sea"]},
+                    "results_count": 12,
+                    "created_at": "2026-03-03 14:00:00+00",
+                },
+            ]
+        )
+
+        with patch(
+            "telegram_bot.services.content_loader.load_services_config",
+            return_value=mock_config,
+        ):
+            await on_phone_received(
+                message,
+                state,
+                kommo_client=mock_kommo,
+                search_event_store=mock_store,
+            )
+
+        # add_note вызван с текстом включающим самари
+        mock_kommo.add_note.assert_called_once()
+        note_text = mock_kommo.add_note.call_args[0][2]
+        assert "двушка у моря" in note_text
