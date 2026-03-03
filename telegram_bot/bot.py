@@ -431,6 +431,9 @@ class PropertyBot:
         # Favorites service (initialized in start() with pg_pool)
         self._favorites_service: Any = None
 
+        # Search event store (initialized in start() with pg_pool)
+        self._search_event_store: Any | None = None
+
         # Nurturing scheduler (initialized in start() if enabled)
         self._nurturing_scheduler: Any | None = None
 
@@ -635,6 +638,18 @@ class PropertyBot:
                 UNIQUE (telegram_id, property_id)
             )
             """,
+            """
+            CREATE TABLE IF NOT EXISTS search_events (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                session_id TEXT NOT NULL,
+                event_type TEXT NOT NULL DEFAULT 'apartment_search',
+                query TEXT NOT NULL,
+                filters JSONB,
+                results_count INT NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """,
             "ALTER TABLE funnel_events ADD COLUMN IF NOT EXISTS stage_name TEXT",
             "CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)",
             "CREATE INDEX IF NOT EXISTS idx_leads_user_id ON leads(user_id)",
@@ -647,6 +662,7 @@ class PropertyBot:
             "CREATE INDEX IF NOT EXISTS idx_nurturing_jobs_pending ON nurturing_jobs (status, scheduled_for ASC)",
             "CREATE INDEX IF NOT EXISTS idx_user_favorites_telegram_id ON user_favorites (telegram_id)",
             "CREATE INDEX IF NOT EXISTS idx_user_favorites_created_at ON user_favorites (created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_search_events_user ON search_events (user_id, created_at DESC)",
         ]
         for stmt in schema_statements:
             await self._pg_pool.execute(stmt)
@@ -2617,6 +2633,7 @@ class PropertyBot:
                 bot=bot,
                 manager_ids=list(self.config.manager_ids),
                 apartments_service=self._apartments_service,
+                search_event_store=self._search_event_store,
             )
 
             # Initialize handler inside propagation context so it inherits session/user/tags.
@@ -3237,6 +3254,7 @@ class PropertyBot:
             role=role,
             manager_id=(self.config.kommo_responsible_user_id if role == "manager" else None),
             apartments_service=self._apartments_service,
+            search_event_store=self._search_event_store,
         )
 
         with propagate_attributes(
@@ -3473,6 +3491,7 @@ class PropertyBot:
             bot=bot,
             manager_ids=list(self.config.manager_ids),
             apartments_service=self._apartments_service,
+            search_event_store=self._search_event_store,
         )
 
         rag_result_store: dict[str, Any] = {}
@@ -3667,6 +3686,11 @@ class PropertyBot:
 
             self._favorites_service = FavoritesService(pool=self._pg_pool)
             logger.info("Favorites service ready")
+
+            from .services.search_event_store import SearchEventStore
+
+            self._search_event_store = SearchEventStore(pool=self._pg_pool)
+            logger.info("Search event store ready")
 
             # Initialize hot lead notifier (#402)
             if self.config.manager_ids and self._cache.redis is not None:
