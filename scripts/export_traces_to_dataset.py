@@ -89,7 +89,9 @@ def extract_item_data(
     if not answer:
         return None
 
-    # Extract retrieved context from node-retrieve observation
+    # Extract retrieved context from node-retrieve observation.
+    # node-retrieve writes eval_docs as a concatenated string
+    # (format: "[score] content\n\n[score] content"), not retrieved_context.
     context_parts: list[str] = []
     for obs in observations:
         if getattr(obs, "name", "") != "node-retrieve":
@@ -97,9 +99,9 @@ def extract_item_data(
         output = getattr(obs, "output", None)
         if not isinstance(output, dict):
             continue
-        for doc in output.get("retrieved_context", []):
-            if isinstance(doc, dict) and doc.get("content"):
-                context_parts.append(str(doc["content"]))
+        eval_docs = output.get("eval_docs", "")
+        if isinstance(eval_docs, str) and eval_docs:
+            context_parts.extend(part.strip() for part in eval_docs.split("\n\n") if part.strip())
 
     return {
         "query": query,
@@ -203,12 +205,16 @@ def export_to_langfuse(
 
     Returns count of items created.
     """
-    langfuse.create_dataset(name=dataset_name)
+    try:
+        langfuse.create_dataset(name=dataset_name)
+    except Exception:
+        logger.debug("Dataset '%s' already exists, reusing it", dataset_name)
     created = 0
 
     for item in items:
         langfuse.create_dataset_item(
             dataset_name=dataset_name,
+            id=item["trace_id"],
             input={"query": item["query"]},
             expected_output={"response": item["answer"]},
             source_trace_id=item["trace_id"],
