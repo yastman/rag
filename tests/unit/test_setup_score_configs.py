@@ -98,7 +98,7 @@ def test_get_existing_configs_returns_name_id_mapping():
     mock_item.is_archived = False
 
     mock_api = MagicMock()
-    mock_api.score_configs.list.return_value.data = [mock_item]
+    mock_api.score_configs.get.return_value.data = [mock_item]
 
     result = module.get_existing_configs(mock_api)
     assert result == {"user_feedback": "uuid-123"}
@@ -112,7 +112,7 @@ def test_get_existing_configs_excludes_archived():
     mock_item.is_archived = True
 
     mock_api = MagicMock()
-    mock_api.score_configs.list.return_value.data = [mock_item]
+    mock_api.score_configs.get.return_value.data = [mock_item]
 
     result = module.get_existing_configs(mock_api)
     assert result == {}
@@ -121,7 +121,7 @@ def test_get_existing_configs_excludes_archived():
 def test_get_existing_configs_empty_when_no_configs():
     module = _load_module()
     mock_api = MagicMock()
-    mock_api.score_configs.list.return_value.data = []
+    mock_api.score_configs.get.return_value.data = []
 
     result = module.get_existing_configs(mock_api)
     assert result == {}
@@ -133,7 +133,7 @@ def test_get_existing_configs_empty_when_no_configs():
 def test_setup_score_configs_creates_all_when_none_exist():
     module = _load_module()
     mock_api = MagicMock()
-    mock_api.score_configs.list.return_value.data = []
+    mock_api.score_configs.get.return_value.data = []
 
     created = MagicMock()
     created.id = "new-id"
@@ -156,7 +156,7 @@ def test_setup_score_configs_skips_existing():
         existing_data.append(item)
 
     mock_api = MagicMock()
-    mock_api.score_configs.list.return_value.data = existing_data
+    mock_api.score_configs.get.return_value.data = existing_data
 
     result = module.setup_score_configs(mock_api)
 
@@ -172,7 +172,7 @@ def test_setup_score_configs_creates_only_missing():
     existing.is_archived = False
 
     mock_api = MagicMock()
-    mock_api.score_configs.list.return_value.data = [existing]
+    mock_api.score_configs.get.return_value.data = [existing]
 
     created = MagicMock()
     created.id = "new-id"

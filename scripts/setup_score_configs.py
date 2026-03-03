@@ -94,7 +94,7 @@ _DATA_TYPE_MAP = {
 
 def get_existing_configs(api: Any) -> dict[str, str]:
     """Return {name: id} mapping for non-archived score configs."""
-    response = api.score_configs.list()
+    response = api.score_configs.get()
     return {item.name: item.id for item in response.data if not item.is_archived}
 
 
