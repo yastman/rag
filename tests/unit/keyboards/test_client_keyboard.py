@@ -45,7 +45,7 @@ def test_build_no_i18n_uses_ru_fallback():
     kb = build_client_keyboard()
     assert isinstance(kb, ReplyKeyboardMarkup)
     buttons = [btn.text for row in kb.keyboard for btn in row]
-    assert any("апарт" in b.lower() for b in buttons)
+    assert any("Подобрать" in b for b in buttons)
 
 
 def test_menu_buttons_has_6_entries():
@@ -74,9 +74,9 @@ def test_build_with_i18n():
             "kb-search": "🏠 Search",
             "kb-services": "🔑 Services",
             "kb-viewing": "📅 Viewing",
-            "kb-bookmarks": "📌 Bookmarks",
-            "kb-promotions": "🎁 Promotions",
             "kb-manager": "👤 Manager",
+            "kb-ask": "💬 Ask",
+            "kb-bookmarks": "📌 Bookmarks",
         }
     )
     kb = build_client_keyboard(i18n=i18n)
@@ -100,17 +100,17 @@ def test_build_with_i18n_calls_all_keys():
 
 
 def test_parse_ru_button_fallback():
-    assert parse_menu_button("🏠 Подбор апартаментов") == "search"
+    assert parse_menu_button("🏠 Подобрать квартиру") == "search"
     assert parse_menu_button("🔑 Услуги") == "services"
 
 
 def test_parse_menu_button_known():
-    assert parse_menu_button("🏠 Подбор апартаментов") == "search"
+    assert parse_menu_button("🏠 Подобрать квартиру") == "search"
     assert parse_menu_button("🔑 Услуги") == "services"
     assert parse_menu_button("📅 Запись на осмотр") == "viewing"
+    assert parse_menu_button("👤 Менеджер") == "manager"
+    assert parse_menu_button("💬 Задать вопрос") == "ask"
     assert parse_menu_button("📌 Мои закладки") == "bookmarks"
-    assert parse_menu_button("🎁 Акции") == "promotions"
-    assert parse_menu_button("👤 Связь с менеджером") == "manager"
 
 
 def test_parse_unknown_returns_none():
@@ -125,16 +125,16 @@ def test_parse_with_i18n_hub():
     mock_hub = MagicMock()
     mock_translator = MagicMock()
     mock_translator.get.side_effect = lambda key: {
-        "kb-search": "🏠 Підбір апартаментів",
+        "kb-search": "🏠 Підібрати квартиру",
         "kb-services": "🔑 Послуги",
         "kb-viewing": "📅 Запис на огляд",
+        "kb-manager": "👤 Менеджер",
+        "kb-ask": "💬 Задати питання",
         "kb-bookmarks": "📌 Мої закладки",
-        "kb-promotions": "🎁 Акції",
-        "kb-manager": "👤 Зв'язок з менеджером",
     }.get(key, key)
     mock_hub.get_translator_by_locale.return_value = mock_translator
 
-    assert parse_menu_button("🏠 Підбір апартаментів", i18n_hub=mock_hub) == "search"
+    assert parse_menu_button("🏠 Підібрати квартиру", i18n_hub=mock_hub) == "search"
     assert parse_menu_button("🔑 Послуги", i18n_hub=mock_hub) == "services"
 
 
@@ -145,7 +145,7 @@ def test_parse_with_i18n_hub_fallback_to_menu_buttons():
     mock_hub.get_translator_by_locale.return_value = mock_translator
 
     # Russian text not in i18n translations but matches MENU_BUTTONS
-    result = parse_menu_button("🏠 Подбор апартаментов", i18n_hub=mock_hub)
+    result = parse_menu_button("🏠 Подобрать квартиру", i18n_hub=mock_hub)
     assert result == "search"
 
 
@@ -164,7 +164,7 @@ def test_parse_menu_button_i18n_hub_raises_fallback():
     mock_hub.get_translator_by_locale.side_effect = RuntimeError("hub broken")
 
     # Still resolves via MENU_BUTTONS fallback
-    assert parse_menu_button("🏠 Подбор апартаментов", i18n_hub=mock_hub) == "search"
+    assert parse_menu_button("🏠 Подобрать квартиру", i18n_hub=mock_hub) == "search"
     # Unknown text still returns None
     assert parse_menu_button("random", i18n_hub=mock_hub) is None
 
@@ -180,28 +180,28 @@ def test_get_menu_button_texts_includes_localized_labels():
         translator = MagicMock()
         mapping = {
             "ru": {
-                "kb-search": "🏠 Подбор апартаментов",
+                "kb-search": "🏠 Подобрать квартиру",
                 "kb-services": "🔑 Услуги",
                 "kb-viewing": "📅 Запись на осмотр",
+                "kb-manager": "👤 Менеджер",
+                "kb-ask": "💬 Задать вопрос",
                 "kb-bookmarks": "📌 Мои закладки",
-                "kb-promotions": "🎁 Акции",
-                "kb-manager": "👤 Связь с менеджером",
             },
             "uk": {
-                "kb-search": "🏠 Підбір апартаментів",
+                "kb-search": "🏠 Підібрати квартиру",
                 "kb-services": "🔑 Послуги",
                 "kb-viewing": "📅 Запис на огляд",
+                "kb-manager": "👤 Менеджер",
+                "kb-ask": "💬 Задати питання",
                 "kb-bookmarks": "📌 Мої закладки",
-                "kb-promotions": "🎁 Акції",
-                "kb-manager": "👤 Зв'язок з менеджером",
             },
             "en": {
-                "kb-search": "🏠 Find Apartments",
+                "kb-search": "🏠 Find Apartment",
                 "kb-services": "🔑 Services",
                 "kb-viewing": "📅 Book a Viewing",
+                "kb-manager": "👤 Manager",
+                "kb-ask": "💬 Ask a Question",
                 "kb-bookmarks": "📌 My Bookmarks",
-                "kb-promotions": "🎁 Promotions",
-                "kb-manager": "👤 Contact Manager",
             },
         }[locale]
         translator.get.side_effect = lambda key, **_kw: mapping.get(key, key)
@@ -211,5 +211,5 @@ def test_get_menu_button_texts_includes_localized_labels():
 
     texts = get_menu_button_texts(i18n_hub=mock_hub)
     assert "🔑 Послуги" in texts
-    assert "🏠 Find Apartments" in texts
+    assert "🏠 Find Apartment" in texts
     assert "🔑 Услуги" in texts
