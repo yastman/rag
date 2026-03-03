@@ -1601,7 +1601,9 @@ class PropertyBot:
         else:
             await callback.answer()
 
-    async def handle_favorite_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+    async def handle_favorite_callback(
+        self, callback: CallbackQuery, state: FSMContext, dialog_manager: Any = None
+    ) -> None:
         """Handle favorite add/remove/viewing callbacks (#628)."""
         data = callback.data or ""
         parts = data.split(":", 2)
@@ -1709,8 +1711,6 @@ class PropertyBot:
                 await callback.answer("Удалено из закладок")
 
         elif action == "viewing" and property_id:
-            from .handlers.phone_collector import start_phone_collection
-
             # Загрузить данные объекта из favorites
             fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
             viewing_objs = []
@@ -1727,13 +1727,24 @@ class PropertyBot:
                         }
                     )
                     break
-            await start_phone_collection(
-                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
-            )
+            if dialog_manager is not None:
+                from aiogram_dialog import StartMode
+
+                from .dialogs.states import ViewingSG
+
+                await dialog_manager.start(
+                    ViewingSG.date,
+                    mode=StartMode.RESET_STACK,
+                    data={"selected_objects": viewing_objs},
+                )
+            else:
+                from .handlers.phone_collector import start_phone_collection
+
+                await start_phone_collection(
+                    callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+                )
 
         elif action == "viewing_all":
-            from .handlers.phone_collector import start_phone_collection
-
             fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
             viewing_objs = []
             for fav in fav_items:
@@ -1747,14 +1758,29 @@ class PropertyBot:
                         "price_eur": d.get("price_eur", 0),
                     }
                 )
-            await start_phone_collection(
-                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
-            )
+            if dialog_manager is not None:
+                from aiogram_dialog import StartMode
+
+                from .dialogs.states import ViewingSG
+
+                await dialog_manager.start(
+                    ViewingSG.date,
+                    mode=StartMode.RESET_STACK,
+                    data={"selected_objects": viewing_objs},
+                )
+            else:
+                from .handlers.phone_collector import start_phone_collection
+
+                await start_phone_collection(
+                    callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+                )
 
         else:
             await callback.answer()
 
-    async def handle_results_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+    async def handle_results_callback(
+        self, callback: CallbackQuery, state: FSMContext, dialog_manager: Any = None
+    ) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
         from .keyboards.property_card import build_results_footer
 
@@ -1850,8 +1876,6 @@ class PropertyBot:
                 )
             await callback.answer()
         elif data == "results:viewing":
-            from .handlers.phone_collector import start_phone_collection
-
             state_data = await state.get_data()
             results = state_data.get("apartment_results", [])
             # Первые 5 результатов как контекст для CRM заметки
@@ -1868,9 +1892,22 @@ class PropertyBot:
                             "price_eur": p.get("price_eur", 0),
                         }
                     )
-            await start_phone_collection(
-                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
-            )
+            if dialog_manager is not None:
+                from aiogram_dialog import StartMode
+
+                from .dialogs.states import ViewingSG
+
+                await dialog_manager.start(
+                    ViewingSG.date,
+                    mode=StartMode.RESET_STACK,
+                    data={"selected_objects": viewing_objs},
+                )
+            else:
+                from .handlers.phone_collector import start_phone_collection
+
+                await start_phone_collection(
+                    callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+                )
         else:
             await callback.answer()
 

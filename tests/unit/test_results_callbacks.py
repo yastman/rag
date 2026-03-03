@@ -240,7 +240,25 @@ async def test_results_refine_clears_state() -> None:
 
 
 async def test_results_viewing_delegates() -> None:
-    """results:viewing → delegates to start_phone_collection."""
+    """results:viewing → starts ViewingSG.date dialog via dialog_manager."""
+    bot = _create_bot()
+    state = _make_state({"apartment_results": _make_results(3)})
+    callback = _make_callback("results:viewing")
+    dialog_manager = AsyncMock()
+
+    await bot.handle_results_callback(callback, state, dialog_manager=dialog_manager)
+
+    dialog_manager.start.assert_awaited_once()
+    from telegram_bot.dialogs.states import ViewingSG
+
+    call_args = dialog_manager.start.call_args
+    assert call_args.args[0] == ViewingSG.date
+    start_data = call_args.kwargs.get("data", {})
+    assert "selected_objects" in start_data
+
+
+async def test_results_viewing_fallback_phone_collector() -> None:
+    """results:viewing without dialog_manager → falls back to start_phone_collection."""
     bot = _create_bot()
     state = _make_state()
     callback = _make_callback("results:viewing")
