@@ -623,6 +623,15 @@ async def on_budget_selected(
         await manager.switch_to(FunnelSG.preferences)
 
 
+async def on_pref_back_to_menu(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """Return to preferences multi-select menu (fixes Back() index-based navigation)."""
+    await manager.switch_to(FunnelSG.preferences)
+
+
 async def on_pref_category_selected(
     callback: CallbackQuery,
     widget: Select,
@@ -989,7 +998,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_floor_selected,
             ),
         ),
-        Back(Format("{btn_back}")),
+        Button(Format("{btn_back}"), id="pref_floor_back", on_click=on_pref_back_to_menu),
         getter=get_pref_floor_options,
         state=FunnelSG.pref_floor,
     ),
@@ -1005,7 +1014,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_view_selected,
             ),
         ),
-        Back(Format("{btn_back}")),
+        Button(Format("{btn_back}"), id="pref_view_back", on_click=on_pref_back_to_menu),
         getter=get_pref_view_options,
         state=FunnelSG.pref_view,
     ),
@@ -1021,7 +1030,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_furnished_selected,
             ),
         ),
-        Back(Format("{btn_back}")),
+        Button(Format("{btn_back}"), id="pref_furn_back", on_click=on_pref_back_to_menu),
         getter=get_pref_furnished_options,
         state=FunnelSG.pref_furnished,
     ),
@@ -1037,7 +1046,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_promotion_selected,
             ),
         ),
-        Back(Format("{btn_back}")),
+        Button(Format("{btn_back}"), id="pref_promo_back", on_click=on_pref_back_to_menu),
         getter=get_pref_promotion_options,
         state=FunnelSG.pref_promotion,
     ),
@@ -1053,7 +1062,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_area_selected,
             ),
         ),
-        Back(Format("{btn_back}")),
+        Button(Format("{btn_back}"), id="pref_area_back", on_click=on_pref_back_to_menu),
         getter=get_pref_area_options,
         state=FunnelSG.pref_area,
     ),
@@ -1069,7 +1078,7 @@ funnel_dialog = Dialog(
                 on_click=on_pref_complex_selected,
             ),
         ),
-        Back(Format("{btn_back}")),
+        Button(Format("{btn_back}"), id="pref_cplx_back", on_click=on_pref_back_to_menu),
         getter=get_pref_complex_options,
         state=FunnelSG.pref_complex,
     ),
