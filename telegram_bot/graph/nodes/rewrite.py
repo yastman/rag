@@ -13,18 +13,10 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.rag_core import rewrite_query_via_llm
 
 
 logger = logging.getLogger(__name__)
-
-
-_REWRITE_PROMPT = (
-    "Ты — помощник по поиску недвижимости. "
-    "Пользователь задал вопрос, но результаты поиска оказались нерелевантными.\n\n"
-    "Переформулируй запрос так, чтобы он лучше подходил для поиска по базе недвижимости.\n"
-    "Верни ТОЛЬКО переформулированный запрос, без пояснений.\n\n"
-    "Оригинальный запрос: {query}"
-)
 
 
 @observe(name="node-rewrite")
@@ -60,25 +52,9 @@ async def rewrite_node(
         config = GraphConfig.from_env()
         if llm is None:
             llm = config.create_llm()
-
-        prompt = _REWRITE_PROMPT.format(query=original_query)
-        response = await llm.chat.completions.create(
-            model=config.rewrite_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=config.rewrite_max_tokens,
-            name="rewrite-query",  # type: ignore[call-overload]  # langfuse kwarg
+        rewritten, effective, rewrite_actual_model = await rewrite_query_via_llm(
+            original_query, llm=llm
         )
-        rewritten = (response.choices[0].message.content or "").strip()
-        rewrite_actual_model = (
-            getattr(response, "model", config.rewrite_model) or config.rewrite_model
-        )
-
-        if not rewritten or rewritten == original_query:
-            rewritten = original_query
-            effective = False
-        else:
-            effective = True
     except Exception as e:
         logger.exception("rewrite_node: LLM rewrite failed, keeping original query")
         get_client().update_current_span(
