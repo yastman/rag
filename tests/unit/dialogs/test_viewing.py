@@ -44,10 +44,14 @@ async def test_on_date_selected_saves_and_switches_to_phone():
     callback = MagicMock()
     callback.message = AsyncMock()
     callback.message.answer = AsyncMock()
+    callback.bot = AsyncMock()
+    callback.from_user = SimpleNamespace(id=123)
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await on_date_selected(callback, SimpleNamespace(), manager, "next_week")
     assert manager.dialog_data["date_range"] == "next_week"
     manager.switch_to.assert_awaited_once_with(ViewingSG.phone)
+    # Should send ReplyKeyboard with request_contact
+    callback.bot.send_message.assert_awaited_once()
 
 
 # --- Objects getter (empty favorites) ---
@@ -224,17 +228,22 @@ async def test_phone_prompt_contains_format_mask():
 
 
 @pytest.mark.asyncio
-async def test_on_date_selected_no_extra_message():
-    """on_date_selected should NOT send extra reply keyboard message."""
+async def test_on_date_selected_sends_reply_keyboard():
+    """on_date_selected should send ReplyKeyboard with request_contact."""
     from telegram_bot.dialogs.viewing import on_date_selected
 
     callback = MagicMock()
     callback.message = AsyncMock()
     callback.message.answer = AsyncMock()
+    callback.bot = AsyncMock()
+    callback.from_user = SimpleNamespace(id=456)
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
     await on_date_selected(callback, SimpleNamespace(), manager, "nearest")
-    # No extra message should be sent
-    callback.message.answer.assert_not_called()
+    # Should send ReplyKeyboard via bot.send_message
+    callback.bot.send_message.assert_awaited_once()
+    call_kwargs = callback.bot.send_message.call_args.kwargs
+    assert call_kwargs["chat_id"] == 456
+    assert call_kwargs["reply_markup"] is not None
 
 
 # --- CRM integration ---
@@ -366,7 +375,7 @@ async def test_on_confirm_graceful_when_no_kommo():
     # Verify confirmation goes to correct chat with expected text
     send_kwargs = callback.bot.send_message.await_args
     assert send_kwargs.kwargs["chat_id"] == 12345
-    assert "Заявка принята" in send_kwargs.kwargs["text"]
+    assert "заявка на осмотр получена" in send_kwargs.kwargs["text"].lower()
     manager.done.assert_awaited_once()
 
 
@@ -418,8 +427,8 @@ async def test_on_confirm_sends_confirmation_with_correct_text():
     callback.bot.send_message.assert_awaited_once()
     call_kwargs = callback.bot.send_message.await_args.kwargs
     assert call_kwargs["chat_id"] == 99999
-    assert "Заявка принята" in call_kwargs["text"]
-    assert "Менеджер свяжется" in call_kwargs["text"]
+    assert "заявка на осмотр получена" in call_kwargs["text"].lower()
+    assert "менеджер свяжется" in call_kwargs["text"].lower()
 
     # 2. Lead title contains object name
     lead_arg = kommo.create_lead.await_args.args[0]

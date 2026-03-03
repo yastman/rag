@@ -10,9 +10,12 @@ from typing import Any
 from aiogram.types import (
     CallbackQuery,
     ContentType,
+    KeyboardButton,
     Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
 )
-from aiogram_dialog import Dialog, DialogManager, Window
+from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select
 from aiogram_dialog.widgets.text import Const, Format  # noqa: F401
@@ -234,25 +237,61 @@ async def on_manual_text_received(message: Message, widget: Any, manager: Dialog
     await manager.switch_to(ViewingSG.date)
 
 
+async def _send_phone_reply_keyboard(callback: CallbackQuery) -> None:
+    """Send ReplyKeyboard with 'Share Contact' button for phone step."""
+    kb = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📱 Поделиться контактом", request_contact=True)],
+            [KeyboardButton(text="❌ Отмена")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+    )
+    await callback.bot.send_message(
+        chat_id=callback.from_user.id,
+        text="👇 Нажмите кнопку ниже или введите номер вручную:",
+        reply_markup=kb,
+    )
+
+
+async def _restore_menu_keyboard(bot: Any, chat_id: int) -> None:
+    """Restore client menu ReplyKeyboard after dialog completes."""
+    from telegram_bot.keyboards.client_keyboard import build_client_keyboard
+
+    await bot.send_message(
+        chat_id=chat_id,
+        text="✅ Ваша заявка на осмотр получена!\n\n"
+        "Наш менеджер свяжется с вами в ближайшее время "
+        "для согласования деталей. Спасибо за обращение! 🙏",
+        reply_markup=build_client_keyboard(),
+    )
+
+
 async def on_date_selected(
     callback: CallbackQuery,
     widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    """Save date range and proceed to phone (no extra message)."""
+    """Save date range and proceed to phone."""
     manager.dialog_data["date_range"] = item_id
+    await _send_phone_reply_keyboard(callback)
     await manager.switch_to(ViewingSG.phone)
 
 
 async def on_phone_text_received(message: Message, widget: Any, manager: DialogManager) -> None:
     """Handle phone number text input."""
-    from aiogram_dialog import ShowMode
-
     from telegram_bot.handlers.phone_collector import normalize_phone, validate_phone
 
     text = message.text or ""
     logger.info("on_phone_text_received: raw=%r", text)
+
+    # Handle cancel from ReplyKeyboard
+    if text in ("❌ Отмена", "Отмена"):
+        await message.answer("Запись отменена.", reply_markup=ReplyKeyboardRemove())
+        await manager.done()
+        return
+
     if not validate_phone(text):
         await message.answer("❌ Некорректный номер. Например: +359 88 123 4567")
         return
@@ -261,6 +300,7 @@ async def on_phone_text_received(message: Message, widget: Any, manager: DialogM
         await message.answer("❌ Некорректный номер. Например: +359 88 123 4567")
         return
     manager.dialog_data["phone"] = phone
+    await message.answer("📞 Номер принят!", reply_markup=ReplyKeyboardRemove())
     manager.show_mode = ShowMode.DELETE_AND_SEND
     logger.info("on_phone_text_received: phone=%s, switching to summary", phone)
     await manager.switch_to(ViewingSG.summary)
@@ -268,14 +308,13 @@ async def on_phone_text_received(message: Message, widget: Any, manager: DialogM
 
 async def on_phone_contact_received(message: Message, widget: Any, manager: DialogManager) -> None:
     """Handle shared contact (request_contact button)."""
-    from aiogram_dialog import ShowMode
-
     if message.contact and message.contact.phone_number:
         from telegram_bot.handlers.phone_collector import normalize_phone
 
         raw = message.contact.phone_number
         phone = normalize_phone(raw) or raw
         manager.dialog_data["phone"] = phone
+        await message.answer("📞 Номер принят!", reply_markup=ReplyKeyboardRemove())
         manager.show_mode = ShowMode.DELETE_AND_SEND
         await manager.switch_to(ViewingSG.summary)
     else:
@@ -405,12 +444,8 @@ async def on_confirm(callback: CallbackQuery, button: Button, manager: DialogMan
             except Exception:
                 logger.exception("CRM viewing lead creation failed for phone=%s", phone)
 
-        # Send confirmation to user's chat (not via callback.message which may be
-        # InaccessibleMessage after ShowMode.EDIT in aiogram-dialog)
-        await callback.bot.send_message(
-            chat_id=callback.from_user.id,
-            text="✅ Заявка принята! Менеджер свяжется с вами в ближайшее время.",
-        )
+        # Send confirmation + restore client menu keyboard
+        await _restore_menu_keyboard(callback.bot, callback.from_user.id)
         logger.info("Viewing confirmation sent to user=%s", callback.from_user.id)
     except Exception:
         logger.exception("on_confirm failed for user=%s", getattr(callback.from_user, "id", "?"))
