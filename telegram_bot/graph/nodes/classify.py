@@ -10,13 +10,12 @@ import logging
 import random
 import re
 import time
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from langgraph.runtime import Runtime
+
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
-
-
-if TYPE_CHECKING:
-    from telegram_bot.services.semantic_classifier import SemanticClassifier
 
 
 logger = logging.getLogger(__name__)
@@ -275,8 +274,7 @@ def classify_query(query: str) -> str:
 @observe(name="node-classify")
 async def classify_node(
     state: dict[str, Any],
-    *,
-    classifier: SemanticClassifier | None = None,
+    runtime: Runtime[GraphContext],
 ) -> dict[str, Any]:
     """LangGraph node: classify the user query.
 
@@ -285,13 +283,13 @@ async def classify_node(
 
     Args:
         state: Current graph state.
-        classifier: Optional SemanticClassifier. If provided and available,
-            uses RedisVL SemanticRouter; falls back to regex on any error.
+        runtime: LangGraph Runtime with GraphContext (classifier).
 
     Returns partial state update with query_type, response (if canned),
     and latency_stages["classify"].
     """
     t0 = time.perf_counter()
+    classifier = runtime.context.get("classifier")
 
     messages = state["messages"]
     query = messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]

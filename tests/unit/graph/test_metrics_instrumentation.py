@@ -5,12 +5,19 @@ from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from langgraph.runtime import Runtime
 
 from telegram_bot.graph.nodes.cache import cache_check_node
 from telegram_bot.graph.nodes.generate import generate_node
 from telegram_bot.graph.nodes.rerank import rerank_node
 from telegram_bot.graph.nodes.retrieve import retrieve_node
 from telegram_bot.graph.state import make_initial_state
+
+
+def _rt(**ctx) -> Runtime:
+    return Runtime(context=ctx)
+
+
 from telegram_bot.services.metrics import PipelineMetrics
 
 
@@ -80,9 +87,7 @@ class TestRetrieveNodeMetrics:
 
         await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _rt(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         stats = PipelineMetrics.get().get_stats()
@@ -102,9 +107,7 @@ class TestRetrieveNodeMetrics:
 
         await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _rt(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         stats = PipelineMetrics.get().get_stats()
@@ -173,7 +176,7 @@ class TestRerankNodeMetrics:
             ]
         )
 
-        await rerank_node(state, reranker=reranker)
+        await rerank_node(state, _rt(reranker=reranker))
 
         stats = PipelineMetrics.get().get_stats()
         assert "rerank" in stats["timings"]
@@ -184,7 +187,7 @@ class TestRerankNodeMetrics:
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["documents"] = _make_docs(5)
 
-        await rerank_node(state, reranker=None)
+        await rerank_node(state, _rt())
 
         stats = PipelineMetrics.get().get_stats()
         assert "rerank" in stats["timings"]
@@ -195,7 +198,7 @@ class TestRerankNodeMetrics:
         state = make_initial_state(user_id=1, session_id="s1", query="test")
         state["documents"] = []
 
-        await rerank_node(state, reranker=None)
+        await rerank_node(state, _rt())
 
         stats = PipelineMetrics.get().get_stats()
         assert "rerank" in stats["timings"]
@@ -218,7 +221,7 @@ class TestCacheCheckNodeMetrics:
 
         embeddings = AsyncMock()
 
-        await cache_check_node(state, cache=cache, embeddings=embeddings)
+        await cache_check_node(state, _rt(cache=cache, embeddings=embeddings))
 
         stats = PipelineMetrics.get().get_stats()
         assert stats["counters"].get("cache_hit", 0) == 1
@@ -237,7 +240,7 @@ class TestCacheCheckNodeMetrics:
 
         embeddings = AsyncMock()
 
-        await cache_check_node(state, cache=cache, embeddings=embeddings)
+        await cache_check_node(state, _rt(cache=cache, embeddings=embeddings))
 
         stats = PipelineMetrics.get().get_stats()
         assert stats["counters"].get("cache_miss", 0) == 1
@@ -256,7 +259,7 @@ class TestCacheCheckNodeMetrics:
 
         embeddings = AsyncMock()
 
-        await cache_check_node(state, cache=cache, embeddings=embeddings)
+        await cache_check_node(state, _rt(cache=cache, embeddings=embeddings))
 
         stats = PipelineMetrics.get().get_stats()
         assert stats["counters"].get("cache_miss", 0) == 1
