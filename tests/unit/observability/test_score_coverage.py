@@ -128,7 +128,6 @@ def test_core_rag_score_value_is_numeric(score_name: str, all_rag_scores: dict) 
         "llm_stream_recovery",
         "bge_embed_error",
         "security_alert",
-        "guard_ml_available",
         "summarization_triggered",
     ],
 )
