@@ -34,14 +34,14 @@ class TestBuildDislikeReasonKeyboard:
         for row in kb.inline_keyboard:
             assert len(row) == 2
 
-    def test_callback_data_starts_with_fb_r(self):
+    def test_callback_data_starts_with_fbr(self):
         from telegram_bot.feedback import build_dislike_reason_keyboard
 
         kb = build_dislike_reason_keyboard("trace123abc")
         for row in kb.inline_keyboard:
             for btn in row:
                 assert btn.callback_data is not None
-                assert btn.callback_data.startswith("fb:r:")
+                assert btn.callback_data.startswith("fbr:")
 
     def test_all_6_reason_codes_present(self):
         from telegram_bot.feedback import build_dislike_reason_keyboard
@@ -50,9 +50,9 @@ class TestBuildDislikeReasonKeyboard:
         codes = set()
         for row in kb.inline_keyboard:
             for btn in row:
-                # format: fb:r:{code}:{trace_id}
+                # format: fbr:{code}:{trace_id}
                 parts = (btn.callback_data or "").split(":")
-                codes.add(parts[2])
+                codes.add(parts[1])
         assert codes == {"wt", "mi", "bs", "ha", "ic", "fm"}
 
     def test_trace_id_encoded_in_callback(self):
