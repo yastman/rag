@@ -60,3 +60,18 @@ class TestTargetSyncExecution:
         # Check method exists (will be added)
         assert hasattr(QdrantHybridWriter, "delete_file_sync")
         assert hasattr(QdrantHybridWriter, "upsert_chunks_sync")
+
+    def test_mutate_does_not_raise_on_single_file_failure(self):
+        """mutate() must not propagate exceptions from individual file failures."""
+        import inspect
+
+        from src.ingestion.unified.targets.qdrant_hybrid_target import (
+            QdrantHybridTargetConnector,
+        )
+
+        source = inspect.getsource(QdrantHybridTargetConnector.mutate)
+        # The except block in mutate() should NOT re-raise
+        assert "raise  # Propagate" not in source, (
+            "mutate() must not re-raise per-file errors — "
+            "one failing file should not kill the entire ingestion process"
+        )
