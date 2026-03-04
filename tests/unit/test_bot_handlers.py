@@ -126,24 +126,6 @@ class TestPropertyBotInit:
         # First call is main collection (with timeout), second is apartments
         assert mock_qdrant.call_args_list[0].kwargs["timeout"] == 7
 
-    def test_init_creates_llm_guard_client_when_enabled(self, mock_config):
-        """PropertyBot initializes LLMGuardClient when ML guard is enabled."""
-        mock_config.guard_ml_enabled = True
-        mock_config.llm_guard_url = "http://guard:8100"
-        with (
-            patch("telegram_bot.bot.Bot"),
-            patch("telegram_bot.integrations.cache.CacheLayerManager"),
-            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
-            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
-            patch("telegram_bot.services.qdrant.QdrantService"),
-            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
-            patch("telegram_bot.services.llm_guard_client.LLMGuardClient") as mock_guard_client,
-        ):
-            bot = PropertyBot(mock_config)
-
-        mock_guard_client.assert_called_once_with(base_url="http://guard:8100")
-        assert bot._llm_guard_client is mock_guard_client.return_value
-
 
 class TestCommandHandlers:
     """Test command handlers."""
@@ -1124,7 +1106,6 @@ class TestCheckpointNamespace:
     async def test_handle_voice_passes_voice_checkpoint_ns(self, mock_config):
         """handle_voice passes checkpoint_ns='tg:voice:v1' in invoke_config."""
         bot, _ = _create_bot(mock_config)
-        bot._llm_guard_client = MagicMock()
         bot._checkpointer = object()
         bot._agent_checkpointer = object()
 
@@ -1166,13 +1147,11 @@ class TestCheckpointNamespace:
             assert cfg["thread_id"] == "12345"
             assert cfg["checkpoint_ns"] == "tg:voice:v1"
             graph_kwargs = mock_build_graph.call_args.kwargs
-            assert graph_kwargs["llm_guard_client"] is bot._llm_guard_client
             assert graph_kwargs["checkpointer"] is bot._agent_checkpointer
 
     async def test_text_and_voice_concurrent_requests_keep_separate_threads(self, mock_config):
         """Concurrent text+voice requests from same user should not interfere (#540)."""
         bot, _ = _create_bot(mock_config)
-        bot._llm_guard_client = MagicMock()
         bot._checkpointer = object()
         bot._agent_checkpointer = object()
         bot._history_service = None
@@ -1478,8 +1457,6 @@ class TestBotLifecycle:
         bot._sparse = MagicMock()
         bot._sparse.aclose = AsyncMock()
         bot._reranker = None
-        bot._llm_guard_client = MagicMock()
-        bot._llm_guard_client.aclose = AsyncMock()
         bot.bot = MagicMock()
         bot.bot.session = MagicMock()
         bot.bot.session.close = AsyncMock()
@@ -1492,7 +1469,6 @@ class TestBotLifecycle:
         bot._qdrant.close.assert_called_once()
         bot._embeddings.aclose.assert_awaited_once()
         bot._sparse.aclose.assert_awaited_once()
-        bot._llm_guard_client.aclose.assert_awaited_once()
 
     async def test_stop_closes_checkpointer_context(self, mock_config):
         """stop() should close async checkpointer context when available."""
