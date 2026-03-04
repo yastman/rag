@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
+from typing import Any
 
-from aiogram import Dispatcher
+from aiogram import BaseMiddleware, Dispatcher
 from aiogram.filters import ExceptionTypeFilter
-from aiogram.types import ErrorEvent
+from aiogram.types import ErrorEvent, Message, TelegramObject
 
 
 logger = logging.getLogger(__name__)
@@ -14,6 +16,29 @@ logger = logging.getLogger(__name__)
 _ERROR_TEXT = (
     "❌ Произошла ошибка при обработке запроса. Попробуйте позже или обратитесь к администратору."
 )
+
+
+class ErrorHandlerMiddleware(BaseMiddleware):
+    """Backward-compatible middleware wrapper for legacy imports/tests."""
+
+    async def __call__(
+        self,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
+        data: dict[str, Any],
+    ) -> Any:
+        try:
+            return await handler(event, data)
+        except Exception as exc:
+            logger.error(
+                "Error in handler for event %s: %s",
+                type(event).__name__,
+                exc,
+                exc_info=True,
+            )
+            if isinstance(event, Message):
+                await event.answer(_ERROR_TEXT)
+            raise
 
 
 async def handle_error(event: ErrorEvent) -> None:
@@ -32,12 +57,19 @@ async def handle_error(event: ErrorEvent) -> None:
         exc_info=exception,
     )
 
+    callback_query = update.callback_query
+    if callback_query is not None:
+        try:
+            await callback_query.answer()
+        except Exception:
+            logger.warning("Failed to answer callback query in error handler", exc_info=True)
+
     # Resolve a message to reply to, if the update carries one.
     message = None
     if update.message is not None:
         message = update.message
-    elif update.callback_query is not None and update.callback_query.message is not None:
-        message = update.callback_query.message  # type: ignore[assignment]
+    elif callback_query is not None and callback_query.message is not None:
+        message = callback_query.message  # type: ignore[assignment]
 
     if message is not None:
         await message.answer(_ERROR_TEXT)
@@ -51,3 +83,9 @@ def setup_error_handler(dp: Dispatcher) -> None:
     """
     dp.errors.register(handle_error, ExceptionTypeFilter(Exception))
     logger.info("Error handler registered via dp.errors")
+
+
+def setup_error_middleware(dp: Dispatcher) -> None:
+    """Backward-compatible legacy registration helper."""
+    dp.message.outer_middleware.register(ErrorHandlerMiddleware())
+    logger.info("Error handling middleware registered")
