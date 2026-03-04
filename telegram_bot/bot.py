@@ -46,7 +46,7 @@ from .handlers.handoff import (
     start_qualification,
 )
 from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
-from .middlewares import setup_error_middleware, setup_throttling_middleware
+from .middlewares import setup_error_handler, setup_throttling_middleware
 from .observability import (
     create_callback_handler,
     get_client,
@@ -461,7 +461,7 @@ class PropertyBot:
     def _setup_middlewares(self):
         """Setup bot middlewares."""
         setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=self.config.admin_ids)
-        setup_error_middleware(self.dp)
+        setup_error_handler(self.dp)
         logger.info("Middlewares configured")
 
     @staticmethod
