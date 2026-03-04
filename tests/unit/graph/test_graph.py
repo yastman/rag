@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from telegram_bot.graph.graph import build_graph
 
 
@@ -97,3 +99,25 @@ class TestBuildGraph:
         )
         assert graph is not None
         assert hasattr(graph, "ainvoke")
+
+    @pytest.mark.asyncio
+    async def test_graph_ainvoke_allows_context_override(self):
+        """ainvoke(context=...) should not fail with duplicate keyword arguments."""
+        cache = AsyncMock()
+        embeddings = AsyncMock()
+        sparse = AsyncMock()
+        qdrant = AsyncMock()
+
+        graph = build_graph(
+            cache=cache,
+            embeddings=embeddings,
+            sparse_embeddings=sparse,
+            qdrant=qdrant,
+        )
+
+        with pytest.raises(Exception) as exc_info:
+            # Empty state is intentionally invalid, but this call must not crash
+            # with TypeError caused by duplicate "context" kwargs.
+            await graph.ainvoke({}, context={"guard_mode": "soft"})
+
+        assert "multiple values for keyword argument 'context'" not in str(exc_info.value)
