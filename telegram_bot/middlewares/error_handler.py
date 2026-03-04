@@ -1,58 +1,53 @@
-"""Error handling middleware for bot."""
+"""Error handler registered on dp.errors router for all event types."""
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
-from typing import Any
 
-from aiogram import BaseMiddleware, Dispatcher
-from aiogram.types import Message, TelegramObject
+from aiogram import Dispatcher
+from aiogram.filters import ExceptionTypeFilter
+from aiogram.types import ErrorEvent
 
 
 logger = logging.getLogger(__name__)
 
+_ERROR_TEXT = (
+    "❌ Произошла ошибка при обработке запроса. Попробуйте позже или обратитесь к администратору."
+)
 
-class ErrorHandlerMiddleware(BaseMiddleware):
+
+async def handle_error(event: ErrorEvent) -> None:
+    """Handle any exception raised in an aiogram handler.
+
+    Covers all event types: Message, CallbackQuery, InlineQuery, etc.
+    Logs the error and sends a user-friendly reply when possible.
     """
-    Middleware for centralized error handling.
+    exception = event.exception
+    update = event.update
 
-    Catches exceptions in handlers and provides user-friendly error messages.
-    """
+    logger.error(
+        "Error in handler for update %s: %s",
+        type(update).__name__,
+        exception,
+        exc_info=exception,
+    )
 
-    async def __call__(
-        self,
-        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
-        event: TelegramObject,
-        data: dict[str, Any],
-    ) -> Any:
-        """Process event with error handling."""
-        try:
-            return await handler(event, data)
-        except Exception as e:
-            logger.error(
-                f"Error in handler for event {type(event).__name__}: {e}",
-                exc_info=True,
-            )
+    # Resolve a message to reply to, if the update carries one.
+    message = None
+    if update.message is not None:
+        message = update.message
+    elif update.callback_query is not None and update.callback_query.message is not None:
+        message = update.callback_query.message
 
-            # Send user-friendly error message
-            if isinstance(event, Message):
-                await event.answer(
-                    "❌ Произошла ошибка при обработке запроса. "
-                    "Попробуйте позже или обратитесь к администратору."
-                )
-
-            # Re-raise to allow error router to handle if needed
-            raise
+    if message is not None:
+        await message.answer(_ERROR_TEXT)
 
 
-def setup_error_middleware(dp: Dispatcher) -> None:
-    """
-    Setup error handling middleware.
+def setup_error_handler(dp: Dispatcher) -> None:
+    """Register handle_error on dp.errors, covering all aiogram event types.
 
     Args:
         dp: Dispatcher instance
     """
-    middleware = ErrorHandlerMiddleware()
-    dp.message.outer_middleware.register(middleware)
-    logger.info("Error handling middleware registered")
+    dp.errors.register(handle_error, ExceptionTypeFilter(Exception))
+    logger.info("Error handler registered via dp.errors")
