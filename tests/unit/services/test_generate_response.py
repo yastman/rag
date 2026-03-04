@@ -89,6 +89,17 @@ class _AsyncStream:
         return chunk
 
 
+class _FailingAsyncStream(_AsyncStream):
+    def __init__(self, chunks: list[_StreamChunk], error: Exception):
+        super().__init__(chunks)
+        self._error = error
+
+    async def __anext__(self):
+        if self._idx >= len(self._chunks):
+            raise self._error
+        return await super().__anext__()
+
+
 @pytest.mark.asyncio
 async def test_generate_response_non_streaming_returns_llm_answer() -> None:
     config, client = _make_non_streaming_config(answer="Найдено 3 варианта.")
@@ -666,6 +677,51 @@ async def test_stream_failure_raises_and_triggers_fallback() -> None:
 
     assert result["response"] == "Нестриминговый fallback"
     assert result["llm_stream_recovery"] is True
+
+
+@pytest.mark.asyncio
+async def test_partial_stream_recovery_edits_existing_message_instead_of_sending_duplicate() -> None:
+    """Partial stream recovery should reuse the persisted message, not send a duplicate."""
+    config, client = _make_non_streaming_config(answer="Полный ответ после recovery")
+    config.streaming_enabled = True
+
+    partial_stream = _FailingAsyncStream([_StreamChunk("Частичный ответ")], RuntimeError("boom"))
+    fallback_response = MagicMock()
+    fallback_response.choices = [MagicMock()]
+    fallback_response.choices[0].message.content = "Полный ответ после recovery"
+    fallback_response.model = "gpt-4o-mini"
+    fallback_response.usage = None
+    client.chat.completions.create = AsyncMock(side_effect=[partial_stream, fallback_response])
+    config.create_llm.return_value = client
+
+    lf = MagicMock()
+    bot = AsyncMock()
+    bot.send_message_draft = AsyncMock(return_value=True)
+    sent_msg = AsyncMock()
+    sent_msg.chat = MagicMock(id=10)
+    sent_msg.message_id = 20
+    message = AsyncMock()
+    message.chat = MagicMock(id=10)
+    message.bot = bot
+    message.answer = AsyncMock(return_value=sent_msg)
+
+    result = await generate_response(
+        query="Тест partial recovery",
+        documents=[{"text": "Контекст", "score": 0.8, "metadata": {}}],
+        config=config,
+        lf_client=lf,
+        message=message,
+        raw_messages=[{"role": "user", "content": "Тест partial recovery"}],
+    )
+
+    assert result["response"] == "Полный ответ после recovery"
+    assert result["llm_stream_recovery"] is True
+    assert result["response_sent"] is True
+    assert message.answer.await_count == 1
+    sent_msg.edit_text.assert_awaited_once_with(
+        "Полный ответ после recovery",
+        parse_mode="Markdown",
+    )
 
 
 @pytest.mark.asyncio
