@@ -46,7 +46,7 @@ async def get_crm_settings(redis: Any | None, tg_id: int) -> dict[str, Any]:
         raw = await redis.get(_crm_settings_key(tg_id))
         if raw is None:
             return dict(DEFAULT_CRM_SETTINGS)
-        return json.loads(raw)
+        return json.loads(raw)  # type: ignore[no-any-return]
     except Exception:
         logger.warning("Failed to load CRM settings for user %d", tg_id, exc_info=True)
         return dict(DEFAULT_CRM_SETTINGS)

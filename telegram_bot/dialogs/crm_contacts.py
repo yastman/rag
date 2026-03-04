@@ -238,7 +238,7 @@ create_contact_dialog = Dialog(
     # Step 1: First name
     Window(
         Format("{prompt}"),
-        TextInput(id="contact_first_name", on_success=on_first_name_entered),
+        TextInput(id="contact_first_name", on_success=on_first_name_entered),  # type: ignore[arg-type]
         Cancel(Format("{btn_cancel}")),
         getter=get_contact_first_name_prompt,
         state=CreateContactSG.first_name,
@@ -246,7 +246,7 @@ create_contact_dialog = Dialog(
     # Step 2: Last name
     Window(
         Format("{prompt}"),
-        TextInput(id="contact_last_name", on_success=on_last_name_entered),
+        TextInput(id="contact_last_name", on_success=on_last_name_entered),  # type: ignore[arg-type]
         Back(Format("{btn_back}")),
         getter=get_contact_last_name_prompt,
         state=CreateContactSG.last_name,
@@ -254,7 +254,7 @@ create_contact_dialog = Dialog(
     # Step 3: Phone
     Window(
         Format("{prompt}"),
-        TextInput(id="contact_phone", on_success=on_phone_entered),
+        TextInput(id="contact_phone", on_success=on_phone_entered),  # type: ignore[arg-type]
         Back(Format("{btn_back}")),
         getter=get_contact_phone_prompt,
         state=CreateContactSG.phone,
@@ -262,7 +262,7 @@ create_contact_dialog = Dialog(
     # Step 4: Email (optional)
     Window(
         Format("{prompt}"),
-        TextInput(id="contact_email", on_success=on_email_entered),
+        TextInput(id="contact_email", on_success=on_email_entered),  # type: ignore[arg-type]
         Button(Format("{btn_skip}"), id="email_skip", on_click=on_email_skip),
         Back(Format("{btn_back}")),
         getter=get_contact_email_prompt,
