@@ -11,6 +11,9 @@ import pytest
 from telegram_bot.services.llm import LLMService
 
 
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+
 def _mock_completion(content: str) -> MagicMock:
     """Helper: create a mock ChatCompletion response."""
     mock_response = MagicMock()
