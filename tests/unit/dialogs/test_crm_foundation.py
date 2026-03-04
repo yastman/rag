@@ -1,8 +1,6 @@
-"""Tests for CRM foundation: states, wizard models, card formatters (#697)."""
+"""Tests for CRM foundation: states, card formatters (#697)."""
 
 from __future__ import annotations
-
-import pytest
 
 from telegram_bot.dialogs.states import (
     AIAdvisorSG,
@@ -56,110 +54,6 @@ def test_search_sg_states():
 def test_ai_advisor_sg_has_main():
     """AIAdvisorSG has 'main' state."""
     assert hasattr(AIAdvisorSG, "main")
-
-
-# --- Wizard Models ---
-
-
-def test_lead_create_data_valid():
-    """LeadCreateData validates with required fields."""
-    from telegram_bot.dialogs.crm_wizard_models import LeadCreateData
-
-    data = LeadCreateData(name="Test Lead", budget=50000, pipeline_id=1)
-    assert data.name == "Test Lead"
-    assert data.budget == 50000
-    assert data.pipeline_id == 1
-
-
-def test_lead_create_data_minimal():
-    """LeadCreateData works with name only."""
-    from telegram_bot.dialogs.crm_wizard_models import LeadCreateData
-
-    data = LeadCreateData(name="Minimal Lead")
-    assert data.budget is None
-    assert data.pipeline_id is None
-
-
-def test_lead_create_data_rejects_empty_name():
-    """LeadCreateData rejects empty name."""
-    from pydantic import ValidationError
-
-    from telegram_bot.dialogs.crm_wizard_models import LeadCreateData
-
-    with pytest.raises(ValidationError):
-        LeadCreateData(name="")
-
-
-def test_contact_create_data_valid():
-    """ContactCreateData validates with all fields."""
-    from telegram_bot.dialogs.crm_wizard_models import ContactCreateData
-
-    data = ContactCreateData(
-        first_name="Ivan",
-        last_name="Petrov",
-        phone="+79001234567",
-        email="ivan@example.com",
-    )
-    assert data.first_name == "Ivan"
-    assert data.last_name == "Petrov"
-
-
-def test_contact_create_data_minimal():
-    """ContactCreateData works with first_name only."""
-    from telegram_bot.dialogs.crm_wizard_models import ContactCreateData
-
-    data = ContactCreateData(first_name="Ivan")
-    assert data.last_name is None
-    assert data.phone is None
-    assert data.email is None
-
-
-def test_task_create_data_valid():
-    """TaskCreateData validates with required fields."""
-    from telegram_bot.dialogs.crm_wizard_models import TaskCreateData
-
-    data = TaskCreateData(
-        text="Follow up with client",
-        entity_id=42,
-        entity_type="leads",
-        complete_till=1740000000,
-    )
-    assert data.text == "Follow up with client"
-    assert data.entity_id == 42
-    assert data.entity_type == "leads"
-
-
-def test_task_create_data_rejects_invalid_entity_type():
-    """TaskCreateData rejects invalid entity_type."""
-    from pydantic import ValidationError
-
-    from telegram_bot.dialogs.crm_wizard_models import TaskCreateData
-
-    with pytest.raises(ValidationError):
-        TaskCreateData(
-            text="Task",
-            entity_id=1,
-            entity_type="invalid",
-            complete_till=1740000000,
-        )
-
-
-def test_note_create_data_valid():
-    """NoteCreateData validates with required fields."""
-    from telegram_bot.dialogs.crm_wizard_models import NoteCreateData
-
-    data = NoteCreateData(entity_type="leads", entity_id=10, text="Client called back")
-    assert data.entity_type == "leads"
-    assert data.entity_id == 10
-    assert data.text == "Client called back"
-
-
-def test_note_create_data_contacts_entity_type():
-    """NoteCreateData accepts 'contacts' entity type."""
-    from telegram_bot.dialogs.crm_wizard_models import NoteCreateData
-
-    data = NoteCreateData(entity_type="contacts", entity_id=5, text="Note text")
-    assert data.entity_type == "contacts"
 
 
 # --- Card Formatters ---
