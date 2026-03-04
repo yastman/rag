@@ -11,7 +11,9 @@ import time
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from langgraph.runtime import Runtime
 
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.rag_core import rewrite_query_via_llm
 
@@ -22,8 +24,7 @@ logger = logging.getLogger(__name__)
 @observe(name="node-rewrite")
 async def rewrite_node(
     state: dict[str, Any],
-    *,
-    llm: Any | None = None,
+    runtime: Runtime[GraphContext],
 ) -> dict[str, Any]:
     """LangGraph node: rewrite the user query for better retrieval.
 
@@ -32,12 +33,13 @@ async def rewrite_node(
 
     Args:
         state: RAGState dict
-        llm: Optional LLM instance (uses GraphConfig default if None)
+        runtime: LangGraph Runtime with GraphContext (llm)
 
     Returns:
         State update with rewritten message, incremented rewrite_count,
         reset query_embedding, and latency.
     """
+    llm: Any | None = runtime.context.get("llm")
     t0 = time.perf_counter()
 
     messages = state.get("messages", [])

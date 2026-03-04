@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from langgraph.runtime import Runtime
+
 from telegram_bot.graph.state import make_initial_state
+
+
+def _rt(**ctx) -> Runtime:
+    return Runtime(context=ctx)
 
 
 class TestLatencyUnitsConsistency:
@@ -37,7 +43,9 @@ class TestLatencyUnitsConsistency:
         with patch("telegram_bot.graph.nodes.cache.time") as mock_time:
             mock_time.time = MagicMock(side_effect=time_values)
             mock_time.perf_counter = MagicMock(side_effect=iter([100.0, 100.05]))
-            result = await cache_check_node(state, cache=mock_cache, embeddings=mock_embeddings)
+            result = await cache_check_node(
+                state, _rt(cache=mock_cache, embeddings=mock_embeddings)
+            )
 
         latency = result["latency_stages"]["cache_check"]
         # In seconds: 0.05. In ms: 50.0. Threshold at 1.0 catches the bug.
@@ -65,9 +73,7 @@ class TestLatencyUnitsConsistency:
             mock_time.perf_counter = MagicMock(side_effect=iter([100.0, 100.2]))
             result = await retrieve_node(
                 state,
-                cache=mock_cache,
-                sparse_embeddings=AsyncMock(),
-                qdrant=AsyncMock(),
+                _rt(cache=mock_cache, sparse_embeddings=AsyncMock(), qdrant=AsyncMock()),
             )
 
         latency = result["latency_stages"]["retrieve"]
