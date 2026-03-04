@@ -6,6 +6,7 @@ Uses OpenAI SDK via Langfuse drop-in replacement for auto-tracing.
 import json
 import logging
 import re
+import warnings
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
@@ -47,6 +48,12 @@ class LLMService:
         model: str = "gpt-4o-mini",
         low_confidence_threshold: float = LOW_CONFIDENCE_THRESHOLD,
     ):
+        warnings.warn(
+            "LLMService is deprecated and will be removed in a future release. "
+            "Use generate_response() from telegram_bot.services.generate_response instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
