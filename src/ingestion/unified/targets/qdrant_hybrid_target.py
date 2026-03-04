@@ -229,7 +229,9 @@ class QdrantHybridTargetConnector:
                                 )
                         except Exception as e:
                             logger.error(f"Mutation failed for {file_id}: {e}", exc_info=True)
-                            raise  # Propagate to CocoIndex
+                            # Don't raise — one failing file must not kill the entire
+                            # ingestion process.  The error is already tracked in
+                            # StateManager (mark_error_sync / DLQ).
 
     @classmethod
     def _handle_delete_with_state(
@@ -338,5 +340,4 @@ class QdrantHybridTargetConnector:
                     payload={"source_path": source_path},
                 )
                 logger.warning(f"Moved to DLQ: {source_path}")
-
-            raise
+            # Don't raise — error is tracked in state/DLQ, process continues
