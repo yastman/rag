@@ -14,6 +14,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+from langgraph.runtime import Runtime
 
 from telegram_bot.agents.rag_pipeline import rag_pipeline
 from telegram_bot.graph.nodes.classify import classify_query
@@ -87,7 +88,7 @@ async def rag_search(
             original_text = ctx.original_user_query if ctx and ctx.original_user_query else query
             guard_result = await guard_node(
                 {"messages": [{"content": original_text}], "latency_stages": {}},
-                guard_mode=guard_mode,
+                Runtime(context={"guard_mode": guard_mode}),
             )
             if guard_result.get("guard_blocked"):
                 pipeline_wall_ms = 0.0
