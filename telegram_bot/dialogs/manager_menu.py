@@ -73,7 +73,7 @@ async def on_manager_action(
     manager: DialogManager,
 ) -> None:
     """Handle manager menu action button click: close dialog, dispatch query to agent."""
-    query_text = _BUTTON_QUERIES.get(button.widget_id, "")
+    query_text = _BUTTON_QUERIES.get(button.widget_id or "", "")
     bot_instance = manager.middleware_data.get("property_bot")
     locale = manager.middleware_data.get("locale", "ru")
     await manager.done()

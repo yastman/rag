@@ -76,7 +76,7 @@ class HandoffState:
         await pipe.execute()
 
     async def get_by_client(self, client_id: int) -> HandoffData | None:
-        raw = await self._redis.hgetall(f"{_PREFIX}:{client_id}")
+        raw = await self._redis.hgetall(f"{_PREFIX}:{client_id}")  # type: ignore[misc]
         if not raw:
             return None
         return HandoffData.from_redis_dict(raw)
@@ -92,7 +92,7 @@ class HandoffState:
         updates: dict[str, str] = {"mode": mode}
         if mode == "human":
             updates["manager_joined_at"] = str(time.time())
-        await self._redis.hset(key, mapping=updates)
+        await self._redis.hset(key, mapping=updates)  # type: ignore[misc]
 
     async def delete(self, client_id: int) -> None:
         data = await self.get_by_client(client_id)
