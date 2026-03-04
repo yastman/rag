@@ -92,7 +92,10 @@ def build_rag_task(graph: Any) -> Any:
     """
 
     def task(*, item: Any, **kwargs: Any) -> dict[str, str]:
-        question = item.input.get("query", "") if isinstance(item.input, dict) else str(item.input)
+        if isinstance(item.input, dict):
+            question = item.input.get("query") or item.input.get("question") or ""
+        else:
+            question = str(item.input)
         result = asyncio.run(graph.ainvoke(_build_eval_state(question)))
         return {
             "answer": result.get("response", ""),
