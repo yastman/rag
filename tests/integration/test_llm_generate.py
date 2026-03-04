@@ -2,6 +2,11 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
 
 async def test_llm_service_has_generate_method():
     """LLMService should have generate() method."""
