@@ -234,8 +234,8 @@ class TestRunExperimentQueryKey:
 
             mock_state.assert_called_once_with("tax question")
 
-    def test_build_rag_task_does_not_read_question_key(self):
-        """When input has only 'question' (no 'query'), task passes empty string."""
+    def test_build_rag_task_reads_legacy_question_key(self):
+        """When input has only legacy 'question', task still builds eval state correctly."""
         from unittest.mock import patch
 
         from scripts.eval.run_experiment import build_rag_task
@@ -249,9 +249,7 @@ class TestRunExperimentQueryKey:
 
             task = build_rag_task(MagicMock())
             item = MagicMock()
-            # Only old 'question' key, no 'query'
             item.input = {"question": "legacy question key"}
             task(item=item)
 
-            # 'question' key is not read; empty string is passed instead
-            mock_state.assert_called_once_with("")
+            mock_state.assert_called_once_with("legacy question key")
