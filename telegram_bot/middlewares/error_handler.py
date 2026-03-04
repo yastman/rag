@@ -37,7 +37,7 @@ async def handle_error(event: ErrorEvent) -> None:
     if update.message is not None:
         message = update.message
     elif update.callback_query is not None and update.callback_query.message is not None:
-        message = update.callback_query.message
+        message = update.callback_query.message  # type: ignore[assignment]
 
     if message is not None:
         await message.answer(_ERROR_TEXT)
