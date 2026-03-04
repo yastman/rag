@@ -551,7 +551,7 @@ async def _rerank(
             )
 
             if _has_get_rerank:
-                cached_reranked = await cache.get_rerank_results(query, documents, top_k)
+                cached_reranked = await cache.get_rerank_results(query, documents, top_k)  # type: ignore[union-attr]
                 if cached_reranked is not None:
                     elapsed = time.perf_counter() - t0
                     logger.info(
@@ -578,7 +578,7 @@ async def _rerank(
                     reranked.append(doc)
 
             if _has_store_rerank:
-                await cache.store_rerank_results(query, documents, top_k, reranked)
+                await cache.store_rerank_results(query, documents, top_k, reranked)  # type: ignore[union-attr]
 
             elapsed = time.perf_counter() - t0
             logger.info(

@@ -247,7 +247,7 @@ async def _send_phone_reply_keyboard(callback: CallbackQuery) -> None:
         resize_keyboard=True,
         one_time_keyboard=True,
     )
-    await callback.bot.send_message(
+    await callback.bot.send_message(  # type: ignore[union-attr]
         chat_id=callback.from_user.id,
         text="👇 Нажмите кнопку ниже или введите номер вручную:",
         reply_markup=kb,
@@ -402,7 +402,7 @@ async def on_confirm(callback: CallbackQuery, button: Button, manager: DialogMan
                 if obj_summary:
                     lead_name = f"Осмотр {obj_summary} — {display_name}"
                 lead = await kommo_client.create_lead(
-                    LeadCreate(
+                    LeadCreate(  # type: ignore[call-arg]
                         name=lead_name,
                         pipeline_id=pipeline_id,
                         status_id=status_id,

@@ -6,7 +6,7 @@ import functools
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 
 _CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
@@ -18,26 +18,26 @@ def load_services_config() -> dict[str, Any]:
     path = _CONFIG_DIR / "services.yaml"
     if path.exists():
         with open(path, encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            return yaml.safe_load(f)  # type: ignore[no-any-return]
     raise FileNotFoundError("services.yaml not found")
 
 
 def get_service_card(service_key: str) -> dict[str, Any] | None:
     """Get single service config by key."""
     config = load_services_config()
-    return config.get("services", {}).get(service_key)
+    return config.get("services", {}).get(service_key)  # type: ignore[no-any-return]
 
 
 def get_promotions() -> list[dict[str, Any]]:
     """Get promotions list from config."""
     config = load_services_config()
-    return config.get("promotions", [])
+    return config.get("promotions", [])  # type: ignore[no-any-return]
 
 
 def get_entry_point_config(key: str) -> dict[str, Any] | None:
     """Get entry point config by key (viewing, manager)."""
     config = load_services_config()
-    return config.get("entry_points", {}).get(key)
+    return config.get("entry_points", {}).get(key)  # type: ignore[no-any-return]
 
 
 def get_phone_config(service_key: str) -> dict[str, Any] | None:
