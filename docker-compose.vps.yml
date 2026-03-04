@@ -258,6 +258,8 @@ services:
       LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
       LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
       LANGFUSE_PROMPT_LABEL: "${LANGFUSE_PROMPT_LABEL:-production}"
+      # Pipeline mode
+      CLIENT_DIRECT_PIPELINE_ENABLED: "true"
       # Domain configuration
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
