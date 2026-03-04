@@ -76,14 +76,13 @@ def _format_filters(filters: dict[str, Any] | str | None) -> str:
     """Format filters dict to human-readable string."""
     if not filters:
         return ""
-    if isinstance(filters, str):
-        filters = _json.loads(filters)
+    data: dict[str, Any] = _json.loads(filters) if isinstance(filters, str) else filters
 
     parts: list[str] = []
-    if "rooms" in filters:
-        parts.append(f"{filters['rooms']} комн.")
-    if "price_eur" in filters:
-        p = filters["price_eur"]
+    if "rooms" in data:
+        parts.append(f"{data['rooms']} комн.")
+    if "price_eur" in data:
+        p = data["price_eur"]
         if isinstance(p, dict):
             lo = p.get("gte")
             hi = p.get("lte")
@@ -95,8 +94,8 @@ def _format_filters(filters: dict[str, Any] | str | None) -> str:
                 parts.append(f"от €{lo:,.0f}")
         else:
             parts.append(f"€{p:,.0f}")
-    if "area_m2" in filters:
-        a = filters["area_m2"]
+    if "area_m2" in data:
+        a = data["area_m2"]
         if isinstance(a, dict):
             lo = a.get("gte")
             hi = a.get("lte")
@@ -106,14 +105,14 @@ def _format_filters(filters: dict[str, Any] | str | None) -> str:
                 parts.append(f"до {hi} м²")
             elif lo:
                 parts.append(f"от {lo} м²")
-    if "complex_name" in filters:
-        parts.append(f"комплекс: {filters['complex_name']}")
-    if "view_tags" in filters:
-        parts.append(f"вид: {', '.join(filters['view_tags'])}")
-    if "is_furnished" in filters:
-        parts.append("мебель: да" if filters["is_furnished"] else "мебель: нет")
-    if "floor" in filters:
-        f = filters["floor"]
+    if "complex_name" in data:
+        parts.append(f"комплекс: {data['complex_name']}")
+    if "view_tags" in data:
+        parts.append(f"вид: {', '.join(data['view_tags'])}")
+    if "is_furnished" in data:
+        parts.append("мебель: да" if data["is_furnished"] else "мебель: нет")
+    if "floor" in data:
+        f = data["floor"]
         if isinstance(f, dict):
             lo = f.get("gte")
             hi = f.get("lte")
