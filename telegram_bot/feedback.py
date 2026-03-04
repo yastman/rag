@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from .callback_data import FeedbackCB, FeedbackReasonCB
 
-_FB_PREFIX = "fb:"
 
 # 6 dislike reason codes → full category names (#755)
 _REASON_CODES: dict[str, str] = {
@@ -35,11 +35,11 @@ def build_feedback_keyboard(trace_id: str) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text="\U0001f44d Полезно",
-                    callback_data=f"{_FB_PREFIX}1:{trace_id}",
+                    callback_data=FeedbackCB(action="like", trace_id=trace_id).pack(),
                 ),
                 InlineKeyboardButton(
                     text="\U0001f44e Не помогло",
-                    callback_data=f"{_FB_PREFIX}0:{trace_id}",
+                    callback_data=FeedbackCB(action="dislike", trace_id=trace_id).pack(),
                 ),
             ]
         ]
@@ -57,7 +57,7 @@ def build_dislike_reason_keyboard(trace_id: str) -> InlineKeyboardMarkup:
             row.append(
                 InlineKeyboardButton(
                     text=_REASON_LABELS[code],
-                    callback_data=f"{_FB_PREFIX}r:{code}:{trace_id}",
+                    callback_data=FeedbackReasonCB(code=code, trace_id=trace_id).pack(),
                 )
             )
         rows.append(row)
@@ -72,7 +72,7 @@ def build_feedback_confirmation(*, liked: bool) -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(
                     text=f"{emoji} Спасибо за отзыв!",
-                    callback_data="fb:done",
+                    callback_data=FeedbackCB(action="done", trace_id="").pack(),
                 ),
             ]
         ]
@@ -82,17 +82,45 @@ def build_feedback_confirmation(*, liked: bool) -> InlineKeyboardMarkup:
 def parse_feedback_callback(data: str) -> tuple[float, str, str | None] | None:
     """Parse callback_data from feedback button.
 
-    Returns (value, trace_id, reason) or None if not a feedback callback.
+    Supports both new CallbackData format (fb:like/dislike:, fbr:code:) and
+    legacy format (fb:1/0:, fb:r:code:) for backward compatibility.
 
-    Formats:
-      fb:{0|1}:{trace_id}          — initial like/dislike (reason=None)
-      fb:r:{code}:{trace_id}       — dislike reason selection (value=0.0)
+    Returns (value, trace_id, reason) or None if not a feedback callback.
     """
-    if not data.startswith(_FB_PREFIX):
+    # New FeedbackReasonCB format: fbr:{code}:{trace_id}
+    if data.startswith("fbr:"):
+        try:
+            reason_cb = FeedbackReasonCB.unpack(data)
+        except Exception:
+            return None
+        if reason_cb.code not in _REASON_CODES:
+            return None
+        if not reason_cb.trace_id:
+            return None
+        return 0.0, reason_cb.trace_id, _REASON_CODES[reason_cb.code]
+
+    if not data.startswith("fb:"):
         return None
 
-    # Reason callback: fb:r:{code}:{trace_id}
-    if data.startswith(f"{_FB_PREFIX}r:"):
+    # New FeedbackCB format: fb:{like|dislike|done}:{trace_id}
+    try:
+        feedback_cb = FeedbackCB.unpack(data)
+        if feedback_cb.action == "like":
+            if not feedback_cb.trace_id:
+                return None
+            return 1.0, feedback_cb.trace_id, None
+        if feedback_cb.action == "dislike":
+            if not feedback_cb.trace_id:
+                return None
+            return 0.0, feedback_cb.trace_id, None
+        if feedback_cb.action == "done":
+            return None
+        # Unknown action (legacy "1", "0") → fall through to legacy parser below
+    except Exception:
+        pass
+
+    # Legacy reason callback: fb:r:{code}:{trace_id}
+    if data.startswith("fb:r:"):
         parts = data.split(":", 3)  # ["fb", "r", "code", "trace_id"]
         if len(parts) != 4:
             return None
@@ -103,7 +131,7 @@ def parse_feedback_callback(data: str) -> tuple[float, str, str | None] | None:
             return None
         return 0.0, trace_id, _REASON_CODES[code]
 
-    # Initial like/dislike callback: fb:{0|1}:{trace_id}
+    # Legacy like/dislike callback: fb:{0|1}:{trace_id}
     parts = data.split(":", 2)  # ["fb", "0|1", "trace_id"]
     if len(parts) != 3:
         return None
