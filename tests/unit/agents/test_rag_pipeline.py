@@ -403,6 +403,35 @@ async def test_cache_store_skips_non_cacheable(mock_cache):
     mock_cache.store_semantic.assert_not_called()
 
 
+async def test_cache_store_exception_preserves_response_and_logs_warning(mock_cache, caplog):
+    """store_semantic raises Exception → response not lost, warning is logged (#524)."""
+    import logging
+
+    from telegram_bot.agents.rag_pipeline import _cache_store
+
+    mock_cache.store_semantic = AsyncMock(side_effect=Exception("Redis gone"))
+
+    with caplog.at_level(logging.WARNING, logger="telegram_bot.agents.rag_pipeline"):
+        result = await _cache_store(
+            "квартира у моря",
+            "Ответ про квартиры",
+            [0.1] * 1024,
+            "FAQ",
+            42,
+            cache=mock_cache,
+            latency_stages={},
+        )
+
+    # Response is preserved — not lost on cache error
+    assert result["stored_semantic"] is False
+    # Latency stage is still populated
+    assert "cache_store" in result["latency_stages"]
+    # Warning was emitted
+    assert any(
+        "cache_store" in r.message or "semantic store failed" in r.message for r in caplog.records
+    )
+
+
 # ---------------------------------------------------------------------------
 # rag_pipeline (full flow) tests
 # ---------------------------------------------------------------------------

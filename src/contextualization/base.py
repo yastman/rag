@@ -114,11 +114,11 @@ class ContextualizeProvider(ABC):
             async with sem:
                 return await self.contextualize_single(chunk, f"chunk_{index}", query)
 
-        return list(
-            await asyncio.gather(
-                *[_process_with_semaphore(i, chunk) for i, chunk in enumerate(chunks)]
-            )
+        results = await asyncio.gather(
+            *[_process_with_semaphore(i, chunk) for i, chunk in enumerate(chunks)],
+            return_exceptions=True,
         )
+        return [r for r in results if not isinstance(r, Exception)]
 
     @staticmethod
     def get_system_prompt() -> str:

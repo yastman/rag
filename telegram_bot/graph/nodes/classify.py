@@ -6,6 +6,7 @@ FAQ, ENTITY, GENERAL. Returns canned responses for CHITCHAT/OFF_TOPIC.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 import re
@@ -296,7 +297,7 @@ async def classify_node(
 
     if classifier is not None and classifier.available:
         try:
-            query_type = classifier.classify(query)
+            query_type = await asyncio.to_thread(classifier.classify, query)
             logger.info("Semantic query classified as %s: %.50s", query_type, query)
         except Exception as exc:
             logger.warning("SemanticClassifier failed, falling back to regex: %s", exc)
