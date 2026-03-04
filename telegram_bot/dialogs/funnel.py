@@ -115,12 +115,6 @@ _PROPERTY_TYPE_DISPLAY: dict[str, str] = {
     "3bed": "3-спальни",
 }
 
-_CITY_DISPLAY: dict[str, str] = {
-    "Солнечный берег": "Солнечный берег",
-    "Свети Влас": "Свети Влас",
-    "Элените": "Элените",
-}
-
 
 def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
     """Build Qdrant filters from dialog_data dict."""
