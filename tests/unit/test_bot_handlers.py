@@ -1882,7 +1882,7 @@ class TestSetupMiddlewares:
     """Test middleware setup."""
 
     @patch("telegram_bot.bot.setup_throttling_middleware")
-    @patch("telegram_bot.bot.setup_error_middleware")
+    @patch("telegram_bot.bot.setup_error_handler")
     def test_middlewares_configured(self, mock_error_mw, mock_throttle_mw, mock_config):
         """Test that middlewares are configured on init."""
         with (
