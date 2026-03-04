@@ -195,7 +195,7 @@ async def test_card_callback_malformed_data_answers_empty() -> None:
 
 @pytest.mark.asyncio
 async def test_card_viewing_starts_dialog_with_edit_mode() -> None:
-    """card:viewing should start ViewingSG with ShowMode.EDIT to edit card in-place."""
+    """card:viewing should start ViewingSG with ShowMode.DELETE_AND_SEND."""
     from aiogram_dialog import ShowMode
 
     bot = _create_bot()
@@ -207,4 +207,4 @@ async def test_card_viewing_starts_dialog_with_edit_mode() -> None:
 
     dialog_manager.start.assert_awaited_once()
     call_kwargs = dialog_manager.start.call_args.kwargs
-    assert call_kwargs.get("show_mode") == ShowMode.EDIT
+    assert call_kwargs.get("show_mode") == ShowMode.DELETE_AND_SEND
