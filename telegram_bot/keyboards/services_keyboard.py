@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from telegram_bot.services.content_loader import load_services_config
@@ -11,7 +13,7 @@ _SVC_PREFIX = "svc:"
 _CTA_PREFIX = "cta:"
 
 
-def build_services_menu(i18n: object = None) -> InlineKeyboardMarkup:
+def build_services_menu(i18n: Any = None) -> InlineKeyboardMarkup:
     """Build inline keyboard with service list."""
     config = load_services_config()
     services = config.get("services", {})
@@ -33,7 +35,7 @@ def build_services_menu(i18n: object = None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def build_service_card_buttons(service_key: str, i18n: object = None) -> InlineKeyboardMarkup:
+def build_service_card_buttons(service_key: str, i18n: Any = None) -> InlineKeyboardMarkup:
     """Build CTA buttons for a service card."""
     get_offer_text = (
         i18n.get("svc-get-offer") if i18n is not None else None
