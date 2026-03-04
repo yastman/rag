@@ -438,3 +438,23 @@ class TestUpsertChunksSyncEdgeCases:
         assert stats.errors is not None
         assert "Qdrant timeout" in stats.errors[0]
         assert stats.points_upserted == 0
+
+    def test_oversized_payload_skipped_with_error(
+        self, writer_voyage, mock_qdrant_client, mock_voyage, mock_bge_client
+    ):
+        """Payload exceeding QDRANT_MAX_PAYLOAD_BYTES is skipped, not sent to Qdrant."""
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+        mock_voyage._client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
+        mock_bge_client.encode_sparse.return_value = MagicMock(
+            weights=[{"indices": [1], "values": [0.5]}]
+        )
+
+        # Create chunk with oversized text (~40MB)
+        huge_text = "x" * (35 * 1024 * 1024)
+        chunk = _make_chunk(text=huge_text)
+        stats = writer_voyage.upsert_chunks_sync([chunk], "f", "/big.pdf", {}, "col")
+
+        assert stats.errors is not None
+        assert "exceeds" in stats.errors[0]
+        assert stats.points_upserted == 0
+        mock_qdrant_client.upsert.assert_not_called()
