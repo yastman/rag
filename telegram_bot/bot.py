@@ -31,6 +31,7 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from .agents.agent import create_bot_agent
 from .agents.context import BotContext
+from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
 from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
@@ -706,14 +707,20 @@ class PropertyBot:
         # which is included AFTER dialog routers in _setup_dialogs().
         # This ensures dialog MessageInput (e.g. viewing phone input)
         # is resolved before the catch-all (aiogram SDK: first-match wins).
-        self.dp.callback_query(F.data.startswith("fb:"))(self.handle_feedback)
+        self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
+        self.dp.callback_query(FeedbackReasonCB.filter())(self.handle_feedback_reason)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
         self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
         # Client menu inline callbacks (#628)
         self.dp.callback_query(F.data.startswith("svc:"))(self.handle_service_callback)
         self.dp.callback_query(F.data.startswith("cta:"))(self.handle_cta_callback)
-        self.dp.callback_query(F.data.startswith("fav:"))(self.handle_favorite_callback)
-        self.dp.callback_query(F.data.startswith("results:"))(self.handle_results_callback)
+        self.dp.callback_query(FavoriteCB.filter(F.action == "add"))(self.handle_fav_add)
+        self.dp.callback_query(FavoriteCB.filter(F.action == "remove"))(self.handle_fav_remove)
+        self.dp.callback_query(FavoriteCB.filter(F.action == "viewing"))(self.handle_fav_viewing)
+        self.dp.callback_query(FavoriteCB.filter(F.action == "viewing_all"))(
+            self.handle_fav_viewing_all
+        )
+        self.dp.callback_query(ResultsCB.filter())(self.handle_results_callback)
         self.dp.callback_query(F.data.startswith("card:"))(self.handle_card_callback)
         self.dp.callback_query(F.data.startswith("ask:"))(self.handle_ask_callback)
 
@@ -1620,154 +1627,155 @@ class PropertyBot:
         else:
             await callback.answer()
 
-    async def handle_favorite_callback(
-        self, callback: CallbackQuery, state: FSMContext, dialog_manager: Any = None
+    async def handle_fav_add(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        callback_data: FavoriteCB | None = None,
+        dialog_manager: Any = None,
     ) -> None:
-        """Handle favorite add/remove/viewing callbacks (#628)."""
-        data = callback.data or ""
-        parts = data.split(":", 2)
-
-        if len(parts) < 2 or not callback.from_user:
+        """Handle fav:add:{property_id} — add to favorites (#628)."""
+        if not callback.from_user:
             await callback.answer()
             return
-
-        action = parts[1]
-        property_id = parts[2] if len(parts) > 2 else ""
+        property_id = callback_data.apartment_id if callback_data is not None else ""
+        if not property_id:
+            await callback.answer()
+            return
 
         favorites_service = getattr(self, "_favorites_service", None)
         if favorites_service is None:
             await callback.answer("Закладки недоступны")
             return
 
-        if action == "add" and property_id:
-            # Build property_data from saved apartment results (#655, #664)
-            state_data = await state.get_data()
-            raw_results = state_data.get("apartment_results")
-            apt_results = raw_results if isinstance(raw_results, list) else []
-            matched = next(
-                (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
-                None,
-            )
-            if matched:
-                payload = matched.get("payload")
-                if not isinstance(payload, dict):
-                    property_data: dict[str, Any] = {}
-                else:
-                    p = payload
-                    property_data = {
-                        "complex_name": p.get("complex_name", ""),
-                        "location": p.get("city", ""),
-                        "property_type": p.get("property_type", ""),
-                        "floor": p.get("floor", 0),
-                        "area_m2": p.get("area_m2", 0),
-                        "view": ", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
-                        "price_eur": p.get("price_eur", 0),
-                    }
+        state_data = await state.get_data()
+        raw_results = state_data.get("apartment_results")
+        apt_results = raw_results if isinstance(raw_results, list) else []
+        matched = next(
+            (r for r in apt_results if isinstance(r, dict) and r.get("id") == property_id),
+            None,
+        )
+        if matched:
+            payload = matched.get("payload")
+            if not isinstance(payload, dict):
+                property_data: dict[str, Any] = {}
             else:
-                property_data = {}
-            result = await favorites_service.add(
-                telegram_id=callback.from_user.id,
-                property_id=property_id,
-                property_data=property_data,
-            )
-            if result:
-                await callback.answer("Добавлено в закладки")
-                if callback.message:
-                    from .keyboards.property_card import build_card_buttons
-
-                    with contextlib.suppress(Exception):
-                        await callback.message.edit_reply_markup(  # type: ignore[union-attr]
-                            reply_markup=build_card_buttons(property_id, is_favorited=True)
-                        )
-            else:
-                await callback.answer("Уже в закладках")
-
-        elif action == "remove" and property_id:
-            await favorites_service.remove(
-                telegram_id=callback.from_user.id, property_id=property_id
-            )
-            state_data = await state.get_data()
-            raw_results = state_data.get("apartment_results")
-            apt_results = raw_results if isinstance(raw_results, list) else []
-            in_search_results = any(
-                isinstance(r, dict) and r.get("id") == property_id for r in apt_results
-            )
-            raw_bookmark_ids = state_data.get("bookmark_message_ids")
-            bookmark_message_ids = (
-                {mid for mid in raw_bookmark_ids if isinstance(mid, int)}
-                if isinstance(raw_bookmark_ids, list)
-                else set()
-            )
-            callback_message_id = getattr(callback.message, "message_id", None)
-            is_bookmark_message = (
-                isinstance(callback_message_id, int) and callback_message_id in bookmark_message_ids
-            )
-            if in_search_results and not is_bookmark_message and callback.message:
+                p = payload
+                property_data = {
+                    "complex_name": p.get("complex_name", ""),
+                    "location": p.get("city", ""),
+                    "property_type": p.get("property_type", ""),
+                    "floor": p.get("floor", 0),
+                    "area_m2": p.get("area_m2", 0),
+                    "view": ", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
+                    "price_eur": p.get("price_eur", 0),
+                }
+        else:
+            property_data = {}
+        result = await favorites_service.add(
+            telegram_id=callback.from_user.id,
+            property_id=property_id,
+            property_data=property_data,
+        )
+        if result:
+            await callback.answer("Добавлено в закладки")
+            if callback.message:
                 from .keyboards.property_card import build_card_buttons
 
                 with contextlib.suppress(Exception):
                     await callback.message.edit_reply_markup(  # type: ignore[union-attr]
-                        reply_markup=build_card_buttons(property_id, is_favorited=False)
+                        reply_markup=build_card_buttons(property_id, is_favorited=True)
                     )
-                await callback.answer("Удалено из закладок")
-            else:
-                if callback.message:
-                    # Delete photo album messages linked to this card
-                    raw_photo_ids = state_data.get("bookmark_photo_ids", {})
-                    photo_ids = (
-                        raw_photo_ids.get(callback_message_id, [])
-                        if isinstance(raw_photo_ids, dict) and isinstance(callback_message_id, int)
-                        else []
-                    )
-                    chat_id = callback.message.chat.id
-                    for pid in photo_ids:
-                        with contextlib.suppress(Exception):
-                            await callback.message.bot.delete_message(  # type: ignore[union-attr]
-                                chat_id=chat_id,
-                                message_id=pid,
-                            )
-                    await callback.message.delete()  # type: ignore[union-attr]
-                await callback.answer("Удалено из закладок")
+        else:
+            await callback.answer("Уже в закладках")
 
-        elif action == "viewing" and property_id:
-            # Загрузить данные объекта из favorites
-            fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
-            viewing_objs = []
-            for fav in fav_items:
-                if fav.property_id == property_id:
-                    d = fav.property_data
-                    viewing_objs.append(
-                        {
-                            "id": fav.property_id,
-                            "complex_name": d.get("complex_name", ""),
-                            "property_type": d.get("property_type", ""),
-                            "area_m2": d.get("area_m2", 0),
-                            "price_eur": d.get("price_eur", 0),
-                        }
-                    )
-                    break
-            if dialog_manager is not None:
-                from aiogram_dialog import ShowMode, StartMode
+    async def handle_fav_remove(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        callback_data: FavoriteCB | None = None,
+        dialog_manager: Any = None,
+    ) -> None:
+        """Handle fav:remove:{property_id} — remove from favorites (#628)."""
+        if not callback.from_user:
+            await callback.answer()
+            return
+        property_id = callback_data.apartment_id if callback_data is not None else ""
+        if not property_id:
+            await callback.answer()
+            return
 
-                from .dialogs.states import ViewingSG
+        favorites_service = getattr(self, "_favorites_service", None)
+        if favorites_service is None:
+            await callback.answer("Закладки недоступны")
+            return
 
-                await dialog_manager.start(
-                    ViewingSG.date,
-                    mode=StartMode.RESET_STACK,
-                    show_mode=ShowMode.DELETE_AND_SEND,
-                    data={"selected_objects": viewing_objs},
+        await favorites_service.remove(telegram_id=callback.from_user.id, property_id=property_id)
+        state_data = await state.get_data()
+        raw_results = state_data.get("apartment_results")
+        apt_results = raw_results if isinstance(raw_results, list) else []
+        in_search_results = any(
+            isinstance(r, dict) and r.get("id") == property_id for r in apt_results
+        )
+        raw_bookmark_ids = state_data.get("bookmark_message_ids")
+        bookmark_message_ids = (
+            {mid for mid in raw_bookmark_ids if isinstance(mid, int)}
+            if isinstance(raw_bookmark_ids, list)
+            else set()
+        )
+        callback_message_id = getattr(callback.message, "message_id", None)
+        is_bookmark_message = (
+            isinstance(callback_message_id, int) and callback_message_id in bookmark_message_ids
+        )
+        if in_search_results and not is_bookmark_message and callback.message:
+            from .keyboards.property_card import build_card_buttons
+
+            with contextlib.suppress(Exception):
+                await callback.message.edit_reply_markup(  # type: ignore[union-attr]
+                    reply_markup=build_card_buttons(property_id, is_favorited=False)
                 )
-            else:
-                from .handlers.phone_collector import start_phone_collection
-
-                await start_phone_collection(
-                    callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+            await callback.answer("Удалено из закладок")
+        else:
+            if callback.message:
+                # Delete photo album messages linked to this card
+                raw_photo_ids = state_data.get("bookmark_photo_ids", {})
+                photo_ids = (
+                    raw_photo_ids.get(callback_message_id, [])
+                    if isinstance(raw_photo_ids, dict) and isinstance(callback_message_id, int)
+                    else []
                 )
+                chat_id = callback.message.chat.id
+                for pid in photo_ids:
+                    with contextlib.suppress(Exception):
+                        await callback.message.bot.delete_message(  # type: ignore[union-attr]
+                            chat_id=chat_id,
+                            message_id=pid,
+                        )
+                await callback.message.delete()  # type: ignore[union-attr]
+            await callback.answer("Удалено из закладок")
 
-        elif action == "viewing_all":
-            fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
-            viewing_objs = []
-            for fav in fav_items:
+    async def handle_fav_viewing(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        callback_data: FavoriteCB | None = None,
+        dialog_manager: Any = None,
+    ) -> None:
+        """Handle fav:viewing:{property_id} — book viewing for one favorite (#628)."""
+        if not callback.from_user:
+            await callback.answer()
+            return
+        property_id = callback_data.apartment_id if callback_data is not None else ""
+
+        favorites_service = getattr(self, "_favorites_service", None)
+        if favorites_service is None:
+            await callback.answer("Закладки недоступны")
+            return
+
+        fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
+        viewing_objs = []
+        for fav in fav_items:
+            if fav.property_id == property_id:
                 d = fav.property_data
                 viewing_objs.append(
                     {
@@ -1778,35 +1786,125 @@ class PropertyBot:
                         "price_eur": d.get("price_eur", 0),
                     }
                 )
-            if dialog_manager is not None:
-                from aiogram_dialog import ShowMode, StartMode
+                break
+        if dialog_manager is not None:
+            from aiogram_dialog import ShowMode, StartMode
 
-                from .dialogs.states import ViewingSG
+            from .dialogs.states import ViewingSG
 
-                await dialog_manager.start(
-                    ViewingSG.date,
-                    mode=StartMode.RESET_STACK,
-                    show_mode=ShowMode.DELETE_AND_SEND,
-                    data={"selected_objects": viewing_objs},
-                )
-            else:
-                from .handlers.phone_collector import start_phone_collection
+            await dialog_manager.start(
+                ViewingSG.date,
+                mode=StartMode.RESET_STACK,
+                show_mode=ShowMode.DELETE_AND_SEND,
+                data={"selected_objects": viewing_objs},
+            )
+        else:
+            from .handlers.phone_collector import start_phone_collection
 
-                await start_phone_collection(
-                    callback, state, service_key="viewing", viewing_objects=viewing_objs or None
-                )
+            await start_phone_collection(
+                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+            )
 
+    async def handle_fav_viewing_all(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        callback_data: FavoriteCB | None = None,
+        dialog_manager: Any = None,
+    ) -> None:
+        """Handle fav:viewing_all — book viewing for all favorites (#628)."""
+        if not callback.from_user:
+            await callback.answer()
+            return
+
+        favorites_service = getattr(self, "_favorites_service", None)
+        if favorites_service is None:
+            await callback.answer("Закладки недоступны")
+            return
+
+        fav_items = await favorites_service.list(telegram_id=callback.from_user.id)
+        viewing_objs = []
+        for fav in fav_items:
+            d = fav.property_data
+            viewing_objs.append(
+                {
+                    "id": fav.property_id,
+                    "complex_name": d.get("complex_name", ""),
+                    "property_type": d.get("property_type", ""),
+                    "area_m2": d.get("area_m2", 0),
+                    "price_eur": d.get("price_eur", 0),
+                }
+            )
+        if dialog_manager is not None:
+            from aiogram_dialog import ShowMode, StartMode
+
+            from .dialogs.states import ViewingSG
+
+            await dialog_manager.start(
+                ViewingSG.date,
+                mode=StartMode.RESET_STACK,
+                show_mode=ShowMode.DELETE_AND_SEND,
+                data={"selected_objects": viewing_objs},
+            )
+        else:
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(
+                callback, state, service_key="viewing", viewing_objects=viewing_objs or None
+            )
+
+    async def handle_favorite_callback(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        callback_data: FavoriteCB | None = None,
+        dialog_manager: Any = None,
+    ) -> None:
+        """Backward-compat dispatcher for fav: callbacks — delegates to per-action handlers (#628).
+
+        Kept for test compatibility; production routing uses per-action CallbackData filters.
+        """
+        if callback_data is None:
+            # Parse from raw string (legacy / test path)
+            data = callback.data or ""
+            parts = data.split(":", 2)
+            if len(parts) < 2 or not callback.from_user:
+                await callback.answer()
+                return
+            action = parts[1]
+            apt_id = parts[2] if len(parts) > 2 else ""
+            callback_data = FavoriteCB(action=action, apartment_id=apt_id)
+
+        if callback_data.action == "add":
+            await self.handle_fav_add(callback, state, callback_data, dialog_manager)
+        elif callback_data.action == "remove":
+            await self.handle_fav_remove(callback, state, callback_data, dialog_manager)
+        elif callback_data.action == "viewing":
+            await self.handle_fav_viewing(callback, state, callback_data, dialog_manager)
+        elif callback_data.action == "viewing_all":
+            await self.handle_fav_viewing_all(callback, state, callback_data, dialog_manager)
         else:
             await callback.answer()
 
     async def handle_results_callback(
-        self, callback: CallbackQuery, state: FSMContext, dialog_manager: Any = None
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        callback_data: ResultsCB | None = None,
+        dialog_manager: Any = None,
     ) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
         from .keyboards.property_card import build_results_footer
 
-        data = callback.data or ""
-        if data == "results:more":
+        # Resolve action from CallbackData or legacy string
+        if callback_data is not None:
+            action = callback_data.action
+        else:
+            data = callback.data or ""
+            parts = data.split(":", 1)
+            action = parts[1] if len(parts) > 1 else ""
+
+        if action == "more":
             state_data = await state.get_data()
             results = state_data.get("apartment_results")
             offset = state_data.get("apartment_offset", 0)
@@ -1894,14 +1992,14 @@ class PropertyBot:
             else:
                 await state.update_data(apartment_offset=new_offset)
             await callback.answer()
-        elif data == "results:refine":
+        elif action == "refine":
             await state.update_data(apartment_results=None, apartment_offset=0)
             if callback.message:
                 await callback.message.answer(
                     "Опишите, какие апартаменты вы ищете, и я подберу варианты."
                 )
             await callback.answer()
-        elif data == "results:viewing":
+        elif action == "viewing":
             state_data = await state.get_data()
             results = state_data.get("apartment_results", [])
             # Первые 5 результатов как контекст для CRM заметки
@@ -2453,7 +2551,8 @@ class PropertyBot:
                         lf = get_client()
                         pre_agent_ms = (time.perf_counter() - pre_agent_start) * 1000
                         rag_result_store["pre_agent_ms"] = pre_agent_ms
-                        tid = lf.get_current_trace_id() or ""
+                        _raw_tid = lf.get_current_trace_id()
+                        tid = _raw_tid if isinstance(_raw_tid, str) else ""
                         reply_markup = None
                         if tid and query_type not in _NO_RAG_QUERY_TYPES:
                             from telegram_bot.feedback import build_feedback_keyboard
@@ -2722,7 +2821,8 @@ class PropertyBot:
             # Skip if a tool already delivered the response via streaming (#428).
             if response_text and not ctx.response_sent:
                 lf = get_client()
-                trace_id = lf.get_current_trace_id() or ""
+                _raw_trace_id = lf.get_current_trace_id()
+                trace_id = _raw_trace_id if isinstance(_raw_trace_id, str) else ""
                 query_type = rag_result_store.get("query_type", "")
 
                 # Build feedback keyboard
@@ -3317,45 +3417,69 @@ class PropertyBot:
         lf = get_client()
         lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
 
-    async def handle_feedback(self, callback: CallbackQuery):
-        """Handle feedback button callback (#229, #755)."""
+    async def handle_feedback(
+        self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
+    ) -> None:
+        """Handle feedback like/dislike/done callback (#229, #755).
+
+        Supports CallbackData injection from aiogram DI, with legacy string fallback
+        for backward compatibility with tests and old-format buttons.
+        """
         from .feedback import (
             build_dislike_reason_keyboard,
             build_feedback_confirmation,
             parse_feedback_callback,
         )
 
-        data = callback.data or ""
+        if callback_data is not None:
+            # New CallbackData path (aiogram DI injection)
+            if callback_data.action == "done":
+                await callback.answer()
+                return
+            if callback_data.action == "dislike":
+                # Step 1: show reason keyboard, score written in handle_feedback_reason
+                await callback.answer()
+                try:
+                    msg = callback.message
+                    if msg is not None and hasattr(msg, "edit_reply_markup"):
+                        await msg.edit_reply_markup(
+                            reply_markup=build_dislike_reason_keyboard(callback_data.trace_id)
+                        )
+                except Exception:
+                    logger.debug("Failed to show dislike reason keyboard", exc_info=True)
+                return
+            # "like" action: write score below
+            value: float = 1.0
+            trace_id: str = callback_data.trace_id
+            reason: str | None = None
+        else:
+            # Legacy fallback (tests and old-format buttons: fb:1/0:, fb:r:)
+            data = callback.data or ""
+            if data in ("fb:done", "fb:done:"):
+                await callback.answer()
+                return
+            parsed = parse_feedback_callback(data)
+            if parsed is None:
+                await callback.answer()
+                return
+            value, trace_id, reason = parsed
 
-        # Acknowledge "done" button silently
-        if data == "fb:done":
-            await callback.answer()
-            return
+            # Legacy dislike without reason → show reason keyboard
+            if value == 0.0 and reason is None:
+                await callback.answer()
+                try:
+                    msg = callback.message
+                    if msg is not None and hasattr(msg, "edit_reply_markup"):
+                        await msg.edit_reply_markup(
+                            reply_markup=build_dislike_reason_keyboard(trace_id)
+                        )
+                except Exception:
+                    logger.debug("Failed to show dislike reason keyboard", exc_info=True)
+                return
 
-        parsed = parse_feedback_callback(data)
-        if parsed is None:
-            await callback.answer()
-            return
-
-        value, trace_id, reason = parsed
-        user_id = callback.from_user.id if callback.from_user else 0
-
-        # Step 1 — dislike without reason: show 6-button reason keyboard
-        if value == 0.0 and reason is None:
-            await callback.answer()
-            try:
-                msg = callback.message
-                if msg is not None and hasattr(msg, "edit_reply_markup"):
-                    await msg.edit_reply_markup(
-                        reply_markup=build_dislike_reason_keyboard(trace_id)
-                    )
-            except Exception:
-                logger.debug("Failed to show dislike reason keyboard", exc_info=True)
-            return
-
-        # Step 2 — reason selected: write user_feedback=0 + user_feedback_reason={category}
-        # Also handles like (value=1.0, reason=None) — single score path
+        # Write score (like, or legacy reason path)
         await callback.answer("Спасибо за отзыв!")
+        user_id = callback.from_user.id if callback.from_user else 0
 
         try:
             lf_client = get_langfuse_client()
@@ -3392,6 +3516,54 @@ class PropertyBot:
                 cleanup_task.add_done_callback(lambda t: t.result() if not t.cancelled() else None)
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
+
+    async def handle_feedback_reason(
+        self, callback: CallbackQuery, callback_data: FeedbackReasonCB
+    ) -> None:
+        """Handle dislike reason selection callback (#755)."""
+        from .feedback import _REASON_CODES, build_feedback_confirmation
+
+        reason = _REASON_CODES.get(callback_data.code)
+        if reason is None:
+            await callback.answer()
+            return
+
+        trace_id = callback_data.trace_id
+        await callback.answer("Спасибо за отзыв!")
+        user_id = callback.from_user.id if callback.from_user else 0
+
+        try:
+            lf_client = get_langfuse_client()
+            if lf_client is not None:
+                lf_client.create_score(
+                    trace_id=trace_id,
+                    name="user_feedback",
+                    value=0.0,
+                    data_type="NUMERIC",
+                    comment=f"user_id:{user_id}",
+                    score_id=f"{trace_id}-user_feedback",
+                )
+                lf_client.create_score(
+                    trace_id=trace_id,
+                    name="user_feedback_reason",
+                    value=reason,
+                    data_type="CATEGORICAL",
+                    comment=f"user_id:{user_id}",
+                    score_id=f"{trace_id}-user_feedback_reason",
+                )
+        except Exception:
+            logger.warning("Failed to write feedback reason score to Langfuse", exc_info=True)
+
+        try:
+            msg = callback.message
+            if msg is not None and hasattr(msg, "edit_reply_markup"):
+                await msg.edit_reply_markup(reply_markup=build_feedback_confirmation(liked=False))
+                cleanup_task = asyncio.create_task(
+                    self._clear_feedback_confirmation_later(msg, _FEEDBACK_CONFIRMATION_TTL_S)
+                )
+                cleanup_task.add_done_callback(lambda t: t.result() if not t.cancelled() else None)
+        except Exception:
+            logger.debug("Failed to update feedback keyboard after reason", exc_info=True)
 
     async def _clear_feedback_confirmation_later(
         self, message: Any, delay_s: float = _FEEDBACK_CONFIRMATION_TTL_S
