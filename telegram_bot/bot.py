@@ -3848,20 +3848,22 @@ class PropertyBot:
         # Initialize i18n (fluentogram)
         from .middlewares.i18n import create_translator_hub, setup_i18n_middleware
 
+        # Register services in dp.workflow_data so all handlers receive them via data dict
+        self.dp["user_service"] = self._user_service
+        self.dp["lead_scoring_store"] = self._lead_scoring_store
+        self.dp["hot_lead_notifier"] = self._hot_lead_notifier
+        self.dp["kommo_client"] = self._kommo_client
+        self.dp["pg_pool"] = self._pg_pool
+        self.dp["bot_config"] = self.config
+        self.dp["property_bot"] = self
+        self.dp["ai_advisor_service"] = self._ai_advisor_service
+        self.dp["apartments_service"] = self._apartments_service
+        self.dp["favorites_service"] = self._favorites_service
+        self.dp["search_event_store"] = self._search_event_store
+
         if self._i18n_hub is None:
             self._i18n_hub = create_translator_hub()
-        setup_i18n_middleware(
-            self.dp,
-            self._i18n_hub,
-            self._user_service,
-            lead_scoring_store=self._lead_scoring_store,
-            hot_lead_notifier=self._hot_lead_notifier,
-            kommo_client=self._kommo_client,
-            pg_pool=self._pg_pool,
-            bot_config=self.config,
-            property_bot=self,
-            ai_advisor_service=self._ai_advisor_service,
-        )
+        setup_i18n_middleware(self.dp, self._i18n_hub, self._user_service)
         logger.info("i18n middleware ready")
 
         # Setup aiogram-dialog (#658: removed dead client_menu_dialog)
