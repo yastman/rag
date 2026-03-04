@@ -82,7 +82,7 @@ ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.v
 | vps-minio | 256MB | S3 storage (Langfuse events/media) |
 | vps-redis-langfuse | 128MB | Langfuse queues |
 | vps-langfuse-worker | 512MB | Langfuse background processing |
-| vps-langfuse | 512MB | Langfuse UI + API (port 3001) |
+| vps-langfuse | 1GB | Langfuse UI + API (port 3001) |
 
 **Collection:** `gdrive_documents_bge` (1024-dim BGE-M3 dense + BGE-M3 sparse, field "bm42")
 
