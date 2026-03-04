@@ -36,6 +36,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -196,6 +197,11 @@ services:
       CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_OTEL_HOST: ${LANGFUSE_HOST:-}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/litellm
     command: ["--config", "/app/config.yaml"]
     depends_on:
       postgres:
@@ -205,6 +211,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -240,13 +247,17 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
       # LLM
-      LLM_API_KEY: ${LITELLM_MASTER_KEY}
+      LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
       # Langfuse observability
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-}
+      LANGFUSE_TRACING_ENVIRONMENT: "${LANGFUSE_TRACING_ENVIRONMENT:-}"
+      LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
+      LANGFUSE_FLUSH_INTERVAL: "${LANGFUSE_FLUSH_INTERVAL:-5.0}"
+      LANGFUSE_PROMPT_LABEL: "${LANGFUSE_PROMPT_LABEL:-production}"
       # Domain configuration
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
@@ -259,9 +270,14 @@ services:
       KOMMO_REDIRECT_URI: "${KOMMO_REDIRECT_URI:-}"
       KOMMO_TELEGRAM_FIELD_ID: "${KOMMO_TELEGRAM_FIELD_ID:-0}"
       KOMMO_DEFAULT_PIPELINE_ID: "${KOMMO_DEFAULT_PIPELINE_ID:-0}"
+      KOMMO_RESPONSIBLE_USER_ID: "${KOMMO_RESPONSIBLE_USER_ID:-0}"
       KOMMO_SESSION_FIELD_ID: "${KOMMO_SESSION_FIELD_ID:-0}"
       KOMMO_LEAD_SCORE_FIELD_ID: "${KOMMO_LEAD_SCORE_FIELD_ID:-0}"
       KOMMO_LEAD_BAND_FIELD_ID: "${KOMMO_LEAD_BAND_FIELD_ID:-0}"
+      KOMMO_NEW_STATUS_ID: "${KOMMO_NEW_STATUS_ID:-0}"
+      KOMMO_SERVICE_FIELD_ID: "${KOMMO_SERVICE_FIELD_ID:-0}"
+      KOMMO_SOURCE_FIELD_ID: "${KOMMO_SOURCE_FIELD_ID:-0}"
+      KOMMO_TELEGRAM_USERNAME_FIELD_ID: "${KOMMO_TELEGRAM_USERNAME_FIELD_ID:-0}"
       # Manager
       MANAGER_IDS: "${MANAGER_IDS:-}"
       MANAGER_HOT_LEAD_THRESHOLD: "${MANAGER_HOT_LEAD_THRESHOLD:-60}"
@@ -332,7 +348,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1G
 
 volumes:
   postgres_data:
