@@ -78,6 +78,11 @@ ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.v
 | vps-litellm | 512MB | |
 | vps-bot | 512MB | **RERANK_PROVIDER=none** (ColBERT too slow on CPU) |
 | vps-ingestion | 512MB | profile: ingest only |
+| vps-clickhouse | 1.5GB | Langfuse analytics |
+| vps-minio | 256MB | S3 storage (Langfuse events/media) |
+| vps-redis-langfuse | 128MB | Langfuse queues |
+| vps-langfuse-worker | 512MB | Langfuse background processing |
+| vps-langfuse | 512MB | Langfuse UI + API (port 3001) |
 
 **Collection:** `gdrive_documents_bge` (1024-dim BGE-M3 dense + BGE-M3 sparse, field "bm42")
 
