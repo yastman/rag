@@ -110,7 +110,10 @@ async def test_results_more_shows_next_page() -> None:
     # 3 remaining cards via helper + 1 footer message via answer
     assert bot._send_property_card.await_count == 3
     assert callback.message.answer.await_count == 1
-    state.update_data.assert_awaited_once_with(apartment_offset=_PAGE_SIZE)
+    state.update_data.assert_awaited_once()
+    update_kwargs = state.update_data.await_args.kwargs
+    assert update_kwargs["apartment_offset"] == _PAGE_SIZE
+    assert "apartment_footer_msg_id" in update_kwargs
     callback.answer.assert_awaited_once_with()
 
 
@@ -179,7 +182,8 @@ async def test_results_more_fetches_next_scroll_page_for_funnel_state() -> None:
     assert first_call["apartment_next_offset"] is None
     assert len(first_call["apartment_results"]) == 8
     second_call = state.update_data.await_args_list[1].kwargs
-    assert second_call == {"apartment_offset": _PAGE_SIZE}
+    assert second_call["apartment_offset"] == _PAGE_SIZE
+    assert "apartment_footer_msg_id" in second_call
     callback.answer.assert_awaited_once_with()
 
 
