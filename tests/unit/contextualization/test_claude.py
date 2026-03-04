@@ -249,7 +249,7 @@ class TestClaudeContextualizerContextualizeSingle:
         assert result.context_method == "claude"
 
     async def test_contextualize_single_with_cache_control(self, contextualizer):
-        """Test that cache control is included when use_cache is True."""
+        """Test that cache control is on the system= param when use_cache is True."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Cached context")]
         mock_response.usage.input_tokens = 100
@@ -259,13 +259,16 @@ class TestClaudeContextualizerContextualizeSingle:
         await contextualizer.contextualize_single(text="Text", article_number="Art1")
 
         call_kwargs = contextualizer.client.messages.create.call_args[1]
-        messages = call_kwargs["messages"]
-        user_content = messages[0]["content"]
-        # Second item should have cache_control
-        assert any("cache_control" in item for item in user_content if isinstance(item, dict))
+        # System param must be a list with cache_control
+        system = call_kwargs["system"]
+        assert isinstance(system, list)
+        assert system[0]["cache_control"] == {"type": "ephemeral"}
+        # User content must be a plain string (no cache_control there)
+        user_content = call_kwargs["messages"][0]["content"]
+        assert isinstance(user_content, str)
 
     async def test_contextualize_single_without_cache_control(self, contextualizer):
-        """Test that cache control is excluded when use_cache is False."""
+        """Test that system= is a plain string when use_cache is False."""
         contextualizer.use_cache = False
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Non-cached context")]
@@ -276,12 +279,8 @@ class TestClaudeContextualizerContextualizeSingle:
         await contextualizer.contextualize_single(text="Text", article_number="Art1")
 
         call_kwargs = contextualizer.client.messages.create.call_args[1]
-        messages = call_kwargs["messages"]
-        user_content = messages[0]["content"]
-        # No item should have cache_control
-        for item in user_content:
-            if isinstance(item, dict):
-                assert "cache_control" not in item
+        system = call_kwargs["system"]
+        assert isinstance(system, str)
 
     async def test_contextualize_single_tracks_tokens(self, contextualizer):
         """Test that token usage is tracked."""
@@ -340,12 +339,10 @@ class TestClaudeContextualizerContextualizeSingle:
 
         call_kwargs = contextualizer.client.messages.create.call_args[1]
         messages = call_kwargs["messages"]
-        # User prompt should contain the query
+        # User prompt should be a plain string containing the query
         user_content = messages[0]["content"]
-        user_text = "".join(
-            item["text"] for item in user_content if isinstance(item, dict) and "text" in item
-        )
-        assert "What are the fines?" in user_text
+        assert isinstance(user_content, str)
+        assert "What are the fines?" in user_content
 
 
 class TestClaudeContextualizerSync:
