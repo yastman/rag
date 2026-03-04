@@ -7,6 +7,11 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langgraph.runtime import Runtime
+
+
+def _rt(**ctx) -> Runtime:
+    return Runtime(context=ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +139,7 @@ class TestCuratedSpanPayloads:
 
         mock_lf = MagicMock()
         with patch("telegram_bot.graph.nodes.retrieve.get_client", return_value=mock_lf):
-            await retrieve_node(state, cache=cache, sparse_embeddings=sparse, qdrant=qdrant)
+            await retrieve_node(state, _rt(cache=cache, sparse_embeddings=sparse, qdrant=qdrant))
 
         payloads = _extract_span_payloads(mock_lf)
         assert len(payloads) >= 2, (
@@ -206,7 +211,7 @@ class TestCuratedSpanPayloads:
         embeddings = AsyncMock()
         mock_lf = MagicMock()
         with patch("telegram_bot.graph.nodes.cache.get_client", return_value=mock_lf):
-            await cache_check_node(state, cache=cache, embeddings=embeddings)
+            await cache_check_node(state, _rt(cache=cache, embeddings=embeddings))
 
         payloads = _extract_span_payloads(mock_lf)
         assert len(payloads) >= 2, (
@@ -229,7 +234,7 @@ class TestCuratedSpanPayloads:
 
         mock_lf = MagicMock()
         with patch("telegram_bot.graph.nodes.cache.get_client", return_value=mock_lf):
-            await cache_store_node(state, cache=cache)
+            await cache_store_node(state, _rt(cache=cache))
 
         payloads = _extract_span_payloads(mock_lf)
         assert len(payloads) >= 2, (
