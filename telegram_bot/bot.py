@@ -1181,7 +1181,7 @@ class PropertyBot:
         if demo_photos:
             try:
                 media = [InputMediaPhoto(media=FSInputFile(path)) for path in demo_photos]
-                sent_photos = await message.answer_media_group(media=media)
+                sent_photos = await message.answer_media_group(media=media)  # type: ignore[arg-type]
                 photo_message_ids = [m.message_id for m in sent_photos]
             except Exception:
                 logger.warning("Failed to send photo album, falling back to text", exc_info=True)
@@ -1452,7 +1452,7 @@ class PropertyBot:
         history: list[dict[str, str]] = []
         if self._cache.redis is not None:
             try:
-                raw = await self._cache.redis.lrange(f"conversation:{user_id}", 0, -1)
+                raw = await self._cache.redis.lrange(f"conversation:{user_id}", 0, -1)  # type: ignore[misc]
                 for item in raw:
                     entry = json.loads(item) if isinstance(item, str) else item
                     if isinstance(entry, dict) and "role" in entry and "content" in entry:
@@ -1470,7 +1470,7 @@ class PropertyBot:
                 from .services.kommo_models import LeadCreate
 
                 lead = await self._kommo_client.create_lead(
-                    LeadCreate(name=f"Handoff: {display_name}")
+                    LeadCreate(name=f"Handoff: {display_name}")  # type: ignore[call-arg]
                 )
                 lead_id = lead.id
                 lead_url = f"https://{self.config.kommo_subdomain}.kommo.com/leads/detail/{lead.id}"
@@ -1569,7 +1569,7 @@ class PropertyBot:
 
         if action == "back":
             if callback.message:
-                await callback.message.delete()
+                await callback.message.delete()  # type: ignore[union-attr]
             await callback.answer()
 
         elif action == "menu":
@@ -1579,7 +1579,7 @@ class PropertyBot:
                 text = "Выберите услугу, чтобы узнать подробнее:"
             kb = build_services_menu(i18n=i18n)
             if callback.message:
-                await callback.message.edit_text(text, reply_markup=kb)
+                await callback.message.edit_text(text, reply_markup=kb)  # type: ignore[union-attr]
             await callback.answer()
 
         elif action == "service" and param:
@@ -1591,7 +1591,7 @@ class PropertyBot:
                     "card_text", ""
                 )
                 if callback.message:
-                    await callback.message.edit_text(card_text, reply_markup=kb)
+                    await callback.message.edit_text(card_text, reply_markup=kb)  # type: ignore[union-attr]
             await callback.answer()
 
         else:
@@ -1676,7 +1676,7 @@ class PropertyBot:
                     from .keyboards.property_card import build_card_buttons
 
                     with contextlib.suppress(Exception):
-                        await callback.message.edit_reply_markup(
+                        await callback.message.edit_reply_markup(  # type: ignore[union-attr]
                             reply_markup=build_card_buttons(property_id, is_favorited=True)
                         )
             else:
@@ -1706,7 +1706,7 @@ class PropertyBot:
                 from .keyboards.property_card import build_card_buttons
 
                 with contextlib.suppress(Exception):
-                    await callback.message.edit_reply_markup(
+                    await callback.message.edit_reply_markup(  # type: ignore[union-attr]
                         reply_markup=build_card_buttons(property_id, is_favorited=False)
                     )
                 await callback.answer("Удалено из закладок")
@@ -1726,7 +1726,7 @@ class PropertyBot:
                                 chat_id=chat_id,
                                 message_id=pid,
                             )
-                    await callback.message.delete()
+                    await callback.message.delete()  # type: ignore[union-attr]
                 await callback.answer("Удалено из закладок")
 
         elif action == "viewing" and property_id:
@@ -1844,7 +1844,7 @@ class PropertyBot:
                             extra_results,
                             total_count,
                             next_offset,
-                        ) = await apartments_service.scroll_with_filters(
+                        ) = await apartments_service.scroll_with_filters(  # type: ignore[union-attr]
                             filters=apartment_filters,
                             limit=scroll_limit,
                             offset=scroll_offset,
@@ -1873,7 +1873,7 @@ class PropertyBot:
             page = results[new_offset : new_offset + _APARTMENT_PAGE_SIZE]
             for result in page:
                 if callback.message:
-                    await self._send_property_card(callback.message, result, callback.from_user.id)
+                    await self._send_property_card(callback.message, result, callback.from_user.id)  # type: ignore[arg-type]
             shown = len(page)
             shown_total = new_offset + shown
             total = apartment_total_value
@@ -1926,7 +1926,7 @@ class PropertyBot:
                 # Delete footer message to keep chat clean
                 if callback.message:
                     with contextlib.suppress(Exception):
-                        await callback.message.delete()
+                        await callback.message.delete()  # type: ignore[union-attr]
 
                 await dialog_manager.start(
                     ViewingSG.date,
@@ -2008,7 +2008,7 @@ class PropertyBot:
                 footer_msg_id = state_data.get("apartment_footer_msg_id")
                 if footer_msg_id and callback.message and callback.message.chat:
                     with contextlib.suppress(Exception):
-                        await callback.bot.delete_message(callback.message.chat.id, footer_msg_id)
+                        await callback.bot.delete_message(callback.message.chat.id, footer_msg_id)  # type: ignore[union-attr]
 
                 await dialog_manager.start(
                     ViewingSG.date,
@@ -2185,7 +2185,7 @@ class PropertyBot:
             )
             page = results[:_APARTMENT_PAGE_SIZE]
             for result in page:
-                await self._send_property_card(message, result, message.from_user.id)
+                await self._send_property_card(message, result, message.from_user.id)  # type: ignore[union-attr]
             shown = len(page)
             total = len(results)
             footer_msg = await message.answer(
@@ -2660,7 +2660,7 @@ class PropertyBot:
                     payload=interrupt_payload,
                     thread_id=_supervisor_thread_id(message.chat.id),
                 )
-                return None
+                return None  # type: ignore[return-value]
 
             # Extract response from final message
             messages = result.get("messages", [])
@@ -3170,7 +3170,7 @@ class PropertyBot:
         await callback.answer("Принято" if action == "approve" else "Отменено")
 
         with contextlib.suppress(Exception):
-            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
 
         # Rebuild agent with same tools and checkpointer (mirrors _handle_query_supervisor)
         from .agents.apartment_tools import apartment_search
@@ -3285,9 +3285,9 @@ class PropertyBot:
             response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
         if response_text:
-            bot = callback.message.bot
+            bot = callback.message.bot  # type: ignore[union-attr]
             for chunk in _split_telegram_response(response_text):
-                await bot.send_message(chat_id=chat_id, text=chunk)
+                await bot.send_message(chat_id=chat_id, text=chunk)  # type: ignore[union-attr]
 
         lf = get_client()
         lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
@@ -3409,7 +3409,7 @@ class PropertyBot:
 
         await callback_query.answer()
         if callback_query.message is not None:
-            await callback_query.message.edit_text(text)
+            await callback_query.message.edit_text(text)  # type: ignore[union-attr]
 
     async def handle_menu_action(
         self, callback: CallbackQuery, query_text: str, locale: str = "ru"
@@ -3530,7 +3530,7 @@ class PropertyBot:
         ):
             langfuse_handler = create_callback_handler()
             callbacks = [langfuse_handler] if langfuse_handler else []
-            async with ChatActionSender.typing(bot=bot, chat_id=chat_id):
+            async with ChatActionSender.typing(bot=bot, chat_id=chat_id):  # type: ignore[arg-type]
                 result = await self._ainvoke_supervisor_with_recovery(
                     agent=agent,
                     tools=tools,
