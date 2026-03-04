@@ -696,6 +696,8 @@ class PropertyBot:
         # This ensures dialog MessageInput (e.g. viewing phone input)
         # is resolved before the catch-all (aiogram SDK: first-match wins).
         self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
+        # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
+        self.dp.callback_query(F.data == "fb:done")(self.handle_feedback)
         self.dp.callback_query(FeedbackReasonCB.filter())(self.handle_feedback_reason)
         self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
         self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
@@ -708,6 +710,8 @@ class PropertyBot:
         self.dp.callback_query(FavoriteCB.filter(F.action == "viewing_all"))(
             self.handle_fav_viewing_all
         )
+        # Legacy buttons in old chat history may contain "fav:viewing_all" (without id part).
+        self.dp.callback_query(F.data == "fav:viewing_all")(self.handle_favorite_callback)
         self.dp.callback_query(ResultsCB.filter())(self.handle_results_callback)
         self.dp.callback_query(F.data.startswith("card:"))(self.handle_card_callback)
         self.dp.callback_query(F.data.startswith("ask:"))(self.handle_ask_callback)
