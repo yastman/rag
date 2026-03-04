@@ -33,6 +33,7 @@ from telegram_bot.observability import get_client, observe
 
 
 if TYPE_CHECKING:
+    from redisvl.extensions.cache.embeddings import EmbeddingsCache
     from redisvl.extensions.cache.llm import SemanticCache
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,26 @@ def _create_semantic_cache(
         return None
 
 
+def _create_embed_cache(
+    async_redis_client: Any,
+    ttl: int,
+) -> EmbeddingsCache | None:
+    """Create RedisVL EmbeddingsCache instance. Returns None on failure."""
+    try:
+        from redisvl.extensions.cache.embeddings import EmbeddingsCache
+
+        cache = EmbeddingsCache(
+            name=f"embeddings:{CACHE_VERSION}",
+            ttl=ttl,
+            async_redis_client=async_redis_client,
+        )
+        logger.info("EmbeddingsCache initialized (ttl=%ds)", ttl)
+        return cache
+    except Exception as e:
+        logger.warning("EmbeddingsCache init failed: %s: %s", type(e).__name__, e)
+        return None
+
+
 class CacheLayerManager:
     """5-tier Redis cache manager for RAG pipeline."""
 
@@ -111,6 +132,7 @@ class CacheLayerManager:
         self.redis_url = redis_url
         self.redis: redis.Redis | None = None
         self.semantic_cache: SemanticCache | None = None
+        self.embed_cache: EmbeddingsCache | None = None
 
         # Semantic cache thresholds per query type (cosine distance, lower = stricter)
         self.cache_thresholds = cache_thresholds or {
@@ -181,6 +203,17 @@ class CacheLayerManager:
         except Exception as e:
             logger.warning("Semantic cache setup skipped: %s: %s", type(e).__name__, e)
             self.semantic_cache = None
+
+        # Init EmbeddingsCache (RedisVL SDK) for dense embedding storage
+        try:
+            embed_ttl = self.exact_ttls.get("embeddings", DEFAULT_TTLS["embeddings"])
+            self.embed_cache = _create_embed_cache(
+                async_redis_client=self.redis,
+                ttl=embed_ttl,
+            )
+        except Exception as e:
+            logger.warning("EmbeddingsCache setup skipped: %s: %s", type(e).__name__, e)
+            self.embed_cache = None
 
     async def close(self) -> None:
         """Close all connections."""
@@ -456,28 +489,61 @@ class CacheLayerManager:
 
     @observe(name="cache-embedding-get", capture_input=False, capture_output=False)
     async def get_embedding(self, text: str, model: str = "bge-m3") -> list[float] | None:
-        """Get cached dense embedding."""
+        """Get cached dense embedding via RedisVL EmbeddingsCache."""
         lf = get_client()
         lf.update_current_span(input={"model": model, "text_length": len(text)})
-        result = await self.get_exact(
-            "embeddings", _hash(f"{model}:{_normalize_query_for_cache(text)}")
-        )
-        lf.update_current_span(output={"hit": result is not None})
-        return result
+        if self.embed_cache is None:
+            lf.update_current_span(output={"hit": False, "embed_cache_enabled": False})
+            return None
+        try:
+            normalized = _normalize_query_for_cache(text)
+            result = await self.embed_cache.aget(content=normalized, model_name=model)
+            if result is not None:
+                self._metrics["embeddings"]["hits"] += 1
+                lf.update_current_span(output={"hit": True})
+                return list(result["embedding"])
+            self._metrics["embeddings"]["misses"] += 1
+            lf.update_current_span(output={"hit": False})
+            return None
+        except Exception as e:
+            logger.error("EmbeddingsCache get error: %s: %s", type(e).__name__, e)
+            self._metrics["embeddings"]["misses"] += 1
+            lf.update_current_span(
+                level="ERROR",
+                status_message=f"EmbeddingsCache get error: {type(e).__name__}",
+                output={"hit": False, "error": type(e).__name__},
+            )
+            return None
 
     @observe(name="cache-embedding-store", capture_input=False, capture_output=False)
     async def store_embedding(
         self, text: str, embedding: list[float], model: str = "bge-m3"
     ) -> None:
-        """Store dense embedding."""
+        """Store dense embedding via RedisVL EmbeddingsCache."""
         lf = get_client()
         lf.update_current_span(
             input={"model": model, "text_length": len(text), "embedding_dim": len(embedding)}
         )
-        await self.store_exact(
-            "embeddings", _hash(f"{model}:{_normalize_query_for_cache(text)}"), embedding
-        )
-        lf.update_current_span(output={"stored": True})
+        if self.embed_cache is None:
+            lf.update_current_span(output={"stored": False, "embed_cache_enabled": False})
+            return
+        try:
+            normalized = _normalize_query_for_cache(text)
+            ttl = self.exact_ttls.get("embeddings")
+            await self.embed_cache.aset(
+                content=normalized,
+                model_name=model,
+                embedding=embedding,
+                ttl=ttl,
+            )
+            lf.update_current_span(output={"stored": True})
+        except Exception as e:
+            logger.error("EmbeddingsCache store error: %s: %s", type(e).__name__, e)
+            lf.update_current_span(
+                level="ERROR",
+                status_message=f"EmbeddingsCache store error: {type(e).__name__}",
+                output={"stored": False, "error": type(e).__name__},
+            )
 
     # ========== Convenience: Sparse Embeddings ==========
 
