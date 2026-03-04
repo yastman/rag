@@ -64,22 +64,19 @@ def test_translator_menu_keys(hub):
 
 
 @pytest.mark.asyncio
-async def test_i18n_middleware_injects_favorites_service(hub):
-    """Middleware injects favorites service for dialog getters via middleware_data."""
-    apartments_service = object()
-    favorites_service = object()
-    property_bot = SimpleNamespace(
-        _apartments_service=apartments_service,
-        _favorites_service=favorites_service,
-    )
-    middleware = I18nMiddleware(hub=hub, property_bot=property_bot)
+async def test_i18n_middleware_injects_only_i18n(hub):
+    """After H5 refactor: middleware injects only i18n + locale, not services."""
+    middleware = I18nMiddleware(hub=hub)
 
     event = SimpleNamespace()
-    data = {"event_from_user": SimpleNamespace(id=123, language_code="ru")}
+    data: dict = {"event_from_user": SimpleNamespace(id=123, language_code="ru")}
 
     async def handler(_event, _data):
         return _data
 
     result = await middleware(handler, event, data)
-    assert result["apartments_service"] is apartments_service
-    assert result["favorites_service"] is favorites_service
+    assert "i18n" in result
+    assert "locale" in result
+    # Services are NOT injected by middleware; they come from dp.workflow_data
+    assert "apartments_service" not in result
+    assert "favorites_service" not in result
