@@ -684,11 +684,12 @@ class TestGenerateNodeStreaming:
         assert result["response"] == "Fallback complete answer."
         assert result["response_sent"] is True
         message.bot.send_message_draft.assert_awaited()
-        assert message.answer.await_count == 2
+        assert message.answer.await_count == 1
         assert message.answer.await_args_list[0].args[0] == "Квартира в Несебре "
-        assert message.answer.await_args_list[-1].args[0] == "Fallback complete answer."
-        assert message.answer.await_args_list[-1].kwargs["parse_mode"] == "Markdown"
-        sent_msg.edit_text.assert_not_called()
+        sent_msg.edit_text.assert_awaited_once_with(
+            "Fallback complete answer.",
+            parse_mode="Markdown",
+        )
 
     async def test_stream_error_partial_and_final_delivery_fails_falls_back_to_respond_node(
         self,
@@ -709,6 +710,12 @@ class TestGenerateNodeStreaming:
         )
         mock_config, _ = _make_streaming_config(mock_client)
         message, sent_msg = _make_message_mock()
+        sent_msg.edit_text = AsyncMock(
+            side_effect=[
+                Exception("markdown edit failed"),
+                Exception("plain edit failed"),
+            ]
+        )
         message.answer = AsyncMock(
             side_effect=[
                 sent_msg,
@@ -1033,6 +1040,12 @@ class TestGenerateNodeLatencyBreakdown:
         )
         mock_config, _ = _make_streaming_config(mock_client)
         message, sent_msg = _make_message_mock()
+        sent_msg.edit_text = AsyncMock(
+            side_effect=[
+                Exception("markdown edit failed"),
+                Exception("plain edit failed"),
+            ]
+        )
         message.answer = AsyncMock(
             side_effect=[
                 sent_msg,
