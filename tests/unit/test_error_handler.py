@@ -53,11 +53,12 @@ class TestHandleError:
         assert "❌" in text
 
     async def test_sends_message_via_callback_query(self) -> None:
-        """Handler replies via callback_query.message for CallbackQuery events."""
+        """Handler answers callback query and replies via callback_query.message."""
         from telegram_bot.middlewares.error_handler import handle_error
 
         mock_message = AsyncMock()
         mock_callback = MagicMock()
+        mock_callback.answer = AsyncMock()
         mock_callback.message = mock_message
 
         mock_update = MagicMock()
@@ -71,6 +72,7 @@ class TestHandleError:
         with patch("telegram_bot.middlewares.error_handler.logger"):
             await handle_error(mock_event)
 
+        mock_callback.answer.assert_awaited_once()
         mock_message.answer.assert_called_once()
         text = mock_message.answer.call_args.args[0]
         assert "❌" in text

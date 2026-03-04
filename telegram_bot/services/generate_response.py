@@ -543,19 +543,34 @@ async def generate_response(
                         )
                     stream_recovery = True
                     delivered = False
-                    try:
-                        sent_msg = await message.answer(answer, parse_mode="Markdown")
-                        delivered = True
-                    except Exception:
+                    if sent_msg is not None:
                         try:
-                            sent_msg = await message.answer(answer)
+                            await sent_msg.edit_text(answer, parse_mode="Markdown")
                             delivered = True
                         except Exception:
-                            logger.warning(
-                                "Failed to deliver fallback answer after partial stream; "
-                                "respond_node will send final answer",
-                                exc_info=True,
-                            )
+                            try:
+                                await sent_msg.edit_text(answer)
+                                delivered = True
+                            except Exception:
+                                logger.warning(
+                                    "Failed to edit partial streaming message; "
+                                    "sending recovery answer as new message",
+                                    exc_info=True,
+                                )
+                    if not delivered:
+                        try:
+                            sent_msg = await message.answer(answer, parse_mode="Markdown")
+                            delivered = True
+                        except Exception:
+                            try:
+                                sent_msg = await message.answer(answer)
+                                delivered = True
+                            except Exception:
+                                logger.warning(
+                                    "Failed to deliver fallback answer after partial stream; "
+                                    "respond_node will send final answer",
+                                    exc_info=True,
+                                )
                     response_sent = delivered
                 else:
                     logger.warning("Streaming failed, falling back to non-streaming", exc_info=True)

@@ -141,7 +141,10 @@ class TestMultiPagePagination:
 
         assert bot._send_property_card.await_count == 5
         assert cb.message.answer.await_count == 1
-        state.update_data.assert_awaited_once_with(apartment_offset=_PAGE_SIZE)
+        state.update_data.assert_awaited_once()
+        update_kwargs = state.update_data.await_args.kwargs
+        assert update_kwargs["apartment_offset"] == _PAGE_SIZE
+        assert "apartment_footer_msg_id" in update_kwargs
         footer_call = cb.message.answer.call_args
         assert "показаны 6–10" in footer_call.args[0]
 
@@ -157,7 +160,10 @@ class TestMultiPagePagination:
 
         assert bot._send_property_card.await_count == 2
         assert cb.message.answer.await_count == 1
-        state.update_data.assert_awaited_once_with(apartment_offset=10)
+        state.update_data.assert_awaited_once()
+        update_kwargs = state.update_data.await_args.kwargs
+        assert update_kwargs["apartment_offset"] == 10
+        assert "apartment_footer_msg_id" in update_kwargs
         footer_call = cb.message.answer.call_args
         assert "показаны 11–12" in footer_call.args[0]
 
