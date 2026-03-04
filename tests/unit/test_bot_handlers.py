@@ -3726,3 +3726,22 @@ class TestHandleAsk:
 
         callback.answer.assert_called_once()
         bot.handle_menu_action_text.assert_not_called()
+
+
+class TestLegacyCallbackRoutes:
+    """Ensure legacy callback payloads remain routable after CallbackData migration."""
+
+    def test_registers_feedback_done_legacy_route(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+
+        callback_handler_names = [h.callback.__name__ for h in bot.dp.callback_query.handlers]
+
+        # One route is CallbackData-based, one is legacy exact-match fallback.
+        assert callback_handler_names.count("handle_feedback") >= 2
+
+    def test_registers_favorite_viewing_all_legacy_route(self, mock_config):
+        bot, _ = _create_bot(mock_config)
+
+        callback_handler_names = [h.callback.__name__ for h in bot.dp.callback_query.handlers]
+
+        assert "handle_favorite_callback" in callback_handler_names
