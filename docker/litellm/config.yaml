@@ -3,20 +3,19 @@
 # Image: ghcr.io/berriai/litellm:main-v1.81.3-stable
 
 model_list:
-  # Primary: gpt-oss-120b on Cerebras (3000 tok/s)
+  # Primary: Cerebras GLM 4.7 (reasoning disabled for low TTFT)
   # ALIAS: "gpt-4o-mini" is an internal alias — it does NOT call OpenAI.
   # The bot sends requests to "gpt-4o-mini" which LiteLLM routes to Cerebras.
   # See fallbacks below for the actual OpenAI fallback (gpt-4o-mini-openai).
-  # merge_reasoning_content: gpt-oss-120b is a reasoning model that sends
-  # tokens as delta.reasoning instead of delta.content — this flag merges them
   - model_name: gpt-4o-mini
     litellm_params:
-      model: cerebras/gpt-oss-120b
+      model: openai/zai-glm-4.7
+      api_base: https://api.cerebras.ai/v1
       api_key: os.environ/CEREBRAS_API_KEY
       max_completion_tokens: 1024
-      merge_reasoning_content_in_choices: true
+      disable_reasoning: true
 
-  # Standalone alias for benchmarking
+  # Standalone alias for benchmarking (reasoning model)
   - model_name: gpt-oss-120b
     litellm_params:
       model: cerebras/gpt-oss-120b
@@ -24,13 +23,13 @@ model_list:
       max_completion_tokens: 1024
       merge_reasoning_content_in_choices: true
 
-  # Fallback 1: Cerebras GLM 4.7 (бывшая primary)
-  - model_name: gpt-4o-mini-cerebras-glm
+  # Fallback 1: Cerebras gpt-oss-120b (reasoning, slower TTFT)
+  - model_name: gpt-4o-mini-cerebras-oss
     litellm_params:
-      model: openai/zai-glm-4.7
-      api_base: https://api.cerebras.ai/v1
+      model: cerebras/gpt-oss-120b
       api_key: os.environ/CEREBRAS_API_KEY
       max_completion_tokens: 1024
+      merge_reasoning_content_in_choices: true
 
   # Fallback 2: Groq (fast, free tier)
   - model_name: gpt-4o-mini-fallback
@@ -73,8 +72,8 @@ litellm_settings:
   drop_params: true
   # Model-group fallbacks on upstream/provider errors
   fallbacks:
-    - gpt-4o-mini: [gpt-4o-mini-cerebras-glm, gpt-4o-mini-fallback, gpt-4o-mini-openai]
-    - gpt-oss-120b: [gpt-4o-mini-cerebras-glm, gpt-4o-mini-fallback, gpt-4o-mini-openai]
+    - gpt-4o-mini: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
+    - gpt-oss-120b: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
 
 # Environment variables for Langfuse v3
 environment_variables:
