@@ -78,5 +78,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["uv", "run", "python", "-m", "src.ingestion.unified.cli"]
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "src.ingestion.unified.cli"]
 CMD ["run", "--watch"]
