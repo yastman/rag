@@ -1,8 +1,9 @@
 from telegram_bot.config import BotConfig
 
 
-def test_handoff_config_defaults():
+def test_handoff_config_defaults(monkeypatch):
     """Handoff config has sensible defaults when env vars not set."""
+    monkeypatch.delenv("MANAGERS_GROUP_ID", raising=False)
     cfg = BotConfig(
         telegram_bot_token="test:token",  # required field
         _env_file=None,

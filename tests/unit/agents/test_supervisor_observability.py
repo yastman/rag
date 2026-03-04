@@ -9,6 +9,13 @@ import pytest
 from telegram_bot.config import BotConfig
 
 
+@pytest.fixture(autouse=True)
+def _isolate_env(monkeypatch):
+    """Prevent .env leaking CLIENT_DIRECT_PIPELINE_ENABLED into tests."""
+    monkeypatch.delenv("CLIENT_DIRECT_PIPELINE_ENABLED", raising=False)
+    monkeypatch.delenv("MANAGERS_GROUP_ID", raising=False)
+
+
 @pytest.fixture
 def supervisor_config():
     """BotConfig for supervisor tests (#310: supervisor-only)."""
@@ -23,6 +30,7 @@ def supervisor_config():
         qdrant_collection="test_collection",
         redis_url="redis://localhost:6379",
         rerank_provider="none",
+        _env_file=None,
     )
 
 

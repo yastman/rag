@@ -613,15 +613,24 @@ async def _cache_store(
     stored_semantic = False
     if response and query_embedding:
         if query_type in CACHEABLE_QUERY_TYPES:
-            await cache.store_semantic(
-                query=query,
-                response=response,
-                vector=query_embedding,
-                query_type=query_type,
-                cache_scope="rag",
-                agent_role=agent_role,
-            )
-            stored_semantic = True
+            try:
+                await cache.store_semantic(
+                    query=query,
+                    response=response,
+                    vector=query_embedding,
+                    query_type=query_type,
+                    cache_scope="rag",
+                    agent_role=agent_role,
+                )
+                stored_semantic = True
+            except Exception as exc:
+                # RedisVLError, RedisSearchError, SchemaValidationError, or any unexpected
+                # error from store_semantic must never lose the response (#524).
+                logger.warning(
+                    "cache_store: semantic store failed, response preserved: %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
 
         if stored_semantic:
             logger.info("cache_store: stored=semantic (type=%s)", query_type)
