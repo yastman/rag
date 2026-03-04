@@ -86,11 +86,11 @@ def _format_filters(filters: dict[str, Any] | str | None) -> str:
         if isinstance(p, dict):
             lo = p.get("gte")
             hi = p.get("lte")
-            if lo and hi:
+            if lo is not None and hi is not None:
                 parts.append(f"€{lo:,.0f}–€{hi:,.0f}")
-            elif hi:
+            elif hi is not None:
                 parts.append(f"до €{hi:,.0f}")
-            elif lo:
+            elif lo is not None:
                 parts.append(f"от €{lo:,.0f}")
         else:
             parts.append(f"€{p:,.0f}")
@@ -99,11 +99,11 @@ def _format_filters(filters: dict[str, Any] | str | None) -> str:
         if isinstance(a, dict):
             lo = a.get("gte")
             hi = a.get("lte")
-            if lo and hi:
+            if lo is not None and hi is not None:
                 parts.append(f"{lo}–{hi} м²")
-            elif hi:
+            elif hi is not None:
                 parts.append(f"до {hi} м²")
-            elif lo:
+            elif lo is not None:
                 parts.append(f"от {lo} м²")
     if "complex_name" in data:
         parts.append(f"комплекс: {data['complex_name']}")
@@ -116,13 +116,13 @@ def _format_filters(filters: dict[str, Any] | str | None) -> str:
         if isinstance(f, dict):
             lo = f.get("gte")
             hi = f.get("lte")
-            if lo and hi and lo == hi:
+            if lo is not None and hi is not None and lo == hi:
                 parts.append(f"{lo} эт.")
-            elif lo and hi:
+            elif lo is not None and hi is not None:
                 parts.append(f"{lo}–{hi} эт.")
-            elif hi:
+            elif hi is not None:
                 parts.append(f"до {hi} эт.")
-            elif lo:
+            elif lo is not None:
                 parts.append(f"от {lo} эт.")
     return ", ".join(parts)
 
