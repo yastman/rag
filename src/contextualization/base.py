@@ -1,5 +1,6 @@
 """Base class for contextualization providers."""
 
+import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -89,6 +90,35 @@ class ContextualizeProvider(ABC):
         Returns:
             Contextualized chunk with metadata
         """
+
+    async def contextualize_batch(
+        self,
+        chunks: list[str],
+        query: str | None = None,
+        *,
+        max_concurrency: int = 5,
+    ) -> list[ContextualizedChunk]:
+        """Contextualize chunks in parallel using asyncio.gather with semaphore.
+
+        Args:
+            chunks: List of text chunks to contextualize
+            query: Optional user query to guide contextualization
+            max_concurrency: Maximum simultaneous API calls (default: 5)
+
+        Returns:
+            List of contextualized chunks preserving input order
+        """
+        sem = asyncio.Semaphore(max_concurrency)
+
+        async def _process_with_semaphore(index: int, chunk: str) -> ContextualizedChunk:
+            async with sem:
+                return await self.contextualize_single(chunk, f"chunk_{index}", query)
+
+        return list(
+            await asyncio.gather(
+                *[_process_with_semaphore(i, chunk) for i, chunk in enumerate(chunks)]
+            )
+        )
 
     @staticmethod
     def get_system_prompt() -> str:
