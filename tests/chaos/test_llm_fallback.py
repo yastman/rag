@@ -12,7 +12,10 @@ from pytest_httpx import HTTPXMock
 from telegram_bot.services.llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
 
 
-pytestmark = pytest.mark.httpx_mock(can_send_already_matched_responses=True)
+pytestmark = [
+    pytest.mark.httpx_mock(can_send_already_matched_responses=True),
+    pytest.mark.filterwarnings("ignore::DeprecationWarning"),
+]
 
 
 class TestLLMTimeout:
