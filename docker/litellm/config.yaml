@@ -22,13 +22,12 @@ model_list:
       max_completion_tokens: 1024
       merge_reasoning_content_in_choices: true
 
-  # Fallback 1: Cerebras gpt-oss-120b (reasoning, slower TTFT)
-  - model_name: gpt-4o-mini-cerebras-oss
+  # Fallback 1: Cerebras zai-glm-4.7 (non-reasoning, fast)
+  - model_name: gpt-4o-mini-cerebras-glm
     litellm_params:
-      model: cerebras/gpt-oss-120b
+      model: cerebras/zai-glm-4.7
       api_key: os.environ/CEREBRAS_API_KEY
       max_completion_tokens: 1024
-      merge_reasoning_content_in_choices: true
 
   # Fallback 2: Groq (fast, free tier)
   - model_name: gpt-4o-mini-fallback
@@ -71,8 +70,8 @@ litellm_settings:
   drop_params: true
   # Model-group fallbacks on upstream/provider errors
   fallbacks:
-    - gpt-4o-mini: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
-    - gpt-oss-120b: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
+    - gpt-4o-mini: [gpt-4o-mini-cerebras-glm, gpt-4o-mini-fallback, gpt-4o-mini-openai]
+    - gpt-oss-120b: [gpt-4o-mini-cerebras-glm, gpt-4o-mini-fallback, gpt-4o-mini-openai]
 
 # Environment variables for Langfuse v3
 environment_variables:

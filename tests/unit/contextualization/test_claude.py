@@ -210,6 +210,24 @@ class TestClaudeContextualizerContextualize:
         results = await contextualizer.contextualize([])
         assert results == []
 
+    async def test_contextualize_uses_parallel_batch_path(self, contextualizer):
+        """contextualize() should delegate to contextualize_batch()."""
+        expected = [
+            ContextualizedChunk(
+                original_text="Chunk 1",
+                contextual_summary="ctx",
+                article_number="chunk_0",
+                context_method="claude",
+            )
+        ]
+        batch = AsyncMock(return_value=expected)
+
+        with patch.object(contextualizer, "contextualize_batch", batch):
+            results = await contextualizer.contextualize(["Chunk 1"], query="q")
+
+        batch.assert_awaited_once_with(["Chunk 1"], query="q")
+        assert results == expected
+
 
 class TestClaudeContextualizerContextualizeSingle:
     """Tests for ClaudeContextualizer.contextualize_single method."""

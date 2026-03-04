@@ -126,6 +126,26 @@ class TestPropertyBotInit:
         # First call is main collection (with timeout), second is apartments
         assert mock_qdrant.call_args_list[0].kwargs["timeout"] == 7
 
+    def test_init_creates_semantic_classifier_when_enabled(self, mock_config):
+        """Semantic classifier must be initialized when CLASSIFIER_MODE=semantic."""
+        mock_config.classifier_mode = "semantic"
+        with (
+            patch("telegram_bot.bot.Bot"),
+            patch("telegram_bot.integrations.cache.CacheLayerManager"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch(
+                "telegram_bot.services.semantic_classifier.SemanticClassifier"
+            ) as mock_classifier,
+            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+        ):
+            bot = PropertyBot(mock_config)
+
+        mock_classifier.assert_called_once_with(redis_url=mock_config.redis_url)
+        assert bot._semantic_classifier is mock_classifier.return_value
+
 
 class TestCommandHandlers:
     """Test command handlers."""
@@ -1108,6 +1128,7 @@ class TestCheckpointNamespace:
         bot, _ = _create_bot(mock_config)
         bot._checkpointer = object()
         bot._agent_checkpointer = object()
+        bot._semantic_classifier = object()
 
         mock_graph = AsyncMock()
         mock_graph.ainvoke = AsyncMock(
@@ -1148,6 +1169,7 @@ class TestCheckpointNamespace:
             assert cfg["checkpoint_ns"] == "tg:voice:v1"
             graph_kwargs = mock_build_graph.call_args.kwargs
             assert graph_kwargs["checkpointer"] is bot._agent_checkpointer
+            assert graph_kwargs["classifier"] is bot._semantic_classifier
 
     async def test_text_and_voice_concurrent_requests_keep_separate_threads(self, mock_config):
         """Concurrent text+voice requests from same user should not interfere (#540)."""

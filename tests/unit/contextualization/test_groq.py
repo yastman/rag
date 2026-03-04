@@ -151,7 +151,7 @@ class TestGroqContextualizerContextualize:
         assert results == []
         contextualizer.client.chat.completions.create.assert_not_called()
 
-    async def test_contextualize_handles_error_gracefully(self, contextualizer, capsys):
+    async def test_contextualize_handles_error_gracefully(self, contextualizer):
         """Test that errors in individual chunks are handled gracefully."""
         call_count = 0
 
@@ -177,9 +177,23 @@ class TestGroqContextualizerContextualize:
         assert results[1].context_method == "none"
         assert results[2].contextual_summary == "Success summary"
 
-        # Check warning was printed
-        captured = capsys.readouterr()
-        assert "Warning: Failed to contextualize chunk 1" in captured.out
+    async def test_contextualize_uses_parallel_batch_path(self, contextualizer):
+        """contextualize() should delegate to contextualize_batch()."""
+        expected = [
+            ContextualizedChunk(
+                original_text="Chunk 1",
+                contextual_summary="ctx",
+                article_number="chunk_0",
+                context_method="groq",
+            )
+        ]
+        batch = AsyncMock(return_value=expected)
+
+        with patch.object(contextualizer, "contextualize_batch", batch):
+            results = await contextualizer.contextualize(["Chunk 1"], query="q")
+
+        batch.assert_awaited_once_with(["Chunk 1"], query="q")
+        assert results == expected
 
 
 class TestGroqContextualizerContextualizeSingle:
@@ -498,7 +512,7 @@ class TestGroqContextualizerErrorHandling:
         with pytest.raises(ConnectionError, match="Network unreachable"):
             await contextualizer.contextualize_single("Text", "art_1")
 
-    async def test_batch_continues_after_single_failure(self, contextualizer, capsys):
+    async def test_batch_continues_after_single_failure(self, contextualizer, caplog):
         """Test that batch processing continues after individual failures."""
         call_count = 0
 
@@ -515,6 +529,7 @@ class TestGroqContextualizerErrorHandling:
             return response
 
         contextualizer.client.chat.completions.create = mock_create
+        caplog.set_level("WARNING")
 
         chunks = ["Chunk 1", "Chunk 2", "Chunk 3", "Chunk 4"]
         results = await contextualizer.contextualize(chunks)
@@ -533,9 +548,8 @@ class TestGroqContextualizerErrorHandling:
         assert results[3].contextual_summary == "Success"
         assert results[3].context_method == "groq"
 
-        captured = capsys.readouterr()
-        assert "chunk 0" in captured.out
-        assert "chunk 2" in captured.out
+        assert "chunk 0" in caplog.text
+        assert "chunk 2" in caplog.text
 
 
 class TestGroqContextualizerPrompts:

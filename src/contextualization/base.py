@@ -1,10 +1,14 @@
 """Base class for contextualization providers."""
 
 import asyncio
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -112,13 +116,20 @@ class ContextualizeProvider(ABC):
 
         async def _process_with_semaphore(index: int, chunk: str) -> ContextualizedChunk:
             async with sem:
-                return await self.contextualize_single(chunk, f"chunk_{index}", query)
+                try:
+                    return await self.contextualize_single(chunk, f"chunk_{index}", query)
+                except Exception:
+                    logger.warning("Failed to contextualize chunk %s", index, exc_info=True)
+                    return ContextualizedChunk(
+                        original_text=chunk,
+                        contextual_summary="",
+                        article_number=f"chunk_{index}",
+                        context_method="none",
+                    )
 
-        results = await asyncio.gather(
-            *[_process_with_semaphore(i, chunk) for i, chunk in enumerate(chunks)],
-            return_exceptions=True,
+        return await asyncio.gather(
+            *[_process_with_semaphore(i, chunk) for i, chunk in enumerate(chunks)]
         )
-        return [r for r in results if not isinstance(r, Exception)]
 
     @staticmethod
     def get_system_prompt() -> str:

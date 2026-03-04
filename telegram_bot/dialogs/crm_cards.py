@@ -10,13 +10,9 @@ import datetime
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from telegram_bot.callback_data import CrmActionCB
 from telegram_bot.services.kommo_models import Contact, Lead, Task
 
-
-# Callback prefix constants
-_LEAD_PREFIX = "crm:lead"
-_CONTACT_PREFIX = "crm:contact"
-_TASK_PREFIX = "crm:task"
 
 # Pagination defaults
 PAGE_SIZE = 5
@@ -57,21 +53,29 @@ def format_lead_card(lead: Lead, task_count: int = 0) -> tuple[str, InlineKeyboa
             [
                 InlineKeyboardButton(
                     text="✏️ Изменить",
-                    callback_data=f"{_LEAD_PREFIX}:edit:{lead.id}",
+                    callback_data=CrmActionCB(
+                        entity="lead", action="edit", entity_id=lead.id
+                    ).pack(),
                 ),
                 InlineKeyboardButton(
                     text="📝 Заметка",
-                    callback_data=f"{_LEAD_PREFIX}:note:{lead.id}",
+                    callback_data=CrmActionCB(
+                        entity="lead", action="note", entity_id=lead.id
+                    ).pack(),
                 ),
             ],
             [
                 InlineKeyboardButton(
                     text="✅ Задача",
-                    callback_data=f"{_LEAD_PREFIX}:task:{lead.id}",
+                    callback_data=CrmActionCB(
+                        entity="lead", action="task", entity_id=lead.id
+                    ).pack(),
                 ),
                 InlineKeyboardButton(
                     text="🔗 Контакт",
-                    callback_data=f"{_LEAD_PREFIX}:contact:{lead.id}",
+                    callback_data=CrmActionCB(
+                        entity="lead", action="contact", entity_id=lead.id
+                    ).pack(),
                 ),
             ],
         ]
@@ -102,11 +106,15 @@ def format_contact_card(contact: Contact) -> tuple[str, InlineKeyboardMarkup]:
             [
                 InlineKeyboardButton(
                     text="✏️ Изменить",
-                    callback_data=f"{_CONTACT_PREFIX}:edit:{contact.id}",
+                    callback_data=CrmActionCB(
+                        entity="contact", action="edit", entity_id=contact.id
+                    ).pack(),
                 ),
                 InlineKeyboardButton(
                     text="📝 Заметка",
-                    callback_data=f"{_CONTACT_PREFIX}:note:{contact.id}",
+                    callback_data=CrmActionCB(
+                        entity="contact", action="note", entity_id=contact.id
+                    ).pack(),
                 ),
             ],
         ]
@@ -142,11 +150,15 @@ def format_task_card(task: Task) -> tuple[str, InlineKeyboardMarkup]:
             [
                 InlineKeyboardButton(
                     text="✅ Завершить",
-                    callback_data=f"{_TASK_PREFIX}:complete:{task.id}",
+                    callback_data=CrmActionCB(
+                        entity="task", action="complete", entity_id=task.id
+                    ).pack(),
                 ),
                 InlineKeyboardButton(
                     text="⏰ Отложить",
-                    callback_data=f"{_TASK_PREFIX}:postpone:{task.id}",
+                    callback_data=CrmActionCB(
+                        entity="task", action="postpone", entity_id=task.id
+                    ).pack(),
                 ),
             ]
         )
@@ -154,7 +166,9 @@ def format_task_card(task: Task) -> tuple[str, InlineKeyboardMarkup]:
             [
                 InlineKeyboardButton(
                     text="✏️ Изменить",
-                    callback_data=f"{_TASK_PREFIX}:edit:{task.id}",
+                    callback_data=CrmActionCB(
+                        entity="task", action="edit", entity_id=task.id
+                    ).pack(),
                 ),
             ]
         )
@@ -163,7 +177,9 @@ def format_task_card(task: Task) -> tuple[str, InlineKeyboardMarkup]:
             [
                 InlineKeyboardButton(
                     text="🔁 Переоткрыть",
-                    callback_data=f"{_TASK_PREFIX}:reopen:{task.id}",
+                    callback_data=CrmActionCB(
+                        entity="task", action="reopen", entity_id=task.id
+                    ).pack(),
                 ),
             ]
         )

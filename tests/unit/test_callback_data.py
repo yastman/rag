@@ -172,6 +172,51 @@ class TestResultsCB:
             assert unpacked.action == original.action
 
 
+class TestServiceAndOpsCallbackData:
+    def test_service_pack_format(self):
+        from telegram_bot.callback_data import ServiceCB
+
+        assert ServiceCB(value="passive_income").pack() == "svc:passive_income"
+
+    def test_cta_manager_pack_format(self):
+        from telegram_bot.callback_data import CtaManagerCB
+
+        assert CtaManagerCB(action="manager").pack() == "cta:manager"
+
+    def test_cta_offer_pack_format(self):
+        from telegram_bot.callback_data import CtaOfferCB
+
+        assert CtaOfferCB(action="get_offer", service_key="installment").pack() == (
+            "cta:get_offer:installment"
+        )
+
+    def test_clearcache_pack_format(self):
+        from telegram_bot.callback_data import ClearCacheCB
+
+        assert ClearCacheCB(tier="semantic").pack() == "cc:semantic"
+
+    def test_hitl_pack_format(self):
+        from telegram_bot.callback_data import HitlCB
+
+        assert HitlCB(action="approve").pack() == "hitl:approve"
+
+    def test_crm_action_pack_format(self):
+        from telegram_bot.callback_data import CrmActionCB
+
+        assert CrmActionCB(entity="task", action="postpone", entity_id=42).pack() == (
+            "crm:task:postpone:42"
+        )
+
+    def test_crm_action_roundtrip(self):
+        from telegram_bot.callback_data import CrmActionCB
+
+        original = CrmActionCB(entity="lead", action="note", entity_id=99)
+        unpacked = CrmActionCB.unpack(original.pack())
+        assert unpacked.entity == "lead"
+        assert unpacked.action == "note"
+        assert unpacked.entity_id == 99
+
+
 class TestParseFeedbackCallbackNewFormat:
     """Tests for parse_feedback_callback with new CallbackData format."""
 

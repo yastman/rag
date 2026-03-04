@@ -280,6 +280,10 @@ class BotConfig(BaseSettings):
         default=True,
         validation_alias=AliasChoices("content_filter_enabled", "CONTENT_FILTER_ENABLED"),
     )
+    classifier_mode: str = Field(
+        default="regex",
+        validation_alias=AliasChoices("classifier_mode", "CLASSIFIER_MODE"),
+    )
     guard_mode: str = Field(
         default="hard",
         validation_alias=AliasChoices("guard_mode", "GUARD_MODE"),

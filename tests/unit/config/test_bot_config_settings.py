@@ -131,3 +131,12 @@ class TestBotConfigIsPydanticSettings:
 
         cfg = BotConfig(_env_file=None)
         assert cfg.client_direct_pipeline_enabled is True
+
+    def test_classifier_mode_reads_env(self, monkeypatch):
+        """CLASSIFIER_MODE must map to BotConfig field."""
+        monkeypatch.setenv("CLASSIFIER_MODE", "semantic")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        assert cfg.classifier_mode == "semantic"

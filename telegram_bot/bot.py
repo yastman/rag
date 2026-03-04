@@ -31,7 +31,17 @@ from aiogram.utils.chat_action import ChatActionSender
 
 from .agents.agent import create_bot_agent
 from .agents.context import BotContext
-from .callback_data import FavoriteCB, FeedbackCB, FeedbackReasonCB, ResultsCB
+from .callback_data import (
+    ClearCacheCB,
+    CtaManagerCB,
+    CtaOfferCB,
+    FavoriteCB,
+    FeedbackCB,
+    FeedbackReasonCB,
+    HitlCB,
+    ResultsCB,
+    ServiceCB,
+)
 from .config import BotConfig
 from .graph.config import GraphConfig
 from .graph.graph import build_graph
@@ -331,6 +341,7 @@ class PropertyBot:
             redis_url=config.redis_url,
             domain=config.domain,
             domain_language=config.domain_language,
+            classifier_mode=config.classifier_mode,
         )
 
         # Initialize LangGraph service dependencies
@@ -376,6 +387,16 @@ class PropertyBot:
             logger.info("Using ColbertRerankerService for reranking")
         elif config.rerank_provider == "none":
             logger.info("Reranking disabled")
+
+        self._semantic_classifier: Any = None
+        if config.classifier_mode == "semantic":
+            from .services.semantic_classifier import SemanticClassifier
+
+            self._semantic_classifier = SemanticClassifier(redis_url=config.redis_url)
+            if getattr(self._semantic_classifier, "available", False):
+                logger.info("Using SemanticClassifier for graph query classification")
+            else:
+                logger.warning("SemanticClassifier requested but unavailable; using regex fallback")
 
         # LLM (optional, defaults via GraphConfig.create_llm)
         self._llm = self._graph_config.create_llm()
@@ -699,11 +720,12 @@ class PropertyBot:
         # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
         self.dp.callback_query(F.data == "fb:done")(self.handle_feedback)
         self.dp.callback_query(FeedbackReasonCB.filter())(self.handle_feedback_reason)
-        self.dp.callback_query(F.data.startswith("hitl:"))(self.handle_hitl_callback)
-        self.dp.callback_query(F.data.startswith("cc:"))(self.handle_clearcache_callback)
+        self.dp.callback_query(HitlCB.filter())(self.handle_hitl_callback)
+        self.dp.callback_query(ClearCacheCB.filter())(self.handle_clearcache_callback)
         # Client menu inline callbacks (#628)
-        self.dp.callback_query(F.data.startswith("svc:"))(self.handle_service_callback)
-        self.dp.callback_query(F.data.startswith("cta:"))(self.handle_cta_callback)
+        self.dp.callback_query(ServiceCB.filter())(self.handle_service_callback)
+        self.dp.callback_query(CtaManagerCB.filter(F.action == "manager"))(self.handle_cta_callback)
+        self.dp.callback_query(CtaOfferCB.filter(F.action == "get_offer"))(self.handle_cta_callback)
         self.dp.callback_query(FavoriteCB.filter(F.action == "add"))(self.handle_fav_add)
         self.dp.callback_query(FavoriteCB.filter(F.action == "remove"))(self.handle_fav_remove)
         self.dp.callback_query(FavoriteCB.filter(F.action == "viewing"))(self.handle_fav_viewing)
@@ -858,14 +880,22 @@ class PropertyBot:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="Semantic", callback_data="cc:semantic"),
-                    InlineKeyboardButton(text="Embeddings", callback_data="cc:embeddings"),
+                    InlineKeyboardButton(
+                        text="Semantic", callback_data=ClearCacheCB(tier="semantic").pack()
+                    ),
+                    InlineKeyboardButton(
+                        text="Embeddings", callback_data=ClearCacheCB(tier="embeddings").pack()
+                    ),
                 ],
                 [
-                    InlineKeyboardButton(text="Sparse", callback_data="cc:sparse"),
-                    InlineKeyboardButton(text="Search+Rerank", callback_data="cc:search"),
+                    InlineKeyboardButton(
+                        text="Sparse", callback_data=ClearCacheCB(tier="sparse").pack()
+                    ),
+                    InlineKeyboardButton(
+                        text="Search+Rerank", callback_data=ClearCacheCB(tier="search").pack()
+                    ),
                 ],
-                [InlineKeyboardButton(text="Все", callback_data="cc:all")],
+                [InlineKeyboardButton(text="Все", callback_data=ClearCacheCB(tier="all").pack())],
             ]
         )
         await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
@@ -1550,7 +1580,12 @@ class PropertyBot:
             except Exception:
                 logger.exception("Failed to update Kommo on handoff close")
 
-    async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
+    async def handle_service_callback(
+        self,
+        callback: CallbackQuery,
+        callback_data: ServiceCB | None = None,
+        i18n: Any = None,
+    ) -> None:
         """Handle service menu inline button clicks (#628)."""
         from .keyboards.services_keyboard import (
             build_service_card_buttons,
@@ -1559,7 +1594,15 @@ class PropertyBot:
         )
         from .services.content_loader import get_service_card
 
-        parsed = parse_service_callback(callback.data or "")
+        if callback_data is not None:
+            if callback_data.value == "back":
+                parsed = ("back", None)
+            elif callback_data.value == "menu":
+                parsed = ("menu", None)
+            else:
+                parsed = ("service", callback_data.value)
+        else:
+            parsed = parse_service_callback(callback.data or "")
         if parsed is None:
             await callback.answer()
             return
@@ -1596,12 +1639,22 @@ class PropertyBot:
         else:
             await callback.answer()
 
-    async def handle_cta_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+    async def handle_cta_callback(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        callback_data: CtaManagerCB | CtaOfferCB | None = None,
+    ) -> None:
         """Handle CTA button clicks (get_offer, manager) (#628)."""
         from .handlers.phone_collector import start_phone_collection
         from .keyboards.services_keyboard import parse_service_callback
 
-        parsed = parse_service_callback(callback.data or "")
+        if callback_data is not None:
+            action = getattr(callback_data, "action", "")
+            param = getattr(callback_data, "service_key", None)
+            parsed = (action, param)
+        else:
+            parsed = parse_service_callback(callback.data or "")
         if parsed is None:
             await callback.answer()
             return
@@ -3103,6 +3156,7 @@ class PropertyBot:
                 stt_model=self.config.stt_model,
                 content_filter_enabled=self.config.content_filter_enabled,
                 guard_mode=self.config.guard_mode,
+                classifier=self._semantic_classifier,
             )
 
             invoke_config = {
@@ -3258,8 +3312,12 @@ class PropertyBot:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="Подтвердить", callback_data="hitl:approve"),
-                    InlineKeyboardButton(text="Отменить", callback_data="hitl:cancel"),
+                    InlineKeyboardButton(
+                        text="Подтвердить", callback_data=HitlCB(action="approve").pack()
+                    ),
+                    InlineKeyboardButton(
+                        text="Отменить", callback_data=HitlCB(action="cancel").pack()
+                    ),
                 ]
             ]
         )
@@ -3270,14 +3328,19 @@ class PropertyBot:
         )
 
     @observe(name="telegram-hitl-callback")
-    async def handle_hitl_callback(self, callback: CallbackQuery) -> None:
+    async def handle_hitl_callback(
+        self, callback: CallbackQuery, callback_data: HitlCB | None = None
+    ) -> None:
         """Handle HITL approve/cancel button click (#443)."""
         if callback.from_user is None or callback.message is None:
             await callback.answer()
             return
 
-        data = callback.data or ""
-        action = "approve" if data == "hitl:approve" else "cancel"
+        if callback_data is not None:
+            action = callback_data.action
+        else:
+            data = callback.data or ""
+            action = "approve" if data == "hitl:approve" else "cancel"
         user_id = callback.from_user.id
         chat_id = callback.message.chat.id
         thread_id = _supervisor_thread_id(chat_id)
@@ -3565,7 +3628,9 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
-    async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
+    async def handle_clearcache_callback(
+        self, callback_query: CallbackQuery, callback_data: ClearCacheCB | None = None
+    ) -> None:
         """Handle /clearcache inline keyboard callbacks (cc: prefix)."""
         _TIER_NAMES = {
             "semantic": "Semantic cache",
@@ -3575,7 +3640,11 @@ class PropertyBot:
             "rerank": "Rerank cache",
             "all": "Все кеши",
         }
-        data = (callback_query.data or "").removeprefix("cc:")
+        data = (
+            callback_data.tier
+            if callback_data is not None
+            else (callback_query.data or "").removeprefix("cc:")
+        )
         tier_name = _TIER_NAMES.get(data, data)
         try:
             if data == "all":

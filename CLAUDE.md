@@ -15,6 +15,75 @@ make ingest-unified        # Unified ingestion (CocoIndex)
 python -m src.ingestion.apartments.runner --incremental  # Apartments (297 rows, change tracking)
 ```
 
+## Development Workflow
+
+### Два окружения — один код
+
+```
+Локально (WSL2, 12 GB RAM)            VPS (прод)
+──────────────────────────            ──────────
+docker-compose.dev.yml                docker-compose.vps.yml
+  redis, qdrant, bge-m3,               redis, qdrant, bge-m3,
+  litellm, docling + профили            litellm, docling, bot,
+                                        langfuse, clickhouse, ...
+
+Свои volumes (данные)                 Свои volumes (данные)
+Свои images (образы)                  Свои images (образы)
+Общий: только код (git)               Общий: только код (git)
+```
+
+Docker-контейнеры **не переносятся** между машинами. Каждое окружение собирает образы из одного и того же кода. Готовые сервисы (qdrant, redis) скачиваются из Docker Hub. Твои сервисы (bot, ingestion) собираются через `docker build`.
+
+### Цикл разработки (ветки + PR)
+
+```
+1. git checkout -b feature/my-feature   # ветка от main
+2. Код + правки                          # IDE + Claude Code
+3. make check                            # lint + mypy (~10с)
+4. make test-unit                        # unit тесты (~30с)
+5. make run-bot                          # проверка бот (DEV-токен)
+6. git push -u origin feature/my-feature # пуш ветки
+7. gh pr create                          # PR в main
+8. CI: ruff + mypy                       # автоматически
+9. Code review                           # перед merge
+10. Merge → auto-deploy на VPS           # ~40с
+```
+
+**НИКОГДА** не пушить напрямую в main. Всегда через PR.
+
+### Локальный dev-сервер (минимум для разработки)
+
+```bash
+make local-up    # 5 сервисов: redis, qdrant, bge-m3, litellm, docling
+make run-bot     # бот нативно (TELEGRAM_BOT_TOKEN_DEV, без Docker)
+```
+
+Langfuse/MLflow/мониторинг — по необходимости: `--profile ml`, `--profile obs`.
+
+### Docker-изменения (compose, Dockerfile, новый сервис)
+
+```bash
+# Проверка синтаксиса
+docker compose -f docker-compose.dev.yml config --quiet
+
+# Локально: перезапуск
+make local-down && make local-up
+
+# На VPS (после merge в main):
+./scripts/deploy-vps.sh              # инфра-изменения (compose, Dockerfile)
+# CI автодеплой пересобирает только bot
+```
+
+### Отличия dev vs vps
+
+| Параметр | Локал (dev) | VPS (prod) |
+|----------|-------------|------------|
+| Redis maxmemory | 512 MB | 256 MB |
+| BGE-M3 OMP threads | 4 | 2 |
+| ColBERT rerank | включён | выключен (CPU ~12с) |
+| Memory limits | щедрые | жёсткие |
+| Бот | нативно (`make run-bot`) | Docker-контейнер |
+
 ## Project Overview
 
 **Contextual RAG Pipeline** — hybrid search (RRF + ColBERT rerank), BGE-M3 embeddings (local), multi-level caching, Telegram bot.
@@ -182,23 +251,25 @@ Details: `.claude/rules/git-workflow.md`
 ## CI/CD Pipeline
 
 ```
-Локально (мощный комп)          GitHub (ubuntu-latest)              VPS
-─────────────────────          ────────────────────              ───
-pre-commit hooks (auto)   →    PR: ruff lint + mypy (~30с)
-make test-unit / make test      │
-                                ├── fail → PR блокирован
-                                └── pass → merge в main
-                                              │
-                                              └── Deploy: SSH → git pull
-                                                  → docker build bot
-                                                  → restart (~40с)
+Локально                    GitHub                         VPS
+────────                    ──────                         ───
+feature branch              PR → ruff + mypy (~30с)
+make check + test-unit       │
+make run-bot (DEV-токен)     ├── fail → PR блокирован
+                             ├── pass + review → merge
+                             └── main push → Deploy:
+                                   SSH → git pull
+                                   → docker build bot
+                                   → restart (~40с)
 ```
 
 | Этап | Где | Что запускается |
 |------|-----|-----------------|
-| **Тесты** | Локально | `make test-unit` / `make test` (pre-commit hooks автоматом) |
-| **Lint** | GitHub Actions | ruff check + ruff format + mypy (на PR и push в main) |
-| **Deploy** | GitHub → VPS | git pull → rebuild bot container → restart (только после lint pass + merge в main) |
+| **Тесты + lint** | Локально | `make ci` (format + lint + types + tests) |
+| **CI гейт** | GitHub Actions | ruff check + ruff format + mypy (на PR) |
+| **Code review** | GitHub PR | Перед merge в main |
+| **Deploy** | GitHub → VPS | git pull → rebuild bot → restart (только после merge в main) |
+| **Инфра-деплой** | Вручную | `./scripts/deploy-vps.sh` (compose/Dockerfile изменения) |
 
 **Workflow:** `.github/workflows/ci.yml` (lint → deploy, один файл)
 

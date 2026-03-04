@@ -20,6 +20,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 
+from telegram_bot.callback_data import CrmActionCB
 from telegram_bot.dialogs.states import CrmQuickActionSG
 from telegram_bot.services.kommo_models import TaskCreate, TaskUpdate
 
@@ -36,16 +37,18 @@ _NO_CRM = "⚠️ CRM недоступна."
 async def on_lead_note(
     callback: CallbackQuery,
     state: FSMContext,
+    callback_data: CrmActionCB | None = None,
     kommo_client: Any | None = None,
 ) -> None:
     """Handle crm:lead:note:{id} — start quick note FSM for a lead."""
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
-    # callback.data is guaranteed non-None by F.data.regexp filter
-    assert callback.data is not None
-    # callback.data format: crm:lead:note:{id}
-    lead_id = int(callback.data.split(":")[3])
+    if callback_data is not None:
+        lead_id = callback_data.entity_id
+    else:
+        assert callback.data is not None
+        lead_id = int(callback.data.split(":")[3])
     await state.set_state(CrmQuickActionSG.waiting_note)
     await state.update_data(entity_type="leads", entity_id=lead_id)
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -56,16 +59,18 @@ async def on_lead_note(
 async def on_lead_task(
     callback: CallbackQuery,
     state: FSMContext,
+    callback_data: CrmActionCB | None = None,
     kommo_client: Any | None = None,
 ) -> None:
     """Handle crm:lead:task:{id} — start quick task FSM for a lead."""
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
-    # callback.data is guaranteed non-None by F.data.regexp filter
-    assert callback.data is not None
-    # callback.data format: crm:lead:task:{id}
-    lead_id = int(callback.data.split(":")[3])
+    if callback_data is not None:
+        lead_id = callback_data.entity_id
+    else:
+        assert callback.data is not None
+        lead_id = int(callback.data.split(":")[3])
     await state.set_state(CrmQuickActionSG.waiting_task)
     await state.update_data(entity_id=lead_id, entity_type="leads")
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -75,16 +80,18 @@ async def on_lead_task(
 
 async def on_task_complete(
     callback: CallbackQuery,
+    callback_data: CrmActionCB | None = None,
     kommo_client: Any | None = None,
 ) -> None:
     """Handle crm:task:complete:{id} — complete task immediately."""
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
-    # callback.data is guaranteed non-None by F.data.regexp filter
-    assert callback.data is not None
-    # callback.data format: crm:task:complete:{id}
-    task_id = int(callback.data.split(":")[3])
+    if callback_data is not None:
+        task_id = callback_data.entity_id
+    else:
+        assert callback.data is not None
+        task_id = int(callback.data.split(":")[3])
     try:
         await kommo_client.complete_task(task_id)
         await callback.answer("✅ Задача завершена.")
@@ -97,16 +104,18 @@ async def on_task_complete(
 
 async def on_task_postpone(
     callback: CallbackQuery,
+    callback_data: CrmActionCB | None = None,
     kommo_client: Any | None = None,
 ) -> None:
     """Handle crm:task:postpone:{id} — postpone task by +1 day."""
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
-    # callback.data is guaranteed non-None by F.data.regexp filter
-    assert callback.data is not None
-    # callback.data format: crm:task:postpone:{id}
-    task_id = int(callback.data.split(":")[3])
+    if callback_data is not None:
+        task_id = callback_data.entity_id
+    else:
+        assert callback.data is not None
+        task_id = int(callback.data.split(":")[3])
     due_ts = int(time.time()) + 86400
     try:
         await kommo_client.update_task(task_id, TaskUpdate(complete_till=due_ts))
@@ -123,16 +132,18 @@ async def on_task_postpone(
 async def on_contact_note(
     callback: CallbackQuery,
     state: FSMContext,
+    callback_data: CrmActionCB | None = None,
     kommo_client: Any | None = None,
 ) -> None:
     """Handle crm:contact:note:{id} — start quick note FSM for a contact."""
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
-    # callback.data is guaranteed non-None by F.data.regexp filter
-    assert callback.data is not None
-    # callback.data format: crm:contact:note:{id}
-    contact_id = int(callback.data.split(":")[3])
+    if callback_data is not None:
+        contact_id = callback_data.entity_id
+    else:
+        assert callback.data is not None
+        contact_id = int(callback.data.split(":")[3])
     await state.set_state(CrmQuickActionSG.waiting_note)
     await state.update_data(entity_type="contacts", entity_id=contact_id)
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -209,14 +220,18 @@ _EDIT_SUCCESS = "✅ Задача обновлена."
 async def on_task_edit(
     callback: CallbackQuery,
     state: FSMContext,
+    callback_data: CrmActionCB | None = None,
     kommo_client: Any | None = None,
 ) -> None:
     """Handle crm:task:edit:{id} — start edit field choice FSM."""
     if kommo_client is None:
         await callback.answer(_NO_CRM, show_alert=True)
         return
-    assert callback.data is not None
-    task_id = int(callback.data.split(":")[3])
+    if callback_data is not None:
+        task_id = callback_data.entity_id
+    else:
+        assert callback.data is not None
+        task_id = int(callback.data.split(":")[3])
     await state.set_state(CrmQuickActionSG.edit_task_choose_field)
     await state.update_data(edit_task_id=task_id)
     if callback.message and not isinstance(callback.message, InaccessibleMessage):
@@ -307,20 +322,32 @@ def create_crm_router() -> Router:
     router = Router(name="crm_callbacks")
 
     # Immediate actions (no FSM required)
-    router.callback_query(F.data.regexp(r"^crm:task:complete:\d+$"))(on_task_complete)
-    router.callback_query(F.data.regexp(r"^crm:task:postpone:\d+$"))(on_task_postpone)
+    router.callback_query(CrmActionCB.filter((F.entity == "task") & (F.action == "complete")))(
+        on_task_complete
+    )
+    router.callback_query(CrmActionCB.filter((F.entity == "task") & (F.action == "postpone")))(
+        on_task_postpone
+    )
 
     # FSM-triggering actions
-    router.callback_query(F.data.regexp(r"^crm:lead:note:\d+$"))(on_lead_note)
-    router.callback_query(F.data.regexp(r"^crm:lead:task:\d+$"))(on_lead_task)
-    router.callback_query(F.data.regexp(r"^crm:contact:note:\d+$"))(on_contact_note)
+    router.callback_query(CrmActionCB.filter((F.entity == "lead") & (F.action == "note")))(
+        on_lead_note
+    )
+    router.callback_query(CrmActionCB.filter((F.entity == "lead") & (F.action == "task")))(
+        on_lead_task
+    )
+    router.callback_query(CrmActionCB.filter((F.entity == "contact") & (F.action == "note")))(
+        on_contact_note
+    )
 
     # FSM text input handlers
     router.message(StateFilter(CrmQuickActionSG.waiting_note), F.text)(on_note_text_received)
     router.message(StateFilter(CrmQuickActionSG.waiting_task), F.text)(on_task_text_received)
 
     # Task edit FSM
-    router.callback_query(F.data.regexp(r"^crm:task:edit:\d+$"))(on_task_edit)
+    router.callback_query(CrmActionCB.filter((F.entity == "task") & (F.action == "edit")))(
+        on_task_edit
+    )
     router.message(StateFilter(CrmQuickActionSG.edit_task_choose_field), F.text)(
         on_edit_field_chosen
     )

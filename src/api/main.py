@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
     from telegram_bot.integrations.cache import CacheLayerManager
     from telegram_bot.services.colbert_reranker import ColbertRerankerService
     from telegram_bot.services.qdrant import QdrantService
+    from telegram_bot.services.semantic_classifier import SemanticClassifier
 
     cfg = GraphConfig.from_env()
 
@@ -55,6 +56,9 @@ async def lifespan(app: FastAPI):
     elif cfg.rerank_provider != "none":
         logger.warning("Unknown RERANK_PROVIDER=%s, reranking disabled", cfg.rerank_provider)
     llm = cfg.create_llm()
+    classifier = None
+    if cfg.classifier_mode == "semantic":
+        classifier = SemanticClassifier(redis_url=cfg.redis_url)
 
     graph = build_graph(
         cache=cache,
@@ -64,6 +68,7 @@ async def lifespan(app: FastAPI):
         reranker=reranker,
         llm=llm,
         message=None,
+        classifier=classifier,
     )
 
     app.state.graph = graph

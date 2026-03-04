@@ -30,3 +30,42 @@ class ResultsCB(CallbackData, prefix="results"):
     """Property results pagination callback data."""
 
     action: str  # "more", "refine", "viewing"
+
+
+class ServiceCB(CallbackData, prefix="svc"):
+    """Service menu callback data preserving svc:{value} format."""
+
+    value: str
+
+
+class CtaManagerCB(CallbackData, prefix="cta"):
+    """CTA callback data for manager contact preserving cta:manager."""
+
+    action: str
+
+
+class CtaOfferCB(CallbackData, prefix="cta"):
+    """CTA callback data for service offer preserving cta:get_offer:{service_key}."""
+
+    action: str
+    service_key: str
+
+
+class ClearCacheCB(CallbackData, prefix="cc"):
+    """Clear-cache callback data preserving cc:{tier} format."""
+
+    tier: str
+
+
+class HitlCB(CallbackData, prefix="hitl"):
+    """HITL resume callback data preserving hitl:{action} format."""
+
+    action: str
+
+
+class CrmActionCB(CallbackData, prefix="crm"):
+    """CRM quick-action callback data preserving crm:{entity}:{action}:{entity_id}."""
+
+    entity: str
+    action: str
+    entity_id: int

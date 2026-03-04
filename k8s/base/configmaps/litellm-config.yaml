@@ -7,10 +7,10 @@ data:
     model_list:
       - model_name: gpt-4o-mini
         litellm_params:
-          model: cerebras/gpt-oss-120b
+          model: cerebras/zai-glm-4.7
           api_key: os.environ/CEREBRAS_API_KEY
           max_completion_tokens: 1024
-          merge_reasoning_content_in_choices: true
+          disable_reasoning: true
       - model_name: gpt-oss-120b
         litellm_params:
           model: cerebras/gpt-oss-120b
@@ -19,8 +19,7 @@ data:
           merge_reasoning_content_in_choices: true
       - model_name: gpt-4o-mini-cerebras-glm
         litellm_params:
-          model: openai/zai-glm-4.7
-          api_base: https://api.cerebras.ai/v1
+          model: cerebras/zai-glm-4.7
           api_key: os.environ/CEREBRAS_API_KEY
           max_completion_tokens: 1024
       - model_name: gpt-4o-mini-fallback

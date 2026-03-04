@@ -52,23 +52,7 @@ class ClaudeContextualizer(ContextualizeProvider):
         Uses batch processing for efficiency.
         """
         _ = context_window
-        results = []
-        for i, chunk in enumerate(chunks):
-            try:
-                result = await self.contextualize_single(chunk, f"chunk_{i}", query)
-                results.append(result)
-            except Exception as e:
-                print(f"Warning: Failed to contextualize chunk {i}: {e}")
-                # Fallback: return chunk without context
-                results.append(
-                    ContextualizedChunk(
-                        original_text=chunk,
-                        contextual_summary="",
-                        article_number=f"chunk_{i}",
-                        context_method="none",
-                    )
-                )
-        return results
+        return await self.contextualize_batch(chunks, query=query)
 
     @retry(
         retry=retry_if_exception_type((RateLimitError, APIStatusError)),

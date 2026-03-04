@@ -41,6 +41,16 @@ class TestSemanticClassifierInit:
                 classifier = SemanticClassifier(redis_url="redis://invalid:9999")
                 assert classifier.available is False
 
+    def test_init_uses_overwrite_true(self):
+        mock_route = MagicMock()
+        mock_router_cls = MagicMock()
+        fake_module = MagicMock(Route=mock_route, SemanticRouter=mock_router_cls)
+
+        with patch.dict("sys.modules", {"redisvl.extensions.router": fake_module}):
+            SemanticClassifier(redis_url="redis://localhost:6379")
+
+        assert mock_router_cls.call_args.kwargs["overwrite"] is True
+
     def test_available_false_by_default_on_import_error(self):
         with patch.dict("sys.modules", {"redisvl": None, "redisvl.extensions.router": None}):
             classifier = SemanticClassifier.__new__(SemanticClassifier)

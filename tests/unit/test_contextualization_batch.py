@@ -86,6 +86,23 @@ class TestContextualizeBatch:
         assert received == ["find X", "find X"]
 
     @pytest.mark.asyncio
+    async def test_failures_return_fallback_chunks(self) -> None:
+        class _FailsOnSecond(_SimpleContextualizer):
+            async def contextualize_single(self, text, article_number, query=None):
+                if article_number == "chunk_1":
+                    raise RuntimeError("boom")
+                return await super().contextualize_single(text, article_number, query)
+
+        results = await _FailsOnSecond().contextualize_batch(["a", "b", "c"])
+
+        assert len(results) == 3
+        assert results[0].context_method == "test"
+        assert results[1].original_text == "b"
+        assert results[1].context_method == "none"
+        assert results[1].article_number == "chunk_1"
+        assert results[2].context_method == "test"
+
+    @pytest.mark.asyncio
     async def test_semaphore_limits_concurrency(self) -> None:
         active = 0
         peak = 0

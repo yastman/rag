@@ -17,6 +17,7 @@ cp .env.example .env
 
 Minimum env for bot profile:
 - `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_BOT_TOKEN_DEV` when production bot is already polling and you want to run local bot in parallel
 - `LITELLM_MASTER_KEY`
 - at least one provider key: `CEREBRAS_API_KEY` or `GROQ_API_KEY` or `OPENAI_API_KEY`
 
@@ -35,6 +36,8 @@ make docker-ingest-up
 make docker-voice-up
 make monitoring-up
 ```
+
+If production is already polling the same Telegram bot token, do not start local bot with that token. Set `TELEGRAM_BOT_TOKEN_DEV` to a separate bot token or keep the local `bot` profile stopped.
 
 ## 3. Validate Runtime
 

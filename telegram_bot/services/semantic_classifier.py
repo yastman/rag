@@ -143,6 +143,7 @@ class SemanticClassifier:
                 "name": "query_classifier",
                 "routes": routes,
                 "redis_url": redis_url,
+                "overwrite": True,
             }
             if vectorizer is not None:
                 kwargs["vectorizer"] = vectorizer
