@@ -238,7 +238,7 @@ async def on_phone_received(
             )
 
             lead = await kommo_client.create_lead(
-                LeadCreate(
+                LeadCreate(  # type: ignore[call-arg]
                     name=f"{crm_title} — {display_name}",
                     pipeline_id=pipeline_id,
                     status_id=status_id,
