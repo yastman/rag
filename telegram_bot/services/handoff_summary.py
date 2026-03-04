@@ -56,7 +56,8 @@ async def generate_handoff_summary(
             temperature=0.3,
             name="handoff-summary",  # type: ignore[call-overload]
         )
-        return resp.choices[0].message.content.strip()
+        content = resp.choices[0].message.content
+        return content.strip() if content else None
     except Exception:
         logger.exception("Failed to generate handoff summary")
         return None
