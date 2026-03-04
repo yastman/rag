@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import operator
 from typing import Any
 
 from aiogram.types import CallbackQuery
 from aiogram_dialog import Dialog, DialogManager, Window
-from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select
+from aiogram_dialog.widgets.kbd import (
+    Back,
+    Button,
+    Cancel,
+    Column,
+    ManagedMultiselect,
+    Multiselect,
+    Select,
+)
 from aiogram_dialog.widgets.text import Format
 
 from .states import FunnelSG
@@ -120,6 +129,19 @@ _CITY_DISPLAY: dict[str, str] = {
     "Свети Влас": "Свети Влас",
     "Элените": "Элените",
 }
+
+# Preference category items for Multiselect widget
+_PREF_ITEMS: list[tuple[str, str]] = [
+    ("🏢 Этаж", "floor"),
+    ("🌅 Вид", "view"),
+    ("📐 Площадь", "area"),
+    ("🛋 Мебель", "furnished"),
+    ("🏷 Акции", "promotion"),
+    ("🏘 Комплекс", "complex"),
+]
+
+# Widget ID for preferences Multiselect
+_PREF_MS_ID = "pref_ms"
 
 
 def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
@@ -238,11 +260,29 @@ async def get_budget_options(**kwargs: Any) -> dict[str, Any]:
     return {"title": "Какой бюджет?", "items": items, "btn_back": btn_back}
 
 
+def _compute_active_pref_categories(data: dict[str, Any]) -> list[str]:
+    """Return list of category IDs that have a non-default value set."""
+    checked: list[str] = []
+    if data.get("floor") and data["floor"] != "any":
+        checked.append("floor")
+    if data.get("view") and data["view"] != "any":
+        checked.append("view")
+    if data.get("area") and data["area"] != "any":
+        checked.append("area")
+    if data.get("is_furnished"):
+        checked.append("furnished")
+    if data.get("is_promotion"):
+        checked.append("promotion")
+    if data.get("complex") and data["complex"] != "any":
+        checked.append("complex")
+    return checked
+
+
 async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for preferences multi-select menu (Step 4).
 
-    Shows 5 category buttons with ✓ checkmark when a value is selected,
-    plus a "Нет, перейти к результатам" button to proceed to summary.
+    Syncs Multiselect widget state from dialog_data so checkmarks reflect
+    actual selections. The "done" button is a separate Button widget.
     """
     i18n = kwargs.get("middleware_data", {}).get("i18n")
     dialog_manager = kwargs.get("dialog_manager")
@@ -252,30 +292,18 @@ async def get_preferences_options(**kwargs: Any) -> dict[str, Any]:
 
     btn_back = i18n.get("back") if i18n else "Назад"
 
-    floor_val = data.get("floor")
-    view_val = data.get("view")
-    area_val = data.get("area")
-    furnished_val = data.get("is_furnished")
-    promotion_val = data.get("is_promotion")
-    complex_val = data.get("complex")
+    # Sync Multiselect widget state from dialog_data
+    if dialog_manager is not None:
+        with contextlib.suppress(AttributeError):
+            dialog_manager.current_context().widget_data[_PREF_MS_ID] = (
+                _compute_active_pref_categories(data)
+            )
 
-    floor_label = f"{'✓ ' if floor_val and floor_val != 'any' else ''}🏢 Этаж"
-    view_label = f"{'✓ ' if view_val and view_val != 'any' else ''}🌅 Вид"
-    area_label = f"{'✓ ' if area_val and area_val != 'any' else ''}📐 Площадь"
-    furnished_label = f"{'✓ ' if furnished_val else ''}🛋 Мебель"
-    promotion_label = f"{'✓ ' if promotion_val else ''}🏷 Акции"
-    complex_label = f"{'✓ ' if complex_val and complex_val != 'any' else ''}🏘 Комплекс"
-
-    items = [
-        (floor_label, "floor"),
-        (view_label, "view"),
-        (area_label, "area"),
-        (furnished_label, "furnished"),
-        (promotion_label, "promotion"),
-        (complex_label, "complex"),
-        ("▶️ Нет, перейти к результатам", "done"),
-    ]
-    return {"title": "✨ Есть ли дополнительные пожелания?", "items": items, "btn_back": btn_back}
+    return {
+        "title": "✨ Есть ли дополнительные пожелания?",
+        "items": _PREF_ITEMS,
+        "btn_back": btn_back,
+    }
 
 
 async def get_pref_floor_options(**kwargs: Any) -> dict[str, Any]:
@@ -632,13 +660,22 @@ async def on_pref_back_to_menu(
     await manager.switch_to(FunnelSG.preferences)
 
 
+async def on_pref_done(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """Proceed to summary from preferences menu."""
+    await manager.switch_to(FunnelSG.summary)
+
+
 async def on_pref_category_selected(
     callback: CallbackQuery,
-    widget: Select,
+    widget: ManagedMultiselect,
     manager: DialogManager,
     item_id: str,
 ) -> None:
-    """Route to the appropriate sub-option window or summary."""
+    """Route to the appropriate sub-option window."""
     _PREF_STATE_MAP = {
         "floor": FunnelSG.pref_floor,
         "view": FunnelSG.pref_view,
@@ -646,10 +683,10 @@ async def on_pref_category_selected(
         "furnished": FunnelSG.pref_furnished,
         "promotion": FunnelSG.pref_promotion,
         "complex": FunnelSG.pref_complex,
-        "done": FunnelSG.summary,
     }
-    target = _PREF_STATE_MAP.get(item_id, FunnelSG.summary)
-    await manager.switch_to(target)
+    target = _PREF_STATE_MAP.get(item_id)
+    if target:
+        await manager.switch_to(target)
 
 
 async def on_pref_floor_selected(
@@ -974,13 +1011,19 @@ funnel_dialog = Dialog(
     Window(
         Format("{title}"),
         Column(
-            Select(
-                Format("{item[0]}"),
-                id="preferences",
+            Multiselect(
+                checked_text=Format("✓ {item[0]}"),
+                unchecked_text=Format("{item[0]}"),
+                id=_PREF_MS_ID,
                 item_id_getter=operator.itemgetter(1),
                 items="items",
                 on_click=on_pref_category_selected,
             ),
+        ),
+        Button(
+            Format("▶️ Нет, перейти к результатам"),
+            id="pref_done",
+            on_click=on_pref_done,
         ),
         Back(Format("{btn_back}")),
         getter=get_preferences_options,
