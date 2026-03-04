@@ -1,6 +1,7 @@
 """Tests for property search funnel dialog (#697 refactor, #712 city filter)."""
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -147,7 +148,8 @@ async def test_pref_complex_any_clears_value():
 
 
 @pytest.mark.asyncio
-async def test_preferences_options_has_5_categories_plus_done():
+async def test_preferences_options_has_6_categories():
+    """Preferences getter returns 6 category items; 'done' is now a separate Button."""
     result = await funnel_module.get_preferences_options(
         middleware_data={},
         dialog_manager=SimpleNamespace(dialog_data={}),
@@ -161,10 +163,8 @@ async def test_preferences_options_has_5_categories_plus_done():
     assert "furnished" in ids
     assert "promotion" in ids
     assert "complex" in ids
-    assert "done" in ids
-    assert any(
-        label == "▶️ Нет, перейти к результатам" for label, item_id in items if item_id == "done"
-    )
+    assert "done" not in ids  # "done" is now a separate Button widget
+    assert len(items) == 6
 
 
 @pytest.mark.asyncio
@@ -184,26 +184,33 @@ async def test_preferences_options_uses_emoji_labels_for_all_categories():
 
 
 @pytest.mark.asyncio
-async def test_preferences_options_shows_checkmark_when_selected():
-    result = await funnel_module.get_preferences_options(
-        middleware_data={},
-        dialog_manager=SimpleNamespace(dialog_data={"floor": "mid", "view": "sea"}),
+async def test_preferences_options_syncs_widget_state_when_selected():
+    """get_preferences_options syncs Multiselect widget_data from dialog_data."""
+    widget_data: dict[str, Any] = {}
+    ctx = SimpleNamespace(widget_data=widget_data)
+    manager = SimpleNamespace(
+        dialog_data={"floor": "mid", "view": "sea"},
+        current_context=lambda: ctx,
     )
-    items = result["items"]
-    labels = [label for label, _ in items]
-    floor_labels = [label for label in labels if "таж" in label.lower()]
-    assert any("✓" in label for label in floor_labels)
+    await funnel_module.get_preferences_options(middleware_data={}, dialog_manager=manager)
+    checked = widget_data.get(funnel_module._PREF_MS_ID, [])
+    assert "floor" in checked
+    assert "view" in checked
+    assert "area" not in checked
 
 
 @pytest.mark.asyncio
-async def test_preferences_complex_shows_checkmark_when_selected():
-    result = await funnel_module.get_preferences_options(
-        middleware_data={},
-        dialog_manager=SimpleNamespace(dialog_data={"complex": "Premier Fort Beach"}),
+async def test_preferences_complex_syncs_widget_state_when_selected():
+    """get_preferences_options marks 'complex' as checked in widget_data when complex is set."""
+    widget_data: dict[str, Any] = {}
+    ctx = SimpleNamespace(widget_data=widget_data)
+    manager = SimpleNamespace(
+        dialog_data={"complex": "Premier Fort Beach"},
+        current_context=lambda: ctx,
     )
-    items = result["items"]
-    complex_labels = [label for label, item_id in items if item_id == "complex"]
-    assert any("✓" in label for label in complex_labels)
+    await funnel_module.get_preferences_options(middleware_data={}, dialog_manager=manager)
+    checked = widget_data.get(funnel_module._PREF_MS_ID, [])
+    assert "complex" in checked
 
 
 @pytest.mark.asyncio
@@ -286,9 +293,10 @@ async def test_pref_category_floor_switches_to_pref_floor():
 
 
 @pytest.mark.asyncio
-async def test_pref_category_done_switches_to_summary():
+async def test_pref_done_switches_to_summary():
+    """The dedicated 'done' button handler navigates to summary."""
     manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
-    await funnel_module.on_pref_category_selected(MagicMock(), SimpleNamespace(), manager, "done")
+    await funnel_module.on_pref_done(MagicMock(), SimpleNamespace(), manager)
     manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
