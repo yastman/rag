@@ -499,12 +499,12 @@ services:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/public/health || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1024M
 
 volumes:
   postgres_data:
