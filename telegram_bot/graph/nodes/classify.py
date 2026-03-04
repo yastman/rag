@@ -10,9 +10,13 @@ import logging
 import random
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from telegram_bot.observability import get_client, observe
+
+
+if TYPE_CHECKING:
+    from telegram_bot.services.semantic_classifier import SemanticClassifier
 
 
 logger = logging.getLogger(__name__)
@@ -269,11 +273,20 @@ def classify_query(query: str) -> str:
 
 
 @observe(name="node-classify")
-async def classify_node(state: dict[str, Any]) -> dict[str, Any]:
+async def classify_node(
+    state: dict[str, Any],
+    *,
+    classifier: SemanticClassifier | None = None,
+) -> dict[str, Any]:
     """LangGraph node: classify the user query.
 
     Reads the last user message, classifies it, and optionally sets
     a canned response for CHITCHAT/OFF_TOPIC queries.
+
+    Args:
+        state: Current graph state.
+        classifier: Optional SemanticClassifier. If provided and available,
+            uses RedisVL SemanticRouter; falls back to regex on any error.
 
     Returns partial state update with query_type, response (if canned),
     and latency_stages["classify"].
@@ -283,8 +296,17 @@ async def classify_node(state: dict[str, Any]) -> dict[str, Any]:
     messages = state["messages"]
     query = messages[-1].content if hasattr(messages[-1], "content") else messages[-1]["content"]
 
-    query_type = classify_query(query)
-    logger.info("Query classified as %s: %.50s", query_type, query)
+    if classifier is not None and classifier.available:
+        try:
+            query_type = classifier.classify(query)
+            logger.info("Semantic query classified as %s: %.50s", query_type, query)
+        except Exception as exc:
+            logger.warning("SemanticClassifier failed, falling back to regex: %s", exc)
+            query_type = classify_query(query)
+            logger.info("Query classified as %s: %.50s", query_type, query)
+    else:
+        query_type = classify_query(query)
+        logger.info("Query classified as %s: %.50s", query_type, query)
 
     result: dict[str, Any] = {
         "query_type": query_type,

@@ -65,6 +65,8 @@ class GraphConfig:
     guard_mode: str = "hard"  # "hard" = block, "soft" = flag + continue, "log" = log only
     # TTFT drift warning threshold in ms (#675); raise for reasoning models behind proxy
     ttft_drift_warn_ms: int = 500
+    # Query classifier mode (#805): "regex" (default) or "semantic" (RedisVL SemanticRouter)
+    classifier_mode: str = "regex"
 
     cache_thresholds: dict[str, float] = field(
         default_factory=lambda: {
@@ -131,6 +133,7 @@ class GraphConfig:
             stt_model=os.getenv("STT_MODEL", "whisper"),
             guard_mode=os.getenv("GUARD_MODE", "hard"),
             ttft_drift_warn_ms=int(os.getenv("TTFT_DRIFT_WARN_MS", "500")),
+            classifier_mode=os.getenv("CLASSIFIER_MODE", "regex"),
             reasoning_effort=os.getenv("REASONING_EFFORT") or None,
             reasoning_format=os.getenv("REASONING_FORMAT") or None,
             disable_reasoning=(
