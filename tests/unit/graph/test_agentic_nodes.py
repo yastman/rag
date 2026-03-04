@@ -5,8 +5,14 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langgraph.runtime import Runtime
 
 from telegram_bot.graph.state import make_initial_state
+
+
+def _make_runtime(**ctx) -> Runtime:
+    """Create a Runtime with GraphContext for node tests."""
+    return Runtime(context=ctx)
 
 
 # --- grade_node tests ---
@@ -128,7 +134,7 @@ class TestRerankNode:
             {"index": 2, "score": 0.7},
         ]
 
-        result = await rerank_node(state, reranker=mock_reranker, top_k=2)
+        result = await rerank_node(state, _make_runtime(reranker=mock_reranker), top_k=2)
         assert result["rerank_applied"] is True
         assert len(result["documents"]) == 2
         assert result["documents"][0]["text"] == "doc B"
@@ -146,7 +152,7 @@ class TestRerankNode:
             {"text": "doc C", "score": 0.4},
         ]
 
-        result = await rerank_node(state, reranker=None, top_k=2)
+        result = await rerank_node(state, _make_runtime(reranker=None), top_k=2)
         assert result["rerank_applied"] is False
         assert len(result["documents"]) == 2
         # Sorted by score desc: B(0.5), C(0.4)
@@ -159,7 +165,7 @@ class TestRerankNode:
 
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["documents"] = []
-        result = await rerank_node(state, reranker=None)
+        result = await rerank_node(state, _make_runtime(reranker=None))
         assert result["documents"] == []
         assert result["rerank_applied"] is False
 
@@ -176,7 +182,7 @@ class TestRerankNode:
         mock_reranker = AsyncMock()
         mock_reranker.rerank.side_effect = RuntimeError("ColBERT unavailable")
 
-        result = await rerank_node(state, reranker=mock_reranker, top_k=2)
+        result = await rerank_node(state, _make_runtime(reranker=mock_reranker), top_k=2)
         assert result["rerank_applied"] is False
         assert result["documents"][0]["text"] == "B"
 
@@ -197,7 +203,9 @@ class TestRerankNode:
         mock_reranker = AsyncMock()
         mock_reranker.rerank = AsyncMock()
 
-        result = await rerank_node(state, cache=mock_cache, reranker=mock_reranker, top_k=1)
+        result = await rerank_node(
+            state, _make_runtime(cache=mock_cache, reranker=mock_reranker), top_k=1
+        )
         assert result["rerank_applied"] is True
         assert result["rerank_cache_hit"] is True
         assert result["documents"][0]["text"] == "doc B"
@@ -228,7 +236,7 @@ class TestRewriteNode:
 
         mock_llm = _make_mock_llm("improved query about real estate")
 
-        result = await rewrite_node(state, llm=mock_llm)
+        result = await rewrite_node(state, _make_runtime(llm=mock_llm))
         assert result["rewrite_count"] == 1
         assert result["query_embedding"] is None
         assert result["sparse_embedding"] is None
@@ -242,7 +250,7 @@ class TestRewriteNode:
 
         mock_llm = _make_mock_llm("rewritten query")
 
-        result = await rewrite_node(state, llm=mock_llm)
+        result = await rewrite_node(state, _make_runtime(llm=mock_llm))
         # Should return messages list with a HumanMessage
         assert len(result["messages"]) == 1
         msg = result["messages"][0]
@@ -257,7 +265,7 @@ class TestRewriteNode:
         mock_llm = MagicMock()
         mock_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
 
-        result = await rewrite_node(state, llm=mock_llm)
+        result = await rewrite_node(state, _make_runtime(llm=mock_llm))
         assert result["rewrite_count"] == 1
         msg = result["messages"][0]
         assert msg.content == "original query"
@@ -271,7 +279,7 @@ class TestRewriteNode:
 
         mock_llm = _make_mock_llm("query v3")
 
-        result = await rewrite_node(state, llm=mock_llm)
+        result = await rewrite_node(state, _make_runtime(llm=mock_llm))
         assert result["rewrite_count"] == 2
 
     async def test_rewrite_empty_content_sets_ineffective(self):
@@ -281,7 +289,7 @@ class TestRewriteNode:
         mock_llm = _make_mock_llm("")  # empty content after strip
 
         state = make_initial_state(user_id=1, session_id="s", query="тест")
-        result = await rewrite_node(state, llm=mock_llm)
+        result = await rewrite_node(state, _make_runtime(llm=mock_llm))
 
         assert result["rewrite_effective"] is False
         assert result["rewrite_count"] == 1
@@ -293,7 +301,7 @@ class TestRewriteNode:
         mock_llm = _make_mock_llm("тест")  # same as original query
 
         state = make_initial_state(user_id=1, session_id="s", query="тест")
-        result = await rewrite_node(state, llm=mock_llm)
+        result = await rewrite_node(state, _make_runtime(llm=mock_llm))
 
         assert result["rewrite_effective"] is False
         assert result["rewrite_count"] == 1
@@ -305,7 +313,7 @@ class TestRewriteNode:
         mock_llm = _make_mock_llm("переформулированный запрос")
 
         state = make_initial_state(user_id=1, session_id="s", query="тест")
-        result = await rewrite_node(state, llm=mock_llm)
+        result = await rewrite_node(state, _make_runtime(llm=mock_llm))
 
         assert result["rewrite_effective"] is True
 
@@ -315,7 +323,7 @@ class TestRewriteNode:
 
         mock_llm = _make_mock_llm("переформулированный запрос")
         state = make_initial_state(user_id=1, session_id="s", query="тест")
-        result = await rewrite_node(state, llm=mock_llm)
+        result = await rewrite_node(state, _make_runtime(llm=mock_llm))
 
         stages = result["latency_stages"]
         assert set(stages.keys()) == {"rewrite"}

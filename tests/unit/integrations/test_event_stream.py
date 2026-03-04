@@ -2,6 +2,8 @@
 
 from unittest.mock import AsyncMock
 
+from langgraph.runtime import Runtime
+
 from telegram_bot.integrations.event_stream import (
     STREAM_KEY,
     STREAM_MAXLEN,
@@ -95,7 +97,9 @@ class TestCacheStoreNodeEventStream:
         event_stream = AsyncMock()
         event_stream.log_event = AsyncMock(return_value="entry-id")
 
-        await cache_store_node(state, cache=cache, event_stream=event_stream)
+        await cache_store_node(
+            state, Runtime(context={"cache": cache, "event_stream": event_stream})
+        )
 
         event_stream.log_event.assert_awaited_once()
         call_args = event_stream.log_event.call_args
@@ -120,7 +124,7 @@ class TestCacheStoreNodeEventStream:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
 
-        result = await cache_store_node(state, cache=cache)
+        result = await cache_store_node(state, Runtime(context={"cache": cache}))
 
         assert result["response"] == "answer"
         cache.store_semantic.assert_awaited_once()
@@ -137,7 +141,9 @@ class TestCacheStoreNodeEventStream:
         cache = AsyncMock()
         event_stream = AsyncMock()
 
-        await cache_store_node(state, cache=cache, event_stream=event_stream)
+        await cache_store_node(
+            state, Runtime(context={"cache": cache, "event_stream": event_stream})
+        )
 
         event_stream.log_event.assert_not_awaited()
 
@@ -160,7 +166,9 @@ class TestCacheStoreNodeEventStream:
         event_stream = AsyncMock()
         event_stream.log_event = AsyncMock(return_value="entry-id")
 
-        await cache_store_node(state, cache=cache, event_stream=event_stream)
+        await cache_store_node(
+            state, Runtime(context={"cache": cache, "event_stream": event_stream})
+        )
 
         event_stream.log_event.assert_awaited_once()
         data = event_stream.log_event.call_args[0][1]

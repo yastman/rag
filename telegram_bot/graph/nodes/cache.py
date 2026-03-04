@@ -12,6 +12,9 @@ import logging
 import time
 from typing import Any
 
+from langgraph.runtime import Runtime
+
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.metrics import PipelineMetrics
 from telegram_bot.services.rag_core import (
@@ -27,20 +30,19 @@ logger = logging.getLogger(__name__)
 @observe(name="node-cache-check", capture_input=False, capture_output=False)
 async def cache_check_node(
     state: dict[str, Any],
-    *,
-    cache: Any,
-    embeddings: Any,
+    runtime: Runtime[GraphContext],
 ) -> dict[str, Any]:
     """Check semantic cache. Compute embedding if not cached.
 
     Args:
         state: RAGState dict
-        cache: CacheLayerManager instance
-        embeddings: BGEM3Embeddings instance (for aembed_query)
+        runtime: LangGraph Runtime with GraphContext (cache, embeddings)
 
     Returns:
         State update with cache_hit, cached_response, query_embedding
     """
+    cache: Any = runtime.context["cache"]
+    embeddings: Any = runtime.context["embeddings"]
     messages = state.get("messages") or []
     last_msg = messages[-1] if messages else {}
     query = (
@@ -171,9 +173,7 @@ async def cache_check_node(
 @observe(name="node-cache-store", capture_input=False, capture_output=False)
 async def cache_store_node(
     state: dict[str, Any],
-    *,
-    cache: Any,
-    event_stream: Any | None = None,
+    runtime: Runtime[GraphContext],
 ) -> dict[str, Any]:
     """Store response in semantic cache (allowlisted types only).
 
@@ -182,12 +182,13 @@ async def cache_store_node(
 
     Args:
         state: RAGState dict (must have response, query_embedding, query_type)
-        cache: CacheLayerManager instance
-        event_stream: Optional PipelineEventStream for observability logging
+        runtime: LangGraph Runtime with GraphContext (cache, event_stream)
 
     Returns:
         State update (pass-through response)
     """
+    cache: Any = runtime.context["cache"]
+    event_stream: Any | None = runtime.context.get("event_stream")
     response = state.get("response", "")
     embedding = state.get("query_embedding")
     query_type = state.get("query_type", "GENERAL")

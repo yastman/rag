@@ -10,6 +10,9 @@ import logging
 import time
 from typing import Any
 
+from langgraph.runtime import Runtime
+
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.metrics import PipelineMetrics
 from telegram_bot.services.rag_core import perform_rerank
@@ -23,22 +26,21 @@ _DEFAULT_TOP_K = 5
 @observe(name="node-rerank")
 async def rerank_node(
     state: dict[str, Any],
-    *,
-    cache: Any | None = None,
-    reranker: Any | None = None,
+    runtime: Runtime[GraphContext],
     top_k: int = _DEFAULT_TOP_K,
 ) -> dict[str, Any]:
     """LangGraph node: rerank documents using ColBERT or score-based fallback.
 
     Args:
         state: RAGState dict (needs documents, messages)
-        cache: Optional CacheLayerManager instance
-        reranker: Optional ColbertRerankerService instance
+        runtime: LangGraph Runtime with GraphContext (cache, reranker)
         top_k: Number of top results to keep
 
     Returns:
         State update with reranked documents, rerank_applied, rerank_cache_hit, latency.
     """
+    cache: Any | None = runtime.context.get("cache")
+    reranker: Any | None = runtime.context.get("reranker")
     t0 = time.perf_counter()
 
     documents = state.get("documents", [])

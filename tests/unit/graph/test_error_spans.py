@@ -9,7 +9,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from langgraph.runtime import Runtime
+
 from telegram_bot.graph.state import make_initial_state
+
+
+def _make_runtime(**ctx) -> Runtime:
+    return Runtime(context=ctx)
 
 
 def _make_state(query: str = "Какие квартиры?") -> dict:
@@ -100,7 +106,7 @@ class TestRewriteNodeErrorSpan:
             ),
             patch.dict(node_fn.__globals__, {"get_client": lambda: mock_lf}),
         ):
-            result = await node_fn(state, llm=mock_llm)
+            result = await node_fn(state, _make_runtime(llm=mock_llm))
 
         mock_lf.update_current_span.assert_called_once()
         call_kwargs = mock_lf.update_current_span.call_args.kwargs
@@ -125,7 +131,7 @@ class TestRerankNodeErrorSpan:
         node_fn = getattr(rerank_node, "__wrapped__", rerank_node)
 
         with patch.dict(node_fn.__globals__, {"get_client": lambda: mock_lf}):
-            result = await node_fn(state, reranker=mock_reranker)
+            result = await node_fn(state, _make_runtime(reranker=mock_reranker))
 
         mock_lf.update_current_span.assert_called_once()
         call_kwargs = mock_lf.update_current_span.call_args.kwargs
