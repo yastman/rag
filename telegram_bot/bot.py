@@ -379,18 +379,6 @@ class PropertyBot:
 
         # LLM (optional, defaults via GraphConfig.create_llm)
         self._llm = self._graph_config.create_llm()
-        self._llm_guard_client: Any | None = None
-        if config.guard_ml_enabled:
-            try:
-                from .services.llm_guard_client import LLMGuardClient
-
-                self._llm_guard_client = LLMGuardClient(base_url=config.llm_guard_url)
-                logger.info("LLM guard ML classifier enabled: %s", config.llm_guard_url)
-            except Exception:
-                logger.exception(
-                    "Failed to initialize LLM guard client; ML classifier will be disabled"
-                )
-
         # Redis health monitor (periodic background task)
         self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
 
@@ -3111,8 +3099,6 @@ class PropertyBot:
                 stt_model=self.config.stt_model,
                 content_filter_enabled=self.config.content_filter_enabled,
                 guard_mode=self.config.guard_mode,
-                guard_ml_enabled=self.config.guard_ml_enabled,
-                llm_guard_client=self._llm_guard_client,
             )
 
             invoke_config = {
@@ -4138,8 +4124,6 @@ class PropertyBot:
         if self._kommo_client is not None:
             await self._kommo_client.close()
             self._kommo_client = None
-        if self._llm_guard_client is not None and hasattr(self._llm_guard_client, "aclose"):
-            await self._llm_guard_client.aclose()
         if self._checkpointer is not None:
             try:
                 if hasattr(self._checkpointer, "__aexit__"):

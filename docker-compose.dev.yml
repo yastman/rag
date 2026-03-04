@@ -120,38 +120,6 @@ services:
           memory: 4G
           pids: 200
 
-  llm-guard:
-    build:
-      context: ./services/llm-guard-api
-      dockerfile: Dockerfile
-    container_name: dev-llm-guard
-    restart: unless-stopped
-    logging: *default-logging
-    ports:
-      - "127.0.0.1:8100:8100"
-    volumes:
-      - hf_cache:/models
-    environment:
-      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-2}
-      MKL_NUM_THREADS: ${MKL_NUM_THREADS:-2}
-      HF_HOME: /models/hf
-      TRANSFORMERS_CACHE: /models/hf
-      THRESHOLD: ${LLM_GUARD_THRESHOLD:-0.85}
-      USE_ONNX: "true"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health', timeout=5)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 180s
-    profiles:
-      - security
-      - full
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-
   user-base:
     <<: *security-defaults
     build:
@@ -562,8 +530,6 @@ services:
       RERANK_PROVIDER: colbert
       BGE_M3_URL: http://bge-m3:8000
       BGE_M3_TIMEOUT: "${BGE_M3_TIMEOUT:-120}"
-      LLM_GUARD_URL: http://llm-guard:8100
-      GUARD_ML_ENABLED: "${GUARD_ML_ENABLED:-false}"
       GENERATE_MAX_TOKENS: "${GENERATE_MAX_TOKENS:-2048}"
       COLBERT_TIMEOUT: "${COLBERT_TIMEOUT:-120}"
       RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
