@@ -3,9 +3,22 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langgraph.runtime import Runtime
 
 from telegram_bot.graph.nodes.retrieve import retrieve_node
 from telegram_bot.graph.state import make_initial_state
+
+
+def _make_runtime(cache=None, sparse_embeddings=None, qdrant=None, embeddings=None) -> Runtime:
+    """Create a Runtime with GraphContext for retrieve_node tests."""
+    return Runtime(
+        context={
+            "cache": cache,
+            "sparse_embeddings": sparse_embeddings,
+            "qdrant": qdrant,
+            "embeddings": embeddings,
+        }
+    )
 
 
 _OK_META = {"backend_error": False, "error_type": None, "error_message": None}
@@ -45,9 +58,7 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         assert len(result["documents"]) == 5
@@ -69,9 +80,7 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         assert len(result["documents"]) == 3
@@ -94,9 +103,7 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         assert result["retrieval_backend_error"] is False
@@ -121,9 +128,7 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         assert result["documents"] == []
@@ -147,9 +152,7 @@ class TestRetrieveNode:
 
         await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         # Should NOT compute sparse — used cached
@@ -179,9 +182,7 @@ class TestRetrieveNode:
 
         await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         cache.store_search_results.assert_awaited_once()
@@ -207,9 +208,7 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         assert len(result["documents"]) == 2
@@ -258,10 +257,12 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            embeddings=embeddings,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(
+                cache=cache,
+                embeddings=embeddings,
+                sparse_embeddings=sparse_embeddings,
+                qdrant=qdrant,
+            ),
         )
 
         assert len(result["documents"]) == 3
@@ -297,10 +298,12 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            embeddings=embeddings,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(
+                cache=cache,
+                embeddings=embeddings,
+                sparse_embeddings=sparse_embeddings,
+                qdrant=qdrant,
+            ),
         )
 
         assert len(result["documents"]) == 3
@@ -348,9 +351,7 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         # Verify result includes retrieved_context for judge evaluation
@@ -377,9 +378,7 @@ class TestRetrieveNode:
 
         result = await retrieve_node(
             state,
-            cache=cache,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
+            _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
         )
 
         assert "retrieved_context" in result
@@ -416,7 +415,8 @@ class TestRetrieveNodeColbert:
             "query_type": "GENERAL",
         }
         result = await retrieve_node(
-            state, cache=mock_cache, sparse_embeddings=mock_sparse, qdrant=mock_qdrant
+            state,
+            _make_runtime(cache=mock_cache, sparse_embeddings=mock_sparse, qdrant=mock_qdrant),
         )
 
         assert len(result["documents"]) == 1
@@ -445,7 +445,8 @@ class TestRetrieveNodeColbert:
             "query_type": "GENERAL",
         }
         result = await retrieve_node(
-            state, cache=mock_cache, sparse_embeddings=mock_sparse, qdrant=mock_qdrant
+            state,
+            _make_runtime(cache=mock_cache, sparse_embeddings=mock_sparse, qdrant=mock_qdrant),
         )
 
         assert len(result["documents"]) == 3
@@ -486,9 +487,7 @@ class TestRetrieveNodeEvalFields:
         with patch("telegram_bot.graph.nodes.retrieve.get_client", return_value=mock_lf):
             await retrieve_node(
                 state,
-                cache=cache,
-                sparse_embeddings=sparse_embeddings,
-                qdrant=qdrant,
+                _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
             )
 
         # Find span output calls
@@ -526,9 +525,7 @@ class TestRetrieveNodeEvalFields:
         with patch("telegram_bot.graph.nodes.retrieve.get_client", return_value=mock_lf):
             await retrieve_node(
                 state,
-                cache=cache,
-                sparse_embeddings=sparse_embeddings,
-                qdrant=qdrant,
+                _make_runtime(cache=cache, sparse_embeddings=sparse_embeddings, qdrant=qdrant),
             )
 
         output_calls = [
