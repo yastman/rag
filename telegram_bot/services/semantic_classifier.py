@@ -6,6 +6,7 @@ Falls back to regex if Redis is unavailable or routing fails.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -177,3 +178,17 @@ class SemanticClassifier:
         if match and match.name:
             return str(match.name)
         return "GENERAL"
+
+    async def aclassify(self, query: str) -> str:
+        """Async classify query using SemanticRouter (runs sync call in thread pool).
+
+        Args:
+            query: User query text.
+
+        Returns:
+            One of: FAQ, CHITCHAT, OFF_TOPIC, STRUCTURED, ENTITY, GENERAL.
+
+        Raises:
+            RuntimeError: If router is not available.
+        """
+        return await asyncio.to_thread(self.classify, query)
