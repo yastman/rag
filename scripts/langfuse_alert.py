@@ -19,7 +19,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import logging
 import os
@@ -373,17 +372,16 @@ def send_telegram_message(token: str, chat_id: str, text: str) -> bool:
     Args:
         token: Telegram bot token.
         chat_id: Target chat ID (e.g. "-100123456789").
-        text: Message text (will be HTML-escaped and sent as plain text).
+        text: Message text (sent as plain text).
 
     Returns:
         True on success, False on failure.
     """
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    safe_text = html.escape(text)
     try:
         response = httpx.post(
             url,
-            json={"chat_id": chat_id, "text": safe_text, "parse_mode": "HTML"},
+            json={"chat_id": chat_id, "text": text},
             timeout=10.0,
         )
         data = response.json()
