@@ -39,7 +39,7 @@ def parse_qual_callback(data: str) -> tuple[str, str] | None:
 def _t(i18n: Any | None, key: str, fallback: str) -> str:
     if i18n is None:
         return fallback
-    return i18n.get(key)
+    return i18n.get(key)  # type: ignore[no-any-return]
 
 
 def build_goal_keyboard(i18n: Any | None = None) -> InlineKeyboardMarkup:
