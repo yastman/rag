@@ -28,7 +28,7 @@ def hitl_guard(
     Returns:
         The resume value dict (with "action" key: "approve" or "cancel").
     """
-    return interrupt(  ***REMOVED*** type: ignore[return-value]
+    return interrupt(  ***REMOVED*** type: ignore[return-value, no-any-return]
         {
             "tool": tool_name,
             "preview": preview,
