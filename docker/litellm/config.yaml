@@ -9,8 +9,7 @@ model_list:
   # See fallbacks below for the actual OpenAI fallback (gpt-4o-mini-openai).
   - model_name: gpt-4o-mini
     litellm_params:
-      model: openai/zai-glm-4.7
-      api_base: https://api.cerebras.ai/v1
+      model: cerebras/zai-glm-4.7
       api_key: os.environ/CEREBRAS_API_KEY
       max_completion_tokens: 1024
       disable_reasoning: true
