@@ -52,6 +52,7 @@ class TestCacheLayerManagerInit:
         assert mgr.redis_url == "redis://localhost:6379"
         assert mgr.redis is None
         assert mgr.semantic_cache is None
+        assert mgr.embed_cache is None
 
     def test_metrics_initialized(self):
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
@@ -426,6 +427,114 @@ class TestExactCaches:
         assert mgr._metrics["rerank"]["hits"] == 1
 
 
+class TestEmbeddingsCacheSDK:
+    """Test get_embedding / store_embedding via RedisVL EmbeddingsCache SDK."""
+
+    async def test_get_embedding_hit(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_ec = AsyncMock()
+        mock_ec.aget = AsyncMock(return_value={"embedding": [0.1] * 1024})
+        mgr.embed_cache = mock_ec
+
+        result = await mgr.get_embedding("тест", model="bge-m3")
+
+        assert result == [0.1] * 1024
+        assert mgr._metrics["embeddings"]["hits"] == 1
+        mock_ec.aget.assert_awaited_once_with(content="тест", model_name="bge-m3")
+
+    async def test_get_embedding_miss(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_ec = AsyncMock()
+        mock_ec.aget = AsyncMock(return_value=None)
+        mgr.embed_cache = mock_ec
+
+        result = await mgr.get_embedding("тест")
+
+        assert result is None
+        assert mgr._metrics["embeddings"]["misses"] == 1
+
+    async def test_get_embedding_no_cache_returns_none(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.embed_cache = None
+
+        result = await mgr.get_embedding("тест")
+
+        assert result is None
+
+    async def test_get_embedding_error_returns_none(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_ec = AsyncMock()
+        mock_ec.aget = AsyncMock(side_effect=Exception("Redis error"))
+        mgr.embed_cache = mock_ec
+
+        result = await mgr.get_embedding("тест")
+
+        assert result is None
+        assert mgr._metrics["embeddings"]["misses"] == 1
+
+    async def test_store_embedding_calls_sdk(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_ec = AsyncMock()
+        mock_ec.aset = AsyncMock(return_value="key:тест")
+        mgr.embed_cache = mock_ec
+
+        await mgr.store_embedding("тест", [0.2] * 1024, model="bge-m3")
+
+        mock_ec.aset.assert_awaited_once_with(
+            content="тест",
+            model_name="bge-m3",
+            embedding=[0.2] * 1024,
+            ttl=7 * 86400,
+        )
+
+    async def test_store_embedding_no_cache_is_noop(self):
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mgr.embed_cache = None
+
+        # Should not raise
+        await mgr.store_embedding("тест", [0.2] * 1024)
+
+    async def test_store_embedding_normalizes_text(self):
+        """store_embedding normalizes text for consistent cache keys."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        stored_contents: list[str] = []
+
+        async def mock_aset(content, model_name, embedding, ttl=None):
+            stored_contents.append(content)
+            return "key"
+
+        mock_ec = AsyncMock()
+        mock_ec.aset = mock_aset
+        mgr.embed_cache = mock_ec
+
+        await mgr.store_embedding("ВНЖ?", [0.5] * 1024)
+
+        assert stored_contents == ["внж"], "Text should be normalized before storage"
+
+    async def test_initialize_creates_embed_cache(self):
+        """initialize() creates EmbeddingsCache after Redis connects."""
+        mgr = CacheLayerManager(redis_url="redis://localhost:6379")
+        mock_redis = AsyncMock()
+        mock_redis.ping = AsyncMock(return_value=True)
+        mock_embed_cache = MagicMock()
+
+        with (
+            patch("telegram_bot.integrations.cache.redis.from_url", return_value=mock_redis),
+            patch("telegram_bot.integrations.cache._create_semantic_cache", return_value=None),
+            patch(
+                "telegram_bot.integrations.cache._create_embed_cache",
+                return_value=mock_embed_cache,
+            ) as mock_create,
+        ):
+            await mgr.initialize()
+
+        mock_create.assert_called_once_with(
+            async_redis_client=mock_redis,
+            ttl=7 * 86400,
+        )
+        assert mgr.embed_cache is mock_embed_cache
+
+
 def _make_pipeline_mock():
     """Create a mock Redis pipeline with async context manager support."""
     pipe = AsyncMock()
@@ -497,24 +606,28 @@ class TestQueryNormalization:
     async def test_embedding_cache_shares_key_after_normalization(self):
         """Storing 'ВНЖ?' and getting 'внж' should hit the same cache key."""
         mgr = CacheLayerManager(redis_url="redis://localhost:6379")
-        stored_keys: list[str] = []
 
-        async def mock_setex(key, ttl, value):
-            stored_keys.append(key)
+        stored: dict[str, list[float]] = {}
 
-        async def mock_get(key):
-            if key in stored_keys:
-                return json.dumps([0.5] * 1024)
+        async def mock_aset(content, model_name, embedding, ttl=None):
+            stored[f"{content}:{model_name}"] = embedding
+            return f"key:{content}"
+
+        async def mock_aget(content, model_name):
+            key = f"{content}:{model_name}"
+            if key in stored:
+                return {"embedding": stored[key]}
             return None
 
-        mgr.redis = AsyncMock()
-        mgr.redis.setex = mock_setex
-        mgr.redis.get = mock_get
+        mock_embed_cache = AsyncMock()
+        mock_embed_cache.aset = mock_aset
+        mock_embed_cache.aget = mock_aget
+        mgr.embed_cache = mock_embed_cache
 
-        # Store with uppercase + trailing punctuation
+        # Store with uppercase + trailing punctuation — normalized to 'внж'
         await mgr.store_embedding("ВНЖ?", [0.5] * 1024)
 
-        # Get with lowercase, no punctuation
+        # Get with lowercase, no punctuation — same normalized form
         result = await mgr.get_embedding("внж")
 
         assert result == [0.5] * 1024, "Normalized queries should share embedding cache key"
