@@ -51,6 +51,7 @@ def build_graph(
     stt_model: str = "whisper",
     content_filter_enabled: bool = True,
     guard_mode: str = "hard",
+    classifier: Any | None = None,
 ) -> Any:
     """Build and compile the RAG StateGraph.
 
@@ -78,7 +79,13 @@ def build_graph(
     workflow = StateGraph(RAGState)
 
     # Add nodes — wrap those that need injected deps via functools.partial
-    workflow.add_node("classify", classify_node)  # type: ignore[type-var]
+    if classifier is not None:
+        workflow.add_node(
+            "classify",
+            functools.partial(classify_node, classifier=classifier),  # type: ignore[type-var]
+        )
+    else:
+        workflow.add_node("classify", classify_node)  # type: ignore[type-var]
 
     workflow.add_node(
         "transcribe",

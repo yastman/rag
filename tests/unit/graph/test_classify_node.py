@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from telegram_bot.graph.nodes.classify import (
@@ -103,3 +105,77 @@ class TestClassifyNode:
         result = await classify_node(state)
         assert result["latency_stages"]["prev"] == 0.5
         assert "classify" in result["latency_stages"]
+
+
+class TestClassifyNodeSemanticMode:
+    """Tests for classify_node with SemanticClassifier injected."""
+
+    def _make_classifier(self, query_type: str, available: bool = True) -> MagicMock:
+        classifier = MagicMock()
+        classifier.available = available
+        classifier.classify.return_value = query_type
+        return classifier
+
+    async def test_semantic_mode_uses_classifier(self):
+        classifier = self._make_classifier(FAQ)
+        state = make_initial_state(user_id=1, session_id="s", query="как оформить покупку")
+        result = await classify_node(state, classifier=classifier)
+        assert result["query_type"] == FAQ
+        classifier.classify.assert_called_once_with("как оформить покупку")
+
+    async def test_semantic_mode_chitchat_returns_canned_response(self):
+        classifier = self._make_classifier(CHITCHAT)
+        state = make_initial_state(user_id=1, session_id="s", query="привет")
+        result = await classify_node(state, classifier=classifier)
+        assert result["query_type"] == CHITCHAT
+        assert result["response"]
+
+    async def test_semantic_mode_off_topic_returns_canned_response(self):
+        classifier = self._make_classifier(OFF_TOPIC)
+        state = make_initial_state(user_id=1, session_id="s", query="рецепт борща")
+        result = await classify_node(state, classifier=classifier)
+        assert result["query_type"] == OFF_TOPIC
+        assert result["response"]
+
+    async def test_semantic_mode_structured_no_canned_response(self):
+        classifier = self._make_classifier(STRUCTURED)
+        state = make_initial_state(user_id=1, session_id="s", query="2 комнаты до 80000 евро")
+        result = await classify_node(state, classifier=classifier)
+        assert result["query_type"] == STRUCTURED
+        assert "response" not in result
+
+    async def test_semantic_mode_general_no_canned_response(self):
+        classifier = self._make_classifier(GENERAL)
+        state = make_initial_state(user_id=1, session_id="s", query="квартира у моря")
+        result = await classify_node(state, classifier=classifier)
+        assert result["query_type"] == GENERAL
+        assert "response" not in result
+
+    async def test_fallback_to_regex_when_classifier_unavailable(self):
+        classifier = self._make_classifier(FAQ, available=False)
+        state = make_initial_state(user_id=1, session_id="s", query="Привет!")
+        result = await classify_node(state, classifier=classifier)
+        # unavailable → regex → CHITCHAT
+        assert result["query_type"] == CHITCHAT
+        classifier.classify.assert_not_called()
+
+    async def test_fallback_to_regex_on_classifier_exception(self):
+        classifier = MagicMock()
+        classifier.available = True
+        classifier.classify.side_effect = RuntimeError("Redis gone")
+        state = make_initial_state(user_id=1, session_id="s", query="Привет!")
+        result = await classify_node(state, classifier=classifier)
+        # fallback → regex → CHITCHAT
+        assert result["query_type"] == CHITCHAT
+
+    async def test_no_classifier_uses_regex(self):
+        state = make_initial_state(user_id=1, session_id="s", query="Привет!")
+        result = await classify_node(state)
+        assert result["query_type"] == CHITCHAT
+
+    async def test_semantic_mode_records_latency(self):
+        classifier = self._make_classifier(FAQ)
+        state = make_initial_state(user_id=1, session_id="s", query="как оформить покупку")
+        result = await classify_node(state, classifier=classifier)
+        assert isinstance(result["latency_stages"]["classify"], float)
+        assert result["latency_stages"]["classify"] >= 0
