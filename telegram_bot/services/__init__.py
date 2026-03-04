@@ -38,6 +38,7 @@ __all__ = [
     "ExpandedChunk",
     "HistoryService",
     "HyDEGenerator",
+    # LLMService is deprecated — use generate_response() instead
     "LLMService",
     "LeadScoringStore",
     "PipelineMetrics",
@@ -65,6 +66,7 @@ _IMPORT_MAP = {
     "LeadScoringStore": ".lead_scoring_store",
     "SessionSummary": ".session_summary",
     "check_responses_parse_compat": ".session_summary",
+    # LLMService is deprecated — kept for backward compatibility only
     "LLMService": ".llm",
     "LOW_CONFIDENCE_THRESHOLD": ".llm",
     "PipelineMetrics": ".metrics",

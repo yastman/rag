@@ -11,6 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+
 class TestLLMServiceObservability:
     """Tests for LLMService observability via Langfuse drop-in replacement."""
 
