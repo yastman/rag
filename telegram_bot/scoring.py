@@ -203,20 +203,6 @@ def write_langfuse_scores(lf: Any, result: dict, *, trace_id: str = "") -> None:
             value=str(injection_pattern),
             data_type="CATEGORICAL",
         )
-    guard_ml_score = float(result.get("guard_ml_score", 0.0) or 0.0)
-    if guard_ml_score > 0:
-        score(lf, trace_id, name="guard_ml_score", value=guard_ml_score)
-    guard_ml_latency = float(result.get("guard_ml_latency_ms", 0.0) or 0.0)
-    if guard_ml_latency > 0:
-        score(lf, trace_id, name="guard_ml_latency_ms", value=guard_ml_latency)
-    score(
-        lf,
-        trace_id,
-        name="guard_ml_available",
-        value=1 if guard_ml_latency > 0 else 0,
-        data_type="BOOLEAN",
-    )
-
     # --- Call limits (#374) ---
     llm_calls = result.get("llm_call_count", 0)
     if llm_calls > 0:
