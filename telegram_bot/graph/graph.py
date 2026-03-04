@@ -249,7 +249,16 @@ def build_graph(
     orig_ainvoke = configured.ainvoke
 
     async def _ainvoke_with_ctx(input_: Any, config: Any = None, **kwargs: Any) -> Any:
-        return await orig_ainvoke(input_, config=config, context=ctx, **kwargs)
+        # Preserve default build_graph context but allow per-call overrides via
+        # graph.ainvoke(..., context={...}) without passing duplicate kwargs.
+        call_context = kwargs.pop("context", None)
+        if call_context is None:
+            merged_context: Any = dict(ctx)
+        elif isinstance(call_context, dict):
+            merged_context = {**ctx, **call_context}
+        else:
+            merged_context = call_context
+        return await orig_ainvoke(input_, config=config, context=merged_context, **kwargs)
 
     configured.ainvoke = _ainvoke_with_ctx  # type: ignore[assignment]
     return configured
