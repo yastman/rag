@@ -89,32 +89,21 @@ class ClaudeContextualizer(ContextualizeProvider):
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
 
-        # Prepare request with optional cache control
-        user_content_item: dict[str, Any] = {
-            "type": "text",
-            "text": user_prompt,
-        }
+        # Build system param with optional prompt caching
+        system_content: str | list[dict[str, Any]]
         if self.use_cache:
-            user_content_item["cache_control"] = {"type": "ephemeral"}
+            system_content = [
+                {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
+            ]
+        else:
+            system_content = system_prompt
 
-        kwargs = {
-            "model": self.settings.model_name,
-            "max_tokens": 256,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": system_prompt,
-                        },
-                        user_content_item,
-                    ],
-                }
-            ],
-        }
-
-        response = await self.client.messages.create(**kwargs)
+        response = await self.client.messages.create(
+            model=self.settings.model_name,
+            max_tokens=256,
+            system=system_content,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
 
         # Track tokens and cost
         self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
