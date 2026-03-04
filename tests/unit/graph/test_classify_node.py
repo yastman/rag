@@ -185,3 +185,29 @@ class TestClassifyNodeSemanticMode:
         result = await classify_node(state, _make_runtime(classifier=classifier))
         assert isinstance(result["latency_stages"]["classify"], float)
         assert result["latency_stages"]["classify"] >= 0
+
+    async def test_semantic_classifier_called_via_asyncio_to_thread(self):
+        """classifier.classify must be called via asyncio.to_thread (non-blocking)."""
+        import asyncio
+        from unittest.mock import patch
+
+        classifier = self._make_classifier(FAQ)
+        state = make_initial_state(user_id=1, session_id="s", query="как оформить покупку")
+
+        thread_calls: list[tuple[object, ...]] = []
+
+        original_to_thread = asyncio.to_thread
+
+        async def recording_to_thread(func, *args, **kwargs):
+            thread_calls.append((func, args, kwargs))
+            return await original_to_thread(func, *args, **kwargs)
+
+        with patch("telegram_bot.graph.nodes.classify.asyncio.to_thread", new=recording_to_thread):
+            result = await classify_node(state, _make_runtime(classifier=classifier))
+
+        # asyncio.to_thread must have been called with classifier.classify and the query
+        assert len(thread_calls) == 1
+        called_func, called_args, _ = thread_calls[0]
+        assert called_func is classifier.classify
+        assert called_args == ("как оформить покупку",)
+        assert result["query_type"] == FAQ

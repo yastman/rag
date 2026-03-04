@@ -43,6 +43,8 @@ def is_reformulation(
         True if the query appears to be a reformulation (similarity > threshold
         AND time_delta < max_time_seconds), False otherwise.
     """
+    if time_delta_seconds < 0:
+        return False
     if time_delta_seconds >= max_time_seconds:
         return False
     sim = cosine_similarity(current, previous)
