@@ -251,7 +251,7 @@ create_lead_dialog = Dialog(
     # Step 1: Name
     Window(
         Format("{prompt}"),
-        TextInput(id="lead_name", on_success=on_lead_name_entered),
+        TextInput(id="lead_name", on_success=on_lead_name_entered),  # type: ignore[arg-type]
         Cancel(Format("{btn_cancel}")),
         getter=get_lead_name_prompt,
         state=CreateLeadSG.name,
@@ -259,7 +259,7 @@ create_lead_dialog = Dialog(
     # Step 2: Budget
     Window(
         Format("{prompt}"),
-        TextInput(id="lead_budget", on_success=on_lead_budget_entered),
+        TextInput(id="lead_budget", on_success=on_lead_budget_entered),  # type: ignore[arg-type]
         Back(Format("{btn_back}")),
         getter=get_lead_budget_prompt,
         state=CreateLeadSG.budget,
