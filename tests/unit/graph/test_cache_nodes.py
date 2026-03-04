@@ -36,12 +36,19 @@ def _ensure_redisvl_mock(monkeypatch):
     monkeypatch.setitem(sys.modules, "redisvl.query.filter", filter_mod)
 
 
+from langgraph.runtime import Runtime
+
 from telegram_bot.graph.nodes.cache import (
     CACHEABLE_QUERY_TYPES,
     cache_check_node,
     cache_store_node,
 )
 from telegram_bot.graph.state import make_initial_state
+
+
+def _make_runtime(cache=None, embeddings=None, event_stream=None) -> Runtime:
+    """Create a Runtime with GraphContext for cache node tests."""
+    return Runtime(context={"cache": cache, "embeddings": embeddings, "event_stream": event_stream})
 
 
 def _make_mock_config():
@@ -68,7 +75,7 @@ class TestCacheCheckNode:
         embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1024)
 
-        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         assert result["cache_hit"] is False
         assert result["cached_response"] is None
@@ -87,7 +94,7 @@ class TestCacheCheckNode:
         embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1024)
 
-        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         assert result["cache_hit"] is False
         cache.check_semantic.assert_awaited_once()
@@ -102,7 +109,7 @@ class TestCacheCheckNode:
 
         embeddings = AsyncMock()
 
-        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         assert result["cache_hit"] is True
         assert result["cached_response"] == "cached answer"
@@ -122,7 +129,7 @@ class TestCacheCheckNode:
         embeddings = AsyncMock()
         embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.2] * 1024] * 2)
 
-        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         assert result["cache_hit"] is True
         embeddings.aembed_colbert_query.assert_not_awaited()
@@ -138,7 +145,7 @@ class TestCacheCheckNode:
 
         embeddings = AsyncMock()
 
-        await cache_check_node(state, cache=cache, embeddings=embeddings)
+        await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         call_kwargs = cache.check_semantic.call_args[1]
         assert "user_id" not in call_kwargs
@@ -154,7 +161,7 @@ class TestCacheCheckNode:
 
         embeddings = AsyncMock()
 
-        await cache_check_node(state, cache=cache, embeddings=embeddings)
+        await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         call_kwargs = cache.check_semantic.call_args[1]
         assert call_kwargs.get("cache_scope") == "rag"
@@ -172,7 +179,7 @@ class TestCacheCheckNode:
         embeddings = AsyncMock(spec=["aembed_query"])
         embeddings.aembed_query = AsyncMock(return_value=[0.3] * 1024)
 
-        await cache_check_node(state, cache=cache, embeddings=embeddings)
+        await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         cache.store_embedding.assert_awaited_once_with("new query", [0.3] * 1024)
 
@@ -196,7 +203,9 @@ class TestCacheCheckNode:
             "query_type": "GENERAL",
             "latency_stages": {},
         }
-        result = await cache_check_node(state, cache=mock_cache, embeddings=mock_embeddings)
+        result = await cache_check_node(
+            state, _make_runtime(cache=mock_cache, embeddings=mock_embeddings)
+        )
 
         assert result.get("colbert_query") is not None
         assert len(result["colbert_query"]) == 4  # 4 token vectors
@@ -219,7 +228,9 @@ class TestCacheCheckNode:
             "query_type": "GENERAL",
             "latency_stages": {},
         }
-        result = await cache_check_node(state, cache=mock_cache, embeddings=mock_embeddings)
+        result = await cache_check_node(
+            state, _make_runtime(cache=mock_cache, embeddings=mock_embeddings)
+        )
 
         assert result.get("colbert_query") is not None
         assert len(result["colbert_query"]) == 4
@@ -241,7 +252,7 @@ class TestCacheCheckNode:
         embeddings = MagicMock()
         embeddings.aembed_hybrid = AsyncMock(return_value=([0.3] * 1024, sparse_vec))
 
-        await cache_check_node(state, cache=cache, embeddings=embeddings)
+        await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         cache.store_embedding.assert_awaited_once_with("hybrid query", [0.3] * 1024)
         cache.store_sparse_embedding.assert_awaited_once_with("hybrid query", sparse_vec)
@@ -260,7 +271,7 @@ class TestCacheStoreNode:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
 
-        result = await cache_store_node(state, cache=cache)
+        result = await cache_store_node(state, _make_runtime(cache=cache))
 
         cache.store_semantic.assert_awaited_once_with(
             query="test query",
@@ -281,7 +292,7 @@ class TestCacheStoreNode:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
 
-        result = await cache_store_node(state, cache=cache)
+        result = await cache_store_node(state, _make_runtime(cache=cache))
 
         cache.store_semantic.assert_awaited_once()
         assert result["response"] == "generated answer"
@@ -296,7 +307,7 @@ class TestCacheStoreNode:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
 
-        await cache_store_node(state, cache=cache)
+        await cache_store_node(state, _make_runtime(cache=cache))
 
         call_kwargs = cache.store_semantic.call_args[1]
         assert "user_id" not in call_kwargs
@@ -311,7 +322,7 @@ class TestCacheStoreNode:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
 
-        await cache_store_node(state, cache=cache)
+        await cache_store_node(state, _make_runtime(cache=cache))
 
         call_kwargs = cache.store_semantic.call_args[1]
         assert call_kwargs.get("cache_scope") == "rag"
@@ -325,7 +336,7 @@ class TestCacheStoreNode:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
 
-        result = await cache_store_node(state, cache=cache)
+        result = await cache_store_node(state, _make_runtime(cache=cache))
 
         cache.store_semantic.assert_not_awaited()
         assert result["response"] == ""
@@ -339,7 +350,7 @@ class TestCacheStoreNode:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock()
 
-        await cache_store_node(state, cache=cache)
+        await cache_store_node(state, _make_runtime(cache=cache))
 
         cache.store_semantic.assert_not_awaited()
 
@@ -371,7 +382,7 @@ class TestCacheableQueryTypes:
 
         embeddings = AsyncMock()
 
-        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         assert result["cache_hit"] is True
         assert result["cached_response"] == "Найдены подходящие варианты..."
@@ -394,7 +405,7 @@ class TestCacheCheckEmbeddingError:
             side_effect=httpx.RemoteProtocolError("Server disconnected")
         )
 
-        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         assert result["embedding_error"] is True
         assert result["embedding_error_type"] == "RemoteProtocolError"
@@ -413,7 +424,7 @@ class TestCacheCheckEmbeddingError:
         embeddings = MagicMock()
         embeddings.aembed_hybrid = AsyncMock(side_effect=httpx.ReadTimeout("Read timed out"))
 
-        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         assert result["embedding_error"] is True
         assert result["cache_hit"] is False
@@ -431,7 +442,7 @@ class TestCacheCheckEmbeddingError:
         # aembed_hybrid should NOT be called
         embeddings.aembed_hybrid = AsyncMock(side_effect=Exception("should not be called"))
 
-        result = await cache_check_node(state, cache=cache, embeddings=embeddings)
+        result = await cache_check_node(state, _make_runtime(cache=cache, embeddings=embeddings))
 
         assert result["embedding_error"] is False
         assert result["cache_hit"] is False
@@ -456,7 +467,7 @@ class TestCacheStoreNodeRedisVLErrorHandling:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock(side_effect=RedisVLError("index not found"))
 
-        result = await cache_store_node(state, cache=cache)
+        result = await cache_store_node(state, _make_runtime(cache=cache))
 
         assert result["response"] == "generated voice response"
 
@@ -470,7 +481,7 @@ class TestCacheStoreNodeRedisVLErrorHandling:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock(side_effect=RedisSearchError("module not loaded"))
 
-        result = await cache_store_node(state, cache=cache)
+        result = await cache_store_node(state, _make_runtime(cache=cache))
 
         assert result["response"] == "rag answer"
 
@@ -486,7 +497,7 @@ class TestCacheStoreNodeRedisVLErrorHandling:
             side_effect=SchemaValidationError("Schema validation failed: field mismatch")
         )
 
-        result = await cache_store_node(state, cache=cache)
+        result = await cache_store_node(state, _make_runtime(cache=cache))
 
         assert result["response"] == "entity answer"
 
@@ -500,6 +511,6 @@ class TestCacheStoreNodeRedisVLErrorHandling:
         cache = AsyncMock()
         cache.store_semantic = AsyncMock(side_effect=RuntimeError("unexpected"))
 
-        result = await cache_store_node(state, cache=cache)
+        result = await cache_store_node(state, _make_runtime(cache=cache))
 
         assert result["response"] == "structured answer"

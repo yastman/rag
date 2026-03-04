@@ -5,13 +5,13 @@ Builds the full StateGraph with all nodes and conditional edges.
 
 from __future__ import annotations
 
-import functools
 import logging
 import time
 from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
 
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.graph.edges import (
     route_after_guard,
     route_by_query_type,
@@ -64,28 +64,42 @@ def build_graph(
         llm: Optional LLM instance (defaults via GraphConfig)
         message: Optional aiogram Message for streaming generate + respond_node
         checkpointer: Optional checkpointer for conversation persistence
+        event_stream: Optional PipelineEventStream for observability logging
+        show_transcription: Send transcription preview to user
+        voice_language: ISO language code for Whisper hint
+        stt_model: Model name in LiteLLM config
+        content_filter_enabled: Whether to include guard node
+        guard_mode: Guard mode ('hard' | 'soft' | 'log')
 
     Returns:
-        Compiled StateGraph ready for .ainvoke()
+        Compiled StateGraph ready for .ainvoke() — context pre-bound.
     """
     from telegram_bot.graph.nodes.cache import cache_check_node, cache_store_node
     from telegram_bot.graph.nodes.classify import classify_node
     from telegram_bot.graph.nodes.grade import grade_node
     from telegram_bot.graph.nodes.guard import guard_node
     from telegram_bot.graph.nodes.rerank import rerank_node
+    from telegram_bot.graph.nodes.retrieve import retrieve_node
     from telegram_bot.graph.nodes.rewrite import rewrite_node
     from telegram_bot.graph.nodes.transcribe import make_transcribe_node
 
-    workflow = StateGraph(RAGState)
+    # Build run-scoped dependency context — injected into nodes via Runtime.
+    ctx: GraphContext = {
+        "cache": cache,
+        "embeddings": embeddings,
+        "sparse_embeddings": sparse_embeddings,
+        "qdrant": qdrant,
+        "reranker": reranker,
+        "llm": llm,
+        "event_stream": event_stream,
+        "guard_mode": guard_mode,
+        "classifier": classifier,
+    }
 
-    # Add nodes — wrap those that need injected deps via functools.partial
-    if classifier is not None:
-        workflow.add_node(
-            "classify",
-            functools.partial(classify_node, classifier=classifier),  # type: ignore[type-var]
-        )
-    else:
-        workflow.add_node("classify", classify_node)  # type: ignore[type-var]
+    workflow = StateGraph(RAGState, context_schema=GraphContext)
+
+    # Add nodes — Runtime[GraphContext] is injected automatically by LangGraph.
+    workflow.add_node("classify", classify_node)  # type: ignore[call-overload]
 
     workflow.add_node(
         "transcribe",
@@ -99,51 +113,20 @@ def build_graph(
     )
 
     if content_filter_enabled:
-        workflow.add_node(
-            "guard",
-            functools.partial(
-                guard_node,
-                guard_mode=guard_mode,
-            ),
-        )
+        workflow.add_node("guard", guard_node)  # type: ignore[call-overload]
 
-    workflow.add_node(
-        "cache_check",
-        functools.partial(cache_check_node, cache=cache, embeddings=embeddings),
-    )
-
-    workflow.add_node(
-        "retrieve",
-        functools.partial(
-            retrieve_node_wrapper,
-            cache=cache,
-            embeddings=embeddings,
-            sparse_embeddings=sparse_embeddings,
-            qdrant=qdrant,
-        ),
-    )
-
-    workflow.add_node("grade", grade_node)  # type: ignore[type-var]
-
-    workflow.add_node(
-        "rerank",
-        functools.partial(rerank_node, cache=cache, reranker=reranker),
-    )
+    workflow.add_node("cache_check", cache_check_node)  # type: ignore[call-overload]
+    workflow.add_node("retrieve", retrieve_node)  # type: ignore[call-overload]
+    workflow.add_node("grade", grade_node)  # type: ignore[call-overload]
+    workflow.add_node("rerank", rerank_node)  # type: ignore[call-overload]
 
     workflow.add_node(
         "generate",
         _make_generate_node(message),
     )
 
-    workflow.add_node(
-        "rewrite",
-        functools.partial(rewrite_node, llm=llm),
-    )
-
-    workflow.add_node(
-        "cache_store",
-        functools.partial(cache_store_node, cache=cache, event_stream=event_stream),
-    )
+    workflow.add_node("rewrite", rewrite_node)  # type: ignore[call-overload]
+    workflow.add_node("cache_store", cache_store_node)  # type: ignore[call-overload]
 
     workflow.add_node(
         "respond",
@@ -185,7 +168,7 @@ def build_graph(
             result["latency_stages"] = {**state.get("latency_stages", {}), "summarize": elapsed}
             return cast(RAGState, result)
 
-        workflow.add_node("summarize", summarize_wrapper)  # type: ignore[type-var]
+        workflow.add_node("summarize", summarize_wrapper)  # type: ignore[call-overload]
 
     # Edges
     workflow.add_conditional_edges(
@@ -258,27 +241,18 @@ def build_graph(
         workflow.add_edge("respond", END)
 
     compiled = workflow.compile(checkpointer=checkpointer)
-    return compiled.with_config(recursion_limit=15)
+    configured = compiled.with_config(recursion_limit=15)
 
+    # Pre-bind the run-scoped context so callers use the existing API:
+    #   graph = build_graph(cache=..., ...)
+    #   result = await graph.ainvoke(state, config=config)
+    orig_ainvoke = configured.ainvoke
 
-async def retrieve_node_wrapper(
-    state: dict[str, Any],
-    *,
-    cache: Any,
-    embeddings: Any | None = None,
-    sparse_embeddings: Any,
-    qdrant: Any,
-) -> dict[str, Any]:
-    """Wrapper for retrieve_node to match functools.partial signature."""
-    from telegram_bot.graph.nodes.retrieve import retrieve_node
+    async def _ainvoke_with_ctx(input_: Any, config: Any = None, **kwargs: Any) -> Any:
+        return await orig_ainvoke(input_, config=config, context=ctx, **kwargs)
 
-    return await retrieve_node(
-        state,
-        cache=cache,
-        embeddings=embeddings,
-        sparse_embeddings=sparse_embeddings,
-        qdrant=qdrant,
-    )
+    configured.ainvoke = _ainvoke_with_ctx  # type: ignore[assignment]
+    return configured
 
 
 def _create_summarize_model(config: Any) -> Any:

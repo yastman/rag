@@ -13,6 +13,9 @@ import logging
 import time
 from typing import Any
 
+from langgraph.runtime import Runtime
+
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 from telegram_bot.services.metrics import PipelineMetrics
 from telegram_bot.services.rag_core import build_retrieved_context as _build_retrieved_context
@@ -24,11 +27,7 @@ logger = logging.getLogger(__name__)
 @observe(name="node-retrieve", capture_input=False, capture_output=False)
 async def retrieve_node(
     state: dict[str, Any],
-    *,
-    cache: Any,
-    sparse_embeddings: Any,
-    qdrant: Any,
-    embeddings: Any | None = None,
+    runtime: Runtime[GraphContext],
     top_k: int = 20,
 ) -> dict[str, Any]:
     """Retrieve documents via hybrid RRF search with caching.
@@ -41,15 +40,16 @@ async def retrieve_node(
 
     Args:
         state: RAGState dict (needs query_embedding)
-        cache: CacheLayerManager instance
-        sparse_embeddings: BGEM3SparseEmbeddings instance
-        qdrant: QdrantService instance
-        embeddings: Optional BGEM3Embeddings for re-embedding after rewrite
+        runtime: LangGraph Runtime with GraphContext (cache, embeddings, sparse_embeddings, qdrant)
         top_k: Number of results to retrieve
 
     Returns:
         State update with documents, search_results_count, sparse_embedding
     """
+    cache: Any = runtime.context["cache"]
+    sparse_embeddings: Any = runtime.context["sparse_embeddings"]
+    qdrant: Any = runtime.context["qdrant"]
+    embeddings: Any | None = runtime.context.get("embeddings")
     messages = state.get("messages") or []
     last_msg = messages[-1] if messages else {}
     query = (

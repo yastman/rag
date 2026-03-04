@@ -12,6 +12,11 @@ from typing import get_type_hints
 from unittest.mock import MagicMock, patch
 
 import pytest
+from langgraph.runtime import Runtime
+
+
+def _rt(**ctx) -> Runtime:
+    return Runtime(context=ctx)
 
 
 class TestRAGStateLLMCallCount:
@@ -135,11 +140,13 @@ class TestNodeLLMCallCountIncrement:
 
     @pytest.mark.asyncio
     async def test_classify_node_increments_llm_call_count(self):
+        from langgraph.runtime import Runtime
+
         from telegram_bot.graph.nodes.classify import classify_node
         from telegram_bot.graph.state import make_initial_state
 
         state = make_initial_state(user_id=1, session_id="s", query="квартира в Несебре")
-        result = await classify_node(state)
+        result = await classify_node(state, Runtime(context={}))
         assert result["llm_call_count"] == 1
 
     @pytest.mark.asyncio
@@ -170,7 +177,7 @@ class TestNodeLLMCallCountIncrement:
             mock_config.create_llm.return_value = mock_llm
             mock_config_cls.from_env.return_value = mock_config
 
-            result = await rewrite_node(state, llm=mock_llm)
+            result = await rewrite_node(state, _rt(llm=mock_llm))
 
         assert result["llm_call_count"] == 3
 
@@ -185,7 +192,7 @@ class TestNodeLLMCallCountIncrement:
             "latency_stages": {},
         }
 
-        result = await rerank_node(state, reranker=None)
+        result = await rerank_node(state, _rt())
         assert result["llm_call_count"] == 2
 
 
