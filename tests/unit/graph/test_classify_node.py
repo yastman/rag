@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from langgraph.runtime import Runtime
 
 from telegram_bot.graph.nodes.classify import (
     CHITCHAT,
@@ -17,6 +18,11 @@ from telegram_bot.graph.nodes.classify import (
     classify_query,
 )
 from telegram_bot.graph.state import make_initial_state
+
+
+def _make_runtime(**ctx) -> Runtime:
+    """Create a Runtime with GraphContext for node tests."""
+    return Runtime(context=ctx)
 
 
 class TestClassifyQuery:
@@ -74,7 +80,7 @@ class TestClassifyNode:
     async def test_early_exit_returns_canned_response(self, query, expected_type):
         """CHITCHAT and OFF_TOPIC queries produce a canned response (early exit)."""
         state = make_initial_state(user_id=1, session_id="s", query=query)
-        result = await classify_node(state)
+        result = await classify_node(state, _make_runtime())
         assert result["query_type"] == expected_type
         assert result["response"]  # non-empty canned response
         assert "classify" in result["latency_stages"]
@@ -89,26 +95,26 @@ class TestClassifyNode:
     async def test_rag_types_have_no_canned_response(self, query, expected_type):
         """STRUCTURED and FAQ queries continue to RAG pipeline (no canned response)."""
         state = make_initial_state(user_id=1, session_id="s", query=query)
-        result = await classify_node(state)
+        result = await classify_node(state, _make_runtime())
         assert result["query_type"] == expected_type
         assert "response" not in result
 
     async def test_records_latency(self):
         state = make_initial_state(user_id=1, session_id="s", query="test")
-        result = await classify_node(state)
+        result = await classify_node(state, _make_runtime())
         assert isinstance(result["latency_stages"]["classify"], float)
         assert result["latency_stages"]["classify"] >= 0
 
     async def test_preserves_existing_latency_stages(self):
         state = make_initial_state(user_id=1, session_id="s", query="test")
         state["latency_stages"] = {"prev": 0.5}
-        result = await classify_node(state)
+        result = await classify_node(state, _make_runtime())
         assert result["latency_stages"]["prev"] == 0.5
         assert "classify" in result["latency_stages"]
 
 
 class TestClassifyNodeSemanticMode:
-    """Tests for classify_node with SemanticClassifier injected."""
+    """Tests for classify_node with SemanticClassifier injected via Runtime."""
 
     def _make_classifier(self, query_type: str, available: bool = True) -> MagicMock:
         classifier = MagicMock()
@@ -119,42 +125,42 @@ class TestClassifyNodeSemanticMode:
     async def test_semantic_mode_uses_classifier(self):
         classifier = self._make_classifier(FAQ)
         state = make_initial_state(user_id=1, session_id="s", query="как оформить покупку")
-        result = await classify_node(state, classifier=classifier)
+        result = await classify_node(state, _make_runtime(classifier=classifier))
         assert result["query_type"] == FAQ
         classifier.classify.assert_called_once_with("как оформить покупку")
 
     async def test_semantic_mode_chitchat_returns_canned_response(self):
         classifier = self._make_classifier(CHITCHAT)
         state = make_initial_state(user_id=1, session_id="s", query="привет")
-        result = await classify_node(state, classifier=classifier)
+        result = await classify_node(state, _make_runtime(classifier=classifier))
         assert result["query_type"] == CHITCHAT
         assert result["response"]
 
     async def test_semantic_mode_off_topic_returns_canned_response(self):
         classifier = self._make_classifier(OFF_TOPIC)
         state = make_initial_state(user_id=1, session_id="s", query="рецепт борща")
-        result = await classify_node(state, classifier=classifier)
+        result = await classify_node(state, _make_runtime(classifier=classifier))
         assert result["query_type"] == OFF_TOPIC
         assert result["response"]
 
     async def test_semantic_mode_structured_no_canned_response(self):
         classifier = self._make_classifier(STRUCTURED)
         state = make_initial_state(user_id=1, session_id="s", query="2 комнаты до 80000 евро")
-        result = await classify_node(state, classifier=classifier)
+        result = await classify_node(state, _make_runtime(classifier=classifier))
         assert result["query_type"] == STRUCTURED
         assert "response" not in result
 
     async def test_semantic_mode_general_no_canned_response(self):
         classifier = self._make_classifier(GENERAL)
         state = make_initial_state(user_id=1, session_id="s", query="квартира у моря")
-        result = await classify_node(state, classifier=classifier)
+        result = await classify_node(state, _make_runtime(classifier=classifier))
         assert result["query_type"] == GENERAL
         assert "response" not in result
 
     async def test_fallback_to_regex_when_classifier_unavailable(self):
         classifier = self._make_classifier(FAQ, available=False)
         state = make_initial_state(user_id=1, session_id="s", query="Привет!")
-        result = await classify_node(state, classifier=classifier)
+        result = await classify_node(state, _make_runtime(classifier=classifier))
         # unavailable → regex → CHITCHAT
         assert result["query_type"] == CHITCHAT
         classifier.classify.assert_not_called()
@@ -164,18 +170,18 @@ class TestClassifyNodeSemanticMode:
         classifier.available = True
         classifier.classify.side_effect = RuntimeError("Redis gone")
         state = make_initial_state(user_id=1, session_id="s", query="Привет!")
-        result = await classify_node(state, classifier=classifier)
+        result = await classify_node(state, _make_runtime(classifier=classifier))
         # fallback → regex → CHITCHAT
         assert result["query_type"] == CHITCHAT
 
     async def test_no_classifier_uses_regex(self):
         state = make_initial_state(user_id=1, session_id="s", query="Привет!")
-        result = await classify_node(state)
+        result = await classify_node(state, _make_runtime())
         assert result["query_type"] == CHITCHAT
 
     async def test_semantic_mode_records_latency(self):
         classifier = self._make_classifier(FAQ)
         state = make_initial_state(user_id=1, session_id="s", query="как оформить покупку")
-        result = await classify_node(state, classifier=classifier)
+        result = await classify_node(state, _make_runtime(classifier=classifier))
         assert isinstance(result["latency_stages"]["classify"], float)
         assert result["latency_stages"]["classify"] >= 0
