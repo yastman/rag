@@ -220,4 +220,4 @@ class ApartmentsService:
             for r in records
         ]
 
-        return formatted, count_result.count, next_offset
+        return formatted, count_result.count, next_offset  # type: ignore[return-value]
