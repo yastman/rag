@@ -15,6 +15,9 @@ import re
 import time
 from typing import Any
 
+from langgraph.runtime import Runtime
+
+from telegram_bot.graph.context import GraphContext
 from telegram_bot.observability import get_client, observe
 
 
@@ -140,8 +143,7 @@ def detect_injection(text: str) -> tuple[bool, float, str | None]:
 @observe(name="node-guard")
 async def guard_node(
     state: dict[str, Any],
-    *,
-    guard_mode: str = "hard",
+    runtime: Runtime[GraphContext],
 ) -> dict[str, Any]:
     """LangGraph node: detect prompt injection attempts.
 
@@ -152,6 +154,7 @@ async def guard_node(
     - "soft": sets injection_detected=True, logs, continues to classify
     - "log": logs only, continues to classify
     """
+    guard_mode: str = runtime.context.get("guard_mode", "hard")  # type: ignore[assignment]
     t0 = time.perf_counter()
     lf = get_client()
 
