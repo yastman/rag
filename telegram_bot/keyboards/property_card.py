@@ -7,6 +7,8 @@ from pathlib import Path
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from telegram_bot.callback_data import FavoriteCB, ResultsCB
+
 
 _DEMO_PHOTO_DIR = Path(__file__).resolve().parents[1] / "static" / "photos" / "demo"
 _DEMO_PHOTOS: list[Path] = sorted(_DEMO_PHOTO_DIR.glob("*.jpg")) if _DEMO_PHOTO_DIR.exists() else []
@@ -79,12 +81,12 @@ def build_card_buttons(
     if is_favorited:
         fav_btn = InlineKeyboardButton(
             text="❌ Убрать из избранного",
-            callback_data=f"fav:remove:{property_id}",
+            callback_data=FavoriteCB(action="remove", apartment_id=property_id).pack(),
         )
     else:
         fav_btn = InlineKeyboardButton(
             text="📌 В избранное",
-            callback_data=f"fav:add:{property_id}",
+            callback_data=FavoriteCB(action="add", apartment_id=property_id).pack(),
         )
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -114,10 +116,24 @@ def build_results_footer(*, shown_total: int, total: int, has_more: bool) -> Inl
             [
                 InlineKeyboardButton(
                     text=f"🔄 Показать ещё ({remaining} осталось)",
-                    callback_data="results:more",
+                    callback_data=ResultsCB(action="more").pack(),
                 )
             ]
         )
-    rows.append([InlineKeyboardButton(text="⚙️ Изменить параметры", callback_data="results:refine")])
-    rows.append([InlineKeyboardButton(text="📅 Запись на осмотр", callback_data="results:viewing")])
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="⚙️ Изменить параметры",
+                callback_data=ResultsCB(action="refine").pack(),
+            )
+        ]
+    )
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="📅 Запись на осмотр",
+                callback_data=ResultsCB(action="viewing").pack(),
+            )
+        ]
+    )
     return InlineKeyboardMarkup(inline_keyboard=rows)
