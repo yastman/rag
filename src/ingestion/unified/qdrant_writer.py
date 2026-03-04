@@ -1,6 +1,7 @@
 # src/ingestion/unified/qdrant_writer.py
 """Qdrant writer with payload contract and replace semantics."""
 
+import json as _json
 import logging
 import threading
 import uuid
@@ -24,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 # Namespace for deterministic UUID generation
 NAMESPACE_GDRIVE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+# Qdrant default max payload size (32 MB).  Points exceeding this are skipped.
+QDRANT_MAX_PAYLOAD_BYTES = 32 * 1024 * 1024
 
 
 @dataclass
@@ -344,7 +348,24 @@ class QdrantHybridWriter:
                 )
                 points.append(point)
 
-            # Step 5: Upsert
+            # Step 5: Payload size guard
+            payload_size = len(_json.dumps([p.payload for p in points]).encode())
+            if payload_size > QDRANT_MAX_PAYLOAD_BYTES:
+                msg = (
+                    f"Payload {payload_size / 1024 / 1024:.1f}MB exceeds "
+                    f"Qdrant limit {QDRANT_MAX_PAYLOAD_BYTES / 1024 / 1024:.0f}MB "
+                    f"for {source_path} ({len(points)} chunks) — skipping"
+                )
+                logger.warning(msg)
+                stats.errors = [msg]
+                try_update_ingestion_trace(
+                    command="qdrant-upsert-chunks",
+                    status="error",
+                    metadata={"collection": collection_name, "error_type": "PayloadTooLarge"},
+                )
+                return stats
+
+            # Step 6: Upsert
             self.client.upsert(collection_name=collection_name, points=points)
             stats.points_upserted = len(points)
 
@@ -467,7 +488,19 @@ class QdrantHybridWriter:
                 )
                 points.append(point)
 
-            # Step 5: Upsert (sync)
+            # Step 5: Payload size guard — skip oversized batches
+            payload_size = len(_json.dumps([p.payload for p in points]).encode())
+            if payload_size > QDRANT_MAX_PAYLOAD_BYTES:
+                msg = (
+                    f"Payload {payload_size / 1024 / 1024:.1f}MB exceeds "
+                    f"Qdrant limit {QDRANT_MAX_PAYLOAD_BYTES / 1024 / 1024:.0f}MB "
+                    f"for {source_path} ({len(points)} chunks) — skipping"
+                )
+                logger.warning(msg)
+                stats.errors = [msg]
+                return stats
+
+            # Step 6: Upsert (sync)
             self.client.upsert(collection_name=collection_name, points=points)
             stats.points_upserted = len(points)
 
