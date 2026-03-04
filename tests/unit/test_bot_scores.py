@@ -278,7 +278,6 @@ class TestScoreWriting:
             "bge_embed_latency_ms",
             # Prompt injection defense (#226)
             "security_alert",
-            "guard_ml_available",
             # Source attribution (#225)
             "sources_shown",
             "sources_count",
@@ -288,7 +287,7 @@ class TestScoreWriting:
             "checkpointer_overhead_proxy_ms",
         ]
         assert sorted(score_names) == sorted(expected_names)
-        assert mock_lf.create_score.call_count == 33
+        assert mock_lf.create_score.call_count == 32
 
     def test_score_values_full_pipeline(self):
         """Score values should match the graph result state."""
