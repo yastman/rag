@@ -10,12 +10,15 @@ class TestBuildFeedbackKeyboard:
         assert len(kb.inline_keyboard[0]) == 2
 
     def test_button_callback_data_format(self):
+        from telegram_bot.callback_data import FeedbackCB
         from telegram_bot.feedback import build_feedback_keyboard
 
         kb = build_feedback_keyboard("abc123def456")
         like_btn, dislike_btn = kb.inline_keyboard[0]
-        assert like_btn.callback_data == "fb:1:abc123def456"
-        assert dislike_btn.callback_data == "fb:0:abc123def456"
+        assert like_btn.callback_data == FeedbackCB(action="like", trace_id="abc123def456").pack()
+        assert dislike_btn.callback_data == FeedbackCB(
+            action="dislike", trace_id="abc123def456"
+        ).pack()
 
     def test_button_labels(self):
         from telegram_bot.feedback import build_feedback_keyboard
