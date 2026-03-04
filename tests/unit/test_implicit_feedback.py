@@ -102,6 +102,23 @@ class TestIsReformulation:
         result = is_reformulation(current, previous, time_delta_seconds=0.0)
         assert result is True
 
+    def test_negative_time_delta_future_timestamp_returns_false(self):
+        """Negative time_delta arises when prev_ts is in the future (clock skew / race condition).
+
+        Edge case: time.time() - prev["ts"] < 0 when the stored timestamp is ahead of
+        the current clock.  This should NOT trigger an implicit retry signal.
+        Similar vectors are used to isolate the time_delta guard behaviour.
+        """
+        from telegram_bot.implicit_feedback import is_reformulation
+
+        # Near-identical vectors → would be a reformulation if time window were valid
+        current = _make_vec()
+        previous = _make_vec()
+        # Negative delta: previous query was timestamped 5s in the future
+        result = is_reformulation(current, previous, time_delta_seconds=-5.0)
+        # A future timestamp is outside the valid [0, max_time_seconds) window → False
+        assert result is False
+
 
 class TestCosineSimilarity:
     """Test the cosine_similarity helper."""

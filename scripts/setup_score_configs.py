@@ -41,12 +41,12 @@ SCORE_CONFIGS: list[dict[str, Any]] = [
         "name": "user_feedback_reason",
         "data_type": "CATEGORICAL",
         "categories": [
-            {"label": "irrelevant", "value": 0},
-            {"label": "incomplete", "value": 1},
-            {"label": "incorrect", "value": 2},
-            {"label": "too_long", "value": 3},
-            {"label": "too_short", "value": 4},
-            {"label": "other", "value": 5},
+            {"label": "wrong_topic", "value": 0},
+            {"label": "missing_info", "value": 1},
+            {"label": "bad_sources", "value": 2},
+            {"label": "hallucination", "value": 3},
+            {"label": "incomplete", "value": 4},
+            {"label": "formatting", "value": 5},
         ],
     },
     {
