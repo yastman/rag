@@ -1,4 +1,4 @@
-# Контракты воркеров v8
+# Контракты воркеров v9
 
 Orch заполняет `{...}` → сохраняет в `.claude/prompts/worker-{name}.md`.
 
@@ -53,7 +53,7 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
 
     Closes #{N}
 
-    Co-Authored-By: Claude {Model} <noreply@anthropic.com>
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
     EOF
     )"
     git push -u origin {branch_name}
@@ -109,21 +109,25 @@ Part-workers коммитят и пушат, но **НЕ создают PR**. PR
 
 ## Codebase контекст (Фаза 2.3 — orch, НЕ worker)
 
-Orch использует GrepAI MCP tools ДО классификации для понимания scope и зависимостей:
+Orch использует 3 системы ДО классификации для понимания scope и зависимостей:
 
-    # 1. Semantic search — найти код, затронутый issue:
+    # 1. GrepAI — semantic search + call graph:
     grepai_search(query="{issue_description}", limit=5, format="toon", compact=true)
-
-    # 2. Call graph — impact analysis:
     grepai_trace_callers(symbol="{function_from_issue}", format="toon", compact=true)
     grepai_trace_callees(symbol="{function_from_issue}", format="toon", compact=true)
-
-    # 3. Полный граф (для COMPLEX+):
     grepai_trace_graph(symbol="{key_symbol}", depth=1, format="toon")
+
+    # 2. LSP — точные типы и references:
+    LSP(operation="documentSymbol", filePath="{file}")
+    LSP(operation="findReferences", filePath="{file}", line=N, character=M)
+    LSP(operation="incomingCalls", filePath="{file}", line=N, character=M)
+
+    # 3. context-mode — сбор контекста:
+    batch_execute(commands=[...], queries=[...])
 
 Результаты используются для:
 - Классификации сложности (Phase 2) — сколько файлов/зависимостей затронуто
-- File overlap detection (Phase 2.5) — точнее, чем grep из тела issue
+- File overlap detection (Phase 2.5) — LSP findReferences точнее, чем grep
 - Файловых резерваций — кто владеет какими файлами
 - Промта worker'а — добавить `{codebase_context}` с ключевыми находками
 
@@ -240,12 +244,24 @@ Haiku НЕ классифицирует сложность — только фи
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
     Углуби SDK исследование если нужно (Context7, Exa). Включи SDK контекст в план.
 
-    CODEBASE КОНТЕКСТ (GrepAI MCP — ИСПОЛЬЗУЙ):
-    - grepai_search(query="...", format="toon", compact=true) — semantic поиск кода
+    CODEBASE КОНТЕКСТ (3 системы — ИСПОЛЬЗУЙ ВСЕ):
+
+    GrepAI MCP (semantic search + call graph):
+    - grepai_search(query="...", format="toon", compact=true) — найти код по описанию
     - grepai_trace_callers(symbol="...", format="toon") — кто вызывает
     - grepai_trace_callees(symbol="...", format="toon") — что вызывает
     - grepai_trace_graph(symbol="...", depth=1, format="toon") — полный call graph
-    Используй для понимания зависимостей, scope, и затронутых файлов перед планированием.
+
+    LSP (точные типы, сигнатуры, структура):
+    - LSP documentSymbol(filePath) — все символы файла (классы, методы)
+    - LSP hover(filePath, line, char) — тип + docstring символа
+    - LSP findReferences(filePath, line, char) — все ссылки на символ
+    - LSP incomingCalls(filePath, line, char) — кто вызывает метод
+
+    context-mode (экономия контекста для больших файлов):
+    - execute_file(path, language, code) — анализ файла без загрузки в контекст
+    - batch_execute(commands, queries) — N команд + поиск в одном вызове
+    Используй вместо Read для файлов >50 строк. Вместо Bash для output >20 строк.
 
     <HARD-GATE>
     Skill(skill="writing-plans") — для создания плана. БЕЗ ИСКЛЮЧЕНИЙ.
