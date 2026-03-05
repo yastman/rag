@@ -171,3 +171,28 @@ class TestConfigDefaults:
         assert _cfg.settings.USE_FP16 is True
         assert _cfg.settings.RERANK_MAX_DOCS == 30
         assert _cfg.settings.RERANK_MAX_LENGTH == 512
+
+
+class TestWarmup:
+    async def test_warmup_includes_colbert(self, bge_app):
+        """Lifespan warmup must call encode with return_colbert_vecs=True.
+
+        ColBERT codepath must be warmed up alongside dense and sparse so that
+        the first real /encode/hybrid request doesn't pay the cold-start penalty.
+        """
+        app_module = bge_app["app_module"]
+        fake_model = bge_app["fake_model"]
+
+        fake_model.encode.reset_mock()
+
+        # Run the lifespan startup directly (no ASGI runner needed)
+        gen = app_module.lifespan(None)
+        await gen.__aenter__()
+        await gen.__aexit__(None, None, None)
+
+        assert fake_model.encode.called, "Warmup must call model.encode()"
+        warmup_kwargs = fake_model.encode.call_args.kwargs
+        assert warmup_kwargs.get("return_colbert_vecs") is True, (
+            f"Warmup must use return_colbert_vecs=True to warm ColBERT codepath, "
+            f"got return_colbert_vecs={warmup_kwargs.get('return_colbert_vecs')}"
+        )
