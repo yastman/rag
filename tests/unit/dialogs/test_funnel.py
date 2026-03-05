@@ -148,8 +148,8 @@ async def test_pref_complex_any_clears_value():
 
 
 @pytest.mark.asyncio
-async def test_preferences_options_has_6_categories():
-    """Preferences getter returns 6 category items; 'done' is now a separate Button."""
+async def test_preferences_options_has_7_categories():
+    """Preferences getter returns 7 category items (6 original + section)."""
     result = await funnel_module.get_preferences_options(
         middleware_data={},
         dialog_manager=SimpleNamespace(dialog_data={}),
@@ -163,8 +163,9 @@ async def test_preferences_options_has_6_categories():
     assert "furnished" in ids
     assert "promotion" in ids
     assert "complex" in ids
+    assert "section" in ids
     assert "done" not in ids  # "done" is now a separate Button widget
-    assert len(items) == 6
+    assert len(items) == 7
 
 
 @pytest.mark.asyncio
@@ -181,6 +182,7 @@ async def test_preferences_options_uses_emoji_labels_for_all_categories():
     assert labels_by_id["furnished"] == "🛋 Мебель"
     assert labels_by_id["promotion"] == "🏷 Акции"
     assert labels_by_id["complex"] == "🏘 Комплекс"
+    assert labels_by_id["section"] == "📍 Секция"
 
 
 @pytest.mark.asyncio
@@ -927,3 +929,62 @@ async def test_summary_shows_promotion():
         ),
     )
     assert "Акции" in result["summary_text"]
+
+
+# ============================================================
+# Task 5: Section filter tests
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_pref_section_options_has_sections_plus_any():
+    result = await funnel_module.get_pref_section_options(middleware_data={})
+    items = result["items"]
+    keys = [key for _, key in items]
+    assert "D-1" in keys
+    assert "any" in keys
+    assert len(items) == 27  # 26 unique sections from CSV + "any"
+
+
+@pytest.mark.asyncio
+async def test_pref_section_selected_saves_and_returns():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_section_selected(MagicMock(), SimpleNamespace(), manager, "D-1")
+    assert manager.dialog_data["section"] == "D-1"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_pref_section_any_clears_value():
+    manager = SimpleNamespace(dialog_data={"section": "D-1"}, switch_to=AsyncMock())
+    await funnel_module.on_pref_section_selected(MagicMock(), SimpleNamespace(), manager, "any")
+    assert manager.dialog_data["section"] is None
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_pref_category_section_switches_to_pref_section():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_category_selected(
+        MagicMock(), SimpleNamespace(), manager, "section"
+    )
+    manager.switch_to.assert_awaited_once_with(FunnelSG.pref_section)
+
+
+@pytest.mark.asyncio
+async def test_preferences_section_syncs_widget_state():
+    widget_data: dict[str, Any] = {}
+    ctx = SimpleNamespace(widget_data=widget_data)
+    manager = SimpleNamespace(
+        dialog_data={"section": "D-1"},
+        current_context=lambda: ctx,
+    )
+    await funnel_module.get_preferences_options(middleware_data={}, dialog_manager=manager)
+    checked = widget_data.get(funnel_module._PREF_MS_ID, [])
+    assert "section" in checked
+
+
+def test_funnel_has_pref_section_window():
+    windows = funnel_dialog.windows
+    states = [w.get_state() for w in windows.values()]
+    assert FunnelSG.pref_section in states

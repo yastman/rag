@@ -48,6 +48,36 @@ _COMPLEX_OPTIONS: list[tuple[str, str]] = [
     ("Любой комплекс", "any"),
 ]
 
+_SECTION_OPTIONS: list[tuple[str, str]] = [
+    ("A", "A"),
+    ("A-2", "A-2"),
+    ("A-A", "A-A"),
+    ("A-B", "A-B"),
+    ("B", "B"),
+    ("B-1", "B-1"),
+    ("B-2", "B-2"),
+    ("B-3", "B-3"),
+    ("B-5", "B-5"),
+    ("B-6", "B-6"),
+    ("B-V", "B-V"),
+    ("C-2", "C-2"),
+    ("C-5", "C-5"),
+    ("D-1", "D-1"),
+    ("D-2", "D-2"),
+    ("D-3", "D-3"),
+    ("E-1", "E-1"),
+    ("E-2", "E-2"),
+    ("E-3", "E-3"),
+    ("E-4", "E-4"),
+    ("F-1", "F-1"),
+    ("F-2", "F-2"),
+    ("F-3", "F-3"),
+    ("F-4", "F-4"),
+    ("V-D", "V-D"),
+    ("V-G", "V-G"),
+    ("Любая секция", "any"),
+]
+
 _ROOMS_MAP: dict[str, int | list[int]] = {"studio": [0, 1], "1bed": 2, "2bed": 3, "3bed": 4}
 _PROPERTY_TYPE_QUERY_TEXT: dict[str, str] = {
     "studio": "студия",
@@ -139,6 +169,7 @@ _PREF_ITEMS: list[tuple[str, str]] = [
     ("🛋 Мебель", "furnished"),
     ("🏷 Акции", "promotion"),
     ("🏘 Комплекс", "complex"),
+    ("📍 Секция", "section"),
 ]
 
 # Widget ID for preferences Multiselect
@@ -157,6 +188,7 @@ def _build_funnel_filters(data: dict[str, Any]) -> dict[str, Any]:
         is_furnished=data.get("is_furnished"),
         is_promotion=data.get("is_promotion"),
         area=data.get("area"),
+        section=data.get("section"),
     )
 
 
@@ -171,6 +203,7 @@ def build_funnel_filters(
     is_furnished: str | None = None,
     is_promotion: str | None = None,
     area: str | None = None,
+    section: str | None = None,
 ) -> dict[str, Any]:
     """Build Qdrant payload filter dict from funnel dialog selections."""
     filters: dict[str, Any] = {}
@@ -194,6 +227,8 @@ def build_funnel_filters(
         filters["is_promotion"] = True
     if area and area != "any" and area in _AREA_MAP:
         filters["area_m2"] = _AREA_MAP[area]
+    if section and section != "any":
+        filters["section"] = section
     return filters
 
 
@@ -276,6 +311,8 @@ def _compute_active_pref_categories(data: dict[str, Any]) -> list[str]:
         checked.append("promotion")
     if data.get("complex") and data["complex"] != "any":
         checked.append("complex")
+    if data.get("section") and data["section"] != "any":
+        checked.append("section")
     return checked
 
 
@@ -380,6 +417,13 @@ async def get_pref_complex_options(**kwargs: Any) -> dict[str, Any]:
     return {"title": "Выберите комплекс:", "items": _COMPLEX_OPTIONS, "btn_back": btn_back}
 
 
+async def get_pref_section_options(**kwargs: Any) -> dict[str, Any]:
+    """Getter for section sub-options in preferences."""
+    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    btn_back = i18n.get("back") if i18n else "← Назад"
+    return {"title": "Выберите секцию:", "items": _SECTION_OPTIONS, "btn_back": btn_back}
+
+
 async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     """Getter for summary window — shows selected filters and can_search flag."""
     dialog_manager = kwargs.get("dialog_manager")
@@ -424,6 +468,10 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
     area_val = data.get("area")
     if area_val and area_val != "any":
         lines.append(f"📐 Площадь: {_AREA_DISPLAY.get(area_val, area_val)}")
+
+    section_val = data.get("section")
+    if section_val and section_val != "any":
+        lines.append(f"📍 Секция: {section_val}")
 
     furnished_val = data.get("is_furnished")
     if furnished_val == "yes":
@@ -558,6 +606,9 @@ async def get_results_data(
                         zero_suggestions.append(
                             ("Убрать: " + _AREA_DISPLAY.get(area_v, "площадь"), "rm_area")
                         )
+                    section_v = data.get("section")
+                    if section_v and section_v != "any":
+                        zero_suggestions.append(("Убрать: секция " + section_v, "rm_section"))
                     if furnished_v:
                         zero_suggestions.append(("Убрать: мебель", "rm_furnished"))
                     if promotion_v:
@@ -675,6 +726,7 @@ async def on_pref_category_selected(
         "furnished": FunnelSG.pref_furnished,
         "promotion": FunnelSG.pref_promotion,
         "complex": FunnelSG.pref_complex,
+        "section": FunnelSG.pref_section,
     }
     target = _PREF_STATE_MAP.get(item_id)
     if target:
@@ -744,6 +796,17 @@ async def on_pref_complex_selected(
 ) -> None:
     """Save complex preference and return to preferences menu."""
     manager.dialog_data["complex"] = item_id if item_id != "any" else None
+    await manager.switch_to(FunnelSG.preferences)
+
+
+async def on_pref_section_selected(
+    callback: CallbackQuery,
+    widget: Select,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """Save section preference and return to preferences menu."""
+    manager.dialog_data["section"] = item_id if item_id != "any" else None
     await manager.switch_to(FunnelSG.preferences)
 
 
@@ -900,6 +963,8 @@ async def on_zero_suggestion_selected(
         data.pop("is_promotion", None)
     elif item_id == "rm_area":
         data.pop("area", None)
+    elif item_id == "rm_section":
+        data.pop("section", None)
     elif item_id == "rm_budget":
         data["budget"] = "any"
     elif item_id == "new_search":
@@ -911,6 +976,7 @@ async def on_zero_suggestion_selected(
             "floor",
             "view",
             "area",
+            "section",
             "is_furnished",
             "is_promotion",
             "scroll_offset",
@@ -1098,6 +1164,22 @@ funnel_dialog = Dialog(
         SwitchTo(Format("{btn_back}"), id="pref_cplx_back", state=FunnelSG.preferences),
         getter=get_pref_complex_options,
         state=FunnelSG.pref_complex,
+    ),
+    # Step 4g: Section sub-options
+    Window(
+        Format("{title}"),
+        Column(
+            Select(
+                Format("{item[0]}"),
+                id="pref_section",
+                item_id_getter=operator.itemgetter(1),
+                items="items",
+                on_click=on_pref_section_selected,
+            ),
+        ),
+        SwitchTo(Format("{btn_back}"), id="pref_section_back", state=FunnelSG.preferences),
+        getter=get_pref_section_options,
+        state=FunnelSG.pref_section,
     ),
     # Step 5: Summary + confirmation
     Window(
