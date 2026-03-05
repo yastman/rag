@@ -46,8 +46,9 @@ def test_compose_redis_uses_requirepass():
 
     project_root = Path(__file__).parent.parent.parent.parent
     compose_files = [
-        project_root / "docker-compose.dev.yml",
-        project_root / "docker-compose.vps.yml",
+        project_root / "compose.yml",
+        project_root / "compose.dev.yml",
+        project_root / "compose.vps.yml",
     ]
 
     errors = []

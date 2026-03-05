@@ -16,8 +16,8 @@ import yaml
 
 
 ROOT = Path(__file__).parents[2]
-DEV_COMPOSE = ROOT / "docker-compose.dev.yml"
-VPS_COMPOSE = ROOT / "docker-compose.vps.yml"
+BASE_COMPOSE = ROOT / "compose.yml"
+DEV_OVERRIDE = ROOT / "compose.dev.yml"
 MAKEFILE = ROOT / "Makefile"
 
 
@@ -26,14 +26,26 @@ def _load_compose(path: Path) -> dict:
         return yaml.full_load(f)
 
 
+def _load_merged_dev() -> dict:
+    """Load base + dev override (profiles/ports split across files)."""
+    base = _load_compose(BASE_COMPOSE)
+    override = _load_compose(DEV_OVERRIDE)
+    for svc_name, svc_override in override.get("services", {}).items():
+        if svc_name in base["services"]:
+            base["services"][svc_name].update(svc_override)
+        else:
+            base["services"][svc_name] = svc_override
+    return base
+
+
 @pytest.fixture(scope="module")
 def dev() -> dict:
-    return _load_compose(DEV_COMPOSE)
+    return _load_merged_dev()
 
 
 @pytest.fixture(scope="module")
 def vps() -> dict:
-    return _load_compose(VPS_COMPOSE)
+    return _load_compose(BASE_COMPOSE)
 
 
 # =============================================================================
@@ -169,11 +181,11 @@ class TestVpsSecurityBaseline:
         assert "cap_drop" in svc, f"vps:{svc_name} missing cap_drop"
         assert "ALL" in svc["cap_drop"], f"vps:{svc_name}.cap_drop must include 'ALL'"
 
-    def test_vps_has_x_security_defaults_anchor(self) -> None:
-        """VPS compose must define x-security-defaults YAML extension anchor."""
-        content = VPS_COMPOSE.read_text()
+    def test_base_has_x_security_defaults_anchor(self) -> None:
+        """Base compose must define x-security-defaults YAML extension anchor."""
+        content = BASE_COMPOSE.read_text()
         assert "x-security-defaults" in content, (
-            "docker-compose.vps.yml is missing x-security-defaults extension field"
+            "compose.yml is missing x-security-defaults extension field"
         )
 
     @pytest.mark.parametrize("svc_name", ["bge-m3", "user-base", "bot"])
