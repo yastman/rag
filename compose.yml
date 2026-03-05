@@ -91,6 +91,7 @@ services:
 
   bge-m3:
     <<: *security-defaults
+    read_only: false
     build:
       context: ./services/bge-m3-api
       dockerfile: Dockerfile
@@ -250,7 +251,7 @@ services:
       MAX_REWRITE_ATTEMPTS: "${MAX_REWRITE_ATTEMPTS:-1}"
       REWRITE_MAX_TOKENS: "${REWRITE_MAX_TOKENS:-64}"
       # Pipeline mode
-      CLIENT_DIRECT_PIPELINE_ENABLED: "${CLIENT_DIRECT_PIPELINE_ENABLED:-}"
+      CLIENT_DIRECT_PIPELINE_ENABLED: "${CLIENT_DIRECT_PIPELINE_ENABLED:-false}"
       # Domain configuration
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
