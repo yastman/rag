@@ -64,6 +64,8 @@ def _sample_result(property_id: str = "prop-1") -> dict:
             "view_tags": ["sea"],
             "view_primary": "sea",
             "price_eur": 55000,
+            "section": "B-2",
+            "apartment_number": "105",
         },
     }
 
@@ -149,3 +151,28 @@ async def test_send_property_card_no_favorites_service(_mock_photos: MagicMock) 
     kb = message.answer.call_args.kwargs.get("reply_markup")
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "fav:add:prop-99" in callbacks
+
+
+@patch(
+    "telegram_bot.keyboards.property_card.get_demo_photo_paths",
+    return_value=[Path("/tmp/demo.jpg")],
+)
+async def test_send_property_card_includes_section_and_apartment_number(
+    _mock_photos: MagicMock,
+) -> None:
+    """_send_property_card includes section and apartment_number in card text."""
+    bot = _create_bot()
+    bot._favorites_service = MagicMock()
+    bot._favorites_service.is_favorited = AsyncMock(return_value=False)
+
+    message = MagicMock()
+    message.answer = AsyncMock()
+    message.answer_media_group = AsyncMock()
+
+    result = _sample_result("prop-1")
+
+    await bot._send_property_card(message, result, telegram_id=123)
+
+    card_text = message.answer.call_args[0][0]
+    assert "B-2" in card_text
+    assert "105" in card_text
