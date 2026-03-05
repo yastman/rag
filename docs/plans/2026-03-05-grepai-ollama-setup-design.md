@@ -1,25 +1,26 @@
-# GrepAI + Ollama (bge-m3) Setup Design
+# GrepAI + Ollama (nomic-embed-text-v2-moe) Setup Design
 
 Date: 2026-03-05
 
 ## Цель
 
-Добавить semantic code search в Claude Code workflow через GrepAI MCP с локальными embeddings (Ollama + bge-m3 на GTX 1070).
+Добавить semantic code search в Claude Code workflow через GrepAI MCP с локальными embeddings (Ollama + `nomic-embed-text-v2-moe` на GTX 1070).
 
 ## Контекст
 
-- GrepAI v0.34.0 установлен (`~/.local/bin/grepai`), протестирован на `src/` (73 файла, 436 chunks)
-- Pyright LSP уже работает — дополняет GrepAI (типы, diagnostics, references)
-- Проект: ~8800 chunks, 3 git worktrees (main + 2 agent worktrees)
-- OpenAI embeddings невозможны: 3 worktrees x TPM limit = постоянные 429 rate limits
+- GrepAI установлен и работает: `grepai version 0.34.0`.
+- Ollama установлен: `ollama version 0.17.6`.
+- Локально скачаны обе embedding-модели: `nomic-embed-text-v2-moe` и `bge-m3`.
+- Фактически активная конфигурация `.grepai/config.yaml` использует `nomic-embed-text-v2-moe` (768 dims, `parallelism: 8`).
+- Индекс уже собран и обновляется watcher-ом: `Files indexed: 652`, `Total chunks: 6893`.
 
 ## Решение
 
 ### Архитектура
 
-```
+```text
 GTX 1070 (8GB VRAM)
-  +-- Ollama daemon (bge-m3, 1.2GB VRAM)
+  +-- Ollama daemon (nomic-embed-text-v2-moe, ~957MB)
         +-- GrepAI watch daemon (background)
               |-- rag-fresh (main)           -> .grepai/index.gob
               |-- rag-fresh-wt-* (worktrees) -> .grepai/index.gob (per worktree)
@@ -27,36 +28,35 @@ GTX 1070 (8GB VRAM)
               +-- MCP Server (stdio) -> Claude Code
 ```
 
-### Почему bge-m3
+### Почему nomic-embed-text-v2-moe
 
-- Multilingual (русские комменты + английский код)
-- 1024 dims, excellent quality
-- Уже используется в RAG pipeline проекта (Docker контейнер на :8000)
-- 567M параметров = 1.2GB VRAM = легко на GTX 1070
+- Мультиязычность (русские комментарии + английский код).
+- Быстрый inference и стабильные результаты в code search.
+- 768 dimensions: хороший баланс качество/скорость.
+- Вписывается в доступную VRAM на GTX 1070.
 
 ### Worktree handling
 
-GrepAI поддерживает worktrees как first-class фичу:
-- PR #115 (v0.31.0): `discoverWorktreesForWatch()` — автодетект linked worktrees
-- PR #142 (v0.33.0): content-hash dedup для PostgreSQL/Qdrant backends
-- С GOB backend: каждый worktree получает отдельный индекс (нормально)
-- С Ollama локально: нет rate limits, 3x embedding = ~3 мин вместо 1 мин
+GrepAI поддерживает worktrees как first-class сценарий:
+- Автодетект linked worktrees для watch-процесса.
+- Отдельный локальный GOB-индекс на каждый worktree.
+- Локальный Ollama снимает внешние rate limits для параллельной работы в нескольких worktree.
 
-### Конфиг `.grepai/config.yaml`
+### Конфиг `.grepai/config.yaml` (актуальный)
 
 ```yaml
 version: 1
 embedder:
     provider: ollama
-    model: bge-m3
+    model: nomic-embed-text-v2-moe
     endpoint: http://localhost:11434
-    dimensions: 1024
-    parallelism: 0
+    dimensions: 768
+    parallelism: 8
 store:
     backend: gob
 chunking:
-    size: 512
-    overlap: 50
+    size: 256
+    overlap: 32
 watch:
     debounce_ms: 500
 search:
@@ -65,21 +65,19 @@ search:
         penalties:
             - pattern: /tests/
               factor: 0.5
-            - pattern: test_
-              factor: 0.5
-            - pattern: /mocks/
-              factor: 0.4
-            - pattern: /fixtures/
-              factor: 0.4
-            - pattern: .md
-              factor: 0.6
             - pattern: /docs/
               factor: 0.6
+            - pattern: /evaluation/
+              factor: 0.3
+            - pattern: /k8s/
+              factor: 0.4
         bonuses:
             - pattern: /src/
-              factor: 1.1
-            - pattern: /telegram_bot/
-              factor: 1.1
+              factor: 1.15
+            - pattern: /telegram_bot/services/
+              factor: 1.2
+            - pattern: /telegram_bot/agents/
+              factor: 1.2
     hybrid:
         enabled: false
         k: 60
@@ -88,71 +86,61 @@ trace:
     enabled_languages:
         - .py
     exclude_patterns:
-        - 'test_*.py'
+        - test_*.py
         - '*_test.py'
-ignore:
-    - .git
-    - .grepai
-    - __pycache__
-    - .venv
-    - venv
-    - node_modules
-    - qdrant_storage
-    - logs
-    - data
-    - .mypy_cache
-    - .ruff_cache
-    - .pytest_cache
-    - htmlcov
-    - "*.egg-info"
-    - .claude/worktrees
 update:
     check_on_startup: false
+external_gitignore: /home/user/projects/rag-fresh/.grepaiignore
 ```
 
-### MCP Server (`.mcp.json`)
+### MCP server template (`.mcp.example.json`)
 
 ```json
-"grepai": {
-    "type": "stdio",
-    "command": "grepai",
-    "args": ["mcp-serve"],
-    "env": {
-        "PATH": "/home/user/.local/bin:/usr/local/bin:/usr/bin:/bin"
+{
+  "mcpServers": {
+    "grepai": {
+      "command": "grepai",
+      "args": ["mcp-serve"]
     }
+  }
 }
 ```
 
-MCP tools:
-- `grepai_search` — semantic code search
-- `grepai_trace_callers` — кто вызывает символ
-- `grepai_trace_callees` — что вызывает символ
-- `grepai_trace_graph` — call graph вокруг символа
-- `grepai_index_status` — статус индекса
+Важно:
+- рабочий файл с секретами должен быть только локальным: `.mcp.json`;
+- в git коммитится только шаблон `.mcp.example.json`;
+- `.mcp.json` уже игнорируется в `.gitignore`.
+
+MCP tools (через `grepai mcp-serve`):
+- `grepai_search`
+- `grepai_trace_callers`
+- `grepai_trace_callees`
+- `grepai_trace_graph`
+- `grepai_index_status`
 
 ## Шаги реализации
 
-1. Установить Ollama + `ollama pull bge-m3`
-2. Обновить `.grepai/config.yaml` (провайдер, ignore, trace languages)
-3. Добавить grepai в `.mcp.json`
-4. Запустить `grepai watch --background` и дождаться индексации
-5. Протестировать semantic search и trace через CLI
-6. Протестировать MCP tools через Claude Code
-7. Добавить `.grepai/` в `.gitignore` (если не добавлен)
+1. Установить Ollama + `ollama pull nomic-embed-text-v2-moe`.
+2. Обновить `.grepai/config.yaml` и указать `external_gitignore` на `.grepaiignore`.
+3. Добавить GrepAI в `.mcp.example.json`, создать локальный `.mcp.json` из шаблона.
+4. Запустить `grepai watch --background` и дождаться индексации.
+5. Протестировать semantic search и trace через CLI.
+6. Проверить MCP tools через Claude Code.
+7. Добавить `.grepai/` в `.gitignore` (если ещё не добавлен).
 
 ## Ресурсы
 
-- VRAM: 1.2GB (из 8GB)
-- Диск: ~10-20MB на индекс
-- Время первой индексации: ~2-3 мин (8800 chunks)
-- CPU в фоне: минимально (file watcher)
+- VRAM: ~957MB под `nomic-embed-text-v2-moe`.
+- Диск: ~37MB для текущего индекса (`index.gob` + `symbols.gob`).
+- Время первичной индексации: ~20-25 минут на полный репозиторий и worktree.
+- CPU в фоне: низкий, burst при file change.
 
 ## Тестирование (проведено)
 
 | Тест | Результат |
 |---|---|
-| `grepai search "hybrid search with RRF fusion"` | Точно нашёл `HybridRRFSearchEngine`, score 0.62 |
-| `grepai search "voice transcription speech to text"` | Точно нашёл `src/voice/transcript_store.py` |
-| `grepai trace callers "create_search_engine"` | 8 callers с контекстом строки |
-| `grepai trace callees "create_search_engine"` | 7 callees |
-| `grepai search --json --compact` | JSON output для MCP интеграции |
+| `ollama list` | Есть `nomic-embed-text-v2-moe` и `bge-m3` |
+| `curl -s http://localhost:11434/api/embed ...` | `dims=768` |
+| `grepai status --no-ui` | `Files indexed: 652`, `Total chunks: 6893`, provider = `nomic-embed-text-v2-moe` |
+| `grepai trace callers "create_search_engine"` | 8 callers |
+| `grepai mcp-serve --help` | MCP tools доступны |
