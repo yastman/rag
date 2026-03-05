@@ -39,7 +39,7 @@ jobs:
         run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 
   deploy:
-    name: Deploy Bot to VPS
+    name: Deploy to VPS
     needs: lint
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -62,19 +62,16 @@ jobs:
             echo "=== Pull latest code ==="
             git pull origin main
 
-            export COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.vps.yml}"
-            export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-vps}"
+            echo "=== Rebuild changed images ==="
+            docker compose build
 
-            echo "=== Rebuild bot image ==="
-            docker compose build bot
-
-            echo "=== Restart bot ==="
-            docker compose --compatibility up -d --force-recreate bot
+            echo "=== Restart changed services ==="
+            docker compose --compatibility up -d
 
             echo "=== Wait for startup ==="
-            sleep 15
+            sleep 20
 
             echo "=== Health check ==="
-            docker compose ps --format '{{.Service}} {{.Status}}' | grep '^bot '
+            docker ps --format '{{.Names}} {{.Status}}' | grep -E 'vps-.*(Up|healthy)'
 
             echo "=== Deploy complete $(date -Iseconds) ==="
