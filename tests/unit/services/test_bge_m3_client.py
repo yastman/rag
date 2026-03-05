@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from unittest import mock
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -362,3 +363,72 @@ class TestBGEM3SyncClient:
         """encode_colbert returns empty result for empty input (no HTTP call)."""
         result = sync_client.encode_colbert([])
         assert result.colbert_vecs == []
+
+    def test_encode_hybrid_returns_hybrid_result(self, sync_client):
+        """Single /encode/hybrid call returns dense + sparse + colbert."""
+        with mock.patch.object(sync_client._client, "post") as mock_post:
+            mock_post.return_value = mock.MagicMock(
+                status_code=200,
+                json=lambda: {
+                    "dense_vecs": [[0.1] * 1024],
+                    "lexical_weights": [{"indices": [1, 2], "values": [0.5, 0.3]}],
+                    "colbert_vecs": [[[0.1] * 1024] * 5],
+                    "processing_time": 0.42,
+                },
+                raise_for_status=lambda: None,
+            )
+            result = sync_client.encode_hybrid(["hello"])
+
+            assert len(result.dense_vecs) == 1
+            assert len(result.lexical_weights) == 1
+            assert result.colbert_vecs is not None
+            assert len(result.colbert_vecs) == 1
+            assert result.processing_time == 0.42
+            mock_post.assert_called_once()
+            call_url = mock_post.call_args[0][0]
+            assert "/encode/hybrid" in call_url
+
+    def test_encode_hybrid_empty_input(self, sync_client):
+        """Empty input returns empty HybridResult without HTTP call."""
+        result = sync_client.encode_hybrid([])
+        assert result.dense_vecs == []
+        assert result.lexical_weights == []
+
+    def test_encode_hybrid_http_error_raises(self, sync_client):
+        """HTTP 500 raises HTTPStatusError."""
+        with mock.patch.object(sync_client._client, "post") as mock_post:
+            mock_post.return_value = mock.MagicMock()
+            mock_post.return_value.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "Server Error", request=mock.MagicMock(), response=mock.MagicMock(status_code=500)
+            )
+            with pytest.raises(httpx.HTTPStatusError):
+                sync_client.encode_hybrid(["hello"])
+
+    def test_encode_hybrid_batches_large_input(self, sync_client):
+        """Input larger than batch_size is split into multiple requests."""
+        sync_client.batch_size = 2
+        texts = ["a", "b", "c"]
+
+        call_count = 0
+
+        def mock_post(url, json=None):
+            nonlocal call_count
+            call_count += 1
+            n = len(json["texts"])
+            resp = mock.MagicMock()
+            resp.json.return_value = {
+                "dense_vecs": [[0.1] * 1024] * n,
+                "lexical_weights": [{"indices": [1], "values": [0.5]}] * n,
+                "colbert_vecs": [[[0.1] * 1024] * 5] * n,
+                "processing_time": 0.1,
+            }
+            resp.raise_for_status = lambda: None
+            return resp
+
+        with mock.patch.object(sync_client._client, "post", side_effect=mock_post):
+            result = sync_client.encode_hybrid(texts)
+
+        assert call_count == 2  # batch of 2 + batch of 1
+        assert len(result.dense_vecs) == 3
+        assert len(result.lexical_weights) == 3
+        assert len(result.colbert_vecs) == 3
