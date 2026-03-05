@@ -149,10 +149,10 @@ test-cov: ## Run tests with coverage
 	@echo "$(GREEN)✓ Tests with coverage complete$(NC)"
 	@echo "$(YELLOW)Open htmlcov/index.html to view coverage report$(NC)"
 
-test-unit: ## Run unit tests locally in parallel (xdist worksteal)
-	@echo "$(BLUE)Running unit tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
-	@echo "$(GREEN)✓ Unit tests complete$(NC)"
+test-unit: ## Run core unit tests locally in parallel (fast default gate)
+	@echo "$(BLUE)Running core unit tests...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
 
 test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse locally)
 	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
