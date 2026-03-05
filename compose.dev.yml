@@ -1,0 +1,107 @@
+# compose.dev.yml — Development overrides: ports, colbert reranking, relaxed defaults, ML profile-gating.
+# Usage: COMPOSE_FILE=compose.yml:compose.dev.yml docker compose up -d
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev_redis_pass}
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-dev_redis_pass}
+      --maxmemory ${REDIS_MAXMEMORY:-512mb}
+      --maxmemory-policy volatile-lfu
+      --maxmemory-samples 10
+
+  qdrant:
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+
+  bge-m3:
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  user-base:
+    ports:
+      - "127.0.0.1:8003:8000"
+
+  docling:
+    ports:
+      - "127.0.0.1:5001:5001"
+
+  litellm:
+    profiles: ["bot", "voice", "full"]
+    ports:
+      - "127.0.0.1:4000:4000"
+
+  bot:
+    profiles: ["bot", "full"]
+    environment:
+      RERANK_PROVIDER: colbert
+      RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
+      COLBERT_TIMEOUT: "${COLBERT_TIMEOUT:-120}"
+
+  # ML services — profile-gated on dev (VPS: always-on via compose.yml base)
+  clickhouse:
+    profiles: ["ml", "full"]
+    ports:
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9009:9000"
+
+  minio:
+    profiles: ["ml", "full"]
+    ports:
+      - "127.0.0.1:9090:9000"
+      - "127.0.0.1:9091:9001"
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+
+  redis-langfuse:
+    profiles: ["ml", "full"]
+    ports:
+      - "127.0.0.1:6380:6379"
+
+  langfuse-worker:
+    profiles: ["ml", "full"]
+
+  langfuse:
+    profiles: ["ml", "full"]
+    ports:
+      - "127.0.0.1:3001:3000"
+
+  mlflow:
+    ports:
+      - "127.0.0.1:5000:5000"
+
+  loki:
+    ports:
+      - "127.0.0.1:3100:3100"
+
+  rag-api:
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  livekit-server:
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+
+  livekit-sip:
+    ports:
+      - "5060:5060/udp"
+      - "5061:5061/tcp"
+      - "10000-10100:10000-10100/udp"
