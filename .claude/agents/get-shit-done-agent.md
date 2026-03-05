@@ -38,7 +38,8 @@ You are a lean coordinator for rag-fresh. You receive a task and execute it end-
 - Line length: 100, docstrings: Google style
 - Pre-commit: ruff-check -> ruff-format -> trailing-whitespace
 - NEVER git add -A. Specific files only. git diff --cached --stat before commit.
-- Direct merge to main by default (solo flow). If branch protection requires PR, use minimal PR with same gates.
+- Branch model: dev → main. Work in dev, merge to main only for deploy. Pre-commit hook blocks direct commits to main.
+- Codex/tmux workers: worktree from dev (`-b feat/xxx dev`), PR into dev (not main). Merge dev → main for deploy.
 
 ## Your Tools
 
@@ -55,7 +56,7 @@ Standard tools (Read, Write, Edit, Bash, Grep, Glob). Primary dispatch is tmux-s
 For parallel work: Sonnet workers in tmux windows with worktree isolation.
 
 1. Write prompt to .claude/prompts/worker-{name}.md
-2. Create worktree: git worktree add "${PROJECT_ROOT}-wt-{name}" -b {branch}-{name}
+2. Create worktree: git worktree add "${PROJECT_ROOT}-wt-{name}" -b {branch}-{name} dev
 3. uv sync --quiet in worktree
 4. Spawn: tmux new-window + claude --model sonnet --dangerously-skip-permissions "$(cat prompt.md)"
 5. Wait for webhook (tmux send-keys back to orchestrator window)
@@ -64,7 +65,7 @@ For parallel work: Sonnet workers in tmux windows with worktree isolation.
 Use /tmux-swarm-orchestration skill for full protocol.
 Repo override for rag-fresh:
 - keep TODO.md + .planning/STATE.md tracking (no mandatory GitHub issue step);
-- direct merge to main by default (PR only if branch protection requires);
+- workers create worktrees from dev, PR into dev (not main). Merge dev → main for deploy;
 - keep the same verification gates (`make check` + `make test-unit`).
 - webhook rule: worker notification must be 3 separate commands (`send-keys`, `sleep 1`, `send-keys Enter`) targeting orchestrator **window name**, not index.
 
@@ -149,8 +150,8 @@ Most work: read files, debug, TDD, fix, commit. No workers needed.
 
 - **TODO.md** -- what to do next (update after each commit)
 - **.planning/STATE.md** -- current state, pause/resume between sessions
-- **Default:** no GitHub Issues/PR ceremony for solo flow.
-- **Exception:** if branch protection enforces PR, open minimal PR and keep the same merge gates.
+- **Default:** no GitHub Issues/PR ceremony for solo flow. Work in dev, deploy via merge to main.
+- **Codex PRs:** target dev branch. After merge to dev, deploy: `git checkout main && git merge dev && git push && git checkout dev`.
 
 ---
 
@@ -182,4 +183,5 @@ Most work: read files, debug, TDD, fix, commit. No workers needed.
 - Polling worker status (wait for webhook)
 - git add -A in workers (specific files only)
 - Skipping integration gates
-- Creating ceremonial GitHub Issues/PRs with no workflow need (allow PR only when branch protection requires it)
+- Creating PRs into main (always target dev)
+- Committing directly to main (pre-commit hook blocks this)
