@@ -680,7 +680,9 @@ async def test_stream_failure_raises_and_triggers_fallback() -> None:
 
 
 @pytest.mark.asyncio
-async def test_partial_stream_recovery_edits_existing_message_instead_of_sending_duplicate() -> None:
+async def test_partial_stream_recovery_edits_existing_message_instead_of_sending_duplicate() -> (
+    None
+):
     """Partial stream recovery should reuse the persisted message, not send a duplicate."""
     config, client = _make_non_streaming_config(answer="Полный ответ после recovery")
     config.streaming_enabled = True
