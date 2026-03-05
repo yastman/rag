@@ -44,5 +44,6 @@ coverage.json
 release-please-config.json
 renovate.json
 .mcp.json
+.mcp.example.json
 .dockerignore
 .editorconfig
