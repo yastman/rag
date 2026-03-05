@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.ingestion.apartments.runner import IncrementalApartmentIngester
+from telegram_bot.services.bge_m3_client import HybridResult
 
 
 def _write_csv(rows: list[dict], path: Path) -> None:
@@ -180,3 +181,37 @@ class TestIncrementalIngester:
         assert stats["removed"] == 0
         assert state_path.exists()
         assert ingester._load_state() == original_state
+
+
+class TestHybridEncoding:
+    """Regression guard: ingestion MUST use encode_hybrid, not 3 separate calls."""
+
+    def test_embed_uses_single_hybrid_call(self, tmp_path: Path) -> None:
+        """Runner calls encode_hybrid() once, never encode_dense/sparse/colbert."""
+        csv_path = tmp_path / "apt.csv"
+        _write_csv([SAMPLE_ROW], csv_path)
+        ingester = IncrementalApartmentIngester(
+            csv_path=str(csv_path),
+            qdrant_url="http://localhost:6333",
+            bge_url="http://localhost:8000",
+            state_path=str(tmp_path / ".state.json"),
+        )
+
+        with (
+            patch("telegram_bot.services.bge_m3_client.BGEM3SyncClient") as MockBGE,
+            patch("qdrant_client.QdrantClient"),
+            patch("src.ingestion.apartments.runner.build_ingestion_batch", return_value=[]),
+        ):
+            mock_bge = MockBGE.return_value
+            mock_bge.encode_hybrid.return_value = HybridResult(
+                dense_vecs=[[0.1] * 1024],
+                lexical_weights=[{"indices": [1], "values": [0.5]}],
+                colbert_vecs=[[[0.1] * 1024] * 5],
+            )
+
+            ingester.run_incremental(force_full=True)
+
+            mock_bge.encode_hybrid.assert_called_once()
+            mock_bge.encode_dense.assert_not_called()
+            mock_bge.encode_sparse.assert_not_called()
+            mock_bge.encode_colbert.assert_not_called()
