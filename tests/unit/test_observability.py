@@ -99,7 +99,10 @@ class TestLangfuseInitialization:
 
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
-        with patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls:
+        with (
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+            patch("telegram_bot.observability.Langfuse", return_value=fake_client) as mock_cls,
+        ):
             result = observability.initialize_langfuse(
                 public_key="pk-test",
                 secret_key="sk-test",
@@ -128,6 +131,7 @@ class TestLangfuseInitialization:
         observability._reset_langfuse_client_for_tests()
         fake_client = MagicMock()
         with (
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
             patch("telegram_bot.observability.Langfuse", return_value=fake_client),
             patch(
                 "telegram_bot.observability.sync_langfuse_model_definitions", return_value=2
@@ -294,6 +298,133 @@ class TestLangfuseFlushConfig:
 
         assert result is None
         mock_atexit.register.assert_not_called()
+
+
+class TestEndpointReachability:
+    """Tests for graceful fallback when Langfuse endpoint is unreachable (#824)."""
+
+    def test_is_endpoint_reachable_returns_false_for_refused_connection(self):
+        """_is_endpoint_reachable returns False when connection is refused."""
+        from telegram_bot.observability import _is_endpoint_reachable
+
+        # Port 1 is almost never open
+        result = _is_endpoint_reachable("http://localhost:1", timeout=0.1)
+        assert result is False
+
+    def test_is_endpoint_reachable_returns_true_when_port_is_open(self):
+        """_is_endpoint_reachable returns True when host:port accepts connections."""
+        import socket
+
+        from telegram_bot.observability import _is_endpoint_reachable
+
+        with socket.socket() as srv:
+            srv.bind(("127.0.0.1", 0))
+            srv.listen(1)
+            port = srv.getsockname()[1]
+            result = _is_endpoint_reachable(f"http://127.0.0.1:{port}", timeout=1.0)
+
+        assert result is True
+
+    def test_initialize_langfuse_skips_when_endpoint_unreachable(self):
+        """When Langfuse endpoint is unreachable, initialize_langfuse returns None."""
+        from unittest.mock import patch
+
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        with (
+            patch(
+                "telegram_bot.observability._is_endpoint_reachable", return_value=False
+            ) as mock_check,
+            patch("telegram_bot.observability.Langfuse") as mock_langfuse,
+        ):
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+                force=True,
+            )
+
+        assert result is None
+        mock_langfuse.assert_not_called()
+        mock_check.assert_called_once()
+
+    def test_initialize_langfuse_proceeds_when_endpoint_reachable(self):
+        """When Langfuse endpoint is reachable, initialize_langfuse creates the client."""
+        from unittest.mock import MagicMock, patch
+
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with (
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+        ):
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+                force=True,
+            )
+
+        assert result is fake_client
+
+    def test_initialize_langfuse_logs_warning_once_when_unreachable(self, caplog):
+        """When endpoint unreachable, WARNING is logged exactly once (no spam)."""
+        import logging
+        from unittest.mock import patch
+
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        with (
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=False),
+            patch("telegram_bot.observability.Langfuse"),
+            caplog.at_level(logging.WARNING, logger="telegram_bot.observability"),
+        ):
+            # First call — should log warning
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+                force=True,
+            )
+            # Second call without force — should NOT log again (cached None)
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+            )
+
+        unreachable_warnings = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "unreachable" in r.message.lower()
+        ]
+        assert len(unreachable_warnings) == 1
+
+    def test_initialize_langfuse_no_endpoint_check_without_host(self):
+        """Without explicit host, endpoint check is skipped (cloud default assumed reachable)."""
+        from unittest.mock import MagicMock, patch
+
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with (
+            patch("telegram_bot.observability._is_endpoint_reachable") as mock_check,
+            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+        ):
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                force=True,
+            )
+
+        # No host → no reachability check, client created normally
+        mock_check.assert_not_called()
+        assert result is fake_client
 
 
 class TestLangfuseModelSync:
