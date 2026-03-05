@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "langfuse": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--python",
+        "3.11",
+        "langfuse-mcp"
+      ],
+      "env": {
+        "LANGFUSE_PUBLIC_KEY": "<REPLACE_WITH_LANGFUSE_PUBLIC_KEY>",
+        "LANGFUSE_SECRET_KEY": "<REPLACE_WITH_LANGFUSE_SECRET_KEY>",
+        "LANGFUSE_HOST": "http://localhost:3001"
+      }
+    },
+    "grepai": {
+      "command": "grepai",
+      "args": [
+        "mcp-serve"
+      ]
+    }
+  }
+}
