@@ -543,7 +543,8 @@ async def test_get_results_data_calls_apartments_service():
 
     result = await get_results_data(manager)
     mock_svc.scroll_with_filters.assert_awaited_once()
-    assert "Sunrise" in result["results_text"]
+    assert len(result["apartments"]) == 1
+    assert result["apartments"][0]["complex_name"] == "Sunrise"
 
 
 @pytest.mark.asyncio
@@ -556,7 +557,8 @@ async def test_get_results_data_fallback_without_service():
     )
 
     result = await get_results_data(manager)
-    assert "недоступен" in result["results_text"].lower()
+    assert result["no_results"] is True
+    assert "недоступен" in result["no_results_text"].lower()
 
 
 # --- Preference any clears ---
