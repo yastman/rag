@@ -7,11 +7,20 @@ from pathlib import Path
 import yaml
 
 
-_COMPOSE_PATH = Path("docker-compose.dev.yml")
+_BASE_PATH = Path("compose.yml")
+_DEV_PATH = Path("compose.dev.yml")
 
 
 def _load_compose() -> dict:
-    return yaml.safe_load(_COMPOSE_PATH.read_text())
+    """Load merged base + dev compose (profiles/ports split across files)."""
+    base = yaml.safe_load(_BASE_PATH.read_text())
+    dev = yaml.safe_load(_DEV_PATH.read_text())
+    for svc_name, svc_override in dev.get("services", {}).items():
+        if svc_name in base["services"]:
+            base["services"][svc_name].update(svc_override)
+        else:
+            base["services"][svc_name] = svc_override
+    return base
 
 
 def _extract_host_port(port_mapping: str) -> str | None:
