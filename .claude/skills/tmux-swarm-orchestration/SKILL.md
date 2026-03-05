@@ -3,12 +3,13 @@ name: tmux-swarm-orchestration
 description: Use when given GitHub issues to solve, problems to fix, or "review all open issues". Also for running heavy commands on VPS through user's terminal. Triggers on "реши issue", "fix #123", "изучи все открытые", "parallel workers", "swarm", "spawn-claude", "tmux воркеры", "VPS команда"
 ---
 
-# tmux Swarm Оркестрация v8
+# tmux Swarm Оркестрация v9
 
 <HARD-GATE>
 ТЫ = OPUS = ДИСПЕТЧЕР. Юзер дал issues — дальше ВСЁ автоматом до PR URLs.
-НЕ читаешь код, НЕ исследуешь файлы, НЕ пишешь код.
-ЛЮБАЯ задача → worker. Opus inline = $15, Sonnet worker = $3.
+НЕ исследуешь файлы напрямую, НЕ пишешь код. ЛЮБАЯ задача → worker.
+ПОСЛЕ worker: ЛИЧНО читаешь diff (Фаза 5.0) — это твоя ответственность, не worker'а.
+Opus inline = $15, Sonnet worker = $3.
 </HARD-GATE>
 
 ## Конвейер
@@ -27,17 +28,19 @@ description: Use when given GitHub issues to solve, problems to fix, or "review 
 digraph flow {
   rankdir=TB; node [shape=box, fontsize=10];
   init [label="Фаза 0: ВВОД\ngh issue view + mkdir -p .signals"];
-  codebase [label="Фаза 2.3: CODEBASE КОНТЕКСТ\nGrepAI search + trace"];
+  codebase [label="Фаза 2.3: CODEBASE КОНТЕКСТ\nGrepAI + LSP + context-mode"];
   classify [label="Фаза 2: КЛАССИФИКАЦИЯ\nRead classification.md"];
   parallel [label="Фаза 2.5: ПАРАЛЛЕЛИЗАЦИЯ\nfile overlap + резервации"];
   sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nSonnet субагент (если нужно)"];
   spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md"];
   wait [label="Фаза 4: ОЖИДАНИЕ\n0 токенов, мониторинг .signals/"];
-  verify [label="Фаза 5: ВЕРИФИКАЦИЯ\nартефакты + маркеры"];
+  review [label="Фаза 5.0: CODE REVIEW\norch лично читает diff\nчерез context-mode"];
+  verify [label="Фаза 5.1: ВЕРИФИКАЦИЯ\nартефакты + маркеры"];
   report [label="Фаза 6: ОТЧЁТ\nPR URLs + метрики → юзеру\nочистка"];
 
-  init -> codebase -> classify -> parallel -> sdk -> spawn -> wait -> verify -> report;
-  verify -> spawn [label="провал\nэскалация 1x", style=dashed];
+  init -> codebase -> classify -> parallel -> sdk -> spawn -> wait -> review -> verify -> report;
+  review -> spawn [label="diff неверный\nэскалация 1x", style=dashed];
+  verify -> spawn [label="артефакты провал\nэскалация 1x", style=dashed];
 }
 ```
 
@@ -49,18 +52,33 @@ digraph flow {
 
 Переиспользование: одно исследование → N воркеров.
 
-**Фаза 2.3: CODEBASE КОНТЕКСТ** — orch использует GrepAI для понимания кода:
+**Фаза 2.3: CODEBASE КОНТЕКСТ** — orch использует 3 системы:
 
-    # Semantic search — найти релевантный код по описанию issue:
+    # 1. GrepAI — semantic search + call graph:
     grepai_search(query="{issue_description}", limit=5, format="toon", compact=true)
-
-    # Call graph — понять зависимости перед классификацией:
     grepai_trace_callers(symbol="{affected_function}", format="toon", compact=true)
+    grepai_trace_graph(symbol="{key_symbol}", depth=1, format="toon")  # полный граф
+    grepai_index_status(format="toon")  # проверить актуальность
 
-    # Статус индекса — убедиться что актуален:
-    grepai_index_status(format="toon")
+    # 2. LSP — точные типы, сигнатуры, references:
+    LSP(operation="documentSymbol", filePath="{file}")  # структура файла
+    LSP(operation="hover", filePath="{file}", line=N, character=M)  # тип + docstring
+    LSP(operation="findReferences", filePath="{file}", line=N, character=M)  # все ссылки
+    LSP(operation="incomingCalls", filePath="{file}", line=N, character=M)  # кто вызывает
 
-GrepAI = codebase search (semantic + call graph). Context7/Exa = SDK/library docs. Не путать.
+    # 3. context-mode — сбор контекста без засорения окна:
+    batch_execute(commands=[
+      {label: "project_scope", command: "head -20 README.md && ls src/"},
+      {label: "recent_commits", command: "git log --oneline -5"},
+      {label: "open_prs", command: "gh pr list --limit 5 --json number,title"}
+    ], queries=["project structure", "recent changes"])
+
+| Система | Когда | Что даёт |
+|---------|-------|----------|
+| GrepAI | Понять scope issue | Семантический поиск + call graph (edges, callers) |
+| LSP | Точные типы/сигнатуры | documentSymbol, hover, findReferences, incomingCalls |
+| context-mode | Любой output >20 строк | execute/batch_execute — output в sandbox, summary в контекст |
+| Context7/Exa | SDK/библиотека | Документация, примеры (через субагент в Фазе 2.7) |
 
 **Двухволновой запуск (COMPLEX+) — Opus решает:**
 
@@ -81,30 +99,52 @@ Opus C анализирует задачи и выдаёт в сигнале `"e
 
 Orch НЕ переопределяет решение Opus. Opus видел код, зависимости и файлы — он решает.
 
-**Фаза 5: ВЕРИФИКАЦИЯ** — двухуровневая:
+**Фаза 5: ВЕРИФИКАЦИЯ** — трёхуровневая:
 
-### Уровень 1: Артефактная проверка (основной)
+### Уровень 0: Code Review (orch лично — ОБЯЗАТЕЛЬНО)
 
-    # Для кодовых контрактов (A/B/D):
-    WT="{PROJECT_ROOT}-wt-{name}"
+Orch **лично** читает diff через context-mode. Worker может пройти тесты, но решить не ту проблему.
 
-    # 1. Тесты существуют и новые (созданы после worktree)
-    test_count=$(find "$WT" -name "test_*" -newer "$WT/.git/HEAD" 2>/dev/null | wc -l)
+    # Для кодовых контрактов (A/B/D) — diff в sandbox, summary в контекст:
+    mcp execute(language="shell", code="""
+      cd '{WT_PATH}' && git diff dev...HEAD 2>&1
+    """, intent="code review: verify changes match issue #{N} requirements")
 
-    # 2. Lint + types чистые
-    cd "$WT" && make check 2>&1 | tail -3
+    # Для контракта C — план в sandbox:
+    mcp execute_file(path="docs/plans/{DATE}-issue-{N}-plan.md", language="shell",
+      code="cat \"$FILE_CONTENT_PATH\"",
+      intent="plan review: verify completeness and correctness")
 
-    # 3. PR создан
-    gh pr list --head "{branch}" --json url -q '.[0].url'
+| Проверка | Вопрос |
+|----------|--------|
+| Соответствие issue | Изменения решают именно то, что описано? |
+| Scope creep | Нет лишних изменений? |
+| Корректность | Логика правильная? Нет очевидных багов? |
 
-    # Для контракта C (исследование):
-    # 1. План существует и содержательный
-    plan_words=$(wc -w < "docs/plans/{DATE}-issue-{N}-plan.md" 2>/dev/null)
-    [ "$plan_words" -gt 200 ]  # минимум 200 слов
+    diff OK → Уровень 1
+    diff WRONG → FAIL → эскалация
+    diff PARTIAL → PASS + WARNING
+
+**HARD-GATE:** Orch НЕ МОЖЕТ пропустить Уровень 0. "Тесты прошли = всё ок" — ЗАПРЕЩЕНО.
+
+### Уровень 1: Артефактная проверка
+
+Через **context-mode execute** (output не засоряет контекст):
+
+    mcp execute(language="shell", code="""
+      WT='{WT_PATH}'
+      echo "=== New tests ===" && find "$WT" -name "test_*" -newer "$WT/.git/HEAD" 2>/dev/null | wc -l
+      echo "=== Lint + types ===" && cd "$WT" && make check 2>&1 | tail -5
+      echo "=== Unit tests ===" && cd "$WT" && PYTEST_ADDOPTS='-n auto' make test-unit 2>&1 | tail -10
+      echo "=== PR ===" && gh pr list --head "{branch}" --json url,title
+    """, intent="verification: tests, lint, PR status")
+
+    # Для контракта C:
+    mcp execute(language="shell", code="wc -w < 'docs/plans/{DATE}-issue-{N}-plan.md'")
 
 | Контракт | Артефакты |
 |----------|-----------|
-| A/B/D | Новые тесты + `make check` чисто + PR создан |
+| A/B/D | Новые тесты + `make check` чисто + `make test-unit` pass + PR создан |
 | C | План >200 слов + содержит секции: файлы, подход, задачи |
 
 ### Уровень 2: Маркеры скиллов (дополнительный)
@@ -122,10 +162,10 @@ Orch НЕ переопределяет решение Opus. Opus видел ко
 
 ### Решение при провале
 
-    Артефакты OK + маркеры OK → PASS
-    Артефакты OK + маркеры MISSING → PASS + WARNING в отчёте
-    Артефакты FAIL + маркеры OK → FAIL (маркеры ≠ качество)
-    Артефакты FAIL + маркеры MISSING → FAIL → эскалация
+    Code Review OK + Артефакты OK + маркеры OK → PASS
+    Code Review OK + Артефакты OK + маркеры MISSING → PASS + WARNING в отчёте
+    Code Review OK + Артефакты FAIL → FAIL → эскалация (код верный, но CI не проходит)
+    Code Review FAIL → FAIL → эскалация (артефакты не проверяем)
 
 ## Эскалация
 
@@ -136,7 +176,7 @@ Orch НЕ переопределяет решение Opus. Opus видел ко
 
 ## Контекст-бюджет
 
-≤5K токенов на issue. Orch читает: `gh issue view`, `git diff --stat`, `.signals/*.json` (<1K).
+≤5K токенов на issue (до review). Code review через context-mode execute — diff остаётся в sandbox, в контекст попадает только summary от intent. Orch читает: `gh issue view`, `.signals/*.json` (<1K), diff через context-mode (~0 контекста).
 
 ## Фаза 6: Финальный отчёт
 
