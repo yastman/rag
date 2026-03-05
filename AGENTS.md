@@ -12,12 +12,18 @@
   3. Deeper nested overrides
 - Directory-specific guidance belongs only in scoped overrides.
 
+## Git Workflow
+- **Branch model:** `dev` → `main`. Main = prod (auto-deploy to VPS on push).
+- **Default branch for work:** `dev`. Never commit directly to main (pre-commit hook blocks it).
+- **Worktrees:** base off `dev`, not main: `git worktree add <path> -b feat/xxx dev`
+- **PRs:** target `dev` branch (not main). After merge to dev, deploy: merge dev → main → push.
+- Before PR review/diff analysis, refresh remote refs (`git fetch --prune`) and compare against `origin/dev`.
+
 ## Workflow
 - Before non-trivial edits, read:
   - `README.md`
   - nearest `AGENTS*.md`
   - relevant `docs/agent-rules/*.md`
-- Before PR review/diff analysis, refresh remote refs (`git fetch --prune`) and compare against `origin/main` (not stale local `main`).
 - For behavior changes, add or update tests in the nearest `tests/` scope.
 - Run pytest in parallel mode (`-n auto --dist=worksteal`) unless explicitly told otherwise.
 
