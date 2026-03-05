@@ -12,8 +12,10 @@ import atexit
 import json
 import logging
 import os
+import socket
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from langfuse import (
     Langfuse,
@@ -42,6 +44,25 @@ _MODEL_SYNC_ENABLED_ENV = "LANGFUSE_MODEL_SYNC_ENABLED"
 _MODEL_LIST_PAGE_SIZE = 100
 
 _pii_redactor = PIIRedactor()
+
+_langfuse_endpoint_warned = False
+
+
+# ---------------------------------------------------------------------------
+# Endpoint reachability check
+# ---------------------------------------------------------------------------
+
+
+def _is_endpoint_reachable(url: str, *, timeout: float = 2.0) -> bool:
+    """Return True if host:port from *url* accepts a TCP connection within *timeout* seconds."""
+    parsed = urlparse(url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -312,13 +333,19 @@ def initialize_langfuse(
 ) -> Langfuse | None:
     """Initialize a Langfuse client after runtime config is loaded.
 
-    Returns None when credentials are missing or client creation fails.
+    Returns None when credentials are missing, endpoint unreachable, or client creation fails.
+    When the endpoint is unreachable, logs a WARNING once and skips OTEL exporter registration.
     """
     global _langfuse_client
     global _langfuse_init_attempted
+    global _langfuse_endpoint_warned
 
     if _langfuse_client is not None and not force:
         return _langfuse_client
+
+    # Return cached None without re-logging when already attempted
+    if _langfuse_init_attempted and _langfuse_client is None and not force:
+        return None
 
     resolved_public_key = _resolve_config_value(public_key, "LANGFUSE_PUBLIC_KEY")
     resolved_secret_key = _resolve_config_value(secret_key, "LANGFUSE_SECRET_KEY")
@@ -329,6 +356,20 @@ def initialize_langfuse(
         if force or not _langfuse_init_attempted:
             logger.info("Langfuse disabled (missing LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY)")
         _langfuse_init_attempted = True
+        return None
+
+    # Probe endpoint reachability only when an explicit host is configured.
+    # Cloud default (no host) is assumed reachable to avoid blocking startup.
+    if resolved_host and not _is_endpoint_reachable(resolved_host):
+        _langfuse_client = None
+        _langfuse_init_attempted = True
+        if not _langfuse_endpoint_warned:
+            _langfuse_endpoint_warned = True
+            logger.warning(
+                "Langfuse endpoint unreachable (%s) — tracing disabled. "
+                "Start Langfuse locally or unset LANGFUSE_HOST to suppress this warning.",
+                resolved_host,
+            )
         return None
 
     kwargs: dict[str, Any] = {
@@ -413,5 +454,7 @@ def _reset_langfuse_client_for_tests() -> None:
     """Reset module-level client cache (test-only helper)."""
     global _langfuse_client
     global _langfuse_init_attempted
+    global _langfuse_endpoint_warned
     _langfuse_client = None
     _langfuse_init_attempted = False
+    _langfuse_endpoint_warned = False
