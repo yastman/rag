@@ -69,13 +69,16 @@ class TestMainFunction:
         mock_config_instance.llm_api_key = "test-api-key"
         mock_bot_config.return_value = mock_config_instance
 
-        with patch.dict(
-            sys.modules,
-            {
-                "telegram_bot.bot": mock_bot_mod,
-                "telegram_bot.config": mock_config_mod,
-                "telegram_bot.logging_config": mock_logging_config_mod,
-            },
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "telegram_bot.bot": mock_bot_mod,
+                    "telegram_bot.config": mock_config_mod,
+                    "telegram_bot.logging_config": mock_logging_config_mod,
+                },
+            ),
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -106,13 +109,16 @@ class TestMainFunction:
         mock_config_instance.llm_api_key = "test-api-key"
         mock_bot_config.return_value = mock_config_instance
 
-        with patch.dict(
-            sys.modules,
-            {
-                "telegram_bot.bot": mock_bot_mod,
-                "telegram_bot.config": mock_config_mod,
-                "telegram_bot.logging_config": mock_logging_config_mod,
-            },
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "telegram_bot.bot": mock_bot_mod,
+                    "telegram_bot.config": mock_config_mod,
+                    "telegram_bot.logging_config": mock_logging_config_mod,
+                },
+            ),
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -143,13 +149,16 @@ class TestMainFunction:
         mock_config_instance.llm_api_key = "test-api-key"
         mock_bot_config.return_value = mock_config_instance
 
-        with patch.dict(
-            sys.modules,
-            {
-                "telegram_bot.bot": mock_bot_mod,
-                "telegram_bot.config": mock_config_mod,
-                "telegram_bot.logging_config": mock_logging_config_mod,
-            },
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "telegram_bot.bot": mock_bot_mod,
+                    "telegram_bot.config": mock_config_mod,
+                    "telegram_bot.logging_config": mock_logging_config_mod,
+                },
+            ),
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
@@ -182,13 +191,16 @@ class TestMainFunction:
         mock_config_instance.llm_api_key = "test-api-key"
         mock_bot_config.return_value = mock_config_instance
 
-        with patch.dict(
-            sys.modules,
-            {
-                "telegram_bot.bot": mock_bot_mod,
-                "telegram_bot.config": mock_config_mod,
-                "telegram_bot.logging_config": mock_logging_config_mod,
-            },
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "telegram_bot.bot": mock_bot_mod,
+                    "telegram_bot.config": mock_config_mod,
+                    "telegram_bot.logging_config": mock_logging_config_mod,
+                },
+            ),
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
         ):
             from telegram_bot import main as main_module
 
