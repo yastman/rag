@@ -147,6 +147,26 @@ class TestLangfuseInitialization:
         assert result is fake_client
         sync.assert_called_once_with(fake_client)
 
+    def test_initialize_langfuse_ignores_non_string_host_values(self):
+        """Non-string host values should be treated as absent and not crash."""
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+        fake_client = MagicMock()
+        with (
+            patch("telegram_bot.observability._is_endpoint_reachable") as mock_check,
+            patch("telegram_bot.observability.Langfuse", return_value=fake_client),
+        ):
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host=MagicMock(),
+                force=True,
+            )
+
+        assert result is fake_client
+        mock_check.assert_not_called()
+
 
 class TestLangfuseTracingEnvironment:
     """Tests for LANGFUSE_TRACING_ENVIRONMENT support."""
