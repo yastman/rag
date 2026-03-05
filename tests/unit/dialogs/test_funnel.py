@@ -942,6 +942,7 @@ async def test_pref_section_options_has_sections_plus_any():
     items = result["items"]
     keys = [key for _, key in items]
     assert "D-1" in keys
+    assert "V- G" in keys
     assert "any" in keys
     assert len(items) == 27  # 26 unique sections from CSV + "any"
 

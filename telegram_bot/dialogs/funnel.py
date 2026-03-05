@@ -74,7 +74,7 @@ _SECTION_OPTIONS: list[tuple[str, str]] = [
     ("F-3", "F-3"),
     ("F-4", "F-4"),
     ("V-D", "V-D"),
-    ("V-G", "V-G"),
+    ("V-G", "V- G"),
     ("Любая секция", "any"),
 ]
 
