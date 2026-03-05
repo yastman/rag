@@ -53,6 +53,20 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 - **Pre-commit:** ruff-check → ruff-format → trailing-whitespace → check-yaml/toml/json
 - **Commits:** `feat(scope): msg` | `fix(scope): msg` | `docs(scope): msg`
 
+## Code Search Tools
+
+3 системы дополняют друг друга:
+
+| Инструмент | Когда использовать | Пример |
+|------------|-------------------|--------|
+| **GrepAI** (MCP) | Semantic search, call graph | "найди код кеширования", "кто вызывает X" |
+| **LSP** (Pyright) | Типы, hover, go-to-definition, references | "что возвращает функция", refactoring |
+| **Grep/Glob** | Точный текст, regex | `TODO`, конкретный паттерн, imports |
+
+GrepAI tools: `grepai_search`, `grepai_trace_callers`, `grepai_trace_callees`, `grepai_trace_graph`, `grepai_index_status`. Формат: `format: "toon"`, `compact: true` для экономии токенов.
+
+GrepAI daemon: `grepai watch --background` (auto-start не настроен, запускать вручную).
+
 ## Context-Mode (MCP plugin)
 
 Экономия контекста ~87%. Сырой output остаётся в sandbox, в контекст — только резюме.
