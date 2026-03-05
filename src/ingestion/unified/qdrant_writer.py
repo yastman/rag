@@ -444,9 +444,12 @@ class QdrantHybridWriter:
             # Step 2: Extract texts
             texts = [chunk.text for chunk in chunks]
 
-            # Step 3: Generate embeddings (sync) - local BGE-M3 or Voyage API
+            # Step 3: Generate embeddings — single hybrid call when local BGE-M3
             if self.use_local_embeddings:
-                all_dense_embeddings = self._embed_documents_local(texts)
+                hybrid_result = self._bge_client.encode_hybrid(texts)
+                all_dense_embeddings = hybrid_result.dense_vecs
+                sparse_embeddings = hybrid_result.lexical_weights
+                colbert_embeddings = hybrid_result.colbert_vecs or []
             else:
                 if self.voyage is None:
                     raise RuntimeError("VoyageService not initialized")
@@ -459,9 +462,8 @@ class QdrantHybridWriter:
                         input_type="document",
                     )
                     all_dense_embeddings.extend(response.embeddings)
-
-            sparse_embeddings = self._embed_sparse(texts)
-            colbert_embeddings = self._embed_colbert(texts) if self.use_local_embeddings else []
+                sparse_embeddings = self._embed_sparse(texts)
+                colbert_embeddings = []
 
             # Step 4: Build points
             points = []
