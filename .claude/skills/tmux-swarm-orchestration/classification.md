@@ -73,21 +73,29 @@ Orch собирает `{project_scope}` автоматически (≤500 то�
 
 **Перед запуском параллельных воркеров** — проверить file overlap.
 
-***REMOVED******REMOVED******REMOVED*** Шаг 1: Собрать затронутые файлы
+***REMOVED******REMOVED******REMOVED*** Шаг 1: Собрать затронутые файлы (3 системы)
 
-    ***REMOVED*** Из тела issue (grep путей):
-    files_issue_N=$(gh issue view $N --json body -q .body | grep -oP 'src/\S+\.py')
-
-    ***REMOVED*** Дополнить через GrepAI semantic search (находит файлы, не упомянутые в issue):
+    ***REMOVED*** 1. GrepAI — semantic search + call graph:
     grepai_search(query="{issue_description}", limit=10, compact=true, format="toon")
-
-    ***REMOVED*** Call graph — найти зависимые файлы через trace:
     grepai_trace_callers(symbol="{key_function}", compact=true, format="toon")
+    grepai_trace_graph(symbol="{key_function}", depth=1, format="toon")
+
+    ***REMOVED*** 2. LSP — точные references для ключевых символов:
+    LSP(operation="findReferences", filePath="{file}", line=N, character=M)
+    LSP(operation="incomingCalls", filePath="{file}", line=N, character=M)
+
+    ***REMOVED*** 3. context-mode — собрать всё в один вызов:
+    batch_execute(commands=[
+      {label: "issue_files_A", command: "gh issue view $A --json body -q .body | grep -oP 'src/\\S+\\.py'"},
+      {label: "issue_files_B", command: "gh issue view $B --json body -q .body | grep -oP 'src/\\S+\\.py'"}
+    ], queries=["overlapping files between issues"])
 
 ***REMOVED******REMOVED******REMOVED*** Шаг 2: Найти пересечения
 
-    ***REMOVED*** Для каждой пары issues:
-    overlap=$(comm -12 <(echo "$files_A" | sort -u) <(echo "$files_B" | sort -u))
+    ***REMOVED*** context-mode execute для анализа (output в sandbox):
+    mcp execute(language="shell", code="""
+      comm -12 <(echo "$files_A" | sort -u) <(echo "$files_B" | sort -u)
+    """, intent="file overlap between issue A and B")
 
 ***REMOVED******REMOVED******REMOVED*** Шаг 3: Решение
 

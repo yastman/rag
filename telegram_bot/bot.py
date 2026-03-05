@@ -1166,6 +1166,8 @@ class PropertyBot:
             area_m2=p.get("area_m2", 0),
             view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
             price_eur=p.get("price_eur", 0),
+            section=p.get("section", ""),
+            apartment_number=p.get("apartment_number", ""),
         )
         favorites_service = getattr(self, "_favorites_service", None)
         is_fav = False
