@@ -107,16 +107,17 @@ repos:
   ***REMOVED***       pass_filenames: false
   ***REMOVED***       stages: [pre-push]
 
-  ***REMOVED*** Prevent pushing to main/master branches accidentally
+  ***REMOVED*** Block direct commits to main — only merge from dev allowed.
+  ***REMOVED*** git merge doesn't trigger pre-commit stage, so merges pass through.
   - repo: local
     hooks:
-      - id: branch-protection
-        name: Protect main/master branch
-        entry: bash -c 'BRANCH=$(git rev-parse --abbrev-ref HEAD); if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then echo "⚠️  Direct push to $BRANCH is not recommended. Use a feature branch."; exit 0; fi'
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
+      - id: no-commit-to-main
+        name: Block direct commits to main
+        entry: ./scripts/no-commit-to-main.sh
+        language: script
         always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
 
 ***REMOVED*** CI configuration
 ci:
