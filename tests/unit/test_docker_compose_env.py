@@ -41,12 +41,12 @@ REQUIRED_VARS = [
 class TestDevComposeEnv:
     @pytest.mark.parametrize("var", REQUIRED_VARS)
     def test_dev_compose_has_var(self, var: str):
-        env = _load_bot_env("docker-compose.dev.yml")
-        assert var in env, f"{var} missing from docker-compose.dev.yml bot environment"
+        env = _load_bot_env("compose.yml")
+        assert var in env, f"{var} missing from compose.yml bot environment"
 
 
 class TestVpsComposeEnv:
     @pytest.mark.parametrize("var", REQUIRED_VARS)
     def test_vps_compose_has_var(self, var: str):
-        env = _load_bot_env("docker-compose.vps.yml")
-        assert var in env, f"{var} missing from docker-compose.vps.yml bot environment"
+        env = _load_bot_env("compose.yml")
+        assert var in env, f"{var} missing from compose.yml bot environment"

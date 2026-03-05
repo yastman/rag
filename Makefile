@@ -149,10 +149,10 @@ test-cov: ## Run tests with coverage
 	@echo "$(GREEN)✓ Tests with coverage complete$(NC)"
 	@echo "$(YELLOW)Open htmlcov/index.html to view coverage report$(NC)"
 
-test-unit: ## Run unit tests locally in parallel (xdist worksteal)
-	@echo "$(BLUE)Running unit tests...$(NC)"
-	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api"
-	@echo "$(GREEN)✓ Unit tests complete$(NC)"
+test-unit: ## Run core unit tests locally in parallel (fast default gate)
+	@echo "$(BLUE)Running core unit tests...$(NC)"
+	PYTHONDONTWRITEBYTECODE=1 uv run pytest tests/unit/ -n auto --dist=worksteal -q --timeout=30 -m "not legacy_api and not requires_extras and not slow"
+	@echo "$(GREEN)✓ Core unit tests complete$(NC)"
 
 test-unit-loadscope: ## Run unit tests with loadscope (faster fixture reuse locally)
 	@echo "$(BLUE)Running unit tests (loadscope)...$(NC)"
@@ -362,7 +362,7 @@ clean: ## Clean up cache files and build artifacts
 # =============================================================================
 
 # Common compose command with --compatibility to enforce deploy.resources.limits
-COMPOSE_CMD := docker compose --compatibility -f docker-compose.dev.yml
+COMPOSE_CMD := docker compose --compatibility
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
@@ -464,7 +464,7 @@ qa: all-checks test ## Full quality assurance
 	@echo "$(GREEN)✓✓✓ Full QA complete! ✓✓✓$(NC)"
 
 # =============================================================================
-# Local Development (single docker-compose.dev.yml)
+# Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 # =============================================================================
 
 .PHONY: local-up local-down local-logs local-ps local-build run-bot bot
@@ -512,16 +512,16 @@ endif
 	git tag v$(VERSION)
 	git push origin v$(VERSION)
 
-deploy-bot:  ## Deploy bot to VPS (git push + SSH rebuild)
+deploy-bot:  ## Deploy all services to VPS (git push + SSH rebuild)
 	@echo "$(CYAN)Pushing to origin...$(NC)"
 	git push origin main
-	@echo "$(CYAN)Deploying bot on VPS...$(NC)"
+	@echo "$(CYAN)Deploying on VPS...$(NC)"
 	ssh vps "cd /opt/rag-fresh && git pull origin main && \
-		docker compose -f docker-compose.vps.yml build bot && \
-		docker compose --compatibility -f docker-compose.vps.yml up -d --force-recreate bot"
-	@echo "$(GREEN)Bot deployed. Waiting for startup...$(NC)"
-	@sleep 15
-	ssh vps "docker ps --format '{{.Names}} {{.Status}}' | grep vps-bot"
+		docker compose build && \
+		docker compose --compatibility up -d"
+	@echo "$(GREEN)Deployed. Waiting for startup...$(NC)"
+	@sleep 20
+	ssh vps "docker ps --format '{{.Names}} {{.Status}}' | grep -E 'vps-.*(Up|healthy)'"
 	@echo "$(GREEN)✓ Deploy complete$(NC)"
 
 # =============================================================================
