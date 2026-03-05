@@ -18,6 +18,8 @@ default_install_hook_types:
 default_stages:
   - pre-commit
 
+fail_fast: true  # Stop on first failure (performance)
+
 repos:
   # Ruff - Modern Python linter and formatter (replaces flake8, black, isort)
   # Best Practice 2025: Run linter BEFORE formatter (lint → format order)
@@ -60,6 +62,8 @@ repos:
         args: ['--maxkb=1000']
       - id: check-merge-conflict
         name: Check for merge conflicts
+      - id: detect-private-key
+        name: Detect private keys
       - id: debug-statements
         name: Check for debugger imports
       - id: mixed-line-ending
