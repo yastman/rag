@@ -81,18 +81,19 @@ claude --worktree                 # → random name (e.g. bright-running-fox)
 ```
 
 - Worktrees: `<repo>/.claude/worktrees/<name>/` (in .gitignore)
-- Branch: `worktree-<name>`, based on default remote branch
+- Branch: `worktree-<name>`, based on HEAD (note: agents should base off `dev`, not `main`)
 - Cleanup: auto-remove if no changes; prompt if changes exist
 - Subagents: `isolation: worktree` in agent frontmatter
 
 ### Method 2: Manual `git worktree` (custom paths/branches)
 
 ```bash
-# Create worktree for agent with specific branch
-git worktree add /home/user/projects/rag-fresh-wt-{name} {branch}
+# Create worktree based on dev (not main!)
+git worktree add /home/user/projects/rag-fresh-wt-{name} -b feat/{name} dev
 
 # Agent works in its own directory — no branch conflicts
-# Clean up after merge
+# After done: merge feat branch into dev, then clean up
+git checkout dev && git merge feat/{name}
 git worktree remove /home/user/projects/rag-fresh-wt-{name}
 ```
 
@@ -100,11 +101,11 @@ git worktree remove /home/user/projects/rag-fresh-wt-{name}
 
 | Scenario | Approach |
 |----------|----------|
-| 1 session, 1 task | Normal checkout in main repo |
+| 1 session, 1 task | Normal work in `dev` branch |
 | 2+ user sessions | `claude --worktree <name>` per terminal |
 | 2+ agents, different PRs | Each agent: `isolation: worktree` or manual worktree |
-| Lead + workers | Lead in main repo, workers in worktrees |
-| Specific existing branch | Manual: `git worktree add <path> <branch>` |
+| Lead + workers | Lead in `dev`, workers in worktrees |
+| Specific existing branch | Manual: `git worktree add <path> -b feat/xxx dev` |
 
 **In agent team prompts:** Include working directory path explicitly:
 ```
