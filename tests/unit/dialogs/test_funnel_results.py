@@ -225,6 +225,30 @@ async def test_get_results_data_uses_i18n_strings():
     assert result["btn_back"] == "Back"
 
 
+def test_section_filter():
+    filters = build_funnel_filters(rooms="any", budget="any", section="D-1")
+    assert filters["section"] == "D-1"
+
+
+def test_section_any_not_included():
+    filters = build_funnel_filters(rooms="any", budget="any", section="any")
+    assert "section" not in filters
+
+
+def test_section_none_not_included():
+    filters = build_funnel_filters(rooms="any", budget="any", section=None)
+    assert "section" not in filters
+
+
+def test_combined_with_section():
+    filters = build_funnel_filters(
+        rooms="2bed", budget="high", complex_name="Premier Fort Beach", section="C-2"
+    )
+    assert filters["rooms"] == 3
+    assert filters["section"] == "C-2"
+    assert filters["complex_name"] == "Premier Fort Beach"
+
+
 @pytest.mark.asyncio
 async def test_get_results_data_uses_i18n_range_and_remaining_when_results_exist():
     from telegram_bot.dialogs.funnel import get_results_data
