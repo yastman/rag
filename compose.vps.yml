@@ -2,6 +2,11 @@
 # Usage: COMPOSE_FILE=compose.yml:compose.vps.yml docker compose up -d
 
 services:
+  bge-m3:
+    read_only: true
+    tmpfs:
+      - /tmp
+
   bot:
     environment:
       RERANK_PROVIDER: "none"
