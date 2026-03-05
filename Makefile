@@ -293,32 +293,32 @@ smoke-zoo: ## Run zoo smoke tests (pytest)
 
 test-redis: ## Verify Redis Query Engine is available
 	@echo "$(BLUE)Testing Redis Query Engine...$(NC)"
-	@redis_policy=$$(docker exec $(REDIS_CONTAINER) redis-cli CONFIG GET maxmemory-policy | tail -n 1); \
+	@redis_policy=$$($(COMPOSE_CMD) exec -T redis redis-cli CONFIG GET maxmemory-policy | tail -n 1); \
 		if [ "$$redis_policy" != "volatile-lfu" ]; then \
 			echo "$(RED)FAIL: maxmemory-policy is $$redis_policy (expected volatile-lfu)$(NC)"; \
 			exit 1; \
 		fi; \
 		echo "  maxmemory-policy: $$redis_policy"
-	@redis_samples=$$(docker exec $(REDIS_CONTAINER) redis-cli CONFIG GET maxmemory-samples | tail -n 1); \
+	@redis_samples=$$($(COMPOSE_CMD) exec -T redis redis-cli CONFIG GET maxmemory-samples | tail -n 1); \
 		if [ "$$redis_samples" != "$(EXPECTED_MAXMEMORY_SAMPLES)" ]; then \
 			echo "$(RED)FAIL: maxmemory-samples is $$redis_samples (expected $(EXPECTED_MAXMEMORY_SAMPLES))$(NC)"; \
 			exit 1; \
 		fi; \
 		echo "  maxmemory-samples: $$redis_samples"
-	@docker exec $(REDIS_CONTAINER) redis-cli FT._LIST > /dev/null 2>&1 || \
+	@$(COMPOSE_CMD) exec -T redis redis-cli FT._LIST > /dev/null 2>&1 || \
 		(echo "$(RED)FAIL: FT._LIST not available - Query Engine missing$(NC)" && exit 1)
 	@echo "  FT._LIST: OK"
-	@docker exec $(REDIS_CONTAINER) redis-cli FT.CREATE __test_vec_idx ON HASH PREFIX 1 __test_vec: SCHEMA name TEXT vec VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE > /dev/null 2>&1 || \
+	@$(COMPOSE_CMD) exec -T redis redis-cli FT.CREATE __test_vec_idx ON HASH PREFIX 1 __test_vec: SCHEMA name TEXT vec VECTOR FLAT 6 TYPE FLOAT32 DIM 4 DISTANCE_METRIC COSINE > /dev/null 2>&1 || \
 		(echo "$(RED)FAIL: Cannot create VECTOR index$(NC)" && exit 1)
 	@echo "  FT.CREATE VECTOR: OK"
-	@docker exec $(REDIS_CONTAINER) redis-cli FT.DROPINDEX __test_vec_idx > /dev/null 2>&1 || true
+	@$(COMPOSE_CMD) exec -T redis redis-cli FT.DROPINDEX __test_vec_idx > /dev/null 2>&1 || true
 	@echo "$(GREEN)Query Engine + Vector Search: OK$(NC)"
 	@if [ "$${REQUIRE_REDIS_JSON:-0}" = "1" ]; then \
-		docker exec $(REDIS_CONTAINER) redis-cli JSON.SET __test_json '$$' '{"test":1}' > /dev/null 2>&1 || \
+		$(COMPOSE_CMD) exec -T redis redis-cli JSON.SET __test_json '$$' '{"test":1}' > /dev/null 2>&1 || \
 			(echo "$(RED)FAIL: JSON.SET not available$(NC)" && exit 1); \
-		docker exec $(REDIS_CONTAINER) redis-cli JSON.GET __test_json > /dev/null 2>&1 || \
+		$(COMPOSE_CMD) exec -T redis redis-cli JSON.GET __test_json > /dev/null 2>&1 || \
 			(echo "$(RED)FAIL: JSON.GET not available$(NC)" && exit 1); \
-		docker exec $(REDIS_CONTAINER) redis-cli DEL __test_json > /dev/null 2>&1 || true; \
+		$(COMPOSE_CMD) exec -T redis redis-cli DEL __test_json > /dev/null 2>&1 || true; \
 		echo "  JSON: OK"; \
 	fi
 	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"
@@ -332,7 +332,7 @@ test-bot-health: ## Preflight: verify Qdrant collection + LLM (local dev, ports 
 
 test-bot-health-vps: ## Preflight: verify Qdrant + LLM from inside Docker network (VPS)
 	@echo "$(BLUE)Running VPS bot health preflight...$(NC)"
-	@docker exec vps-bot python -c "\
+	@$(COMPOSE_CMD) exec -T bot python -c "\
 	import urllib.request, json, sys; \
 	r = json.loads(urllib.request.urlopen('http://qdrant:6333/collections', timeout=10).read()); \
 	names = [c['name'] for c in r['result']['collections']]; \
@@ -362,7 +362,7 @@ clean: ## Clean up cache files and build artifacts
 # =============================================================================
 
 # Common compose command with --compatibility to enforce deploy.resources.limits
-COMPOSE_CMD := docker compose --compatibility -f docker-compose.dev.yml
+COMPOSE_CMD := docker compose --compatibility
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
@@ -464,7 +464,7 @@ qa: all-checks test ## Full quality assurance
 	@echo "$(GREEN)✓✓✓ Full QA complete! ✓✓✓$(NC)"
 
 # =============================================================================
-# Local Development (single docker-compose.dev.yml)
+# Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 # =============================================================================
 
 .PHONY: local-up local-down local-logs local-ps local-build run-bot bot
@@ -516,12 +516,15 @@ deploy-bot:  ## Deploy bot to VPS (git push + SSH rebuild)
 	@echo "$(CYAN)Pushing to origin...$(NC)"
 	git push origin main
 	@echo "$(CYAN)Deploying bot on VPS...$(NC)"
-	ssh vps "cd /opt/rag-fresh && git pull origin main && \
-		docker compose -f docker-compose.vps.yml build bot && \
-		docker compose --compatibility -f docker-compose.vps.yml up -d --force-recreate bot"
+	ssh vps 'cd /opt/rag-fresh && git pull origin main && \
+		export COMPOSE_FILE="$${COMPOSE_FILE:-compose.yml:compose.vps.yml}" COMPOSE_PROJECT_NAME="$${COMPOSE_PROJECT_NAME:-vps}" && \
+		docker compose build bot && \
+		docker compose --compatibility up -d --force-recreate bot'
 	@echo "$(GREEN)Bot deployed. Waiting for startup...$(NC)"
 	@sleep 15
-	ssh vps "docker ps --format '{{.Names}} {{.Status}}' | grep vps-bot"
+	ssh vps 'cd /opt/rag-fresh && \
+		export COMPOSE_FILE="$${COMPOSE_FILE:-compose.yml:compose.vps.yml}" COMPOSE_PROJECT_NAME="$${COMPOSE_PROJECT_NAME:-vps}" && \
+		docker compose ps --format "{{.Service}} {{.Status}}" | grep "^bot "'
 	@echo "$(GREEN)✓ Deploy complete$(NC)"
 
 # =============================================================================
