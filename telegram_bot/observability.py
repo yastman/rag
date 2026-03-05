@@ -101,6 +101,8 @@ def _resolve_config_value(explicit: str | None, env_name: str) -> str | None:
     value = explicit if explicit is not None else os.getenv(env_name)
     if value is None:
         return None
+    if not isinstance(value, str):
+        return None
     normalized = value.strip()
     return normalized or None
 
