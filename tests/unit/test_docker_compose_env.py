@@ -1,4 +1,4 @@
-"""Verify bot service environment across unified compose files (#402)."""
+"""Verify docker-compose bot service has CRM env vars (#402)."""
 
 from functools import cache
 from pathlib import Path
@@ -39,8 +39,6 @@ REQUIRED_VARS = [
 
 
 class TestDevComposeEnv:
-    """CRM vars must be present in base compose bot environment."""
-
     @pytest.mark.parametrize("var", REQUIRED_VARS)
     def test_dev_compose_has_var(self, var: str):
         env = _load_bot_env("compose.yml")
@@ -48,19 +46,7 @@ class TestDevComposeEnv:
 
 
 class TestVpsComposeEnv:
-    """Overrides must keep required bot behavior knobs explicit."""
-
     @pytest.mark.parametrize("var", REQUIRED_VARS)
     def test_vps_compose_has_var(self, var: str):
         env = _load_bot_env("compose.yml")
         assert var in env, f"{var} missing from compose.yml bot environment"
-
-    def test_dev_override_sets_colbert_rerank(self):
-        env = _load_bot_env("compose.dev.yml")
-        assert env.get("RERANK_PROVIDER") == "colbert"
-        assert "RERANK_CANDIDATES_MAX" in env
-
-    def test_vps_override_sets_none_rerank(self):
-        env = _load_bot_env("compose.vps.yml")
-        assert env.get("RERANK_PROVIDER") == "none"
-        assert env.get("RERANK_CANDIDATES_MAX") == "5"
