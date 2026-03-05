@@ -453,18 +453,32 @@ async def test_on_summary_search_resets_scroll_and_goes_to_results(monkeypatch):
     assert manager.dialog_data.get("scroll_offset") is None
 
 
-@pytest.mark.asyncio
-async def test_on_summary_refine_goes_to_preferences():
-    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
-    await funnel_module.on_summary_refine(MagicMock(), SimpleNamespace(), manager)
-    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+def test_switchto_change_in_summary_targets_change_filter():
+    """SwitchTo 'change' in summary window targets FunnelSG.change_filter."""
+    from aiogram_dialog.widgets.kbd import SwitchTo as SwitchToWidget
+
+    summary_window = funnel_dialog.windows[FunnelSG.summary]
+    found = False
+    for widget in summary_window.keyboard.buttons:
+        if isinstance(widget, SwitchToWidget) and widget.widget_id == "change":
+            assert widget.state == FunnelSG.change_filter
+            found = True
+            break
+    assert found, "SwitchTo 'change' not found in summary window"
 
 
-@pytest.mark.asyncio
-async def test_on_summary_change_goes_to_change_filter():
-    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
-    await funnel_module.on_summary_change(MagicMock(), SimpleNamespace(), manager)
-    manager.switch_to.assert_awaited_once_with(FunnelSG.change_filter)
+def test_switchto_refine_in_summary_targets_preferences():
+    """SwitchTo 'refine' in summary window targets FunnelSG.preferences."""
+    from aiogram_dialog.widgets.kbd import SwitchTo as SwitchToWidget
+
+    summary_window = funnel_dialog.windows[FunnelSG.summary]
+    found = False
+    for widget in summary_window.keyboard.buttons:
+        if isinstance(widget, SwitchToWidget) and widget.widget_id == "refine":
+            assert widget.state == FunnelSG.preferences
+            found = True
+            break
+    assert found, "SwitchTo 'refine' not found in summary window"
 
 
 # --- Change filter ---
@@ -729,11 +743,18 @@ async def test_pref_category_promotion_switches_to_pref_promotion():
     manager.switch_to.assert_awaited_once_with(FunnelSG.pref_promotion)
 
 
-@pytest.mark.asyncio
-async def test_pref_back_to_menu_switches_to_preferences():
-    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
-    await funnel_module.on_pref_back_to_menu(MagicMock(), SimpleNamespace(), manager)
-    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+def test_switchto_back_in_pref_floor_targets_preferences():
+    """SwitchTo back button in pref_floor targets FunnelSG.preferences."""
+    from aiogram_dialog.widgets.kbd import SwitchTo as SwitchToWidget
+
+    floor_window = funnel_dialog.windows[FunnelSG.pref_floor]
+    found = False
+    for widget in floor_window.keyboard.buttons:
+        if isinstance(widget, SwitchToWidget) and widget.widget_id == "pref_floor_back":
+            assert widget.state == FunnelSG.preferences
+            found = True
+            break
+    assert found, "SwitchTo 'pref_floor_back' not found in pref_floor window"
 
 
 @pytest.mark.asyncio
