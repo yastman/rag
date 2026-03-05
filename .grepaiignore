@@ -1,0 +1,48 @@
+***REMOVED*** GrepAI extra ignores (works like .gitignore)
+***REMOVED*** For git-tracked files that should NOT be semantically indexed
+
+***REMOVED*** Claude internal (tracked in git but not app code)
+.claude/
+docs/claude-skills/
+docs/agent-rules/
+docs/plans/
+docs/archive/
+docs/archive_*/
+docs/audits/
+docs/continuous-claude-*
+docs/llm-tldr-*
+docs/2026-*.md
+AGENTS.md
+CLAUDE.local.md
+TODO.md
+AUDIT_REPORT.md
+DOCKER.md
+CHANGELOG.md
+
+***REMOVED*** Evaluation (reports + data, not app code)
+evaluation/
+
+***REMOVED*** K8s (tracked but infrastructure)
+k8s/
+
+***REMOVED*** Docs root-level (audits, guides - not app code)
+docs/*.md
+docs/AGENTS.override.md
+
+***REMOVED*** Root-level junk
+debug_*.py
+verify_*.py
+simple_index_test.py
+test_output_*.txt
+test_coverage_*.txt
+coverage_report_*.txt
+coverage.json
+.test_durations
+
+***REMOVED*** Config files (not code)
+.release-please-manifest.json
+release-please-config.json
+renovate.json
+.mcp.json
+.dockerignore
+.editorconfig
