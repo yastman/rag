@@ -20,7 +20,7 @@ from aiogram_dialog.widgets.kbd import (
     Select,
     SwitchTo,
 )
-from aiogram_dialog.widgets.text import Format
+from aiogram_dialog.widgets.text import Format, Jinja, List
 
 from .states import FunnelSG
 
@@ -258,11 +258,29 @@ def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
 
 async def get_city_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for city/resort selection (Step 1)."""
-    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    dialog_manager = kwargs.get("dialog_manager")
+    middleware = getattr(dialog_manager, "middleware_data", None) or kwargs.get(
+        "middleware_data", {}
+    )
+    i18n = middleware.get("i18n")
     btn_back = i18n.get("back") if i18n else "Назад"
+
+    svc = middleware.get("apartments_service")
+    items: list[tuple[str, str]]
+    if svc is not None:
+        try:
+            cities = await svc.get_distinct_values("city")
+            items = [(c, c) for c in cities]
+        except Exception:
+            logger.warning("Failed to load dynamic cities, using fallback")
+            items = list(_CITY_OPTIONS[:-1])
+    else:
+        items = list(_CITY_OPTIONS[:-1])
+
+    items.append(("Любой город", "any"))
     return {
         "title": "Выберите город:",
-        "items": _CITY_OPTIONS,
+        "items": items,
         "btn_back": btn_back,
     }
 
@@ -412,16 +430,52 @@ async def get_pref_area_options(**kwargs: Any) -> dict[str, Any]:
 
 async def get_pref_complex_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for complex sub-options in preferences."""
-    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    dialog_manager = kwargs.get("dialog_manager")
+    middleware = getattr(dialog_manager, "middleware_data", None) or kwargs.get(
+        "middleware_data", {}
+    )
+    i18n = middleware.get("i18n")
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Выберите комплекс:", "items": _COMPLEX_OPTIONS, "btn_back": btn_back}
+
+    svc = middleware.get("apartments_service")
+    items: list[tuple[str, str]]
+    if svc is not None:
+        try:
+            complexes = await svc.get_distinct_values("complex_name")
+            items = [(c, c) for c in complexes]
+        except Exception:
+            logger.warning("Failed to load dynamic complexes, using fallback")
+            items = list(_COMPLEX_OPTIONS[:-1])
+    else:
+        items = list(_COMPLEX_OPTIONS[:-1])
+
+    items.append(("Любой комплекс", "any"))
+    return {"title": "Выберите комплекс:", "items": items, "btn_back": btn_back}
 
 
 async def get_pref_section_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for section sub-options in preferences."""
-    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    dialog_manager = kwargs.get("dialog_manager")
+    middleware = getattr(dialog_manager, "middleware_data", None) or kwargs.get(
+        "middleware_data", {}
+    )
+    i18n = middleware.get("i18n")
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Выберите секцию:", "items": _SECTION_OPTIONS, "btn_back": btn_back}
+
+    svc = middleware.get("apartments_service")
+    items: list[tuple[str, str]]
+    if svc is not None:
+        try:
+            sections = await svc.get_distinct_values("section")
+            items = [(s, s) for s in sections]
+        except Exception:
+            logger.warning("Failed to load dynamic sections, using fallback")
+            items = list(_SECTION_OPTIONS[:-1])
+    else:
+        items = list(_SECTION_OPTIONS[:-1])
+
+    items.append(("Любая секция", "any"))
+    return {"title": "Выберите секцию:", "items": items, "btn_back": btn_back}
 
 
 async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
@@ -507,9 +561,7 @@ async def get_results_data(
     dialog_manager: DialogManager,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Getter for results window — SDK scroll with pagination (no embeddings needed)."""
-    from telegram_bot.keyboards.property_card import format_property_card
-
+    """Getter for results window — returns structured data for List widget."""
     i18n = dialog_manager.middleware_data.get("i18n")
     data = dialog_manager.dialog_data
 
@@ -532,8 +584,9 @@ async def get_results_data(
         if property_bot is not None:
             svc = getattr(property_bot, "_apartments_service", None)
 
-    results_text: str
+    apartments: list[dict[str, Any]] = []
     has_more = False
+    no_results = False
     total_count = 0
     zero_suggestions: list[tuple[str, str]] = []
     shown_start = 0
@@ -556,26 +609,22 @@ async def get_results_data(
                 current_page = max(int(data.get("scroll_page", 1) or 1), 1)
                 shown_start = (current_page - 1) * _SCROLL_PAGE_SIZE + 1
                 shown_end = shown_start + len(results) - 1
-                cards = []
                 for apt in results:
                     p = apt["payload"]
                     rooms_num = p.get("rooms", 1)
-                    rooms_display = _ROOMS_DISPLAY.get(rooms_num, str(rooms_num))
-                    cards.append(
-                        format_property_card(
-                            property_id=apt["id"],
-                            complex_name=p.get("complex_name", ""),
-                            location=p.get("city", "Болгария"),
-                            property_type=rooms_display,
-                            floor=p.get("floor", 0),
-                            area_m2=p.get("area_m2", 0),
-                            view=p.get("view_primary", ""),
-                            price_eur=p.get("price_eur", 0),
-                            section=p.get("section", ""),
-                            apartment_number=p.get("apartment_number", ""),
-                        )
+                    apartments.append(
+                        {
+                            "complex_name": p.get("complex_name", ""),
+                            "section": p.get("section", ""),
+                            "apartment_number": p.get("apartment_number", ""),
+                            "city": p.get("city", ""),
+                            "property_type": _ROOMS_DISPLAY.get(rooms_num, str(rooms_num)),
+                            "floor": p.get("floor", 0),
+                            "area_m2": p.get("area_m2", 0),
+                            "view": p.get("view_primary", ""),
+                            "price_formatted": f"{int(p.get('price_eur', 0)):,}".replace(",", " "),
+                        }
                     )
-                results_text = "\n\n".join(cards)
                 if has_more:
                     remaining = max(total_count - shown_end, 0)
                     if i18n:
@@ -586,7 +635,7 @@ async def get_results_data(
                     else:
                         btn_more = f"🔄 Показать ещё ({remaining} осталось)"
             else:
-                results_text = no_results_text
+                no_results = True
                 # Build zero-results recovery suggestions
                 if total_count == 0:
                     floor_v = data.get("floor")
@@ -620,39 +669,48 @@ async def get_results_data(
                     zero_suggestions.append(("Новый поиск", "new_search"))
         except Exception:
             logger.exception("Failed to fetch funnel results from Qdrant")
-            results_text = no_results_text
+            no_results = True
     else:
-        results_text = service_unavailable_text
+        no_results = True
+        no_results_text = service_unavailable_text
 
-    if total_count:
-        if shown_start and shown_end:
-            if i18n:
-                try:
-                    title = i18n.get(
-                        "results-found-range",
-                        total=total_count,
-                        start=shown_start,
-                        end=shown_end,
-                    )
-                except Exception:
-                    title = (
-                        f"{i18n.get('results-found', total=total_count)} "
-                        f"(показаны {shown_start}–{shown_end})"
-                    )
-            else:
-                title = f"Найдено {total_count} апартаментов (показаны {shown_start}–{shown_end})"
+    if apartments:
+        if i18n:
+            try:
+                title = i18n.get(
+                    "results-found-range",
+                    total=total_count,
+                    start=shown_start,
+                    end=shown_end,
+                )
+            except Exception:
+                title = (
+                    f"{i18n.get('results-found', total=total_count)} "
+                    f"(показаны {shown_start}–{shown_end})"
+                )
         else:
-            title = (
-                i18n.get("results-found", total=total_count)
-                if i18n
-                else f"Найдено {total_count} апартаментов"
-            )
+            title = f"Найдено {total_count} апартаментов (показаны {shown_start}–{shown_end})"
+    elif total_count:
+        title = (
+            i18n.get("results-found", total=total_count)
+            if i18n
+            else f"Найдено {total_count} апартаментов"
+        )
     else:
         title = results_title
 
+    # Persist for CRM scoring
+    _spawn_persist_funnel_lead_score(
+        dialog_manager=dialog_manager,
+        total_count=total_count,
+    )
+
     return {
         "title": title,
-        "results_text": results_text,
+        "apartments": apartments,
+        "has_apartments": bool(apartments),
+        "no_results": no_results,
+        "no_results_text": no_results_text if no_results else "",
         "has_more": has_more,
         "btn_more": btn_more,
         "btn_back": btn_back,
@@ -1222,9 +1280,27 @@ funnel_dialog = Dialog(
         getter=get_change_filter_options,
         state=FunnelSG.change_filter,
     ),
-    # Step 6: Results (SDK scroll with pagination)
+    # Step 6: Results (SDK List widget)
     Window(
-        Format("{title}\n\n{results_text}"),
+        Format("{title}"),
+        List(
+            Jinja(
+                "🏠 Комплекс: {{ item.complex_name }}"
+                "{% if item.section %}\n🏗 Секция: {{ item.section }}{% endif %}"
+                "{% if item.apartment_number %}\n🚪 №: {{ item.apartment_number }}{% endif %}"
+                "{% if item.city %}\n📍 Город: {{ item.city }}{% endif %}"
+                "{% if item.property_type %}\n🛏 Тип: {{ item.property_type }}{% endif %}"
+                "{% if item.floor %}\n🔼 Этаж: {{ item.floor }}{% endif %}"
+                "{% if item.area_m2 %}\n📐 Площадь: {{ item.area_m2 }} м²{% endif %}"
+                "{% if item.view %}\n🌅 Вид: {{ item.view }}{% endif %}"
+                "\n💰 Цена: {{ item.price_formatted }} €"
+            ),
+            items="apartments",
+            sep="\n\n",
+            id="apt_list",
+            when="has_apartments",
+        ),
+        Format("{no_results_text}", when="no_results"),
         Column(
             Select(
                 Format("{item[0]}"),

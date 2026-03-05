@@ -221,3 +221,24 @@ class ApartmentsService:
         ]
 
         return formatted, count_result.count, next_offset  # type: ignore[return-value]
+
+    async def get_distinct_values(self, field: str) -> list[str]:
+        """Get sorted unique non-empty values for a payload field via scroll."""
+        values: set[str] = set()
+        offset = None
+        while True:
+            records, next_offset = await self._qdrant.client.scroll(
+                collection_name=self._qdrant.collection_name,
+                limit=1000,
+                offset=offset,
+                with_payload=[field],
+                with_vectors=False,
+            )
+            for r in records:
+                val = (r.payload or {}).get(field, "")
+                if val:
+                    values.add(str(val))
+            if next_offset is None:
+                break
+            offset = next_offset
+        return sorted(values)
