@@ -75,8 +75,14 @@ Orch собирает `{project_scope}` автоматически (≤500 то�
 
 ***REMOVED******REMOVED******REMOVED*** Шаг 1: Собрать затронутые файлы
 
-    ***REMOVED*** Из тела каждого issue (grep путей):
+    ***REMOVED*** Из тела issue (grep путей):
     files_issue_N=$(gh issue view $N --json body -q .body | grep -oP 'src/\S+\.py')
+
+    ***REMOVED*** Дополнить через GrepAI semantic search (находит файлы, не упомянутые в issue):
+    grepai_search(query="{issue_description}", limit=10, compact=true, format="toon")
+
+    ***REMOVED*** Call graph — найти зависимые файлы через trace:
+    grepai_trace_callers(symbol="{key_function}", compact=true, format="toon")
 
 ***REMOVED******REMOVED******REMOVED*** Шаг 2: Найти пересечения
 

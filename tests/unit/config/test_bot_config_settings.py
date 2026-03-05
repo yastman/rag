@@ -131,3 +131,12 @@ class TestBotConfigIsPydanticSettings:
 
         cfg = BotConfig(_env_file=None)
         assert cfg.client_direct_pipeline_enabled is True
+
+    def test_client_direct_pipeline_flag_empty_env_treated_as_false(self, monkeypatch):
+        """Empty env var should not crash and must be treated as disabled."""
+        monkeypatch.setenv("CLIENT_DIRECT_PIPELINE_ENABLED", "")
+
+        from telegram_bot.config import BotConfig
+
+        cfg = BotConfig(_env_file=None)
+        assert cfg.client_direct_pipeline_enabled is False
