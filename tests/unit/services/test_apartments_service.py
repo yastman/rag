@@ -75,6 +75,27 @@ class TestBuildApartmentFilter:
                 assert cond.match.value is True
                 assert cond.range is None
 
+    def test_string_keyword_exact_match(self) -> None:
+        """String values (like section) create MatchValue keyword conditions."""
+        f = _build_apartment_filter({"section": "D-1"})
+        assert f is not None
+        assert len(f.must) == 1
+        cond = f.must[0]
+        assert cond.key == "section"
+        assert cond.match.value == "D-1"
+
+    def test_combined_three_condition_types(self) -> None:
+        """Verify 3 different condition types build as separate must clauses."""
+        f = _build_apartment_filter(
+            {
+                "city": "Элените",
+                "rooms": 3,
+                "price_eur": {"gte": 100000},
+            }
+        )
+        assert f is not None
+        assert len(f.must) == 3
+
 
 class TestCheckEscalation:
     def test_no_escalation(self) -> None:
