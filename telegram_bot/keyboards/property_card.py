@@ -29,20 +29,26 @@ def format_property_card(
     area_m2: int | float,
     view: str,
     price_eur: int | float,
+    section: str = "",
+    apartment_number: str = "",
 ) -> str:
     """Format property as text card."""
     price_formatted = f"{int(price_eur):,}".replace(",", " ")
     lines = [f"🏠 Комплекс: {complex_name}"]
+    if section:
+        lines.append(f"🏗 Секция: {section}")
+    if apartment_number:
+        lines.append(f"🚪 №: {apartment_number}")
     if location:
         lines.append(f"📍 Город: {location}")
     if property_type:
-        lines.append(f"🏢 Тип: {property_type}")
+        lines.append(f"🛏 Тип: {property_type}")
     if floor:
-        lines.append(f"🔢 Этаж: {floor}")
+        lines.append(f"🔼 Этаж: {floor}")
     if area_m2:
         lines.append(f"📐 Площадь: {area_m2} м²")
     if view:
-        lines.append(f"👁 Вид: {view}")
+        lines.append(f"🌅 Вид: {view}")
     lines.append(f"💰 Цена: {price_formatted} €")
     return "\n".join(lines)
 
