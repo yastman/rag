@@ -362,7 +362,7 @@ clean: ## Clean up cache files and build artifacts
 # =============================================================================
 
 # Common compose command with --compatibility to enforce deploy.resources.limits
-COMPOSE_CMD := docker compose --compatibility -f docker-compose.dev.yml
+COMPOSE_CMD := docker compose --compatibility
 
 .PHONY: docker-core-up docker-bot-up docker-obs-up docker-ml-up docker-ai-up docker-ingest-up docker-voice-up docker-full-up docker-down docker-ps
 
@@ -464,7 +464,7 @@ qa: all-checks test ## Full quality assurance
 	@echo "$(GREEN)✓✓✓ Full QA complete! ✓✓✓$(NC)"
 
 # =============================================================================
-# Local Development (single docker-compose.dev.yml)
+# Local Development (compose.yml + compose.dev.yml via COMPOSE_FILE env)
 # =============================================================================
 
 .PHONY: local-up local-down local-logs local-ps local-build run-bot bot
@@ -517,8 +517,8 @@ deploy-bot:  ## Deploy bot to VPS (git push + SSH rebuild)
 	git push origin main
 	@echo "$(CYAN)Deploying bot on VPS...$(NC)"
 	ssh vps "cd /opt/rag-fresh && git pull origin main && \
-		docker compose -f docker-compose.vps.yml build bot && \
-		docker compose --compatibility -f docker-compose.vps.yml up -d --force-recreate bot"
+		docker compose build bot && \
+		docker compose --compatibility up -d --force-recreate bot"
 	@echo "$(GREEN)Bot deployed. Waiting for startup...$(NC)"
 	@sleep 15
 	ssh vps "docker ps --format '{{.Names}} {{.Status}}' | grep vps-bot"
