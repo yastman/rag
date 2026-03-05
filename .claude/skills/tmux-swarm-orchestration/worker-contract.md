@@ -107,6 +107,26 @@ Part-workers коммитят и пушат, но **НЕ создают PR**. PR
         model="sonnet"
     )
 
+## Codebase контекст (Фаза 2.3 — orch, НЕ worker)
+
+Orch использует GrepAI MCP tools ДО классификации для понимания scope и зависимостей:
+
+    # 1. Semantic search — найти код, затронутый issue:
+    grepai_search(query="{issue_description}", limit=5, format="toon", compact=true)
+
+    # 2. Call graph — impact analysis:
+    grepai_trace_callers(symbol="{function_from_issue}", format="toon", compact=true)
+    grepai_trace_callees(symbol="{function_from_issue}", format="toon", compact=true)
+
+    # 3. Полный граф (для COMPLEX+):
+    grepai_trace_graph(symbol="{key_symbol}", depth=1, format="toon")
+
+Результаты используются для:
+- Классификации сложности (Phase 2) — сколько файлов/зависимостей затронуто
+- File overlap detection (Phase 2.5) — точнее, чем grep из тела issue
+- Файловых резерваций — кто владеет какими файлами
+- Промта worker'а — добавить `{codebase_context}` с ключевыми находками
+
 ---
 
 ## Предварительная фильтрация (5+ issues)
@@ -219,6 +239,13 @@ Haiku НЕ классифицирует сложность — только фи
     {sdk_summary}
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
     Углуби SDK исследование если нужно (Context7, Exa). Включи SDK контекст в план.
+
+    CODEBASE КОНТЕКСТ (GrepAI MCP — ИСПОЛЬЗУЙ):
+    - grepai_search(query="...", format="toon", compact=true) — semantic поиск кода
+    - grepai_trace_callers(symbol="...", format="toon") — кто вызывает
+    - grepai_trace_callees(symbol="...", format="toon") — что вызывает
+    - grepai_trace_graph(symbol="...", depth=1, format="toon") — полный call graph
+    Используй для понимания зависимостей, scope, и затронутых файлов перед планированием.
 
     <HARD-GATE>
     Skill(skill="writing-plans") — для создания плана. БЕЗ ИСКЛЮЧЕНИЙ.
