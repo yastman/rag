@@ -224,3 +224,5 @@ docs/artifacts/*.md
 .claude/settings.json
 # Claude hooks (per-machine)
 .claude/hooks/
+.grepai/
+.signals/
