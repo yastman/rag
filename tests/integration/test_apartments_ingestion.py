@@ -46,3 +46,19 @@ class TestApartmentsIngestion:
         vectors = results[0].vector
         assert "dense" in vectors
         assert "bm42" in vectors
+
+
+@pytest.mark.skipif(
+    not os.getenv("RUN_INTEGRATION", ""),
+    reason="RUN_INTEGRATION not set",
+)
+def test_apartments_payload_indexes_exist() -> None:
+    """Apartments collection must have payload indexes for filtered search."""
+    client = QdrantClient(url=QDRANT_URL)
+    info = client.get_collection(COLLECTION)
+
+    indexed_fields = set(info.payload_schema.keys())
+    required = {"city", "complex_name", "rooms", "price_eur", "area_m2", "floor"}
+
+    missing = required - indexed_fields
+    assert not missing, f"Missing payload indexes: {missing}"
