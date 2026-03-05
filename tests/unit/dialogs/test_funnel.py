@@ -681,3 +681,228 @@ async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
     )
     assert manager.dialog_data == {}
     manager.switch_to.assert_awaited_once_with(FunnelSG.city)
+
+
+# ============================================================
+# Task 1: Handler & navigation tests (existing code coverage)
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_pref_view_selected_saves_and_returns():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_view_selected(MagicMock(), SimpleNamespace(), manager, "sea")
+    assert manager.dialog_data["view"] == "sea"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_pref_view_any_keeps_any_marker():
+    manager = SimpleNamespace(dialog_data={"view": "sea"}, switch_to=AsyncMock())
+    await funnel_module.on_pref_view_selected(MagicMock(), SimpleNamespace(), manager, "any")
+    assert manager.dialog_data["view"] == "any"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_pref_category_view_switches_to_pref_view():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_category_selected(MagicMock(), SimpleNamespace(), manager, "view")
+    manager.switch_to.assert_awaited_once_with(FunnelSG.pref_view)
+
+
+@pytest.mark.asyncio
+async def test_pref_category_furnished_switches_to_pref_furnished():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_category_selected(
+        MagicMock(), SimpleNamespace(), manager, "furnished"
+    )
+    manager.switch_to.assert_awaited_once_with(FunnelSG.pref_furnished)
+
+
+@pytest.mark.asyncio
+async def test_pref_category_promotion_switches_to_pref_promotion():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_category_selected(
+        MagicMock(), SimpleNamespace(), manager, "promotion"
+    )
+    manager.switch_to.assert_awaited_once_with(FunnelSG.pref_promotion)
+
+
+@pytest.mark.asyncio
+async def test_pref_back_to_menu_switches_to_preferences():
+    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
+    await funnel_module.on_pref_back_to_menu(MagicMock(), SimpleNamespace(), manager)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.preferences)
+
+
+@pytest.mark.asyncio
+async def test_results_more_increments_page_and_offset():
+    manager = SimpleNamespace(
+        dialog_data={"scroll_next_offset": "uuid-next", "scroll_page": 1},
+    )
+    callback = MagicMock()
+    callback.answer = AsyncMock()
+    await funnel_module.on_results_more(callback, SimpleNamespace(), manager)
+    assert manager.dialog_data["scroll_offset"] == "uuid-next"
+    assert manager.dialog_data["scroll_page"] == 2
+
+
+@pytest.mark.asyncio
+async def test_results_more_no_next_offset_answers_all_shown():
+    manager = SimpleNamespace(dialog_data={})
+    callback = MagicMock()
+    callback.answer = AsyncMock()
+    await funnel_module.on_results_more(callback, SimpleNamespace(), manager)
+    callback.answer.assert_awaited_once_with("Все результаты показаны")
+
+
+@pytest.mark.asyncio
+async def test_property_type_return_to_summary():
+    manager = SimpleNamespace(dialog_data={"_return_to_summary": True}, switch_to=AsyncMock())
+    await funnel_module.on_property_type_selected(MagicMock(), SimpleNamespace(), manager, "2bed")
+    assert manager.dialog_data["property_type"] == "2bed"
+    assert "_return_to_summary" not in manager.dialog_data
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
+
+
+# ============================================================
+# Task 2: Getters, zero suggestions, summary display
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_pref_floor_options_has_4_plus_any():
+    result = await funnel_module.get_pref_floor_options(middleware_data={})
+    items = result["items"]
+    keys = [key for _, key in items]
+    assert len(items) == 5
+    assert set(keys) == {"low", "mid", "high", "top", "any"}
+
+
+@pytest.mark.asyncio
+async def test_pref_view_options_has_4_plus_any():
+    result = await funnel_module.get_pref_view_options(middleware_data={})
+    items = result["items"]
+    keys = [key for _, key in items]
+    assert len(items) == 5
+    assert set(keys) == {"sea", "pool", "garden", "forest", "any"}
+
+
+@pytest.mark.asyncio
+async def test_pref_furnished_options_has_3():
+    result = await funnel_module.get_pref_furnished_options(middleware_data={})
+    items = result["items"]
+    keys = [key for _, key in items]
+    assert len(items) == 3
+    assert set(keys) == {"yes", "no", "any"}
+
+
+@pytest.mark.asyncio
+async def test_pref_promotion_options_has_2():
+    result = await funnel_module.get_pref_promotion_options(middleware_data={})
+    items = result["items"]
+    keys = [key for _, key in items]
+    assert len(items) == 2
+    assert set(keys) == {"yes", "any"}
+
+
+@pytest.mark.asyncio
+async def test_zero_suggestion_rm_view():
+    manager = SimpleNamespace(
+        dialog_data={"view": "sea", "scroll_offset": "x", "scroll_next_offset": "y"},
+        switch_to=AsyncMock(),
+    )
+    await funnel_module.on_zero_suggestion_selected(
+        MagicMock(), SimpleNamespace(), manager, "rm_view"
+    )
+    assert "view" not in manager.dialog_data
+    assert manager.dialog_data.get("scroll_offset") is None
+    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+
+
+@pytest.mark.asyncio
+async def test_zero_suggestion_rm_furnished():
+    manager = SimpleNamespace(
+        dialog_data={"is_furnished": "yes", "scroll_offset": "x"},
+        switch_to=AsyncMock(),
+    )
+    await funnel_module.on_zero_suggestion_selected(
+        MagicMock(), SimpleNamespace(), manager, "rm_furnished"
+    )
+    assert "is_furnished" not in manager.dialog_data
+    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+
+
+@pytest.mark.asyncio
+async def test_zero_suggestion_rm_promotion():
+    manager = SimpleNamespace(
+        dialog_data={"is_promotion": "yes", "scroll_offset": "x"},
+        switch_to=AsyncMock(),
+    )
+    await funnel_module.on_zero_suggestion_selected(
+        MagicMock(), SimpleNamespace(), manager, "rm_promotion"
+    )
+    assert "is_promotion" not in manager.dialog_data
+    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+
+
+@pytest.mark.asyncio
+async def test_zero_suggestion_rm_budget():
+    manager = SimpleNamespace(
+        dialog_data={"budget": "high", "scroll_offset": "x"},
+        switch_to=AsyncMock(),
+    )
+    await funnel_module.on_zero_suggestion_selected(
+        MagicMock(), SimpleNamespace(), manager, "rm_budget"
+    )
+    assert manager.dialog_data["budget"] == "any"
+    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+
+
+@pytest.mark.asyncio
+async def test_summary_shows_furnished_yes():
+    result = await funnel_module.get_summary_data(
+        dialog_manager=SimpleNamespace(
+            dialog_data={
+                "city": "any",
+                "property_type": "any",
+                "budget": "any",
+                "is_furnished": "yes",
+            },
+            middleware_data={},
+        ),
+    )
+    assert "С мебелью" in result["summary_text"]
+
+
+@pytest.mark.asyncio
+async def test_summary_shows_furnished_no():
+    result = await funnel_module.get_summary_data(
+        dialog_manager=SimpleNamespace(
+            dialog_data={
+                "city": "any",
+                "property_type": "any",
+                "budget": "any",
+                "is_furnished": "no",
+            },
+            middleware_data={},
+        ),
+    )
+    assert "Без мебели" in result["summary_text"]
+
+
+@pytest.mark.asyncio
+async def test_summary_shows_promotion():
+    result = await funnel_module.get_summary_data(
+        dialog_manager=SimpleNamespace(
+            dialog_data={
+                "city": "any",
+                "property_type": "any",
+                "budget": "any",
+                "is_promotion": "yes",
+            },
+            middleware_data={},
+        ),
+    )
+    assert "Акции" in result["summary_text"]
