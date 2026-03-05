@@ -62,6 +62,9 @@ jobs:
             echo "=== Pull latest code ==="
             git pull origin main
 
+            export COMPOSE_FILE="${COMPOSE_FILE:-compose.yml:compose.vps.yml}"
+            export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-vps}"
+
             echo "=== Rebuild bot image ==="
             docker compose build bot
 
@@ -72,6 +75,6 @@ jobs:
             sleep 15
 
             echo "=== Health check ==="
-            docker ps --format '{{.Names}} {{.Status}}' | grep vps-bot
+            docker compose ps --format '{{.Service}} {{.Status}}' | grep '^bot '
 
             echo "=== Deploy complete $(date -Iseconds) ==="
