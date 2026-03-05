@@ -3,12 +3,17 @@
 ## Git Workflow
 
 **Branch model:** `dev` → `main`. Main = прод, auto-deploy на VPS.
+**Protection:** pre-commit hook блокирует прямые коммиты в main. Только merge из dev.
 
 ```bash
 # Работа: всегда в dev
 git checkout dev
-# Деплой: merge в main после локальных тестов
+# Коммиты в dev (без push)
+git add <files> && git commit -m "feat(scope): msg"
+# Деплой: тесты → merge → push → auto-deploy VPS (~40с)
 make check && make test-unit && git checkout main && git merge dev && git push && git checkout dev
+# Post-deploy проверка
+ssh vps "cd /opt/rag-fresh && docker compose -f docker-compose.vps.yml ps"
 ```
 
 ## Commands
