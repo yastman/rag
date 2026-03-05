@@ -1,0 +1,11 @@
+{"ts":"2026-03-05T09:27:52+00:00","event":"classify","issue":814,"level":"COMPLEX","contract":"B","execution":"sequential"}
+{"ts":"2026-03-05T09:28:24+00:00","event":"spawn","worker":"W-FUNNEL","worktree":"/home/user/projects/rag-fresh-wt-funnel-section","timeout":1800}
+{"ts":"2026-03-05T09:55:12+00:00","event":"done","worker":"W-FUNNEL","pr":"https://github.com/yastman/rag/pull/815","duration_s":1608}
+{"ts":"2026-03-05T10:14:28+00:00","event":"classify","issue":816,"level":"CLEAR","contract":"A"}
+{"ts":"2026-03-05T10:14:28+00:00","event":"spawn","worker":"W-816","worktree":"/home/user/projects/rag-fresh-wt-816","timeout":900}
+{"ts":"2026-03-05T10:21:48+00:00","event":"done","worker":"W-816","pr":"https://github.com/yastman/rag/pull/817","duration_s":"~300"}
+{"ts":"2026-03-05T10:49:19+00:00","event":"classify","level":"CLEAR","contract":"A","task":"grepai-ollama-setup"}
+{"ts":"2026-03-05T10:49:19+00:00","event":"spawn","worker":"W-GREPAI","worktree":"/home/user/projects/rag-fresh-wt-grepai","timeout":900}
+{"ts":"2026-03-05T11:11:06+00:00","event":"spawn","worker":"W-DOCKER-UNIFY","worktree":"/home/user/projects/rag-fresh-wt-docker-unify","timeout":1800}
+{"ts":"2026-03-05T11:16:08+00:00","event":"spawn","worker":"W-GREPAI-FIN","worktree":"/home/user/projects/rag-fresh-wt-grepai","timeout":1200,"note":"finish worker after first crashed at 81% ctx"}
+{"ts":"2026-03-05T11:30:56+00:00","event":"done","worker":"W-DOCKER-UNIFY","pr":"https://github.com/yastman/rag/pull/819","duration_s":"~1200"}
