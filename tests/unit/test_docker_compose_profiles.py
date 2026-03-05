@@ -7,25 +7,20 @@ from pathlib import Path
 import yaml
 
 
-_BASE_COMPOSE_PATH = Path("compose.yml")
-_DEV_OVERRIDE_PATH = Path("compose.dev.yml")
+_BASE_PATH = Path("compose.yml")
+_DEV_PATH = Path("compose.dev.yml")
 
 
-def _load_compose(path: Path) -> dict:
-    return yaml.safe_load(path.read_text())
-
-
-def _effective_services() -> dict[str, dict]:
-    """Build lightweight effective service view for dev (base + dev override)."""
-    base = _load_compose(_BASE_COMPOSE_PATH)
-    override = _load_compose(_DEV_OVERRIDE_PATH)
-
-    services = {name: dict(cfg) for name, cfg in base.get("services", {}).items()}
-    for service_name, override_cfg in override.get("services", {}).items():
-        merged = dict(services.get(service_name, {}))
-        merged.update(override_cfg)
-        services[service_name] = merged
-    return services
+def _load_compose() -> dict:
+    """Load merged base + dev compose (profiles/ports split across files)."""
+    base = yaml.safe_load(_BASE_PATH.read_text())
+    dev = yaml.safe_load(_DEV_PATH.read_text())
+    for svc_name, svc_override in dev.get("services", {}).items():
+        if svc_name in base["services"]:
+            base["services"][svc_name].update(svc_override)
+        else:
+            base["services"][svc_name] = svc_override
+    return base
 
 
 def _extract_host_port(port_mapping: str) -> str | None:
@@ -49,7 +44,8 @@ def _extract_host_port(port_mapping: str) -> str | None:
 
 def test_compose_includes_expected_profile_groups():
     """All required optional profile groups should be present."""
-    services = _effective_services()
+    data = _load_compose()
+    services = data.get("services", {})
 
     explicit_profiles: set[str] = set()
     for service in services.values():
@@ -62,7 +58,8 @@ def test_compose_includes_expected_profile_groups():
 
 def test_core_services_are_always_enabled():
     """Core services should have no profile restriction (default compose up)."""
-    services = _effective_services()
+    data = _load_compose()
+    services = data.get("services", {})
 
     core_services = {"redis", "qdrant", "bge-m3", "docling"}
     missing = [name for name in core_services if name not in services]
@@ -74,7 +71,8 @@ def test_core_services_are_always_enabled():
 
 def test_compose_has_no_duplicate_host_ports():
     """No two services should bind the same host port in short syntax."""
-    services = _effective_services()
+    data = _load_compose()
+    services = data.get("services", {})
 
     seen: dict[str, str] = {}
     collisions: list[str] = []
