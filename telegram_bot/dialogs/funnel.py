@@ -571,6 +571,8 @@ async def get_results_data(
                             area_m2=p.get("area_m2", 0),
                             view=p.get("view_primary", ""),
                             price_eur=p.get("price_eur", 0),
+                            section=p.get("section", ""),
+                            apartment_number=p.get("apartment_number", ""),
                         )
                     )
                 results_text = "\n\n".join(cards)
