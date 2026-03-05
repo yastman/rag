@@ -55,17 +55,20 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 
 ## Code Search Tools
 
-3 системы дополняют друг друга:
+| Задача | Инструмент | Tool |
+|--------|-----------|------|
+| Понять что делает код / найти по описанию | **GrepAI** | `grepai_search(query, format="toon", compact=true)` |
+| Кто вызывает функцию (impact analysis) | **GrepAI** | `grepai_trace_callers(symbol, format="toon")` |
+| Что вызывает функция (зависимости) | **GrepAI** | `grepai_trace_callees(symbol, format="toon")` |
+| Полный call graph | **GrepAI** | `grepai_trace_graph(symbol, depth=1, format="toon")` |
+| Тип / сигнатура / docstring | **LSP** | `hover(filePath, line, character)` |
+| Go-to-definition | **LSP** | `goToDefinition(filePath, line, character)` |
+| Все references (для refactoring) | **LSP** | `findReferences(filePath, line, character)` |
+| Структура файла (все символы) | **LSP** | `documentSymbol(filePath)` |
+| Точный текст / regex | **Grep** | `pattern="cache.*ttl"` |
+| Найти файл по имени | **Glob** | `pattern="**/*cache*.py"` |
 
-| Инструмент | Когда использовать | Пример |
-|------------|-------------------|--------|
-| **GrepAI** (MCP) | Semantic search, call graph | "найди код кеширования", "кто вызывает X" |
-| **LSP** (Pyright) | Типы, hover, go-to-definition, references | "что возвращает функция", refactoring |
-| **Grep/Glob** | Точный текст, regex | `TODO`, конкретный паттерн, imports |
-
-GrepAI tools: `grepai_search`, `grepai_trace_callers`, `grepai_trace_callees`, `grepai_trace_graph`, `grepai_index_status`. Формат: `format: "toon"`, `compact: true` для экономии токенов.
-
-GrepAI daemon: `grepai watch --background` (auto-start не настроен, запускать вручную).
+GrepAI daemon автостартует через SessionStart hook (`~/.claude/hooks/grepai-ensure.sh`).
 
 ## Context-Mode (MCP plugin)
 
