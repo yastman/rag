@@ -7,6 +7,7 @@ import threading
 from unittest.mock import MagicMock
 
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
+from telegram_bot.services.bge_m3_client import HybridResult
 
 
 class TestPayloadContract:
@@ -136,20 +137,12 @@ class TestColbertVectorInUpsert:
 
         mock_bge = MagicMock()
 
-        # Dense: 1 doc, 1024-dim
-        dense_result = MagicMock()
-        dense_result.vectors = [[0.1] * 1024]
-        mock_bge.encode_dense.return_value = dense_result
-
-        # Sparse: 1 doc
-        sparse_result = MagicMock()
-        sparse_result.weights = [{"indices": [1, 2], "values": [0.5, 0.3]}]
-        mock_bge.encode_sparse.return_value = sparse_result
-
-        # ColBERT: 1 doc, 2 tokens
-        colbert_result = MagicMock()
-        colbert_result.colbert_vecs = [[[0.1] * 1024, [0.2] * 1024]]
-        mock_bge.encode_colbert.return_value = colbert_result
+        # Single hybrid call returns dense + sparse + colbert
+        mock_bge.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.1] * 1024],
+            lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
+            colbert_vecs=[[[0.1] * 1024, [0.2] * 1024]],
+        )
 
         writer = _make_writer_with_mocks(mock_bge)
 
