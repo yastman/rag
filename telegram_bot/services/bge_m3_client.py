@@ -397,6 +397,38 @@ class BGEM3SyncClient:
             processing_time=data.get("processing_time"),
         )
 
+    def encode_hybrid(self, texts: list[str]) -> HybridResult:
+        """Encode texts to dense + sparse + colbert in a single /encode/hybrid call.
+
+        This is 3x more efficient than calling encode_dense + encode_sparse +
+        encode_colbert separately, as the BGE-M3 model runs one forward pass.
+        """
+        if not texts:
+            return HybridResult(dense_vecs=[], lexical_weights=[])
+        all_dense: list[list[float]] = []
+        all_weights: list[dict[str, Any]] = []
+        all_colbert: list[list[list[float]]] = []
+        processing_time: float | None = None
+        for i in range(0, len(texts), self.batch_size):
+            batch = texts[i : i + self.batch_size]
+            resp = self._client.post(
+                f"{self.base_url}/encode/hybrid",
+                json={"texts": batch, "batch_size": len(batch), "max_length": self.max_length},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            all_dense.extend(data["dense_vecs"])
+            all_weights.extend(data["lexical_weights"])
+            if data.get("colbert_vecs"):
+                all_colbert.extend(data["colbert_vecs"])
+            processing_time = data.get("processing_time")
+        return HybridResult(
+            dense_vecs=all_dense,
+            lexical_weights=all_weights,
+            colbert_vecs=all_colbert or None,
+            processing_time=processing_time,
+        )
+
     def close(self) -> None:
         """Close the underlying httpx client."""
         self._client.close()
