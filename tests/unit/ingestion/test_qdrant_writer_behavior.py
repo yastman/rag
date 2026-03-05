@@ -15,6 +15,7 @@ import pytest
 from qdrant_client.models import Filter, PointStruct, SparseVector
 
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
+from telegram_bot.services.bge_m3_client import HybridResult
 
 
 # ---------------------------------------------------------------------------
@@ -358,11 +359,11 @@ class TestColbertVectorBehavior:
     ):
         """When use_local_embeddings=True, 'colbert' key must appear in vector."""
         mock_qdrant_client.count.return_value = MagicMock(count=0)
-        mock_bge_client.encode_dense.return_value = MagicMock(vectors=[[0.2] * 1024])
-        mock_bge_client.encode_sparse.return_value = MagicMock(
-            weights=[{"indices": [1], "values": [0.5]}]
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.2] * 1024],
+            lexical_weights=[{"indices": [1], "values": [0.5]}],
+            colbert_vecs=[[[0.3] * 128] * 5],
         )
-        mock_bge_client.encode_colbert.return_value = MagicMock(colbert_vecs=[[[0.3] * 128] * 5])
 
         chunk = _make_chunk()
         writer_local.upsert_chunks_sync([chunk], "f", "/p", {}, "col")
@@ -458,3 +459,37 @@ class TestUpsertChunksSyncEdgeCases:
         assert "exceeds" in stats.errors[0]
         assert stats.points_upserted == 0
         mock_qdrant_client.upsert.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Regression guard: local BGE-M3 path must use encode_hybrid()
+# ---------------------------------------------------------------------------
+
+
+class TestHybridEncodingRegression:
+    """Regression: local BGE-M3 ingestion MUST use encode_hybrid, not 3 calls."""
+
+    def test_upsert_chunks_sync_uses_hybrid_when_local(
+        self, writer_local, mock_bge_client, mock_qdrant_client
+    ):
+        """Writer with use_local_embeddings=True calls bge.encode_hybrid once."""
+        mock_bge_client.encode_hybrid.return_value = HybridResult(
+            dense_vecs=[[0.2] * 1024],
+            lexical_weights=[{"indices": [1, 2], "values": [0.5, 0.3]}],
+            colbert_vecs=[[[0.1] * 128] * 5],
+        )
+        mock_qdrant_client.count.return_value = MagicMock(count=0)
+
+        chunk = _make_chunk(text="test text", order=0)
+        writer_local.upsert_chunks_sync(
+            chunks=[chunk],
+            file_id="test-file",
+            source_path="test.md",
+            file_metadata={},
+            collection_name="test_collection",
+        )
+
+        mock_bge_client.encode_hybrid.assert_called_once_with(["test text"])
+        mock_bge_client.encode_dense.assert_not_called()
+        mock_bge_client.encode_sparse.assert_not_called()
+        mock_bge_client.encode_colbert.assert_not_called()
