@@ -91,7 +91,6 @@ services:
 
   bge-m3:
     <<: *security-defaults
-    read_only: false
     build:
       context: ./services/bge-m3-api
       dockerfile: Dockerfile
