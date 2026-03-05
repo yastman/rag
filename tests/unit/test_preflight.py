@@ -305,12 +305,13 @@ class TestCheckSingleDep:
         mock_qdrant_client.get_collection.assert_awaited_once_with(config.qdrant_collection)
         mock_qdrant_client.close.assert_awaited_once()
 
-    async def test_qdrant_exception_fails(self):
+    async def test_qdrant_connection_error_fails(self):
+        """Non-404 exceptions (e.g. connection refused) still fail the check."""
         config = _make_config()
         client = AsyncMock(spec=httpx.AsyncClient)
 
         mock_qdrant_client = AsyncMock()
-        mock_qdrant_client.get_collection = AsyncMock(side_effect=Exception("not found"))
+        mock_qdrant_client.get_collection = AsyncMock(side_effect=Exception("Connection refused"))
         mock_qdrant_client.close = AsyncMock()
 
         with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant_client):
@@ -773,3 +774,92 @@ class TestPostgresOptionalBehavior:
             results = await check_dependencies(config)
 
         assert results["postgres"] is False
+
+
+# ===========================================================================
+***REMOVED*** preflight: auto-create missing collection
+# ===========================================================================
+
+
+class TestQdrantPreflightEnsureCollection:
+    """Preflight auto-creates Qdrant collection when it is missing."""
+
+    async def test_creates_collection_when_not_found(self):
+        """When collection missing (not-found error), preflight creates it and returns True."""
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_qdrant.get_collection = AsyncMock(
+            side_effect=Exception("Not found: Collection `test_col` doesn't exist!")
+        )
+        mock_qdrant.create_collection = AsyncMock()
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+
+        assert result is True
+        mock_qdrant.create_collection.assert_awaited_once()
+
+    async def test_returns_true_after_auto_create(self):
+        """Returns True after successfully creating missing collection (404 variant)."""
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("status_code=404"))
+        mock_qdrant.create_collection = AsyncMock()
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+
+        assert result is True
+
+    async def test_fails_when_create_also_raises(self):
+        """Returns False when collection missing AND create_collection also fails."""
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Not found"))
+        mock_qdrant.create_collection = AsyncMock(side_effect=Exception("Permission denied"))
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+
+        assert result is False
+
+    async def test_non_404_exception_still_fails_without_create(self):
+        """Connection-refused and other non-404 errors fail without attempting create."""
+        config = _make_config()
+        mock_qdrant = AsyncMock()
+        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Connection refused"))
+        mock_qdrant.create_collection = AsyncMock()
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            result = await _check_single_dep("qdrant", config, client)
+
+        assert result is False
+        mock_qdrant.create_collection.assert_not_awaited()
+
+    async def test_created_collection_has_required_vector_schema(self):
+        """Auto-created collection has dense, colbert (multivector), and bm42 vectors."""
+        config = _make_config(qdrant_collection="gdrive_documents_bge")
+        mock_qdrant = AsyncMock()
+        mock_qdrant.get_collection = AsyncMock(side_effect=Exception("Not found"))
+        mock_qdrant.create_collection = AsyncMock()
+        mock_qdrant.close = AsyncMock()
+
+        with patch("telegram_bot.preflight.AsyncQdrantClient", return_value=mock_qdrant):
+            client = AsyncMock()
+            await _check_single_dep("qdrant", config, client)
+
+        call_kwargs = mock_qdrant.create_collection.call_args[1]
+        assert call_kwargs["collection_name"] == "gdrive_documents_bge"
+        vectors_config = call_kwargs["vectors_config"]
+        assert "dense" in vectors_config
+        assert "colbert" in vectors_config
+        sparse_config = call_kwargs["sparse_vectors_config"]
+        assert "bm42" in sparse_config
