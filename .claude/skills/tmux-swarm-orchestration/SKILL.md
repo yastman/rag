@@ -27,6 +27,7 @@ description: Use when given GitHub issues to solve, problems to fix, or "review 
 digraph flow {
   rankdir=TB; node [shape=box, fontsize=10];
   init [label="Фаза 0: ВВОД\ngh issue view + mkdir -p .signals"];
+  codebase [label="Фаза 2.3: CODEBASE КОНТЕКСТ\nGrepAI search + trace"];
   classify [label="Фаза 2: КЛАССИФИКАЦИЯ\nRead classification.md"];
   parallel [label="Фаза 2.5: ПАРАЛЛЕЛИЗАЦИЯ\nfile overlap + резервации"];
   sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nSonnet субагент (если нужно)"];
@@ -35,7 +36,7 @@ digraph flow {
   verify [label="Фаза 5: ВЕРИФИКАЦИЯ\nартефакты + маркеры"];
   report [label="Фаза 6: ОТЧЁТ\nPR URLs + метрики → юзеру\nочистка"];
 
-  init -> classify -> parallel -> sdk -> spawn -> wait -> verify -> report;
+  init -> codebase -> classify -> parallel -> sdk -> spawn -> wait -> verify -> report;
   verify -> spawn [label="провал\nэскалация 1x", style=dashed];
 }
 ```
@@ -47,6 +48,19 @@ digraph flow {
       Резюме (300 слов) верни мне. Полный контекст запиши в .claude/cache/sdk-{lib}-{N}.md")
 
 Переиспользование: одно исследование → N воркеров.
+
+**Фаза 2.3: CODEBASE КОНТЕКСТ** — orch использует GrepAI для понимания кода:
+
+    # Semantic search — найти релевантный код по описанию issue:
+    grepai_search(query="{issue_description}", limit=5, format="toon", compact=true)
+
+    # Call graph — понять зависимости перед классификацией:
+    grepai_trace_callers(symbol="{affected_function}", format="toon", compact=true)
+
+    # Статус индекса — убедиться что актуален:
+    grepai_index_status(format="toon")
+
+GrepAI = codebase search (semantic + call graph). Context7/Exa = SDK/library docs. Не путать.
 
 **Двухволновой запуск (COMPLEX+) — Opus решает:**
 
