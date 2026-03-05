@@ -17,14 +17,16 @@
         "langfuse-mcp"
       ],
       "env": {
-        "LANGFUSE_PUBLIC_KEY": "[REDACTED-LANGFUSE-KEY]
-        "LANGFUSE_SECRET_KEY": "[REDACTED-LANGFUSE-KEY]
+        "LANGFUSE_PUBLIC_KEY": "<REPLACE_WITH_LANGFUSE_PUBLIC_KEY>",
+        "LANGFUSE_SECRET_KEY": "<REPLACE_WITH_LANGFUSE_SECRET_KEY>",
         "LANGFUSE_HOST": "http://localhost:3001"
       }
     },
     "grepai": {
       "command": "grepai",
-      "args": ["mcp-serve"]
+      "args": [
+        "mcp-serve"
+      ]
     }
   }
 }
