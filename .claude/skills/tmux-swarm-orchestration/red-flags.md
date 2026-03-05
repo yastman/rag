@@ -23,6 +23,8 @@
 - Нет `--model sonnet` (дефолт = Opus = $$$)
 - Последовательно для РАЗНЫХ файлов (параллельно)
 - Orch мержит/PR (workers сами)
+- Grep/Glob для понимания зависимостей вместо `grepai_trace_callers` (semantic + call graph точнее)
+- Классификация без GrepAI (Фаза 2.3) — orch не понимает scope, неверная сложность
 
 **Скиллы:**
 - Worker коммит БЕЗ `Skill(skill="requesting-code-review")`
@@ -69,6 +71,7 @@
 | "Review — лишний шаг" | Review ловит 20% ошибок. |
 | "Маркеры — бюрократия" | 1 echo = 0 токенов. Без него orch не верифицирует. |
 | "Worker сам найдёт SDK документацию" | Sonnet субагент = $0.50. Worker ресёрчит = $3+. |
+| "Grep хватит для понимания кода" | Grep = literal text. GrepAI = semantic + call graph. Используй оба. |
 | "Haiku определит сложность" | Haiku фильтрует DO/SKIP/STALE/UNCERTAIN. Сложность — orch. |
 | "Haiku правильно определил вне скоупа" | Haiku не знает скоуп. SKIP только с доказательством (PR#, дубль#). Иначе → DO. |
 | "send-keys надёжнее файлов" | send-keys = UDP без ACK. Файл = гарантия доставки. |
@@ -88,6 +91,7 @@
 - [ ] Правильный контракт (A/B/C/D)
 - [ ] COMPLEX+: Волна 1 (исследование) до Волны 2 (выполнение)
 - [ ] Фаза 2.5: file overlap проверен, `{reserved_files}` назначены
+- [ ] Фаза 2.3 (GrepAI codebase контекст) — semantic search + trace callers для scope
 - [ ] Фаза 2.7 (SDK контекст) если issue про библиотеку
 - [ ] `git worktree add` (НЕ `claude --worktree`)
 - [ ] `.env.test` скопирован в worktree (НЕ `.env`)

@@ -86,6 +86,11 @@ Plan inline -> /tmux-swarm-orchestration (Sonnet workers) -> merge -> verify
 /systematic-debugging -> root cause -> /test-driven-development -> fix -> /verification-before-completion
 ```
 
+Инструменты поиска (см. `.claude/rules/code-search.md`):
+- **GrepAI** `grepai_search` → semantic поиск бага, `grepai_trace_callers` → impact analysis
+- **LSP** `hover` → типы, `findReferences` → все usage
+- **Grep** → exact pattern match
+
 Железные правила:
 1. НЕТ фикса без root cause
 2. НЕТ фикса без теста

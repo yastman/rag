@@ -2,8 +2,18 @@
 
 from typing import Annotated
 
-from pydantic import AliasChoices, Field, SecretStr, field_validator
+from pydantic import AliasChoices, BeforeValidator, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+def _empty_str_to_false(v: object) -> object:
+    """Convert empty string to False (env vars with no value)."""
+    if v == "":
+        return False
+    return v
+
+
+EmptyStrBool = Annotated[bool, BeforeValidator(_empty_str_to_false)]
 
 
 class BotConfig(BaseSettings):
@@ -325,7 +335,7 @@ class BotConfig(BaseSettings):
         default="gpt-4o-mini",
         validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),
     )
-    client_direct_pipeline_enabled: bool = Field(
+    client_direct_pipeline_enabled: EmptyStrBool = Field(
         default=False,
         validation_alias=AliasChoices(
             "client_direct_pipeline_enabled",
