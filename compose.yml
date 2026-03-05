@@ -180,7 +180,6 @@ services:
     # Keep hardening defaults, but allow writes for this service.
     read_only: false
     image: ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:3d80908e35230a0dfb58051ae4e2847371b2a327b44e105e79b8c4f67a65596c
-    profiles: ["bot", "voice", "full"]
     restart: unless-stopped
     logging: *default-logging
     volumes:
@@ -224,7 +223,6 @@ services:
     build:
       context: .
       dockerfile: telegram_bot/Dockerfile
-    profiles: ["bot", "full"]
     restart: unless-stopped
     logging: *default-logging
     environment:
