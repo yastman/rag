@@ -7,11 +7,25 @@ from pathlib import Path
 import yaml
 
 
-_COMPOSE_PATH = Path("docker-compose.dev.yml")
+_BASE_COMPOSE_PATH = Path("compose.yml")
+_DEV_OVERRIDE_PATH = Path("compose.dev.yml")
 
 
-def _load_compose() -> dict:
-    return yaml.safe_load(_COMPOSE_PATH.read_text())
+def _load_compose(path: Path) -> dict:
+    return yaml.safe_load(path.read_text())
+
+
+def _effective_services() -> dict[str, dict]:
+    """Build lightweight effective service view for dev (base + dev override)."""
+    base = _load_compose(_BASE_COMPOSE_PATH)
+    override = _load_compose(_DEV_OVERRIDE_PATH)
+
+    services = {name: dict(cfg) for name, cfg in base.get("services", {}).items()}
+    for service_name, override_cfg in override.get("services", {}).items():
+        merged = dict(services.get(service_name, {}))
+        merged.update(override_cfg)
+        services[service_name] = merged
+    return services
 
 
 def _extract_host_port(port_mapping: str) -> str | None:
@@ -35,8 +49,7 @@ def _extract_host_port(port_mapping: str) -> str | None:
 
 def test_compose_includes_expected_profile_groups():
     """All required optional profile groups should be present."""
-    data = _load_compose()
-    services = data.get("services", {})
+    services = _effective_services()
 
     explicit_profiles: set[str] = set()
     for service in services.values():
@@ -49,8 +62,7 @@ def test_compose_includes_expected_profile_groups():
 
 def test_core_services_are_always_enabled():
     """Core services should have no profile restriction (default compose up)."""
-    data = _load_compose()
-    services = data.get("services", {})
+    services = _effective_services()
 
     core_services = {"redis", "qdrant", "bge-m3", "docling"}
     missing = [name for name in core_services if name not in services]
@@ -62,8 +74,7 @@ def test_core_services_are_always_enabled():
 
 def test_compose_has_no_duplicate_host_ports():
     """No two services should bind the same host port in short syntax."""
-    data = _load_compose()
-    services = data.get("services", {})
+    services = _effective_services()
 
     seen: dict[str, str] = {}
     collisions: list[str] = []
