@@ -26,6 +26,14 @@
 - Grep/Glob для понимания зависимостей вместо `grepai_trace_callers` (semantic + call graph точнее)
 - Классификация без GrepAI (Фаза 2.3) — orch не понимает scope, неверная сложность
 
+**MCP tools:**
+- Read для файлов >50 строк при анализе (используй context-mode execute_file)
+- Bash для output >20 строк (используй context-mode execute или batch_execute)
+- Только GrepAI без LSP для type-checking (LSP hover/findReferences даёт точные типы)
+- Code review через Read diff (используй context-mode execute — diff в sandbox, не в контекст)
+- Нет LSP findReferences при file reservation (неточные резервации → merge conflicts)
+- Нет batch_execute для сбора project_scope (N Bash вызовов засоряют контекст)
+
 **Скиллы:**
 - Worker коммит БЕЗ `Skill(skill="requesting-code-review")`
 - Worker коммит БЕЗ `Skill(skill="verification-before-completion")`
@@ -79,6 +87,9 @@
 | "Файловые резервации — оверкилл" | 2 worker'а в одном файле = merge conflict = оба потеряны. |
 | "Этот issue надо распараллелить" | Opus решает, не orch. Если Opus сказал sequential — sequential. |
 | "Opus ошибся, задачи явно независимы" | Opus видел код и зависимости. Orch видел только тело issue. Доверяй Opus. |
+| "Read diff быстрее context-mode" | Read загружает diff в контекст (~5K токенов). context-mode execute — 0 токенов, summary от intent. |
+| "LSP overkill, GrepAI хватит" | GrepAI = semantic. LSP = точные типы и references. Для file reservation нужны оба. |
+| "batch_execute сложнее N Bash" | 1 batch_execute = 1 round-trip. N Bash = N round-trips + N × output в контексте. |
 
 ## Чеклист (перед запуском)
 
@@ -91,8 +102,9 @@
 - [ ] Правильный контракт (A/B/C/D)
 - [ ] COMPLEX+: Волна 1 (исследование) до Волны 2 (выполнение)
 - [ ] Фаза 2.5: file overlap проверен, `{reserved_files}` назначены
-- [ ] Фаза 2.3 (GrepAI codebase контекст) — semantic search + trace callers для scope
+- [ ] Фаза 2.3 (GrepAI + LSP + context-mode) — semantic search, trace, types, references
 - [ ] Фаза 2.7 (SDK контекст) если issue про библиотеку
+- [ ] project_scope через batch_execute (НЕ inline Bash)
 - [ ] `git worktree add` (НЕ `claude --worktree`)
 - [ ] `.env.test` скопирован в worktree (НЕ `.env`)
 - [ ] Промт в файл (НЕ inline)
@@ -107,9 +119,10 @@
 ## Чеклист (Фаза 5 — при сигнале)
 
 - [ ] Прочитать `.signals/worker-{name}.json`
-- [ ] Артефактная проверка: тесты + `make check` + PR (код) или план >200 слов (C)
+- [ ] **Уровень 0: Code Review** через context-mode execute (diff в sandbox, НЕ Read)
+- [ ] Артефактная проверка через context-mode execute: тесты + `make check` + PR
 - [ ] Маркеры: `grep '\[SKILL:' logs/worker-{name}.log` (дополнительно)
-- [ ] Решение: артефакты OK → PASS, артефакты FAIL → эскалация
+- [ ] Решение: Code Review OK + артефакты OK → PASS, Code Review FAIL → эскалация
 - [ ] `orch_log` записать результат
 - [ ] Переименовать сигнал → `done-worker-{name}.json`
 - [ ] Очистка: убить окно + удалить worktree
