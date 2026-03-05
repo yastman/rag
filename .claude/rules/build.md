@@ -65,7 +65,7 @@ Project uses **uv** package manager with **Ruff** linter/formatter and **pre-com
 | `make docker-down` | full | stop all |
 | `make local-up` | - | redis, qdrant, bge-m3, docling (minimal) |
 
-All compose commands use `docker compose --compatibility -f docker-compose.dev.yml`.
+All compose commands use `docker compose --compatibility` (COMPOSE_FILE from `.env`).
 
 ## Pre-commit Hooks
 
@@ -73,8 +73,8 @@ File: `.pre-commit-config.yaml`
 
 | Hook | Purpose |
 |------|---------|
-| ruff-check (v0.15.1) | Lint + auto-fix |
-| ruff-format (v0.15.1) | Code formatting |
+| ruff-check (v0.15.4) | Lint + auto-fix |
+| ruff-format (v0.15.4) | Code formatting |
 | trailing-whitespace | Trim whitespace |
 | end-of-file-fixer | Ensure newline |
 | check-yaml/toml/json | Syntax check |
@@ -82,7 +82,8 @@ File: `.pre-commit-config.yaml`
 | check-merge-conflict | Detect conflict markers |
 | debug-statements | Detect debugger imports |
 | mixed-line-ending (--fix=lf) | Normalize line endings |
-| branch-protection | Warn on push to main/master (pre-push, exit 0) |
+| detect-private-key | Detect accidental key commits |
+| branch-protection | Block direct commits to main (pre-commit) |
 
 ```bash
 make setup-hooks                          # Install (one-time)
