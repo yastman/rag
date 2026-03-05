@@ -258,11 +258,29 @@ def _spawn_persist_funnel_lead_score(**kwargs: Any) -> None:
 
 async def get_city_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for city/resort selection (Step 1)."""
-    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    dialog_manager = kwargs.get("dialog_manager")
+    middleware = getattr(dialog_manager, "middleware_data", None) or kwargs.get(
+        "middleware_data", {}
+    )
+    i18n = middleware.get("i18n")
     btn_back = i18n.get("back") if i18n else "Назад"
+
+    svc = middleware.get("apartments_service")
+    items: list[tuple[str, str]]
+    if svc is not None:
+        try:
+            cities = await svc.get_distinct_values("city")
+            items = [(c, c) for c in cities]
+        except Exception:
+            logger.warning("Failed to load dynamic cities, using fallback")
+            items = list(_CITY_OPTIONS[:-1])
+    else:
+        items = list(_CITY_OPTIONS[:-1])
+
+    items.append(("Любой город", "any"))
     return {
         "title": "Выберите город:",
-        "items": _CITY_OPTIONS,
+        "items": items,
         "btn_back": btn_back,
     }
 
@@ -412,16 +430,52 @@ async def get_pref_area_options(**kwargs: Any) -> dict[str, Any]:
 
 async def get_pref_complex_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for complex sub-options in preferences."""
-    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    dialog_manager = kwargs.get("dialog_manager")
+    middleware = getattr(dialog_manager, "middleware_data", None) or kwargs.get(
+        "middleware_data", {}
+    )
+    i18n = middleware.get("i18n")
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Выберите комплекс:", "items": _COMPLEX_OPTIONS, "btn_back": btn_back}
+
+    svc = middleware.get("apartments_service")
+    items: list[tuple[str, str]]
+    if svc is not None:
+        try:
+            complexes = await svc.get_distinct_values("complex_name")
+            items = [(c, c) for c in complexes]
+        except Exception:
+            logger.warning("Failed to load dynamic complexes, using fallback")
+            items = list(_COMPLEX_OPTIONS[:-1])
+    else:
+        items = list(_COMPLEX_OPTIONS[:-1])
+
+    items.append(("Любой комплекс", "any"))
+    return {"title": "Выберите комплекс:", "items": items, "btn_back": btn_back}
 
 
 async def get_pref_section_options(**kwargs: Any) -> dict[str, Any]:
     """Getter for section sub-options in preferences."""
-    i18n = kwargs.get("middleware_data", {}).get("i18n")
+    dialog_manager = kwargs.get("dialog_manager")
+    middleware = getattr(dialog_manager, "middleware_data", None) or kwargs.get(
+        "middleware_data", {}
+    )
+    i18n = middleware.get("i18n")
     btn_back = i18n.get("back") if i18n else "← Назад"
-    return {"title": "Выберите секцию:", "items": _SECTION_OPTIONS, "btn_back": btn_back}
+
+    svc = middleware.get("apartments_service")
+    items: list[tuple[str, str]]
+    if svc is not None:
+        try:
+            sections = await svc.get_distinct_values("section")
+            items = [(s, s) for s in sections]
+        except Exception:
+            logger.warning("Failed to load dynamic sections, using fallback")
+            items = list(_SECTION_OPTIONS[:-1])
+    else:
+        items = list(_SECTION_OPTIONS[:-1])
+
+    items.append(("Любая секция", "any"))
+    return {"title": "Выберите секцию:", "items": items, "btn_back": btn_back}
 
 
 async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
