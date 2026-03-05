@@ -53,6 +53,23 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 - **Pre-commit:** ruff-check → ruff-format → trailing-whitespace → check-yaml/toml/json
 - **Commits:** `feat(scope): msg` | `fix(scope): msg` | `docs(scope): msg`
 
+## Code Search Tools
+
+| Задача | Инструмент | Tool |
+|--------|-----------|------|
+| Понять что делает код / найти по описанию | **GrepAI** | `grepai_search(query, format="toon", compact=true)` |
+| Кто вызывает функцию (impact analysis) | **GrepAI** | `grepai_trace_callers(symbol, format="toon")` |
+| Что вызывает функция (зависимости) | **GrepAI** | `grepai_trace_callees(symbol, format="toon")` |
+| Полный call graph | **GrepAI** | `grepai_trace_graph(symbol, depth=1, format="toon")` |
+| Тип / сигнатура / docstring | **LSP** | `hover(filePath, line, character)` |
+| Go-to-definition | **LSP** | `goToDefinition(filePath, line, character)` |
+| Все references (для refactoring) | **LSP** | `findReferences(filePath, line, character)` |
+| Структура файла (все символы) | **LSP** | `documentSymbol(filePath)` |
+| Точный текст / regex | **Grep** | `pattern="cache.*ttl"` |
+| Найти файл по имени | **Glob** | `pattern="**/*cache*.py"` |
+
+GrepAI daemon автостартует через SessionStart hook (`~/.claude/hooks/grepai-ensure.sh`).
+
 ## Context-Mode (MCP plugin)
 
 Экономия контекста ~87%. Сырой output остаётся в sandbox, в контекст — только резюме.
