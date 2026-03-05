@@ -143,8 +143,8 @@ def test_combined_filters():
 
 
 @pytest.mark.asyncio
-async def test_get_results_data_returns_cards():
-    """get_results_data calls scroll_with_filters and formats cards."""
+async def test_get_results_data_returns_apartments_list():
+    """get_results_data returns structured apartment dicts for List widget."""
     from telegram_bot.dialogs.funnel import get_results_data
 
     results = [
@@ -152,11 +152,14 @@ async def test_get_results_data_returns_cards():
             "id": "apt-1",
             "payload": {
                 "complex_name": "Sunrise Complex",
+                "section": "B-2",
+                "apartment_number": "105",
                 "rooms": 1,
                 "floor": 2,
                 "area_m2": 42.0,
-                "view_primary": "Море",
+                "view_primary": "sea",
                 "price_eur": 48500,
+                "city": "Свети Влас",
             },
         }
     ]
@@ -169,15 +172,26 @@ async def test_get_results_data_returns_cards():
     )
 
     result = await get_results_data(dialog_manager=manager)
-    assert result["title"] == "Найдено 297 апартаментов (показаны 1–1)"
-    assert "Sunrise Complex" in result["results_text"]
+
+    assert "apartments" in result
+    assert len(result["apartments"]) == 1
+    apt = result["apartments"][0]
+    assert apt["complex_name"] == "Sunrise Complex"
+    assert apt["section"] == "B-2"
+    assert apt["apartment_number"] == "105"
+    assert apt["price_formatted"] == "48 500"
+    assert apt["property_type"] == "Студия"
+    assert result["has_apartments"] is True
     assert result["has_more"] is True
+    assert result["no_results"] is False
+    assert result["title"] == "Найдено 297 апартаментов (показаны 1–1)"
     assert "296 осталось" in result["btn_more"]
     mock_svc.scroll_with_filters.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_get_results_data_no_results():
+async def test_get_results_data_no_results_sets_flag():
+    """get_results_data sets no_results=True when empty."""
     from telegram_bot.dialogs.funnel import get_results_data
 
     mock_svc = MagicMock()
@@ -189,7 +203,9 @@ async def test_get_results_data_no_results():
     )
 
     result = await get_results_data(dialog_manager=manager)
-    assert "ничего не найдено" in result["results_text"]
+    assert result["apartments"] == []
+    assert result["has_apartments"] is False
+    assert result["no_results"] is True
     assert result["has_more"] is False
 
 
@@ -203,7 +219,8 @@ async def test_get_results_data_no_service():
     )
 
     result = await get_results_data(dialog_manager=manager)
-    assert "недоступен" in result["results_text"].lower()
+    assert result["no_results"] is True
+    assert "недоступен" in result["no_results_text"].lower()
     assert result["btn_back"] == "Назад"
 
 
@@ -277,3 +294,5 @@ async def test_get_results_data_uses_i18n_range_and_remaining_when_results_exist
     result = await get_results_data(dialog_manager=manager)
     assert result["title"] == "Found 12 apartments (showing 1–1)"
     assert result["btn_more"] == "🔄 Show more (11 left)"
+    assert "apartments" in result
+    assert len(result["apartments"]) == 1
