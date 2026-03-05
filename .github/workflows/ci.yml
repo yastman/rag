@@ -63,10 +63,10 @@ jobs:
             git pull origin main
 
             echo "=== Rebuild bot image ==="
-            docker compose -f docker-compose.vps.yml build bot
+            docker compose build bot
 
             echo "=== Restart bot ==="
-            docker compose --compatibility -f docker-compose.vps.yml up -d --force-recreate bot
+            docker compose --compatibility up -d --force-recreate bot
 
             echo "=== Wait for startup ==="
             sleep 15
