@@ -225,3 +225,4 @@ docs/artifacts/*.md
 # Claude hooks (per-machine)
 .claude/hooks/
 .grepai/
+.signals/
