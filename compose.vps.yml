@@ -1,4 +1,4 @@
-# compose.vps.yml — VPS production overrides: memory limits, no colbert reranking.
+# compose.vps.yml — VPS production overrides: ColBERT rerank with reduced candidates, security.
 # Usage: COMPOSE_FILE=compose.yml:compose.vps.yml docker compose up -d
 
 services:
@@ -9,8 +9,8 @@ services:
 
   bot:
     environment:
-      RERANK_PROVIDER: "none"
-      RERANK_CANDIDATES_MAX: "5"
+      RERANK_PROVIDER: "colbert"
+      RERANK_CANDIDATES_MAX: "3"
 
   langfuse:
     ports:
