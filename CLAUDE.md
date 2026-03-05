@@ -1,5 +1,16 @@
 # CLAUDE.md
 
+## Git Workflow
+
+**Branch model:** `dev` → `main`. Main = прод, auto-deploy на VPS.
+
+```bash
+# Работа: всегда в dev
+git checkout dev
+# Деплой: merge в main после локальных тестов
+make check && make test-unit && git checkout main && git merge dev && git push && git checkout dev
+```
+
 ## Commands
 
 ```bash
