@@ -44,10 +44,12 @@ services:
       - "127.0.0.1:5001:5001"
 
   litellm:
+    profiles: ["bot", "voice", "full"]
     ports:
       - "127.0.0.1:4000:4000"
 
   bot:
+    profiles: ["bot", "full"]
     environment:
       RERANK_PROVIDER: colbert
       RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
