@@ -47,3 +47,21 @@ def test_validate_expired_data():
     raw = _make_init_data(BOT_TOKEN, auth_date="1000000000")
     with pytest.raises(ValueError, match="expired"):
         validate_init_data(raw, BOT_TOKEN, max_age=60)
+
+
+def test_validate_missing_hash():
+    raw = "auth_date=9999999999&user=%7B%22id%22%3A123%7D"
+    with pytest.raises(ValueError, match="Invalid"):
+        validate_init_data(raw, BOT_TOKEN)
+
+
+def test_validate_missing_auth_date():
+    # Build valid initData without auth_date — auth_date defaults to 0 -> expired
+    params = {"user": '{"id":123,"first_name":"Test"}'}
+    data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
+    secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+    hash_val = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+    params["hash"] = hash_val
+    raw = "&".join(f"{k}={quote(v)}" for k, v in params.items())
+    with pytest.raises(ValueError, match="expired"):
+        validate_init_data(raw, BOT_TOKEN, max_age=60)
