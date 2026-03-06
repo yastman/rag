@@ -847,7 +847,10 @@ ingest-gdrive-status: ## Show GDrive collection stats
 # UNIFIED INGESTION PIPELINE (v3.2.1)
 # =============================================================================
 
-.PHONY: ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+.PHONY: ingest-services ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs
+
+ingest-services: ## Index services.yaml into Qdrant
+	uv run python scripts/index_services.py
 
 ingest-unified: ## Run unified ingestion once
 	@echo "$(BLUE)Running unified ingestion (CocoIndex)...$(NC)"
