@@ -186,3 +186,12 @@ class TestPipelineCache:
 
         regex.parse.assert_called_once()
         assert result is not None
+
+
+class TestExtractionPipelineObservability:
+    def test_extract_is_observed(self) -> None:
+        """ApartmentExtractionPipeline.extract must be @observe-decorated (span: apartment-extraction-pipeline)."""
+        assert hasattr(ApartmentExtractionPipeline.extract, "__wrapped__"), (
+            "ApartmentExtractionPipeline.extract must be decorated with "
+            "@observe(name='apartment-extraction-pipeline')"
+        )
