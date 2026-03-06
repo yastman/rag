@@ -33,14 +33,26 @@ describe('HomePage', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders loading state initially (returns null before config)', () => {
+  it('renders loading indicator while config is pending', () => {
     vi.spyOn(api, 'fetchConfig').mockReturnValue(new Promise(() => {}));
-    const { container } = render(
+    render(
       <MemoryRouter>
         <HomePage />
       </MemoryRouter>,
     );
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByText('Загрузка...')).toBeInTheDocument();
+  });
+
+  it('renders empty lists on fetch error', async () => {
+    vi.spyOn(api, 'fetchConfig').mockRejectedValue(new Error('network error'));
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+    await waitFor(() => {
+      expect(screen.queryByText('Загрузка...')).not.toBeInTheDocument();
+    });
   });
 
   it('renders questions and experts after fetch', async () => {
