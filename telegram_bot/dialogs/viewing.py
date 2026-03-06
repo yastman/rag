@@ -18,6 +18,8 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select
 from aiogram_dialog.widgets.text import Const, Format  # noqa: F401
 
+from telegram_bot.observability import observe
+
 from .states import ViewingSG
 
 
@@ -318,6 +320,7 @@ async def on_phone_contact_received(message: Message, widget: Any, manager: Dial
         await message.answer("❌ Не удалось получить номер. Введите вручную:")
 
 
+@observe(name="dialog-viewing-confirm", capture_input=False, capture_output=False)
 async def on_confirm(callback: CallbackQuery, button: Button, manager: DialogManager) -> None:
     """Submit viewing request to Kommo CRM and close dialog."""
     try:
