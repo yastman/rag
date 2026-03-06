@@ -1,0 +1,222 @@
+"""Demo flow handler — FSM-based apartment search with LLM extraction."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from aiogram import F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import CallbackQuery, Message
+
+from telegram_bot.keyboards.demo_keyboard import (
+    DEFAULT_EXAMPLES,
+    build_demo_examples,
+    build_demo_menu,
+)
+
+
+logger = logging.getLogger(__name__)
+
+demo_router = Router(name="demo")
+
+
+class DemoStates(StatesGroup):
+    waiting_query = State()
+
+
+async def handle_demo_button(message: Message) -> None:
+    """Handle '🎯 Демонстрация' button press."""
+    await message.answer(
+        "🎯 Демонстрация возможностей\n\nПосмотрите, как работает умный подбор недвижимости:",
+        reply_markup=build_demo_menu(),
+    )
+
+
+@demo_router.callback_query(lambda c: c.data == "demo:apartments")
+async def handle_demo_apartments(
+    callback: CallbackQuery,
+    state: FSMContext,
+    **kwargs: Any,
+) -> None:
+    """Show instruction + example buttons, set FSM state."""
+    await callback.answer()
+    await state.set_state(DemoStates.waiting_query)
+
+    apartments_service = kwargs.get("apartments_service")
+    examples = DEFAULT_EXAMPLES
+    if apartments_service is not None:
+        try:
+            from telegram_bot.services.apartments_service import generate_search_examples
+
+            stats = await apartments_service.get_collection_stats()
+            examples = generate_search_examples(stats)
+        except Exception:
+            logger.warning("Failed to get dynamic examples, using defaults", exc_info=True)
+
+    await state.update_data(examples=examples)
+
+    await callback.message.answer(
+        "🏖 Подбор апартаментов\n\n"
+        "Напишите текстом или отправьте голосовое сообщение.\n"
+        "Или выберите пример:",
+        reply_markup=build_demo_examples(examples),
+    )
+
+
+@demo_router.callback_query(lambda c: c.data is not None and c.data.startswith("demo:example:"))
+async def handle_demo_example(
+    callback: CallbackQuery,
+    state: FSMContext,
+    **kwargs: Any,
+) -> None:
+    """Handle example button click — treat as text query."""
+    await callback.answer()
+    idx = int(callback.data.split(":")[-1])  # type: ignore[union-attr]
+    data = await state.get_data()
+    examples = data.get("examples", DEFAULT_EXAMPLES)
+    if idx >= len(examples):
+        return
+    query = examples[idx]
+
+    # Delegate search using callback.message as the reply target
+    await _run_demo_search(query, callback.message, state, **kwargs)  # type: ignore[arg-type]
+
+
+@demo_router.message(DemoStates.waiting_query)
+async def handle_demo_search_text(
+    message: Message,
+    state: FSMContext,
+    pipeline: Any = None,
+    apartments_service: Any = None,
+    embeddings: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Handle text input in demo mode — LLM extraction → search → results."""
+    if not message.text:
+        await message.answer("Отправьте текстовое или голосовое сообщение.")
+        return
+    await _run_demo_search(
+        message.text,
+        message,
+        state,
+        pipeline=pipeline,
+        apartments_service=apartments_service,
+        embeddings=embeddings,
+        **kwargs,
+    )
+
+
+async def _run_demo_search(
+    query: str,
+    message: Message,
+    state: FSMContext,
+    pipeline: Any = None,
+    apartments_service: Any = None,
+    embeddings: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Core search logic: LLM extraction → Qdrant → format results."""
+    if not pipeline:
+        await message.answer("Сервис поиска временно недоступен.")
+        return
+
+    await message.answer("🔍 Ищу подходящие варианты...")
+
+    # 1. LLM extraction
+    extraction = await pipeline.extract(query)
+
+    if not apartments_service or not embeddings:
+        await message.answer(
+            f"📋 Распознано: {extraction.hard.model_dump(exclude_none=True)}\n"
+            "(поиск недоступен в тестовом режиме)"
+        )
+        return
+
+    # 2. Embeddings
+    semantic_query = extraction.meta.semantic_remainder or query
+    dense, sparse, colbert = await embeddings.aembed_hybrid_with_colbert(semantic_query)
+
+    # 3. Search
+    filters = extraction.hard.to_filters_dict()
+    results, count = await apartments_service.search_with_filters(
+        dense_vector=dense,
+        colbert_query=colbert or None,
+        sparse_vector=sparse,
+        filters=filters or None,
+        top_k=5,
+    )
+
+    # 4. Format results
+    if not results:
+        await message.answer(
+            "К сожалению, ничего не найдено по вашему запросу.\n"
+            "Попробуйте изменить параметры или напишите другой запрос."
+        )
+        return
+
+    text_parts = [f"Найдено {count} вариантов:\n"]
+    for i, r in enumerate(results[:5], 1):
+        name = r.get("complex_name", "—")
+        rooms = r.get("rooms", "?")
+        price = r.get("price_eur", 0)
+        area = r.get("area_m2", 0)
+        city = r.get("city", "")
+        text_parts.append(f"{i}. **{name}** — {rooms} комн., {area:.0f} м², {price:,.0f}€, {city}")
+
+    await message.answer("\n".join(text_parts), parse_mode="Markdown")
+
+
+@demo_router.message(DemoStates.waiting_query, F.voice)
+async def handle_demo_search_voice(
+    message: Message,
+    state: FSMContext,
+    pipeline: Any = None,
+    apartments_service: Any = None,
+    embeddings: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Handle voice input — STT → LLM extraction → search."""
+    await message.answer("🎤 Распознаю голос...")
+
+    text = await transcribe_voice(message)
+    if not text:
+        await message.answer("Не удалось распознать речь. Попробуйте ещё раз.")
+        return
+
+    await message.answer(f"📝 Распознано: {text}")
+
+    await _run_demo_search(
+        text,
+        message,
+        state,
+        pipeline=pipeline,
+        apartments_service=apartments_service,
+        embeddings=embeddings,
+        **kwargs,
+    )
+
+
+async def transcribe_voice(message: Message) -> str | None:
+    """Download voice and transcribe via Whisper."""
+    import io
+
+    from langfuse.openai import AsyncOpenAI
+
+    bot = message.bot
+    if bot is None or message.voice is None:
+        return None
+    file = await bot.get_file(message.voice.file_id)
+    data = io.BytesIO()
+    await bot.download_file(file.file_path, data)  # type: ignore[arg-type]
+    data.seek(0)
+    data.name = "voice.ogg"  # type: ignore[attr-defined]
+
+    client = AsyncOpenAI()
+    transcript = await client.audio.transcriptions.create(
+        model="whisper",
+        file=data,
+        language="ru",
+    )
+    return transcript.text or None
