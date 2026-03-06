@@ -19,6 +19,7 @@ from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select, Sta
 from aiogram_dialog.widgets.text import Const, Format
 
 from telegram_bot.handlers.crm_callbacks import _EDIT_FIELD_PROMPT
+from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import Task
 
 from .states import CreateTaskSG, CrmQuickActionSG, MyTasksSG, TasksMenuSG
@@ -389,6 +390,7 @@ async def on_due_date_error(
     await message.answer(f"❌ {error}\n\nВведите дату в формате DD.MM.YYYY:")
 
 
+@observe(name="dialog-crm-create-task", capture_input=False, capture_output=False)
 async def on_task_confirm(
     callback: CallbackQuery,
     button: Button,

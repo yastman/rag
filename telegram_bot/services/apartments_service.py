@@ -183,6 +183,7 @@ class ApartmentsService:
 
         return formatted, len(result.points)
 
+    @observe(name="apartments-scroll", capture_input=False, capture_output=False)
     async def scroll_with_filters(
         self,
         filters: dict | None = None,

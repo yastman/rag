@@ -16,6 +16,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,7 @@ def _trim_turns_for_summary(turns: list[dict]) -> list[dict]:
     return cleaned[-_MAX_TURNS_FOR_SUMMARY:]
 
 
+@observe(name="session-summary-generate", capture_input=False, capture_output=False)
 async def generate_summary(
     *,
     turns: list[dict],
