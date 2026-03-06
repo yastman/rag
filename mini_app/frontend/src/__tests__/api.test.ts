@@ -20,6 +20,19 @@ describe('fetchConfig', () => {
 
     expect(mockFetch).toHaveBeenCalledWith('/api/config');
   });
+
+  it('throws and logs on network error', async () => {
+    const mockFetch = vi.mocked(fetch);
+    mockFetch.mockRejectedValue(new Error('network error'));
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(fetchConfig()).rejects.toThrow('network error');
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[fetchConfig] Failed to load config:',
+      expect.any(Error),
+    );
+    consoleSpy.mockRestore();
+  });
 });
 
 describe('streamChat', () => {
