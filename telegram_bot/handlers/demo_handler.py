@@ -20,8 +20,6 @@ from telegram_bot.keyboards.demo_keyboard import (
 
 logger = logging.getLogger(__name__)
 
-demo_router = Router(name="demo")
-
 
 class DemoStates(StatesGroup):
     waiting_query = State()
@@ -35,7 +33,6 @@ async def handle_demo_button(message: Message) -> None:
     )
 
 
-@demo_router.callback_query(DemoCB.filter(F.action == "apartments"))
 async def handle_demo_apartments(
     callback: CallbackQuery,
     state: FSMContext,
@@ -65,35 +62,52 @@ async def handle_demo_apartments(
     )
 
 
-@demo_router.callback_query(DemoCB.filter(F.action == "example"))
 async def handle_demo_example(
     callback: CallbackQuery,
-    callback_data: DemoCB,
-    state: FSMContext,
+    callback_data: DemoCB | None = None,
+    state: FSMContext | None = None,
     pipeline: Any = None,
     apartments_service: Any = None,
     embeddings: Any = None,
 ) -> None:
     """Handle example button click — treat as text query."""
     await callback.answer()
-    idx = callback_data.idx
+    if state is None and callback_data is not None and hasattr(callback_data, "get_data"):
+        # Backward-compatible direct calls: handle_demo_example(callback, state, ...)
+        state = callback_data  # type: ignore[assignment]
+        callback_data = None
+    if state is None:
+        return
+
+    idx: int | None = callback_data.idx if callback_data is not None else None
+    if idx is None:
+        raw_data = callback.data or ""
+        if raw_data.startswith("demo:example:"):
+            try:
+                idx = int(raw_data.rsplit(":", 1)[-1])
+            except ValueError:
+                return
+        else:
+            return
+
     data = await state.get_data()
     examples = data.get("examples", DEFAULT_EXAMPLES)
     if idx >= len(examples):
         return
     query = examples[idx]
+    if callback.message is None:
+        return
 
     await _run_demo_search(
         query,
-        callback.message,
-        state,  # type: ignore[arg-type]
+        callback.message,  # type: ignore[arg-type]
+        state,
         pipeline=pipeline,
         apartments_service=apartments_service,
         embeddings=embeddings,
     )
 
 
-@demo_router.message(DemoStates.waiting_query)
 async def handle_demo_search_text(
     message: Message,
     state: FSMContext,
@@ -177,7 +191,6 @@ async def _run_demo_search(
     await message.answer("\n".join(text_parts), parse_mode="Markdown")
 
 
-@demo_router.message(DemoStates.waiting_query, F.voice)
 async def handle_demo_search_voice(
     message: Message,
     state: FSMContext,
@@ -229,3 +242,19 @@ async def transcribe_voice(message: Message) -> str | None:
         language="ru",
     )
     return transcript.text or None
+
+
+def create_demo_router() -> Router:
+    """Create a fresh demo router instance for each bot instance."""
+    router = Router(name="demo")
+    router.callback_query.register(
+        handle_demo_apartments,
+        DemoCB.filter(F.action == "apartments"),
+    )
+    router.callback_query.register(
+        handle_demo_example,
+        DemoCB.filter(F.action == "example"),
+    )
+    router.message.register(handle_demo_search_text, DemoStates.waiting_query)
+    router.message.register(handle_demo_search_voice, DemoStates.waiting_query, F.voice)
+    return router
