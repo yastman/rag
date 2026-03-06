@@ -30,3 +30,10 @@ class ResultsCB(CallbackData, prefix="results"):
     """Property results pagination callback data."""
 
     action: str  # "more", "refine", "viewing"
+
+
+class DemoCB(CallbackData, prefix="demo"):
+    """Demo flow callback data."""
+
+    action: str  # "apartments", "example"
+    idx: int = 0
