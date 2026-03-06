@@ -59,6 +59,13 @@ docs = [
     "mkdocstrings[python]>=0.25.0",  # Auto API docs
 ]
 
+# Mini App (Telegram Web App — FastAPI backend)
+mini-app = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
+]
+
 # Voice bot (LiveKit Agents + RAG API)
 voice = [
     "livekit-agents[silero,turn-detector]~=1.4",
