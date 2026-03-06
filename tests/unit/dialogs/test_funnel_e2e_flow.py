@@ -102,8 +102,8 @@ async def test_zero_results_recovery_removes_filter():
         "property_type": "2bed",
         "budget": "luxury",
         "floor": "top",
-        "scroll_offset": "off1",
-        "scroll_next_offset": "off2",
+        "scroll_start_from": 1.0,
+        "scroll_seen_ids": ["off1"],
     }
     manager = SimpleNamespace(dialog_data=data, switch_to=AsyncMock())
 
@@ -111,7 +111,7 @@ async def test_zero_results_recovery_removes_filter():
         MagicMock(), SimpleNamespace(), manager, "rm_floor"
     )
     assert "floor" not in data
-    assert data.get("scroll_offset") is None
+    assert data.get("scroll_start_from") is None
     manager.switch_to.assert_awaited_with(FunnelSG.results)
 
     # Verify filters without floor
