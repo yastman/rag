@@ -144,6 +144,9 @@ _AREA_DISPLAY: dict[str, str] = {
 
 _VIEW_DISPLAY: dict[str, str] = {
     "sea": "Море",
+    "sea_panorama": "Панорама моря",
+    "ultra_sea_panorama": "Ультра панорама моря",
+    "ultra_sea": "Ультра море",
     "pool": "Бассейн",
     "garden": "Газон/сад",
     "forest": "Лес/горы",
@@ -622,7 +625,9 @@ async def get_results_data(
                             "property_type": _ROOMS_DISPLAY.get(rooms_num, str(rooms_num)),
                             "floor": p.get("floor", 0),
                             "area_m2": p.get("area_m2", 0),
-                            "view": p.get("view_primary", ""),
+                            "view": _VIEW_DISPLAY.get(
+                                p.get("view_primary", ""), p.get("view_primary", "")
+                            ),
                             "price_formatted": f"{int(p.get('price_eur', 0)):,}".replace(",", " "),
                         }
                     )
