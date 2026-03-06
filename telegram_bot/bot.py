@@ -4070,6 +4070,7 @@ class PropertyBot:
         self.dp["search_event_store"] = self._search_event_store
         self.dp["pipeline"] = self._apartment_pipeline
         self.dp["embeddings"] = self._hybrid
+        self.dp["llm"] = self._llm
 
         if self._i18n_hub is None:
             self._i18n_hub = create_translator_hub()

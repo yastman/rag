@@ -16,7 +16,6 @@ from telegram_bot.keyboards.demo_keyboard import (
     build_demo_examples,
     build_demo_menu,
 )
-from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -132,7 +131,6 @@ async def handle_demo_search_text(
     )
 
 
-@observe(name="demo-search", capture_input=False, capture_output=False)
 async def _run_demo_search(
     query: str,
     message: Message,
@@ -200,12 +198,13 @@ async def handle_demo_search_voice(
     pipeline: Any = None,
     apartments_service: Any = None,
     embeddings: Any = None,
+    llm: Any = None,
     **kwargs: Any,
 ) -> None:
     """Handle voice input — STT → LLM extraction → search."""
     await message.answer("🎤 Распознаю голос...")
 
-    text = await transcribe_voice(message)
+    text = await transcribe_voice(message, llm=llm)
     if not text:
         await message.answer("Не удалось распознать речь. Попробуйте ещё раз.")
         return
@@ -223,12 +222,9 @@ async def handle_demo_search_voice(
     )
 
 
-@observe(name="demo-transcribe", capture_input=False, capture_output=False)
-async def transcribe_voice(message: Message) -> str | None:
+async def transcribe_voice(message: Message, *, llm: Any = None) -> str | None:
     """Download voice and transcribe via Whisper."""
     import io
-
-    from langfuse.openai import AsyncOpenAI
 
     bot = message.bot
     if bot is None or message.voice is None:
@@ -239,8 +235,12 @@ async def transcribe_voice(message: Message) -> str | None:
     data.seek(0)
     data.name = "voice.ogg"  # type: ignore[attr-defined]
 
-    client = AsyncOpenAI()
-    transcript = await client.audio.transcriptions.create(
+    if llm is None:
+        from langfuse.openai import AsyncOpenAI
+
+        llm = AsyncOpenAI()
+
+    transcript = await llm.audio.transcriptions.create(
         model="whisper",
         file=data,
         language="ru",
@@ -259,6 +259,6 @@ def create_demo_router() -> Router:
         handle_demo_example,
         DemoCB.filter(F.action == "example"),
     )
-    router.message.register(handle_demo_search_text, DemoStates.waiting_query)
     router.message.register(handle_demo_search_voice, DemoStates.waiting_query, F.voice)
+    router.message.register(handle_demo_search_text, DemoStates.waiting_query, F.text)
     return router
