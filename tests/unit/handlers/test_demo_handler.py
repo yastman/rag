@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from aiogram.fsm.context import FSMContext
@@ -13,6 +13,7 @@ from telegram_bot.handlers.demo_handler import (
     handle_demo_apartments,
     handle_demo_button,
     handle_demo_search_text,
+    handle_demo_search_voice,
 )
 
 
@@ -118,3 +119,125 @@ class TestDemoExampleClick:
             embeddings=embeddings,
         )
         pipeline.extract.assert_awaited_once()
+
+
+class TestDemoVoiceFlow:
+    """Voice messages in demo FSM state must go through demo pipeline, not main handle_voice."""
+
+    async def test_demo_voice_calls_transcribe_and_pipeline(self) -> None:
+        """Voice in demo mode → STT → pipeline.extract() → apartment search."""
+        from telegram_bot.services.apartment_models import (
+            ApartmentSearchFilters,
+            ExtractionMeta,
+            HardFilters,
+        )
+
+        message = AsyncMock()
+        message.voice = AsyncMock()
+        message.bot = AsyncMock()
+        state = AsyncMock(spec=FSMContext)
+
+        pipeline = AsyncMock()
+        pipeline.extract.return_value = ApartmentSearchFilters(
+            hard=HardFilters(rooms=2, min_price_eur=200000, city="Солнечный берег"),
+            meta=ExtractionMeta(source="llm", confidence="HIGH"),
+        )
+        apartments_service = AsyncMock()
+        apartments_service.search_with_filters.return_value = (
+            [
+                {
+                    "score": 0.9,
+                    "payload": {
+                        "complex_name": "Premier Fort Beach",
+                        "rooms": 2,
+                        "price_eur": 200000,
+                        "area_m2": 79,
+                        "city": "Солнечный берег",
+                    },
+                    "id": "1",
+                }
+            ],
+            1,
+        )
+        embeddings = AsyncMock()
+        embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
+
+        transcribed = "Солнечный берег, квартиры дороже 200 тысяч евро"
+        with patch(
+            "telegram_bot.handlers.demo_handler.transcribe_voice",
+            return_value=transcribed,
+        ) as mock_transcribe:
+            await handle_demo_search_voice(
+                message,
+                state,
+                pipeline=pipeline,
+                apartments_service=apartments_service,
+                embeddings=embeddings,
+            )
+            mock_transcribe.assert_awaited_once_with(message)
+
+        pipeline.extract.assert_awaited_once_with(transcribed)
+        apartments_service.search_with_filters.assert_awaited_once()
+
+    async def test_demo_voice_shows_transcription(self) -> None:
+        """Voice in demo shows '📝 Распознано: ...' before search."""
+        message = AsyncMock()
+        state = AsyncMock(spec=FSMContext)
+
+        transcribed = "двушка до 100к"
+        with patch(
+            "telegram_bot.handlers.demo_handler.transcribe_voice",
+            return_value=transcribed,
+        ):
+            await handle_demo_search_voice(message, state, pipeline=None)
+
+        # First call: "🎤 Распознаю голос...", second: "📝 Распознано: ..."
+        calls = message.answer.await_args_list
+        assert any("Распознано" in str(c) and transcribed in str(c) for c in calls)
+
+    async def test_demo_voice_failed_stt_shows_error(self) -> None:
+        """If STT returns None, show error message."""
+        message = AsyncMock()
+        state = AsyncMock(spec=FSMContext)
+
+        with patch(
+            "telegram_bot.handlers.demo_handler.transcribe_voice",
+            return_value=None,
+        ):
+            await handle_demo_search_voice(message, state, pipeline=AsyncMock())
+
+        calls = message.answer.await_args_list
+        assert any("Не удалось распознать" in str(c) for c in calls)
+
+    async def test_demo_router_registers_voice_handler(self) -> None:
+        """Demo router must register voice handler for DemoStates.waiting_query."""
+        from telegram_bot.handlers.demo_handler import create_demo_router
+
+        router = create_demo_router()
+        # Check that handle_demo_search_voice is registered
+        handler_names = [h.callback.__name__ for h in router.message.handlers]
+        assert "handle_demo_search_voice" in handler_names, (
+            "Demo router must register handle_demo_search_voice"
+        )
+
+
+class TestHandleVoiceStateFilter:
+    """Main handle_voice must NOT intercept voice during active FSM states."""
+
+    def test_handle_voice_has_state_filter(self) -> None:
+        """handle_voice registration must include StateFilter(None)
+        to avoid intercepting voice messages during demo FSM state.
+        Regression test for: voice in demo went to RAG instead of apartment search.
+        """
+
+        # Inspect _register_handlers source to find the voice registration
+        import inspect
+
+        from telegram_bot.bot import PropertyBot
+
+        source = inspect.getsource(PropertyBot._register_handlers)
+        # Must have StateFilter(None) alongside F.voice
+        assert "StateFilter(None)" in source and "F.voice" in source, (
+            "handle_voice must be registered with StateFilter(None) "
+            "to prevent intercepting voice during FSM states (e.g. DemoStates.waiting_query)"
+        )
