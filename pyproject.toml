@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "anthropic",
     "openai",
+    "instructor>=1.7.0",  # Structured LLM extraction for apartment filters
     "groq",
     "python-dotenv",
     "pydantic-settings>=2.0.0",  # Required by telegram_bot/config.py (BotConfig)
