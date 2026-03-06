@@ -4124,6 +4124,7 @@ class PropertyBot:
                     web_app=WebAppInfo(url=self.config.mini_app_url),
                 )
             )
+            logger.info("Mini App menu button set: %s", self.config.mini_app_url)
         else:
             from aiogram.types import MenuButtonCommands
 
