@@ -4114,10 +4114,20 @@ class PropertyBot:
             ]
         )
 
-        # Set default Menu Button → opens commands list (#628)
-        from aiogram.types import MenuButtonCommands
+        # Set Menu Button: WebApp when MINI_APP_URL is configured, else commands list (#883)
+        if self.config.mini_app_url:
+            from aiogram.types import MenuButtonWebApp, WebAppInfo
 
-        await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+            await self.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Открыть",
+                    web_app=WebAppInfo(url=self.config.mini_app_url),
+                )
+            )
+        else:
+            from aiogram.types import MenuButtonCommands
+
+            await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
         await self.dp.start_polling(self.bot)
 
