@@ -37,3 +37,25 @@ class TestGenerateExamples:
         }
         examples = generate_search_examples(stats)
         assert len(set(examples)) == 4
+
+    def test_empty_stats_uses_defaults(self) -> None:
+        examples = generate_search_examples({})
+        assert len(examples) == 4
+        assert all(isinstance(e, str) for e in examples)
+
+    def test_single_city_no_complex(self) -> None:
+        stats = {
+            "cities": ["Бургас"],
+            "complexes": [],
+            "rooms": [1],
+            "min_price": 50000,
+            "max_price": 150000,
+        }
+        examples = generate_search_examples(stats)
+        assert len(examples) == 4
+        assert any("Бургас" in e for e in examples)
+
+    def test_no_cities_uses_defaults(self) -> None:
+        stats = {"cities": [], "complexes": [], "rooms": [], "min_price": 0, "max_price": 0}
+        examples = generate_search_examples(stats)
+        assert len(examples) == 4
