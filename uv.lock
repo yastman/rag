@@ -747,6 +747,7 @@ dependencies = [
     { name = "cachetools" },
     { name = "fluentogram" },
     { name = "groq" },
+    { name = "instructor" },
     { name = "langchain-core" },
     { name = "langfuse" },
     { name = "langgraph" },
@@ -817,6 +818,11 @@ ingest = [
     { name = "fastembed" },
     { name = "pymupdf" },
 ]
+mini-app = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "uvicorn" },
+]
 ml-local = [
     { name = "flagembedding" },
     { name = "scipy" },
@@ -874,12 +880,15 @@ requires-dist = [
     { name = "datasets", marker = "extra == 'eval'", specifier = ">=3.0.0" },
     { name = "docling", marker = "extra == 'ingest'", specifier = ">=2.70.0" },
     { name = "docling-core", marker = "extra == 'ingest'", specifier = ">=2.61.0" },
+    { name = "fastapi", marker = "extra == 'mini-app'", specifier = ">=0.115.0" },
     { name = "fastapi", marker = "extra == 'voice'", specifier = ">=0.115.0" },
     { name = "fastembed", marker = "extra == 'ingest'", specifier = ">=0.7.4" },
     { name = "flagembedding", marker = "extra == 'ml-local'" },
     { name = "fluentogram", specifier = ">=1.2.0" },
     { name = "groq" },
+    { name = "httpx", marker = "extra == 'mini-app'", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'voice'", specifier = ">=0.27.0" },
+    { name = "instructor", specifier = ">=1.7.0" },
     { name = "langchain-core", specifier = ">=1.2" },
     { name = "langfuse", specifier = ">=3.14.0" },
     { name = "langgraph", specifier = ">=1.0.3,<2.0" },
@@ -914,11 +923,12 @@ requires-dist = [
     { name = "torch", marker = "extra == 'ml-local'", specifier = ">=2.0.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", marker = "extra == 'ml-local'", specifier = ">=0.15.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "transformers", marker = "extra == 'ml-local'", specifier = ">=4.30.0" },
+    { name = "uvicorn", marker = "extra == 'mini-app'", specifier = ">=0.30.0" },
     { name = "uvicorn", marker = "extra == 'voice'", specifier = ">=0.30.0" },
     { name = "uvloop", specifier = ">=0.21.0" },
     { name = "voyageai", specifier = ">=0.3.0" },
 ]
-provides-extras = ["ml-local", "docs", "voice", "ingest", "eval", "all"]
+provides-extras = ["ml-local", "docs", "mini-app", "voice", "ingest", "eval", "all"]
 
 [package.metadata.requires-dev]
 dev = [
