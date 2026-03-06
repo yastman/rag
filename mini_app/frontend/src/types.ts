@@ -36,7 +36,7 @@ declare global {
   interface Window {
     Telegram?: {
       WebApp: {
-        BackButton: { show(): void; hide(): void; onClick(cb: () => void): void };
+        BackButton: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
         MainButton: { show(): void; hide(): void; setText(t: string): void; onClick(cb: () => void): void };
         ready(): void;
         expand(): void;
