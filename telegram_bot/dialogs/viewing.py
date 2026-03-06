@@ -10,9 +10,7 @@ from typing import Any
 from aiogram.types import (
     CallbackQuery,
     ContentType,
-    KeyboardButton,
     Message,
-    ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
 )
 from aiogram_dialog import Dialog, DialogManager, ShowMode, Window
@@ -239,14 +237,9 @@ async def on_manual_text_received(message: Message, widget: Any, manager: Dialog
 
 async def _send_phone_reply_keyboard(callback: CallbackQuery) -> None:
     """Send ReplyKeyboard with 'Share Contact' button for phone step."""
-    kb = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📱 Поделиться контактом", request_contact=True)],
-            [KeyboardButton(text="❌ Отмена")],
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True,
-    )
+    from telegram_bot.keyboards.phone_keyboard import build_phone_keyboard
+
+    kb = build_phone_keyboard()
     await callback.bot.send_message(  # type: ignore[union-attr]
         chat_id=callback.from_user.id,
         text="👇 Нажмите кнопку ниже или введите номер вручную:",
@@ -281,13 +274,17 @@ async def on_date_selected(
 
 async def on_phone_text_received(message: Message, widget: Any, manager: DialogManager) -> None:
     """Handle phone number text input."""
-    from telegram_bot.handlers.phone_collector import normalize_phone, validate_phone
+    from telegram_bot.keyboards.phone_keyboard import (
+        is_phone_cancel,
+        normalize_phone,
+        validate_phone,
+    )
 
     text = message.text or ""
     logger.info("on_phone_text_received: raw=%r", text)
 
     # Handle cancel from ReplyKeyboard
-    if text in ("❌ Отмена", "Отмена"):
+    if is_phone_cancel(text):
         await message.answer("Запись отменена.", reply_markup=ReplyKeyboardRemove())
         await manager.done()
         return
@@ -309,7 +306,7 @@ async def on_phone_text_received(message: Message, widget: Any, manager: DialogM
 async def on_phone_contact_received(message: Message, widget: Any, manager: DialogManager) -> None:
     """Handle shared contact (request_contact button)."""
     if message.contact and message.contact.phone_number:
-        from telegram_bot.handlers.phone_collector import normalize_phone
+        from telegram_bot.keyboards.phone_keyboard import normalize_phone
 
         raw = message.contact.phone_number
         phone = normalize_phone(raw) or raw
