@@ -1012,20 +1012,21 @@ def test_summary_window_has_list_and_cards_buttons():
     summary_window = funnel_dialog.windows[FunnelSG.summary]
     assert summary_window is not None, "Summary window not found"
 
-    button_ids = set()
+    widgets = {}
 
-    def _collect_ids(widget):
+    def _collect(widget):
         if hasattr(widget, "widget_id") and widget.widget_id:
-            button_ids.add(widget.widget_id)
+            widgets[widget.widget_id] = widget
         for child in getattr(widget, "buttons", []):
-            _collect_ids(child)
+            _collect(child)
 
     for child in summary_window.keyboard.buttons:
-        _collect_ids(child)
+        _collect(child)
 
-    assert "search_list" in button_ids, "Missing 'search_list' SwitchTo button"
-    assert "search_cards" in button_ids, "Missing 'search_cards' Button"
-    assert "search" not in button_ids, "Old 'search' button still present"
+    assert "search_list" in widgets, "Missing 'search_list' SwitchTo button"
+    assert "search_cards" in widgets, "Missing 'search_cards' Button"
+    assert "search" not in widgets, "Old 'search' button still present"
+    assert widgets["search_list"].state == FunnelSG.results, "search_list must target results"
 
 
 def test_funnel_has_pref_section_window():
