@@ -1147,9 +1147,9 @@ class TestCheckpointNamespace:
             assert cfg["thread_id"] == "12345"
             assert cfg["checkpoint_ns"] == "tg:voice:v1"
             graph_kwargs = mock_build_graph.call_args.kwargs
-            assert graph_kwargs["checkpointer"] is None, (
-                "Voice graph must not use Redis checkpointer — HumanMessage is not "
-                "JSON serializable (langgraph-checkpoint-redis #420)"
+            assert graph_kwargs["checkpointer"] is bot._agent_checkpointer, (
+                "Voice graph should use agent checkpointer "
+                "(HumanMessage serialization fixed in langgraph-checkpoint-redis>=0.3.6)"
             )
 
     async def test_text_and_voice_concurrent_requests_keep_separate_threads(self, mock_config):
