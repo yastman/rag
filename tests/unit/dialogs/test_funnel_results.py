@@ -191,6 +191,67 @@ async def test_get_results_data_returns_apartments_list():
 
 
 @pytest.mark.asyncio
+async def test_card_has_html_bold_tags():
+    """Card text must contain HTML <b> tags for idx, complex name, and price."""
+    from telegram_bot.dialogs.funnel import get_results_data
+
+    results = [
+        {
+            "id": "apt-1",
+            "payload": {
+                "complex_name": "Test Resort",
+                "section": "A-1",
+                "apartment_number": "42",
+                "rooms": 2,
+                "floor": 3,
+                "area_m2": 75.6,
+                "view_primary": "sea_panorama",
+                "price_eur": 150000,
+                "city": "Бургас",
+            },
+        }
+    ]
+    mock_svc = MagicMock()
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 1, None, []))
+
+    manager = SimpleNamespace(
+        dialog_data={"property_type": "2bed", "budget": "mid"},
+        middleware_data={"apartments_service": mock_svc},
+    )
+
+    result = await get_results_data(dialog_manager=manager)
+    card = result["apartments"][0]["card"]
+
+    # HTML bold tags
+    assert "<b>1.</b>" in card
+    assert "<b>Test Resort</b>" in card
+    assert "<b>150 000 €</b>" in card
+
+    # View translated from raw view_primary
+    assert "Панорама моря" in card
+    assert "sea_panorama" not in card
+
+    # Area rounded to int
+    assert "76 м²" in card
+    assert "75.6" not in card
+
+    # 3-line format
+    lines = card.split("\n")
+    assert len(lines) == 3
+
+
+def test_results_window_has_html_parse_mode():
+    """Results Window must have parse_mode=HTML for bold rendering."""
+    from aiogram.enums import ParseMode
+
+    from telegram_bot.dialogs.funnel import funnel_dialog
+    from telegram_bot.dialogs.states import FunnelSG
+
+    results_window = funnel_dialog.windows[FunnelSG.results]
+    assert results_window.parse_mode == ParseMode.HTML
+
+
+@pytest.mark.asyncio
 async def test_get_results_data_no_results_sets_flag():
     """get_results_data sets no_results=True when empty."""
     from telegram_bot.dialogs.funnel import get_results_data
