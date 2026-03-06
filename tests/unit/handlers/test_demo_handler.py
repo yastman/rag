@@ -174,7 +174,7 @@ class TestDemoVoiceFlow:
                 apartments_service=apartments_service,
                 embeddings=embeddings,
             )
-            mock_transcribe.assert_awaited_once_with(message)
+            mock_transcribe.assert_awaited_once_with(message, llm=None)
 
         pipeline.extract.assert_awaited_once_with(transcribed)
         apartments_service.search_with_filters.assert_awaited_once()
@@ -208,6 +208,38 @@ class TestDemoVoiceFlow:
 
         calls = message.answer.await_args_list
         assert any("Не удалось распознать" in str(c) for c in calls)
+
+    async def test_demo_voice_passes_llm_to_transcribe(self) -> None:
+        """Voice handler must pass injected llm client to transcribe_voice."""
+        message = AsyncMock()
+        state = AsyncMock(spec=FSMContext)
+        llm = AsyncMock()
+
+        with patch(
+            "telegram_bot.handlers.demo_handler.transcribe_voice",
+            return_value="test",
+        ) as mock_transcribe:
+            await handle_demo_search_voice(message, state, pipeline=None, llm=llm)
+            mock_transcribe.assert_awaited_once_with(message, llm=llm)
+
+    async def test_transcribe_voice_uses_injected_llm(self) -> None:
+        """transcribe_voice must use injected llm, not create its own AsyncOpenAI."""
+        from telegram_bot.handlers.demo_handler import transcribe_voice
+
+        message = AsyncMock()
+        message.voice = AsyncMock(file_id="f1")
+        message.bot = AsyncMock()
+        file_mock = AsyncMock()
+        file_mock.file_path = "voice/test.ogg"
+        message.bot.get_file.return_value = file_mock
+
+        llm = AsyncMock()
+        llm.audio.transcriptions.create.return_value = AsyncMock(text="hello")
+
+        result = await transcribe_voice(message, llm=llm)
+
+        assert result == "hello"
+        llm.audio.transcriptions.create.assert_awaited_once()
 
     async def test_demo_router_registers_voice_handler(self) -> None:
         """Demo router must register voice handler for DemoStates.waiting_query."""
