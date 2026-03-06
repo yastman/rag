@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import uuid
 
 from qdrant_client import models
 
@@ -188,39 +187,52 @@ class ApartmentsService:
         self,
         filters: dict | None = None,
         limit: int = 5,
-        offset: str | uuid.UUID | None = None,
-    ) -> tuple[list[dict], int, str | uuid.UUID | None]:
-        """Payload-only scroll (no vectors), ordered by price_eur.
+        start_from: float | None = None,
+        exclude_ids: list[str] | None = None,
+    ) -> tuple[list[dict], int, float | None, list[str]]:
+        """Payload-only scroll ordered by price_eur.
 
-        Returns: (results, total_count, next_offset)
+        Uses OrderBy.start_from for pagination (offset incompatible with order_by).
+        Returns: (results, total_count, next_start_from, page_ids)
         """
         qdrant_filter = _build_apartment_filter(filters)
 
-        records, next_offset = await self._qdrant.client.scroll(
+        # Дедупликация: исключить уже показанные ID на границе цены
+        if exclude_ids:
+            has_id_cond = models.HasIdCondition(has_id=exclude_ids)
+            if qdrant_filter is None:
+                qdrant_filter = models.Filter(must_not=[has_id_cond])
+            else:
+                existing_must_not = list(qdrant_filter.must_not or [])
+                existing_must_not.append(has_id_cond)
+                qdrant_filter.must_not = existing_must_not
+
+        records, _ = await self._qdrant.client.scroll(
             collection_name=self._qdrant.collection_name,
             scroll_filter=qdrant_filter,
             limit=limit,
-            offset=offset,
             with_payload=True,
             with_vectors=False,
-            order_by=models.OrderBy(key="price_eur"),
+            order_by=models.OrderBy(key="price_eur", start_from=start_from),
         )
 
         count_result = await self._qdrant.client.count(
             collection_name=self._qdrant.collection_name,
-            count_filter=qdrant_filter,
+            count_filter=_build_apartment_filter(filters),  # без exclude_ids
             exact=True,
         )
 
-        formatted = [
-            {
-                "id": str(r.id),
-                "payload": r.payload or {},
-            }
-            for r in records
-        ]
+        formatted = [{"id": str(r.id), "payload": r.payload or {}} for r in records]
 
-        return formatted, count_result.count, next_offset  # type: ignore[return-value]
+        # next_start_from = цена последней записи
+        next_start_from_val: float | None = None
+        page_ids: list[str] = []
+        if records:
+            last_price = (records[-1].payload or {}).get("price_eur")
+            next_start_from_val = float(last_price) if last_price is not None else None
+            page_ids = [str(r.id) for r in records]
+
+        return formatted, count_result.count, next_start_from_val, page_ids
 
     async def get_distinct_values(self, field: str) -> list[str]:
         """Get sorted unique non-empty values for a payload field via scroll."""
