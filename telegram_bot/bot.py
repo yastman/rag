@@ -697,7 +697,7 @@ class PropertyBot:
         self.dp.message(Command("call"))(self.cmd_call)
         self.dp.message(Command("history"))(self.cmd_history)
         self.dp.message(Command("clearcache"))(self.cmd_clearcache)
-        self.dp.message(F.voice)(self.handle_voice)
+        self.dp.message(StateFilter(None), F.voice)(self.handle_voice)
         # ReplyKeyboard buttons — registered before catch-all F.text (#628)
         from .keyboards.client_keyboard import get_menu_button_texts
 
