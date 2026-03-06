@@ -97,32 +97,27 @@ async def apartment_search(
     if not _has_explicit_filters and pipeline is not None:
         try:
             extraction = await pipeline.extract(query)
-            if extraction.hard:
-                rooms = rooms if rooms is not None else extraction.hard.rooms
-                min_price_eur = (
-                    min_price_eur if min_price_eur is not None else extraction.hard.min_price_eur
-                )
-                max_price_eur = (
-                    max_price_eur if max_price_eur is not None else extraction.hard.max_price_eur
-                )
-                min_area_m2 = (
-                    min_area_m2 if min_area_m2 is not None else extraction.hard.min_area_m2
-                )
-                max_area_m2 = (
-                    max_area_m2 if max_area_m2 is not None else extraction.hard.max_area_m2
-                )
-                min_floor = min_floor if min_floor is not None else extraction.hard.min_floor
-                max_floor = max_floor if max_floor is not None else extraction.hard.max_floor
-                complex_name = (
-                    complex_name if complex_name is not None else extraction.hard.complex_name
-                )
-                is_furnished = (
-                    is_furnished if is_furnished is not None else extraction.hard.is_furnished
-                )
-                if not view and extraction.hard.view_tags:
-                    view = extraction.hard.view_tags[0]
-                if extraction.meta.semantic_remainder:
-                    query = extraction.meta.semantic_remainder
+            rooms = rooms if rooms is not None else extraction.hard.rooms
+            min_price_eur = (
+                min_price_eur if min_price_eur is not None else extraction.hard.min_price_eur
+            )
+            max_price_eur = (
+                max_price_eur if max_price_eur is not None else extraction.hard.max_price_eur
+            )
+            min_area_m2 = min_area_m2 if min_area_m2 is not None else extraction.hard.min_area_m2
+            max_area_m2 = max_area_m2 if max_area_m2 is not None else extraction.hard.max_area_m2
+            min_floor = min_floor if min_floor is not None else extraction.hard.min_floor
+            max_floor = max_floor if max_floor is not None else extraction.hard.max_floor
+            complex_name = (
+                complex_name if complex_name is not None else extraction.hard.complex_name
+            )
+            is_furnished = (
+                is_furnished if is_furnished is not None else extraction.hard.is_furnished
+            )
+            if not view and extraction.hard.view_tags:
+                view = extraction.hard.view_tags[0]
+            if extraction.meta.semantic_remainder:
+                query = extraction.meta.semantic_remainder
         except Exception:
             logger.debug("Pipeline extraction in apartment_search failed", exc_info=True)
 
