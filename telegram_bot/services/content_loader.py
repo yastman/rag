@@ -49,3 +49,10 @@ def get_phone_config(service_key: str) -> dict[str, Any] | None:
     if svc:
         return svc
     return get_entry_point_config(service_key)
+
+
+def load_mini_app_config() -> dict[str, Any]:
+    """Load Mini App configuration (questions + experts) from YAML."""
+    path = _CONFIG_DIR / "mini_app.yaml"
+    with open(path, encoding="utf-8") as f:
+        return yaml.safe_load(f)  # type: ignore[no-any-return]
