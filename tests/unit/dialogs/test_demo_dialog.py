@@ -194,6 +194,10 @@ async def test_on_text_input_calls_pipeline_and_switches_to_results() -> None:
     pipeline.extract.assert_awaited_once_with("двушка до 100к")
     manager.switch_to.assert_awaited_once_with(DemoSG.results)
 
+    # Verify top_k passed to service
+    call_kwargs = apartments_service.search_with_filters.await_args
+    assert call_kwargs.kwargs["top_k"] == 10
+
 
 @pytest.mark.asyncio
 async def test_on_text_input_no_pipeline_shows_error() -> None:
