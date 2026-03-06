@@ -17,6 +17,7 @@ from aiogram_dialog.widgets.kbd import (
     Column,
     ManagedMultiselect,
     Multiselect,
+    Row,
     Select,
     SwitchTo,
 )
@@ -870,6 +871,18 @@ async def on_pref_section_selected(
     await manager.switch_to(FunnelSG.preferences)
 
 
+async def on_search_list(
+    callback: CallbackQuery,
+    widget: Any,
+    manager: DialogManager,
+) -> None:
+    """Reset pagination before switching to list results."""
+    data = manager.dialog_data
+    data.pop("scroll_offset", None)
+    data.pop("scroll_next_offset", None)
+    data["scroll_page"] = 1
+
+
 async def on_summary_search(
     callback: CallbackQuery,
     button: Button,
@@ -1244,11 +1257,20 @@ funnel_dialog = Dialog(
     # Step 5: Summary + confirmation
     Window(
         Format("{summary_text}"),
-        Button(
-            Format("🔍 Показать результаты"),
-            id="search",
-            on_click=on_summary_search,
-            when="can_search",
+        Row(
+            SwitchTo(
+                Format("📋 Списком"),
+                id="search_list",
+                state=FunnelSG.results,
+                on_click=on_search_list,
+                when="can_search",
+            ),
+            Button(
+                Format("🏠 Карточками"),
+                id="search_cards",
+                on_click=on_summary_search,
+                when="can_search",
+            ),
         ),
         SwitchTo(
             Format("✏️ Изменить параметры"),
