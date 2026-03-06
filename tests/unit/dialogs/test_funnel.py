@@ -987,6 +987,47 @@ async def test_preferences_section_syncs_widget_state():
     assert "section" in checked
 
 
+@pytest.mark.asyncio
+async def test_on_search_list_resets_pagination():
+    """on_search_list must reset scroll state before switching to list view."""
+    manager = SimpleNamespace(
+        dialog_data={
+            "scroll_offset": "some-offset",
+            "scroll_next_offset": "next",
+            "scroll_page": 3,
+            "city": "Бургас",
+        },
+    )
+    callback = AsyncMock()
+    await funnel_module.on_search_list(callback, None, manager)
+
+    assert "scroll_offset" not in manager.dialog_data
+    assert "scroll_next_offset" not in manager.dialog_data
+    assert manager.dialog_data["scroll_page"] == 1
+    assert manager.dialog_data["city"] == "Бургас"
+
+
+def test_summary_window_has_list_and_cards_buttons():
+    """Summary Window must have both 'list' and 'cards' result buttons."""
+    summary_window = funnel_dialog.windows[FunnelSG.summary]
+    assert summary_window is not None, "Summary window not found"
+
+    button_ids = set()
+
+    def _collect_ids(widget):
+        if hasattr(widget, "widget_id") and widget.widget_id:
+            button_ids.add(widget.widget_id)
+        for child in getattr(widget, "buttons", []):
+            _collect_ids(child)
+
+    for child in summary_window.keyboard.buttons:
+        _collect_ids(child)
+
+    assert "search_list" in button_ids, "Missing 'search_list' SwitchTo button"
+    assert "search_cards" in button_ids, "Missing 'search_cards' Button"
+    assert "search" not in button_ids, "Old 'search' button still present"
+
+
 def test_funnel_has_pref_section_window():
     windows = funnel_dialog.windows
     states = [w.get_state() for w in windows.values()]
