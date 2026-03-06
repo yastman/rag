@@ -34,7 +34,7 @@ async def handle_demo_button(message: Message) -> None:
     )
 
 
-@demo_router.callback_query(lambda c: c.data == "demo:apartments")
+@demo_router.callback_query(F.data == "demo:apartments")
 async def handle_demo_apartments(
     callback: CallbackQuery,
     state: FSMContext,
@@ -65,7 +65,7 @@ async def handle_demo_apartments(
     )
 
 
-@demo_router.callback_query(lambda c: c.data is not None and c.data.startswith("demo:example:"))
+@demo_router.callback_query(F.data.startswith("demo:example:"))
 async def handle_demo_example(
     callback: CallbackQuery,
     state: FSMContext,
