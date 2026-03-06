@@ -31,11 +31,15 @@ class TestDemoSearchText:
         apartments_service.search_with_filters.return_value = (
             [
                 {
-                    "complex_name": "Test",
-                    "rooms": 2,
-                    "price_eur": 95000,
-                    "area_m2": 60,
-                    "city": "Солнечный берег",
+                    "score": 0.85,
+                    "payload": {
+                        "complex_name": "Test",
+                        "rooms": 2,
+                        "price_eur": 95000,
+                        "area_m2": 60,
+                        "city": "Солнечный берег",
+                    },
+                    "id": "1",
                 }
             ],
             1,
@@ -173,11 +177,15 @@ class TestDemoSearchEdgeCases:
         apartments_service.search_with_filters.return_value = (
             [
                 {
-                    "complex_name": "Fort Beach",
-                    "rooms": 2,
-                    "price_eur": 95000,
-                    "area_m2": 60,
-                    "city": "Солнечный берег",
+                    "score": 0.85,
+                    "payload": {
+                        "complex_name": "Fort Beach",
+                        "rooms": 2,
+                        "price_eur": 95000,
+                        "area_m2": 60,
+                        "city": "Солнечный берег",
+                    },
+                    "id": "1",
                 }
             ],
             1,
@@ -197,6 +205,114 @@ class TestDemoSearchEdgeCases:
         assert len(result_msg) == 1
         assert "комн." in result_msg[0]
         assert "м²" in result_msg[0]
+
+
+class TestDemoResultsFormatting:
+    """Tests for _run_demo_search result formatting with payload structure."""
+
+    @staticmethod
+    def _make_result(payload: dict, score: float = 0.8, rid: str = "1") -> dict:
+        return {"score": score, "payload": payload, "id": rid}
+
+    @staticmethod
+    async def _run(results: list[dict], count: int) -> list[str]:
+        message = AsyncMock()
+        message.text = "тест"
+        state = AsyncMock()
+        pipeline = AsyncMock()
+        pipeline.extract.return_value = ApartmentSearchFilters(
+            hard=HardFilters(),
+            meta=ExtractionMeta(source="llm", confidence="HIGH"),
+        )
+        svc = AsyncMock()
+        svc.search_with_filters.return_value = (results, count)
+        emb = AsyncMock()
+        emb.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
+        await handle_demo_search_text(
+            message,
+            state,
+            pipeline=pipeline,
+            apartments_service=svc,
+            embeddings=emb,
+        )
+        return [c.args[0] for c in message.answer.await_args_list]
+
+    @pytest.mark.asyncio
+    async def test_partial_payload_uses_defaults(self) -> None:
+        """Missing payload fields fall back to defaults (—, ?, 0)."""
+        results = [self._make_result({"complex_name": "Beach"})]
+        calls = await self._run(results, 1)
+        result_msg = [c for c in calls if "Beach" in c]
+        assert len(result_msg) == 1
+        assert "? комн." in result_msg[0]
+        assert "0 м²" in result_msg[0]
+        assert "0€" in result_msg[0]
+
+    @pytest.mark.asyncio
+    async def test_empty_payload_all_defaults(self) -> None:
+        """Result with empty payload shows all default values."""
+        results = [self._make_result({})]
+        calls = await self._run(results, 1)
+        result_msg = [c for c in calls if "—" in c]
+        assert len(result_msg) == 1
+        assert "? комн." in result_msg[0]
+
+    @pytest.mark.asyncio
+    async def test_missing_payload_key_graceful(self) -> None:
+        """Result dict without 'payload' key doesn't crash."""
+        results = [{"score": 0.5, "id": "x"}]
+        calls = await self._run(results, 1)
+        result_msg = [c for c in calls if "—" in c]
+        assert len(result_msg) == 1
+
+    @pytest.mark.asyncio
+    async def test_multiple_results_numbered(self) -> None:
+        """Multiple results are numbered 1-N with correct data."""
+        results = [
+            self._make_result(
+                {"complex_name": "Alpha", "rooms": 1, "price_eur": 50000, "area_m2": 30}, rid="a"
+            ),
+            self._make_result(
+                {"complex_name": "Beta", "rooms": 3, "price_eur": 200000, "area_m2": 90}, rid="b"
+            ),
+            self._make_result(
+                {"complex_name": "Gamma", "rooms": 2, "price_eur": 120000, "area_m2": 65}, rid="c"
+            ),
+        ]
+        calls = await self._run(results, 3)
+        result_msg = [c for c in calls if "Alpha" in c]
+        assert len(result_msg) == 1
+        text = result_msg[0]
+        assert "1. **Alpha**" in text
+        assert "2. **Beta**" in text
+        assert "3. **Gamma**" in text
+
+    @pytest.mark.asyncio
+    async def test_large_price_formatted(self) -> None:
+        """Price >= 1000 is formatted with comma separator."""
+        results = [self._make_result({"complex_name": "X", "price_eur": 250000})]
+        calls = await self._run(results, 1)
+        result_msg = [c for c in calls if "X" in c]
+        assert "250,000€" in result_msg[0]
+
+    @pytest.mark.asyncio
+    async def test_count_header_reflects_total(self) -> None:
+        """Header shows total count, not just returned results."""
+        results = [self._make_result({"complex_name": "Solo"})]
+        calls = await self._run(results, 42)
+        header = [c for c in calls if "42" in c]
+        assert len(header) == 1
+
+    @pytest.mark.asyncio
+    async def test_max_five_results_shown(self) -> None:
+        """At most 5 results are displayed even if more returned."""
+        results = [self._make_result({"complex_name": f"R{i}"}, rid=str(i)) for i in range(7)]
+        calls = await self._run(results, 7)
+        result_msg = [c for c in calls if "вариантов" in c]
+        assert len(result_msg) == 1
+        assert "R0" in result_msg[0]
+        assert "R4" in result_msg[0]
+        assert "R5" not in result_msg[0]
 
 
 class TestDemoVoice:
