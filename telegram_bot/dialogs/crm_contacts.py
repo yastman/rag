@@ -17,6 +17,8 @@ from aiogram_dialog.widgets.input import MessageInput, TextInput
 from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Start
 from aiogram_dialog.widgets.text import Format
 
+from telegram_bot.observability import observe
+
 from .crm_cards import format_contact_card
 from .states import (
     ContactsMenuSG,
@@ -194,6 +196,7 @@ async def on_contact_edit(
     await manager.switch_to(CreateContactSG.first_name)
 
 
+@observe(name="dialog-crm-create-contact", capture_input=False, capture_output=False)
 async def on_contact_confirm(
     callback: CallbackQuery,
     button: Button,
