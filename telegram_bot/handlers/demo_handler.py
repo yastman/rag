@@ -16,6 +16,7 @@ from telegram_bot.keyboards.demo_keyboard import (
     build_demo_examples,
     build_demo_menu,
 )
+from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,7 @@ async def handle_demo_search_text(
     )
 
 
+@observe(name="demo-search", capture_input=False, capture_output=False)
 async def _run_demo_search(
     query: str,
     message: Message,
