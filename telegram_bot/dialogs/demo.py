@@ -134,7 +134,7 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
         colbert_query=colbert or None,
         sparse_vector=sparse,
         filters=filters or None,
-        top_k=5,
+        top_k=10,
     )
 
     manager.dialog_data["results"] = results

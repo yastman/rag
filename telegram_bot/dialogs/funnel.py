@@ -561,7 +561,7 @@ async def get_change_filter_options(**kwargs: Any) -> dict[str, Any]:
     return {"title": "Что хотите изменить?", "items": items, "btn_back": "← Назад"}
 
 
-_SCROLL_PAGE_SIZE = 5
+_SCROLL_PAGE_SIZE = 10
 
 
 @observe(name="dialog-funnel-results", capture_input=False, capture_output=False)
