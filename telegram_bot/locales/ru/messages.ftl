@@ -158,6 +158,7 @@ kb-viewing = 📅 Запись на осмотр
 kb-manager = 👤 Менеджер
 kb-ask = 💬 Задать вопрос
 kb-bookmarks = 📌 Мои закладки
+kb-demo = 🎯 Демонстрация
 
 ***REMOVED*** Welcome (***REMOVED***660)
 welcome-text =
