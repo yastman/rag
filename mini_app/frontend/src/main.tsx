@@ -9,7 +9,11 @@ createRoot(document.getElementById("root")!).render(
 );
 
 // Telegram WebApp initialization
-if (window.Telegram?.WebApp) {
-  window.Telegram.WebApp.ready();
-  window.Telegram.WebApp.expand();
+try {
+  if (window.Telegram?.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+  }
+} catch (e) {
+  console.warn("Telegram WebApp init error:", e);
 }
