@@ -1,6 +1,8 @@
 # tests/unit/keyboards/test_property_card.py
 """Tests for property card rendering."""
 
+import pytest
+
 from telegram_bot.keyboards.property_card import (
     build_card_buttons,
     build_results_footer,
@@ -163,6 +165,54 @@ def test_format_property_card_zero_price():
         price_eur=0,
     )
     assert "0" in card
+
+
+# --- send_property_card (Task 14 DRY) ---
+
+
+@pytest.mark.asyncio
+async def test_send_property_card_sends_card_text() -> None:
+    """send_property_card sends formatted card text to message."""
+    from unittest.mock import AsyncMock, patch
+
+    from telegram_bot.keyboards.property_card import send_property_card
+
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=AsyncMock())
+    message.answer_media_group = AsyncMock(return_value=[])
+
+    result = {"id": "apt1", "payload": {"complex_name": "Beach Tower", "price_eur": 95000}}
+
+    with patch("telegram_bot.keyboards.property_card.get_demo_photo_paths", return_value=[]):
+        card_msg = await send_property_card(message, result)
+
+    message.answer.assert_awaited_once()
+    call_text = message.answer.await_args.args[0]
+    assert "Beach Tower" in call_text
+    assert card_msg is not None
+
+
+@pytest.mark.asyncio
+async def test_send_property_card_checks_favorites_when_service_provided() -> None:
+    """send_property_card checks favorites status when service is available."""
+    from unittest.mock import AsyncMock, patch
+
+    from telegram_bot.keyboards.property_card import send_property_card
+
+    message = AsyncMock()
+    message.answer = AsyncMock(return_value=AsyncMock())
+
+    favorites_service = AsyncMock()
+    favorites_service.is_favorited = AsyncMock(return_value=True)
+
+    result = {"id": "apt42", "payload": {"complex_name": "Fort Beach", "price_eur": 120000}}
+
+    with patch("telegram_bot.keyboards.property_card.get_demo_photo_paths", return_value=[]):
+        await send_property_card(
+            message, result, favorites_service=favorites_service, telegram_id=123
+        )
+
+    favorites_service.is_favorited.assert_awaited_once_with(123, "apt42")
 
 
 def test_build_results_footer_no_more():
