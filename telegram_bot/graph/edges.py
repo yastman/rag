@@ -13,10 +13,13 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
+from telegram_bot.observability import observe
+
 
 logger = logging.getLogger(__name__)
 
 
+@observe(name="edge-route-start")
 def route_start(
     state: dict[str, Any],
 ) -> Literal["transcribe", "classify"]:
@@ -26,6 +29,7 @@ def route_start(
     return "classify"
 
 
+@observe(name="edge-route-query-type")
 def route_by_query_type(
     state: dict[str, Any],
 ) -> Literal["respond", "guard"]:
@@ -36,6 +40,7 @@ def route_by_query_type(
     return "guard"
 
 
+@observe(name="edge-route-guard")
 def route_after_guard(
     state: dict[str, Any],
 ) -> Literal["respond", "cache_check"]:
@@ -45,6 +50,7 @@ def route_after_guard(
     return "cache_check"
 
 
+@observe(name="edge-route-cache")
 def route_cache(
     state: dict[str, Any],
 ) -> Literal["respond", "retrieve"]:
@@ -56,6 +62,7 @@ def route_cache(
     return "retrieve"
 
 
+@observe(name="edge-route-grade")
 def route_grade(
     state: dict[str, Any],
 ) -> Literal["rerank", "rewrite", "generate"]:

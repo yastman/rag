@@ -21,6 +21,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InaccessibleMessage, Message
 
 from telegram_bot.dialogs.states import CrmQuickActionSG
+from telegram_bot.observability import observe
 from telegram_bot.services.kommo_models import TaskCreate, TaskUpdate
 
 
@@ -73,6 +74,7 @@ async def on_lead_task(
     await callback.answer()
 
 
+@observe(name="crm-quick-complete", capture_input=False, capture_output=False)
 async def on_task_complete(
     callback: CallbackQuery,
     kommo_client: Any | None = None,
@@ -140,6 +142,7 @@ async def on_contact_note(
     await callback.answer()
 
 
+@observe(name="crm-quick-note", capture_input=False, capture_output=False)
 async def on_note_text_received(
     message: Message,
     state: FSMContext,
