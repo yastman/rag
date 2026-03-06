@@ -893,7 +893,7 @@ requires-dist = [
     { name = "langfuse", specifier = ">=3.14.0" },
     { name = "langgraph", specifier = ">=1.0.3,<2.0" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0" },
-    { name = "langgraph-checkpoint-redis", specifier = ">=0.2.0" },
+    { name = "langgraph-checkpoint-redis", specifier = ">=0.3.6" },
     { name = "langmem", specifier = ">=0.0.30" },
     { name = "livekit", marker = "extra == 'voice'", specifier = "~=1.0" },
     { name = "livekit-agents", extras = ["silero", "turn-detector"], marker = "extra == 'voice'", specifier = "~=1.4" },
@@ -2893,7 +2893,7 @@ wheels = [
 
 [[package]]
 name = "langgraph-checkpoint-redis"
-version = "0.3.4"
+version = "0.3.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langgraph-checkpoint" },
@@ -2901,9 +2901,9 @@ dependencies = [
     { name = "redis" },
     { name = "redisvl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b0/a9/54a10fdba7e04cbbf2885c718f7638f07d20bb3dee9f26355290e3f8f690/langgraph_checkpoint_redis-0.3.4.tar.gz", hash = "sha256:cf28b39d51554a1423ee3696530089e851e0aaad52b9539afac895a9a3516b10", size = 107475, upload-time = "2026-02-03T03:15:30.263Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/5f/daf4c6e27e050ff40ad351044346c8132d0e60ee301eb719a2908a0d14c1/langgraph_checkpoint_redis-0.3.6.tar.gz", hash = "sha256:d0e849a0979a0af36a515de529b5cbbd65b2645a583a2973b812b446569a31fd", size = 108547, upload-time = "2026-02-27T16:36:59.496Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f2/9a/c01b800b6f9980657758f0173f78950dac4a77803f9ff808cae7db0c1d7f/langgraph_checkpoint_redis-0.3.4-py3-none-any.whl", hash = "sha256:60481bd3dcb0dd66b1267811cbfc9a23c70e252a0d0ee9a0d702a5759f6c6378", size = 121028, upload-time = "2026-02-03T03:15:29.17Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/bf/5c795afb11051cebb3fe5b9ab5f5805f4de1d95039d6223d23b264b77fc3/langgraph_checkpoint_redis-0.3.6-py3-none-any.whl", hash = "sha256:bd0cc555934711c790f6dbb767add82efdb5b3968922afb9e6b66a26d1dcefd0", size = 122040, upload-time = "2026-02-27T16:36:58.321Z" },
 ]
 
 [[package]]
@@ -5883,7 +5883,7 @@ wheels = [
 
 [[package]]
 name = "redisvl"
-version = "0.14.0"
+version = "0.15.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpath-ng" },
@@ -5895,9 +5895,9 @@ dependencies = [
     { name = "redis" },
     { name = "tenacity" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/21/45/1c5b308f68b01c4e33590a8e1445f43c51292917b28c2def8deaa5b3dc5b/redisvl-0.14.0.tar.gz", hash = "sha256:7a84c46858dbc86943e64ffe8590013684d03d79b72a634d10c02ce5d1c02335", size = 759829, upload-time = "2026-02-06T15:48:19.384Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/1a/f1f0ff963622c34a9e9a9f2a0c6ad82bfbd05c082ecc89e38e092e3e9069/redisvl-0.15.0.tar.gz", hash = "sha256:0e382e9b6cd8378dfe1515b18f92d125cfba905f6f3c5fe9b8904b3ca840d1ca", size = 861480, upload-time = "2026-02-27T14:02:33.366Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/24/e9/264455caf42501b2b0747ac4819c7d0a2b458fad5e4e1f7610b6383d6d74/redisvl-0.14.0-py3-none-any.whl", hash = "sha256:85ec38f414427260da82ef20653a62d4c2626b97672c5c950616e5dde3cf0d0b", size = 196705, upload-time = "2026-02-06T15:48:17.636Z" },
+    { url = "https://files.pythonhosted.org/packages/cc/23/5c5263a3cfc66957fa3bb154ef9441fbbcfb2f4eae910eb18e316db168b1/redisvl-0.15.0-py3-none-any.whl", hash = "sha256:aff716b9a9c4aef9c81de9a12d9939a0170ff3b3a1fe9d4164e94b131a754290", size = 197935, upload-time = "2026-02-27T14:02:31.262Z" },
 ]
 
 [[package]]

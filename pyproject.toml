@@ -32,7 +32,7 @@ dependencies = [
     "langchain-core>=1.2",                ***REMOVED*** Core abstractions (Embeddings, etc.)
     "langgraph-checkpoint-postgres>=2.0", ***REMOVED*** Postgres checkpointing for LangGraph
     ***REMOVED*** Conversation memory (***REMOVED***154)
-    "langgraph-checkpoint-redis>=0.2.0",  ***REMOVED*** Redis checkpointer for LangGraph
+    "langgraph-checkpoint-redis>=0.3.6",  ***REMOVED*** Redis checkpointer for LangGraph (0.3.0 fixes HumanMessage serialization ***REMOVED***128)
     "langmem>=0.0.30",                    ***REMOVED*** SummarizationNode for conversation compression
     ***REMOVED*** Scheduled nurturing + analytics (***REMOVED***390)
     "apscheduler>=3.11.2,<4.0",           ***REMOVED*** Async job scheduling (v3 API)
