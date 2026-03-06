@@ -386,7 +386,7 @@ class PropertyBot:
         from .services.apartment_filter_extractor import ApartmentFilterExtractor
         from .services.apartment_llm_extractor import ApartmentLlmExtractor
 
-        _apt_llm = ApartmentLlmExtractor(llm=self._llm, model="gpt-4o-mini")
+        _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
         self._apartment_pipeline = ApartmentExtractionPipeline(
             regex_extractor=ApartmentFilterExtractor(),
             llm_extractor=_apt_llm,
@@ -710,9 +710,9 @@ class PropertyBot:
         # This ensures dialog MessageInput (e.g. viewing phone input)
         # is resolved before the catch-all (aiogram SDK: first-match wins).
         # Demo flow router
-        from .handlers.demo_handler import demo_router
+        from .handlers.demo_handler import create_demo_router
 
-        self.dp.include_router(demo_router)
+        self.dp.include_router(create_demo_router())
 
         self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
         # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
