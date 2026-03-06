@@ -222,27 +222,33 @@ async def handle_demo_search_voice(
 
 
 async def transcribe_voice(message: Message) -> str | None:
-    """Download voice and transcribe via Whisper."""
+    """Download voice and transcribe via Whisper (@observe: demo-transcribe-voice)."""
     import io
 
     from langfuse.openai import AsyncOpenAI
 
-    bot = message.bot
-    if bot is None or message.voice is None:
-        return None
-    file = await bot.get_file(message.voice.file_id)
-    data = io.BytesIO()
-    await bot.download_file(file.file_path, data)  # type: ignore[arg-type]
-    data.seek(0)
-    data.name = "voice.ogg"  # type: ignore[attr-defined]
+    from telegram_bot.observability import observe
 
-    client = AsyncOpenAI()
-    transcript = await client.audio.transcriptions.create(
-        model="whisper",
-        file=data,
-        language="ru",
-    )
-    return transcript.text or None
+    @observe(name="demo-transcribe-voice")
+    async def _run() -> str | None:
+        bot = message.bot
+        if bot is None or message.voice is None:
+            return None
+        file = await bot.get_file(message.voice.file_id)
+        data = io.BytesIO()
+        await bot.download_file(file.file_path, data)  # type: ignore[arg-type]
+        data.seek(0)
+        data.name = "voice.ogg"  # type: ignore[attr-defined]
+
+        client = AsyncOpenAI()
+        transcript = await client.audio.transcriptions.create(
+            model="whisper",
+            file=data,
+            language="ru",
+        )
+        return transcript.text or None
+
+    return await _run()
 
 
 def create_demo_router() -> Router:
