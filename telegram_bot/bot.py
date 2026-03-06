@@ -398,8 +398,8 @@ class PropertyBot:
         # Conversation memory checkpointer (initialized in start())
         self._checkpointer: Any = None
 
-        # Agent checkpointer — MemorySaver to avoid Redis JSON serialization
-        # issues with LangChain Message objects (#420)
+        # Agent checkpointer — Redis with TTL (#424). Used by text agent only;
+        # voice graph passes checkpointer=None (HumanMessage not JSON serializable #420).
         self._agent_checkpointer: Any = None
 
         # History service (initialized in start())
@@ -3131,7 +3131,7 @@ class PropertyBot:
                 reranker=self._reranker,
                 llm=self._llm,
                 message=message,
-                checkpointer=self._agent_checkpointer,
+                checkpointer=None,  # Voice: stateless, no Redis checkpoint (#420)
                 show_transcription=self.config.show_transcription,
                 voice_language=self.config.voice_language,
                 stt_model=self.config.stt_model,
