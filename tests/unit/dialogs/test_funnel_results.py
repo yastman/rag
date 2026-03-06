@@ -184,7 +184,7 @@ async def test_get_results_data_returns_apartments_list():
     assert result["has_apartments"] is True
     assert result["has_more"] is True
     assert result["no_results"] is False
-    assert result["title"] == "Найдено 297 апартаментов (показаны 1–1)"
+    assert result["title"] == "Найдено <b>297</b> апартаментов (показаны 1–1)"
     assert "296 осталось" in result["btn_more"]
     mock_svc.scroll_with_filters.assert_awaited_once()
 
