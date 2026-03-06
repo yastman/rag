@@ -30,3 +30,22 @@ def test_each_expert_has_required_fields():
         assert "system_prompt_key" in e
         assert "prompts" in e
         assert len(e["prompts"]) >= 4
+
+
+def test_each_question_has_prompts():
+    config = load_mini_app_config()
+    for q in config["questions"]:
+        assert "prompts" in q
+        assert len(q["prompts"]) > 0
+
+
+def test_each_prompt_has_emoji_and_text():
+    config = load_mini_app_config()
+    for q in config["questions"]:
+        for prompt in q["prompts"]:
+            assert "emoji" in prompt
+            assert "text" in prompt
+    for e in config["experts"]:
+        for prompt in e["prompts"]:
+            assert "emoji" in prompt
+            assert "text" in prompt
