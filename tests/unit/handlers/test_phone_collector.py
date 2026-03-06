@@ -10,6 +10,7 @@ from telegram_bot.handlers.phone_collector import (
     _build_note_text,
     build_display_name,
     create_phone_router,
+    on_phone_contact,
 )
 from telegram_bot.keyboards.phone_keyboard import normalize_phone, validate_phone
 
@@ -577,3 +578,43 @@ def test_create_phone_router_has_contact_handler():
     router = create_phone_router()
     # Router should have at least 2 message handlers (text + contact)
     assert len(router.message.handlers) >= 2
+
+
+async def test_on_phone_contact_valid_processes_phone():
+    """on_phone_contact with valid contact should call _process_valid_phone."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.contact = MagicMock()
+    message.contact.phone_number = "+359896759292"
+    message.from_user = MagicMock()
+    message.from_user.id = 123
+    message.from_user.first_name = "Test"
+    message.from_user.last_name = None
+    message.from_user.username = "testuser"
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.clear = AsyncMock()
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await on_phone_contact(message, state)
+
+    state.clear.assert_awaited_once()
+    message.answer.assert_awaited_once()
+    assert "Спасибо" in message.answer.call_args[0][0]
+
+
+async def test_on_phone_contact_no_contact_asks_manual_input():
+    """on_phone_contact with no contact data should ask for manual input."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.contact = None
+    message.answer = AsyncMock()
+    state = MagicMock()
+
+    await on_phone_contact(message, state)
+
+    message.answer.assert_awaited_once()
+    assert "вручную" in message.answer.call_args[0][0].lower()
