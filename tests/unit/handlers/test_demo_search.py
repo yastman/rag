@@ -402,3 +402,13 @@ class TestDemoApartmentsWithDynamicExamples:
         await handle_demo_apartments(callback, state, apartments_service=apartments_service)
         saved = state.update_data.await_args.kwargs.get("examples")
         assert saved == DEFAULT_EXAMPLES
+
+
+class TestDemoSearchObservability:
+    def test_run_demo_search_is_observed(self) -> None:
+        """_run_demo_search must be @observe-decorated (span: demo-search)."""
+        from telegram_bot.handlers.demo_handler import _run_demo_search
+
+        assert hasattr(_run_demo_search, "__wrapped__"), (
+            "_run_demo_search must be decorated with @observe(name='demo-search')"
+        )
