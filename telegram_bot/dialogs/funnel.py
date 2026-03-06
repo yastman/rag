@@ -24,6 +24,8 @@ from aiogram_dialog.widgets.kbd import (
 )
 from aiogram_dialog.widgets.text import Format, Jinja, List
 
+from telegram_bot.observability import observe
+
 from .states import FunnelSG
 
 
@@ -562,6 +564,7 @@ async def get_change_filter_options(**kwargs: Any) -> dict[str, Any]:
 _SCROLL_PAGE_SIZE = 5
 
 
+@observe(name="dialog-funnel-results", capture_input=False, capture_output=False)
 async def get_results_data(
     dialog_manager: DialogManager,
     **kwargs: Any,
@@ -912,6 +915,7 @@ async def on_search_list(
     data["scroll_page"] = 1
 
 
+@observe(name="dialog-funnel-search", capture_input=False, capture_output=False)
 async def on_summary_search(
     callback: CallbackQuery,
     button: Button,
