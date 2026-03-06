@@ -49,6 +49,10 @@ class TestApartmentSearchTool:
         assert "215" in result
         assert "248" in result
 
+        # Verify top_k passed to service
+        call_kwargs = mock_service.search_with_filters.await_args
+        assert call_kwargs.kwargs["top_k"] == 20
+
     @pytest.mark.asyncio
     async def test_no_results(self) -> None:
         mock_service = AsyncMock()
