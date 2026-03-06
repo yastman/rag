@@ -599,20 +599,30 @@ async def get_results_data(
     if svc is not None:
         try:
             filters = _build_funnel_filters(data)
-            scroll_offset = data.get("scroll_offset")
+            start_from = data.get("scroll_start_from")
+            seen_ids = data.get("scroll_seen_ids") or []
 
-            results, total_count, next_offset = await svc.scroll_with_filters(
+            results, total_count, next_start_from, page_ids = await svc.scroll_with_filters(
                 filters=filters,
                 limit=_SCROLL_PAGE_SIZE,
-                offset=scroll_offset,
+                start_from=start_from,
+                exclude_ids=seen_ids if start_from is not None else None,
             )
-            data["scroll_next_offset"] = str(next_offset) if next_offset else None
-            has_more = next_offset is not None
+            # Сохраняем state для следующей страницы
+            data["scroll_start_from"] = next_start_from
+            if next_start_from is not None and page_ids:
+                boundary_ids = [
+                    r["id"] for r in results if r["payload"].get("price_eur") == next_start_from
+                ]
+                data["scroll_seen_ids"] = boundary_ids
+            else:
+                data["scroll_seen_ids"] = []
 
             if results:
                 current_page = max(int(data.get("scroll_page", 1) or 1), 1)
                 shown_start = (current_page - 1) * _SCROLL_PAGE_SIZE + 1
                 shown_end = shown_start + len(results) - 1
+                has_more = next_start_from is not None and total_count > shown_end
                 for apt in results:
                     p = apt["payload"]
                     rooms_num = p.get("rooms", 1)
@@ -883,8 +893,8 @@ async def on_search_list(
 ) -> None:
     """Reset pagination before switching to list results."""
     data = manager.dialog_data
-    data.pop("scroll_offset", None)
-    data.pop("scroll_next_offset", None)
+    data.pop("scroll_start_from", None)
+    data.pop("scroll_seen_ids", None)
     data["scroll_page"] = 1
 
 
@@ -897,8 +907,8 @@ async def on_summary_search(
     from telegram_bot.keyboards.property_card import build_results_footer
 
     data = manager.dialog_data
-    data.pop("scroll_offset", None)
-    data.pop("scroll_next_offset", None)
+    data.pop("scroll_start_from", None)
+    data.pop("scroll_seen_ids", None)
     data["scroll_page"] = 1
 
     # Persist lead score (fire-and-forget)
@@ -937,10 +947,10 @@ async def on_summary_search(
     # Search
     try:
         filters = _build_funnel_filters(data)
-        results, total_count, next_offset = await svc.scroll_with_filters(
+        results, total_count, _next_start, _page_ids = await svc.scroll_with_filters(
             filters=filters,
             limit=_SCROLL_PAGE_SIZE,
-            offset=None,
+            start_from=None,
         )
     except Exception:
         logger.exception("Failed to fetch funnel results")
@@ -959,7 +969,7 @@ async def on_summary_search(
             apartment_offset=0,
             bookmarks_context=False,
             apartment_total=total_count,
-            apartment_next_offset=next_offset,
+            apartment_next_offset=_next_start,
             apartment_filters=filters,
             funnel_data=dict(data),
         )
@@ -1014,11 +1024,10 @@ async def on_results_more(
 ) -> None:
     """Load next page of scroll results."""
     data = manager.dialog_data
-    next_offset = data.get("scroll_next_offset")
-    if not next_offset:
+    next_start = data.get("scroll_start_from")
+    if next_start is None:
         await callback.answer("Все результаты показаны")
         return
-    data["scroll_offset"] = next_offset
     data["scroll_page"] = data.get("scroll_page", 1) + 1
 
 
@@ -1057,8 +1066,8 @@ async def on_zero_suggestion_selected(
             "section",
             "is_furnished",
             "is_promotion",
-            "scroll_offset",
-            "scroll_next_offset",
+            "scroll_start_from",
+            "scroll_seen_ids",
             "scroll_page",
         ):
             data.pop(key, None)
@@ -1067,8 +1076,8 @@ async def on_zero_suggestion_selected(
     else:
         return
 
-    data.pop("scroll_offset", None)
-    data.pop("scroll_next_offset", None)
+    data.pop("scroll_start_from", None)
+    data.pop("scroll_seen_ids", None)
     data["scroll_page"] = 1
     await manager.switch_to(FunnelSG.results)
 
