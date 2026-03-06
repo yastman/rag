@@ -1,5 +1,7 @@
 """Tests for Mini App config API endpoint."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -24,3 +26,35 @@ async def test_health_endpoint():
         resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_chat_endpoint_returns_sse():
+    mock_result = {"response": "Test response"}
+    with patch("mini_app.chat.run_mini_app_query", AsyncMock(return_value=mock_result)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post("/api/chat", json={"message": "test", "user_id": 123})
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")
+
+
+@pytest.mark.asyncio
+async def test_phone_endpoint_returns_json():
+    mock_kommo = MagicMock()
+    mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
+    mock_kommo.create_lead = AsyncMock(return_value={"id": 2})
+    with patch("mini_app.phone.get_kommo_client", return_value=mock_kommo):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/phone",
+                json={"phone": "+359888123456", "source": "test", "user_id": 123},
+            )
+    assert resp.status_code == 200
+    assert resp.json()["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_cors_headers_present():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/health", headers={"Origin": "https://example.com"})
+    assert "access-control-allow-origin" in resp.headers
