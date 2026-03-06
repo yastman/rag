@@ -1,4 +1,4 @@
-"""Apartment extraction pipeline: regex → confidence gate → LLM fallback."""
+"""Apartment extraction pipeline: LLM first, regex fallback."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ _CACHE_TTL = 86400  # 24h
 
 
 class ApartmentExtractionPipeline:
-    """Orchestrates regex → confidence gate → LLM fallback."""
+    """Orchestrates LLM first, regex fallback."""
 
     def __init__(
         self,
@@ -40,35 +40,24 @@ class ApartmentExtractionPipeline:
         self._redis = redis
 
     async def extract(self, query: str) -> ApartmentSearchFilters:
-        """Main entry point: regex → confidence gate → LLM fallback."""
+        """Main entry point: cache → LLM (primary) → regex (fallback)."""
         # 1. Check cache
         cached = await self._cache_get(query)
         if cached:
             return cached
 
-        # 2. Regex extraction
+        # 2. LLM primary
+        if self._llm is not None:
+            try:
+                result = await self._llm.extract(query=query)
+                await self._cache_set(query, result)
+                return result
+            except Exception:
+                logger.warning("LLM extraction failed, falling back to regex", exc_info=True)
+
+        # 3. Regex fallback
         parsed = self._regex.parse(query)
-        regex_result = self._parsed_to_search_filters(parsed)
-
-        # 3. Confidence gate
-        if regex_result.meta.confidence == "HIGH":
-            return regex_result
-
-        if self._llm is None:
-            return regex_result  # no LLM available, return regex result as-is
-
-        if regex_result.meta.confidence == "MEDIUM":
-            llm_result = await self._llm.extract(query=query, partial_filters=regex_result.hard)
-            from telegram_bot.services.apartment_llm_extractor import merge_extraction_results
-
-            merged = merge_extraction_results(regex_result, llm_result)
-            await self._cache_set(query, merged)
-            return merged
-
-        # LOW confidence — full LLM extraction
-        llm_result = await self._llm.extract(query=query)
-        await self._cache_set(query, llm_result)
-        return llm_result
+        return self._parsed_to_search_filters(parsed)
 
     def _parsed_to_search_filters(self, parsed: object) -> ApartmentSearchFilters:
         """Convert legacy ApartmentQueryParseResult to ApartmentSearchFilters."""
