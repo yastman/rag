@@ -181,11 +181,12 @@ async def _run_demo_search(
 
     text_parts = [f"Найдено {count} вариантов:\n"]
     for i, r in enumerate(results[:5], 1):
-        name = r.get("complex_name", "—")
-        rooms = r.get("rooms", "?")
-        price = r.get("price_eur", 0)
-        area = r.get("area_m2", 0)
-        city = r.get("city", "")
+        p = r.get("payload", {})
+        name = p.get("complex_name", "—")
+        rooms = p.get("rooms", "?")
+        price = p.get("price_eur", 0)
+        area = p.get("area_m2", 0)
+        city = p.get("city", "")
         text_parts.append(f"{i}. **{name}** — {rooms} комн., {area:.0f} м², {price:,.0f}€, {city}")
 
     await message.answer("\n".join(text_parts), parse_mode="Markdown")
