@@ -8,32 +8,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.apartment_formatter import format_apartment_text
 
 
 logger = logging.getLogger(__name__)
-
-
-def _format_apartment_results(results: list[dict]) -> str:
-    """Format apartment search results for LLM context."""
-    if not results:
-        return "Апартаменты по вашим критериям не найдены. Попробуйте изменить параметры поиска."
-
-    lines = []
-    for i, apt in enumerate(results, 1):
-        p = apt.get("payload", {})
-        price_fmt = f"{p.get('price_eur', 0):,.0f}".replace(",", " ")
-        view = ", ".join(p.get("view_tags", [])) or p.get("view_primary", "")
-        furnished = "с мебелью" if p.get("is_furnished") else "без мебели"
-        floor_str = "цоколь" if p.get("floor", 0) == 0 else f"{p.get('floor')} эт."
-
-        lines.append(
-            f"{i}. {p.get('complex_name', '?')}, секция {p.get('section', '?')}, "
-            f"апп. {p.get('apartment_number', '?')} — "
-            f"{p.get('rooms', '?')}к, {p.get('area_m2', '?')} м², {floor_str}, "
-            f"вид: {view}, {price_fmt} €, {furnished}"
-        )
-
-    return f"Найдено {len(results)} апартаментов:\n" + "\n".join(lines)
 
 
 @tool
@@ -167,7 +145,7 @@ async def apartment_search(
             top_k=10,
         )
 
-        response = _format_apartment_results(results)
+        response = format_apartment_text(results)
         lf.update_current_span(output={"results_count": total})
 
         # Log search filters for CRM enrichment
