@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from telegram_bot.services.apartment_llm_extractor import (
     EXTRACTION_SYSTEM_PROMPT,
     ApartmentLlmExtractor,
+    _get_system_prompt,
     merge_extraction_results,
 )
 from telegram_bot.services.apartment_models import (
@@ -130,3 +131,29 @@ class TestLlmExtractorObservability:
             "ApartmentLlmExtractor.extract must be decorated with "
             "@observe(name='apartment-llm-extract')"
         )
+
+
+class TestGetSystemPrompt:
+    """Task 13: Tests for prompt manager integration in extraction."""
+
+    def test_get_system_prompt_calls_get_prompt_with_correct_name(self) -> None:
+        with patch("telegram_bot.services.apartment_llm_extractor.get_prompt") as mock_get_prompt:
+            mock_get_prompt.return_value = "custom prompt from langfuse"
+            result = _get_system_prompt()
+            mock_get_prompt.assert_called_once_with(
+                "apartment-extraction-system-prompt",
+                fallback=EXTRACTION_SYSTEM_PROMPT,
+            )
+            assert result == "custom prompt from langfuse"
+
+    def test_get_system_prompt_returns_default_when_langfuse_unavailable(self) -> None:
+        with patch("telegram_bot.services.apartment_llm_extractor.get_prompt") as mock_get_prompt:
+            mock_get_prompt.return_value = EXTRACTION_SYSTEM_PROMPT
+            result = _get_system_prompt()
+            assert "Солнечный берег" in result
+            assert "Premier Fort Beach" in result
+
+    def test_extraction_system_prompt_still_exported(self) -> None:
+        """EXTRACTION_SYSTEM_PROMPT must remain importable for backward compatibility."""
+        assert EXTRACTION_SYSTEM_PROMPT
+        assert "Солнечный берег" in EXTRACTION_SYSTEM_PROMPT
