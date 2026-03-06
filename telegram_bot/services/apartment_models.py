@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 
 # --- View normalization ---
@@ -211,6 +214,7 @@ class ApartmentQueryParseResult:
     is_furnished: bool | None = None
 
     # Entity filters
+    city: str | None = None
     complex_name: str | None = None
     view_tags: list[str] = field(default_factory=list)
     section: str | None = None
@@ -220,6 +224,7 @@ class ApartmentQueryParseResult:
     confidence: str = "LOW"
     score: int = 0
     conflicts: list[str] = field(default_factory=list)
+    missing_fields: list[str] = field(default_factory=list)
     raw_query: str = ""
 
     def to_filters_dict(self) -> dict:
@@ -260,15 +265,23 @@ class ApartmentQueryParseResult:
 
 
 def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQueryParseResult:
-    """Score and assign confidence level. Returns new instance."""
+    """Score and assign confidence level. Returns new instance.
+
+    3-level confidence gate with critical slot tracking:
+    - HIGH: has critical slot (city OR complex_name) AND at least one hard numeric filter
+    - MEDIUM: has critical slot OR hard filter, but not both
+    - LOW: no filters extracted
+    """
     if parse_result.conflicts:
-        return replace(parse_result, confidence="LOW", score=-1)
+        return replace(
+            parse_result, confidence="LOW", score=-1, missing_fields=["city", "complex_name"]
+        )
 
     score = 0
     has_hard = False
-    has_entity = False
+    has_critical = False
 
-    # Hard filters
+    # Hard numeric filters
     if parse_result.rooms is not None:
         score += 2
         has_hard = True
@@ -282,23 +295,164 @@ def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQuer
         score += 1
         has_hard = True
 
-    # Entity filters
+    # Critical slots: city OR complex_name
+    if getattr(parse_result, "city", None) is not None:
+        score += 2
+        has_critical = True
     if parse_result.complex_name is not None:
         score += 2
-        has_entity = True
+        has_critical = True
+
+    # Secondary entity filters
     if parse_result.view_tags:
         score += 1
-        has_entity = True
     if parse_result.section is not None:
         score += 1
-        has_entity = True
+
+    # Track missing critical slots for LLM to fill
+    missing_fields: list[str] = [] if has_critical else ["city", "complex_name"]
 
     # Confidence mapping
-    if score >= 4 and has_hard and has_entity:
+    if has_critical and has_hard:
         confidence = "HIGH"
-    elif score >= 1:
+    elif has_critical or has_hard:
         confidence = "MEDIUM"
     else:
         confidence = "LOW"
 
-    return replace(parse_result, confidence=confidence, score=score)
+    return replace(parse_result, confidence=confidence, score=score, missing_fields=missing_fields)
+
+
+# --- Pydantic extraction models (hybrid pipeline) ---
+
+
+class HardFilters(BaseModel):
+    """Hard filters that map directly to Qdrant payload conditions."""
+
+    city: str | None = None
+    rooms: int | None = None
+    min_price_eur: float | None = None
+    max_price_eur: float | None = None
+    min_area_m2: float | None = None
+    max_area_m2: float | None = None
+    min_floor: int | None = None
+    max_floor: int | None = None
+    complex_name: str | None = None
+    view_tags: list[str] = Field(default_factory=list)
+    section: str | None = None
+    is_furnished: bool | None = None
+
+    @model_validator(mode="after")
+    def fix_ranges(self) -> HardFilters:
+        """Auto-swap inverted ranges so min <= max."""
+        if (
+            self.min_price_eur is not None
+            and self.max_price_eur is not None
+            and self.min_price_eur > self.max_price_eur
+        ):
+            self.min_price_eur, self.max_price_eur = self.max_price_eur, self.min_price_eur
+        if (
+            self.min_area_m2 is not None
+            and self.max_area_m2 is not None
+            and self.min_area_m2 > self.max_area_m2
+        ):
+            self.min_area_m2, self.max_area_m2 = self.max_area_m2, self.min_area_m2
+        if (
+            self.min_floor is not None
+            and self.max_floor is not None
+            and self.min_floor > self.max_floor
+        ):
+            self.min_floor, self.max_floor = self.max_floor, self.min_floor
+        return self
+
+    def to_filters_dict(self) -> dict | None:
+        """Convert to Qdrant-compatible filters dict for _build_apartment_filter()."""
+        f: dict = {}
+        if self.city is not None:
+            f["city"] = self.city
+        if self.rooms is not None:
+            f["rooms"] = self.rooms
+        if self.min_price_eur is not None or self.max_price_eur is not None:
+            price_range: dict = {}
+            if self.min_price_eur is not None:
+                price_range["gte"] = self.min_price_eur
+            if self.max_price_eur is not None:
+                price_range["lte"] = self.max_price_eur
+            f["price_eur"] = price_range
+        if self.min_area_m2 is not None or self.max_area_m2 is not None:
+            area_range: dict = {}
+            if self.min_area_m2 is not None:
+                area_range["gte"] = self.min_area_m2
+            if self.max_area_m2 is not None:
+                area_range["lte"] = self.max_area_m2
+            f["area_m2"] = area_range
+        if self.min_floor is not None or self.max_floor is not None:
+            floor_range: dict = {}
+            if self.min_floor is not None:
+                floor_range["gte"] = self.min_floor
+            if self.max_floor is not None:
+                floor_range["lte"] = self.max_floor
+            f["floor"] = floor_range
+        if self.complex_name is not None:
+            f["complex_name"] = self.complex_name
+        if self.view_tags:
+            f["view_tags"] = self.view_tags
+        if self.is_furnished is not None:
+            f["is_furnished"] = self.is_furnished
+        return f or None
+
+
+class SoftPreferences(BaseModel):
+    """Мягкие предпочтения — boosting в semantic search, не отсекают результаты."""
+
+    near_sea: bool = Field(False, description="Близко к морю")
+    spacious: bool = Field(False, description="Просторная")
+    budget_friendly: bool = Field(False, description="Недорого/бюджетно")
+    high_floor: bool = Field(False, description="Высокий этаж")
+    quiet: bool = Field(False, description="Тихое место")
+    sort_bias: Literal["price_asc", "price_desc", "area_desc", "floor_desc", "relevance"] = (
+        "relevance"
+    )
+
+    def to_semantic_parts(self) -> list[str]:
+        """Convert preferences to semantic query fragments."""
+        parts: list[str] = []
+        if self.near_sea:
+            parts.append("близко к морю")
+        if self.spacious:
+            parts.append("просторная квартира")
+        if self.budget_friendly:
+            parts.append("недорого бюджетно")
+        if self.high_floor:
+            parts.append("высокий этаж")
+        if self.quiet:
+            parts.append("тихое спокойное место")
+        return parts
+
+
+class ExtractionMeta(BaseModel):
+    """Метаданные извлечения для мониторинга и отладки."""
+
+    source: Literal["regex", "llm", "hybrid"] = "regex"
+    confidence: Literal["HIGH", "MEDIUM", "LOW"] = "LOW"
+    score: int = 0
+    missing_fields: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    normalized_query: str = ""
+    semantic_remainder: str = ""
+
+
+class ApartmentSearchFilters(BaseModel):
+    """Полный результат extraction pipeline."""
+
+    hard: HardFilters = Field(default_factory=lambda: HardFilters())
+    soft: SoftPreferences = Field(default_factory=lambda: SoftPreferences())  # type: ignore[call-arg]
+    meta: ExtractionMeta = Field(default_factory=lambda: ExtractionMeta())
+
+    def build_semantic_query(self) -> str:
+        """Build semantic query from preferences + remainder text."""
+        parts: list[str] = []
+        if self.meta.semantic_remainder:
+            parts.append(self.meta.semantic_remainder)
+        parts.extend(self.soft.to_semantic_parts())
+        return " ".join(parts) if parts else "апартамент"
