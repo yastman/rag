@@ -6,6 +6,7 @@ import hashlib
 import logging
 from typing import TYPE_CHECKING
 
+from telegram_bot.observability import observe
 from telegram_bot.services.apartment_filter_extractor import ApartmentFilterExtractor
 from telegram_bot.services.apartment_models import (
     ApartmentSearchFilters,
@@ -39,6 +40,7 @@ class ApartmentExtractionPipeline:
         self._llm = llm_extractor
         self._redis = redis
 
+    @observe(name="apartment-extraction-pipeline", capture_input=False, capture_output=False)
     async def extract(self, query: str) -> ApartmentSearchFilters:
         """Main entry point: cache → LLM (primary) → regex (fallback)."""
         # 1. Check cache
