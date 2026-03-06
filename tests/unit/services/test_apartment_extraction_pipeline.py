@@ -1,8 +1,8 @@
-"""Tests for ApartmentExtractionPipeline (regex → confidence gate → LLM fallback)."""
+"""Tests for ApartmentExtractionPipeline (LLM first, regex fallback)."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from telegram_bot.services.apartment_extraction_pipeline import ApartmentExtractionPipeline
 from telegram_bot.services.apartment_models import (
@@ -56,38 +56,33 @@ class TestPipelineHighConfidence:
         assert result.meta.source == "regex"
         assert result.hard.rooms == 2
 
-    async def test_high_confidence_no_llm_call(self) -> None:
+    async def test_llm_called_first_regardless_of_regex_confidence(self) -> None:
         regex = _make_regex_extractor("HIGH")
         llm = AsyncMock()
+        llm.extract = AsyncMock(return_value=_make_filters("HIGH", "llm"))
         pipeline = ApartmentExtractionPipeline(regex_extractor=regex, llm_extractor=llm)
 
         await pipeline.extract("двушка солнечный берег")
 
-        llm.extract.assert_not_called()
+        llm.extract.assert_called_once()
 
 
 class TestPipelineMediumConfidence:
-    async def test_medium_calls_llm_with_partial_filters(self) -> None:
+    async def test_llm_called_without_partial_filters(self) -> None:
+        """LLM-first: no partial_filters — LLM extracts from scratch."""
         regex = _make_regex_extractor("MEDIUM")
-        llm_result = _make_filters("HIGH", "hybrid")
+        llm_result = _make_filters("HIGH", "llm")
         llm = AsyncMock()
         llm.extract = AsyncMock(return_value=llm_result)
 
         pipeline = ApartmentExtractionPipeline(regex_extractor=regex, llm_extractor=llm)
-
-        with patch(
-            "telegram_bot.services.apartment_llm_extractor.merge_extraction_results",
-            return_value=_make_filters("HIGH", "hybrid"),
-        ):
-            await pipeline.extract("двушка")
+        result = await pipeline.extract("двушка")
 
         llm.extract.assert_called_once()
-        # partial_filters passed to llm.extract
         call_kwargs = llm.extract.call_args
-        partial = call_kwargs.kwargs.get("partial_filters") or (
-            call_kwargs.args[1] if len(call_kwargs.args) > 1 else None
-        )
-        assert partial is not None
+        partial = call_kwargs.kwargs.get("partial_filters")
+        assert partial is None
+        assert result.meta.source == "llm"
 
     async def test_medium_without_llm_returns_regex(self) -> None:
         regex = _make_regex_extractor("MEDIUM")

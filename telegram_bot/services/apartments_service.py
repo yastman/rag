@@ -254,3 +254,82 @@ class ApartmentsService:
                 break
             offset = next_offset
         return sorted(values)
+
+    async def get_collection_stats(self) -> dict:
+        """Get unique cities, complexes, rooms, price range for example generation."""
+        records, _ = await self._qdrant.client.scroll(
+            collection_name=self._qdrant.collection_name,
+            limit=100,
+            with_payload=True,
+            with_vectors=False,
+        )
+        cities: set[str] = set()
+        complexes: set[str] = set()
+        rooms_set: set[int] = set()
+        prices: list[float] = []
+        for p in records:
+            d = p.payload or {}
+            if d.get("city"):
+                cities.add(d["city"])
+            if d.get("complex_name"):
+                complexes.add(d["complex_name"])
+            if d.get("rooms"):
+                rooms_set.add(int(d["rooms"]))
+            if d.get("price_eur"):
+                prices.append(float(d["price_eur"]))
+        return {
+            "cities": sorted(cities),
+            "complexes": sorted(complexes),
+            "rooms": sorted(rooms_set),
+            "min_price": min(prices) if prices else 0,
+            "max_price": max(prices) if prices else 0,
+        }
+
+
+def generate_search_examples(stats: dict) -> list[str]:
+    """Generate 4 diverse search example strings from DB stats."""
+    cities = stats.get("cities", [])
+    complexes = stats.get("complexes", [])
+    rooms_list = stats.get("rooms", [1, 2, 3])
+    max_price = stats.get("max_price", 200000)
+
+    room_names = {1: "Студия", 2: "Двушка", 3: "Трёшка"}
+    examples: list[str] = []
+
+    # Example 1: room type + city + price
+    if cities:
+        r = rooms_list[0] if rooms_list else 1
+        price = round(max_price * 0.4 / 5000) * 5000
+        examples.append(
+            f"{room_names.get(r, 'Апартамент')} в {cities[0]} до {price:,.0f}€".replace(",", " ")
+        )
+
+    # Example 2: room type + complex
+    if complexes:
+        r = rooms_list[1] if len(rooms_list) > 1 else 2
+        examples.append(f"{room_names.get(r, 'Двушка')} в {complexes[0]}")
+
+    # Example 3: room type + city + price
+    if len(cities) > 1:
+        r = rooms_list[-1] if rooms_list else 3
+        price = round(max_price * 0.65 / 5000) * 5000
+        examples.append(
+            f"{room_names.get(r, 'Трёшка')} в {cities[-1]} до {price:,.0f}€".replace(",", " ")
+        )
+
+    # Example 4: generic + city + price range
+    if len(cities) > 1:
+        price = round(max_price * 0.5 / 5000) * 5000
+        examples.append(f"Апартамент в {cities[1]} от {price:,.0f}€".replace(",", " "))
+
+    # Pad with defaults if needed
+    defaults = [
+        "Студия у моря до 100 000€",
+        "Двушка с видом на море",
+        "Трёшка с бассейном",
+        "Апартамент с мебелью",
+    ]
+    while len(examples) < 4:
+        examples.append(defaults[len(examples)])
+
+    return examples[:4]
