@@ -1,8 +1,13 @@
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
 export async function fetchConfig() {
-  const resp = await fetch(`${API_BASE}/config`);
-  return resp.json();
+  try {
+    const resp = await fetch(`${API_BASE}/config`);
+    return resp.json();
+  } catch (err) {
+    console.error("[fetchConfig] Failed to load config:", err);
+    throw err;
+  }
 }
 
 export async function* streamChat(
