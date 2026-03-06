@@ -7,6 +7,7 @@ import logging
 import instructor
 from openai import AsyncOpenAI
 
+from telegram_bot.observability import observe
 from telegram_bot.services.apartment_models import (
     ApartmentSearchFilters,
     HardFilters,
@@ -71,6 +72,7 @@ class ApartmentLlmExtractor:
         self._client = instructor.from_openai(llm)
         self._model = model
 
+    @observe(name="apartment-llm-extract")
     async def extract(
         self,
         query: str,
