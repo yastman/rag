@@ -255,8 +255,8 @@ services:
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
       # Langfuse observability (optional — bot degrades gracefully)
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
       LANGFUSE_TRACING_ENVIRONMENT: "${LANGFUSE_TRACING_ENVIRONMENT:-}"
       LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
@@ -323,6 +323,9 @@ services:
     stop_grace_period: 30s
     logging: *default-logging
     environment:
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
@@ -650,8 +653,8 @@ services:
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
       RERANK_PROVIDER: colbert
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     depends_on:
       redis:
@@ -745,8 +748,8 @@ services:
       ELEVEN_API_KEY: ${ELEVENLABS_API_KEY:-}
       RAG_API_URL: http://rag-api:8080
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081')\" || exit 1"]
