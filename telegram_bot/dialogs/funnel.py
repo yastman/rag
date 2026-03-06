@@ -623,18 +623,18 @@ async def get_results_data(
                 shown_start = (current_page - 1) * _SCROLL_PAGE_SIZE + 1
                 shown_end = shown_start + len(results) - 1
                 has_more = next_start_from is not None and total_count > shown_end
-                for apt in results:
+                for i, apt in enumerate(results):
                     p = apt["payload"]
                     rooms_num = p.get("rooms", 1)
                     apartments.append(
                         {
+                            "idx": shown_start + i,
                             "complex_name": p.get("complex_name", ""),
                             "section": p.get("section", ""),
                             "apartment_number": p.get("apartment_number", ""),
-                            "city": p.get("city", ""),
                             "property_type": _ROOMS_DISPLAY.get(rooms_num, str(rooms_num)),
                             "floor": p.get("floor", 0),
-                            "area_m2": p.get("area_m2", 0),
+                            "area_m2": round(p.get("area_m2", 0)),
                             "view": _VIEW_DISPLAY.get(
                                 p.get("view_primary", ""), p.get("view_primary", "")
                             ),
@@ -701,16 +701,18 @@ async def get_results_data(
                 )
             except Exception:
                 title = (
-                    f"{i18n.get('results-found', total=total_count)} "
+                    f"Найдено <b>{total_count}</b> апартаментов "
                     f"(показаны {shown_start}–{shown_end})"
                 )
         else:
-            title = f"Найдено {total_count} апартаментов (показаны {shown_start}–{shown_end})"
+            title = (
+                f"Найдено <b>{total_count}</b> апартаментов (показаны {shown_start}–{shown_end})"
+            )
     elif total_count:
         title = (
             i18n.get("results-found", total=total_count)
             if i18n
-            else f"Найдено {total_count} апартаментов"
+            else f"Найдено <b>{total_count}</b> апартаментов"
         )
     else:
         title = results_title
@@ -1318,18 +1320,17 @@ funnel_dialog = Dialog(
     ),
     # Step 6: Results (SDK List widget)
     Window(
-        Format("{title}"),
+        Jinja("{title}"),
         List(
             Jinja(
-                "🏠 Комплекс: {{ item.complex_name }}"
-                "{% if item.section %}\n🏗 Секция: {{ item.section }}{% endif %}"
-                "{% if item.apartment_number %}\n🚪 №: {{ item.apartment_number }}{% endif %}"
-                "{% if item.city %}\n📍 Город: {{ item.city }}{% endif %}"
-                "{% if item.property_type %}\n🛏 Тип: {{ item.property_type }}{% endif %}"
-                "{% if item.floor %}\n🔼 Этаж: {{ item.floor }}{% endif %}"
-                "{% if item.area_m2 %}\n📐 Площадь: {{ item.area_m2 }} м²{% endif %}"
-                "{% if item.view %}\n🌅 Вид: {{ item.view }}{% endif %}"
-                "\n💰 Цена: {{ item.price_formatted }} €"
+                "<b>{{ item.idx }}.</b> <b>{{ item.complex_name }}</b>"
+                "{% if item.section %} · {{ item.section }}{% endif %}"
+                "{% if item.apartment_number %} · №{{ item.apartment_number }}{% endif %}"
+                "\n    {{ item.property_type }}"
+                "{% if item.floor %} · {{ item.floor }} эт{% endif %}"
+                "{% if item.area_m2 %} · {{ item.area_m2 }} м²{% endif %}"
+                "{% if item.view %} · {{ item.view }}{% endif %}"
+                "\n    <b>{{ item.price_formatted }} €</b>"
             ),
             items="apartments",
             sep="\n\n",
@@ -1356,5 +1357,6 @@ funnel_dialog = Dialog(
         Cancel(Format("{btn_back}")),
         getter=get_results_data,
         state=FunnelSG.results,
+        parse_mode="HTML",
     ),
 )
