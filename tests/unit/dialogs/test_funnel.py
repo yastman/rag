@@ -544,7 +544,7 @@ async def test_get_results_data_calls_apartments_service():
     result = await get_results_data(manager)
     mock_svc.scroll_with_filters.assert_awaited_once()
     assert len(result["apartments"]) == 1
-    assert result["apartments"][0]["complex_name"] == "Sunrise"
+    assert "Sunrise" in result["apartments"][0]["card"]
 
 
 @pytest.mark.asyncio
