@@ -16,6 +16,7 @@ MENU_BUTTONS: dict[str, str] = {
     "👤 Менеджер": "manager",
     "💬 Задать вопрос": "ask",
     "📌 Мои закладки": "bookmarks",
+    "🎯 Демонстрация": "demo",
 }
 
 # Reverse lookup: action_id -> button text (ru fallback)
@@ -29,6 +30,7 @@ _ACTION_IDS: dict[str, str] = {
     "kb-manager": "manager",
     "kb-ask": "ask",
     "kb-bookmarks": "bookmarks",
+    "kb-demo": "demo",
 }
 
 
@@ -62,16 +64,17 @@ def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
     else:
         texts = list(MENU_BUTTONS.keys())  # fallback to hardcoded Russian
 
-    # Ensure exactly 6 buttons (pad or trim if needed)
-    while len(texts) < 6:
+    # Ensure exactly 7 buttons (pad or trim if needed)
+    while len(texts) < 7:
         texts.append("")
-    texts = texts[:6]
+    texts = texts[:7]
 
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=texts[0]), KeyboardButton(text=texts[1])],
             [KeyboardButton(text=texts[2]), KeyboardButton(text=texts[3])],
             [KeyboardButton(text=texts[4]), KeyboardButton(text=texts[5])],
+            [KeyboardButton(text=texts[6])],  # Демонстрация — отдельный ряд
         ],
         resize_keyboard=True,
         is_persistent=True,
