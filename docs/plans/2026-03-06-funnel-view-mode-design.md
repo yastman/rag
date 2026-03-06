@@ -1,85 +1,71 @@
-# Funnel View Mode: List vs Cards — Design
+# Funnel View Mode: List vs Cards — Implementation Plan
 
-## Problem
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-Пользователь проходит воронку подбора апартаментов (funnel), но не может выбрать формат результатов.
-Сейчас кнопка "🔍 Показать результаты" в summary Window вызывает `on_summary_search` — закрывает диалог и шлёт фото-карточки через bot path.
+**Goal:** Добавить выбор формата результатов (список / карточки) в summary Window воронки подбора апартаментов.
 
-## Solution
+**Architecture:** Заменить одну кнопку "🔍 Показать результаты" на `Row(SwitchTo + Button)` в summary Window. SwitchTo → существующий SDK List Window, Button → существующий bot path с фото-карточками. Без новых State/Window.
 
-Заменить одну кнопку "🔍 Показать результаты" на две в summary Window:
-- **"📋 Показать списком"** → `SwitchTo(FunnelSG.results)` — текущий SDK Window (`List` + `Jinja`)
-- **"🏠 Показать карточками"** → `Button(on_click=on_summary_search)` — текущий bot path (фото + карточки)
+**Tech Stack:** Python 3.12, aiogram-dialog (SwitchTo, Button, Row), pytest
 
-Чисто SDK решение: `SwitchTo` + `Button`. Новых State/Window не нужно.
+---
 
-## Current Flow
+### Task 1: Add `on_search_list` callback + `Row` import
 
-```
-Step 5: summary Window (FunnelSG.summary)
-  ├── [🔍 Показать результаты]  → on_summary_search (Button + on_click)
-  ├── [✏️ Изменить параметры]   → SwitchTo(FunnelSG.change_filter)
-  ├── [⚙️ Доп. пожелания]      → SwitchTo(FunnelSG.preferences)
-  └── [Отмена]                  → Cancel
-```
+**Files:**
+- Modify: `telegram_bot/dialogs/funnel.py:21` (import), `telegram_bot/dialogs/funnel.py:873` (near on_summary_search)
+- Test: `tests/unit/dialogs/test_funnel.py`
 
-## New Flow
+**Step 1: Write failing test**
 
-```
-Step 5: summary Window (FunnelSG.summary)
-  ├── [📋 Показать списком]     → SwitchTo(FunnelSG.results)     ← SDK List Window
-  ├── [🏠 Показать карточками]  → on_summary_search (Button)     ← bot path cards
-  ├── [✏️ Изменить параметры]   → SwitchTo(FunnelSG.change_filter)
-  ├── [⚙️ Доп. пожелания]      → SwitchTo(FunnelSG.preferences)
-  └── [Отмена]                  → Cancel
-```
+Add to `tests/unit/dialogs/test_funnel.py`:
 
-## Changes
-
-### 1. `telegram_bot/dialogs/states.py` — без изменений
-
-Новые State не нужны. `FunnelSG.results` уже существует.
-
-### 2. `telegram_bot/dialogs/funnel.py` — summary Window
-
-**Было (line ~1247):**
 ```python
-Button(
-    Format("🔍 Показать результаты"),
-    id="search",
-    on_click=on_summary_search,
-    when="can_search",
-),
+@pytest.mark.asyncio
+async def test_on_search_list_resets_pagination():
+    """on_search_list must reset scroll state before switching to list view."""
+    manager = SimpleNamespace(
+        dialog_data={
+            "scroll_offset": "some-offset",
+            "scroll_next_offset": "next",
+            "scroll_page": 3,
+            "city": "Бургас",
+        },
+    )
+    callback = AsyncMock()
+    await funnel_module.on_search_list(callback, None, manager)
+
+    assert "scroll_offset" not in manager.dialog_data
+    assert "scroll_next_offset" not in manager.dialog_data
+    assert manager.dialog_data["scroll_page"] == 1
+    # Preserve other data
+    assert manager.dialog_data["city"] == "Бургас"
 ```
 
-**Стало:**
+**Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/unit/dialogs/test_funnel.py::test_on_search_list_resets_pagination -v`
+Expected: FAIL — `AttributeError: module has no attribute 'on_search_list'`
+
+**Step 3: Implement `on_search_list` + add `Row` import**
+
+In `telegram_bot/dialogs/funnel.py`, add `Row` to imports (line ~21):
+
 ```python
-Row(
-    SwitchTo(
-        Format("📋 Списком"),
-        id="search_list",
-        state=FunnelSG.results,
-        when="can_search",
-    ),
-    Button(
-        Format("🏠 Карточками"),
-        id="search_cards",
-        on_click=on_summary_search,
-        when="can_search",
-    ),
-),
+from aiogram_dialog.widgets.kbd import (
+    Back,
+    Button,
+    Cancel,
+    Column,
+    ManagedMultiselect,
+    Multiselect,
+    Row,
+    Select,
+    SwitchTo,
+)
 ```
 
-`Row` — SDK виджет, ставит 2 кнопки в одну строку. `when="can_search"` сохраняется для обеих.
-
-### 3. `telegram_bot/dialogs/funnel.py` — results getter
-
-Текущий `get_results_data()` уже делает поиск через `svc.scroll_with_filters()`.
-При `SwitchTo` → results Window, getter вызывается автоматически aiogram-dialog.
-
-Нужно убедиться что `scroll_offset` / `scroll_page` сбрасываются.
-Добавить `on_click` callback к `SwitchTo` (или использовать `pre_update` в Window)
-для сброса пагинации — аналогично тому что делает `on_summary_search`:
+Add `on_search_list` callback near `on_summary_search` (before it, around line 870):
 
 ```python
 async def on_search_list(
@@ -94,39 +80,136 @@ async def on_search_list(
     data["scroll_page"] = 1
 ```
 
-И прицепить к SwitchTo: `SwitchTo(..., on_click=on_search_list)`.
+**Step 4: Run test to verify it passes**
 
-### 4. Import `Row` в funnel.py
+Run: `uv run pytest tests/unit/dialogs/test_funnel.py::test_on_search_list_resets_pagination -v`
+Expected: PASS
 
-Добавить `Row` в импорт aiogram-dialog виджетов (если ещё нет).
+**Step 5: Commit**
 
-## Files
+```bash
+git add telegram_bot/dialogs/funnel.py tests/unit/dialogs/test_funnel.py
+git commit -m "feat(funnel): add on_search_list callback and Row import"
+```
+
+---
+
+### Task 2: Replace summary Window button with Row(SwitchTo + Button)
+
+**Files:**
+- Modify: `telegram_bot/dialogs/funnel.py:1247-1252` (summary Window)
+- Test: `tests/unit/dialogs/test_funnel.py`
+
+**Step 1: Write failing test**
+
+Add to `tests/unit/dialogs/test_funnel.py`:
+
+```python
+def test_summary_window_has_list_and_cards_buttons():
+    """Summary Window must have both 'list' and 'cards' result buttons."""
+    from telegram_bot.dialogs.funnel import funnel_dialog
+
+    # Find summary window (FunnelSG.summary state)
+    summary_window = None
+    for window in funnel_dialog.windows.values():
+        if window.get_state() == FunnelSG.summary:
+            summary_window = window
+            break
+
+    assert summary_window is not None, "Summary window not found"
+
+    # Collect all button IDs recursively
+    button_ids = set()
+
+    def _collect_ids(widget):
+        if hasattr(widget, "widget_id") and widget.widget_id:
+            button_ids.add(widget.widget_id)
+        # Row, Column, Group have .buttons
+        for child in getattr(widget, "buttons", []):
+            _collect_ids(child)
+
+    for child in summary_window.keyboard.buttons:
+        _collect_ids(child)
+
+    assert "search_list" in button_ids, "Missing 'search_list' SwitchTo button"
+    assert "search_cards" in button_ids, "Missing 'search_cards' Button"
+    # Old single button should be gone
+    assert "search" not in button_ids, "Old 'search' button still present"
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/unit/dialogs/test_funnel.py::test_summary_window_has_list_and_cards_buttons -v`
+Expected: FAIL — `"search_list" not in button_ids`
+
+**Step 3: Replace Button with Row in summary Window**
+
+In `telegram_bot/dialogs/funnel.py`, replace the summary Window's search button (around line 1247-1252):
+
+**Replace:**
+```python
+        Button(
+            Format("🔍 Показать результаты"),
+            id="search",
+            on_click=on_summary_search,
+            when="can_search",
+        ),
+```
+
+**With:**
+```python
+        Row(
+            SwitchTo(
+                Format("📋 Списком"),
+                id="search_list",
+                state=FunnelSG.results,
+                on_click=on_search_list,
+                when="can_search",
+            ),
+            Button(
+                Format("🏠 Карточками"),
+                id="search_cards",
+                on_click=on_summary_search,
+                when="can_search",
+            ),
+        ),
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/unit/dialogs/test_funnel.py::test_summary_window_has_list_and_cards_buttons -v`
+Expected: PASS
+
+**Step 5: Run all funnel tests**
+
+Run: `uv run pytest tests/unit/dialogs/test_funnel.py tests/unit/dialogs/test_funnel_results.py -v`
+Expected: all PASS
+
+**Step 6: Run full checks**
+
+Run: `make check && uv run pytest tests/unit/ -n auto -q --timeout=30`
+Expected: 0 errors, all tests PASS
+
+**Step 7: Commit**
+
+```bash
+git add telegram_bot/dialogs/funnel.py tests/unit/dialogs/test_funnel.py
+git commit -m "feat(funnel): add list/cards view mode buttons to summary
+
+Replace single 'Показать результаты' button with Row containing
+'📋 Списком' (SwitchTo → SDK List) and '🏠 Карточками' (Button → bot path cards)."
+```
+
+---
+
+## Summary of changes
 
 | File | Change |
 |------|--------|
-| `telegram_bot/dialogs/funnel.py` | Summary Window: replace 1 Button → Row(SwitchTo + Button) + on_search_list callback |
-| `tests/unit/dialogs/test_funnel.py` | Тест: summary Window содержит 2 кнопки результатов |
+| `telegram_bot/dialogs/funnel.py` | Add `Row` import, `on_search_list` callback, replace Button → Row(SwitchTo + Button) |
+| `tests/unit/dialogs/test_funnel.py` | 2 new tests: pagination reset + button structure |
 
-## UX
+## Commit sequence
 
-Пользователь на экране summary видит свои параметры и два варианта:
-```
-Ваши параметры поиска:
-📍 Город: Бургас
-🛏 Тип: 1-спальня
-💰 Бюджет: до 80 000€
-
-[📋 Списком] [🏠 Карточками]
-[✏️ Изменить параметры]
-[⚙️ Доп. пожелания]
-[Отмена]
-```
-
-- "📋 Списком" — остаётся в диалоге, видит компактный список с пагинацией
-- "🏠 Карточками" — диалог закрывается, получает фото-карточки с кнопками "В избранное" / "На осмотр"
-
-## Out of Scope
-
-- Запоминание предпочтения пользователя (будущее)
-- Переключение вида после показа результатов
-- Карточки внутри aiogram-dialog (нет SDK-способа слать album)
+1. `feat(funnel): add on_search_list callback and Row import`
+2. `feat(funnel): add list/cards view mode buttons to summary`
