@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HomePage } from "./pages/HomePage";
 import { QuestionSheet } from "./pages/QuestionSheet";
 import { ExpertSheet } from "./pages/ExpertSheet";
@@ -19,6 +19,7 @@ export function App() {
           <Route path="/question/:id" element={<QuestionSheet />} />
           <Route path="/expert/:id" element={<ExpertSheet />} />
           <Route path="/chat" element={<ChatPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </HashRouter>
