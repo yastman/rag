@@ -1328,6 +1328,10 @@ class PropertyBot:
         """Handoff to manager (#628, #730)."""
         if self._forum_bridge is not None:
             await start_qualification(message, i18n=i18n, state=state)
+        elif state is not None:
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(message, state, service_key="manager")
         else:
             await self.handle_menu_action_text(message, "Соедини с менеджером")
 
