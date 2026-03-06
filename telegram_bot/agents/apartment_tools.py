@@ -142,7 +142,7 @@ async def apartment_search(
             colbert_query=colbert or None,
             sparse_vector=sparse,
             filters=filters or None,
-            top_k=10,
+            top_k=20,
         )
 
         response = format_apartment_text(results)
