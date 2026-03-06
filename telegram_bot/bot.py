@@ -2,7 +2,6 @@
 
 import asyncio
 import contextlib
-import hashlib
 import inspect
 import io
 import json
@@ -10,7 +9,6 @@ import logging
 import re
 import time
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -49,6 +47,7 @@ from .handlers.handoff import (
 from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
+from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
     create_callback_handler,
     get_client,
@@ -100,19 +99,8 @@ def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
     return merged
 
 
-def make_session_id(session_type: str, identifier: int | str) -> str:
-    """Create unified session_id format: {type}-{hash}-{YYYYMMDD}.
-
-    Args:
-        session_type: Type prefix (e.g., 'chat', 'smoke', 'load')
-        identifier: Unique identifier (chat_id, user_id, etc.)
-
-    Returns:
-        Formatted session_id: "chat-a1b2c3d4-20260202"
-    """
-    id_hash = hashlib.sha256(str(identifier).encode()).hexdigest()[:8]
-    date_str = datetime.now(UTC).strftime("%Y%m%d")
-    return f"{session_type}-{id_hash}-{date_str}"
+# Re-export from shared module (avoid circular imports with middlewares)
+from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
 
 def _supervisor_thread_id(chat_id: int | str) -> str:
@@ -462,6 +450,9 @@ class PropertyBot:
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
+        # Langfuse context must be outermost to wrap all handlers
+        self.dp.message.outer_middleware(LangfuseContextMiddleware())
+        self.dp.callback_query.outer_middleware(LangfuseContextMiddleware())
         setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=self.config.admin_ids)
         setup_error_handler(self.dp)
         self.dp.message.outer_middleware(FSMCancelMiddleware())
@@ -754,6 +745,7 @@ class PropertyBot:
             return "manager"
         return db_role or "client"
 
+    @observe(name="cmd-start", capture_input=False, capture_output=False)
     async def cmd_start(self, message: Message, dialog_manager: Any = None, i18n: Any = None):
         """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
         assert message.from_user is not None
@@ -800,6 +792,7 @@ class PropertyBot:
             "/stats - Показать статистику кеша\n"
         )
 
+    @observe(name="cmd-clear", capture_input=False, capture_output=False)
     async def cmd_clear(self, message: Message):
         """Handle /clear command - clear conversation history."""
         assert message.from_user is not None
@@ -872,6 +865,7 @@ class PropertyBot:
         text = f"```\n{metrics.format_text()}\n```"
         await message.answer(text, parse_mode="Markdown")
 
+    @observe(name="cmd-clearcache", capture_input=False, capture_output=False)
     async def cmd_clearcache(self, message: Message) -> None:
         """Handle /clearcache command — show inline keyboard to select cache tier for clearing."""
         keyboard = InlineKeyboardMarkup(
@@ -889,6 +883,7 @@ class PropertyBot:
         )
         await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
 
+    @observe(name="cmd-call", capture_input=False, capture_output=False)
     async def cmd_call(self, message: Message):
         """Handle /call command — trigger outbound voice call.
 
@@ -1076,6 +1071,7 @@ class PropertyBot:
 
             await message.answer("\n".join(lines))
 
+    @observe(name="menu-router", capture_input=False, capture_output=False)
     async def handle_menu_button(
         self,
         message: Message,
@@ -1134,6 +1130,7 @@ class PropertyBot:
         patched = message.model_copy(update={"text": query_text})
         await self.handle_query(patched)
 
+    @observe(name="menu-search", capture_input=False, capture_output=False)
     async def _handle_search(self, message: Message, dialog_manager: Any = None) -> None:
         """Start property search funnel via aiogram-dialog (#628, #658)."""
         if dialog_manager is not None:
@@ -1146,6 +1143,7 @@ class PropertyBot:
             # Fallback when dialog_manager not available (e.g., tests)
             await self.handle_menu_action_text(message, "Подбери апартаменты")
 
+    @observe(name="menu-services", capture_input=False, capture_output=False)
     async def _handle_services(self, message: Message, i18n: Any = None) -> None:
         """Show services inline menu (#628)."""
         from .keyboards.services_keyboard import build_services_menu
@@ -1157,6 +1155,7 @@ class PropertyBot:
         kb = build_services_menu(i18n=i18n)
         await message.answer(text, reply_markup=kb)
 
+    @observe(name="menu-viewing", capture_input=False, capture_output=False)
     async def _handle_viewing(
         self, message: Message, state: FSMContext, dialog_manager: Any = None
     ) -> None:
@@ -1218,6 +1217,7 @@ class PropertyBot:
         card_msg._photo_message_ids = photo_message_ids  # type: ignore[attr-defined]
         return card_msg
 
+    @observe(name="menu-bookmarks", capture_input=False, capture_output=False)
     async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
         """Show user's saved favorites (#628)."""
         if not message.from_user:
@@ -1268,6 +1268,7 @@ class PropertyBot:
                 bookmark_photo_ids=bookmark_photo_ids,
             )
 
+    @observe(name="menu-promotions", capture_input=False, capture_output=False)
     async def _handle_promotions(self, message: Message) -> None:
         """Show promotions from config (#628)."""
         from .services.content_loader import get_promotions
@@ -1291,6 +1292,7 @@ class PropertyBot:
         "ask:installment": "Какие условия рассрочки?",
     }
 
+    @observe(name="menu-ask", capture_input=False, capture_output=False)
     async def _handle_ask(self, message: Message, i18n: Any = None) -> None:
         """Show FAQ inline menu with popular questions."""
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1339,6 +1341,7 @@ class PropertyBot:
         kb = InlineKeyboardMarkup(inline_keyboard=buttons)
         await message.answer(prompt, reply_markup=kb)
 
+    @observe(name="cb-ask", capture_input=False, capture_output=False)
     async def handle_ask_callback(self, callback: CallbackQuery) -> None:
         """Handle ask:* callback — route FAQ question to RAG pipeline."""
         await callback.answer()
@@ -1347,6 +1350,7 @@ class PropertyBot:
             return
         await self.handle_menu_action_text(callback.message, query_text)  # type: ignore[arg-type]
 
+    @observe(name="menu-manager", capture_input=False, capture_output=False)
     async def _handle_manager(
         self, message: Message, i18n: Any = None, state: FSMContext | None = None
     ) -> None:
@@ -1586,6 +1590,7 @@ class PropertyBot:
             except Exception:
                 logger.exception("Failed to update Kommo on handoff close")
 
+    @observe(name="cb-service", capture_input=False, capture_output=False)
     async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
         """Handle service menu inline button clicks (#628)."""
         from .keyboards.services_keyboard import (
@@ -1632,6 +1637,7 @@ class PropertyBot:
         else:
             await callback.answer()
 
+    @observe(name="cb-cta", capture_input=False, capture_output=False)
     async def handle_cta_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
         """Handle CTA button clicks (get_offer, manager) (#628)."""
         from .handlers.phone_collector import start_phone_collection
@@ -1881,6 +1887,7 @@ class PropertyBot:
                 callback, state, service_key="viewing", viewing_objects=viewing_objs or None
             )
 
+    @observe(name="cb-favorite", capture_input=False, capture_output=False)
     async def handle_favorite_callback(
         self,
         callback: CallbackQuery,
@@ -1914,6 +1921,7 @@ class PropertyBot:
         else:
             await callback.answer()
 
+    @observe(name="cb-results", capture_input=False, capture_output=False)
     async def handle_results_callback(
         self,
         callback: CallbackQuery,
@@ -2069,6 +2077,7 @@ class PropertyBot:
         else:
             await callback.answer()
 
+    @observe(name="cb-card", capture_input=False, capture_output=False)
     async def handle_card_callback(
         self,
         callback: CallbackQuery,
@@ -3441,6 +3450,7 @@ class PropertyBot:
         lf = get_client()
         lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
 
+    @observe(name="cb-feedback", capture_input=False, capture_output=False)
     async def handle_feedback(
         self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
     ) -> None:
@@ -3541,6 +3551,7 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
 
+    @observe(name="cb-feedback-reason", capture_input=False, capture_output=False)
     async def handle_feedback_reason(
         self, callback: CallbackQuery, callback_data: FeedbackReasonCB
     ) -> None:
@@ -3599,6 +3610,7 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
+    @observe(name="cb-clearcache", capture_input=False, capture_output=False)
     async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
         """Handle /clearcache inline keyboard callbacks (cc: prefix)."""
         _TIER_NAMES = {
