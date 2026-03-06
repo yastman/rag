@@ -8,6 +8,7 @@ import logging
 import operator
 from typing import Any
 
+from aiogram.enums import ParseMode
 from aiogram.types import CallbackQuery
 from aiogram_dialog import Dialog, DialogManager, Window
 from aiogram_dialog.widgets.kbd import (
@@ -1359,6 +1360,6 @@ funnel_dialog = Dialog(
         Cancel(Format("{btn_back}")),
         getter=get_results_data,
         state=FunnelSG.results,
-        parse_mode="HTML",
+        parse_mode=ParseMode.HTML,
     ),
 )
