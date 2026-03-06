@@ -1320,7 +1320,7 @@ funnel_dialog = Dialog(
     ),
     # Step 6: Results (SDK List widget)
     Window(
-        Jinja("{title}"),
+        Jinja("{{ title }}"),
         List(
             Jinja(
                 "<b>{{ item.idx }}.</b> <b>{{ item.complex_name }}</b>"
