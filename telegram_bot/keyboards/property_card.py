@@ -8,6 +8,7 @@ from pathlib import Path
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from telegram_bot.callback_data import FavoriteCB, ResultsCB
+from telegram_bot.services.apartment_formatter import format_apartment_html
 
 
 _DEMO_PHOTO_DIR = Path(__file__).resolve().parents[1] / "static" / "photos" / "demo"
@@ -33,24 +34,18 @@ def format_property_card(
     apartment_number: str = "",
 ) -> str:
     """Format property as text card."""
-    price_formatted = f"{int(price_eur):,}".replace(",", " ")
-    lines = [f"🏠 Комплекс: {complex_name}"]
-    if section:
-        lines.append(f"🏗 Секция: {section}")
-    if apartment_number:
-        lines.append(f"🚪 №: {apartment_number}")
-    if location:
-        lines.append(f"📍 Город: {location}")
-    if property_type:
-        lines.append(f"🛏 Тип: {property_type}")
-    if floor:
-        lines.append(f"🔼 Этаж: {floor}")
-    if area_m2:
-        lines.append(f"📐 Площадь: {area_m2} м²")
-    if view:
-        lines.append(f"🌅 Вид: {view}")
-    lines.append(f"💰 Цена: {price_formatted} €")
-    return "\n".join(lines)
+    return format_apartment_html(
+        property_id=property_id,
+        complex_name=complex_name,
+        location=location,
+        property_type=property_type,
+        floor=floor,
+        area_m2=area_m2,
+        view=view,
+        price_eur=price_eur,
+        section=section,
+        apartment_number=apartment_number,
+    )
 
 
 def format_promotion_card(
