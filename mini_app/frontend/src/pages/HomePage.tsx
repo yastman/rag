@@ -11,10 +11,15 @@ export function HomePage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchConfig().then(setConfig);
+    fetchConfig().then(setConfig).catch(() => setConfig({ questions: [], experts: [] }));
   }, []);
 
-  if (!config) return null;
+  if (!config)
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
+        Загрузка...
+      </div>
+    );
 
   const handleQuestion = (q: Question) => navigate(`/question/${q.id}`);
   const handleExpert = (e: Expert) => navigate(`/expert/${e.id}`);
