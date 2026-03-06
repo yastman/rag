@@ -11,6 +11,7 @@ import pytest
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 BGE_M3_URL = os.getenv("BGE_M3_URL", "http://localhost:8000")
 COLLECTION = os.getenv("GDRIVE_COLLECTION_NAME", "gdrive_documents_bge")
+SCROLL_SAMPLE_LIMIT = 20
 
 
 def _port_open(host: str, port: int) -> bool:
@@ -43,6 +44,33 @@ def _require_bge_m3() -> None:
         pytest.skip("BGE-M3 not running on localhost:8000")
 
 
+def _first_document_point(points: list[dict]) -> dict:
+    """Return the first point that looks like an indexed document chunk."""
+    for point in points:
+        payload = point.get("payload", {})
+        metadata = payload.get("metadata", {})
+        text = payload.get("text", "")
+        if text and metadata.get("doc_id"):
+            return point
+    raise AssertionError("No indexed document point found in scroll results")
+
+
+def test_first_document_point_skips_points_without_doc_id() -> None:
+    points = [
+        {"payload": {"text": "orphan text", "metadata": {}}},
+        {"payload": {"text": "valid text", "metadata": {"doc_id": "guide.md"}}},
+    ]
+
+    point = _first_document_point(points)
+
+    assert point["payload"]["metadata"]["doc_id"] == "guide.md"
+
+
+def test_first_document_point_raises_when_no_valid_document_points() -> None:
+    with pytest.raises(AssertionError, match="No indexed document point"):
+        _first_document_point([{"payload": {"text": "", "metadata": {}}}])
+
+
 class TestIngestionHealth:
     """Verify gdrive_documents_bge collection is populated after ingestion."""
 
@@ -65,23 +93,42 @@ class TestIngestionHealth:
         _require_qdrant()
         result = _http_post(
             f"{QDRANT_URL}/collections/{COLLECTION}/points/scroll",
-            {"limit": 1, "with_payload": True, "with_vector": False},
+            {"limit": SCROLL_SAMPLE_LIMIT, "with_payload": True, "with_vector": False},
         )
         points = result.get("result", {}).get("points", [])
         assert points, "No points returned from scroll"
-        payload = points[0].get("payload", {})
+        payload = _first_document_point(points).get("payload", {})
         assert "text" in payload, f"Point payload missing 'text': {list(payload.keys())}"
         assert len(payload["text"]) > 10, "Text payload is too short"
+
+    def test_documents_have_page_content(self) -> None:
+        """page_content is required by QdrantService._format_results() in RAG pipeline."""
+        _require_qdrant()
+        result = _http_post(
+            f"{QDRANT_URL}/collections/{COLLECTION}/points/scroll",
+            {"limit": SCROLL_SAMPLE_LIMIT, "with_payload": True, "with_vector": False},
+        )
+        points = result.get("result", {}).get("points", [])
+        assert points, "No points returned from scroll"
+        payload = _first_document_point(points).get("payload", {})
+        assert "page_content" in payload, (
+            f"Point payload missing 'page_content' (required by RAG pipeline): "
+            f"{list(payload.keys())}"
+        )
+        assert len(payload["page_content"]) > 10, "page_content is too short"
+        assert payload["page_content"] == payload.get("text", ""), (
+            "page_content and text should match"
+        )
 
     def test_documents_have_doc_id(self) -> None:
         _require_qdrant()
         result = _http_post(
             f"{QDRANT_URL}/collections/{COLLECTION}/points/scroll",
-            {"limit": 1, "with_payload": True, "with_vector": False},
+            {"limit": SCROLL_SAMPLE_LIMIT, "with_payload": True, "with_vector": False},
         )
         points = result.get("result", {}).get("points", [])
         assert points, "No points returned"
-        metadata = points[0].get("payload", {}).get("metadata", {})
+        metadata = _first_document_point(points).get("payload", {}).get("metadata", {})
         assert "doc_id" in metadata, f"Missing doc_id in metadata: {list(metadata.keys())}"
 
 
