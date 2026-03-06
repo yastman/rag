@@ -368,14 +368,6 @@ class PropertyBot:
         )
         self._apartments_service = ApartmentsService(qdrant=self._qdrant_apartments)
 
-        # Apartment extraction pipeline: regex → confidence gate → LLM fallback
-        from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
-        from .services.apartment_filter_extractor import ApartmentFilterExtractor
-
-        self._apartment_pipeline = ApartmentExtractionPipeline(
-            regex_extractor=ApartmentFilterExtractor(),
-        )
-
         # Rerank provider (feature flag)
         self._reranker = None
         if config.rerank_provider == "colbert":
@@ -388,6 +380,18 @@ class PropertyBot:
 
         # LLM (optional, defaults via GraphConfig.create_llm)
         self._llm = self._graph_config.create_llm()
+
+        # Apartment extraction pipeline: LLM first → regex fallback
+        from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
+        from .services.apartment_filter_extractor import ApartmentFilterExtractor
+        from .services.apartment_llm_extractor import ApartmentLlmExtractor
+
+        _apt_llm = ApartmentLlmExtractor(llm=self._llm, model="gpt-4o-mini")
+        self._apartment_pipeline = ApartmentExtractionPipeline(
+            regex_extractor=ApartmentFilterExtractor(),
+            llm_extractor=_apt_llm,
+            redis=self._cache.redis,
+        )
         # Redis health monitor (periodic background task)
         self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
 
@@ -705,6 +709,11 @@ class PropertyBot:
         # which is included AFTER dialog routers in _setup_dialogs().
         # This ensures dialog MessageInput (e.g. viewing phone input)
         # is resolved before the catch-all (aiogram SDK: first-match wins).
+        # Demo flow router
+        from .handlers.demo_handler import demo_router
+
+        self.dp.include_router(demo_router)
+
         self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
         # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
         self.dp.callback_query(F.data == "fb:done")(self.handle_feedback)
@@ -1094,6 +1103,7 @@ class PropertyBot:
             "bookmarks": self._handle_bookmarks,
             "ask": self._handle_ask,
             "manager": self._handle_manager,
+            "demo": self._handle_demo,
         }
         handler = handlers.get(action_id)
         if handler:
@@ -1109,8 +1119,15 @@ class PropertyBot:
                 await handler(message, i18n=i18n)
             elif action_id == "manager":
                 await handler(message, i18n=i18n, state=state)
+            elif action_id == "demo":
+                await handler(message)
             else:
                 await handler(message)
+
+    async def _handle_demo(self, message: Message) -> None:
+        from .handlers.demo_handler import handle_demo_button
+
+        await handle_demo_button(message)
 
     async def handle_menu_action_text(self, message: Message, query_text: str) -> None:
         """Dispatch text query to agent pipeline (from ReplyKeyboard context) (#628)."""
