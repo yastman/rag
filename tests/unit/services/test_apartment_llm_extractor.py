@@ -121,3 +121,12 @@ class TestMergeExtractionResults:
         llm = ApartmentSearchFilters(meta=ExtractionMeta(source="llm"))
         merged = merge_extraction_results(regex, llm)
         assert merged.meta.source == "hybrid"
+
+
+class TestLlmExtractorObservability:
+    def test_extract_is_observed(self) -> None:
+        """ApartmentLlmExtractor.extract must be @observe-decorated (span: apartment-llm-extract)."""
+        assert hasattr(ApartmentLlmExtractor.extract, "__wrapped__"), (
+            "ApartmentLlmExtractor.extract must be decorated with "
+            "@observe(name='apartment-llm-extract')"
+        )

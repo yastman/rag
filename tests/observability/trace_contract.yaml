@@ -125,6 +125,8 @@ spans:
   services:
     - apartments-hybrid-search
     - apartments-filtered-search
+    - apartment-extraction-pipeline
+    - apartment-llm-extract
     - service-generate-response
     - detect-response-style
     - get-prompt
@@ -140,6 +142,7 @@ spans:
     - handoff-generate-summary
     - search-event-append
     - search-event-get-user
+    - demo-search
 
   kommo_client:
     - kommo-create-lead
