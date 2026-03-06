@@ -341,6 +341,10 @@ class BotConfig(BaseSettings):
         default="gpt-4o-mini",
         validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),
     )
+    apartment_extraction_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("apartment_extraction_model", "APARTMENT_EXTRACTION_MODEL"),
+    )
     client_direct_pipeline_enabled: EmptyStrBool = Field(
         default=False,
         validation_alias=AliasChoices(
