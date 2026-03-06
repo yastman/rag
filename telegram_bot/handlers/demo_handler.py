@@ -10,6 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
+from telegram_bot.callback_data import DemoCB
 from telegram_bot.keyboards.demo_keyboard import (
     DEFAULT_EXAMPLES,
     build_demo_examples,
@@ -34,17 +35,16 @@ async def handle_demo_button(message: Message) -> None:
     )
 
 
-@demo_router.callback_query(F.data == "demo:apartments")
+@demo_router.callback_query(DemoCB.filter(F.action == "apartments"))
 async def handle_demo_apartments(
     callback: CallbackQuery,
     state: FSMContext,
-    **kwargs: Any,
+    apartments_service: Any = None,
 ) -> None:
     """Show instruction + example buttons, set FSM state."""
     await callback.answer()
     await state.set_state(DemoStates.waiting_query)
 
-    apartments_service = kwargs.get("apartments_service")
     examples = DEFAULT_EXAMPLES
     if apartments_service is not None:
         try:
@@ -65,23 +65,32 @@ async def handle_demo_apartments(
     )
 
 
-@demo_router.callback_query(F.data.startswith("demo:example:"))
+@demo_router.callback_query(DemoCB.filter(F.action == "example"))
 async def handle_demo_example(
     callback: CallbackQuery,
+    callback_data: DemoCB,
     state: FSMContext,
-    **kwargs: Any,
+    pipeline: Any = None,
+    apartments_service: Any = None,
+    embeddings: Any = None,
 ) -> None:
     """Handle example button click — treat as text query."""
     await callback.answer()
-    idx = int(callback.data.split(":")[-1])  # type: ignore[union-attr]
+    idx = callback_data.idx
     data = await state.get_data()
     examples = data.get("examples", DEFAULT_EXAMPLES)
     if idx >= len(examples):
         return
     query = examples[idx]
 
-    # Delegate search using callback.message as the reply target
-    await _run_demo_search(query, callback.message, state, **kwargs)  # type: ignore[arg-type]
+    await _run_demo_search(
+        query,
+        callback.message,
+        state,  # type: ignore[arg-type]
+        pipeline=pipeline,
+        apartments_service=apartments_service,
+        embeddings=embeddings,
+    )
 
 
 @demo_router.message(DemoStates.waiting_query)
