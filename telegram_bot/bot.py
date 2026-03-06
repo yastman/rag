@@ -1412,6 +1412,9 @@ class PropertyBot:
         elif value == "phone":
             if msg and hasattr(msg, "edit_text"):
                 await msg.edit_text("Сейчас попросим номер телефона...")
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(callback, state, service_key="manager")
         else:
             # Fallback — delegate to agent pipeline.
             if msg and hasattr(msg, "edit_text"):
