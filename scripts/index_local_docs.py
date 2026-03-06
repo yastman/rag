@@ -268,6 +268,7 @@ def upsert_points(
                     ),
                 },
                 payload={
+                    "page_content": chunk["text"],
                     "text": chunk["text"],
                     "metadata": {
                         "file_name": chunk["source_file"],
