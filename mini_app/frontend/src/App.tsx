@@ -10,8 +10,8 @@ export function App() {
       <div
         style={{
           minHeight: "100vh",
-          background: "var(--tg-theme-bg-color)",
-          color: "var(--tg-theme-text-color)",
+          background: "var(--tg-theme-bg-color, #ffffff)",
+          color: "var(--tg-theme-text-color, #000000)",
         }}
       >
         <Routes>
