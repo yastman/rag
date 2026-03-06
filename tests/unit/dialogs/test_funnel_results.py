@@ -188,6 +188,8 @@ async def test_get_results_data_returns_apartments_list():
     assert result["title"] == "Найдено <b>297</b> апартаментов (показаны 1–1)"
     assert "296 осталось" in result["btn_more"]
     mock_svc.scroll_with_filters.assert_awaited_once()
+    call_kwargs = mock_svc.scroll_with_filters.await_args
+    assert call_kwargs.kwargs["limit"] == 10
 
 
 @pytest.mark.asyncio
