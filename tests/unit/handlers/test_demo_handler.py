@@ -93,11 +93,15 @@ class TestDemoExampleClick:
         apartments_service.search_with_filters.return_value = (
             [
                 {
-                    "complex_name": "Test",
-                    "rooms": 1,
-                    "price_eur": 90000,
-                    "area_m2": 40,
-                    "city": "Солнечный берег",
+                    "score": 0.85,
+                    "payload": {
+                        "complex_name": "Test",
+                        "rooms": 1,
+                        "price_eur": 90000,
+                        "area_m2": 40,
+                        "city": "Солнечный берег",
+                    },
+                    "id": "1",
                 }
             ],
             1,
