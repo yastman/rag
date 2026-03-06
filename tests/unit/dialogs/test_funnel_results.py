@@ -175,12 +175,13 @@ async def test_get_results_data_returns_apartments_list():
 
     assert "apartments" in result
     assert len(result["apartments"]) == 1
-    apt = result["apartments"][0]
-    assert apt["complex_name"] == "Sunrise Complex"
-    assert apt["section"] == "B-2"
-    assert apt["apartment_number"] == "105"
-    assert apt["price_formatted"] == "48 500"
-    assert apt["property_type"] == "Студия"
+    card = result["apartments"][0]["card"]
+    assert "Sunrise Complex" in card
+    assert "B-2" in card
+    assert "№105" in card
+    assert "48 500 €" in card
+    assert "Студия" in card
+    assert "\n" in card  # multi-line card
     assert result["has_apartments"] is True
     assert result["has_more"] is True
     assert result["no_results"] is False

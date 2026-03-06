@@ -625,22 +625,33 @@ async def get_results_data(
                 has_more = next_start_from is not None and total_count > shown_end
                 for i, apt in enumerate(results):
                     p = apt["payload"]
-                    rooms_num = p.get("rooms", 1)
-                    apartments.append(
-                        {
-                            "idx": shown_start + i,
-                            "complex_name": p.get("complex_name", ""),
-                            "section": p.get("section", ""),
-                            "apartment_number": p.get("apartment_number", ""),
-                            "property_type": _ROOMS_DISPLAY.get(rooms_num, str(rooms_num)),
-                            "floor": p.get("floor", 0),
-                            "area_m2": round(p.get("area_m2", 0)),
-                            "view": _VIEW_DISPLAY.get(
-                                p.get("view_primary", ""), p.get("view_primary", "")
-                            ),
-                            "price_formatted": f"{int(p.get('price_eur', 0)):,}".replace(",", " "),
-                        }
-                    )
+                    idx = shown_start + i
+                    complex_name = p.get("complex_name", "")
+                    section = p.get("section", "")
+                    apt_num = p.get("apartment_number", "")
+                    prop_type = _ROOMS_DISPLAY.get(p.get("rooms", 1), str(p.get("rooms", 1)))
+                    floor = p.get("floor", 0)
+                    area = round(p.get("area_m2", 0))
+                    view = _VIEW_DISPLAY.get(p.get("view_primary", ""), p.get("view_primary", ""))
+                    price = f"{int(p.get('price_eur', 0)):,}".replace(",", " ")
+
+                    line1 = f"<b>{idx}.</b> <b>{complex_name}</b>"
+                    if section:
+                        line1 += f" · {section}"
+                    if apt_num:
+                        line1 += f" · №{apt_num}"
+
+                    line2 = f"    {prop_type}"
+                    if floor:
+                        line2 += f" · {floor} эт"
+                    if area:
+                        line2 += f" · {area} м²"
+                    if view:
+                        line2 += f" · {view}"
+
+                    line3 = f"    <b>{price} €</b>"
+
+                    apartments.append({"card": f"{line1}\n{line2}\n{line3}"})
                 if has_more:
                     remaining = max(total_count - shown_end, 0)
                     if i18n:
@@ -1322,16 +1333,7 @@ funnel_dialog = Dialog(
     Window(
         Jinja("{{ title }}\n"),
         List(
-            Jinja(
-                "<b>{{ item.idx }}.</b> <b>{{ item.complex_name }}</b>"
-                "{% if item.section %} · {{ item.section }}{% endif %}"
-                "{% if item.apartment_number %} · №{{ item.apartment_number }}{% endif %}"
-                "\n    {{ item.property_type }}"
-                "{% if item.floor %} · {{ item.floor }} эт{% endif %}"
-                "{% if item.area_m2 %} · {{ item.area_m2 }} м²{% endif %}"
-                "{% if item.view %} · {{ item.view }}{% endif %}"
-                "\n    <b>{{ item.price_formatted }} €</b>"
-            ),
+            Jinja("{{ item.card }}"),
             items="apartments",
             sep="\n\n",
             id="apt_list",
