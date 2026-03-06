@@ -69,6 +69,7 @@ class TestDemoFlow:
 class TestDemoExampleClick:
     @pytest.mark.asyncio
     async def test_example_click_triggers_search(self) -> None:
+        from telegram_bot.callback_data import DemoCB
         from telegram_bot.handlers.demo_handler import handle_demo_example
         from telegram_bot.services.apartment_models import (
             ApartmentSearchFilters,
@@ -77,9 +78,9 @@ class TestDemoExampleClick:
         )
 
         callback = AsyncMock(spec=CallbackQuery)
-        callback.data = "demo:example:0"
         callback.answer = AsyncMock()
         callback.message = AsyncMock()
+        callback_data = DemoCB(action="example", idx=0)
         state = AsyncMock(spec=FSMContext)
         state.get_data.return_value = {"examples": ["Студия в Солнечном берегу до 100 000€"]}
 
@@ -106,6 +107,7 @@ class TestDemoExampleClick:
 
         await handle_demo_example(
             callback,
+            callback_data,
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
