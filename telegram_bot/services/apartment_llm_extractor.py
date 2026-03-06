@@ -7,6 +7,7 @@ import logging
 import instructor
 from openai import AsyncOpenAI
 
+from telegram_bot.integrations.prompt_manager import get_prompt
 from telegram_bot.observability import observe
 from telegram_bot.services.apartment_models import (
     ApartmentSearchFilters,
@@ -34,6 +35,18 @@ Crown Fort Club, Green Fort Suites, Premier Fort Suites, Nessebar Fort Residence
 - "недорого"/"бюджетно" = budget_friendly preference + sort_bias="price_asc"
 - "просторная" = spacious preference + min_area_m2 >= 60
 - Если не уверен — оставь None, не выдумывай"""
+
+
+def _get_system_prompt() -> str:
+    """Fetch system prompt from Langfuse Prompt Management with fallback to default.
+
+    Prompt name: "apartment-extraction-system-prompt"
+    Falls back to EXTRACTION_SYSTEM_PROMPT when Langfuse is unavailable.
+    """
+    return get_prompt(
+        "apartment-extraction-system-prompt",
+        fallback=EXTRACTION_SYSTEM_PROMPT,
+    )
 
 
 def merge_extraction_results(
@@ -87,7 +100,7 @@ class ApartmentLlmExtractor:
 
         source = "hybrid" if partial_filters else "llm"
         messages = [
-            {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT + context},
+            {"role": "system", "content": _get_system_prompt() + context},
             {"role": "user", "content": query},
         ]
 
