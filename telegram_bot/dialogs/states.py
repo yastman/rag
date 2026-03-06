@@ -176,3 +176,10 @@ class CrmQuickActionSG(StatesGroup):
     edit_task_choose_field = State()  # choose what to edit (text or due date)
     edit_task_text = State()  # waiting for new task text
     edit_task_date = State()  # waiting for new due date
+
+
+class DemoSG(StatesGroup):
+    """Demo apartment search dialog (aiogram-dialog, #907)."""
+
+    intro = State()  # Step 1: query input (text or voice)
+    results = State()  # Step 2: search results display
