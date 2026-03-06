@@ -14,7 +14,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv sync --frozen --no-dev --no-install-project
+    uv sync --frozen --no-dev --no-install-project --extra mini-app
 
 # Code layer
 COPY pyproject.toml uv.lock ./
@@ -23,7 +23,7 @@ COPY telegram_bot/ telegram_bot/
 COPY src/ src/
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --extra mini-app
 
 # ====== RUNTIME STAGE ======
 FROM python:3.12-slim-bookworm AS runtime
