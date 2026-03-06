@@ -368,6 +368,14 @@ class PropertyBot:
         )
         self._apartments_service = ApartmentsService(qdrant=self._qdrant_apartments)
 
+        # Apartment extraction pipeline: regex → confidence gate → LLM fallback
+        from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
+        from .services.apartment_filter_extractor import ApartmentFilterExtractor
+
+        self._apartment_pipeline = ApartmentExtractionPipeline(
+            regex_extractor=ApartmentFilterExtractor(),
+        )
+
         # Rerank provider (feature flag)
         self._reranker = None
         if config.rerank_provider == "colbert":
@@ -2217,16 +2225,14 @@ class PropertyBot:
         state: FSMContext | None = None,
     ) -> str | None:
         """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
-        from .services.apartment_filter_extractor import ApartmentFilterExtractor
         from .services.apartments_service import check_escalation
 
-        extractor = ApartmentFilterExtractor()
-        parsed = extractor.parse(user_text)
+        result = await self._apartment_pipeline.extract(user_text)
 
-        if parsed.confidence == "LOW":
+        if result.meta.confidence == "LOW":
             return None  # escalate to agent
 
-        semantic_query = parsed.semantic_query or user_text
+        semantic_query = result.meta.semantic_remainder or user_text
         dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(semantic_query)
         await self._cache.store_embedding(semantic_query, dense)
         await self._cache.store_sparse_embedding(semantic_query, sparse)
@@ -2256,7 +2262,7 @@ class PropertyBot:
             except Exception:
                 logger.debug("Implicit retry check failed", exc_info=True)
 
-        filters = parsed.to_filters_dict()
+        filters = result.hard.to_filters_dict()
         results, returned_count = await self._apartments_service.search_with_filters(
             dense_vector=dense,
             colbert_query=colbert or None,
@@ -2270,7 +2276,7 @@ class PropertyBot:
             returned_count=returned_count,
             top_k=10,
             score_spread=score_spread,
-            confidence=parsed.confidence,
+            confidence=result.meta.confidence,
         )
         if escalation:
             return None  # escalate to agent
