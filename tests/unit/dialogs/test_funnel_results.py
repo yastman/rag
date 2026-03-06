@@ -164,7 +164,7 @@ async def test_get_results_data_returns_apartments_list():
         }
     ]
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 297, "next-uuid"))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 297, 48500.0, ["apt-1"]))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "studio", "budget": "low"},
@@ -195,7 +195,7 @@ async def test_get_results_data_no_results_sets_flag():
     from telegram_bot.dialogs.funnel import get_results_data
 
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 0, None))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 0, None, []))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "3bed", "budget": "luxury"},
@@ -229,7 +229,7 @@ async def test_get_results_data_uses_i18n_strings():
     from telegram_bot.dialogs.funnel import get_results_data
 
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 12, "next"))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 12, None, []))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "any", "budget": "any"},
@@ -284,7 +284,7 @@ async def test_get_results_data_uses_i18n_range_and_remaining_when_results_exist
         }
     ]
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 12, "next"))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 12, 48500.0, ["apt-1"]))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "any", "budget": "any", "scroll_page": 1},
@@ -296,3 +296,52 @@ async def test_get_results_data_uses_i18n_range_and_remaining_when_results_exist
     assert result["btn_more"] == "🔄 Show more (11 left)"
     assert "apartments" in result
     assert len(result["apartments"]) == 1
+
+
+# --- Task 4: build_funnel_filters edge cases ---
+
+
+def test_area_small():
+    f = build_funnel_filters(area="small")
+    assert f == {"area_m2": {"lte": 40}}
+
+
+def test_area_mid():
+    f = build_funnel_filters(area="mid")
+    assert f == {"area_m2": {"gte": 40, "lte": 60}}
+
+
+def test_area_xlarge():
+    f = build_funnel_filters(area="xlarge")
+    assert f == {"area_m2": {"gte": 80, "lte": 120}}
+
+
+def test_area_any_not_included():
+    f = build_funnel_filters(area="any")
+    assert "area_m2" not in f
+
+
+def test_city_filter():
+    f = build_funnel_filters(city="Свети Влас")
+    assert f == {"city": "Свети Влас"}
+
+
+def test_city_any_not_included():
+    f = build_funnel_filters(city="any")
+    assert "city" not in f
+
+
+def test_rooms_studio_returns_list():
+    """Studio maps to [0, 1] for MatchAny."""
+    f = build_funnel_filters(rooms="studio")
+    assert f["rooms"] == [0, 1]
+
+
+def test_rooms_list_creates_match_any():
+    """rooms=[0,1] -> MatchAny(any=[0,1]) in Qdrant filter."""
+    from telegram_bot.services.apartments_service import _build_apartment_filter
+
+    qdrant_filter = _build_apartment_filter({"rooms": [0, 1]})
+    assert qdrant_filter is not None
+    cond = qdrant_filter.must[0]
+    assert cond.match.any == [0, 1]
