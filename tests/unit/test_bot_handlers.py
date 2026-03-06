@@ -3745,3 +3745,77 @@ class TestLegacyCallbackRoutes:
         callback_handler_names = [h.callback.__name__ for h in bot.dp.callback_query.handlers]
 
         assert "handle_favorite_callback" in callback_handler_names
+
+
+# ---------------------------------------------------------------------------
+# PropertyBot apartment pipeline wiring
+# ---------------------------------------------------------------------------
+
+
+class TestPropertyBotApartmentPipeline:
+    """PropertyBot.__init__ wires _apartment_pipeline; fast path uses it."""
+
+    def test_init_creates_apartment_pipeline(self, mock_config):
+        """PropertyBot.__init__ creates _apartment_pipeline (not None)."""
+        with (
+            patch("telegram_bot.bot.Bot"),
+            patch("telegram_bot.integrations.cache.CacheLayerManager"),
+            patch("telegram_bot.integrations.embeddings.BGEM3HybridEmbeddings"),
+            patch("telegram_bot.integrations.embeddings.BGEM3SparseEmbeddings"),
+            patch("telegram_bot.services.qdrant.QdrantService"),
+            patch("telegram_bot.graph.config.GraphConfig.create_llm"),
+            patch("telegram_bot.graph.config.GraphConfig.create_supervisor_llm"),
+        ):
+            bot = PropertyBot(mock_config)
+
+        assert hasattr(bot, "_apartment_pipeline")
+        assert bot._apartment_pipeline is not None
+
+    async def test_apartment_fast_path_uses_pipeline(self, mock_config):
+        """_handle_apartment_fast_path calls pipeline.extract and passes filters to search."""
+        from unittest.mock import patch as _patch
+
+        bot, _ = _create_bot(mock_config)
+
+        # Pipeline mock
+        pipeline = AsyncMock()
+        extraction = MagicMock()
+        extraction.meta.confidence = "HIGH"
+        extraction.meta.semantic_remainder = ""
+        extraction.hard.to_filters_dict.return_value = {"rooms": 2}
+        pipeline.extract.return_value = extraction
+        bot._apartment_pipeline = pipeline
+
+        # Service mocks
+        bot._embeddings = AsyncMock()
+        bot._embeddings.aembed_hybrid_with_colbert = AsyncMock(
+            return_value=([0.1] * 1024, {"indices": [], "values": []}, None)
+        )
+        bot._cache = AsyncMock()
+        bot._cache.redis = None  # skip implicit retry block
+        bot._apartments_service = AsyncMock()
+        bot._apartments_service.search_with_filters.return_value = ([], 0)
+
+        message = _make_text_message(text="двушка у моря")
+
+        with (
+            _patch(
+                "telegram_bot.services.apartments_service.check_escalation",
+                return_value=False,
+            ),
+            _patch(
+                "telegram_bot.services.generate_response.generate_response",
+                new_callable=AsyncMock,
+                return_value={"response": "ok", "response_sent": True},
+            ),
+        ):
+            result = await bot._handle_apartment_fast_path(
+                user_text="двушка у моря",
+                message=message,
+            )
+
+        pipeline.extract.assert_awaited_once_with("двушка у моря")
+        bot._apartments_service.search_with_filters.assert_awaited_once()
+        call_kwargs = bot._apartments_service.search_with_filters.await_args
+        assert call_kwargs.kwargs["filters"] == {"rooms": 2}
+        assert result == "ok"
