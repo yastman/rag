@@ -257,6 +257,12 @@ class BotConfig(BaseSettings):
         default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
     )
 
+    # Mini App (Telegram Web App)
+    mini_app_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("mini_app_url", "MINI_APP_URL"),
+    )
+
     # LiveKit (voice calls)
     livekit_url: str = Field(
         default="", validation_alias=AliasChoices("LIVEKIT_URL", "livekit_url")
