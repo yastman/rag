@@ -4056,6 +4056,8 @@ class PropertyBot:
         self.dp["apartments_service"] = self._apartments_service
         self.dp["favorites_service"] = self._favorites_service
         self.dp["search_event_store"] = self._search_event_store
+        self.dp["pipeline"] = self._apartment_pipeline
+        self.dp["embeddings"] = self._hybrid
 
         if self._i18n_hub is None:
             self._i18n_hub = create_translator_hub()
