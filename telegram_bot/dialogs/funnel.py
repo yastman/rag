@@ -1332,7 +1332,7 @@ funnel_dialog = Dialog(
     ),
     # Step 6: Results (SDK List widget)
     Window(
-        Jinja("{{ title | safe }}\n"),
+        Jinja("{{ title | safe }}\n\n"),
         List(
             Jinja("{{ item.card | safe }}"),
             items="apartments",
