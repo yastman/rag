@@ -2301,10 +2301,10 @@ class PropertyBot:
         if escalation:
             return None  # escalate to agent
 
-        from .agents.apartment_tools import _format_apartment_results
+        from .services.apartment_formatter import format_apartment_text
         from .services.generate_response import generate_response
 
-        context = _format_apartment_results(results)
+        context = format_apartment_text(results)
 
         generated = await generate_response(
             query=user_text,
