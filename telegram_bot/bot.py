@@ -48,6 +48,7 @@ from .handlers.handoff import (
 )
 from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
 from .middlewares import setup_error_handler, setup_throttling_middleware
+from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .observability import (
     create_callback_handler,
     get_client,
@@ -451,6 +452,7 @@ class PropertyBot:
         """Setup bot middlewares."""
         setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=self.config.admin_ids)
         setup_error_handler(self.dp)
+        self.dp.message.outer_middleware(FSMCancelMiddleware())
         logger.info("Middlewares configured")
 
     @staticmethod
@@ -1326,6 +1328,10 @@ class PropertyBot:
         """Handoff to manager (#628, #730)."""
         if self._forum_bridge is not None:
             await start_qualification(message, i18n=i18n, state=state)
+        elif state is not None:
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(message, state, service_key="manager")
         else:
             await self.handle_menu_action_text(message, "Соедини с менеджером")
 
