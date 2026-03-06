@@ -146,3 +146,39 @@ class TestConfidenceIntegration:
     def test_low_confidence(self) -> None:
         result = _ext.parse("что-нибудь хорошее")
         assert result.confidence == "LOW"
+
+
+class TestCity:
+    @pytest.mark.parametrize(
+        ("query", "expected_city"),
+        [
+            ("двушка солнечный берег", "Солнечный берег"),
+            ("студия sunny beach", "Солнечный берег"),
+            ("квартира в свети влас", "Свети Влас"),
+            ("апартамент святой влас", "Свети Влас"),
+            ("элените 3 комнаты", "Элените"),
+            ("elenite apartment", "Элените"),
+            ("санни бич до 100к", "Солнечный берег"),
+            ("двушка в несебре", None),  # несебр — не в нашей БД
+        ],
+    )
+    def test_city_extraction(self, query: str, expected_city: str | None) -> None:
+        result = _ext.parse(query)
+        assert result.city == expected_city
+
+
+class TestCityAndComplex:
+    def test_city_consumed_from_semantic(self) -> None:
+        result = _ext.parse("уютная двушка солнечный берег до 100к")
+        assert result.city == "Солнечный берег"
+        assert "солнечный берег" not in result.semantic_query.lower()
+
+    def test_city_and_complex_together(self) -> None:
+        result = _ext.parse("премьер форт свети влас")
+        assert result.city == "Свети Влас"
+        assert result.complex_name == "Premier Fort Beach"
+
+    def test_treshka_rooms(self) -> None:
+        result = _ext.parse("трешка солнечный берег")
+        assert result.rooms == 3
+        assert result.city == "Солнечный берег"
