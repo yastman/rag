@@ -30,6 +30,9 @@ export function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentChunk]);
 
+  const tg = window.Telegram?.WebApp;
+  const userId = tg?.initDataUnsafe?.user?.id ?? 0;
+
   const sendMessage = async (text: string) => {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setStreaming(true);
@@ -37,7 +40,7 @@ export function ChatPage() {
 
     let fullText = "";
     try {
-      for await (const event of streamChat(text, 123, expertId)) {
+      for await (const event of streamChat(text, userId, expertId)) {
         if (event.type === "chunk") {
           fullText += event.text;
           setCurrentChunk(fullText);
@@ -57,9 +60,13 @@ export function ChatPage() {
   useEffect(() => {
     const webApp = window.Telegram?.WebApp;
     if (webApp?.BackButton) {
+      const handleBack = () => navigate(-1);
       webApp.BackButton.show();
-      webApp.BackButton.onClick(() => navigate(-1));
-      return () => webApp.BackButton.hide();
+      webApp.BackButton.onClick(handleBack);
+      return () => {
+        webApp.BackButton.hide();
+        webApp.BackButton.offClick(handleBack);
+      };
     }
   }, [navigate]);
 
