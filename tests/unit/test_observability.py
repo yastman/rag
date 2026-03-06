@@ -583,3 +583,144 @@ class TestLangfuseModelSync:
         )
 
         assert result == 0
+
+
+class TestDisableOtelExporter:
+    """Tests for _disable_otel_exporter() shutdown logic."""
+
+    def test_sets_otel_sdk_disabled_env_var(self, monkeypatch):
+        """_disable_otel_exporter sets OTEL_SDK_DISABLED=true via os.environ.setdefault."""
+        import os
+
+        from telegram_bot.observability import _disable_otel_exporter
+
+        monkeypatch.delenv("OTEL_SDK_DISABLED", raising=False)
+        with (
+            patch("opentelemetry.trace.get_tracer_provider", return_value=MagicMock()),
+            patch("opentelemetry.trace.set_tracer_provider"),
+        ):
+            _disable_otel_exporter()
+
+        assert os.environ.get("OTEL_SDK_DISABLED") == "true"
+
+    def test_calls_shutdown_on_sdk_tracer_provider(self):
+        """_disable_otel_exporter calls shutdown() when provider is SdkTracerProvider."""
+        from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
+
+        from telegram_bot.observability import _disable_otel_exporter
+
+        real_provider = SdkTracerProvider()
+        real_provider.shutdown = MagicMock()  # type: ignore[method-assign]
+
+        with (
+            patch("opentelemetry.trace.get_tracer_provider", return_value=real_provider),
+            patch("opentelemetry.trace.set_tracer_provider"),
+        ):
+            _disable_otel_exporter()
+
+        real_provider.shutdown.assert_called_once()
+
+    def test_replaces_provider_with_noop(self):
+        """_disable_otel_exporter replaces global provider with NoOpTracerProvider."""
+        from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
+        from opentelemetry.trace import NoOpTracerProvider
+
+        from telegram_bot.observability import _disable_otel_exporter
+
+        real_provider = SdkTracerProvider()
+        real_provider.shutdown = MagicMock()  # type: ignore[method-assign]
+
+        with (
+            patch("opentelemetry.trace.get_tracer_provider", return_value=real_provider),
+            patch("opentelemetry.trace.set_tracer_provider") as mock_set,
+        ):
+            _disable_otel_exporter()
+
+        mock_set.assert_called_once()
+        assert isinstance(mock_set.call_args[0][0], NoOpTracerProvider)
+
+    def test_handles_import_error_gracefully(self, monkeypatch):
+        """_disable_otel_exporter silently passes when opentelemetry is not installed."""
+        import sys
+
+        from telegram_bot.observability import _disable_otel_exporter
+
+        monkeypatch.setitem(sys.modules, "opentelemetry", None)
+
+        # Should not raise
+        _disable_otel_exporter()
+
+    def test_no_shutdown_when_provider_is_not_sdk(self):
+        """_disable_otel_exporter does not call shutdown() on non-SdkTracerProvider."""
+        from opentelemetry.trace import NoOpTracerProvider
+
+        from telegram_bot.observability import _disable_otel_exporter
+
+        noop_provider = NoOpTracerProvider()
+
+        with (
+            patch("opentelemetry.trace.get_tracer_provider", return_value=noop_provider),
+            patch("opentelemetry.trace.set_tracer_provider"),
+        ):
+            # NoOpTracerProvider has no shutdown() — should complete without error
+            _disable_otel_exporter()
+
+
+class TestInitializeLangfuseCallsDisableOtel:
+    """Tests verifying _disable_otel_exporter() is called in all early-return paths."""
+
+    def test_called_when_credentials_missing(self, monkeypatch):
+        """initialize_langfuse calls _disable_otel_exporter when public/secret key absent."""
+        import telegram_bot.observability as observability
+
+        monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+        monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+        observability._reset_langfuse_client_for_tests()
+
+        with patch("telegram_bot.observability._disable_otel_exporter") as mock_disable:
+            observability.initialize_langfuse(force=True)
+
+        mock_disable.assert_called_once()
+
+    def test_called_when_endpoint_unreachable(self):
+        """initialize_langfuse calls _disable_otel_exporter when host is unreachable."""
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+
+        with (
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=False),
+            patch("telegram_bot.observability._disable_otel_exporter") as mock_disable,
+        ):
+            observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+                force=True,
+            )
+
+        mock_disable.assert_called_once()
+
+    def test_called_when_constructor_fails(self):
+        """initialize_langfuse calls _disable_otel_exporter when Langfuse() raises."""
+        import telegram_bot.observability as observability
+
+        observability._reset_langfuse_client_for_tests()
+
+        with (
+            patch("telegram_bot.observability._is_endpoint_reachable", return_value=True),
+            patch(
+                "telegram_bot.observability.Langfuse",
+                side_effect=RuntimeError("init failed"),
+            ),
+            patch("telegram_bot.observability._disable_otel_exporter") as mock_disable,
+        ):
+            result = observability.initialize_langfuse(
+                public_key="pk-test",
+                secret_key="sk-test",
+                host="http://localhost:3001",
+                force=True,
+            )
+
+        assert result is None
+        mock_disable.assert_called_once()

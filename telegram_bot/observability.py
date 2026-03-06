@@ -326,6 +326,26 @@ def sync_langfuse_model_definitions(
     return created_or_updated
 
 
+def _disable_otel_exporter() -> None:
+    """Shutdown any active OTel TracerProvider and replace with NoOp.
+
+    Prevents 'Exception while exporting Span' errors when Langfuse is unreachable.
+    """
+    os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+    try:
+        from opentelemetry import trace as otel_trace_api
+        from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
+        from opentelemetry.trace import NoOpTracerProvider
+
+        current = otel_trace_api.get_tracer_provider()
+        actual = getattr(current, "_real_provider", current)
+        if isinstance(actual, SdkTracerProvider):
+            actual.shutdown()
+        otel_trace_api.set_tracer_provider(NoOpTracerProvider())
+    except ImportError:
+        pass
+
+
 def initialize_langfuse(
     *,
     public_key: str | None = None,
@@ -358,6 +378,7 @@ def initialize_langfuse(
         if force or not _langfuse_init_attempted:
             logger.info("Langfuse disabled (missing LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY)")
         _langfuse_init_attempted = True
+        _disable_otel_exporter()
         return None
 
     # Probe endpoint reachability only when an explicit host is configured.
@@ -372,6 +393,7 @@ def initialize_langfuse(
                 "Start Langfuse locally or unset LANGFUSE_HOST to suppress this warning.",
                 resolved_host,
             )
+        _disable_otel_exporter()
         return None
 
     kwargs: dict[str, Any] = {
@@ -400,6 +422,7 @@ def initialize_langfuse(
         logger.warning("Failed to initialize Langfuse client", exc_info=True)
         _langfuse_client = None
         _langfuse_init_attempted = True
+        _disable_otel_exporter()
         return None
 
 
