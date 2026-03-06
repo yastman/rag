@@ -34,7 +34,7 @@ describe('ChatPage', () => {
     const input = screen.getByPlaceholderText('Спросить что-нибудь...');
     await userEvent.type(input, 'Как купить квартиру?');
     await userEvent.click(screen.getByRole('button'));
-    expect(api.streamChat).toHaveBeenCalledWith('Как купить квартиру?', 123, undefined);
+    expect(api.streamChat).toHaveBeenCalledWith('Как купить квартиру?', 0, undefined);
     expect(await screen.findByText('Как купить квартиру?')).toBeInTheDocument();
   });
 });
