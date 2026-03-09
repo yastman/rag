@@ -17,6 +17,7 @@ import time
 from typing import Any
 
 from telegram_bot.integrations.prompt_manager import get_prompt
+from telegram_bot.observability import observe
 
 
 logger = logging.getLogger(__name__)
@@ -259,6 +260,7 @@ class AIAdvisorService:
 
         return "\n\n".join(sections)
 
+    @observe(name="advisor-llm-call", capture_input=False, capture_output=False)
     async def _call_llm(self, system_prompt: str, user_text: str) -> str:
         """Call LLM with system+user prompt, return response text."""
         try:

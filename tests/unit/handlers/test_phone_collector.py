@@ -10,9 +10,9 @@ from telegram_bot.handlers.phone_collector import (
     _build_note_text,
     build_display_name,
     create_phone_router,
-    normalize_phone,
-    validate_phone,
+    on_phone_contact,
 )
+from telegram_bot.keyboards.phone_keyboard import normalize_phone, validate_phone
 
 
 def test_validate_phone_valid():
@@ -516,7 +516,8 @@ async def test_phone_error_message_shows_format_mask():
     """Fallback error message should show format examples, not raw phone numbers."""
     state = AsyncMock()
     message = AsyncMock()
-    message.text = "invalid"
+    # Use a phone-like string (5+ digits) that fails validate_phone
+    message.text = "+11111111111"
     message.from_user = SimpleNamespace(id=1, first_name="Test", last_name=None, username=None)
 
     await mod.on_phone_received(message, state)
@@ -524,3 +525,96 @@ async def test_phone_error_message_shows_format_mask():
     call_text = message.answer.call_args[0][0]
     assert "+359" in call_text
     assert "+380501234567" not in call_text
+
+
+# --- Reply keyboard and contact handler tests ---
+
+
+async def test_start_phone_collection_sends_reply_keyboard():
+    """start_phone_collection must send ReplyKeyboardMarkup with contact + cancel."""
+    from unittest.mock import MagicMock
+
+    from aiogram.fsm.context import FSMContext
+    from aiogram.types import ReplyKeyboardMarkup
+
+    from telegram_bot.handlers.phone_collector import start_phone_collection
+
+    message = MagicMock()
+    message.answer = AsyncMock()
+    state = MagicMock(spec=FSMContext)
+    state.set_state = AsyncMock()
+    state.update_data = AsyncMock()
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await start_phone_collection(message, state, service_key="test")
+
+    message.answer.assert_awaited_once()
+    call_kwargs = message.answer.call_args
+    reply_markup = call_kwargs.kwargs.get("reply_markup") or call_kwargs[1].get("reply_markup")
+    assert isinstance(reply_markup, ReplyKeyboardMarkup)
+
+
+async def test_on_phone_received_non_phone_text_exits_fsm():
+    """Text without 5+ digits should silently exit FSM."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.text = "Какие есть апартаменты?"
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.clear = AsyncMock()
+
+    await mod.on_phone_received(message, state)
+
+    state.clear.assert_awaited_once()
+    assert (
+        "отменён" in message.answer.call_args[0][0].lower()
+        or "отменен" in message.answer.call_args[0][0].lower()
+    )
+
+
+def test_create_phone_router_has_contact_handler():
+    """Router must handle ContentType.CONTACT in waiting_phone state."""
+    router = create_phone_router()
+    # Router should have at least 2 message handlers (text + contact)
+    assert len(router.message.handlers) >= 2
+
+
+async def test_on_phone_contact_valid_processes_phone():
+    """on_phone_contact with valid contact should call _process_valid_phone."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.contact = MagicMock()
+    message.contact.phone_number = "+359896759292"
+    message.from_user = MagicMock()
+    message.from_user.id = 123
+    message.from_user.first_name = "Test"
+    message.from_user.last_name = None
+    message.from_user.username = "testuser"
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.get_data = AsyncMock(return_value={"service_key": "test", "viewing_objects": []})
+    state.clear = AsyncMock()
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await on_phone_contact(message, state)
+
+    state.clear.assert_awaited_once()
+    message.answer.assert_awaited_once()
+    assert "Спасибо" in message.answer.call_args[0][0]
+
+
+async def test_on_phone_contact_no_contact_asks_manual_input():
+    """on_phone_contact with no contact data should ask for manual input."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.contact = None
+    message.answer = AsyncMock()
+    state = MagicMock()
+
+    await on_phone_contact(message, state)
+
+    message.answer.assert_awaited_once()
+    assert "вручную" in message.answer.call_args[0][0].lower()
