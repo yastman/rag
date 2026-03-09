@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "anthropic",
     "openai",
+    "instructor>=1.7.0",  ***REMOVED*** Structured LLM extraction for apartment filters
     "groq",
     "python-dotenv",
     "pydantic-settings>=2.0.0",  ***REMOVED*** Required by telegram_bot/config.py (BotConfig)
@@ -31,7 +32,7 @@ dependencies = [
     "langchain-core>=1.2",                ***REMOVED*** Core abstractions (Embeddings, etc.)
     "langgraph-checkpoint-postgres>=2.0", ***REMOVED*** Postgres checkpointing for LangGraph
     ***REMOVED*** Conversation memory (***REMOVED***154)
-    "langgraph-checkpoint-redis>=0.2.0",  ***REMOVED*** Redis checkpointer for LangGraph
+    "langgraph-checkpoint-redis>=0.3.6",  ***REMOVED*** Redis checkpointer for LangGraph (0.3.0 fixes HumanMessage serialization ***REMOVED***128)
     "langmem>=0.0.30",                    ***REMOVED*** SummarizationNode for conversation compression
     ***REMOVED*** Scheduled nurturing + analytics (***REMOVED***390)
     "apscheduler>=3.11.2,<4.0",           ***REMOVED*** Async job scheduling (v3 API)
@@ -57,6 +58,13 @@ docs = [
     "mkdocs>=1.6.0",         ***REMOVED*** Documentation generator
     "mkdocs-material>=9.5.0",***REMOVED*** Material theme
     "mkdocstrings[python]>=0.25.0",  ***REMOVED*** Auto API docs
+]
+
+***REMOVED*** Mini App (Telegram Web App — FastAPI backend)
+mini-app = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
 ]
 
 ***REMOVED*** Voice bot (LiveKit Agents + RAG API)
