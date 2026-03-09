@@ -140,35 +140,3 @@ def parse_menu_button(text: str, i18n_hub: Any = None) -> str | None:
 
     # Fallback: check hardcoded MENU_BUTTONS (text -> action)
     return MENU_BUTTONS.get(text)
-
-
-# --- Catalog mode keyboard ---
-
-CATALOG_BUTTONS: dict[str, str] = {
-    "📥 Показать ещё 10": "catalog_more",
-    "🔍 Фильтры": "catalog_filters",
-    "🏠 Главное меню": "catalog_exit",
-}
-
-
-def build_catalog_keyboard(*, shown: int, total: int) -> ReplyKeyboardMarkup:
-    """Build ReplyKeyboard for catalog browsing mode."""
-    has_more = shown < total
-    more_text = "📥 Показать ещё 10" if has_more else f"✅ Все {total} показаны"
-    counter_text = f"{shown} из {total}"
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=more_text), KeyboardButton(text=counter_text)],
-            [KeyboardButton(text="🔍 Фильтры"), KeyboardButton(text="🏠 Главное меню")],
-        ],
-        resize_keyboard=True,
-    )
-
-
-def parse_catalog_button(text: str) -> str | None:
-    """Parse catalog keyboard button text to action ID."""
-    if text.startswith("📥 Показать"):
-        return "catalog_more"
-    if text.startswith("✅ Все"):
-        return "catalog_more"  # no-op, всё показано
-    return CATALOG_BUTTONS.get(text)
