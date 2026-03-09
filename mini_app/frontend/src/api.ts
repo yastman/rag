@@ -12,7 +12,7 @@ export async function fetchConfig() {
 }
 
 export interface StartExpertResponse {
-  thread_id: number;
+  start_link: string;
   expert_name: string;
   status: string;
 }
