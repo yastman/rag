@@ -290,14 +290,9 @@ svc-back-to-services = Back to Services
 
 # ── Handoff (Forum Topics) ──────────────────────────────────────
 handoff-qual-prompt = So the manager can help right away — a couple of questions:
-handoff-goal-buy = 🏠 Purchase
-handoff-goal-rent = 🔑 Rental
-handoff-goal-consult = 📋 Consultation
-handoff-budget-prompt = Approximate budget?
-handoff-budget-low = up to 50k€
-handoff-budget-mid = 50-100k€
-handoff-budget-high = 100k€+
-handoff-budget-unknown = Not sure yet
+handoff-goal-search = 🏠 Property search
+handoff-goal-services = 🔑 Services
+handoff-goal-consult = 💬 Consultation
 handoff-contact-prompt = How would you like to connect?
 handoff-contact-chat = 💬 Chat now
 handoff-contact-phone = 📞 Leave phone number
