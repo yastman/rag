@@ -797,6 +797,9 @@ class PropertyBot:
             "Команды:\n"
             "/clear - Очистить историю диалога\n"
             "/stats - Показать статистику кеша\n"
+            "/history <запрос> - Поиск по истории диалогов\n"
+            "/metrics - Метрики пайплайна (p50/p95)\n"
+            "/clearcache - Очистить кеш Redis\n"
         )
 
     @observe(name="cmd-clear", capture_input=False, capture_output=False)
@@ -1274,22 +1277,6 @@ class PropertyBot:
                 bookmark_message_ids=bookmark_message_ids,
                 bookmark_photo_ids=bookmark_photo_ids,
             )
-
-    @observe(name="menu-promotions", capture_input=False, capture_output=False)
-    async def _handle_promotions(self, message: Message) -> None:
-        """Show promotions from config (#628)."""
-        from .services.content_loader import get_promotions
-
-        promos = get_promotions()
-        if not promos:
-            await message.answer("Актуальных акций пока нет.")
-            return
-
-        lines = []
-        for p in promos:
-            lines.append(f"{p['emoji']} {p['title']}\n{p['text']}")
-        text = "\n\n".join(lines)
-        await message.answer(text)
 
     # Mapping callback_data -> query text for RAG pipeline
     _ASK_QUERIES: dict[str, str] = {
@@ -4234,6 +4221,7 @@ class PropertyBot:
         await self._redis_monitor.start()
 
         # Register bot commands in Telegram menu
+        # Note: /call is intentionally excluded — it's admin-only (gated by _is_admin)
         await self.bot.set_my_commands(
             [
                 BotCommand(command="start", description="Начать работу с ботом"),
