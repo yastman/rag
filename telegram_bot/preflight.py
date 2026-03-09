@@ -22,6 +22,9 @@ CRITICAL_RETRIES = 3
 CRITICAL_RETRY_DELAY = 5.0  # seconds
 _DEFAULT_COLBERT_COVERAGE_WARN_THRESHOLD = 0.995
 
+# BGE-M3 dense vector dimensionality (used when auto-creating missing collections)
+_BGEM3_DENSE_DIM = 1024
+
 
 def _read_colbert_coverage_warn_threshold() -> float:
     """Read configurable ColBERT coverage warning threshold safely."""
@@ -214,6 +217,43 @@ async def _verify_cache_synthetic(redis_url: str) -> tuple[bool, list[str]]:
         await r.aclose()
 
 
+def _is_collection_not_found(exc: Exception) -> bool:
+    """Return True when the exception indicates a missing Qdrant collection (HTTP 404)."""
+    msg = str(exc).lower()
+    return "not found" in msg or "doesn't exist" in msg or "404" in msg
+
+
+async def _ensure_qdrant_collection(qdrant: AsyncQdrantClient, collection_name: str) -> None:
+    """Create Qdrant collection with the standard BGE-M3 vector schema.
+
+    Schema mirrors gdrive_documents_bge: dense (1024-dim COSINE), colbert
+    (multi-vector MAX_SIM), and bm42 (sparse IDF).  The collection will be
+    empty — ingestion should populate it afterwards.
+    """
+    await qdrant.create_collection(
+        collection_name=collection_name,
+        vectors_config={
+            "dense": models.VectorParams(
+                size=_BGEM3_DENSE_DIM,
+                distance=models.Distance.COSINE,
+            ),
+            "colbert": models.VectorParams(
+                size=_BGEM3_DENSE_DIM,
+                distance=models.Distance.COSINE,
+                multivector_config=models.MultiVectorConfig(
+                    comparator=models.MultiVectorComparator.MAX_SIM
+                ),
+                hnsw_config=models.HnswConfigDiff(m=0),
+            ),
+        },
+        sparse_vectors_config={
+            "bm42": models.SparseVectorParams(
+                modifier=models.Modifier.IDF,
+            ),
+        },
+    )
+
+
 async def _check_single_dep(
     name: str,
     config: BotConfig,
@@ -313,6 +353,25 @@ async def _check_single_dep(
 
             return True
         except Exception as exc:
+            if _is_collection_not_found(exc):
+                logger.warning(
+                    "Preflight WARN: Qdrant collection %s not found — creating with default schema",
+                    collection,
+                )
+                try:
+                    await _ensure_qdrant_collection(qdrant, collection)
+                    logger.info(
+                        "Preflight Qdrant: collection %s created (empty, ready for ingestion)",
+                        collection,
+                    )
+                    return True
+                except Exception as create_exc:
+                    logger.error(
+                        "Preflight FAIL: Qdrant — could not create collection %s: %s",
+                        collection,
+                        create_exc,
+                    )
+                    return False
             logger.error("Preflight FAIL: Qdrant — %s", exc)
             return False
         finally:

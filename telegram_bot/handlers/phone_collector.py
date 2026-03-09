@@ -5,52 +5,33 @@ from __future__ import annotations
 
 import datetime
 import logging
-import re
 import time
 from typing import Any
 
-import phonenumbers
 from aiogram import F, Router
+from aiogram.enums import ContentType
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
+from telegram_bot.keyboards.phone_keyboard import (
+    build_phone_keyboard,
+    is_phone_attempt,
+    normalize_phone,
+    validate_phone,
+)
+from telegram_bot.observability import observe
 from telegram_bot.services.content_loader import get_phone_config
 from telegram_bot.services.kommo_models import ContactCreate, LeadCreate, TaskCreate
 
 
 logger = logging.getLogger(__name__)
 
-_PHONE_PATTERN = re.compile(r"^\+?\d{7,15}$")
-
 
 class PhoneCollectorStates(StatesGroup):
     """FSM states for phone collection."""
 
     waiting_phone = State()
-
-
-def normalize_phone(raw: str, default_region: str = "BG") -> str | None:
-    """Parse and validate phone via phonenumbers; return E164 or None if invalid.
-
-    Tries with default_region first (for local numbers like 088...),
-    then without region (for international +380, +7, etc.).
-    """
-    cleaned = re.sub(r"[\s\-\(\)]", "", raw)
-    for region in (default_region, None):
-        try:
-            parsed = phonenumbers.parse(cleaned, region)
-            if phonenumbers.is_valid_number(parsed):
-                return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-        except phonenumbers.NumberParseException:
-            continue
-    return None
-
-
-def validate_phone(text: str) -> bool:
-    """Validate phone number format."""
-    cleaned = re.sub(r"[\s\-\(\)]", "", text)
-    return bool(_PHONE_PATTERN.match(cleaned))
 
 
 def build_display_name(user: Any | None, phone: str) -> str:
@@ -138,7 +119,7 @@ async def start_phone_collection(
     service_key: str,
     viewing_objects: list[dict[str, Any]] | None = None,
 ) -> None:
-    """Start phone collection flow. Called from various handlers."""
+    """Start phone collection flow with reply keyboard."""
     config = get_phone_config(service_key)
     phone_prompt = (
         config["phone_prompt"]
@@ -149,40 +130,28 @@ async def start_phone_collection(
     await state.set_state(PhoneCollectorStates.waiting_phone)
     await state.update_data(service_key=service_key, viewing_objects=viewing_objects or [])
 
+    kb = build_phone_keyboard()
+    text = f"{phone_prompt}\n\n👇 Нажмите кнопку или введите номер вручную:"
+
     if isinstance(message_or_callback, CallbackQuery) and message_or_callback.message:
-        await message_or_callback.message.answer(phone_prompt)
+        await message_or_callback.message.answer(text, reply_markup=kb)
         await message_or_callback.answer()
     else:
-        await message_or_callback.answer(phone_prompt)  # type: ignore[union-attr]
+        await message_or_callback.answer(text, reply_markup=kb)  # type: ignore[union-attr]
 
 
-async def on_phone_received(
+@observe(name="phone-lead-capture", capture_input=False, capture_output=False)
+async def _process_valid_phone(
+    phone: str,
     message: Message,
     state: FSMContext,
     kommo_client: Any | None = None,
-    i18n: Any | None = None,
     bot_config: Any | None = None,
     search_event_store: Any | None = None,
 ) -> None:
-    """Handle phone number input."""
-    if not message.text or not validate_phone(message.text):
-        phone_invalid = (
-            i18n.get("phone-invalid")
-            if i18n
-            else "Пожалуйста, введите корректный номер телефона.\nНапример: +359 88 123 4567"
-        )
-        await message.answer(phone_invalid)
-        return
+    """Process validated phone: CRM lead + success message."""
+    from telegram_bot.keyboards.client_keyboard import build_client_keyboard
 
-    phone = normalize_phone(message.text)
-    if phone is None:
-        phone_invalid = (
-            i18n.get("phone-invalid")
-            if i18n
-            else "Пожалуйста, введите корректный номер телефона.\nНапример: +359 88 123 4567"
-        )
-        await message.answer(phone_invalid)
-        return
     data = await state.get_data()
     service_key = data.get("service_key", "unknown")
     viewing_objects: list[dict[str, Any]] = data.get("viewing_objects", [])
@@ -210,7 +179,7 @@ async def on_phone_received(
         user_id,
     )
 
-    await message.answer(phone_success)
+    await message.answer(phone_success, reply_markup=build_client_keyboard())
 
     if kommo_client is not None:
         try:
@@ -281,8 +250,72 @@ async def on_phone_received(
             logger.exception("CRM lead creation failed for phone=%s", phone)
 
 
+async def on_phone_received(
+    message: Message,
+    state: FSMContext,
+    kommo_client: Any | None = None,
+    i18n: Any | None = None,
+    bot_config: Any | None = None,
+    search_event_store: Any | None = None,
+) -> None:
+    """Handle phone number text input."""
+    from telegram_bot.keyboards.client_keyboard import build_client_keyboard
+
+    text = message.text or ""
+
+    # Not a phone attempt (no 5+ digits) — silently exit FSM
+    if not is_phone_attempt(text):
+        await state.clear()
+        await message.answer(
+            "Ввод телефона отменён. Вы можете задать вопрос.",
+            reply_markup=build_client_keyboard(),
+        )
+        return
+
+    if not validate_phone(text):
+        phone_invalid = (
+            i18n.get("phone-invalid")
+            if i18n
+            else "Пожалуйста, введите корректный номер телефона.\nНапример: +359 88 123 4567"
+        )
+        await message.answer(phone_invalid)
+        return
+
+    phone = normalize_phone(text)
+    if phone is None:
+        phone_invalid = (
+            i18n.get("phone-invalid")
+            if i18n
+            else "Пожалуйста, введите корректный номер телефона.\nНапример: +359 88 123 4567"
+        )
+        await message.answer(phone_invalid)
+        return
+
+    await _process_valid_phone(phone, message, state, kommo_client, bot_config, search_event_store)
+
+
+async def on_phone_contact(
+    message: Message,
+    state: FSMContext,
+    kommo_client: Any | None = None,
+    bot_config: Any | None = None,
+    search_event_store: Any | None = None,
+) -> None:
+    """Handle shared contact via request_contact button."""
+    if message.contact and message.contact.phone_number:
+        phone = normalize_phone(message.contact.phone_number) or message.contact.phone_number
+        await _process_valid_phone(
+            phone, message, state, kommo_client, bot_config, search_event_store
+        )
+    else:
+        await message.answer("Не удалось получить номер. Введите вручную:")
+
+
 def create_phone_router() -> Router:
     """Create a fresh router instance for phone FSM handlers."""
     router = Router(name="phone_collector")
     router.message(PhoneCollectorStates.waiting_phone, F.text)(on_phone_received)
+    router.message(PhoneCollectorStates.waiting_phone, F.content_type == ContentType.CONTACT)(
+        on_phone_contact
+    )
     return router

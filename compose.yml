@@ -255,8 +255,8 @@ services:
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
       # Langfuse observability (optional — bot degrades gracefully)
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
       LANGFUSE_TRACING_ENVIRONMENT: "${LANGFUSE_TRACING_ENVIRONMENT:-}"
       LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
@@ -311,6 +311,74 @@ services:
           pids: 100
 
   # =============================================================================
+  # MINI APP (Telegram Web App — FastAPI + React/nginx)
+  # =============================================================================
+
+  mini-app-api:
+    <<: *security-defaults
+    build:
+      context: .
+      dockerfile: mini_app/Dockerfile
+    profiles: ["bot", "full"]
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-gdrive_documents_bge}
+      BGE_M3_URL: http://bge-m3:8000
+      LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
+      LLM_BASE_URL: http://litellm:4000
+      LLM_MODEL: gpt-4o-mini
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
+      KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
+      KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
+      KOMMO_ACCESS_TOKEN: "${KOMMO_ACCESS_TOKEN:-}"
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      bge-m3:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  mini-app-frontend:
+    build:
+      context: ./mini_app/frontend
+      dockerfile: Dockerfile
+    profiles: ["bot", "full"]
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      mini-app-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  # =============================================================================
   # UNIFIED INGESTION PIPELINE (v3.2.1)
   # =============================================================================
 
@@ -323,6 +391,9 @@ services:
     stop_grace_period: 30s
     logging: *default-logging
     environment:
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
@@ -650,8 +721,8 @@ services:
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
       RERANK_PROVIDER: colbert
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     depends_on:
       redis:
@@ -745,8 +816,8 @@ services:
       ELEVEN_API_KEY: ${ELEVENLABS_API_KEY:-}
       RAG_API_URL: http://rag-api:8080
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081')\" || exit 1"]

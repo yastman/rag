@@ -171,6 +171,7 @@ class NurturingService:
         logger.info("NurturingDispatch: sent %d/%d", sent, len(rows))
         return sent
 
+    @observe(name="nurturing-llm-generate", capture_input=False, capture_output=False)
     async def _generate_nurturing_message(self, preferences: dict[str, Any]) -> str:
         """Generate personalized nurturing message via LLM or template fallback."""
         prefs_text = ", ".join(f"{k}: {v}" for k, v in preferences.items()) or "general interest"
