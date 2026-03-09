@@ -1288,7 +1288,10 @@ class PropertyBot:
         """Handle 'Фильтры' — show inline filter panel with current filters."""
         import contextlib
 
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        from telegram_bot.keyboards.filter_panel import (
+            build_filter_panel_keyboard,
+            build_filter_panel_text,
+        )
 
         data = await state.get_data()
         filters: dict = data.get("apartment_filters") or {}
@@ -1298,35 +1301,8 @@ class PropertyBot:
             with contextlib.suppress(Exception):
                 count = await svc.count_with_filters(filters=filters)
 
-        lines = ["🔍 Фильтры поиска\n"]
-        if filters.get("city"):
-            lines.append(f"📍 Город: {filters['city']}")
-        if filters.get("rooms") is not None:
-            lines.append(f"🛏 Комнаты: {filters['rooms']}")
-        if filters.get("price_eur"):
-            p = filters["price_eur"]
-            if isinstance(p, dict):
-                parts = []
-                if p.get("gte"):
-                    parts.append(f"от {p['gte']:,} €".replace(",", " "))
-                if p.get("lte"):
-                    parts.append(f"до {p['lte']:,} €".replace(",", " "))
-                if parts:
-                    lines.append(f"💰 Бюджет: {' '.join(parts)}")
-        lines.append(f"\nНайдено: {count} апартаментов")
-        text = "\n".join(lines)
-
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text=f"✅ Применить ({count})", callback_data="fpanel:apply:"
-                    )
-                ],
-                [InlineKeyboardButton(text="🗑 Сбросить фильтры", callback_data="fpanel:reset:")],
-                [InlineKeyboardButton(text="↩️ Назад к результатам", callback_data="fpanel:back:")],
-            ]
-        )
+        text = build_filter_panel_text(filters=filters, count=count)
+        kb = build_filter_panel_keyboard(count=count)
         await message.answer(text, reply_markup=kb)
 
     async def handle_menu_action_text(self, message: Message, query_text: str) -> None:
