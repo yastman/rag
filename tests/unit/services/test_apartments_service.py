@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -125,6 +126,44 @@ class TestCheckEscalation:
         result = check_escalation(returned_count=5, top_k=10, score_spread=0.3, confidence="LOW")
         assert result is not None
         assert "low_confidence" in result
+
+
+class TestCountWithFilters:
+    """Test count_with_filters — payload-only count without vector search."""
+
+    @pytest.fixture
+    def mock_qdrant(self) -> MagicMock:
+        q = MagicMock()
+        q.client = MagicMock()
+        q.collection_name = "apartments"
+        q.client.count = AsyncMock(return_value=SimpleNamespace(count=0))
+        return q
+
+    async def test_count_no_filters_returns_total(self, mock_qdrant: MagicMock) -> None:
+        mock_qdrant.client.count = AsyncMock(return_value=SimpleNamespace(count=297))
+        svc = ApartmentsService(mock_qdrant)
+        result = await svc.count_with_filters(filters=None)
+        assert result == 297
+
+    async def test_count_with_city_filter(self, mock_qdrant: MagicMock) -> None:
+        mock_qdrant.client.count = AsyncMock(return_value=SimpleNamespace(count=42))
+        svc = ApartmentsService(mock_qdrant)
+        result = await svc.count_with_filters(filters={"city": "Солнечный берег"})
+        assert result == 42
+        call_args = mock_qdrant.client.count.call_args
+        assert call_args.kwargs["count_filter"] is not None
+
+    async def test_count_with_combined_filters(self, mock_qdrant: MagicMock) -> None:
+        mock_qdrant.client.count = AsyncMock(return_value=SimpleNamespace(count=15))
+        svc = ApartmentsService(mock_qdrant)
+        result = await svc.count_with_filters(
+            filters={
+                "city": "Солнечный берег",
+                "rooms": 2,
+                "price_eur": {"gte": 50000, "lte": 100000},
+            }
+        )
+        assert result == 15
 
 
 class TestScrollWithFilters:
