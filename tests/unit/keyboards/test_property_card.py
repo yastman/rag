@@ -5,7 +5,6 @@ import pytest
 
 from telegram_bot.keyboards.property_card import (
     build_card_buttons,
-    build_results_footer,
     format_property_card,
 )
 
@@ -31,9 +30,9 @@ def test_build_card_buttons():
 
     kb = build_card_buttons(property_id="p1")
     assert isinstance(kb, InlineKeyboardMarkup)
-    # Row 1: 2 buttons (viewing + favorite)
+    # Row 1: 2 buttons (favorite + manager)
     assert len(kb.inline_keyboard[0]) == 2
-    # Row 2: 1 button (ask manager)
+    # Row 2: 1 button (viewing)
     assert len(kb.inline_keyboard[1]) == 1
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "card:viewing:p1" in callbacks
@@ -47,9 +46,9 @@ def test_build_card_buttons_default_not_favorited():
 
     kb = build_card_buttons(property_id="p1")
     assert isinstance(kb, InlineKeyboardMarkup)
-    # Row 1: 2 buttons (viewing + favorite)
+    # Row 1: 2 buttons (favorite + manager)
     assert len(kb.inline_keyboard[0]) == 2
-    # Row 2: 1 button (ask manager)
+    # Row 2: 1 button (viewing)
     assert len(kb.inline_keyboard[1]) == 1
     assert len(kb.inline_keyboard) == 2
 
@@ -67,16 +66,38 @@ def test_build_card_buttons_favorited():
     assert "fav:add:p1" not in callbacks
 
 
-def test_build_results_footer():
-    from aiogram.types import InlineKeyboardMarkup
+# --- Task 10: Redesigned card buttons layout ---
 
-    kb = build_results_footer(shown_total=5, total=23, has_more=True)
-    assert isinstance(kb, InlineKeyboardMarkup)
-    callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
-    assert "results:more" in callbacks
-    assert "results:refine" in callbacks
-    assert "results:viewing" in callbacks
-    assert "18 осталось" in kb.inline_keyboard[0][0].text
+
+class TestCardButtonsRedesign:
+    def test_button_layout_2_plus_1(self):
+        """Раскладка: [В избранное][Менеджеру] + [На осмотр]."""
+        kb = build_card_buttons("apt-1")
+        assert len(kb.inline_keyboard) == 2
+        assert len(kb.inline_keyboard[0]) == 2  # избранное + менеджер
+        assert len(kb.inline_keyboard[1]) == 1  # осмотр
+
+    def test_first_row_favorite_then_manager(self):
+        kb = build_card_buttons("apt-1")
+        assert "В избранное" in kb.inline_keyboard[0][0].text
+        assert "Менеджеру" in kb.inline_keyboard[0][1].text
+
+    def test_second_row_viewing(self):
+        kb = build_card_buttons("apt-1")
+        assert "На осмотр" in kb.inline_keyboard[1][0].text
+
+
+# --- Task 11: build_results_footer removed ---
+
+
+class TestOldFooterRemoved:
+    def test_build_results_footer_not_exported(self):
+        """build_results_footer должен быть удалён из property_card."""
+        import telegram_bot.keyboards.property_card as property_card_module
+
+        assert not hasattr(property_card_module, "build_results_footer"), (
+            "build_results_footer должен быть удалён"
+        )
 
 
 # --- format_promotion_card ---
@@ -213,13 +234,3 @@ async def test_send_property_card_checks_favorites_when_service_provided() -> No
         )
 
     favorites_service.is_favorited.assert_awaited_once_with(123, "apt42")
-
-
-def test_build_results_footer_no_more():
-    from aiogram.types import InlineKeyboardMarkup
-
-    kb = build_results_footer(shown_total=3, total=3, has_more=False)
-    assert isinstance(kb, InlineKeyboardMarkup)
-    callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
-    assert "results:more" not in callbacks
-    assert "results:refine" in callbacks
