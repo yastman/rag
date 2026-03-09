@@ -14,7 +14,7 @@ from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, CommandObject, StateFilter
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
@@ -687,6 +687,10 @@ class PropertyBot:
                 F.message_thread_id,
             )(self._handle_group_message)
 
+        # Deep link: /start q_<uuid> — must be registered BEFORE generic /start
+        self.dp.message(CommandStart(deep_link=True, magic=F.args.startswith("q_")))(
+            self.cmd_start_deeplink
+        )
         self.dp.message(Command("start"))(self.cmd_start)
         self.dp.message(Command("help"))(self.cmd_help)
         self.dp.message(Command("clear"))(self.cmd_clear)
@@ -753,6 +757,17 @@ class PropertyBot:
         return db_role or "client"
 
     @observe(name="cmd-start", capture_input=False, capture_output=False)
+    async def cmd_start_deeplink(
+        self,
+        message: Message,
+        command: CommandObject,
+    ):
+        """Handle /start q_<uuid> — Mini App deep link flow."""
+        assert message.from_user is not None
+        assert command.args is not None
+        uuid_str = command.args[2:]  # strip "q_" prefix
+        await self._handle_deeplink_start(message, uuid_str)
+
     async def cmd_start(
         self,
         message: Message,
@@ -760,17 +775,8 @@ class PropertyBot:
         dialog_manager: Any = None,
         i18n: Any = None,
     ):
-        """Handle /start command — ReplyKeyboard for clients, dialog for managers.
-
-        If command args start with 'q_', handle as Mini App deep link payload.
-        """
+        """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
         assert message.from_user is not None
-
-        # Deep link: /start q_<uuid>
-        args = command.args if command else None
-        if args and args.startswith("q_") and self._topic_manager is not None:
-            await self._handle_deeplink_start(message, args[2:])
-            return
 
         role = await self._resolve_user_role(message.from_user.id)
 
