@@ -26,9 +26,9 @@ export function ExpertSheet() {
     if (!userId || !id || loading) return;
     setLoading(true);
     try {
-      await startExpert(userId, id, text);
-      // Close Mini App — user lands in bot chat with the topic
-      window.Telegram?.WebApp?.close();
+      const data = await startExpert(userId, id, text);
+      // Deep link: open bot chat with /start q_{uuid} — creates forum topic
+      window.Telegram?.WebApp?.openTelegramLink(data.start_link);
     } catch (err) {
       console.error("Failed to start expert:", err);
       setLoading(false);
