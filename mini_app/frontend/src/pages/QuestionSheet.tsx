@@ -20,7 +20,8 @@ export function QuestionSheet() {
   if (!question) return null;
 
   const handlePrompt = (text: string) => {
-    navigate(`/chat?message=${encodeURIComponent(text)}&question_id=${id}`);
+    window.Telegram?.WebApp?.sendData(text);
+    window.Telegram?.WebApp?.close();
   };
 
   return (
@@ -33,7 +34,7 @@ export function QuestionSheet() {
       {question.prompts.map((p, i) => (
         <PromptRow key={i} prompt={p} onClick={handlePrompt} />
       ))}
-      <ChatInput onSend={(text) => handlePrompt(text)} />
+      <ChatInput onSend={handlePrompt} />
     </BottomSheet>
   );
 }
