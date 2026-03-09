@@ -69,6 +69,7 @@ from .services.handoff_summary import generate_handoff_summary
 from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
+from .services.topic_service import TopicService
 
 
 logger = logging.getLogger(__name__)
@@ -103,8 +104,10 @@ def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
 from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
 
-def _supervisor_thread_id(chat_id: int | str) -> str:
+def _supervisor_thread_id(chat_id: int | str, thread_id: int | None = None) -> str:
     """Build checkpointer thread id for text-agent conversations."""
+    if thread_id is not None:
+        return f"tg_{chat_id}:{thread_id}"
     return f"tg_{chat_id}"
 
 
@@ -438,6 +441,10 @@ class PropertyBot:
         self._handoff_state: HandoffState | None = None
         self._forum_bridge: ForumBridge | None = None
         self._bot_user_id: int | None = None
+
+        # Expert topic service (user+expert → thread_id mapping)
+        self._topic_service: TopicService | None = None
+        self._topics_enabled: bool = False
 
         # Track initialization state
         self._cache_initialized = False
@@ -2200,6 +2207,15 @@ class PropertyBot:
 
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
+        # Resolve expert from forum topic thread (int check guards against mock objects in tests)
+        _raw_thread_id = message.message_thread_id
+        forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
+        expert_id: str | None = None
+        if forum_thread_id is not None and self._topic_service is not None and self._topics_enabled:
+            expert_id = await self._topic_service.get_expert_by_thread(
+                user_id=message.from_user.id, thread_id=forum_thread_id
+            )
+
         root_trace_metadata: dict[str, Any] = {}
         response_text = await self._handle_query_supervisor(
             message,
@@ -2207,6 +2223,8 @@ class PropertyBot:
             locale=locale,
             root_trace_metadata=root_trace_metadata,
             state=state,
+            forum_thread_id=forum_thread_id,
+            expert_id=expert_id,
         )
         update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
         if root_trace_metadata:
@@ -2418,6 +2436,8 @@ class PropertyBot:
         locale: str = "ru",
         root_trace_metadata: dict[str, Any] | None = None,
         state: FSMContext | None = None,
+        forum_thread_id: int | None = None,
+        expert_id: str | None = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
         from .agents.agent import LOCALE_TO_LANGUAGE
@@ -2808,6 +2828,7 @@ class PropertyBot:
                     callbacks=callbacks,
                     bot_context=ctx,
                     rag_result_store=rag_result_store,
+                    forum_thread_id=forum_thread_id,
                 )
 
             # Check for HITL interrupt (#443)
@@ -2817,7 +2838,7 @@ class PropertyBot:
                 await self._send_hitl_confirmation(
                     message=message,
                     payload=interrupt_payload,
-                    thread_id=_supervisor_thread_id(message.chat.id),
+                    thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
                 )
                 return None  # type: ignore[return-value]
 
@@ -2890,20 +2911,47 @@ class PropertyBot:
 
                 full_response = response_text + sources_text if sources_text else response_text
 
-                # Send with Markdown, fallback to plain text
-                chunks = list(_split_telegram_response(full_response))
-                for i, chunk in enumerate(chunks):
-                    is_last = i == len(chunks) - 1
-                    markup = reply_markup if is_last else None
+                # Send via DraftStreamer (supports forum thread routing)
+                from telegram_bot.services.draft_streamer import DraftStreamer
+
+                if message.chat.type == "private":
                     try:
-                        await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
+                        streamer = DraftStreamer(
+                            bot=self.bot,
+                            chat_id=message.chat.id,
+                            thread_id=forum_thread_id,
+                        )
+                        await streamer.finalize(
+                            full_response,
+                            parse_mode="Markdown",
+                            reply_markup=reply_markup,
+                        )
                     except Exception:
-                        logger.warning("Markdown parse failed in text path, falling back")
+                        logger.warning("DraftStreamer failed, falling back to message.answer")
                         try:
-                            await message.answer(chunk, reply_markup=markup)
+                            await message.answer(
+                                full_response,
+                                parse_mode="Markdown",
+                                reply_markup=reply_markup,
+                            )
                         except Exception:
-                            logger.exception("Failed to send text response chunk")
-                            await message.answer(chunk)
+                            logger.exception("Failed to send text response")
+                            await message.answer(full_response)
+                else:
+                    # Send with Markdown, fallback to plain text
+                    chunks = list(_split_telegram_response(full_response))
+                    for i, chunk in enumerate(chunks):
+                        is_last = i == len(chunks) - 1
+                        markup = reply_markup if is_last else None
+                        try:
+                            await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
+                        except Exception:
+                            logger.warning("Markdown parse failed in text path, falling back")
+                            try:
+                                await message.answer(chunk, reply_markup=markup)
+                            except Exception:
+                                logger.exception("Failed to send text response chunk")
+                                await message.answer(chunk)
 
             # Store final agent response in semantic cache for cacheable query types.
             # Use cache_key_embedding (original query embedding) so that future
@@ -3040,13 +3088,14 @@ class PropertyBot:
         callbacks: list[Any],
         bot_context: BotContext,
         rag_result_store: dict[str, Any],
+        forum_thread_id: int | None = None,
     ) -> dict[str, Any]:
         """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures."""
         payload = {"messages": [{"role": "user", "content": user_text}]}
         config = {
             "callbacks": callbacks,
             "configurable": {
-                "thread_id": _supervisor_thread_id(chat_id),
+                "thread_id": _supervisor_thread_id(chat_id, forum_thread_id),
                 "bot_context": bot_context,
                 "rag_result_store": rag_result_store,
                 "role": role,
@@ -3834,6 +3883,28 @@ class PropertyBot:
             logger.warning("Agent Redis checkpointer init failed, using in-memory", exc_info=True)
             self._agent_checkpointer = create_fallback_checkpointer()
 
+        # Initialize topic service (forum topics mapping — user+expert → thread_id)
+        import redis.asyncio as aioredis
+
+        topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
+        self._topic_service = TopicService(redis=topic_redis)
+        logger.info("TopicService ready (Redis)")
+
+        # Initialize bot bridge for Mini App API
+        from mini_app.bot_bridge import BotBridge, set_bot_bridge
+
+        async def _noop_rag(**kwargs: Any) -> dict[str, Any]:
+            return {}
+
+        set_bot_bridge(
+            BotBridge(
+                bot=self.bot,
+                topic_service=self._topic_service,
+                rag_fn=_noop_rag,
+            )
+        )
+        logger.info("BotBridge initialized for Mini App API")
+
         # Initialize history service (Qdrant-backed Q&A history)
         try:
             self._history_service = HistoryService(
@@ -4037,6 +4108,23 @@ class PropertyBot:
         except Exception:
             logger.warning("Failed to cache bot user id")
 
+        # Verify forum topics mode is enabled for expert threads
+        try:
+            me = await self.bot.get_me()
+            if not getattr(me, "has_topics_enabled", False):
+                logger.warning(
+                    "Forum topics not enabled for this bot. "
+                    "Enable 'Topics in Private Chats' via BotFather Mini App. "
+                    "Thread routing will be disabled."
+                )
+                self._topics_enabled = False
+            else:
+                self._topics_enabled = True
+                logger.info("Forum topics mode: enabled")
+        except Exception:
+            logger.warning("Failed to check forum topics status", exc_info=True)
+            self._topics_enabled = False
+
         # Initialize handoff services (#730)
         if self._cache.redis is not None:
             self._handoff_state = HandoffState(
@@ -4064,6 +4152,7 @@ class PropertyBot:
         self.dp["pg_pool"] = self._pg_pool
         self.dp["bot_config"] = self.config
         self.dp["property_bot"] = self
+        self.dp["topic_service"] = self._topic_service
         self.dp["ai_advisor_service"] = self._ai_advisor_service
         self.dp["apartments_service"] = self._apartments_service
         self.dp["favorites_service"] = self._favorites_service
