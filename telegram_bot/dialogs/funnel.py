@@ -936,8 +936,8 @@ async def on_summary_search(
     button: Button,
     manager: DialogManager,
 ) -> None:
-    """Search, send photo cards, close dialog."""
-    from telegram_bot.keyboards.property_card import build_results_footer
+    """Search, send photo cards, close dialog, show catalog keyboard."""
+    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
 
     data = manager.dialog_data
     data.pop("scroll_start_from", None)
@@ -999,12 +999,14 @@ async def on_summary_search(
         await state.update_data(
             apartment_results=results,
             apartment_query=f"funnel:{data.get('city', 'any')}",
-            apartment_offset=0,
+            apartment_offset=len(results),
             bookmarks_context=False,
             apartment_total=total_count,
             apartment_next_offset=_next_start,
+            apartment_scroll_seen_ids=_page_ids,
             apartment_filters=filters,
             funnel_data=dict(data),
+            catalog_mode=True,
         )
 
     if not results:
@@ -1020,16 +1022,12 @@ async def on_summary_search(
             telegram_id = callback.from_user.id if callback.from_user else 0
             await property_bot._send_property_card(callback.message, result, telegram_id)
 
-    # Footer
+    # Catalog keyboard
     shown = len(results)
-    has_more = total_count > shown
+    catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
     await callback.message.answer(
         f"Найдено {total_count} апартаментов (показаны 1–{shown})",
-        reply_markup=build_results_footer(
-            shown_total=shown,
-            total=total_count,
-            has_more=has_more,
-        ),
+        reply_markup=catalog_kb,
     )
 
 
