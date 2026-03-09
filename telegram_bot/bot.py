@@ -799,20 +799,19 @@ class PropertyBot:
         Reads one-time payload from Redis, creates forum topic via TopicManager,
         echoes user message to topic, then triggers RAG pipeline.
         """
-        import json as _json
+        if self._deeplink_redis is None or self._topic_manager is None:
+            logger.warning("Deep link received but TopicManager not initialized")
+            return
 
-        assert self._deeplink_redis is not None
         key = f"miniapp:q:{uuid_str}"
-        raw = await self._deeplink_redis.get(key)
+        # Atomic GET+DEL — prevents race condition with duplicate requests
+        raw = await self._deeplink_redis.getdel(key)
         if raw is None:
             await message.answer("Ссылка устарела. Пожалуйста, вернитесь в приложение.")
             return
 
-        # One-time: delete immediately after reading
-        await self._deeplink_redis.delete(key)
-
         try:
-            payload = _json.loads(raw)
+            payload = json.loads(raw)
         except (ValueError, TypeError):
             await message.answer("Ошибка обработки ссылки.")
             return
@@ -830,13 +829,17 @@ class PropertyBot:
             return
 
         # Create / get forum topic for this expert
-        assert self._topic_manager is not None
-        topic_id = await self._topic_manager.get_or_create_topic(
-            chat_id=message.chat.id,
-            expert_id=expert_id,
-            expert_name=expert["name"],
-            expert_emoji=expert.get("emoji", "💬"),
-        )
+        try:
+            topic_id = await self._topic_manager.get_or_create_topic(
+                chat_id=message.chat.id,
+                expert_id=expert_id,
+                expert_name=expert["name"],
+                expert_emoji=expert.get("emoji", "💬"),
+            )
+        except TelegramBadRequest as exc:
+            logger.error("Failed to create forum topic: %s", exc)
+            await message.answer("Не удалось создать тему. Попробуйте позже.")
+            return
 
         if user_message:
             # Echo user question in the topic
