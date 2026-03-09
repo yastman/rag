@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+
+
+logger = logging.getLogger(__name__)
 
 
 # Fallback button text -> action ID mapping (used when i18n not available)
@@ -100,7 +104,7 @@ def parse_menu_button(text: str, i18n_hub: Any = None) -> str | None:
                     if t.get(ftl_key) == text:
                         return action_id
             except Exception:
-                pass
+                logger.warning("Failed to parse menu button via i18n locale=%s", locale)
 
     # Fallback: check hardcoded MENU_BUTTONS (text -> action)
     return MENU_BUTTONS.get(text)
