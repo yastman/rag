@@ -155,7 +155,7 @@ crm-error-postpone-task = ⚠️ Error postponing task.
 kb-search = 🏠 Find Apartment
 kb-services = 🔑 Services
 kb-viewing = 📅 Book a Viewing
-kb-manager = 👤 Manager
+kb-manager = 👤 Contact manager
 kb-ask = 💬 Ask a Question
 kb-bookmarks = 📌 My Bookmarks
 
@@ -289,13 +289,14 @@ svc-contact-manager = Contact Manager
 svc-back-to-services = Back to Services
 
 # ── Handoff (Forum Topics) ──────────────────────────────────────
-handoff-qual-prompt = So the manager can help right away — a couple of questions:
+handoff-qual-prompt = 📋 What topic are you interested in?
 handoff-goal-search = 🏠 Property search
 handoff-goal-services = 🔑 Services
 handoff-goal-consult = 💬 Consultation
-handoff-contact-prompt = How would you like to connect?
-handoff-contact-chat = 💬 Chat now
-handoff-contact-phone = 📞 Leave phone number
+handoff-goal-other = 📎 Other
+handoff-contact-prompt = How would you prefer to be contacted?
+handoff-contact-chat = 💬 Chat with manager
+handoff-contact-phone = 📞 Call me back
 handoff-connecting = Connecting you with a manager. While you wait — I can answer questions!
 handoff-offline = 📨 Your request has been received!
 
