@@ -235,6 +235,17 @@ class ApartmentsService:
 
         return formatted, count_result.count, next_start_from_val, page_ids
 
+    @observe(name="apartments-count")
+    async def count_with_filters(self, filters: dict | None = None) -> int:
+        """Count apartments matching payload filters (no vector search)."""
+        qdrant_filter = _build_apartment_filter(filters)
+        result = await self._qdrant.client.count(
+            collection_name=self._qdrant.collection_name,
+            count_filter=qdrant_filter,
+            exact=True,
+        )
+        return result.count
+
     async def get_distinct_values(self, field: str) -> list[str]:
         """Get sorted unique non-empty values for a payload field via scroll."""
         values: set[str] = set()
