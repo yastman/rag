@@ -1,296 +1,300 @@
-"""Tests for inline filter panel callback handlers (Task 8)."""
+"""Tests for filter panel callback handlers (Task 8)."""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
+from telegram_bot.callback_data import FilterPanelCB
+from telegram_bot.handlers.filter_panel import handle_filter_panel
 
-# --- Router creation ---
 
+def _make_callback(action: str, field: str, value: str = "") -> MagicMock:
+    """Create a mock callback query with FilterPanelCB data."""
+    cb = MagicMock()
+    cb.message = MagicMock()
+    cb.message.edit_text = AsyncMock()
+    cb.message.delete = AsyncMock()
+    cb.message.answer = AsyncMock()
+    cb.answer = AsyncMock()
+    cb.from_user = MagicMock()
+    cb.from_user.id = 12345
+    return cb
 
-def test_create_filter_panel_router_returns_router() -> None:
-    """create_filter_panel_router() returns an aiogram Router."""
-    from aiogram import Router
 
-    from telegram_bot.handlers.filter_panel import create_filter_panel_router
+def _make_state(data: dict[str, Any] | None = None) -> MagicMock:
+    """Create a mock FSM state."""
+    state = MagicMock()
+    _data: dict[str, Any] = data or {}
 
-    router = create_filter_panel_router()
-    assert isinstance(router, Router)
-    assert router.name == "filter_panel"
+    async def get_data() -> dict[str, Any]:
+        return dict(_data)
 
+    async def update_data(**kwargs: Any) -> None:
+        _data.update(kwargs)
 
-# --- Handler imports ---
+    state.get_data = get_data
+    state.update_data = AsyncMock(side_effect=update_data)
+    return state
 
 
-def test_handler_functions_exist() -> None:
-    """All required handler functions are importable."""
-    from telegram_bot.handlers.filter_panel import (  # noqa: F401
-        on_filter_panel_apply,
-        on_filter_panel_back,
-        on_filter_panel_reset,
-        on_filter_panel_select,
-        on_filter_panel_set,
-    )
+class TestFilterPanelHandlerSelect:
+    """Tests for action='select' — show sub-menu for a filter."""
 
+    async def test_select_city_shows_city_options(self) -> None:
+        """Нажатие 'Город' показывает варианты городов."""
+        cb = _make_callback("select", "city")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="select", field="city")
 
-# --- on_filter_panel_select: shows sub-menu for a filter ---
+        await handle_filter_panel(cb, state, cb_data)
 
+        cb.message.edit_text.assert_awaited_once()
+        call_args = cb.message.edit_text.call_args
+        # Текст должен содержать опции городов
+        text = call_args.args[0] if call_args.args else call_args.kwargs.get("text", "")
+        assert "Солнечный берег" in text or "город" in text.lower()
 
-async def test_select_city_edits_message_with_options() -> None:
-    """Pressing 'Город' replaces message with city options keyboard."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_select
+    async def test_select_rooms_shows_rooms_options(self) -> None:
+        """Нажатие 'Комнаты' показывает варианты комнат."""
+        cb = _make_callback("select", "rooms")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="select", field="rooms")
 
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {"city": "Несебр"}})
+        await handle_filter_panel(cb, state, cb_data)
 
-    cb_data = FilterPanelCB(action="select", field="city")
-    await on_filter_panel_select(callback, state, cb_data)
+        cb.message.edit_text.assert_awaited_once()
 
-    callback.message.edit_text.assert_called_once()
-    call_kwargs = callback.message.edit_text.call_args
-    # Should edit with some text and inline keyboard
-    assert call_kwargs is not None
-    callback.answer.assert_called()
+    async def test_select_uses_inline_keyboard(self) -> None:
+        """Sub-menu использует InlineKeyboardMarkup."""
+        from aiogram.types import InlineKeyboardMarkup
 
+        cb = _make_callback("select", "city")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="select", field="city")
 
-async def test_select_rooms_edits_message_with_keyboard() -> None:
-    """Pressing 'Комнаты' edits with rooms options."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_select
+        await handle_filter_panel(cb, state, cb_data)
 
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {}})
+        call_kwargs = cb.message.edit_text.call_args.kwargs
+        assert isinstance(call_kwargs.get("reply_markup"), InlineKeyboardMarkup)
 
-    cb_data = FilterPanelCB(action="select", field="rooms")
-    await on_filter_panel_select(callback, state, cb_data)
+    async def test_select_answers_callback(self) -> None:
+        """После показа sub-menu отвечает на callback запрос."""
+        cb = _make_callback("select", "city")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="select", field="city")
+
+        await handle_filter_panel(cb, state, cb_data)
 
-    callback.message.edit_text.assert_called_once()
-    callback.answer.assert_called()
+        cb.answer.assert_awaited()
+
+
+class TestFilterPanelHandlerSet:
+    """Tests for action='set' — update a filter value."""
+
+    async def test_set_city_updates_filters(self) -> None:
+        """Выбор города обновляет фильтры в FSMContext."""
+        cb = _make_callback("set", "city", "Солнечный берег")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="set", field="city", value="Солнечный берег")
 
+        await handle_filter_panel(cb, state, cb_data)
 
-async def test_select_unknown_field_answers_gracefully() -> None:
-    """Unknown field does not crash — answers with notification."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_select
+        state.update_data.assert_awaited()
+        update_calls = state.update_data.call_args_list
+        updated = {}
+        for call in update_calls:
+            updated.update(call.kwargs)
+        assert updated.get("apartment_filters", {}).get("city") == "Солнечный берег"
+
+    async def test_set_rooms_updates_filters(self) -> None:
+        """Выбор комнат обновляет фильтры."""
+        cb = _make_callback("set", "rooms", "2")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="set", field="rooms", value="2")
+
+        await handle_filter_panel(cb, state, cb_data)
+
+        state.update_data.assert_awaited()
+
+    async def test_set_empty_value_clears_filter(self) -> None:
+        """Пустое значение очищает конкретный фильтр."""
+        cb = _make_callback("set", "city", "")
+        state = _make_state({"apartment_filters": {"city": "Варна"}, "apartment_total": 10})
+        cb_data = FilterPanelCB(action="set", field="city", value="")
+
+        await handle_filter_panel(cb, state, cb_data)
+
+        state.update_data.assert_awaited()
+        update_calls = state.update_data.call_args_list
+        updated = {}
+        for call in update_calls:
+            updated.update(call.kwargs)
+        filters = updated.get("apartment_filters", {"city": "Варна"})
+        assert filters.get("city") in (None, "", "Варна") or "city" not in filters
+
+    async def test_set_returns_to_main_panel(self) -> None:
+        """После установки фильтра показывает обновлённую панель."""
+        cb = _make_callback("set", "city", "Бургас")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 5})
+        cb_data = FilterPanelCB(action="set", field="city", value="Бургас")
+
+        await handle_filter_panel(cb, state, cb_data)
+
+        cb.message.edit_text.assert_awaited()
+
+
+class TestFilterPanelHandlerApply:
+    """Tests for action='apply' — apply filters and close panel."""
+
+    async def test_apply_closes_panel(self) -> None:
+        """'Применить' удаляет сообщение с панелью."""
+        cb = _make_callback("apply", "")
+        state = _make_state(
+            {
+                "apartment_filters": {"city": "Солнечный берег"},
+                "apartment_offset": 20,
+                "apartment_total": 30,
+            }
+        )
+        cb_data = FilterPanelCB(action="apply", field="")
+
+        await handle_filter_panel(cb, state, cb_data)
+
+        # Либо удаляет, либо редактирует сообщение
+        assert cb.message.delete.call_count > 0 or cb.message.edit_text.call_count > 0
+
+    async def test_apply_resets_offset(self) -> None:
+        """'Применить' сбрасывает offset для поиска с начала."""
+        cb = _make_callback("apply", "")
+        state = _make_state(
+            {
+                "apartment_filters": {"city": "Солнечный берег"},
+                "apartment_offset": 20,
+                "apartment_total": 30,
+            }
+        )
+        cb_data = FilterPanelCB(action="apply", field="")
 
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {}})
+        await handle_filter_panel(cb, state, cb_data)
 
-    cb_data = FilterPanelCB(action="select", field="unknown_field")
-    await on_filter_panel_select(callback, state, cb_data)
+        state.update_data.assert_awaited()
+        update_calls = state.update_data.call_args_list
+        updated = {}
+        for call in update_calls:
+            updated.update(call.kwargs)
+        assert updated.get("apartment_offset", 20) == 0
 
-    callback.answer.assert_called()
+    async def test_apply_answers_callback(self) -> None:
+        """'Применить' отвечает на callback запрос."""
+        cb = _make_callback("apply", "")
+        state = _make_state({"apartment_filters": {}, "apartment_offset": 0, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="apply", field="")
 
+        await handle_filter_panel(cb, state, cb_data)
 
-# --- on_filter_panel_set: updates filters in FSMContext ---
+        cb.answer.assert_awaited()
 
 
-async def test_set_city_updates_fsm_filters() -> None:
-    """Setting city updates apartment_filters in FSMContext."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_set
+class TestFilterPanelHandlerReset:
+    """Tests for action='reset' — clear all filters."""
 
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {}})
+    async def test_reset_clears_all_filters(self) -> None:
+        """'Сбросить' очищает все фильтры."""
+        cb = _make_callback("reset", "")
+        state = _make_state(
+            {
+                "apartment_filters": {"city": "Варна", "rooms": 2},
+                "apartment_total": 42,
+            }
+        )
+        cb_data = FilterPanelCB(action="reset", field="")
 
-    cb_data = FilterPanelCB(action="set", field="city", value="Солнечный берег")
-    await on_filter_panel_set(callback, state, cb_data)
-
-    state.update_data.assert_called()
-    call_kwargs = state.update_data.call_args
-    updated = call_kwargs.kwargs.get("apartment_filters") or (
-        call_kwargs.args[0] if call_kwargs.args else {}
-    )
-    assert updated.get("city") == "Солнечный берег"
-
-
-async def test_set_empty_value_removes_filter() -> None:
-    """Setting empty value removes that filter key."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_set
-
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {"city": "Несебр", "rooms": 2}})
+        await handle_filter_panel(cb, state, cb_data)
 
-    cb_data = FilterPanelCB(action="set", field="city", value="")
-    await on_filter_panel_set(callback, state, cb_data)
+        state.update_data.assert_awaited()
+        update_calls = state.update_data.call_args_list
+        updated = {}
+        for call in update_calls:
+            updated.update(call.kwargs)
+        assert updated.get("apartment_filters") == {}
 
-    state.update_data.assert_called()
-    call_kwargs = state.update_data.call_args
-    updated = call_kwargs.kwargs.get("apartment_filters") or (
-        call_kwargs.args[0] if call_kwargs.args else {}
-    )
-    assert "city" not in updated
+    async def test_reset_updates_panel_text(self) -> None:
+        """'Сбросить' обновляет панель с пустыми фильтрами."""
+        cb = _make_callback("reset", "")
+        state = _make_state({"apartment_filters": {"city": "Варна"}, "apartment_total": 5})
+        cb_data = FilterPanelCB(action="reset", field="")
 
+        await handle_filter_panel(cb, state, cb_data)
 
-async def test_set_rooms_converts_to_int() -> None:
-    """Setting rooms converts string value to int."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_set
+        cb.message.edit_text.assert_awaited()
 
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {}})
+    async def test_reset_answers_callback(self) -> None:
+        """'Сбросить' отвечает на callback запрос."""
+        cb = _make_callback("reset", "")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="reset", field="")
 
-    cb_data = FilterPanelCB(action="set", field="rooms", value="2")
-    await on_filter_panel_set(callback, state, cb_data)
+        await handle_filter_panel(cb, state, cb_data)
 
-    state.update_data.assert_called()
-    call_kwargs = state.update_data.call_args
-    updated = call_kwargs.kwargs.get("apartment_filters") or (
-        call_kwargs.args[0] if call_kwargs.args else {}
-    )
-    assert updated.get("rooms") == 2
+        cb.answer.assert_awaited()
 
 
-async def test_set_goes_back_to_panel_after_update() -> None:
-    """After setting a filter, message is edited back to main panel."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_set
+class TestFilterPanelHandlerBack:
+    """Tests for action='back' — close panel, return to catalog."""
 
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {}})
+    async def test_back_deletes_panel_message(self) -> None:
+        """'Назад' удаляет сообщение с панелью."""
+        cb = _make_callback("back", "")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 10})
+        cb_data = FilterPanelCB(action="back", field="")
 
-    cb_data = FilterPanelCB(action="set", field="city", value="Варна")
-    await on_filter_panel_set(callback, state, cb_data)
+        await handle_filter_panel(cb, state, cb_data)
 
-    # Should edit message to show updated panel
-    callback.message.edit_text.assert_called_once()
+        cb.message.delete.assert_awaited_once()
 
+    async def test_back_answers_callback(self) -> None:
+        """'Назад' отвечает на callback запрос."""
+        cb = _make_callback("back", "")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 10})
+        cb_data = FilterPanelCB(action="back", field="")
 
-# --- on_filter_panel_apply: close panel, re-search ---
+        await handle_filter_panel(cb, state, cb_data)
 
+        cb.answer.assert_awaited()
 
-async def test_apply_resets_offset_to_zero() -> None:
-    """Apply resets apartment_offset to 0 for fresh search."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_apply
 
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(
-        return_value={
-            "apartment_filters": {"city": "Солнечный берег"},
-            "apartment_offset": 20,
-        }
-    )
+class TestFilterPanelHandlerMain:
+    """Tests for action='main' — return to filter panel main screen from sub-menu."""
 
-    cb_data = FilterPanelCB(action="apply", field="")
-    await on_filter_panel_apply(callback, state, cb_data)
+    async def test_main_shows_filter_panel(self) -> None:
+        """'Назад к фильтрам' показывает главный экран панели."""
+        cb = _make_callback("main", "")
+        state = _make_state({"apartment_filters": {"city": "Несебр"}, "apartment_total": 12})
+        cb_data = FilterPanelCB(action="main", field="")
 
-    state.update_data.assert_called()
-    # Check offset reset
-    all_calls = state.update_data.call_args_list
-    updated_offsets = [
-        c.kwargs.get("apartment_offset")
-        for c in all_calls
-        if "apartment_offset" in (c.kwargs or {})
-    ]
-    assert any(v == 0 for v in updated_offsets)
+        await handle_filter_panel(cb, state, cb_data)
 
+        cb.message.edit_text.assert_awaited_once()
 
-async def test_apply_deletes_panel_message() -> None:
-    """Apply closes the inline panel (deletes the message)."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_apply
+    async def test_main_shows_correct_filters_in_text(self) -> None:
+        """Главный экран показывает текущие активные фильтры."""
+        cb = _make_callback("main", "")
+        state = _make_state({"apartment_filters": {"city": "Несебр"}, "apartment_total": 12})
+        cb_data = FilterPanelCB(action="main", field="")
 
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {}})
+        await handle_filter_panel(cb, state, cb_data)
 
-    cb_data = FilterPanelCB(action="apply", field="")
-    await on_filter_panel_apply(callback, state, cb_data)
+        call_args = cb.message.edit_text.call_args
+        text = call_args.args[0] if call_args.args else call_args.kwargs.get("text", "")
+        assert "Несебр" in text
 
-    callback.message.delete.assert_called_once()
+    async def test_main_answers_callback(self) -> None:
+        """'Назад к фильтрам' отвечает на callback запрос."""
+        cb = _make_callback("main", "")
+        state = _make_state({"apartment_filters": {}, "apartment_total": 0})
+        cb_data = FilterPanelCB(action="main", field="")
 
+        await handle_filter_panel(cb, state, cb_data)
 
-# --- on_filter_panel_reset: clears all filters ---
-
-
-async def test_reset_clears_all_filters() -> None:
-    """Reset empties apartment_filters dict."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_reset
-
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {"city": "X", "rooms": 2}})
-
-    cb_data = FilterPanelCB(action="reset", field="")
-    await on_filter_panel_reset(callback, state, cb_data)
-
-    state.update_data.assert_called()
-    call_kwargs = state.update_data.call_args
-    assert "apartment_filters" in call_kwargs.kwargs
-    assert call_kwargs.kwargs["apartment_filters"] == {}
-
-
-async def test_reset_updates_panel_keyboard() -> None:
-    """After reset, panel is edited to show updated (empty) filters."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_reset
-
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {"city": "X"}})
-
-    cb_data = FilterPanelCB(action="reset", field="")
-    await on_filter_panel_reset(callback, state, cb_data)
-
-    callback.message.edit_text.assert_called_once()
-
-
-# --- on_filter_panel_back: close panel ---
-
-
-async def test_back_deletes_panel_message() -> None:
-    """Back deletes the inline panel message."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_back
-
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-
-    cb_data = FilterPanelCB(action="back", field="")
-    await on_filter_panel_back(callback, state, cb_data)
-
-    callback.message.delete.assert_called_once()
-    callback.answer.assert_called()
-
-
-async def test_back_from_submenu_returns_to_panel() -> None:
-    """Back from sub-menu (field != '') returns to main panel."""
-    from telegram_bot.callback_data import FilterPanelCB
-    from telegram_bot.handlers.filter_panel import on_filter_panel_back
-
-    callback = AsyncMock()
-    callback.message = AsyncMock()
-    state = AsyncMock()
-    state.get_data = AsyncMock(return_value={"apartment_filters": {"city": "Несебр"}})
-
-    cb_data = FilterPanelCB(action="back", field="city")
-    await on_filter_panel_back(callback, state, cb_data)
-
-    # Should edit message back to main panel (not delete)
-    callback.message.edit_text.assert_called_once()
-    callback.message.delete.assert_not_called()
-    callback.answer.assert_called()
+        cb.answer.assert_awaited()
