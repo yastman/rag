@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import os
+import uuid as _uuid_lib
+from typing import Any
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,6 +24,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_redis_client: Any = None
+
+_DEEPLINK_TTL = 300  # seconds
+
+
+async def _get_redis() -> Any:
+    """Lazy-init Redis client from REDIS_URL env var."""
+    global _redis_client
+    if _redis_client is None:
+        import redis.asyncio as aioredis
+
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        _redis_client = aioredis.from_url(redis_url, decode_responses=True)
+    return _redis_client
+
 
 @app.get("/api/config")
 async def get_config() -> dict:
@@ -28,10 +48,8 @@ async def get_config() -> dict:
 
 @app.post("/api/start-expert")
 async def start_expert(request: StartExpertRequest) -> StartExpertResponse:
-    """Create forum topic for expert and optionally send first message."""
+    """Store deep-link payload in Redis and return start_link for openTelegramLink."""
     from fastapi import HTTPException
-
-    from mini_app.bot_bridge import get_bot_bridge
 
     config = load_mini_app_config()
     experts = config.get("experts", [])
@@ -39,26 +57,22 @@ async def start_expert(request: StartExpertRequest) -> StartExpertResponse:
     if expert is None:
         raise HTTPException(status_code=404, detail="Expert not found")
 
-    topic_name = f"{expert['emoji']} {expert['name']}"
-
-    bridge = get_bot_bridge()
-    thread_id = await bridge.ensure_topic(
-        chat_id=request.user_id,
-        user_id=request.user_id,
-        expert_id=request.expert_id,
-        topic_name=topic_name,
+    uid = str(_uuid_lib.uuid4())
+    payload = json.dumps(
+        {
+            "expert_id": request.expert_id,
+            "message": request.message,
+            "user_id": request.user_id,
+        }
     )
+    redis = await _get_redis()
+    await redis.set(f"miniapp:q:{uid}", payload, ex=_DEEPLINK_TTL)
 
-    if request.message:
-        await bridge.send_to_topic(
-            chat_id=request.user_id,
-            thread_id=thread_id,
-            message=request.message,
-            expert_id=request.expert_id,
-        )
+    bot_username = os.environ.get("BOT_USERNAME", "")
+    start_link = f"https://t.me/{bot_username}?start=q_{uid}"
 
     return StartExpertResponse(
-        thread_id=thread_id,
+        start_link=start_link,
         expert_name=expert["name"],
     )
 
