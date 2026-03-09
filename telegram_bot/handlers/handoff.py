@@ -1,7 +1,7 @@
 """Manager handoff: qualification flow + Forum Topics bridge.
 
-Callback data format: qual:{step}:{value}
-Steps: goal → contact
+Qualification is handled by aiogram-dialog (HandoffSG in dialogs/handoff.py).
+This module retains FSM states, callback parsing helpers, and the dialog launcher.
 """
 
 from __future__ import annotations
@@ -9,10 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 
 class HandoffStates(StatesGroup):
@@ -33,70 +31,16 @@ def parse_qual_callback(data: str) -> tuple[str, str] | None:
     return None
 
 
-# ── Keyboard builders ───────────────────────────────────────────
-
-
-def _t(i18n: Any | None, key: str, fallback: str) -> str:
-    if i18n is None:
-        return fallback
-    return i18n.get(key)  # type: ignore[no-any-return]
-
-
-def build_goal_keyboard(i18n: Any | None = None) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=_t(i18n, "handoff-goal-search", "🏠 Подбор недвижимости"),
-                    callback_data="qual:goal:search",
-                ),
-                InlineKeyboardButton(
-                    text=_t(i18n, "handoff-goal-services", "🔑 Услуги"),
-                    callback_data="qual:goal:services",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=_t(i18n, "handoff-goal-consult", "💬 Консультация"),
-                    callback_data="qual:goal:consult",
-                ),
-                InlineKeyboardButton(
-                    text=_t(i18n, "handoff-goal-other", "📎 Другое"),
-                    callback_data="qual:goal:other",
-                ),
-            ],
-        ]
-    )
-
-
-def build_contact_keyboard(i18n: Any | None = None) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=_t(i18n, "handoff-contact-chat", "💬 Чат с менеджером"),
-                    callback_data="qual:contact:chat",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=_t(i18n, "handoff-contact-phone", "📞 Перезвоните мне"),
-                    callback_data="qual:contact:phone",
-                ),
-            ],
-        ]
-    )
-
-
-# ── Start qualification ─────────────────────────────────────────
+# ── Start qualification (aiogram-dialog) ────────────────────────
 
 
 async def start_qualification(
     message_or_callback: Any,
     i18n: Any | None = None,
     state: FSMContext | None = None,
+    dialog_manager: Any | None = None,
 ) -> None:
-    """Send first qualification step (goal selection)."""
+    """Launch handoff qualification dialog (aiogram-dialog)."""
     # FSM guard: if handoff already active, don't start again.
     if state is not None and await state.get_state() == HandoffStates.active:
         reply = "Вы уже на связи с менеджером, ожидайте ответа 💬"
@@ -109,64 +53,20 @@ async def start_qualification(
             await message_or_callback.answer(reply)
         return
 
-    text = _t(i18n, "handoff-qual-prompt", "📋 Какая тема вас интересует?")
-    kb = build_goal_keyboard(i18n)
-    if hasattr(message_or_callback, "message"):
-        # CallbackQuery — dismiss loading spinner, then send qualification buttons.
-        msg = message_or_callback.message
-        await message_or_callback.answer()
-        if msg and hasattr(msg, "answer"):
-            await msg.answer(text, reply_markup=kb)
+    if dialog_manager is not None:
+        from aiogram_dialog import StartMode
+
+        from telegram_bot.dialogs.states import HandoffSG
+
+        await dialog_manager.start(HandoffSG.goal, mode=StartMode.RESET_STACK)
     else:
-        await message_or_callback.answer(text, reply_markup=kb)
-
-
-# ── Qualification callback handler ──────────────────────────────
-
-# Stores in-progress qualification per user.  Cleared on completion.
-# Key: user_id → {"goal": ...}
-_qual_cache: dict[int, dict[str, str]] = {}
-
-
-async def on_qual_callback(
-    callback: CallbackQuery,
-    i18n: Any | None = None,
-    **kwargs: Any,
-) -> None:
-    """Handle qual:goal callback queries — advance through steps."""
-    parsed = parse_qual_callback(callback.data or "")
-    if not parsed:
-        return
-    step, value = parsed
-    user_id = callback.from_user.id
-
-    msg = callback.message
-    if msg is None or not hasattr(msg, "edit_text"):
-        await callback.answer()
-        return
-
-    if user_id not in _qual_cache:
-        _qual_cache[user_id] = {}
-    _qual_cache[user_id][step] = value
-
-    if step == "goal":
-        text = _t(i18n, "handoff-contact-prompt", "Какой способ связи предпочитаете?")
-        kb = build_contact_keyboard(i18n)
-        await msg.edit_text(text, reply_markup=kb)
-
-    await callback.answer()
-
-
-def get_user_qualification(user_id: int) -> dict[str, str]:
-    """Retrieve and clear cached qualification data for a user."""
-    return _qual_cache.pop(user_id, {})
-
-
-# ── Router factory ──────────────────────────────────────────────
-
-
-def create_handoff_router() -> Router:
-    """Create router for handoff qualification callbacks (goal only)."""
-    router = Router(name="handoff_qualification")
-    router.callback_query(F.data.startswith("qual:goal:"))(on_qual_callback)
-    return router
+        # Fallback when dialog_manager not available — send plain text.
+        logger.warning("start_qualification called without dialog_manager")
+        text = "📋 Какая тема вас интересует?"
+        if hasattr(message_or_callback, "message"):
+            await message_or_callback.answer()
+            msg = message_or_callback.message
+            if msg and hasattr(msg, "answer"):
+                await msg.answer(text)
+        else:
+            await message_or_callback.answer(text)
