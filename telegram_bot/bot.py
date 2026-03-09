@@ -104,8 +104,10 @@ def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
 from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
 
-def _supervisor_thread_id(chat_id: int | str) -> str:
+def _supervisor_thread_id(chat_id: int | str, thread_id: int | None = None) -> str:
     """Build checkpointer thread id for text-agent conversations."""
+    if thread_id is not None:
+        return f"tg_{chat_id}:{thread_id}"
     return f"tg_{chat_id}"
 
 
@@ -2205,6 +2207,14 @@ class PropertyBot:
 
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
+        # Resolve expert from forum topic thread
+        forum_thread_id = message.message_thread_id
+        expert_id: str | None = None
+        if forum_thread_id is not None and self._topic_service is not None and self._topics_enabled:
+            expert_id = await self._topic_service.get_expert_by_thread(
+                user_id=message.from_user.id, thread_id=forum_thread_id
+            )
+
         root_trace_metadata: dict[str, Any] = {}
         response_text = await self._handle_query_supervisor(
             message,
@@ -2212,6 +2222,8 @@ class PropertyBot:
             locale=locale,
             root_trace_metadata=root_trace_metadata,
             state=state,
+            forum_thread_id=forum_thread_id,
+            expert_id=expert_id,
         )
         update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
         if root_trace_metadata:
@@ -2423,6 +2435,8 @@ class PropertyBot:
         locale: str = "ru",
         root_trace_metadata: dict[str, Any] | None = None,
         state: FSMContext | None = None,
+        forum_thread_id: int | None = None,
+        expert_id: str | None = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
         from .agents.agent import LOCALE_TO_LANGUAGE
@@ -2813,6 +2827,7 @@ class PropertyBot:
                     callbacks=callbacks,
                     bot_context=ctx,
                     rag_result_store=rag_result_store,
+                    forum_thread_id=forum_thread_id,
                 )
 
             # Check for HITL interrupt (#443)
@@ -2822,7 +2837,7 @@ class PropertyBot:
                 await self._send_hitl_confirmation(
                     message=message,
                     payload=interrupt_payload,
-                    thread_id=_supervisor_thread_id(message.chat.id),
+                    thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
                 )
                 return None  # type: ignore[return-value]
 
@@ -3045,13 +3060,14 @@ class PropertyBot:
         callbacks: list[Any],
         bot_context: BotContext,
         rag_result_store: dict[str, Any],
+        forum_thread_id: int | None = None,
     ) -> dict[str, Any]:
         """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures."""
         payload = {"messages": [{"role": "user", "content": user_text}]}
         config = {
             "callbacks": callbacks,
             "configurable": {
-                "thread_id": _supervisor_thread_id(chat_id),
+                "thread_id": _supervisor_thread_id(chat_id, forum_thread_id),
                 "bot_context": bot_context,
                 "rag_result_store": rag_result_store,
                 "role": role,
