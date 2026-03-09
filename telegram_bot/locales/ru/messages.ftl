@@ -155,7 +155,7 @@ crm-error-postpone-task = ⚠️ Ошибка при откладывании з
 kb-search = 🏠 Подобрать квартиру
 kb-services = 🔑 Услуги
 kb-viewing = 📅 Запись на осмотр
-kb-manager = 👤 Менеджер
+kb-manager = 👤 Связаться с менеджером
 kb-ask = 💬 Задать вопрос
 kb-bookmarks = 📌 Мои закладки
 kb-demo = 🎯 Демонстрация
@@ -290,13 +290,14 @@ svc-contact-manager = Связаться с менеджером
 svc-back-to-services = Назад к услугам
 
 # ── Handoff (Forum Topics) ──────────────────────────────────────
-handoff-qual-prompt = Чтобы менеджер сразу помог — пару вопросов:
+handoff-qual-prompt = 📋 Какая тема вас интересует?
 handoff-goal-search = 🏠 Подбор недвижимости
 handoff-goal-services = 🔑 Услуги
 handoff-goal-consult = 💬 Консультация
-handoff-contact-prompt = Как удобнее связаться?
-handoff-contact-chat = 💬 Написать сейчас
-handoff-contact-phone = 📞 Оставить номер
+handoff-goal-other = 📎 Другое
+handoff-contact-prompt = Какой способ связи предпочитаете?
+handoff-contact-chat = 💬 Чат с менеджером
+handoff-contact-phone = 📞 Перезвоните мне
 handoff-connecting = Соединяю с менеджером. Пока ждёте — могу ответить на вопросы!
 handoff-offline = 📨 Ваш запрос принят!
 

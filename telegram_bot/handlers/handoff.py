@@ -60,6 +60,10 @@ def build_goal_keyboard(i18n: Any | None = None) -> InlineKeyboardMarkup:
                     text=_t(i18n, "handoff-goal-consult", "💬 Консультация"),
                     callback_data="qual:goal:consult",
                 ),
+                InlineKeyboardButton(
+                    text=_t(i18n, "handoff-goal-other", "📎 Другое"),
+                    callback_data="qual:goal:other",
+                ),
             ],
         ]
     )
@@ -70,14 +74,16 @@ def build_contact_keyboard(i18n: Any | None = None) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=_t(i18n, "handoff-contact-chat", "Написать сейчас"),
+                    text=_t(i18n, "handoff-contact-chat", "💬 Чат с менеджером"),
                     callback_data="qual:contact:chat",
                 ),
+            ],
+            [
                 InlineKeyboardButton(
-                    text=_t(i18n, "handoff-contact-phone", "Оставить номер"),
+                    text=_t(i18n, "handoff-contact-phone", "📞 Перезвоните мне"),
                     callback_data="qual:contact:phone",
                 ),
-            ]
+            ],
         ]
     )
 
@@ -103,7 +109,7 @@ async def start_qualification(
             await message_or_callback.answer(reply)
         return
 
-    text = _t(i18n, "handoff-qual-prompt", "Чтобы менеджер сразу помог:")
+    text = _t(i18n, "handoff-qual-prompt", "📋 Какая тема вас интересует?")
     kb = build_goal_keyboard(i18n)
     if hasattr(message_or_callback, "message"):
         # CallbackQuery — dismiss loading spinner, then send qualification buttons.
@@ -144,7 +150,7 @@ async def on_qual_callback(
     _qual_cache[user_id][step] = value
 
     if step == "goal":
-        text = _t(i18n, "handoff-contact-prompt", "Как удобнее связаться?")
+        text = _t(i18n, "handoff-contact-prompt", "Какой способ связи предпочитаете?")
         kb = build_contact_keyboard(i18n)
         await msg.edit_text(text, reply_markup=kb)
 
