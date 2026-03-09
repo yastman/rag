@@ -178,6 +178,13 @@ class CrmQuickActionSG(StatesGroup):
     edit_task_date = State()  # waiting for new due date
 
 
+class HandoffSG(StatesGroup):
+    """Manager handoff qualification (#730)."""
+
+    goal = State()
+    contact = State()
+
+
 class DemoSG(StatesGroup):
     """Demo apartment search dialog (aiogram-dialog, #907)."""
 
