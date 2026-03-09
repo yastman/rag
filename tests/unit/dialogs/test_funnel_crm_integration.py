@@ -34,6 +34,7 @@ async def test_summary_search_calls_lead_scoring(monkeypatch):
             "bot_config": MagicMock(),
         },
         switch_to=AsyncMock(),
+        done=AsyncMock(),
     )
 
     await funnel_module.on_summary_search(callback, MagicMock(), manager)
@@ -112,7 +113,7 @@ async def test_zero_suggestion_rm_section():
     )
     assert "section" not in manager.dialog_data
     assert manager.dialog_data.get("scroll_start_from") is None
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 async def test_summary_shows_section():
