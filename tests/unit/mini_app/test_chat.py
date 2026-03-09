@@ -92,3 +92,21 @@ async def test_start_expert_stores_payload_in_redis():
     assert call_args.kwargs.get("ex") == 300 or (
         len(call_args.args) > 2 and call_args.args[2] == 300
     )
+
+
+@pytest.mark.asyncio
+async def test_start_expert_fails_without_bot_username():
+    """Missing BOT_USERNAME should return 500."""
+    mock_redis = AsyncMock()
+    experts = [{"id": "consultant", "name": "Консультант", "emoji": "👷"}]
+    with patch("mini_app.api.load_mini_app_config", return_value={"experts": experts}):
+        with patch("mini_app.api._get_redis", new=AsyncMock(return_value=mock_redis)):
+            with patch.dict(os.environ, {"BOT_USERNAME": ""}, clear=False):
+                async with AsyncClient(
+                    transport=ASGITransport(app=app), base_url="http://test"
+                ) as client:
+                    resp = await client.post(
+                        "/api/start-expert",
+                        json={"user_id": 123, "expert_id": "consultant"},
+                    )
+    assert resp.status_code == 500
