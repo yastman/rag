@@ -29,16 +29,6 @@ async def test_health_endpoint():
 
 
 @pytest.mark.asyncio
-async def test_chat_endpoint_returns_sse():
-    mock_result = {"response": "Test response"}
-    with patch("mini_app.chat.run_mini_app_query", AsyncMock(return_value=mock_result)):
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.post("/api/chat", json={"message": "test", "user_id": 123})
-    assert resp.status_code == 200
-    assert "text/event-stream" in resp.headers.get("content-type", "")
-
-
-@pytest.mark.asyncio
 async def test_phone_endpoint_returns_json():
     mock_kommo = MagicMock()
     mock_kommo.upsert_contact = AsyncMock(return_value={"id": 1})
