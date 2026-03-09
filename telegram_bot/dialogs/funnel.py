@@ -8,7 +8,6 @@ import logging
 import operator
 from typing import Any
 
-from aiogram.enums import ParseMode
 from aiogram.types import CallbackQuery
 from aiogram_dialog import Dialog, DialogManager, Window
 from aiogram_dialog.widgets.kbd import (
@@ -22,7 +21,7 @@ from aiogram_dialog.widgets.kbd import (
     Select,
     SwitchTo,
 )
-from aiogram_dialog.widgets.text import Format, Jinja, List
+from aiogram_dialog.widgets.text import Format
 
 from telegram_bot.observability import observe
 
@@ -579,193 +578,6 @@ async def get_change_filter_options(**kwargs: Any) -> dict[str, Any]:
 _SCROLL_PAGE_SIZE = 10
 
 
-@observe(name="dialog-funnel-results", capture_input=False, capture_output=False)
-async def get_results_data(
-    dialog_manager: DialogManager,
-    **kwargs: Any,
-) -> dict[str, Any]:
-    """Getter for results window — returns structured data for List widget."""
-    i18n = dialog_manager.middleware_data.get("i18n")
-    data = dialog_manager.dialog_data
-
-    no_results_text = (
-        i18n.get("results-no-results")
-        if i18n
-        else "К сожалению, по вашим критериям ничего не найдено."
-    )
-    results_title = i18n.get("funnel-results-title") if i18n else "Результаты"
-    btn_more = i18n.get("results-show-more") if i18n else "🔄 Показать ещё"
-    service_unavailable_text = (
-        i18n.get("results-service-unavailable") if i18n else "Сервис поиска недоступен."
-    )
-    btn_back = i18n.get("back") if i18n else "Назад"
-
-    # Resolve apartments_service with property_bot fallback
-    svc = dialog_manager.middleware_data.get("apartments_service")
-    if svc is None:
-        property_bot = dialog_manager.middleware_data.get("property_bot")
-        if property_bot is not None:
-            svc = getattr(property_bot, "_apartments_service", None)
-
-    apartments: list[dict[str, Any]] = []
-    has_more = False
-    no_results = False
-    total_count = 0
-    zero_suggestions: list[tuple[str, str]] = []
-    shown_start = 0
-    shown_end = 0
-
-    if svc is not None:
-        try:
-            filters = _build_funnel_filters(data)
-            start_from = data.get("scroll_start_from")
-            seen_ids = data.get("scroll_seen_ids") or []
-
-            results, total_count, next_start_from, page_ids = await svc.scroll_with_filters(
-                filters=filters,
-                limit=_SCROLL_PAGE_SIZE,
-                start_from=start_from,
-                exclude_ids=seen_ids if start_from is not None else None,
-            )
-            # Сохраняем state для следующей страницы
-            data["scroll_start_from"] = next_start_from
-            if next_start_from is not None and page_ids:
-                boundary_ids = [
-                    r["id"] for r in results if r["payload"].get("price_eur") == next_start_from
-                ]
-                data["scroll_seen_ids"] = boundary_ids
-            else:
-                data["scroll_seen_ids"] = []
-
-            if results:
-                current_page = max(int(data.get("scroll_page", 1) or 1), 1)
-                shown_start = (current_page - 1) * _SCROLL_PAGE_SIZE + 1
-                shown_end = shown_start + len(results) - 1
-                has_more = next_start_from is not None and total_count > shown_end
-                for i, apt in enumerate(results):
-                    p = apt["payload"]
-                    idx = shown_start + i
-                    complex_name = p.get("complex_name", "")
-                    section = p.get("section", "")
-                    apt_num = p.get("apartment_number", "")
-                    prop_type = _ROOMS_DISPLAY.get(p.get("rooms", 1), str(p.get("rooms", 1)))
-                    floor = p.get("floor", 0)
-                    area = round(p.get("area_m2", 0))
-                    view = _VIEW_DISPLAY.get(p.get("view_primary", ""), p.get("view_primary", ""))
-                    price = f"{int(p.get('price_eur', 0)):,}".replace(",", " ")
-
-                    line1 = f"<b>{idx}.</b> <b>{complex_name}</b>"
-                    if section:
-                        line1 += f" · {section}"
-                    if apt_num:
-                        line1 += f" · №{apt_num}"
-
-                    line2 = f"    {prop_type}"
-                    if floor:
-                        line2 += f" · {floor} эт"
-                    if area:
-                        line2 += f" · {area} м²"
-                    if view:
-                        line2 += f" · {view}"
-
-                    line3 = f"    <b>{price} €</b>"
-
-                    apartments.append({"card": f"{line1}\n{line2}\n{line3}"})
-                if has_more:
-                    remaining = max(total_count - shown_end, 0)
-                    if i18n:
-                        try:
-                            btn_more = i18n.get("results-show-more-remaining", remaining=remaining)
-                        except Exception:
-                            btn_more = f"{i18n.get('results-show-more')} ({remaining} осталось)"
-                    else:
-                        btn_more = f"🔄 Показать ещё ({remaining} осталось)"
-            else:
-                no_results = True
-                # Build zero-results recovery suggestions
-                if total_count == 0:
-                    floor_v = data.get("floor")
-                    view_v = data.get("view")
-                    furnished_v = data.get("is_furnished")
-                    promotion_v = data.get("is_promotion")
-                    budget_v = data.get("budget", "any")
-
-                    if floor_v and floor_v != "any":
-                        zero_suggestions.append(
-                            ("Убрать: " + _FLOOR_DISPLAY.get(floor_v, "этаж"), "rm_floor")
-                        )
-                    if view_v and view_v != "any":
-                        zero_suggestions.append(
-                            ("Убрать: " + _VIEW_DISPLAY.get(view_v, "вид"), "rm_view")
-                        )
-                    area_v = data.get("area")
-                    if area_v and area_v != "any":
-                        zero_suggestions.append(
-                            ("Убрать: " + _AREA_DISPLAY.get(area_v, "площадь"), "rm_area")
-                        )
-                    section_v = data.get("section")
-                    if section_v and section_v != "any":
-                        zero_suggestions.append(("Убрать: секция " + section_v, "rm_section"))
-                    if furnished_v:
-                        zero_suggestions.append(("Убрать: мебель", "rm_furnished"))
-                    if promotion_v:
-                        zero_suggestions.append(("Убрать: акции", "rm_promotion"))
-                    if budget_v != "any":
-                        zero_suggestions.append(("Расширить бюджет", "rm_budget"))
-                    zero_suggestions.append(("Новый поиск", "new_search"))
-        except Exception:
-            logger.exception("Failed to fetch funnel results from Qdrant")
-            no_results = True
-    else:
-        no_results = True
-        no_results_text = service_unavailable_text
-
-    if apartments:
-        if i18n:
-            try:
-                title = i18n.get(
-                    "results-found-range",
-                    total=total_count,
-                    start=shown_start,
-                    end=shown_end,
-                )
-            except Exception:
-                title = (
-                    f"Найдено <b>{total_count}</b> апартаментов "
-                    f"(показаны {shown_start}–{shown_end})"
-                )
-        else:
-            title = (
-                f"Найдено <b>{total_count}</b> апартаментов (показаны {shown_start}–{shown_end})"
-            )
-    elif total_count:
-        title = (
-            i18n.get("results-found", total=total_count)
-            if i18n
-            else f"Найдено <b>{total_count}</b> апартаментов"
-        )
-    else:
-        title = results_title
-
-    # Persist for CRM scoring
-    _spawn_persist_funnel_lead_score(
-        dialog_manager=dialog_manager,
-        total_count=total_count,
-    )
-
-    return {
-        "title": title,
-        "apartments": apartments,
-        "has_apartments": bool(apartments),
-        "no_results": no_results,
-        "no_results_text": no_results_text if no_results else "",
-        "has_more": has_more,
-        "btn_more": btn_more,
-        "btn_back": btn_back,
-        "zero_suggestions": zero_suggestions,
-    }
-
-
 # --- Handlers (on_click) ---
 
 
@@ -918,18 +730,6 @@ async def on_pref_section_selected(
     await manager.switch_to(FunnelSG.preferences)
 
 
-async def on_search_list(
-    callback: CallbackQuery,
-    widget: Any,
-    manager: DialogManager,
-) -> None:
-    """Reset pagination before switching to list results."""
-    data = manager.dialog_data
-    data.pop("scroll_start_from", None)
-    data.pop("scroll_seen_ids", None)
-    data["scroll_page"] = 1
-
-
 @observe(name="dialog-funnel-search", capture_input=False, capture_output=False)
 async def on_summary_search(
     callback: CallbackQuery,
@@ -974,7 +774,7 @@ async def on_summary_search(
         svc = getattr(property_bot, "_apartments_service", None)
 
     if svc is None or callback.message is None:
-        await manager.switch_to(FunnelSG.results)
+        await manager.done()
         return
 
     # Search
@@ -987,7 +787,7 @@ async def on_summary_search(
         )
     except Exception:
         logger.exception("Failed to fetch funnel results")
-        await manager.switch_to(FunnelSG.results)
+        await manager.done()
         return
 
     # Close dialog before sending cards
@@ -1048,20 +848,6 @@ async def on_change_filter_selected(
     await manager.switch_to(target)
 
 
-async def on_results_more(
-    callback: CallbackQuery,
-    button: Button,
-    manager: DialogManager,
-) -> None:
-    """Load next page of scroll results."""
-    data = manager.dialog_data
-    next_start = data.get("scroll_start_from")
-    if next_start is None:
-        await callback.answer("Все результаты показаны")
-        return
-    data["scroll_page"] = data.get("scroll_page", 1) + 1
-
-
 async def on_zero_suggestion_selected(
     callback: CallbackQuery,
     widget: Select,
@@ -1110,7 +896,7 @@ async def on_zero_suggestion_selected(
     data.pop("scroll_start_from", None)
     data.pop("scroll_seen_ids", None)
     data["scroll_page"] = 1
-    await manager.switch_to(FunnelSG.results)
+    await manager.switch_to(FunnelSG.summary)
 
 
 # --- Dialog ---
@@ -1334,37 +1120,5 @@ funnel_dialog = Dialog(
         Back(Format("{btn_back}")),
         getter=get_change_filter_options,
         state=FunnelSG.change_filter,
-    ),
-    # Step 6: Results (SDK List widget)
-    Window(
-        Jinja("{{ title | safe }}\n\n"),
-        List(
-            Jinja("{{ item.card | safe }}"),
-            items="apartments",
-            sep="\n\n",
-            id="apt_list",
-            when="has_apartments",
-        ),
-        Format("{no_results_text}", when="no_results"),
-        Column(
-            Select(
-                Format("{item[0]}"),
-                id="zero_suggestions",
-                item_id_getter=operator.itemgetter(1),
-                items="zero_suggestions",
-                on_click=on_zero_suggestion_selected,
-            ),
-            when="zero_suggestions",
-        ),
-        Button(
-            Format("{btn_more}"),
-            id="more",
-            on_click=on_results_more,
-            when="has_more",
-        ),
-        Cancel(Format("{btn_back}")),
-        getter=get_results_data,
-        state=FunnelSG.results,
-        parse_mode=ParseMode.HTML,
     ),
 )
