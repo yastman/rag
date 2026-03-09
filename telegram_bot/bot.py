@@ -1425,8 +1425,9 @@ class PropertyBot:
                 state=state,
             )
         elif value == "phone":
-            if msg and hasattr(msg, "edit_text"):
-                await msg.edit_text("Сейчас попросим номер телефона...")
+            if msg and hasattr(msg, "delete"):
+                with contextlib.suppress(Exception):
+                    await msg.delete()
             from .handlers.phone_collector import start_phone_collection
 
             await start_phone_collection(callback, state, service_key="manager")
@@ -3876,21 +3877,6 @@ class PropertyBot:
         topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
         self._topic_service = TopicService(redis=topic_redis)
         logger.info("TopicService ready (Redis)")
-
-        # Initialize bot bridge for Mini App API
-        from mini_app.bot_bridge import BotBridge, set_bot_bridge
-
-        async def _noop_rag(**kwargs: Any) -> dict[str, Any]:
-            return {}
-
-        set_bot_bridge(
-            BotBridge(
-                bot=self.bot,
-                topic_service=self._topic_service,
-                rag_fn=_noop_rag,
-            )
-        )
-        logger.info("BotBridge initialized for Mini App API")
 
         # Initialize history service (Qdrant-backed Q&A history)
         try:
