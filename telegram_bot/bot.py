@@ -2910,20 +2910,47 @@ class PropertyBot:
 
                 full_response = response_text + sources_text if sources_text else response_text
 
-                # Send with Markdown, fallback to plain text
-                chunks = list(_split_telegram_response(full_response))
-                for i, chunk in enumerate(chunks):
-                    is_last = i == len(chunks) - 1
-                    markup = reply_markup if is_last else None
+                # Send via DraftStreamer (supports forum thread routing)
+                from telegram_bot.services.draft_streamer import DraftStreamer
+
+                if message.chat.type == "private":
                     try:
-                        await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
+                        streamer = DraftStreamer(
+                            bot=self.bot,
+                            chat_id=message.chat.id,
+                            thread_id=forum_thread_id,
+                        )
+                        await streamer.finalize(
+                            full_response,
+                            parse_mode="Markdown",
+                            reply_markup=reply_markup,
+                        )
                     except Exception:
-                        logger.warning("Markdown parse failed in text path, falling back")
+                        logger.warning("DraftStreamer failed, falling back to message.answer")
                         try:
-                            await message.answer(chunk, reply_markup=markup)
+                            await message.answer(
+                                full_response,
+                                parse_mode="Markdown",
+                                reply_markup=reply_markup,
+                            )
                         except Exception:
-                            logger.exception("Failed to send text response chunk")
-                            await message.answer(chunk)
+                            logger.exception("Failed to send text response")
+                            await message.answer(full_response)
+                else:
+                    # Send with Markdown, fallback to plain text
+                    chunks = list(_split_telegram_response(full_response))
+                    for i, chunk in enumerate(chunks):
+                        is_last = i == len(chunks) - 1
+                        markup = reply_markup if is_last else None
+                        try:
+                            await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
+                        except Exception:
+                            logger.warning("Markdown parse failed in text path, falling back")
+                            try:
+                                await message.answer(chunk, reply_markup=markup)
+                            except Exception:
+                                logger.exception("Failed to send text response chunk")
+                                await message.answer(chunk)
 
             # Store final agent response in semantic cache for cacheable query types.
             # Use cache_key_embedding (original query embedding) so that future
