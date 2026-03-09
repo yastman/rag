@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { fetchConfig, streamChat } from '../api';
+import { fetchConfig, startExpert } from '../api';
 
 describe('fetchConfig', () => {
   beforeEach(() => {
@@ -46,7 +46,7 @@ describe('fetchConfig', () => {
   });
 });
 
-describe('streamChat', () => {
+describe('startExpert', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
   });
@@ -57,97 +57,42 @@ describe('streamChat', () => {
 
   it('sends POST with correct body', async () => {
     const mockFetch = vi.mocked(fetch);
-    const lines = ['data: {"type":"chunk","text":"ok"}', 'data: {"type":"done","full_text":"ok"}'];
-    let callCount = 0;
-    const mockReader = {
-      read: vi.fn().mockImplementation(async () => {
-        if (callCount < lines.length) {
-          const text = lines[callCount++] + '\n';
-          return { done: false, value: new TextEncoder().encode(text) };
-        }
-        return { done: true, value: undefined };
-      }),
-    };
     mockFetch.mockResolvedValue({
       ok: true,
-      body: { getReader: () => mockReader },
-    } as unknown as Response);
+      json: async () => ({ thread_id: 42, expert_name: 'Консультант', status: 'ok' }),
+    } as Response);
 
-    const events = [];
-    for await (const event of streamChat('Привет', 42, 'expert1')) {
-      events.push(event);
-    }
+    const result = await startExpert(123, 'consultant', 'Подбери квартиру');
 
-    expect(mockFetch).toHaveBeenCalledWith('/api/chat', {
+    expect(mockFetch).toHaveBeenCalledWith('/api/start-expert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Привет', user_id: 42, expert_id: 'expert1' }),
+      body: JSON.stringify({ user_id: 123, expert_id: 'consultant', message: 'Подбери квартиру' }),
     });
-    expect(events).toHaveLength(2);
-    expect(events[0]).toEqual({ type: 'chunk', text: 'ok' });
-    expect(events[1]).toEqual({ type: 'done', full_text: 'ok' });
+    expect(result.thread_id).toBe(42);
+    expect(result.expert_name).toBe('Консультант');
   });
 
-  it('buffers SSE lines split across read() chunks', async () => {
+  it('sends without message when not provided', async () => {
     const mockFetch = vi.mocked(fetch);
-    // First chunk ends mid-JSON, second chunk completes the line
-    const chunks = [
-      'data: {"type":"chunk","te',
-      'xt":"hello"}\ndata: {"type":"done","full_text":"hello"}\n',
-    ];
-    let callCount = 0;
-    const mockReader = {
-      read: vi.fn().mockImplementation(async () => {
-        if (callCount < chunks.length) {
-          return { done: false, value: new TextEncoder().encode(chunks[callCount++]) };
-        }
-        return { done: true, value: undefined };
-      }),
-    };
     mockFetch.mockResolvedValue({
       ok: true,
-      body: { getReader: () => mockReader },
-    } as unknown as Response);
+      json: async () => ({ thread_id: 1, expert_name: 'Test', status: 'ok' }),
+    } as Response);
 
-    const events = [];
-    for await (const event of streamChat('test', 1)) {
-      events.push(event);
-    }
+    await startExpert(123, 'consultant');
 
-    expect(events).toHaveLength(2);
-    expect(events[0]).toEqual({ type: 'chunk', text: 'hello' });
-    expect(events[1]).toEqual({ type: 'done', full_text: 'hello' });
+    const body = JSON.parse(mockFetch.mock.calls[0][1]!.body as string);
+    expect(body.message).toBeUndefined();
   });
 
-  it('throws on non-ok response (500)', async () => {
+  it('throws on non-ok response', async () => {
     const mockFetch = vi.mocked(fetch);
     mockFetch.mockResolvedValue({
       ok: false,
-      status: 500,
-    } as unknown as Response);
+      status: 404,
+    } as Response);
 
-    const gen = streamChat('test', 1);
-    await expect(gen.next()).rejects.toThrow('Chat request failed: 500');
-  });
-
-  it('throws when backend sends error event', async () => {
-    const mockFetch = vi.mocked(fetch);
-    let callCount = 0;
-    const chunks = ['data: {"type":"error","text":"Backend error"}\n'];
-    const mockReader = {
-      read: vi.fn().mockImplementation(async () => {
-        if (callCount < chunks.length) {
-          return { done: false, value: new TextEncoder().encode(chunks[callCount++]) };
-        }
-        return { done: true, value: undefined };
-      }),
-    };
-    mockFetch.mockResolvedValue({
-      ok: true,
-      body: { getReader: () => mockReader },
-    } as unknown as Response);
-
-    const gen = streamChat('test', 1);
-    await expect(gen.next()).rejects.toThrow('Backend error');
+    await expect(startExpert(1, 'x')).rejects.toThrow('start-expert failed: 404');
   });
 });
