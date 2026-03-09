@@ -57,6 +57,19 @@ async def handle_error(event: ErrorEvent) -> None:
         exc_info=exception,
     )
 
+    # Report error to Langfuse if trace is active
+    try:
+        from telegram_bot.observability import get_client
+
+        lf = get_client()
+        if lf is not None and lf.get_current_trace_id():
+            lf.update_current_observation(
+                level="ERROR",
+                status_message=f"{type(exception).__name__}: {str(exception)[:200]}",
+            )
+    except Exception:
+        logger.debug("Failed to report error to Langfuse", exc_info=True)
+
     callback_query = update.callback_query
     if callback_query is not None:
         try:

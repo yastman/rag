@@ -257,6 +257,12 @@ class BotConfig(BaseSettings):
         default="ru", validation_alias=AliasChoices("domain_language", "BOT_LANGUAGE")
     )
 
+    # Mini App (Telegram Web App)
+    mini_app_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("mini_app_url", "MINI_APP_URL"),
+    )
+
     # LiveKit (voice calls)
     livekit_url: str = Field(
         default="", validation_alias=AliasChoices("LIVEKIT_URL", "livekit_url")
@@ -334,6 +340,10 @@ class BotConfig(BaseSettings):
     supervisor_model: str = Field(
         default="gpt-4o-mini",
         validation_alias=AliasChoices("supervisor_model", "SUPERVISOR_MODEL"),
+    )
+    apartment_extraction_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("apartment_extraction_model", "APARTMENT_EXTRACTION_MODEL"),
     )
     client_direct_pipeline_enabled: EmptyStrBool = Field(
         default=False,
