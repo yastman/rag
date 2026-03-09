@@ -92,6 +92,21 @@ Worker → orch через JSON-файлы в `.signals/`. **Атомарная 
 
 **КРИТИЧНО:** orch обработал сигнал → переименовать файл (`done-*`) чтобы не обработать повторно.
 
+### Чтение сигналов через context-mode
+
+При обработке сигнала — используй context-mode для верификации (output не засоряет контекст):
+
+    # Проверить все сигналы за один вызов:
+    mcp batch_execute(commands=[
+      {label: "signals", command: "cat .signals/worker-*.json 2>/dev/null"},
+      {label: "logs", command: "tail -20 logs/worker-*.log 2>/dev/null"}
+    ], queries=["worker status done or failed", "skill markers"])
+
+    # Code review diff через context-mode (Фаза 5.0):
+    mcp execute(language="shell", code="""
+      cd '{WT_PATH}' && git diff dev...HEAD 2>&1
+    """, intent="code review: verify changes match issue #{N}")
+
 ### tmux send-keys (запасной метод)
 
 Если файловые сигналы невозможны (VPS, нет общей FS):

@@ -16,6 +16,8 @@ from aiogram_dialog.widgets.input import ManagedTextInput, TextInput
 from aiogram_dialog.widgets.kbd import Back, Button, Cancel, Column, Select
 from aiogram_dialog.widgets.text import Const, Format
 
+from telegram_bot.observability import observe
+
 from .states import CreateNoteSG
 
 
@@ -177,6 +179,7 @@ async def on_entity_selected(
     await manager.switch_to(CreateNoteSG.summary)
 
 
+@observe(name="dialog-crm-create-note", capture_input=False, capture_output=False)
 async def on_note_confirm(
     callback: CallbackQuery,
     button: Button,
