@@ -3862,6 +3862,21 @@ class PropertyBot:
         self._topic_service = TopicService(redis=topic_redis)
         logger.info("TopicService ready (Redis)")
 
+        # Initialize bot bridge for Mini App API
+        from mini_app.bot_bridge import BotBridge, set_bot_bridge
+
+        async def _noop_rag(**kwargs: Any) -> dict[str, Any]:
+            return {}
+
+        set_bot_bridge(
+            BotBridge(
+                bot=self.bot,
+                topic_service=self._topic_service,
+                rag_fn=_noop_rag,
+            )
+        )
+        logger.info("BotBridge initialized for Mini App API")
+
         # Initialize history service (Qdrant-backed Q&A history)
         try:
             self._history_service = HistoryService(
