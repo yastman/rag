@@ -44,7 +44,12 @@ from .handlers.handoff import (
     parse_qual_callback,
     start_qualification,
 )
-from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
+from .keyboards.client_keyboard import (
+    build_catalog_keyboard,
+    build_client_keyboard,
+    parse_catalog_button,
+    parse_menu_button,
+)
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
@@ -1090,6 +1095,20 @@ class PropertyBot:
         i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
+        # Catalog mode intercepts buttons before normal menu routing
+        data = await state.get_data()
+        if data.get("catalog_mode"):
+            catalog_action = parse_catalog_button(message.text or "")
+            if catalog_action == "catalog_more":
+                await self._handle_catalog_more(message, state)
+                return
+            if catalog_action == "catalog_filters":
+                await self._handle_catalog_filters(message, state)
+                return
+            if catalog_action == "catalog_exit":
+                await self._handle_catalog_exit(message, state)
+                return
+
         action_id = parse_menu_button(
             message.text or "",
             i18n_hub=getattr(self, "_i18n_hub", None),
@@ -1134,6 +1153,104 @@ class PropertyBot:
         from .handlers.demo_handler import handle_demo_button
 
         await handle_demo_button(message)
+
+    async def _handle_catalog_more(self, message: Message, state: FSMContext) -> None:
+        """Handle 'Показать ещё 10' in catalog mode."""
+        data = await state.get_data()
+        offset = data.get("apartment_offset", 0)
+        total = data.get("apartment_total", 0)
+        filters = data.get("apartment_filters")
+        next_start = data.get("apartment_next_offset")
+        seen_ids = data.get("apartment_scroll_seen_ids", [])
+
+        if offset >= total:
+            return  # всё показано
+
+        svc: Any = getattr(self, "_apartments_service", None)
+        if svc is None:
+            return
+
+        results, total_count, new_next_start, page_ids = await svc.scroll_with_filters(
+            filters=filters,
+            limit=10,
+            start_from=next_start,
+            exclude_ids=seen_ids if next_start is not None else None,
+        )
+
+        telegram_id = message.from_user.id if message.from_user else 0
+        for result in results:
+            await self._send_property_card(message, result, telegram_id)
+
+        new_offset = offset + len(results)
+        await state.update_data(
+            apartment_offset=new_offset,
+            apartment_total=total_count,
+            apartment_next_offset=new_next_start,
+            apartment_scroll_seen_ids=page_ids,
+        )
+
+        catalog_kb = build_catalog_keyboard(shown=new_offset, total=total_count)
+        await message.answer(
+            f"Показаны {new_offset} из {total_count} апартаментов",
+            reply_markup=catalog_kb,
+        )
+
+    async def _handle_catalog_exit(self, message: Message, state: FSMContext) -> None:
+        """Handle 'Главное меню' — exit catalog mode and restore main keyboard."""
+        await state.update_data(
+            catalog_mode=False,
+            apartment_offset=None,
+            apartment_total=None,
+            apartment_next_offset=None,
+            apartment_scroll_seen_ids=None,
+            apartment_filters=None,
+        )
+        await message.answer("Главное меню", reply_markup=build_client_keyboard())
+
+    async def _handle_catalog_filters(self, message: Message, state: FSMContext) -> None:
+        """Handle 'Фильтры' — show inline filter panel with current filters."""
+        import contextlib
+
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+        data = await state.get_data()
+        filters: dict = data.get("apartment_filters") or {}
+        svc: Any = getattr(self, "_apartments_service", None)
+        count = data.get("apartment_total", 0)
+        if svc is not None:
+            with contextlib.suppress(Exception):
+                count = await svc.count_with_filters(filters=filters)
+
+        lines = ["🔍 Фильтры поиска\n"]
+        if filters.get("city"):
+            lines.append(f"📍 Город: {filters['city']}")
+        if filters.get("rooms") is not None:
+            lines.append(f"🛏 Комнаты: {filters['rooms']}")
+        if filters.get("price_eur"):
+            p = filters["price_eur"]
+            if isinstance(p, dict):
+                parts = []
+                if p.get("gte"):
+                    parts.append(f"от {p['gte']:,} €".replace(",", " "))
+                if p.get("lte"):
+                    parts.append(f"до {p['lte']:,} €".replace(",", " "))
+                if parts:
+                    lines.append(f"💰 Бюджет: {' '.join(parts)}")
+        lines.append(f"\nНайдено: {count} апартаментов")
+        text = "\n".join(lines)
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=f"✅ Применить ({count})", callback_data="fpanel:apply:"
+                    )
+                ],
+                [InlineKeyboardButton(text="🗑 Сбросить фильтры", callback_data="fpanel:reset:")],
+                [InlineKeyboardButton(text="↩️ Назад к результатам", callback_data="fpanel:back:")],
+            ]
+        )
+        await message.answer(text, reply_markup=kb)
 
     async def handle_menu_action_text(self, message: Message, query_text: str) -> None:
         """Dispatch text query to agent pipeline (from ReplyKeyboard context) (#628)."""
