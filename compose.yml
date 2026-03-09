@@ -357,7 +357,7 @@ services:
 
   # ClickHouse for Langfuse v3 analytics
   clickhouse:
-    image: clickhouse/clickhouse-server:26.1@sha256:7f6546e5e293cfcdb812675fde424dc9bce3d32ac86f18051fedc23bff75a724
+    image: clickhouse/clickhouse-server:26.2@sha256:51beb66e790213a53ddacacf133d3067106f5aa0c446c5b40b9b0c3ae0cd39fc
     restart: unless-stopped
     logging: *default-logging
     user: "101:101"
