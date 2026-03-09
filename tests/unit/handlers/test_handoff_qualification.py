@@ -25,11 +25,11 @@ def test_parse_qual_callback_invalid():
 
 
 def test_build_goal_keyboard_layout():
-    """Row 1: search + services, Row 2: consult."""
+    """Row 1: search + services, Row 2: consult + other."""
     kb = build_goal_keyboard(i18n=None)
     assert len(kb.inline_keyboard) == 2
     assert len(kb.inline_keyboard[0]) == 2
-    assert len(kb.inline_keyboard[1]) == 1
+    assert len(kb.inline_keyboard[1]) == 2
 
 
 def test_build_goal_keyboard_callbacks():
@@ -37,6 +37,7 @@ def test_build_goal_keyboard_callbacks():
     assert kb.inline_keyboard[0][0].callback_data == "qual:goal:search"
     assert kb.inline_keyboard[0][1].callback_data == "qual:goal:services"
     assert kb.inline_keyboard[1][0].callback_data == "qual:goal:consult"
+    assert kb.inline_keyboard[1][1].callback_data == "qual:goal:other"
 
 
 def test_build_goal_keyboard_no_buy_rent():
@@ -56,6 +57,6 @@ def test_no_build_budget_keyboard():
 
 def test_build_contact_keyboard():
     kb = build_contact_keyboard(i18n=None)
-    assert len(kb.inline_keyboard) == 1  # 1 row: 2 buttons
+    assert len(kb.inline_keyboard) == 2  # 2 rows: 1 button each
     assert kb.inline_keyboard[0][0].callback_data == "qual:contact:chat"
-    assert kb.inline_keyboard[0][1].callback_data == "qual:contact:phone"
+    assert kb.inline_keyboard[1][0].callback_data == "qual:contact:phone"
