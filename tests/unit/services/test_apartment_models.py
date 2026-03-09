@@ -208,7 +208,7 @@ class TestComputeConfidence:
             (2, None, None, ["sea"], [], "MEDIUM"),
             (None, 200000.0, None, [], [], "MEDIUM"),
             (2, None, None, [], [], "MEDIUM"),
-            (None, None, None, ["sea"], [], "MEDIUM"),
+            (None, None, None, ["sea"], [], "LOW"),  # view only, no hard/critical → LOW
             (None, None, None, [], [], "LOW"),
             (2, 200000.0, "Premier", [], ["min>max"], "LOW"),
         ],
@@ -232,6 +232,52 @@ class TestComputeConfidence:
         )
         result = compute_confidence(r)
         assert result.confidence == expected
+
+
+class TestComputeConfidenceV2:
+    """Updated confidence with critical slots check."""
+
+    def test_high_with_city_and_hard(self) -> None:
+        r = ApartmentQueryParseResult(rooms=2, max_price_eur=100000, city="Солнечный берег")
+        result = compute_confidence(r)
+        assert result.confidence == "HIGH"
+
+    def test_high_with_complex_and_hard(self) -> None:
+        r = ApartmentQueryParseResult(
+            rooms=2, max_price_eur=200000, complex_name="Premier Fort Beach"
+        )
+        result = compute_confidence(r)
+        assert result.confidence == "HIGH"
+
+    def test_medium_rooms_only(self) -> None:
+        r = ApartmentQueryParseResult(rooms=2)
+        result = compute_confidence(r)
+        assert result.confidence == "MEDIUM"
+
+    def test_medium_city_only(self) -> None:
+        r = ApartmentQueryParseResult(city="Свети Влас")
+        result = compute_confidence(r)
+        assert result.confidence == "MEDIUM"
+
+    def test_low_no_filters(self) -> None:
+        r = ApartmentQueryParseResult()
+        result = compute_confidence(r)
+        assert result.confidence == "LOW"
+
+    def test_low_on_conflict(self) -> None:
+        r = ApartmentQueryParseResult(rooms=2, city="Элените", conflicts=["price_conflict:min>max"])
+        result = compute_confidence(r)
+        assert result.confidence == "LOW"
+
+    def test_missing_fields_tracked(self) -> None:
+        r = ApartmentQueryParseResult(rooms=2)
+        result = compute_confidence(r)
+        assert "city" in result.missing_fields or "complex_name" in result.missing_fields
+
+    def test_missing_fields_empty_when_critical_present(self) -> None:
+        r = ApartmentQueryParseResult(rooms=2, city="Элените")
+        result = compute_confidence(r)
+        assert result.missing_fields == []
 
 
 class TestHybridDescription:

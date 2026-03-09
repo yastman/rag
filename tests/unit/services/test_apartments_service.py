@@ -154,7 +154,7 @@ class TestScrollWithFilters:
         mock_qdrant.client.count = AsyncMock(return_value=MagicMock(count=1))
 
         svc = ApartmentsService(mock_qdrant)
-        results, total, _offset = await svc.scroll_with_filters({"rooms": 2})
+        results, total, _next_start, _ids = await svc.scroll_with_filters({"rooms": 2})
 
         assert len(results) == 1
         assert results[0]["payload"]["rooms"] == 2
@@ -176,8 +176,99 @@ class TestScrollWithFilters:
         call_kwargs = mock_qdrant.client.scroll.call_args.kwargs
         assert call_kwargs.get("scroll_filter") is None
 
-    async def test_scroll_returns_next_offset(self, mock_qdrant: MagicMock) -> None:
-        mock_qdrant.client.scroll = AsyncMock(return_value=([], "offset-token"))
+    async def test_scroll_returns_next_start_from(self, mock_qdrant: MagicMock) -> None:
+        records = [
+            MagicMock(id="a1", payload={"price_eur": 50000, "rooms": 2}),
+        ]
+        mock_qdrant.client.scroll = AsyncMock(return_value=(records, None))
+        mock_qdrant.client.count = AsyncMock(return_value=MagicMock(count=1))
         svc = ApartmentsService(mock_qdrant)
-        _, _, next_offset = await svc.scroll_with_filters({})
-        assert next_offset == "offset-token"
+        _, _, next_start_from, page_ids = await svc.scroll_with_filters({})
+        assert next_start_from == 50000.0
+        assert page_ids == ["a1"]
+
+    async def test_scroll_uses_start_from_instead_of_offset(self, mock_qdrant: MagicMock) -> None:
+        """start_from передаётся в OrderBy, offset не передаётся."""
+        mock_qdrant.client.scroll.return_value = ([], None)
+        mock_qdrant.client.count.return_value = MagicMock(count=0)
+        mock_qdrant.collection_name = "apartments"
+
+        svc = ApartmentsService(mock_qdrant)
+        await svc.scroll_with_filters(
+            filters={"rooms": 2},
+            limit=5,
+            start_from=50000.0,
+            exclude_ids=["id-1", "id-2"],
+        )
+
+        call_kwargs = mock_qdrant.client.scroll.call_args.kwargs
+        order_by = call_kwargs["order_by"]
+        assert order_by.start_from == 50000.0
+        assert call_kwargs.get("offset") is None
+        scroll_filter = call_kwargs["scroll_filter"]
+        assert scroll_filter.must_not is not None
+
+    async def test_scroll_returns_last_price_as_next_start(self, mock_qdrant: MagicMock) -> None:
+        """Возвращает last_price для следующей страницы."""
+        records = [
+            MagicMock(id="a1", payload={"price_eur": 50000, "rooms": 2}),
+            MagicMock(id="a2", payload={"price_eur": 55000, "rooms": 2}),
+        ]
+        mock_qdrant.client.scroll.return_value = (records, None)
+        mock_qdrant.client.count.return_value = MagicMock(count=10)
+        mock_qdrant.collection_name = "apartments"
+
+        svc = ApartmentsService(mock_qdrant)
+        _results, total, next_start_from, page_ids = await svc.scroll_with_filters(
+            filters=None,
+            limit=2,
+        )
+
+        assert next_start_from == 55000.0
+        assert page_ids == ["a1", "a2"]
+        assert total == 10
+
+    async def test_scroll_pagination_three_pages(self, mock_qdrant: MagicMock) -> None:
+        """Три страницы: page1 → start_from → page2 → start_from → page3."""
+        page1 = [
+            MagicMock(id="a1", payload={"price_eur": 30000, "rooms": 1}),
+            MagicMock(id="a2", payload={"price_eur": 50000, "rooms": 2}),
+        ]
+        page2 = [
+            MagicMock(id="a3", payload={"price_eur": 50000, "rooms": 2}),
+            MagicMock(id="a4", payload={"price_eur": 70000, "rooms": 3}),
+        ]
+        page3 = [
+            MagicMock(id="a5", payload={"price_eur": 80000, "rooms": 3}),
+        ]
+        mock_qdrant.client.scroll.side_effect = [
+            (page1, None),
+            (page2, None),
+            (page3, None),
+        ]
+        mock_qdrant.client.count.return_value = MagicMock(count=5)
+        mock_qdrant.collection_name = "apartments"
+        svc = ApartmentsService(mock_qdrant)
+
+        # Page 1
+        r1, _total, start1, ids1 = await svc.scroll_with_filters(limit=2)
+        assert len(r1) == 2
+        assert start1 == 50000.0
+        assert ids1 == ["a1", "a2"]
+
+        # Page 2 — start_from=50000, exclude a2 (boundary)
+        r2, _, start2, _ids2 = await svc.scroll_with_filters(
+            limit=2,
+            start_from=start1,
+            exclude_ids=["a2"],
+        )
+        assert len(r2) == 2
+        assert start2 == 70000.0
+
+        # Page 3
+        r3, _, _start3, _ids3 = await svc.scroll_with_filters(
+            limit=2,
+            start_from=start2,
+            exclude_ids=["a4"],
+        )
+        assert len(r3) == 1
