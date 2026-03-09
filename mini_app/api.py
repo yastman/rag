@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 
-from mini_app.chat import ChatRequest, chat_sse_generator
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
 from telegram_bot.services.content_loader import load_mini_app_config
@@ -26,16 +24,6 @@ app.add_middleware(
 async def get_config() -> dict:
     """Return Mini App UI config: questions + experts."""
     return load_mini_app_config()
-
-
-@app.post("/api/chat")
-async def chat(request: ChatRequest) -> StreamingResponse:
-    """Chat endpoint with SSE streaming."""
-    return StreamingResponse(
-        chat_sse_generator(request),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
 
 
 @app.post("/api/start-expert")
