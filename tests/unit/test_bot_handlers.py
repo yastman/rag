@@ -173,6 +173,22 @@ class TestCommandHandlers:
         for fragment in ["Примеры запросов", "/clear", "/stats"]:
             assert fragment in call_args
 
+    async def test_cmd_help_includes_all_commands(self, mock_config):
+        """Test /help lists /history, /metrics, /clearcache (#864)."""
+        bot, _ = _create_bot(mock_config)
+        message = _make_text_message()
+
+        await bot.cmd_help(message)
+
+        call_args = message.answer.call_args[0][0]
+        for cmd in ["/history", "/metrics", "/clearcache"]:
+            assert cmd in call_args, f"{cmd} missing from /help text"
+
+    async def test_no_handle_promotions_method(self, mock_config):
+        """_handle_promotions removed as dead code (#863)."""
+        bot, _ = _create_bot(mock_config)
+        assert not hasattr(bot, "_handle_promotions")
+
     async def test_cmd_start_manager_receives_manager_menu(self, mock_config):
         """Manager user receives manager dialog when kommo enabled (#388, #628)."""
         mock_config.manager_ids = [12345]
