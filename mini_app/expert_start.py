@@ -1,0 +1,17 @@
+"""Start expert conversation — creates forum topic + sends first message."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+
+class StartExpertRequest(BaseModel):
+    user_id: int
+    expert_id: str
+    message: str | None = None
+
+
+class StartExpertResponse(BaseModel):
+    thread_id: int
+    expert_name: str
+    status: str = "ok"
