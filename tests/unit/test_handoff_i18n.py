@@ -5,14 +5,9 @@ from telegram_bot.middlewares.i18n import create_translator_hub
 
 HANDOFF_KEYS = [
     "handoff-qual-prompt",
-    "handoff-goal-buy",
-    "handoff-goal-rent",
+    "handoff-goal-search",
+    "handoff-goal-services",
     "handoff-goal-consult",
-    "handoff-budget-prompt",
-    "handoff-budget-low",
-    "handoff-budget-mid",
-    "handoff-budget-high",
-    "handoff-budget-unknown",
     "handoff-contact-prompt",
     "handoff-contact-chat",
     "handoff-contact-phone",
