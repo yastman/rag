@@ -18,7 +18,6 @@ export function BottomSheet({ emoji, title, description, onClose, children }: Pr
         zIndex: 100,
         display: "flex",
         flexDirection: "column",
-        overflowY: "auto",
       }}
     >
       <div
@@ -41,7 +40,9 @@ export function BottomSheet({ emoji, title, description, onClose, children }: Pr
           {description}
         </div>
       </div>
-      {children}
+      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 16 }}>
+        {children}
+      </div>
     </div>
   );
 }
