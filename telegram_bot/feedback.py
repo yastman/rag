@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from .callback_data import FeedbackCB, FeedbackReasonCB
+
+
+logger = logging.getLogger(__name__)
 
 
 # 6 dislike reason codes → full category names (#755)
@@ -117,7 +122,7 @@ def parse_feedback_callback(data: str) -> tuple[float, str, str | None] | None:
             return None
         # Unknown action (legacy "1", "0") → fall through to legacy parser below
     except Exception:
-        pass
+        logger.warning("Failed to parse feedback callback %r", data, exc_info=True)
 
     # Legacy reason callback: fb:r:{code}:{trace_id}
     if data.startswith("fb:r:"):
