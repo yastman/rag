@@ -618,3 +618,50 @@ async def test_on_phone_contact_no_contact_asks_manual_input():
 
     message.answer.assert_awaited_once()
     assert "вручную" in message.answer.call_args[0][0].lower()
+
+
+# --- start_phone_collection prompt text tests ---
+
+
+async def test_start_phone_collection_prompt_text():
+    """start_phone_collection sends hardcoded prompt with all key parts."""
+    from unittest.mock import MagicMock
+
+    from aiogram.fsm.context import FSMContext
+
+    from telegram_bot.handlers.phone_collector import start_phone_collection
+
+    message = MagicMock()
+    message.answer = AsyncMock()
+    state = MagicMock(spec=FSMContext)
+    state.set_state = AsyncMock()
+    state.update_data = AsyncMock()
+
+    with patch("telegram_bot.handlers.phone_collector.get_phone_config", return_value=None):
+        await start_phone_collection(message, state, service_key="test")
+
+    text = message.answer.call_args[0][0]
+    assert "Оставьте номер телефона" in text
+    assert "Поделиться контактом" in text
+    assert "введите номер вручную" in text
+    assert "+380990091392" in text
+
+
+# --- Phone cancel handling tests ---
+
+
+async def test_on_phone_received_cancel_clears_state_and_sends_message():
+    """Sending '❌ Отмена' in waiting_phone state clears FSM and sends cancel text."""
+    from unittest.mock import MagicMock
+
+    message = MagicMock()
+    message.text = "❌ Отмена"
+    message.answer = AsyncMock()
+    state = MagicMock()
+    state.clear = AsyncMock()
+
+    await mod.on_phone_received(message, state)
+
+    state.clear.assert_awaited_once()
+    answer_text = message.answer.call_args[0][0]
+    assert answer_text == "Обращение отменено."
