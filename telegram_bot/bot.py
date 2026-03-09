@@ -39,8 +39,6 @@ from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
 from .handlers.handoff import (
     HandoffStates,
-    get_user_qualification,
-    parse_qual_callback,
     start_qualification,
 )
 from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
@@ -1201,7 +1199,12 @@ class PropertyBot:
             elif action_id == "services":
                 await handler(message, i18n=i18n)
             elif action_id == "manager":
-                await handler(message, i18n=i18n, state=state)
+                await handler(
+                    message,
+                    i18n=i18n,
+                    state=state,
+                    dialog_manager=dialog_manager,
+                )
             elif action_id == "demo":
                 await handler(message)
             else:
@@ -1423,11 +1426,20 @@ class PropertyBot:
 
     @observe(name="menu-manager", capture_input=False, capture_output=False)
     async def _handle_manager(
-        self, message: Message, i18n: Any = None, state: FSMContext | None = None
+        self,
+        message: Message,
+        i18n: Any = None,
+        state: FSMContext | None = None,
+        dialog_manager: Any = None,
     ) -> None:
         """Handoff to manager (#628, #730)."""
         if self._forum_bridge is not None:
-            await start_qualification(message, i18n=i18n, state=state)
+            await start_qualification(
+                message,
+                i18n=i18n,
+                state=state,
+                dialog_manager=dialog_manager,
+            )
         elif state is not None:
             from .handlers.phone_collector import start_phone_collection
 
@@ -1472,46 +1484,6 @@ class PropertyBot:
                 )
             except TelegramBadRequest:
                 logger.warning("Failed to relay message to client %s", handoff.client_id)
-
-    async def _on_qual_contact(self, callback: CallbackQuery, state: FSMContext) -> None:
-        """Handle final qualification step — create topic + state (#730 review)."""
-        await callback.answer()
-        parsed = parse_qual_callback(callback.data or "")
-        if not parsed:
-            return
-        _, value = parsed
-
-        qualification = get_user_qualification(callback.from_user.id)
-        qualification["contact"] = value
-
-        user_id = callback.from_user.id
-        msg = callback.message
-        if value == "chat" and self._forum_bridge is not None:
-            if msg and hasattr(msg, "edit_text"):
-                await msg.edit_text("Соединяю с менеджером...")
-            display_name = callback.from_user.full_name or "User"
-            username = callback.from_user.username
-            locale = "ru"
-            await self._complete_handoff(
-                user_id=user_id,
-                username=username,
-                display_name=display_name,
-                locale=locale,
-                qualification=qualification,
-                message=msg,
-                state=state,
-            )
-        elif value == "phone":
-            if msg and hasattr(msg, "delete"):
-                with contextlib.suppress(Exception):
-                    await msg.delete()
-            from .handlers.phone_collector import start_phone_collection
-
-            await start_phone_collection(callback, state, service_key="manager")
-        else:
-            # Fallback — delegate to agent pipeline.
-            if msg and hasattr(msg, "edit_text"):
-                await msg.edit_text("Соединяю с менеджером...")
 
     async def _complete_handoff(
         self,
