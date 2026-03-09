@@ -67,6 +67,7 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
             ],
             1,
             None,
+            ["a1"],
         )
     )
     mock_bot = MagicMock()
@@ -89,6 +90,7 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
         "state": state_mock,
     }
     manager.done = AsyncMock()
+    manager.switch_to = AsyncMock()
 
     await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
@@ -102,14 +104,14 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
 async def test_zero_suggestion_rm_section():
     """rm_section removes section and resets scroll."""
     manager = SimpleNamespace(
-        dialog_data={"section": "D-1", "scroll_offset": "x", "scroll_next_offset": "y"},
+        dialog_data={"section": "D-1", "scroll_start_from": 1.0, "scroll_seen_ids": ["x"]},
         switch_to=AsyncMock(),
     )
     await funnel_module.on_zero_suggestion_selected(
         MagicMock(), SimpleNamespace(), manager, "rm_section"
     )
     assert "section" not in manager.dialog_data
-    assert manager.dialog_data.get("scroll_offset") is None
+    assert manager.dialog_data.get("scroll_start_from") is None
     manager.switch_to.assert_awaited_once_with(FunnelSG.results)
 
 
