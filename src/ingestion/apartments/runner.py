@@ -160,17 +160,15 @@ class IncrementalApartmentIngester:
         try:
             descriptions = [format_apartment_text(r) for r in records]
 
-            # Embed
-            dense_result = bge.encode_dense(descriptions)
-            sparse_result = bge.encode_sparse(descriptions)
-            colbert_result = bge.encode_colbert(descriptions)
+            # Embed — single hybrid call (3x fewer HTTP requests, 1 model forward pass)
+            hybrid_result = bge.encode_hybrid(descriptions)
 
             # Build points
             point_dicts = build_ingestion_batch(
                 records,
-                dense_result.vectors,
-                sparse_result.weights,
-                colbert_result.colbert_vecs,
+                hybrid_result.dense_vecs,
+                hybrid_result.lexical_weights,
+                hybrid_result.colbert_vecs or [],
             )
 
             # Upsert
@@ -181,7 +179,7 @@ class IncrementalApartmentIngester:
             for i in range(0, len(points), 20):
                 batch = points[i : i + 20]
                 client.upsert(collection_name=COLLECTION, points=batch, wait=True)
-                logger.info("Upserted %d/%d", min(i + 100, len(points)), len(points))
+                logger.info("Upserted %d/%d", min(i + 20, len(points)), len(points))
 
             logger.info("Done. %d apartments upserted.", len(points))
         finally:

@@ -40,13 +40,10 @@ def ingest(csv_path: str, qdrant_url: str, bge_url: str) -> None:
     all_dense, all_sparse, all_colbert = [], [], []
     for i in range(0, len(descriptions), BATCH_SIZE):
         batch = descriptions[i : i + BATCH_SIZE]
-        # BGEM3SyncClient has no encode_hybrid(); call sync endpoints explicitly.
-        dense_result = bge.encode_dense(batch)
-        sparse_result = bge.encode_sparse(batch)
-        colbert_result = bge.encode_colbert(batch)
-        all_dense.extend(dense_result.vectors)
-        all_sparse.extend(sparse_result.weights)
-        all_colbert.extend(colbert_result.colbert_vecs)
+        result = bge.encode_hybrid(batch)
+        all_dense.extend(result.dense_vecs)
+        all_sparse.extend(result.lexical_weights)
+        all_colbert.extend(result.colbert_vecs or [])
         print(f"  Embedded {min(i + BATCH_SIZE, len(descriptions))}/{len(descriptions)}")
 
     # Build points

@@ -8,32 +8,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.apartment_formatter import format_apartment_text
 
 
 logger = logging.getLogger(__name__)
-
-
-def _format_apartment_results(results: list[dict]) -> str:
-    """Format apartment search results for LLM context."""
-    if not results:
-        return "Апартаменты по вашим критериям не найдены. Попробуйте изменить параметры поиска."
-
-    lines = []
-    for i, apt in enumerate(results, 1):
-        p = apt.get("payload", {})
-        price_fmt = f"{p.get('price_eur', 0):,.0f}".replace(",", " ")
-        view = ", ".join(p.get("view_tags", [])) or p.get("view_primary", "")
-        furnished = "с мебелью" if p.get("is_furnished") else "без мебели"
-        floor_str = "цоколь" if p.get("floor", 0) == 0 else f"{p.get('floor')} эт."
-
-        lines.append(
-            f"{i}. {p.get('complex_name', '?')}, секция {p.get('section', '?')}, "
-            f"апп. {p.get('apartment_number', '?')} — "
-            f"{p.get('rooms', '?')}к, {p.get('area_m2', '?')} м², {floor_str}, "
-            f"вид: {view}, {price_fmt} €, {furnished}"
-        )
-
-    return f"Найдено {len(results)} апартаментов:\n" + "\n".join(lines)
 
 
 @tool
@@ -76,6 +54,50 @@ async def apartment_search(
 
     lf = get_client()
     lf.update_current_span(input={"query": query[:100], "rooms": rooms, "max_price": max_price_eur})
+
+    # Pipeline fallback: extract filters from query text when none provided explicitly
+    _has_explicit_filters = any(
+        v is not None
+        for v in [
+            rooms,
+            min_price_eur,
+            max_price_eur,
+            min_area_m2,
+            max_area_m2,
+            min_floor,
+            max_floor,
+            complex_name,
+            view,
+            is_furnished,
+        ]
+    )
+    pipeline = getattr(ctx, "apartment_pipeline", None)
+    if not _has_explicit_filters and pipeline is not None:
+        try:
+            extraction = await pipeline.extract(query)
+            rooms = rooms if rooms is not None else extraction.hard.rooms
+            min_price_eur = (
+                min_price_eur if min_price_eur is not None else extraction.hard.min_price_eur
+            )
+            max_price_eur = (
+                max_price_eur if max_price_eur is not None else extraction.hard.max_price_eur
+            )
+            min_area_m2 = min_area_m2 if min_area_m2 is not None else extraction.hard.min_area_m2
+            max_area_m2 = max_area_m2 if max_area_m2 is not None else extraction.hard.max_area_m2
+            min_floor = min_floor if min_floor is not None else extraction.hard.min_floor
+            max_floor = max_floor if max_floor is not None else extraction.hard.max_floor
+            complex_name = (
+                complex_name if complex_name is not None else extraction.hard.complex_name
+            )
+            is_furnished = (
+                is_furnished if is_furnished is not None else extraction.hard.is_furnished
+            )
+            if not view and extraction.hard.view_tags:
+                view = extraction.hard.view_tags[0]
+            if extraction.meta.semantic_remainder:
+                query = extraction.meta.semantic_remainder
+        except Exception:
+            logger.debug("Pipeline extraction in apartment_search failed", exc_info=True)
 
     # Build filters dict
     filters: dict = {}
@@ -120,10 +142,10 @@ async def apartment_search(
             colbert_query=colbert or None,
             sparse_vector=sparse,
             filters=filters or None,
-            top_k=10,
+            top_k=20,
         )
 
-        response = _format_apartment_results(results)
+        response = format_apartment_text(results)
         lf.update_current_span(output={"results_count": total})
 
         # Log search filters for CRM enrichment
