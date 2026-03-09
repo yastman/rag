@@ -452,7 +452,7 @@ async def test_on_summary_search_resets_scroll_and_goes_to_results(monkeypatch):
     )
     await funnel_module.on_summary_search(callback, SimpleNamespace(), manager)
     manager.switch_to.assert_awaited_once_with(FunnelSG.results)
-    assert manager.dialog_data.get("scroll_offset") is None
+    assert manager.dialog_data.get("scroll_start_from") is None
 
 
 def test_switchto_change_in_summary_targets_change_filter():
@@ -534,7 +534,7 @@ async def test_get_results_data_calls_apartments_service():
         }
     ]
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 1, None))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 1, None, []))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "studio", "budget": "low"},
@@ -543,7 +543,8 @@ async def test_get_results_data_calls_apartments_service():
 
     result = await get_results_data(manager)
     mock_svc.scroll_with_filters.assert_awaited_once()
-    assert "Sunrise" in result["results_text"]
+    assert len(result["apartments"]) == 1
+    assert "Sunrise" in result["apartments"][0]["card"]
 
 
 @pytest.mark.asyncio
@@ -556,7 +557,8 @@ async def test_get_results_data_fallback_without_service():
     )
 
     result = await get_results_data(manager)
-    assert "недоступен" in result["results_text"].lower()
+    assert result["no_results"] is True
+    assert "недоступен" in result["no_results_text"].lower()
 
 
 # --- Preference any clears ---
@@ -586,21 +588,21 @@ async def test_pref_promotion_any_clears_value():
 @pytest.mark.asyncio
 async def test_zero_suggestion_removes_area_and_refreshes_results():
     manager = SimpleNamespace(
-        dialog_data={"area": "large", "scroll_offset": "off1", "scroll_next_offset": "off2"},
+        dialog_data={"area": "large", "scroll_start_from": 50000.0, "scroll_seen_ids": ["id-1"]},
         switch_to=AsyncMock(),
     )
     await funnel_module.on_zero_suggestion_selected(
         MagicMock(), SimpleNamespace(), manager, "rm_area"
     )
     assert "area" not in manager.dialog_data
-    assert manager.dialog_data.get("scroll_offset") is None
+    assert manager.dialog_data.get("scroll_start_from") is None
     manager.switch_to.assert_awaited_once_with(FunnelSG.results)
 
 
 @pytest.mark.asyncio
 async def test_zero_suggestion_removes_floor_and_refreshes_results():
     manager = SimpleNamespace(
-        dialog_data={"floor": "mid", "scroll_offset": "off1", "scroll_next_offset": "off2"},
+        dialog_data={"floor": "mid", "scroll_start_from": 50000.0, "scroll_seen_ids": ["id-1"]},
         switch_to=AsyncMock(),
     )
     await funnel_module.on_zero_suggestion_selected(
@@ -610,8 +612,8 @@ async def test_zero_suggestion_removes_floor_and_refreshes_results():
         "rm_floor",
     )
     assert "floor" not in manager.dialog_data
-    assert manager.dialog_data.get("scroll_offset") is None
-    assert manager.dialog_data.get("scroll_next_offset") is None
+    assert manager.dialog_data.get("scroll_start_from") is None
+    assert manager.dialog_data.get("scroll_seen_ids") is None
     manager.switch_to.assert_awaited_once_with(FunnelSG.results)
 
 
@@ -642,6 +644,7 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
             ],
             1,
             None,
+            ["apt-1"],
         )
     )
     mock_bot = MagicMock()
@@ -683,8 +686,8 @@ async def test_zero_suggestion_new_search_clears_all_and_goes_to_city():
             "area": "large",
             "is_furnished": "yes",
             "is_promotion": "yes",
-            "scroll_offset": "off1",
-            "scroll_next_offset": "off2",
+            "scroll_start_from": 50000.0,
+            "scroll_seen_ids": ["id-1"],
             "scroll_page": 2,
         },
         switch_to=AsyncMock(),
@@ -760,14 +763,29 @@ def test_switchto_back_in_pref_floor_targets_preferences():
 
 
 @pytest.mark.asyncio
+async def test_results_more_uses_start_from_and_seen_ids():
+    """on_results_more передаёт start_from и seen_ids в следующую страницу."""
+    manager = SimpleNamespace(
+        dialog_data={
+            "scroll_start_from": 50000.0,
+            "scroll_seen_ids": ["id-1", "id-2"],
+            "scroll_page": 1,
+        },
+    )
+    callback = MagicMock()
+    callback.answer = AsyncMock()
+    await funnel_module.on_results_more(callback, MagicMock(), manager)
+    assert manager.dialog_data["scroll_page"] == 2
+
+
+@pytest.mark.asyncio
 async def test_results_more_increments_page_and_offset():
     manager = SimpleNamespace(
-        dialog_data={"scroll_next_offset": "uuid-next", "scroll_page": 1},
+        dialog_data={"scroll_start_from": 50000.0, "scroll_page": 1},
     )
     callback = MagicMock()
     callback.answer = AsyncMock()
     await funnel_module.on_results_more(callback, SimpleNamespace(), manager)
-    assert manager.dialog_data["scroll_offset"] == "uuid-next"
     assert manager.dialog_data["scroll_page"] == 2
 
 
@@ -833,21 +851,21 @@ async def test_pref_promotion_options_has_2():
 @pytest.mark.asyncio
 async def test_zero_suggestion_rm_view():
     manager = SimpleNamespace(
-        dialog_data={"view": "sea", "scroll_offset": "x", "scroll_next_offset": "y"},
+        dialog_data={"view": "sea", "scroll_start_from": 50000.0, "scroll_seen_ids": []},
         switch_to=AsyncMock(),
     )
     await funnel_module.on_zero_suggestion_selected(
         MagicMock(), SimpleNamespace(), manager, "rm_view"
     )
     assert "view" not in manager.dialog_data
-    assert manager.dialog_data.get("scroll_offset") is None
+    assert manager.dialog_data.get("scroll_start_from") is None
     manager.switch_to.assert_awaited_once_with(FunnelSG.results)
 
 
 @pytest.mark.asyncio
 async def test_zero_suggestion_rm_furnished():
     manager = SimpleNamespace(
-        dialog_data={"is_furnished": "yes", "scroll_offset": "x"},
+        dialog_data={"is_furnished": "yes", "scroll_start_from": 50000.0},
         switch_to=AsyncMock(),
     )
     await funnel_module.on_zero_suggestion_selected(
@@ -860,7 +878,7 @@ async def test_zero_suggestion_rm_furnished():
 @pytest.mark.asyncio
 async def test_zero_suggestion_rm_promotion():
     manager = SimpleNamespace(
-        dialog_data={"is_promotion": "yes", "scroll_offset": "x"},
+        dialog_data={"is_promotion": "yes", "scroll_start_from": 50000.0},
         switch_to=AsyncMock(),
     )
     await funnel_module.on_zero_suggestion_selected(
@@ -873,7 +891,7 @@ async def test_zero_suggestion_rm_promotion():
 @pytest.mark.asyncio
 async def test_zero_suggestion_rm_budget():
     manager = SimpleNamespace(
-        dialog_data={"budget": "high", "scroll_offset": "x"},
+        dialog_data={"budget": "high", "scroll_start_from": 50000.0},
         switch_to=AsyncMock(),
     )
     await funnel_module.on_zero_suggestion_selected(
@@ -983,6 +1001,48 @@ async def test_preferences_section_syncs_widget_state():
     await funnel_module.get_preferences_options(middleware_data={}, dialog_manager=manager)
     checked = widget_data.get(funnel_module._PREF_MS_ID, [])
     assert "section" in checked
+
+
+@pytest.mark.asyncio
+async def test_on_search_list_resets_pagination():
+    """on_search_list must reset scroll state before switching to list view."""
+    manager = SimpleNamespace(
+        dialog_data={
+            "scroll_start_from": 50000.0,
+            "scroll_seen_ids": ["id-1"],
+            "scroll_page": 3,
+            "city": "Бургас",
+        },
+    )
+    callback = AsyncMock()
+    await funnel_module.on_search_list(callback, None, manager)
+
+    assert "scroll_start_from" not in manager.dialog_data
+    assert "scroll_seen_ids" not in manager.dialog_data
+    assert manager.dialog_data["scroll_page"] == 1
+    assert manager.dialog_data["city"] == "Бургас"
+
+
+def test_summary_window_has_list_and_cards_buttons():
+    """Summary Window must have both 'list' and 'cards' result buttons."""
+    summary_window = funnel_dialog.windows[FunnelSG.summary]
+    assert summary_window is not None, "Summary window not found"
+
+    widgets = {}
+
+    def _collect(widget):
+        if hasattr(widget, "widget_id") and widget.widget_id:
+            widgets[widget.widget_id] = widget
+        for child in getattr(widget, "buttons", []):
+            _collect(child)
+
+    for child in summary_window.keyboard.buttons:
+        _collect(child)
+
+    assert "search_list" in widgets, "Missing 'search_list' SwitchTo button"
+    assert "search_cards" in widgets, "Missing 'search_cards' Button"
+    assert "search" not in widgets, "Old 'search' button still present"
+    assert widgets["search_list"].state == FunnelSG.results, "search_list must target results"
 
 
 def test_funnel_has_pref_section_window():

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 
+from telegram_bot.observability import observe
 from telegram_bot.services.apartment_models import ApartmentQueryParseResult, compute_confidence
 
 
@@ -41,9 +42,24 @@ _COMPLEX_ALIASES: dict[str, str] = {
 _COMPLEX_ALIASES_SORTED = sorted(_COMPLEX_ALIASES, key=len, reverse=True)
 
 
+# City aliases — sorted longest-first for greedy match
+_CITY_ALIASES: dict[str, str] = {
+    "солнечный берег": "Солнечный берег",
+    "sunny beach": "Солнечный берег",
+    "санни бич": "Солнечный берег",
+    "свети влас": "Свети Влас",
+    "святой влас": "Свети Влас",
+    "элените": "Элените",
+    "elenite": "Элените",
+}
+
+_CITY_ALIASES_SORTED = sorted(_CITY_ALIASES, key=len, reverse=True)
+
+
 class ApartmentFilterExtractor:
     """Extract apartment filters from natural language (regex-only, 0 LLM calls)."""
 
+    @observe(name="apartment-filter-parse", capture_input=False, capture_output=False)
     def parse(self, query: str) -> ApartmentQueryParseResult:
         """Parse query into ApartmentQueryParseResult with confidence score."""
         q = query.lower()
@@ -55,6 +71,7 @@ class ApartmentFilterExtractor:
         min_floor, max_floor = self._extract_floor(q, consumed)
         complex_name = self._extract_complex(q, consumed)
         view_tags = self._extract_view(q, consumed)
+        city = self._extract_city(q, consumed)
 
         conflicts: list[str] = []
         if min_price is not None and max_price is not None and min_price > max_price:
@@ -68,6 +85,7 @@ class ApartmentFilterExtractor:
             max_area_m2=max_area,
             min_floor=min_floor,
             max_floor=max_floor,
+            city=city,
             complex_name=complex_name,
             view_tags=view_tags,
             semantic_query=self._build_semantic_query(query, consumed),
@@ -82,6 +100,7 @@ class ApartmentFilterExtractor:
         _num_map = {"одно": 1, "дву": 2, "трех": 3, "трёх": 3, "четырех": 4, "пяти": 5}
         patterns: list[tuple[str, int | None]] = [
             (r"двушка", 2),
+            (r"трёшка|трешка", 3),
             (r"трёхкомнатная|трехкомнатная", 3),
             (r"однокомнатная", 1),
             (r"студия", 1),
@@ -248,6 +267,16 @@ class ApartmentFilterExtractor:
                 consumed.append(m.span())
                 return tags
         return []
+
+    # --- City ---
+
+    def _extract_city(self, text: str, consumed: list[tuple[int, int]]) -> str | None:
+        for alias in _CITY_ALIASES_SORTED:
+            if alias in text:
+                start = text.index(alias)
+                consumed.append((start, start + len(alias)))
+                return _CITY_ALIASES[alias]
+        return None
 
     # --- Semantic query ---
 

@@ -45,3 +45,4 @@ class BotContext:
     manager_ids: list[int] | None = None  # Telegram IDs of managers (for handoff, #445)
     apartments_service: Any | None = None  # ApartmentsService (#629)
     search_event_store: Any | None = None  # SearchEventStore
+    apartment_pipeline: Any | None = None  # ApartmentExtractionPipeline

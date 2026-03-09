@@ -2,7 +2,6 @@
 
 import asyncio
 import contextlib
-import hashlib
 import inspect
 import io
 import json
@@ -10,7 +9,6 @@ import logging
 import re
 import time
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -48,6 +46,8 @@ from .handlers.handoff import (
 )
 from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
 from .middlewares import setup_error_handler, setup_throttling_middleware
+from .middlewares.fsm_cancel import FSMCancelMiddleware
+from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
     create_callback_handler,
     get_client,
@@ -69,6 +69,7 @@ from .services.handoff_summary import generate_handoff_summary
 from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
+from .services.topic_service import TopicService
 
 
 logger = logging.getLogger(__name__)
@@ -99,23 +100,14 @@ def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
     return merged
 
 
-def make_session_id(session_type: str, identifier: int | str) -> str:
-    """Create unified session_id format: {type}-{hash}-{YYYYMMDD}.
-
-    Args:
-        session_type: Type prefix (e.g., 'chat', 'smoke', 'load')
-        identifier: Unique identifier (chat_id, user_id, etc.)
-
-    Returns:
-        Formatted session_id: "chat-a1b2c3d4-20260202"
-    """
-    id_hash = hashlib.sha256(str(identifier).encode()).hexdigest()[:8]
-    date_str = datetime.now(UTC).strftime("%Y%m%d")
-    return f"{session_type}-{id_hash}-{date_str}"
+# Re-export from shared module (avoid circular imports with middlewares)
+from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
 
-def _supervisor_thread_id(chat_id: int | str) -> str:
+def _supervisor_thread_id(chat_id: int | str, thread_id: int | None = None) -> str:
     """Build checkpointer thread id for text-agent conversations."""
+    if thread_id is not None:
+        return f"tg_{chat_id}:{thread_id}"
     return f"tg_{chat_id}"
 
 
@@ -379,14 +371,26 @@ class PropertyBot:
 
         # LLM (optional, defaults via GraphConfig.create_llm)
         self._llm = self._graph_config.create_llm()
+
+        # Apartment extraction pipeline: LLM first → regex fallback
+        from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
+        from .services.apartment_filter_extractor import ApartmentFilterExtractor
+        from .services.apartment_llm_extractor import ApartmentLlmExtractor
+
+        _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
+        self._apartment_pipeline = ApartmentExtractionPipeline(
+            regex_extractor=ApartmentFilterExtractor(),
+            llm_extractor=_apt_llm,
+            redis=self._cache.redis,
+        )
         # Redis health monitor (periodic background task)
         self._redis_monitor = RedisHealthMonitor(redis_url=config.redis_url)
 
         # Conversation memory checkpointer (initialized in start())
         self._checkpointer: Any = None
 
-        # Agent checkpointer — MemorySaver to avoid Redis JSON serialization
-        # issues with LangChain Message objects (#420)
+        # Agent checkpointer — Redis with TTL (#424).
+        # HumanMessage serialization fixed in langgraph-checkpoint-redis>=0.3.6 (#420).
         self._agent_checkpointer: Any = None
 
         # History service (initialized in start())
@@ -438,6 +442,10 @@ class PropertyBot:
         self._forum_bridge: ForumBridge | None = None
         self._bot_user_id: int | None = None
 
+        # Expert topic service (user+expert → thread_id mapping)
+        self._topic_service: TopicService | None = None
+        self._topics_enabled: bool = False
+
         # Track initialization state
         self._cache_initialized = False
 
@@ -449,8 +457,12 @@ class PropertyBot:
 
     def _setup_middlewares(self):
         """Setup bot middlewares."""
+        # Langfuse context must be outermost to wrap all handlers
+        self.dp.message.outer_middleware(LangfuseContextMiddleware())
+        self.dp.callback_query.outer_middleware(LangfuseContextMiddleware())
         setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=self.config.admin_ids)
         setup_error_handler(self.dp)
+        self.dp.message.outer_middleware(FSMCancelMiddleware())
         logger.info("Middlewares configured")
 
     @staticmethod
@@ -683,7 +695,7 @@ class PropertyBot:
         self.dp.message(Command("call"))(self.cmd_call)
         self.dp.message(Command("history"))(self.cmd_history)
         self.dp.message(Command("clearcache"))(self.cmd_clearcache)
-        self.dp.message(F.voice)(self.handle_voice)
+        self.dp.message(StateFilter(None), F.voice)(self.handle_voice)
         # ReplyKeyboard buttons — registered before catch-all F.text (#628)
         from .keyboards.client_keyboard import get_menu_button_texts
 
@@ -695,6 +707,11 @@ class PropertyBot:
         # which is included AFTER dialog routers in _setup_dialogs().
         # This ensures dialog MessageInput (e.g. viewing phone input)
         # is resolved before the catch-all (aiogram SDK: first-match wins).
+        # Demo flow router
+        from .handlers.demo_handler import create_demo_router
+
+        self.dp.include_router(create_demo_router())
+
         self.dp.callback_query(FeedbackCB.filter())(self.handle_feedback)
         # Legacy buttons in old chat history may contain "fb:done" (without trailing ':').
         self.dp.callback_query(F.data == "fb:done")(self.handle_feedback)
@@ -735,6 +752,7 @@ class PropertyBot:
             return "manager"
         return db_role or "client"
 
+    @observe(name="cmd-start", capture_input=False, capture_output=False)
     async def cmd_start(self, message: Message, dialog_manager: Any = None, i18n: Any = None):
         """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
         assert message.from_user is not None
@@ -781,6 +799,7 @@ class PropertyBot:
             "/stats - Показать статистику кеша\n"
         )
 
+    @observe(name="cmd-clear", capture_input=False, capture_output=False)
     async def cmd_clear(self, message: Message):
         """Handle /clear command - clear conversation history."""
         assert message.from_user is not None
@@ -853,6 +872,7 @@ class PropertyBot:
         text = f"```\n{metrics.format_text()}\n```"
         await message.answer(text, parse_mode="Markdown")
 
+    @observe(name="cmd-clearcache", capture_input=False, capture_output=False)
     async def cmd_clearcache(self, message: Message) -> None:
         """Handle /clearcache command — show inline keyboard to select cache tier for clearing."""
         keyboard = InlineKeyboardMarkup(
@@ -870,6 +890,7 @@ class PropertyBot:
         )
         await message.answer("Выберите тип кеша для очистки:", reply_markup=keyboard)
 
+    @observe(name="cmd-call", capture_input=False, capture_output=False)
     async def cmd_call(self, message: Message):
         """Handle /call command — trigger outbound voice call.
 
@@ -1057,6 +1078,7 @@ class PropertyBot:
 
             await message.answer("\n".join(lines))
 
+    @observe(name="menu-router", capture_input=False, capture_output=False)
     async def handle_menu_button(
         self,
         message: Message,
@@ -1084,6 +1106,7 @@ class PropertyBot:
             "bookmarks": self._handle_bookmarks,
             "ask": self._handle_ask,
             "manager": self._handle_manager,
+            "demo": self._handle_demo,
         }
         handler = handlers.get(action_id)
         if handler:
@@ -1099,14 +1122,22 @@ class PropertyBot:
                 await handler(message, i18n=i18n)
             elif action_id == "manager":
                 await handler(message, i18n=i18n, state=state)
+            elif action_id == "demo":
+                await handler(message)
             else:
                 await handler(message)
+
+    async def _handle_demo(self, message: Message) -> None:
+        from .handlers.demo_handler import handle_demo_button
+
+        await handle_demo_button(message)
 
     async def handle_menu_action_text(self, message: Message, query_text: str) -> None:
         """Dispatch text query to agent pipeline (from ReplyKeyboard context) (#628)."""
         patched = message.model_copy(update={"text": query_text})
         await self.handle_query(patched)
 
+    @observe(name="menu-search", capture_input=False, capture_output=False)
     async def _handle_search(self, message: Message, dialog_manager: Any = None) -> None:
         """Start property search funnel via aiogram-dialog (#628, #658)."""
         if dialog_manager is not None:
@@ -1119,6 +1150,7 @@ class PropertyBot:
             # Fallback when dialog_manager not available (e.g., tests)
             await self.handle_menu_action_text(message, "Подбери апартаменты")
 
+    @observe(name="menu-services", capture_input=False, capture_output=False)
     async def _handle_services(self, message: Message, i18n: Any = None) -> None:
         """Show services inline menu (#628)."""
         from .keyboards.services_keyboard import build_services_menu
@@ -1130,6 +1162,7 @@ class PropertyBot:
         kb = build_services_menu(i18n=i18n)
         await message.answer(text, reply_markup=kb)
 
+    @observe(name="menu-viewing", capture_input=False, capture_output=False)
     async def _handle_viewing(
         self, message: Message, state: FSMContext, dialog_manager: Any = None
     ) -> None:
@@ -1166,6 +1199,8 @@ class PropertyBot:
             area_m2=p.get("area_m2", 0),
             view=", ".join(p.get("view_tags", [])) or p.get("view_primary", ""),
             price_eur=p.get("price_eur", 0),
+            section=p.get("section", ""),
+            apartment_number=p.get("apartment_number", ""),
         )
         favorites_service = getattr(self, "_favorites_service", None)
         is_fav = False
@@ -1189,6 +1224,7 @@ class PropertyBot:
         card_msg._photo_message_ids = photo_message_ids  # type: ignore[attr-defined]
         return card_msg
 
+    @observe(name="menu-bookmarks", capture_input=False, capture_output=False)
     async def _handle_bookmarks(self, message: Message, state: FSMContext | None = None) -> None:
         """Show user's saved favorites (#628)."""
         if not message.from_user:
@@ -1239,6 +1275,7 @@ class PropertyBot:
                 bookmark_photo_ids=bookmark_photo_ids,
             )
 
+    @observe(name="menu-promotions", capture_input=False, capture_output=False)
     async def _handle_promotions(self, message: Message) -> None:
         """Show promotions from config (#628)."""
         from .services.content_loader import get_promotions
@@ -1262,6 +1299,7 @@ class PropertyBot:
         "ask:installment": "Какие условия рассрочки?",
     }
 
+    @observe(name="menu-ask", capture_input=False, capture_output=False)
     async def _handle_ask(self, message: Message, i18n: Any = None) -> None:
         """Show FAQ inline menu with popular questions."""
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1310,6 +1348,7 @@ class PropertyBot:
         kb = InlineKeyboardMarkup(inline_keyboard=buttons)
         await message.answer(prompt, reply_markup=kb)
 
+    @observe(name="cb-ask", capture_input=False, capture_output=False)
     async def handle_ask_callback(self, callback: CallbackQuery) -> None:
         """Handle ask:* callback — route FAQ question to RAG pipeline."""
         await callback.answer()
@@ -1318,12 +1357,17 @@ class PropertyBot:
             return
         await self.handle_menu_action_text(callback.message, query_text)  # type: ignore[arg-type]
 
+    @observe(name="menu-manager", capture_input=False, capture_output=False)
     async def _handle_manager(
         self, message: Message, i18n: Any = None, state: FSMContext | None = None
     ) -> None:
         """Handoff to manager (#628, #730)."""
         if self._forum_bridge is not None:
             await start_qualification(message, i18n=i18n, state=state)
+        elif state is not None:
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(message, state, service_key="manager")
         else:
             await self.handle_menu_action_text(message, "Соедини с менеджером")
 
@@ -1396,6 +1440,9 @@ class PropertyBot:
         elif value == "phone":
             if msg and hasattr(msg, "edit_text"):
                 await msg.edit_text("Сейчас попросим номер телефона...")
+            from .handlers.phone_collector import start_phone_collection
+
+            await start_phone_collection(callback, state, service_key="manager")
         else:
             # Fallback — delegate to agent pipeline.
             if msg and hasattr(msg, "edit_text"):
@@ -1550,6 +1597,7 @@ class PropertyBot:
             except Exception:
                 logger.exception("Failed to update Kommo on handoff close")
 
+    @observe(name="cb-service", capture_input=False, capture_output=False)
     async def handle_service_callback(self, callback: CallbackQuery, i18n: Any = None) -> None:
         """Handle service menu inline button clicks (#628)."""
         from .keyboards.services_keyboard import (
@@ -1596,6 +1644,7 @@ class PropertyBot:
         else:
             await callback.answer()
 
+    @observe(name="cb-cta", capture_input=False, capture_output=False)
     async def handle_cta_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
         """Handle CTA button clicks (get_offer, manager) (#628)."""
         from .handlers.phone_collector import start_phone_collection
@@ -1845,6 +1894,7 @@ class PropertyBot:
                 callback, state, service_key="viewing", viewing_objects=viewing_objs or None
             )
 
+    @observe(name="cb-favorite", capture_input=False, capture_output=False)
     async def handle_favorite_callback(
         self,
         callback: CallbackQuery,
@@ -1878,6 +1928,7 @@ class PropertyBot:
         else:
             await callback.answer()
 
+    @observe(name="cb-results", capture_input=False, capture_output=False)
     async def handle_results_callback(
         self,
         callback: CallbackQuery,
@@ -2033,6 +2084,7 @@ class PropertyBot:
         else:
             await callback.answer()
 
+    @observe(name="cb-card", capture_input=False, capture_output=False)
     async def handle_card_callback(
         self,
         callback: CallbackQuery,
@@ -2155,6 +2207,15 @@ class PropertyBot:
 
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
+        # Resolve expert from forum topic thread (int check guards against mock objects in tests)
+        _raw_thread_id = message.message_thread_id
+        forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
+        expert_id: str | None = None
+        if forum_thread_id is not None and self._topic_service is not None and self._topics_enabled:
+            expert_id = await self._topic_service.get_expert_by_thread(
+                user_id=message.from_user.id, thread_id=forum_thread_id
+            )
+
         root_trace_metadata: dict[str, Any] = {}
         response_text = await self._handle_query_supervisor(
             message,
@@ -2162,6 +2223,8 @@ class PropertyBot:
             locale=locale,
             root_trace_metadata=root_trace_metadata,
             state=state,
+            forum_thread_id=forum_thread_id,
+            expert_id=expert_id,
         )
         update_kwargs: dict[str, Any] = {"output": {"response": response_text or ""}}
         if root_trace_metadata:
@@ -2209,16 +2272,14 @@ class PropertyBot:
         state: FSMContext | None = None,
     ) -> str | None:
         """C+ fast path: regex filters -> hybrid search -> generate. No agent loop (#629)."""
-        from .services.apartment_filter_extractor import ApartmentFilterExtractor
         from .services.apartments_service import check_escalation
 
-        extractor = ApartmentFilterExtractor()
-        parsed = extractor.parse(user_text)
+        result = await self._apartment_pipeline.extract(user_text)
 
-        if parsed.confidence == "LOW":
+        if result.meta.confidence == "LOW":
             return None  # escalate to agent
 
-        semantic_query = parsed.semantic_query or user_text
+        semantic_query = result.meta.semantic_remainder or user_text
         dense, sparse, colbert = await self._embeddings.aembed_hybrid_with_colbert(semantic_query)
         await self._cache.store_embedding(semantic_query, dense)
         await self._cache.store_sparse_embedding(semantic_query, sparse)
@@ -2248,7 +2309,7 @@ class PropertyBot:
             except Exception:
                 logger.debug("Implicit retry check failed", exc_info=True)
 
-        filters = parsed.to_filters_dict()
+        filters = result.hard.to_filters_dict()
         results, returned_count = await self._apartments_service.search_with_filters(
             dense_vector=dense,
             colbert_query=colbert or None,
@@ -2262,15 +2323,15 @@ class PropertyBot:
             returned_count=returned_count,
             top_k=10,
             score_spread=score_spread,
-            confidence=parsed.confidence,
+            confidence=result.meta.confidence,
         )
         if escalation:
             return None  # escalate to agent
 
-        from .agents.apartment_tools import _format_apartment_results
+        from .services.apartment_formatter import format_apartment_text
         from .services.generate_response import generate_response
 
-        context = _format_apartment_results(results)
+        context = format_apartment_text(results)
 
         generated = await generate_response(
             query=user_text,
@@ -2375,6 +2436,8 @@ class PropertyBot:
         locale: str = "ru",
         root_trace_metadata: dict[str, Any] | None = None,
         state: FSMContext | None = None,
+        forum_thread_id: int | None = None,
+        expert_id: str | None = None,
     ) -> str:
         """Handle query via create_agent SDK (#413 — replaces build_supervisor_graph)."""
         from .agents.agent import LOCALE_TO_LANGUAGE
@@ -2765,6 +2828,7 @@ class PropertyBot:
                     callbacks=callbacks,
                     bot_context=ctx,
                     rag_result_store=rag_result_store,
+                    forum_thread_id=forum_thread_id,
                 )
 
             # Check for HITL interrupt (#443)
@@ -2774,7 +2838,7 @@ class PropertyBot:
                 await self._send_hitl_confirmation(
                     message=message,
                     payload=interrupt_payload,
-                    thread_id=_supervisor_thread_id(message.chat.id),
+                    thread_id=_supervisor_thread_id(message.chat.id, forum_thread_id),
                 )
                 return None  # type: ignore[return-value]
 
@@ -2847,20 +2911,47 @@ class PropertyBot:
 
                 full_response = response_text + sources_text if sources_text else response_text
 
-                # Send with Markdown, fallback to plain text
-                chunks = list(_split_telegram_response(full_response))
-                for i, chunk in enumerate(chunks):
-                    is_last = i == len(chunks) - 1
-                    markup = reply_markup if is_last else None
+                # Send via DraftStreamer (supports forum thread routing)
+                from telegram_bot.services.draft_streamer import DraftStreamer
+
+                if message.chat.type == "private":
                     try:
-                        await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
+                        streamer = DraftStreamer(
+                            bot=self.bot,
+                            chat_id=message.chat.id,
+                            thread_id=forum_thread_id,
+                        )
+                        await streamer.finalize(
+                            full_response,
+                            parse_mode="Markdown",
+                            reply_markup=reply_markup,
+                        )
                     except Exception:
-                        logger.warning("Markdown parse failed in text path, falling back")
+                        logger.warning("DraftStreamer failed, falling back to message.answer")
                         try:
-                            await message.answer(chunk, reply_markup=markup)
+                            await message.answer(
+                                full_response,
+                                parse_mode="Markdown",
+                                reply_markup=reply_markup,
+                            )
                         except Exception:
-                            logger.exception("Failed to send text response chunk")
-                            await message.answer(chunk)
+                            logger.exception("Failed to send text response")
+                            await message.answer(full_response)
+                else:
+                    # Send with Markdown, fallback to plain text
+                    chunks = list(_split_telegram_response(full_response))
+                    for i, chunk in enumerate(chunks):
+                        is_last = i == len(chunks) - 1
+                        markup = reply_markup if is_last else None
+                        try:
+                            await message.answer(chunk, parse_mode="Markdown", reply_markup=markup)
+                        except Exception:
+                            logger.warning("Markdown parse failed in text path, falling back")
+                            try:
+                                await message.answer(chunk, reply_markup=markup)
+                            except Exception:
+                                logger.exception("Failed to send text response chunk")
+                                await message.answer(chunk)
 
             # Store final agent response in semantic cache for cacheable query types.
             # Use cache_key_embedding (original query embedding) so that future
@@ -2997,13 +3088,14 @@ class PropertyBot:
         callbacks: list[Any],
         bot_context: BotContext,
         rag_result_store: dict[str, Any],
+        forum_thread_id: int | None = None,
     ) -> dict[str, Any]:
         """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures."""
         payload = {"messages": [{"role": "user", "content": user_text}]}
         config = {
             "callbacks": callbacks,
             "configurable": {
-                "thread_id": _supervisor_thread_id(chat_id),
+                "thread_id": _supervisor_thread_id(chat_id, forum_thread_id),
                 "bot_context": bot_context,
                 "rag_result_store": rag_result_store,
                 "role": role,
@@ -3407,6 +3499,7 @@ class PropertyBot:
         lf = get_client()
         lf.score_current_trace(name="hitl_action", value=action, data_type="CATEGORICAL")
 
+    @observe(name="cb-feedback", capture_input=False, capture_output=False)
     async def handle_feedback(
         self, callback: CallbackQuery, callback_data: FeedbackCB | None = None
     ) -> None:
@@ -3507,6 +3600,7 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to update feedback keyboard", exc_info=True)
 
+    @observe(name="cb-feedback-reason", capture_input=False, capture_output=False)
     async def handle_feedback_reason(
         self, callback: CallbackQuery, callback_data: FeedbackReasonCB
     ) -> None:
@@ -3565,6 +3659,7 @@ class PropertyBot:
         except Exception:
             logger.debug("Failed to clear feedback confirmation keyboard", exc_info=True)
 
+    @observe(name="cb-clearcache", capture_input=False, capture_output=False)
     async def handle_clearcache_callback(self, callback_query: CallbackQuery) -> None:
         """Handle /clearcache inline keyboard callbacks (cc: prefix)."""
         _TIER_NAMES = {
@@ -3788,6 +3883,28 @@ class PropertyBot:
             logger.warning("Agent Redis checkpointer init failed, using in-memory", exc_info=True)
             self._agent_checkpointer = create_fallback_checkpointer()
 
+        # Initialize topic service (forum topics mapping — user+expert → thread_id)
+        import redis.asyncio as aioredis
+
+        topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
+        self._topic_service = TopicService(redis=topic_redis)
+        logger.info("TopicService ready (Redis)")
+
+        # Initialize bot bridge for Mini App API
+        from mini_app.bot_bridge import BotBridge, set_bot_bridge
+
+        async def _noop_rag(**kwargs: Any) -> dict[str, Any]:
+            return {}
+
+        set_bot_bridge(
+            BotBridge(
+                bot=self.bot,
+                topic_service=self._topic_service,
+                rag_fn=_noop_rag,
+            )
+        )
+        logger.info("BotBridge initialized for Mini App API")
+
         # Initialize history service (Qdrant-backed Q&A history)
         try:
             self._history_service = HistoryService(
@@ -3991,6 +4108,23 @@ class PropertyBot:
         except Exception:
             logger.warning("Failed to cache bot user id")
 
+        # Verify forum topics mode is enabled for expert threads
+        try:
+            me = await self.bot.get_me()
+            if not getattr(me, "has_topics_enabled", False):
+                logger.warning(
+                    "Forum topics not enabled for this bot. "
+                    "Enable 'Topics in Private Chats' via BotFather Mini App. "
+                    "Thread routing will be disabled."
+                )
+                self._topics_enabled = False
+            else:
+                self._topics_enabled = True
+                logger.info("Forum topics mode: enabled")
+        except Exception:
+            logger.warning("Failed to check forum topics status", exc_info=True)
+            self._topics_enabled = False
+
         # Initialize handoff services (#730)
         if self._cache.redis is not None:
             self._handoff_state = HandoffState(
@@ -4018,10 +4152,14 @@ class PropertyBot:
         self.dp["pg_pool"] = self._pg_pool
         self.dp["bot_config"] = self.config
         self.dp["property_bot"] = self
+        self.dp["topic_service"] = self._topic_service
         self.dp["ai_advisor_service"] = self._ai_advisor_service
         self.dp["apartments_service"] = self._apartments_service
         self.dp["favorites_service"] = self._favorites_service
         self.dp["search_event_store"] = self._search_event_store
+        self.dp["pipeline"] = self._apartment_pipeline
+        self.dp["embeddings"] = self._hybrid
+        self.dp["llm"] = self._llm
 
         if self._i18n_hub is None:
             self._i18n_hub = create_translator_hub()
@@ -4045,6 +4183,7 @@ class PropertyBot:
         )
         from .dialogs.crm_notes import create_note_dialog
         from .dialogs.crm_tasks import create_task_dialog, my_tasks_dialog, tasks_menu_dialog
+        from .dialogs.demo import demo_dialog
         from .dialogs.faq import faq_dialog
         from .dialogs.funnel import funnel_dialog
         from .dialogs.manager_menu import manager_menu_dialog
@@ -4069,6 +4208,7 @@ class PropertyBot:
         self.dp.include_router(create_note_dialog)
         self.dp.include_router(advisor_dialog)
         self.dp.include_router(settings_dialog)
+        self.dp.include_router(demo_dialog)
         self.dp.include_router(funnel_dialog)
         self.dp.include_router(faq_dialog)
         self.dp.include_router(viewing_dialog)
@@ -4106,10 +4246,21 @@ class PropertyBot:
             ]
         )
 
-        # Set default Menu Button → opens commands list (#628)
-        from aiogram.types import MenuButtonCommands
+        # Set Menu Button: WebApp when MINI_APP_URL is configured, else commands list (#883)
+        if self.config.mini_app_url:
+            from aiogram.types import MenuButtonWebApp, WebAppInfo
 
-        await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+            await self.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Открыть",
+                    web_app=WebAppInfo(url=self.config.mini_app_url),
+                )
+            )
+            logger.info("Mini App menu button set: %s", self.config.mini_app_url)
+        else:
+            from aiogram.types import MenuButtonCommands
+
+            await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
         await self.dp.start_polling(self.bot)
 
