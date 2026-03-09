@@ -14,7 +14,7 @@ from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
@@ -753,9 +753,25 @@ class PropertyBot:
         return db_role or "client"
 
     @observe(name="cmd-start", capture_input=False, capture_output=False)
-    async def cmd_start(self, message: Message, dialog_manager: Any = None, i18n: Any = None):
-        """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
+    async def cmd_start(
+        self,
+        message: Message,
+        command: CommandObject | None = None,
+        dialog_manager: Any = None,
+        i18n: Any = None,
+    ):
+        """Handle /start command — ReplyKeyboard for clients, dialog for managers.
+
+        If command args start with 'q_', handle as Mini App deep link payload.
+        """
         assert message.from_user is not None
+
+        # Deep link: /start q_<uuid>
+        args = command.args if command else None
+        if args and args.startswith("q_") and self._topic_manager is not None:
+            await self._handle_deeplink_start(message, args[2:])
+            return
+
         role = await self._resolve_user_role(message.from_user.id)
 
         kommo_enabled = getattr(self.config, "kommo_enabled", False)
@@ -776,6 +792,64 @@ class PropertyBot:
                 cfg = load_services_config()
                 welcome = cfg.get("welcome", {}).get("text", "Добро пожаловать!")
             await message.answer(welcome, reply_markup=build_client_keyboard(i18n=i18n))
+
+    async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
+        """Handle Mini App deep link: /start q_<uuid>.
+
+        Reads one-time payload from Redis, creates forum topic via TopicManager,
+        echoes user message to topic, then triggers RAG pipeline.
+        """
+        import json as _json
+
+        assert self._deeplink_redis is not None
+        key = f"miniapp:q:{uuid_str}"
+        raw = await self._deeplink_redis.get(key)
+        if raw is None:
+            await message.answer("Ссылка устарела. Пожалуйста, вернитесь в приложение.")
+            return
+
+        # One-time: delete immediately after reading
+        await self._deeplink_redis.delete(key)
+
+        try:
+            payload = _json.loads(raw)
+        except (ValueError, TypeError):
+            await message.answer("Ошибка обработки ссылки.")
+            return
+
+        expert_id = payload.get("expert_id", "")
+        user_message = payload.get("message") or ""
+
+        # Look up expert config
+        from .services.content_loader import load_mini_app_config
+
+        config_data = load_mini_app_config()
+        expert = next((e for e in config_data.get("experts", []) if e["id"] == expert_id), None)
+        if not expert:
+            await message.answer("Эксперт не найден.")
+            return
+
+        # Create / get forum topic for this expert
+        assert self._topic_manager is not None
+        topic_id = await self._topic_manager.get_or_create_topic(
+            chat_id=message.chat.id,
+            expert_id=expert_id,
+            expert_name=expert["name"],
+            expert_emoji=expert.get("emoji", "💬"),
+        )
+
+        if user_message:
+            # Echo user question in the topic
+            await self.bot.send_message(
+                chat_id=message.chat.id,
+                message_thread_id=topic_id,
+                text=f"❝ {user_message} ❞",
+            )
+            # Trigger RAG pipeline: synthetic message in the topic
+            topic_msg = message.model_copy(
+                update={"text": user_message, "message_thread_id": topic_id}
+            )
+            await self.handle_query(topic_msg)
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -3876,6 +3950,19 @@ class PropertyBot:
         topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
         self._topic_service = TopicService(redis=topic_redis)
         logger.info("TopicService ready (Redis)")
+
+        # Initialize TopicManager + deeplink Redis for Mini App deep link flow
+        if self.config.expert_topics_enabled:
+            from telegram_bot.services.topic_manager import TopicManager
+
+            self._deeplink_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
+            self._topic_manager: TopicManager | None = TopicManager(
+                bot=self.bot, redis=self._deeplink_redis
+            )
+            logger.info("TopicManager ready (expert deep link flow)")
+        else:
+            self._deeplink_redis = None
+            self._topic_manager = None
 
         # Initialize bot bridge for Mini App API
         from mini_app.bot_bridge import BotBridge, set_bot_bridge

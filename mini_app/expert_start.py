@@ -12,6 +12,6 @@ class StartExpertRequest(BaseModel):
 
 
 class StartExpertResponse(BaseModel):
-    thread_id: int
+    start_link: str
     expert_name: str
     status: str = "ok"
