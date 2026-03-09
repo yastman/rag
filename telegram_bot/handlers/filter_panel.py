@@ -6,6 +6,7 @@ This module exposes `handle_filter_panel` coroutine for use as a callback handle
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -27,6 +28,7 @@ async def handle_filter_panel(
     callback: CallbackQuery,
     state: FSMContext,
     callback_data: FilterPanelCB,
+    apartments_service: Any = None,
 ) -> None:
     """Dispatch filter panel callback by action."""
     action = callback_data.action
@@ -37,15 +39,15 @@ async def handle_filter_panel(
         if action == "select":
             await _handle_select(callback, state, field)
         elif action == "set":
-            await _handle_set(callback, state, field, value)
+            await _handle_set(callback, state, field, value, apartments_service)
         elif action == "apply":
             await _handle_apply(callback, state)
         elif action == "reset":
-            await _handle_reset(callback, state)
+            await _handle_reset(callback, state, apartments_service)
         elif action == "back":
             await _handle_back(callback)
         elif action == "main":
-            await _handle_main(callback, state)
+            await _handle_main(callback, state, apartments_service)
         else:
             logger.warning("Unknown filter panel action: %s", action)
             await callback.answer()
@@ -90,6 +92,7 @@ async def _handle_set(
     state: FSMContext,
     field: str,
     value: str,
+    apartments_service: Any = None,
 ) -> None:
     """Set a filter value and return to main panel."""
     data = await state.get_data()
@@ -110,10 +113,9 @@ async def _handle_set(
 
     await state.update_data(apartment_filters=filters)
 
-    # Refresh panel with updated filters
-    total = data.get("apartment_total", 0)
-    text = build_filter_panel_text(filters=filters, count=total)
-    kb = build_filter_panel_keyboard(count=total)
+    count = await _get_count(filters, data, apartments_service)
+    text = build_filter_panel_text(filters=filters, count=count)
+    kb = build_filter_panel_keyboard(count=count)
     await callback.message.edit_text(text, reply_markup=kb)  # type: ignore[union-attr]
     await callback.answer()
 
@@ -131,15 +133,15 @@ async def _handle_apply(
 async def _handle_reset(
     callback: CallbackQuery,
     state: FSMContext,
+    apartments_service: Any = None,
 ) -> None:
     """Clear all filters and refresh panel."""
     data = await state.get_data()
-    total = data.get("apartment_total", 0)
-
     await state.update_data(apartment_filters={})
 
-    text = build_filter_panel_text(filters={}, count=total)
-    kb = build_filter_panel_keyboard(count=total)
+    count = await _get_count({}, data, apartments_service)
+    text = build_filter_panel_text(filters={}, count=count)
+    kb = build_filter_panel_keyboard(count=count)
     await callback.message.edit_text(text, reply_markup=kb)  # type: ignore[union-attr]
     await callback.answer("Фильтры сброшены")
 
@@ -153,16 +155,29 @@ async def _handle_back(callback: CallbackQuery) -> None:
 async def _handle_main(
     callback: CallbackQuery,
     state: FSMContext,
+    apartments_service: Any = None,
 ) -> None:
     """Return to main filter panel screen from sub-menu."""
     data = await state.get_data()
     filters: dict[str, Any] = data.get("apartment_filters") or {}
-    total = data.get("apartment_total", 0)
 
-    text = build_filter_panel_text(filters=filters, count=total)
-    kb = build_filter_panel_keyboard(count=total)
+    count = await _get_count(filters, data, apartments_service)
+    text = build_filter_panel_text(filters=filters, count=count)
+    kb = build_filter_panel_keyboard(count=count)
     await callback.message.edit_text(text, reply_markup=kb)  # type: ignore[union-attr]
     await callback.answer()
+
+
+async def _get_count(
+    filters: dict[str, Any],
+    state_data: dict[str, Any],
+    apartments_service: Any,
+) -> int:
+    """Get live apartment count for filters, falling back to stale total."""
+    if apartments_service is not None:
+        with contextlib.suppress(Exception):
+            return await apartments_service.count_with_filters(filters=filters)
+    return state_data.get("apartment_total", 0)
 
 
 def _field_to_filter_key(field: str) -> str:
