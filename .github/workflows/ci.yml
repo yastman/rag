@@ -38,6 +38,11 @@ jobs:
       - name: Type check
         run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 
+      - name: Security scan (bandit + vulture)
+        run: |
+          uv run bandit -r src/ telegram_bot/ -c pyproject.toml
+          uv run vulture src/ telegram_bot/ --min-confidence 80
+
   deploy:
     name: Deploy to VPS
     needs: lint
