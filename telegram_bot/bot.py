@@ -4107,6 +4107,23 @@ class PropertyBot:
         except Exception:
             logger.warning("Failed to cache bot user id")
 
+        # Verify forum topics mode is enabled for expert threads
+        try:
+            me = await self.bot.get_me()
+            if not getattr(me, "has_topics_enabled", False):
+                logger.warning(
+                    "Forum topics not enabled for this bot. "
+                    "Enable 'Topics in Private Chats' via BotFather Mini App. "
+                    "Thread routing will be disabled."
+                )
+                self._topics_enabled = False
+            else:
+                self._topics_enabled = True
+                logger.info("Forum topics mode: enabled")
+        except Exception:
+            logger.warning("Failed to check forum topics status", exc_info=True)
+            self._topics_enabled = False
+
         # Initialize handoff services (#730)
         if self._cache.redis is not None:
             self._handoff_state = HandoffState(
