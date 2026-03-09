@@ -1077,3 +1077,106 @@ def test_funnel_has_pref_section_window():
     windows = funnel_dialog.windows
     states = [w.get_state() for w in windows.values()]
     assert FunnelSG.pref_section in states
+
+
+# ============================================================
+# Task 4: on_summary_search redesign — catalog keyboard + FSM
+# ============================================================
+
+_APT_PAYLOAD = {
+    "id": "apt-1",
+    "payload": {
+        "complex_name": "Test",
+        "city": "Солнечный берег",
+        "property_type": "Студия",
+        "floor": 2,
+        "area_m2": 45,
+        "view_tags": [],
+        "view_primary": "sea",
+        "price_eur": 55000,
+        "rooms": 1,
+    },
+}
+
+
+def _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock):
+    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
+    callback = MagicMock()
+    callback.from_user = MagicMock(id=123)
+    callback.message = MagicMock()
+    callback.message.chat = MagicMock(id=456)
+    callback.message.answer = AsyncMock()
+    manager = MagicMock()
+    manager.dialog_data = {"city": "Солнечный берег", "property_type": "1bed", "budget": "mid"}
+    manager.middleware_data = {
+        "apartments_service": mock_svc,
+        "property_bot": mock_bot,
+        "state": state_mock,
+    }
+    manager.done = AsyncMock()
+    return callback, manager
+
+
+class TestOnSummarySearchRedesign:
+    async def test_sends_catalog_keyboard(self, monkeypatch):
+        """on_summary_search заменяет footer на ReplyKeyboardMarkup каталога."""
+        from aiogram.types import ReplyKeyboardMarkup
+
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        last_call = callback.message.answer.call_args_list[-1]
+        reply_markup = last_call.kwargs.get("reply_markup")
+        assert isinstance(reply_markup, ReplyKeyboardMarkup), (
+            "Ожидается ReplyKeyboardMarkup каталога"
+        )
+        button_texts = [btn.text for row in reply_markup.keyboard for btn in row]
+        assert any("Показать ещё" in t or "Все" in t for t in button_texts)
+        assert "🏠 Главное меню" in button_texts
+
+    async def test_stores_catalog_mode_in_fsm(self, monkeypatch):
+        """on_summary_search сохраняет catalog_mode=True в FSMContext."""
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+        captured: dict = {}
+
+        async def capture_update(**kwargs):
+            captured.update(kwargs)
+
+        state_mock = MagicMock()
+        state_mock.update_data = capture_update
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        assert captured.get("catalog_mode") is True, "catalog_mode должен быть True"
+
+    async def test_sends_10_apartments(self, monkeypatch):
+        """on_summary_search запрашивает limit=10 карточек."""
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD] * 10, 30, 55000.0, ["apt-1"] * 10)
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        call_kwargs = mock_svc.scroll_with_filters.call_args.kwargs
+        assert call_kwargs.get("limit") == 10
