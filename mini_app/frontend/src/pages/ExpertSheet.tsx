@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { fetchConfig } from "../api";
+import { useNavigate, useParams } from "react-router-dom";
+import { fetchConfig, startExpert } from "../api";
 import { BottomSheet } from "../components/BottomSheet";
-import { PromptRow } from "../components/PromptRow";
 import { ChatInput } from "../components/ChatInput";
+import { PromptRow } from "../components/PromptRow";
 import type { Expert } from "../types";
 
 export function ExpertSheet() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [expert, setExpert] = useState<Expert | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchConfig().then((c) => {
@@ -19,8 +20,19 @@ export function ExpertSheet() {
 
   if (!expert) return null;
 
-  const handlePrompt = (text: string) => {
-    navigate(`/chat?message=${encodeURIComponent(text)}&expert_id=${id}`);
+  const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+
+  const handleStart = async (text: string) => {
+    if (!userId || !id || loading) return;
+    setLoading(true);
+    try {
+      await startExpert(userId, id, text);
+      // Close Mini App — user lands in bot chat with the topic
+      window.Telegram?.WebApp?.close();
+    } catch (err) {
+      console.error("Failed to start expert:", err);
+      setLoading(false);
+    }
   };
 
   return (
@@ -31,9 +43,9 @@ export function ExpertSheet() {
       onClose={() => navigate("/")}
     >
       {expert.prompts.map((p, i) => (
-        <PromptRow key={i} prompt={p} onClick={handlePrompt} />
+        <PromptRow key={i} prompt={p} onClick={(text) => handleStart(text)} />
       ))}
-      <ChatInput onSend={(text) => handlePrompt(text)} />
+      <ChatInput onSend={handleStart} />
     </BottomSheet>
   );
 }
