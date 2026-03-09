@@ -37,6 +37,7 @@ declare global {
         expand(): void;
         close(): void;
         sendData(data: string): void;
+        openTelegramLink(url: string): void;
         initData: string;
         initDataUnsafe: { user?: { id: number; first_name: string } };
         themeParams: Record<string, string>;
