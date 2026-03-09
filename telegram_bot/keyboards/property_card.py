@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from telegram_bot.callback_data import FavoriteCB, ResultsCB
+from telegram_bot.callback_data import FavoriteCB
 from telegram_bot.services.apartment_formatter import format_apartment_html
 
 
@@ -160,35 +160,3 @@ async def send_property_card(
     card_msg = await message.answer(card, reply_markup=reply_markup)
     card_msg._photo_message_ids = photo_message_ids  # type: ignore[attr-defined]
     return card_msg
-
-
-def build_results_footer(*, shown_total: int, total: int, has_more: bool) -> InlineKeyboardMarkup:
-    """Build footer buttons after property results."""
-    rows = []
-    if has_more:
-        remaining = max(total - shown_total, 0)
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"🔄 Показать ещё ({remaining} осталось)",
-                    callback_data=ResultsCB(action="more").pack(),
-                )
-            ]
-        )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="⚙️ Изменить параметры",
-                callback_data=ResultsCB(action="refine").pack(),
-            )
-        ]
-    )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="📅 Запись на осмотр",
-                callback_data=ResultsCB(action="viewing").pack(),
-            )
-        ]
-    )
-    return InlineKeyboardMarkup(inline_keyboard=rows)
