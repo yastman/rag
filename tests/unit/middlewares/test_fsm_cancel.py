@@ -84,3 +84,21 @@ class TestFSMCancelMiddleware:
         await middleware(handler, msg, {"state": state})
 
         handler.assert_awaited_once()
+
+    @pytest.mark.asyncio()
+    async def test_cancel_response_text_and_keyboard(self, middleware):
+        """Cancel sends exact response text and build_client_keyboard() markup."""
+        msg = _make_message("❌ Отмена")
+        state = _make_state("PhoneCollectorStates:waiting_phone")
+        handler = AsyncMock()
+
+        with patch("telegram_bot.middlewares.fsm_cancel.build_client_keyboard") as mock_kb:
+            sentinel_kb = MagicMock()
+            mock_kb.return_value = sentinel_kb
+            await middleware(handler, msg, {"state": state})
+
+        msg.answer.assert_awaited_once_with(
+            "😊 Запрос на звонок отменён. Когда будете готовы — менеджер на связи!",
+            reply_markup=sentinel_kb,
+        )
+        mock_kb.assert_called_once()
