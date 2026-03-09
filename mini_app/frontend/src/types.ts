@@ -27,11 +27,6 @@ export interface AppConfig {
   experts: Expert[];
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant";
-  text: string;
-}
-
 declare global {
   interface Window {
     Telegram?: {
@@ -41,6 +36,7 @@ declare global {
         ready(): void;
         expand(): void;
         close(): void;
+        sendData(data: string): void;
         initData: string;
         initDataUnsafe: { user?: { id: number; first_name: string } };
         themeParams: Record<string, string>;
