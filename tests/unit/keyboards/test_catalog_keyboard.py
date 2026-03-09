@@ -33,3 +33,23 @@ class TestBuildCatalogKeyboard:
     def test_resize_keyboard_true(self):
         kb = build_catalog_keyboard(shown=10, total=47)
         assert kb.resize_keyboard is True
+
+
+class TestNoDuplicateCatalogCode:
+    def test_parse_catalog_button_defined_once(self):
+        """parse_catalog_button must not be duplicated in the module."""
+        import inspect
+
+        import telegram_bot.keyboards.client_keyboard as mod
+
+        source = inspect.getsource(mod)
+        assert source.count("def parse_catalog_button") == 1
+
+    def test_build_catalog_keyboard_defined_once(self):
+        """build_catalog_keyboard must not be duplicated in the module."""
+        import inspect
+
+        import telegram_bot.keyboards.client_keyboard as mod
+
+        source = inspect.getsource(mod)
+        assert source.count("def build_catalog_keyboard") == 1
