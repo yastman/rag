@@ -262,6 +262,10 @@ class BotConfig(BaseSettings):
         default="",
         validation_alias=AliasChoices("mini_app_url", "MINI_APP_URL"),
     )
+    expert_topics_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("expert_topics_enabled", "EXPERT_TOPICS_ENABLED"),
+    )
 
     # LiveKit (voice calls)
     livekit_url: str = Field(

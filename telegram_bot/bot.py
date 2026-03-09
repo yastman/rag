@@ -14,7 +14,7 @@ from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
@@ -39,7 +39,6 @@ from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
 from .handlers.handoff import (
     HandoffStates,
-    create_handoff_router,
     get_user_qualification,
     parse_qual_callback,
     start_qualification,
@@ -675,11 +674,6 @@ class PropertyBot:
 
         self.dp.include_router(create_phone_router())
 
-        # Handoff qualification callbacks — qual:goal/budget (#730)
-        self.dp.include_router(create_handoff_router())
-        # Final qualification step — triggers handoff completion (#730 review)
-        self.dp.callback_query(F.data.startswith("qual:contact:"))(self._on_qual_contact)
-
         # Group message handler — manager → client relay (#730)
         if self.config.managers_group_id:
             self.dp.message(
@@ -687,6 +681,10 @@ class PropertyBot:
                 F.message_thread_id,
             )(self._handle_group_message)
 
+        # Deep link: /start q_<uuid> — must be registered BEFORE generic /start
+        self.dp.message(CommandStart(deep_link=True, magic=F.args.startswith("q_")))(
+            self.cmd_start_deeplink
+        )
         self.dp.message(Command("start"))(self.cmd_start)
         self.dp.message(Command("help"))(self.cmd_help)
         self.dp.message(Command("clear"))(self.cmd_clear)
@@ -753,9 +751,27 @@ class PropertyBot:
         return db_role or "client"
 
     @observe(name="cmd-start", capture_input=False, capture_output=False)
-    async def cmd_start(self, message: Message, dialog_manager: Any = None, i18n: Any = None):
+    async def cmd_start_deeplink(
+        self,
+        message: Message,
+        command: CommandObject,
+    ):
+        """Handle /start q_<uuid> — Mini App deep link flow."""
+        assert message.from_user is not None
+        assert command.args is not None
+        uuid_str = command.args[2:]  # strip "q_" prefix
+        await self._handle_deeplink_start(message, uuid_str)
+
+    async def cmd_start(
+        self,
+        message: Message,
+        command: CommandObject | None = None,
+        dialog_manager: Any = None,
+        i18n: Any = None,
+    ):
         """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
         assert message.from_user is not None
+
         role = await self._resolve_user_role(message.from_user.id)
 
         kommo_enabled = getattr(self.config, "kommo_enabled", False)
@@ -776,6 +792,67 @@ class PropertyBot:
                 cfg = load_services_config()
                 welcome = cfg.get("welcome", {}).get("text", "Добро пожаловать!")
             await message.answer(welcome, reply_markup=build_client_keyboard(i18n=i18n))
+
+    async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
+        """Handle Mini App deep link: /start q_<uuid>.
+
+        Reads one-time payload from Redis, creates forum topic via TopicManager,
+        echoes user message to topic, then triggers RAG pipeline.
+        """
+        if self._deeplink_redis is None or self._topic_manager is None:
+            logger.warning("Deep link received but TopicManager not initialized")
+            return
+
+        key = f"miniapp:q:{uuid_str}"
+        # Atomic GET+DEL — prevents race condition with duplicate requests
+        raw = await self._deeplink_redis.getdel(key)
+        if raw is None:
+            await message.answer("Ссылка устарела. Пожалуйста, вернитесь в приложение.")
+            return
+
+        try:
+            payload = json.loads(raw)
+        except (ValueError, TypeError):
+            await message.answer("Ошибка обработки ссылки.")
+            return
+
+        expert_id = payload.get("expert_id", "")
+        user_message = payload.get("message") or ""
+
+        # Look up expert config
+        from .services.content_loader import load_mini_app_config
+
+        config_data = load_mini_app_config()
+        expert = next((e for e in config_data.get("experts", []) if e["id"] == expert_id), None)
+        if not expert:
+            await message.answer("Эксперт не найден.")
+            return
+
+        # Create / get forum topic for this expert
+        try:
+            topic_id = await self._topic_manager.get_or_create_topic(
+                chat_id=message.chat.id,
+                expert_id=expert_id,
+                expert_name=expert["name"],
+                expert_emoji=expert.get("emoji", "💬"),
+            )
+        except TelegramBadRequest as exc:
+            logger.error("Failed to create forum topic: %s", exc)
+            await message.answer("Не удалось создать тему. Попробуйте позже.")
+            return
+
+        if user_message:
+            # Echo user question in the topic
+            await self.bot.send_message(
+                chat_id=message.chat.id,
+                message_thread_id=topic_id,
+                text=f"❝ {user_message} ❞",
+            )
+            # Trigger RAG pipeline: synthetic message in the topic
+            topic_msg = message.model_copy(
+                update={"text": user_message, "message_thread_id": topic_id}
+            )
+            await self.handle_query(topic_msg)
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -3878,6 +3955,18 @@ class PropertyBot:
         self._topic_service = TopicService(redis=topic_redis)
         logger.info("TopicService ready (Redis)")
 
+        # Initialize TopicManager + deeplink Redis for Mini App deep link flow
+        if self.config.expert_topics_enabled:
+            from telegram_bot.services.topic_manager import TopicManager
+
+            self._deeplink_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
+            self._topic_manager: TopicManager | None = TopicManager(
+                bot=self.bot, redis=self._deeplink_redis
+            )
+            logger.info("TopicManager ready (expert deep link flow)")
+        else:
+            self._deeplink_redis = None
+            self._topic_manager = None
         # Initialize history service (Qdrant-backed Q&A history)
         try:
             self._history_service = HistoryService(
