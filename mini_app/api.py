@@ -69,6 +69,8 @@ async def start_expert(request: StartExpertRequest) -> StartExpertResponse:
     await redis.set(f"miniapp:q:{uid}", payload, ex=_DEEPLINK_TTL)
 
     bot_username = os.environ.get("BOT_USERNAME", "")
+    if not bot_username:
+        raise HTTPException(status_code=500, detail="BOT_USERNAME not configured")
     start_link = f"https://t.me/{bot_username}?start=q_{uid}"
 
     return StartExpertResponse(
