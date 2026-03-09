@@ -75,7 +75,6 @@ def test_funnel_has_all_windows():
     assert FunnelSG.pref_complex in states
     assert FunnelSG.summary in states
     assert FunnelSG.change_filter in states
-    assert FunnelSG.results in states
 
 
 # --- City getter/handler ---
@@ -426,35 +425,6 @@ async def test_summary_all_any_allows_search_and_shows_explicit_any_labels():
 # --- Summary actions ---
 
 
-@pytest.mark.asyncio
-async def test_on_summary_search_resets_scroll_and_goes_to_results(monkeypatch):
-    spawn_mock = MagicMock()
-    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", spawn_mock)
-    callback = SimpleNamespace(
-        from_user=SimpleNamespace(id=99),
-        message=SimpleNamespace(chat=SimpleNamespace(id=111)),
-    )
-    manager = SimpleNamespace(
-        dialog_data={
-            "city": "Солнечный берег",
-            "property_type": "2bed",
-            "budget": "high",
-        },
-        middleware_data={
-            "user_service": object(),
-            "pg_pool": object(),
-            "lead_scoring_store": object(),
-            "kommo_client": object(),
-            "hot_lead_notifier": object(),
-            "bot_config": object(),
-        },
-        switch_to=AsyncMock(),
-    )
-    await funnel_module.on_summary_search(callback, SimpleNamespace(), manager)
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
-    assert manager.dialog_data.get("scroll_start_from") is None
-
-
 def test_switchto_change_in_summary_targets_change_filter():
     """SwitchTo 'change' in summary window targets FunnelSG.change_filter (may be inside Row)."""
     from aiogram_dialog.widgets.kbd import SwitchTo as SwitchToWidget
@@ -504,57 +474,6 @@ async def test_change_filter_sets_return_flag():
     manager.switch_to.assert_awaited_once_with(FunnelSG.budget)
 
 
-# --- Results ---
-
-
-@pytest.mark.asyncio
-async def test_get_results_data_calls_apartments_service():
-    from telegram_bot.dialogs.funnel import get_results_data
-
-    results = [
-        {
-            "id": "p1",
-            "payload": {
-                "complex_name": "Sunrise",
-                "city": "Солнечный берег",
-                "property_type": "studio",
-                "floor": 2,
-                "area_m2": 42,
-                "view_primary": "sea",
-                "view_tags": ["sea"],
-                "price_eur": 48500,
-                "rooms": 1,
-            },
-        }
-    ]
-    mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 1, None, []))
-
-    manager = SimpleNamespace(
-        dialog_data={"property_type": "studio", "budget": "low"},
-        middleware_data={"apartments_service": mock_svc},
-    )
-
-    result = await get_results_data(manager)
-    mock_svc.scroll_with_filters.assert_awaited_once()
-    assert len(result["apartments"]) == 1
-    assert "Sunrise" in result["apartments"][0]["card"]
-
-
-@pytest.mark.asyncio
-async def test_get_results_data_fallback_without_service():
-    from telegram_bot.dialogs.funnel import get_results_data
-
-    manager = SimpleNamespace(
-        dialog_data={},
-        middleware_data={},
-    )
-
-    result = await get_results_data(manager)
-    assert result["no_results"] is True
-    assert "недоступен" in result["no_results_text"].lower()
-
-
 # --- Preference any clears ---
 
 
@@ -580,7 +499,7 @@ async def test_pref_promotion_any_clears_value():
 
 
 @pytest.mark.asyncio
-async def test_zero_suggestion_removes_area_and_refreshes_results():
+async def test_zero_suggestion_removes_area_and_refreshes_summary():
     manager = SimpleNamespace(
         dialog_data={"area": "large", "scroll_start_from": 50000.0, "scroll_seen_ids": ["id-1"]},
         switch_to=AsyncMock(),
@@ -590,11 +509,11 @@ async def test_zero_suggestion_removes_area_and_refreshes_results():
     )
     assert "area" not in manager.dialog_data
     assert manager.dialog_data.get("scroll_start_from") is None
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
-async def test_zero_suggestion_removes_floor_and_refreshes_results():
+async def test_zero_suggestion_removes_floor_and_refreshes_summary():
     manager = SimpleNamespace(
         dialog_data={"floor": "mid", "scroll_start_from": 50000.0, "scroll_seen_ids": ["id-1"]},
         switch_to=AsyncMock(),
@@ -608,7 +527,7 @@ async def test_zero_suggestion_removes_floor_and_refreshes_results():
     assert "floor" not in manager.dialog_data
     assert manager.dialog_data.get("scroll_start_from") is None
     assert manager.dialog_data.get("scroll_seen_ids") is None
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -757,42 +676,6 @@ def test_switchto_back_in_pref_floor_targets_preferences():
 
 
 @pytest.mark.asyncio
-async def test_results_more_uses_start_from_and_seen_ids():
-    """on_results_more передаёт start_from и seen_ids в следующую страницу."""
-    manager = SimpleNamespace(
-        dialog_data={
-            "scroll_start_from": 50000.0,
-            "scroll_seen_ids": ["id-1", "id-2"],
-            "scroll_page": 1,
-        },
-    )
-    callback = MagicMock()
-    callback.answer = AsyncMock()
-    await funnel_module.on_results_more(callback, MagicMock(), manager)
-    assert manager.dialog_data["scroll_page"] == 2
-
-
-@pytest.mark.asyncio
-async def test_results_more_increments_page_and_offset():
-    manager = SimpleNamespace(
-        dialog_data={"scroll_start_from": 50000.0, "scroll_page": 1},
-    )
-    callback = MagicMock()
-    callback.answer = AsyncMock()
-    await funnel_module.on_results_more(callback, SimpleNamespace(), manager)
-    assert manager.dialog_data["scroll_page"] == 2
-
-
-@pytest.mark.asyncio
-async def test_results_more_no_next_offset_answers_all_shown():
-    manager = SimpleNamespace(dialog_data={})
-    callback = MagicMock()
-    callback.answer = AsyncMock()
-    await funnel_module.on_results_more(callback, SimpleNamespace(), manager)
-    callback.answer.assert_awaited_once_with("Все результаты показаны")
-
-
-@pytest.mark.asyncio
 async def test_property_type_return_to_summary():
     manager = SimpleNamespace(dialog_data={"_return_to_summary": True}, switch_to=AsyncMock())
     await funnel_module.on_property_type_selected(MagicMock(), SimpleNamespace(), manager, "2bed")
@@ -853,7 +736,7 @@ async def test_zero_suggestion_rm_view():
     )
     assert "view" not in manager.dialog_data
     assert manager.dialog_data.get("scroll_start_from") is None
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -866,7 +749,7 @@ async def test_zero_suggestion_rm_furnished():
         MagicMock(), SimpleNamespace(), manager, "rm_furnished"
     )
     assert "is_furnished" not in manager.dialog_data
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -879,7 +762,7 @@ async def test_zero_suggestion_rm_promotion():
         MagicMock(), SimpleNamespace(), manager, "rm_promotion"
     )
     assert "is_promotion" not in manager.dialog_data
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -892,7 +775,7 @@ async def test_zero_suggestion_rm_budget():
         MagicMock(), SimpleNamespace(), manager, "rm_budget"
     )
     assert manager.dialog_data["budget"] == "any"
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -995,26 +878,6 @@ async def test_preferences_section_syncs_widget_state():
     await funnel_module.get_preferences_options(middleware_data={}, dialog_manager=manager)
     checked = widget_data.get(funnel_module._PREF_MS_ID, [])
     assert "section" in checked
-
-
-@pytest.mark.asyncio
-async def test_on_search_list_resets_pagination():
-    """on_search_list must reset scroll state before switching to list view."""
-    manager = SimpleNamespace(
-        dialog_data={
-            "scroll_start_from": 50000.0,
-            "scroll_seen_ids": ["id-1"],
-            "scroll_page": 3,
-            "city": "Бургас",
-        },
-    )
-    callback = AsyncMock()
-    await funnel_module.on_search_list(callback, None, manager)
-
-    assert "scroll_start_from" not in manager.dialog_data
-    assert "scroll_seen_ids" not in manager.dialog_data
-    assert manager.dialog_data["scroll_page"] == 1
-    assert manager.dialog_data["city"] == "Бургас"
 
 
 def _collect_widget_ids(window) -> set:
@@ -1180,3 +1043,28 @@ class TestOnSummarySearchRedesign:
 
         call_kwargs = mock_svc.scroll_with_filters.call_args.kwargs
         assert call_kwargs.get("limit") == 10
+
+
+# ============================================================
+# Task 12: results window removed from funnel dialog
+# ============================================================
+
+
+class TestResultsWindowRemoved:
+    def test_get_results_data_not_exported(self):
+        """get_results_data должен быть удалён из funnel (результаты теперь вне dialog)."""
+        import telegram_bot.dialogs.funnel as m
+
+        assert not hasattr(m, "get_results_data"), "get_results_data должен быть удалён"
+
+    def test_on_search_list_not_exported(self):
+        """on_search_list должен быть удалён из funnel."""
+        import telegram_bot.dialogs.funnel as m
+
+        assert not hasattr(m, "on_search_list"), "on_search_list должен быть удалён"
+
+    def test_funnel_results_state_removed(self):
+        """FunnelSG.results должен быть удалён из states."""
+        from telegram_bot.dialogs.states import FunnelSG
+
+        assert not hasattr(FunnelSG, "results"), "FunnelSG.results должен быть удалён"
