@@ -69,6 +69,7 @@ from .services.handoff_summary import generate_handoff_summary
 from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
+from .services.topic_service import TopicService
 
 
 logger = logging.getLogger(__name__)
@@ -438,6 +439,10 @@ class PropertyBot:
         self._handoff_state: HandoffState | None = None
         self._forum_bridge: ForumBridge | None = None
         self._bot_user_id: int | None = None
+
+        # Expert topic service (user+expert → thread_id mapping)
+        self._topic_service: TopicService | None = None
+        self._topics_enabled: bool = False
 
         # Track initialization state
         self._cache_initialized = False
@@ -3834,6 +3839,13 @@ class PropertyBot:
             logger.warning("Agent Redis checkpointer init failed, using in-memory", exc_info=True)
             self._agent_checkpointer = create_fallback_checkpointer()
 
+        # Initialize topic service (forum topics mapping — user+expert → thread_id)
+        import redis.asyncio as aioredis
+
+        topic_redis = aioredis.from_url(self.config.redis_url, decode_responses=False)
+        self._topic_service = TopicService(redis=topic_redis)
+        logger.info("TopicService ready (Redis)")
+
         # Initialize history service (Qdrant-backed Q&A history)
         try:
             self._history_service = HistoryService(
@@ -4064,6 +4076,7 @@ class PropertyBot:
         self.dp["pg_pool"] = self._pg_pool
         self.dp["bot_config"] = self.config
         self.dp["property_bot"] = self
+        self.dp["topic_service"] = self._topic_service
         self.dp["ai_advisor_service"] = self._ai_advisor_service
         self.dp["apartments_service"] = self._apartments_service
         self.dp["favorites_service"] = self._favorites_service
