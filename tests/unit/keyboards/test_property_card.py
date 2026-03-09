@@ -79,6 +79,27 @@ def test_build_results_footer():
     assert "18 осталось" in kb.inline_keyboard[0][0].text
 
 
+# --- Task 10: Redesigned card buttons layout ---
+
+
+class TestCardButtonsRedesign:
+    def test_button_layout_2_plus_1(self):
+        """Раскладка: [В избранное][Менеджеру] + [На осмотр]."""
+        kb = build_card_buttons("apt-1")
+        assert len(kb.inline_keyboard) == 2
+        assert len(kb.inline_keyboard[0]) == 2  # избранное + менеджер
+        assert len(kb.inline_keyboard[1]) == 1  # осмотр
+
+    def test_first_row_favorite_then_manager(self):
+        kb = build_card_buttons("apt-1")
+        assert "В избранное" in kb.inline_keyboard[0][0].text
+        assert "Менеджеру" in kb.inline_keyboard[0][1].text
+
+    def test_second_row_viewing(self):
+        kb = build_card_buttons("apt-1")
+        assert "На осмотр" in kb.inline_keyboard[1][0].text
+
+
 # --- format_promotion_card ---
 
 

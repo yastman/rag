@@ -100,16 +100,16 @@ def build_card_buttons(
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(
-                    text="📅 На осмотр",
-                    callback_data=f"card:viewing:{property_id}",
-                ),
                 fav_btn,
+                InlineKeyboardButton(
+                    text="👤 Менеджеру",
+                    callback_data=f"card:ask:{property_id}",
+                ),
             ],
             [
                 InlineKeyboardButton(
-                    text="💬 Уточнить у менеджера",
-                    callback_data=f"card:ask:{property_id}",
+                    text="📅 На осмотр",
+                    callback_data=f"card:viewing:{property_id}",
                 ),
             ],
         ]
