@@ -456,31 +456,25 @@ async def test_on_summary_search_resets_scroll_and_goes_to_results(monkeypatch):
 
 
 def test_switchto_change_in_summary_targets_change_filter():
-    """SwitchTo 'change' in summary window targets FunnelSG.change_filter."""
+    """SwitchTo 'change' in summary window targets FunnelSG.change_filter (may be inside Row)."""
     from aiogram_dialog.widgets.kbd import SwitchTo as SwitchToWidget
 
     summary_window = funnel_dialog.windows[FunnelSG.summary]
-    found = False
-    for widget in summary_window.keyboard.buttons:
+    found_widget = None
+
+    def _find(widget):
+        nonlocal found_widget
         if isinstance(widget, SwitchToWidget) and widget.widget_id == "change":
-            assert widget.state == FunnelSG.change_filter
-            found = True
-            break
-    assert found, "SwitchTo 'change' not found in summary window"
+            found_widget = widget
+            return
+        for child in getattr(widget, "buttons", []):
+            _find(child)
 
+    for child in summary_window.keyboard.buttons:
+        _find(child)
 
-def test_switchto_refine_in_summary_targets_preferences():
-    """SwitchTo 'refine' in summary window targets FunnelSG.preferences."""
-    from aiogram_dialog.widgets.kbd import SwitchTo as SwitchToWidget
-
-    summary_window = funnel_dialog.windows[FunnelSG.summary]
-    found = False
-    for widget in summary_window.keyboard.buttons:
-        if isinstance(widget, SwitchToWidget) and widget.widget_id == "refine":
-            assert widget.state == FunnelSG.preferences
-            found = True
-            break
-    assert found, "SwitchTo 'refine' not found in summary window"
+    assert found_widget is not None, "SwitchTo 'change' not found in summary window"
+    assert found_widget.state == FunnelSG.change_filter
 
 
 # --- Change filter ---
@@ -1023,26 +1017,60 @@ async def test_on_search_list_resets_pagination():
     assert manager.dialog_data["city"] == "Бургас"
 
 
-def test_summary_window_has_list_and_cards_buttons():
-    """Summary Window must have both 'list' and 'cards' result buttons."""
-    summary_window = funnel_dialog.windows[FunnelSG.summary]
-    assert summary_window is not None, "Summary window not found"
+def _collect_widget_ids(window) -> set:
+    """Collect all widget IDs in a window (recursing into Row etc)."""
+    ids: set = set()
 
-    widgets = {}
-
-    def _collect(widget):
+    def _recurse(widget):
         if hasattr(widget, "widget_id") and widget.widget_id:
-            widgets[widget.widget_id] = widget
+            ids.add(widget.widget_id)
         for child in getattr(widget, "buttons", []):
-            _collect(child)
+            _recurse(child)
 
-    for child in summary_window.keyboard.buttons:
-        _collect(child)
+    for child in window.keyboard.buttons:
+        _recurse(child)
+    return ids
 
-    assert "search_list" in widgets, "Missing 'search_list' SwitchTo button"
-    assert "search_cards" in widgets, "Missing 'search_cards' Button"
-    assert "search" not in widgets, "Old 'search' button still present"
-    assert widgets["search_list"].state == FunnelSG.results, "search_list must target results"
+
+# ============================================================
+# Task 3 (redesign): Summary window — Find/Edit buttons, live count
+# ============================================================
+
+
+class TestSummaryRedesign:
+    async def test_summary_data_includes_count(self):
+        """Summary должен показывать 'Найдено: X апартаментов'."""
+        mock_svc = MagicMock()
+        mock_svc.count_with_filters = AsyncMock(return_value=23)
+        result = await funnel_module.get_summary_data(
+            dialog_manager=SimpleNamespace(
+                dialog_data={"city": "Солнечный берег", "property_type": "1bed", "budget": "mid"},
+                middleware_data={"apartments_service": mock_svc},
+            ),
+        )
+        assert "23" in result["summary_text"]
+        assert "Найдено" in result["summary_text"]
+
+    async def test_summary_data_includes_sort_info(self):
+        """Summary должен показывать сортировку."""
+        mock_svc = MagicMock()
+        mock_svc.count_with_filters = AsyncMock(return_value=10)
+        result = await funnel_module.get_summary_data(
+            dialog_manager=SimpleNamespace(
+                dialog_data={"city": "any", "property_type": "any", "budget": "any"},
+                middleware_data={"apartments_service": mock_svc},
+            ),
+        )
+        assert "цене" in result["summary_text"].lower()
+
+    def test_summary_window_has_find_and_edit_buttons(self):
+        """Summary должен иметь кнопки 'Найти' и 'Изменить', без 'Списком/Карточками'."""
+        summary_window = funnel_dialog.windows[FunnelSG.summary]
+        button_ids = _collect_widget_ids(summary_window)
+        assert "search_find" in button_ids, "'search_find' button missing from summary window"
+        assert "change" in button_ids, "'change' button missing from summary window"
+        assert "search_list" not in button_ids, "'search_list' should be removed"
+        assert "search_cards" not in button_ids, "'search_cards' should be removed"
 
 
 def test_funnel_has_pref_section_window():
