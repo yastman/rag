@@ -42,6 +42,6 @@ class DemoCB(CallbackData, prefix="demo"):
 class FilterPanelCB(CallbackData, prefix="fpanel"):
     """Filter panel callback data."""
 
-    action: str  ***REMOVED*** "select", "apply", "reset", "back", "set"
+    action: str  ***REMOVED*** "select", "set", "apply", "reset", "back", "main"
     field: str  ***REMOVED*** "city", "rooms", "budget", "view", "area", "floor", "complex", "furnished", "promotion"
     value: str = ""  ***REMOVED*** значение при action="set"
