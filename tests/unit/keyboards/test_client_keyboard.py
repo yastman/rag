@@ -22,15 +22,15 @@ def test_build_client_keyboard_returns_markup():
     assert isinstance(kb, ReplyKeyboardMarkup)
 
 
-def test_keyboard_has_3_rows():
+def test_keyboard_has_4_rows():
     kb = build_client_keyboard()
-    assert len(kb.keyboard) == 3
+    assert len(kb.keyboard) == 4
 
 
-def test_keyboard_has_6_buttons():
+def test_keyboard_has_7_buttons():
     kb = build_client_keyboard()
     buttons = [btn for row in kb.keyboard for btn in row]
-    assert len(buttons) == 6
+    assert len(buttons) == 7
 
 
 def test_keyboard_is_persistent():
@@ -48,12 +48,12 @@ def test_build_no_i18n_uses_ru_fallback():
     assert any("Подобрать" in b for b in buttons)
 
 
-def test_menu_buttons_has_6_entries():
-    assert len(MENU_BUTTONS) == 6
+def test_menu_buttons_has_7_entries():
+    assert len(MENU_BUTTONS) == 7
 
 
-def test_action_ids_has_6_entries():
-    assert len(_ACTION_IDS) == 6
+def test_action_ids_has_7_entries():
+    assert len(_ACTION_IDS) == 7
 
 
 # --- i18n-aware tests ---
@@ -77,12 +77,13 @@ def test_build_with_i18n():
             "kb-manager": "👤 Manager",
             "kb-ask": "💬 Ask",
             "kb-bookmarks": "📌 Bookmarks",
+            "kb-demo": "🎯 Demo",
         }
     )
     kb = build_client_keyboard(i18n=i18n)
     assert isinstance(kb, ReplyKeyboardMarkup)
     buttons = [btn.text for row in kb.keyboard for btn in row]
-    assert len(buttons) == 6
+    assert len(buttons) == 7
     assert "🏠 Search" in buttons
     assert "🔑 Services" in buttons
 

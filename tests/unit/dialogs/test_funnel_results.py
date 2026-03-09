@@ -143,8 +143,8 @@ def test_combined_filters():
 
 
 @pytest.mark.asyncio
-async def test_get_results_data_returns_cards():
-    """get_results_data calls scroll_with_filters and formats cards."""
+async def test_get_results_data_returns_apartments_list():
+    """get_results_data returns structured apartment dicts for List widget."""
     from telegram_bot.dialogs.funnel import get_results_data
 
     results = [
@@ -152,16 +152,19 @@ async def test_get_results_data_returns_cards():
             "id": "apt-1",
             "payload": {
                 "complex_name": "Sunrise Complex",
+                "section": "B-2",
+                "apartment_number": "105",
                 "rooms": 1,
                 "floor": 2,
                 "area_m2": 42.0,
-                "view_primary": "Море",
+                "view_primary": "sea",
                 "price_eur": 48500,
+                "city": "Свети Влас",
             },
         }
     ]
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 297, "next-uuid"))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 297, 48500.0, ["apt-1"]))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "studio", "budget": "low"},
@@ -169,19 +172,94 @@ async def test_get_results_data_returns_cards():
     )
 
     result = await get_results_data(dialog_manager=manager)
-    assert result["title"] == "Найдено 297 апартаментов (показаны 1–1)"
-    assert "Sunrise Complex" in result["results_text"]
+
+    assert "apartments" in result
+    assert len(result["apartments"]) == 1
+    card = result["apartments"][0]["card"]
+    assert "Sunrise Complex" in card
+    assert "B-2" in card
+    assert "№105" in card
+    assert "48 500 €" in card
+    assert "Студия" in card
+    assert "\n" in card  # multi-line card
+    assert result["has_apartments"] is True
     assert result["has_more"] is True
+    assert result["no_results"] is False
+    assert result["title"] == "Найдено <b>297</b> апартаментов (показаны 1–1)"
     assert "296 осталось" in result["btn_more"]
     mock_svc.scroll_with_filters.assert_awaited_once()
+    call_kwargs = mock_svc.scroll_with_filters.await_args
+    assert call_kwargs.kwargs["limit"] == 10
 
 
 @pytest.mark.asyncio
-async def test_get_results_data_no_results():
+async def test_card_has_html_bold_tags():
+    """Card text must contain HTML <b> tags for idx, complex name, and price."""
+    from telegram_bot.dialogs.funnel import get_results_data
+
+    results = [
+        {
+            "id": "apt-1",
+            "payload": {
+                "complex_name": "Test Resort",
+                "section": "A-1",
+                "apartment_number": "42",
+                "rooms": 2,
+                "floor": 3,
+                "area_m2": 75.6,
+                "view_primary": "sea_panorama",
+                "price_eur": 150000,
+                "city": "Бургас",
+            },
+        }
+    ]
+    mock_svc = MagicMock()
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 1, None, []))
+
+    manager = SimpleNamespace(
+        dialog_data={"property_type": "2bed", "budget": "mid"},
+        middleware_data={"apartments_service": mock_svc},
+    )
+
+    result = await get_results_data(dialog_manager=manager)
+    card = result["apartments"][0]["card"]
+
+    # HTML bold tags
+    assert "<b>1.</b>" in card
+    assert "<b>Test Resort</b>" in card
+    assert "<b>150 000 €</b>" in card
+
+    # View translated from raw view_primary
+    assert "Панорама моря" in card
+    assert "sea_panorama" not in card
+
+    # Area rounded to int
+    assert "76 м²" in card
+    assert "75.6" not in card
+
+    # 3-line format
+    lines = card.split("\n")
+    assert len(lines) == 3
+
+
+def test_results_window_has_html_parse_mode():
+    """Results Window must have parse_mode=HTML for bold rendering."""
+    from aiogram.enums import ParseMode
+
+    from telegram_bot.dialogs.funnel import funnel_dialog
+    from telegram_bot.dialogs.states import FunnelSG
+
+    results_window = funnel_dialog.windows[FunnelSG.results]
+    assert results_window.parse_mode == ParseMode.HTML
+
+
+@pytest.mark.asyncio
+async def test_get_results_data_no_results_sets_flag():
+    """get_results_data sets no_results=True when empty."""
     from telegram_bot.dialogs.funnel import get_results_data
 
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 0, None))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 0, None, []))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "3bed", "budget": "luxury"},
@@ -189,7 +267,9 @@ async def test_get_results_data_no_results():
     )
 
     result = await get_results_data(dialog_manager=manager)
-    assert "ничего не найдено" in result["results_text"]
+    assert result["apartments"] == []
+    assert result["has_apartments"] is False
+    assert result["no_results"] is True
     assert result["has_more"] is False
 
 
@@ -203,7 +283,8 @@ async def test_get_results_data_no_service():
     )
 
     result = await get_results_data(dialog_manager=manager)
-    assert "недоступен" in result["results_text"].lower()
+    assert result["no_results"] is True
+    assert "недоступен" in result["no_results_text"].lower()
     assert result["btn_back"] == "Назад"
 
 
@@ -212,7 +293,7 @@ async def test_get_results_data_uses_i18n_strings():
     from telegram_bot.dialogs.funnel import get_results_data
 
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 12, "next"))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=([], 12, None, []))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "any", "budget": "any"},
@@ -267,7 +348,7 @@ async def test_get_results_data_uses_i18n_range_and_remaining_when_results_exist
         }
     ]
     mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 12, "next"))
+    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 12, 48500.0, ["apt-1"]))
 
     manager = SimpleNamespace(
         dialog_data={"property_type": "any", "budget": "any", "scroll_page": 1},
@@ -277,3 +358,54 @@ async def test_get_results_data_uses_i18n_range_and_remaining_when_results_exist
     result = await get_results_data(dialog_manager=manager)
     assert result["title"] == "Found 12 apartments (showing 1–1)"
     assert result["btn_more"] == "🔄 Show more (11 left)"
+    assert "apartments" in result
+    assert len(result["apartments"]) == 1
+
+
+# --- Task 4: build_funnel_filters edge cases ---
+
+
+def test_area_small():
+    f = build_funnel_filters(area="small")
+    assert f == {"area_m2": {"lte": 40}}
+
+
+def test_area_mid():
+    f = build_funnel_filters(area="mid")
+    assert f == {"area_m2": {"gte": 40, "lte": 60}}
+
+
+def test_area_xlarge():
+    f = build_funnel_filters(area="xlarge")
+    assert f == {"area_m2": {"gte": 80, "lte": 120}}
+
+
+def test_area_any_not_included():
+    f = build_funnel_filters(area="any")
+    assert "area_m2" not in f
+
+
+def test_city_filter():
+    f = build_funnel_filters(city="Свети Влас")
+    assert f == {"city": "Свети Влас"}
+
+
+def test_city_any_not_included():
+    f = build_funnel_filters(city="any")
+    assert "city" not in f
+
+
+def test_rooms_studio_returns_list():
+    """Studio maps to [0, 1] for MatchAny."""
+    f = build_funnel_filters(rooms="studio")
+    assert f["rooms"] == [0, 1]
+
+
+def test_rooms_list_creates_match_any():
+    """rooms=[0,1] -> MatchAny(any=[0,1]) in Qdrant filter."""
+    from telegram_bot.services.apartments_service import _build_apartment_filter
+
+    qdrant_filter = _build_apartment_filter({"rooms": [0, 1]})
+    assert qdrant_filter is not None
+    cond = qdrant_filter.must[0]
+    assert cond.match.any == [0, 1]

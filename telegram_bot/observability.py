@@ -326,6 +326,30 @@ def sync_langfuse_model_definitions(
     return created_or_updated
 
 
+def _disable_otel_exporter() -> None:
+    """Shutdown any active OTel TracerProvider to stop span exports.
+
+    Shuts down the SDK TracerProvider (if present) but keeps it in place so that
+    Langfuse SDK lazy-init can still call ``add_span_processor`` without crashing.
+    Replacing with ``NoOpTracerProvider`` would break Langfuse v3 which assumes the
+    provider always has ``add_span_processor``.
+
+    Also sets ``LANGFUSE_TRACING_ENABLED=false`` so that Langfuse SDK's own
+    lazy-init path skips OTEL setup entirely.
+    """
+    os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")
+    try:
+        from opentelemetry import trace as otel_trace_api
+        from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
+
+        current = otel_trace_api.get_tracer_provider()
+        actual = getattr(current, "_real_provider", current)
+        if isinstance(actual, SdkTracerProvider):
+            actual.shutdown()
+    except ImportError:
+        pass
+
+
 def initialize_langfuse(
     *,
     public_key: str | None = None,
@@ -358,6 +382,7 @@ def initialize_langfuse(
         if force or not _langfuse_init_attempted:
             logger.info("Langfuse disabled (missing LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY)")
         _langfuse_init_attempted = True
+        _disable_otel_exporter()
         return None
 
     # Probe endpoint reachability only when an explicit host is configured.
@@ -372,6 +397,7 @@ def initialize_langfuse(
                 "Start Langfuse locally or unset LANGFUSE_HOST to suppress this warning.",
                 resolved_host,
             )
+        _disable_otel_exporter()
         return None
 
     kwargs: dict[str, Any] = {
@@ -400,6 +426,7 @@ def initialize_langfuse(
         logger.warning("Failed to initialize Langfuse client", exc_info=True)
         _langfuse_client = None
         _langfuse_init_attempted = True
+        _disable_otel_exporter()
         return None
 
 

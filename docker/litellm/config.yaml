@@ -69,6 +69,9 @@ litellm_settings:
   json_logs: true
   # Drop provider-unsupported request params instead of failing hard
   drop_params: true
+  # Langfuse observability callbacks
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
   # Model-group fallbacks on upstream/provider errors
   fallbacks:
     - gpt-4o-mini: [gpt-4o-mini-cerebras-oss, gpt-4o-mini-fallback, gpt-4o-mini-openai]
