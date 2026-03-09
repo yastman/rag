@@ -2042,8 +2042,6 @@ class PropertyBot:
         dialog_manager: Any = None,
     ) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
-        from .keyboards.property_card import build_results_footer
-
         # Resolve action from CallbackData or legacy string
         if callback_data is not None:
             action = callback_data.action
@@ -2125,13 +2123,35 @@ class PropertyBot:
             total = apartment_total_value
             has_more = shown_total < total
             if callback.message:
+                _footer_rows: list[list[InlineKeyboardButton]] = []
+                if has_more:
+                    _footer_rows.append(
+                        [
+                            InlineKeyboardButton(
+                                text=f"🔄 Показать ещё ({max(total - shown_total, 0)} осталось)",
+                                callback_data=ResultsCB(action="more").pack(),
+                            )
+                        ]
+                    )
+                _footer_rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="⚙️ Изменить параметры",
+                            callback_data=ResultsCB(action="refine").pack(),
+                        )
+                    ]
+                )
+                _footer_rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="📅 Запись на осмотр",
+                            callback_data=ResultsCB(action="viewing").pack(),
+                        )
+                    ]
+                )
                 footer_msg = await callback.message.answer(
                     f"Найдено {total} апартаментов (показаны {new_offset + 1}–{shown_total})",
-                    reply_markup=build_results_footer(
-                        shown_total=shown_total,
-                        total=total,
-                        has_more=has_more,
-                    ),
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=_footer_rows),
                 )
                 await state.update_data(
                     apartment_offset=new_offset,
@@ -2453,8 +2473,6 @@ class PropertyBot:
 
         # Store results in FSMContext and send property cards (#654)
         if state is not None and results:
-            from .keyboards.property_card import build_results_footer
-
             await state.update_data(
                 apartment_results=results,
                 apartment_query=user_text,
@@ -2469,13 +2487,36 @@ class PropertyBot:
                 await self._send_property_card(message, result, message.from_user.id)  # type: ignore[union-attr]
             shown = len(page)
             total = len(results)
+            _has_more = total > _APARTMENT_PAGE_SIZE
+            _footer_rows2: list[list[InlineKeyboardButton]] = []
+            if _has_more:
+                _footer_rows2.append(
+                    [
+                        InlineKeyboardButton(
+                            text=f"🔄 Показать ещё ({max(total - shown, 0)} осталось)",
+                            callback_data=ResultsCB(action="more").pack(),
+                        )
+                    ]
+                )
+            _footer_rows2.append(
+                [
+                    InlineKeyboardButton(
+                        text="⚙️ Изменить параметры",
+                        callback_data=ResultsCB(action="refine").pack(),
+                    )
+                ]
+            )
+            _footer_rows2.append(
+                [
+                    InlineKeyboardButton(
+                        text="📅 Запись на осмотр",
+                        callback_data=ResultsCB(action="viewing").pack(),
+                    )
+                ]
+            )
             footer_msg = await message.answer(
                 f"Найдено {total} апартаментов (показаны 1–{shown})",
-                reply_markup=build_results_footer(
-                    shown_total=shown,
-                    total=total,
-                    has_more=total > _APARTMENT_PAGE_SIZE,
-                ),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=_footer_rows2),
             )
             await state.update_data(apartment_footer_msg_id=footer_msg.message_id)
 
