@@ -97,15 +97,13 @@ def build_card_buttons(
             text="📌 В избранное",
             callback_data=FavoriteCB(action="add", apartment_id=property_id).pack(),
         )
+    manager_btn = InlineKeyboardButton(
+        text="💬 Менеджеру",
+        callback_data=f"card:ask:{property_id}",
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                fav_btn,
-                InlineKeyboardButton(
-                    text="👤 Менеджеру",
-                    callback_data=f"card:ask:{property_id}",
-                ),
-            ],
+            [fav_btn, manager_btn],
             [
                 InlineKeyboardButton(
                     text="📅 На осмотр",
