@@ -109,7 +109,7 @@ def test_parse_menu_button_known():
     assert parse_menu_button("🏠 Подобрать квартиру") == "search"
     assert parse_menu_button("🔑 Услуги") == "services"
     assert parse_menu_button("📅 Запись на осмотр") == "viewing"
-    assert parse_menu_button("👤 Менеджер") == "manager"
+    assert parse_menu_button("👤 Связаться с менеджером") == "manager"
     assert parse_menu_button("💬 Задать вопрос") == "ask"
     assert parse_menu_button("📌 Мои закладки") == "bookmarks"
 
@@ -172,6 +172,15 @@ def test_parse_menu_button_i18n_hub_raises_fallback():
 
 def test_parse_menu_button_empty_returns_none():
     assert parse_menu_button("") is None
+
+
+# --- MENU_BUTTONS key verification tests ---
+
+
+def test_menu_buttons_manager_key_is_updated():
+    """MENU_BUTTONS must use '👤 Связаться с менеджером', not old '👤 Менеджер'."""
+    assert MENU_BUTTONS["👤 Связаться с менеджером"] == "manager"
+    assert "👤 Менеджер" not in MENU_BUTTONS
 
 
 def test_get_menu_button_texts_includes_localized_labels():
