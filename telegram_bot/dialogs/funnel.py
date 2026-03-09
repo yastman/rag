@@ -545,6 +545,21 @@ async def get_summary_data(**kwargs: Any) -> dict[str, Any]:
         lines.append("🎁 Акции: Только акции")
 
     summary_text = "\n".join(lines)
+
+    # Live count via payload filter
+    svc = None
+    if dialog_manager is not None:
+        middleware = getattr(dialog_manager, "middleware_data", {})
+        svc = middleware.get("apartments_service")
+    count = 0
+    if svc is not None:
+        try:
+            filters = _build_funnel_filters(data)
+            count = await svc.count_with_filters(filters=filters)
+        except Exception:
+            logger.exception("Failed to count apartments for summary")
+    summary_text += f"\n\nНайдено: {count} апартаментов\nСортировка: по цене ↑"
+
     return {
         "summary_text": summary_text,
         "can_search": True,
@@ -1290,29 +1305,17 @@ funnel_dialog = Dialog(
     Window(
         Format("{summary_text}"),
         Row(
-            SwitchTo(
-                Format("📋 Списком"),
-                id="search_list",
-                state=FunnelSG.results,
-                on_click=on_search_list,
-                when="can_search",
-            ),
             Button(
-                Format("🏠 Карточками"),
-                id="search_cards",
+                Format("🔍 Найти"),
+                id="search_find",
                 on_click=on_summary_search,
                 when="can_search",
             ),
-        ),
-        SwitchTo(
-            Format("✏️ Изменить параметры"),
-            id="change",
-            state=FunnelSG.change_filter,
-        ),
-        SwitchTo(
-            Format("⚙️ Доп. пожелания"),
-            id="refine",
-            state=FunnelSG.preferences,
+            SwitchTo(
+                Format("✏️ Изменить"),
+                id="change",
+                state=FunnelSG.change_filter,
+            ),
         ),
         Cancel(Format("Отмена")),
         getter=get_summary_data,
