@@ -112,7 +112,7 @@ async def test_zero_results_recovery_removes_filter():
     )
     assert "floor" not in data
     assert data.get("scroll_start_from") is None
-    manager.switch_to.assert_awaited_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_with(FunnelSG.summary)
 
     # Verify filters without floor
     filters = build_funnel_filters(
