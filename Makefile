@@ -115,14 +115,17 @@ pylint: ## Run Pylint (comprehensive linting)
 	uv run pylint src/ --rcfile=pyproject.toml || true
 	@echo "$(GREEN)✓ Pylint check complete$(NC)"
 
-security: ## Run Bandit security checks
+security: ## Run Bandit security scan + Vulture dead-code check
 	@echo "$(BLUE)Running Bandit security checks...$(NC)"
-	uv run bandit -r src/ -c pyproject.toml
-	@echo "$(GREEN)✓ Security check complete$(NC)"
+	uv run bandit -r src/ telegram_bot/ -c pyproject.toml
+	@echo "$(GREEN)✓ Bandit security check complete$(NC)"
+	@echo "$(BLUE)Checking for dead code with Vulture...$(NC)"
+	uv run vulture src/ telegram_bot/ --min-confidence 80
+	@echo "$(GREEN)✓ Vulture dead-code check complete$(NC)"
 
-dead-code: ## Find dead code with Vulture
+dead-code: ## Find dead code with Vulture (alias for security)
 	@echo "$(BLUE)Checking for dead code...$(NC)"
-	uv run vulture src/ --min-confidence 80
+	uv run vulture src/ telegram_bot/ --min-confidence 80
 	@echo "$(GREEN)✓ Dead code check complete$(NC)"
 
 all-checks: lint type-check security ## Run all code quality checks
