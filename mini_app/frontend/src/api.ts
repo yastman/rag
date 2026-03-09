@@ -11,52 +11,28 @@ export async function fetchConfig() {
   }
 }
 
-export async function* streamChat(
-  message: string,
+export interface StartExpertResponse {
+  thread_id: number;
+  expert_name: string;
+  status: string;
+}
+
+export async function startExpert(
   userId: number,
-  expertId?: string,
-) {
-  const resp = await fetch(`${API_BASE}/chat`, {
+  expertId: string,
+  message?: string,
+): Promise<StartExpertResponse> {
+  const resp = await fetch(`${API_BASE}/start-expert`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      message,
       user_id: userId,
       expert_id: expertId,
+      message: message || undefined,
     }),
   });
-
-  if (!resp.ok) {
-    throw new Error(`Chat request failed: ${resp.status}`);
-  }
-
-  const reader = resp.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let parsed: any;
-        try {
-          parsed = JSON.parse(line.slice(6));
-        } catch {
-          console.warn("[streamChat] Failed to parse SSE line:", line);
-          continue;
-        }
-        if (parsed.type === "error") {
-          throw new Error(parsed.text || "Stream error");
-        }
-        yield parsed;
-      }
-    }
-  }
+  if (!resp.ok) throw new Error(`start-expert failed: ${resp.status}`);
+  return resp.json();
 }
 
 export async function submitPhone(
