@@ -2207,8 +2207,9 @@ class PropertyBot:
 
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        # Resolve expert from forum topic thread
-        forum_thread_id = message.message_thread_id
+        # Resolve expert from forum topic thread (int check guards against mock objects in tests)
+        _raw_thread_id = message.message_thread_id
+        forum_thread_id: int | None = _raw_thread_id if isinstance(_raw_thread_id, int) else None
         expert_id: str | None = None
         if forum_thread_id is not None and self._topic_service is not None and self._topics_enabled:
             expert_id = await self._topic_service.get_expert_by_thread(
