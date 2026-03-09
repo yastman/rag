@@ -7,7 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram_bot.callback_data import FilterPanelCB
 
 
-# Human-readable display maps
+# Display maps for human-readable filter values
 _ROOMS_DISPLAY: dict[int, str] = {
     0: "Студия",
     1: "Студия",
@@ -17,43 +17,37 @@ _ROOMS_DISPLAY: dict[int, str] = {
     5: "4+ спальни",
 }
 
-_BUDGET_OPTIONS: list[tuple[str, str]] = [
-    ("low", "До 50 000 €"),
-    ("mid", "50 000 – 100 000 €"),
-    ("high", "100 000 – 150 000 €"),
-    ("premium", "150 000 – 200 000 €"),
-    ("luxury", "Более 200 000 €"),
-]
 
 _CITY_OPTIONS: list[str] = [
     "Солнечный берег",
     "Свети Влас",
     "Несебр",
+    "Поморие",
     "Бургас",
     "Варна",
     "Созополь",
 ]
 
-_VIEW_OPTIONS: list[str] = ["Море", "Горы", "Бассейн", "Парк", "Город"]
-
-_AREA_OPTIONS: list[tuple[str, str]] = [
-    ("small", "До 40 м²"),
-    ("medium", "40 – 80 м²"),
-    ("large", "80 – 120 м²"),
-    ("xlarge", "Более 120 м²"),
+_ROOMS_OPTIONS: list[tuple[str, int]] = [
+    ("Студия", 1),
+    ("1-спальня", 2),
+    ("2-спальни", 3),
+    ("3-спальни", 4),
+    ("4+ спальни", 5),
 ]
 
-_FLOOR_OPTIONS: list[tuple[str, str]] = [
-    ("low", "1–3 этаж"),
-    ("mid", "4–7 этаж"),
-    ("high", "8+ этаж"),
+_BUDGET_OPTIONS: list[tuple[str, str]] = [
+    ("До 50 000 €", "low"),
+    ("50 000 – 100 000 €", "mid"),
+    ("100 000 – 150 000 €", "high"),
+    ("150 000 – 200 000 €", "premium"),
+    ("Более 200 000 €", "luxury"),
 ]
 
 
 def build_filter_panel_text(*, filters: dict, count: int) -> str:
     """Build filter panel message text with active filters and count."""
     lines = ["🏠 Поиск апартаментов\n"]
-
     if filters.get("city"):
         lines.append(f"📍 Город: {filters['city']}")
     if filters.get("rooms") is not None:
@@ -65,9 +59,9 @@ def build_filter_panel_text(*, filters: dict, count: int) -> str:
         if isinstance(p, dict):
             parts = []
             if p.get("gte"):
-                parts.append(f"от {p['gte']:,.0f} €".replace(",", " "))
+                parts.append(f"от {p['gte']:,.0f} €")
             if p.get("lte"):
-                parts.append(f"до {p['lte']:,.0f} €".replace(",", " "))
+                parts.append(f"до {p['lte']:,.0f} €")
             lines.append(f"💰 Бюджет: {' '.join(parts)}")
     if filters.get("view_tags"):
         lines.append(f"🌅 Вид: {', '.join(filters['view_tags'])}")
@@ -81,7 +75,6 @@ def build_filter_panel_text(*, filters: dict, count: int) -> str:
         lines.append(f"🛋 Мебель: {'Да' if filters['is_furnished'] else 'Нет'}")
     if filters.get("is_promotion"):
         lines.append("🏷 Акции: Да")
-
     lines.append(f"\nНайдено: {count} апартаментов")
     return "\n".join(lines)
 
@@ -128,144 +121,151 @@ def build_filter_panel_keyboard(*, count: int = 0) -> InlineKeyboardMarkup:
 
 def build_filter_options_keyboard(
     field: str,
+    *,
     current_value: str | int | None = None,
 ) -> InlineKeyboardMarkup:
-    """Build inline keyboard for a specific filter sub-menu.
-
-    Shows available options with checkmark on currently selected value.
-    Always includes a back button as the last row.
-    """
+    """Build sub-menu keyboard for selecting a filter value."""
     rows: list[list[InlineKeyboardButton]] = []
 
     if field == "city":
-        rows.extend(_build_city_options(current_value))
-    elif field == "rooms":
-        rows.extend(_build_rooms_options(current_value))
-    elif field == "budget":
-        rows.extend(_build_budget_options(current_value))
-    elif field == "view":
-        rows.extend(_build_view_options(current_value))
-    elif field == "area":
-        rows.extend(_build_area_options(current_value))
-    elif field == "floor":
-        rows.extend(_build_floor_options(current_value))
-    elif field == "furnished" or field == "promotion":
-        rows.extend(_build_bool_options(field, current_value, "Да", "Нет"))
-    elif field == "complex":
-        rows.extend(_build_complex_options(current_value))
-    else:
-        rows.append([_any_btn(field)])
+        any_btn = InlineKeyboardButton(
+            text="✅ Любой город" if current_value is None else "Любой город",
+            callback_data=FilterPanelCB(action="set", field="city", value="").pack(),
+        )
+        rows.append([any_btn])
+        for city in _CITY_OPTIONS:
+            label = f"✅ {city}" if city == current_value else city
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=label,
+                        callback_data=FilterPanelCB(action="set", field="city", value=city).pack(),
+                    )
+                ]
+            )
 
-    # Back button
+    elif field == "rooms":
+        any_btn = InlineKeyboardButton(
+            text="✅ Любое кол-во" if current_value is None else "Любое кол-во",
+            callback_data=FilterPanelCB(action="set", field="rooms", value="").pack(),
+        )
+        rows.append([any_btn])
+        for label, value in _ROOMS_OPTIONS:
+            is_current = int(current_value) == value if current_value is not None else False
+            display = f"✅ {label}" if is_current else label
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=display,
+                        callback_data=FilterPanelCB(
+                            action="set", field="rooms", value=str(value)
+                        ).pack(),
+                    )
+                ]
+            )
+
+    elif field == "budget":
+        any_btn = InlineKeyboardButton(
+            text="✅ Любой бюджет" if current_value is None else "Любой бюджет",
+            callback_data=FilterPanelCB(action="set", field="budget", value="").pack(),
+        )
+        rows.append([any_btn])
+        for label, value in _BUDGET_OPTIONS:
+            is_current = current_value == value
+            display = f"✅ {label}" if is_current else label
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=display,
+                        callback_data=FilterPanelCB(
+                            action="set", field="budget", value=value
+                        ).pack(),
+                    )
+                ]
+            )
+
+    elif field == "furnished":
+        is_yes = current_value is True or current_value == "true"
+        is_no = current_value is False or current_value == "false"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Да" if is_yes else "Да",
+                    callback_data=FilterPanelCB(
+                        action="set", field="furnished", value="true"
+                    ).pack(),
+                )
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Нет" if is_no else "Нет",
+                    callback_data=FilterPanelCB(
+                        action="set", field="furnished", value="false"
+                    ).pack(),
+                )
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Любое" if current_value is None else "Любое",
+                    callback_data=FilterPanelCB(action="set", field="furnished", value="").pack(),
+                )
+            ]
+        )
+
+    elif field == "promotion":
+        is_yes = current_value is True or current_value == "true"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Да" if is_yes else "Да",
+                    callback_data=FilterPanelCB(
+                        action="set", field="promotion", value="true"
+                    ).pack(),
+                )
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Нет" if not is_yes else "Нет",
+                    callback_data=FilterPanelCB(
+                        action="set", field="promotion", value="false"
+                    ).pack(),
+                )
+            ]
+        )
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Любое" if current_value is None else "Любое",
+                    callback_data=FilterPanelCB(action="set", field="promotion", value="").pack(),
+                )
+            ]
+        )
+
+    else:
+        # Generic text-based filter (view, area, floor, complex) — placeholder
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Любое",
+                    callback_data=FilterPanelCB(action="set", field=field, value="").pack(),
+                )
+            ]
+        )
+
+    # Back button always last
     rows.append(
         [
             InlineKeyboardButton(
-                text="↩️ Назад",
-                callback_data=FilterPanelCB(action="back", field=field).pack(),
+                text="↩️ Назад к фильтрам",
+                callback_data=FilterPanelCB(action="main", field="").pack(),
             )
         ]
     )
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
-
-
-# --- Option builders ---
-
-
-def _check(label: str, is_active: bool) -> str:
-    return f"✅ {label}" if is_active else label
-
-
-def _set_btn(field: str, value: str, label: str, is_active: bool = False) -> InlineKeyboardButton:
-    return InlineKeyboardButton(
-        text=_check(label, is_active),
-        callback_data=FilterPanelCB(action="set", field=field, value=value).pack(),
-    )
-
-
-def _any_btn(field: str) -> InlineKeyboardButton:
-    return InlineKeyboardButton(
-        text="Любой",
-        callback_data=FilterPanelCB(action="set", field=field, value="").pack(),
-    )
-
-
-def _build_city_options(current: str | int | None) -> list[list[InlineKeyboardButton]]:
-    rows: list[list[InlineKeyboardButton]] = []
-    for city in _CITY_OPTIONS:
-        rows.append([_set_btn("city", city, city, city == current)])
-    rows.append([_any_btn("city")])
-    return rows
-
-
-def _build_rooms_options(current: str | int | None) -> list[list[InlineKeyboardButton]]:
-    options = [
-        (1, "Студия"),
-        (2, "1-спальня"),
-        (3, "2-спальни"),
-        (4, "3-спальни"),
-    ]
-    rows: list[list[InlineKeyboardButton]] = []
-    for val, label in options:
-        is_active = current is not None and int(current) == val
-        rows.append([_set_btn("rooms", str(val), label, is_active)])
-    rows.append([_any_btn("rooms")])
-    return rows
-
-
-def _build_budget_options(current: str | int | None) -> list[list[InlineKeyboardButton]]:
-    rows: list[list[InlineKeyboardButton]] = []
-    for key, label in _BUDGET_OPTIONS:
-        rows.append([_set_btn("budget", key, label, key == current)])
-    rows.append([_any_btn("budget")])
-    return rows
-
-
-def _build_view_options(current: str | int | None) -> list[list[InlineKeyboardButton]]:
-    rows: list[list[InlineKeyboardButton]] = []
-    for view in _VIEW_OPTIONS:
-        view_lower = view.lower()
-        is_active = isinstance(current, (list, str)) and (
-            view_lower in current
-            if isinstance(current, list)
-            else view_lower == str(current).lower()
-        )
-        rows.append([_set_btn("view", view_lower, view, is_active)])
-    rows.append([_any_btn("view")])
-    return rows
-
-
-def _build_area_options(current: str | int | None) -> list[list[InlineKeyboardButton]]:
-    rows: list[list[InlineKeyboardButton]] = []
-    for key, label in _AREA_OPTIONS:
-        rows.append([_set_btn("area", key, label, key == current)])
-    rows.append([_any_btn("area")])
-    return rows
-
-
-def _build_floor_options(current: str | int | None) -> list[list[InlineKeyboardButton]]:
-    rows: list[list[InlineKeyboardButton]] = []
-    for key, label in _FLOOR_OPTIONS:
-        rows.append([_set_btn("floor", key, label, key == current)])
-    rows.append([_any_btn("floor")])
-    return rows
-
-
-def _build_bool_options(
-    field: str,
-    current: str | int | None,
-    yes_label: str,
-    no_label: str,
-) -> list[list[InlineKeyboardButton]]:
-    yes_active = current is True or current == "true" or current == "yes"
-    no_active = current is False or current == "false" or current == "no"
-    return [
-        [_set_btn(field, "true", yes_label, yes_active)],
-        [_set_btn(field, "false", no_label, no_active)],
-        [_any_btn(field)],
-    ]
-
-
-def _build_complex_options(current: str | int | None) -> list[list[InlineKeyboardButton]]:
-    # Комплексы могут быть динамическими, пока заглушка
-    return [[_any_btn("complex")]]
