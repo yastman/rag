@@ -290,14 +290,9 @@ svc-back-to-services = Назад до послуг
 
 # ── Handoff (Forum Topics) ──────────────────────────────────────
 handoff-qual-prompt = Щоб менеджер одразу допоміг — кілька питань:
-handoff-goal-buy = 🏠 Купівля
-handoff-goal-rent = 🔑 Оренда
-handoff-goal-consult = 📋 Консультація
-handoff-budget-prompt = Який бюджет приблизно?
-handoff-budget-low = до 50к€
-handoff-budget-mid = 50-100к€
-handoff-budget-high = 100к€+
-handoff-budget-unknown = Поки не знаю
+handoff-goal-search = 🏠 Підбір нерухомості
+handoff-goal-services = 🔑 Послуги
+handoff-goal-consult = 💬 Консультація
 handoff-contact-prompt = Як зручніше зв'язатися?
 handoff-contact-chat = 💬 Написати зараз
 handoff-contact-phone = 📞 Залишити номер
