@@ -36,9 +36,10 @@ digraph flow {
   wait [label="Фаза 4: ОЖИДАНИЕ\n0 токенов, мониторинг .signals/"];
   review [label="Фаза 5.0: CODE REVIEW\norch лично читает diff\nчерез context-mode"];
   verify [label="Фаза 5.1: ВЕРИФИКАЦИЯ\nартефакты + маркеры"];
+  sdkupd [label="Фаза 5.2: SDK РЕЕСТР\nобновить паттерны/gotchas\nновые SDK из diff"];
   report [label="Фаза 6: ОТЧЁТ\nPR URLs + метрики → юзеру\nочистка"];
 
-  init -> codebase -> classify -> parallel -> sdk -> spawn -> wait -> review -> verify -> report;
+  init -> codebase -> classify -> parallel -> sdk -> spawn -> wait -> review -> verify -> sdkupd -> report;
   review -> spawn [label="diff неверный\nэскалация 1x", style=dashed];
   verify -> spawn [label="артефакты провал\nэскалация 1x", style=dashed];
 }
@@ -206,6 +207,51 @@ Orch **лично** читает diff через context-mode. Worker может
     Code Review OK + Артефакты OK + маркеры MISSING → PASS + WARNING в отчёте
     Code Review OK + Артефакты FAIL → FAIL → эскалация (код верный, но CI не проходит)
     Code Review FAIL → FAIL → эскалация (артефакты не проверяем)
+
+### Фаза 5.2: Обновление SDK реестра
+
+После PASS верификации — orch проверяет `sdk_updates` из сигнала worker'а и diff.
+
+    # 1. Читать sdk_updates из сигнала:
+    updates=$(cat .signals/worker-{name}.json | python3 -c "
+      import sys,json
+      d=json.load(sys.stdin)
+      for u in d.get('sdk_updates',[]):
+        print(f\"{u['type']}: {u['sdk']} — {u['detail']}\")
+    ")
+
+    # 2. Если есть updates ИЛИ diff затрагивает новую зависимость:
+    mcp execute(language="shell", code="""
+      cd '{WT_PATH}'
+      # Новые импорты из diff:
+      git diff dev...HEAD | grep -E '^\+.*from .* import|^\+.*import ' | head -20
+      # Изменения в pyproject.toml:
+      git diff dev...HEAD -- pyproject.toml 2>/dev/null | head -20
+    """, intent="check for new SDK patterns or dependencies in worker diff")
+
+    # 3. При обнаружении обновлений — orch редактирует реестр:
+    test -f .claude/rules/sdk-registry.md && {
+      # Обновить существующую секцию SDK (новый паттерн/gotcha)
+      # ИЛИ добавить новый SDK по шаблону в конце реестра
+      Edit .claude/rules/sdk-registry.md
+      git add .claude/rules/sdk-registry.md
+      git commit -m "docs(sdk): update registry — {краткое описание}"
+    }
+
+| Тип обновления | Действие orch |
+|----------------|---------------|
+| `new_pattern` | Добавить в `паттерны` существующего SDK |
+| `outdated_pattern` | Обновить/заменить в `паттерны` + `как_у_нас` |
+| `new_sdk` | Добавить новую секцию по шаблону |
+| `new_gotcha` | Добавить в `gotchas` существующего SDK |
+| Новый import в diff, нет в реестре | Добавить новую секцию по шаблону |
+| Изменения в pyproject.toml (add/remove dep) | Добавить/удалить секцию SDK |
+
+**Правила:**
+- Обновление реестра — **в основной ветке** (dev), НЕ в worktree worker'а
+- Коммит отдельный от PR worker'а
+- Нет обновлений → пропустить (не коммитить пустое)
+- Реестр не существует → пропустить фазу
 
 ## Эскалация
 
