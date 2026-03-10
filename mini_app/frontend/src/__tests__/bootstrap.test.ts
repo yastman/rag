@@ -81,14 +81,16 @@ describe("bootstrap", () => {
     expect(mockSwipeDisable).toHaveBeenCalled();
   });
 
-  it("returns isTelegram=false when not in TMA", async () => {
+  it("forces isTelegram=true in dev mode (skips isTMA check)", async () => {
+    // In dev mode, isTelegram is always true regardless of isTMA result
     const bridge = await import("@tma.js/bridge");
     vi.mocked(bridge.isTMA).mockResolvedValueOnce(false);
 
     const { initApp } = await import("../bootstrap");
     const result = await initApp();
 
-    expect(result.isTelegram).toBe(false);
-    expect(mockInit).not.toHaveBeenCalled();
+    // Dev mode forces isTelegram=true, so init is still called
+    expect(result.isTelegram).toBe(true);
+    expect(mockInit).toHaveBeenCalled();
   });
 });
