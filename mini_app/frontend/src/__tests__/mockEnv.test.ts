@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as sdkReact from '@telegram-apps/sdk-react';
+import * as bridge from '@tma.js/bridge';
 
 describe('setupMockEnv', () => {
   beforeEach(() => {
@@ -11,8 +11,8 @@ describe('setupMockEnv', () => {
   });
 
   it('does nothing when isTMA returns true', async () => {
-    vi.spyOn(sdkReact, 'isTMA').mockReturnValue(true as unknown as ReturnType<typeof sdkReact.isTMA>);
-    const mockTelegramEnvSpy = vi.spyOn(sdkReact, 'mockTelegramEnv');
+    vi.spyOn(bridge, 'isTMA').mockReturnValue(true as unknown as ReturnType<typeof bridge.isTMA>);
+    const mockTelegramEnvSpy = vi.spyOn(bridge, 'mockTelegramEnv');
 
     const { setupMockEnv } = await import('../mockEnv');
     setupMockEnv();
@@ -21,8 +21,8 @@ describe('setupMockEnv', () => {
   });
 
   it('calls mockTelegramEnv when not in TMA', async () => {
-    vi.spyOn(sdkReact, 'isTMA').mockReturnValue(false as unknown as ReturnType<typeof sdkReact.isTMA>);
-    const mockTelegramEnvSpy = vi.spyOn(sdkReact, 'mockTelegramEnv');
+    vi.spyOn(bridge, 'isTMA').mockReturnValue(false as unknown as ReturnType<typeof bridge.isTMA>);
+    const mockTelegramEnvSpy = vi.spyOn(bridge, 'mockTelegramEnv');
 
     const { setupMockEnv } = await import('../mockEnv');
     setupMockEnv();
@@ -31,8 +31,8 @@ describe('setupMockEnv', () => {
   });
 
   it('passes correct launchParams structure', async () => {
-    vi.spyOn(sdkReact, 'isTMA').mockReturnValue(false as unknown as ReturnType<typeof sdkReact.isTMA>);
-    const mockTelegramEnvSpy = vi.spyOn(sdkReact, 'mockTelegramEnv');
+    vi.spyOn(bridge, 'isTMA').mockReturnValue(false as unknown as ReturnType<typeof bridge.isTMA>);
+    const mockTelegramEnvSpy = vi.spyOn(bridge, 'mockTelegramEnv');
 
     const { setupMockEnv } = await import('../mockEnv');
     setupMockEnv();
