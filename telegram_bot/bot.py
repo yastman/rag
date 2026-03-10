@@ -42,7 +42,6 @@ from .handlers.handoff import (
     start_qualification,
 )
 from .keyboards.client_keyboard import (
-    build_catalog_keyboard,
     build_client_keyboard,
     parse_menu_button,
 )
@@ -1169,12 +1168,7 @@ class PropertyBot:
         i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
-        # Catalog mode: delegate to catalog dispatcher (menu handler is matched
-        # first because menu_button_texts includes CATALOG_BUTTONS keys)
-        data = await state.get_data()
-        if data.get("catalog_mode"):
-            await self._handle_catalog_dispatch(message, state, dialog_manager)
-            return
+        # Catalog browsing is handled by catalog_router (StateFilter-based)
         action_id = parse_menu_button(
             message.text or "",
             i18n_hub=getattr(self, "_i18n_hub", None),
@@ -1224,143 +1218,6 @@ class PropertyBot:
         from .handlers.demo_handler import handle_demo_button
 
         await handle_demo_button(message)
-
-    async def _handle_catalog_dispatch(
-        self,
-        message: Message,
-        state: FSMContext,
-        dialog_manager: Any = None,
-    ) -> None:
-        """Central dispatcher for all text in catalog_mode."""
-        from .keyboards.client_keyboard import parse_catalog_button, parse_menu_button
-
-        catalog_action = parse_catalog_button(message.text or "")
-        if catalog_action == "catalog_noop":
-            return
-        if catalog_action == "catalog_more":
-            await self._handle_catalog_more(message, state)
-            return
-        if catalog_action == "catalog_filters":
-            await self._handle_catalog_filters(message, state, dialog_manager)
-            return
-        if catalog_action == "catalog_bookmarks":
-            await self._handle_bookmarks(message, state)
-            return
-        if catalog_action == "catalog_exit":
-            await self._handle_catalog_exit(message, state)
-            return
-        # Menu button while in catalog (e.g. "🏠 Главное меню")
-        action_id = parse_menu_button(
-            message.text or "",
-            i18n_hub=getattr(self, "_i18n_hub", None),
-        )
-        if action_id == "menu":
-            await self._handle_catalog_exit(message, state)
-            return
-        # Non-catalog, non-menu text in catalog mode — ignore (don't leak to RAG)
-
-    async def _handle_catalog_more(self, message: Message, state: FSMContext) -> None:
-        """Handle 'Показать ещё 10' in catalog mode."""
-        data = await state.get_data()
-        offset = data.get("apartment_offset", 0)
-        total = data.get("apartment_total", 0)
-        filters = data.get("apartment_filters")
-        next_start = data.get("apartment_next_offset")
-        seen_ids = data.get("apartment_scroll_seen_ids", [])
-
-        if offset >= total:
-            return  # всё показано
-
-        svc: Any = getattr(self, "_apartments_service", None)
-        if svc is None:
-            return
-
-        results, total_count, new_next_start, page_ids = await svc.scroll_with_filters(
-            filters=filters,
-            limit=10,
-            start_from=next_start,
-            exclude_ids=seen_ids if next_start is not None else None,
-        )
-
-        new_offset = offset + len(results)
-        catalog_kb = build_catalog_keyboard(shown=new_offset, total=total_count)
-
-        view_mode = data.get("catalog_view_mode", "cards")
-        if view_mode == "list":
-            from telegram_bot.dialogs.funnel import format_apartment_list
-
-            text = format_apartment_list(
-                results,
-                shown_start=offset + 1,
-                total=total_count,
-            )
-            await message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
-        else:
-            telegram_id = message.from_user.id if message.from_user else 0
-            for result in results:
-                await self._send_property_card(message, result, telegram_id)
-            status = f"Показано {new_offset} из {total_count}"
-            await message.answer(status, reply_markup=catalog_kb)
-
-        await state.update_data(
-            apartment_offset=new_offset,
-            apartment_total=total_count,
-            apartment_next_offset=new_next_start,
-            apartment_scroll_seen_ids=page_ids,
-        )
-
-    async def _handle_catalog_exit(self, message: Message, state: FSMContext) -> None:
-        """Handle 'Главное меню' — exit catalog mode and restore main keyboard."""
-        await state.update_data(
-            catalog_mode=False,
-            apartment_offset=None,
-            apartment_total=None,
-            apartment_next_offset=None,
-            apartment_scroll_seen_ids=None,
-            apartment_filters=None,
-        )
-        await message.answer("Вы вернулись в главное меню 🏠", reply_markup=build_client_keyboard())
-
-    async def _handle_catalog_filters(
-        self,
-        message: Message,
-        state: FSMContext,
-        dialog_manager: Any = None,
-    ) -> None:
-        """Handle 'Фильтры' — return to funnel summary with saved filter data."""
-        if dialog_manager is not None:
-            data = await state.get_data()
-            funnel_data = data.get("funnel_data", {})
-            from aiogram_dialog import StartMode
-
-            from .dialogs.states import FunnelSG
-
-            await dialog_manager.start(
-                FunnelSG.summary,
-                mode=StartMode.RESET_STACK,
-                data=funnel_data,
-            )
-            return
-
-        # Fallback: inline filter panel (если dialog_manager недоступен)
-        import contextlib
-
-        from telegram_bot.keyboards.filter_panel import (
-            build_filter_panel_keyboard,
-            build_filter_panel_text,
-        )
-
-        data = await state.get_data()
-        filters: dict = data.get("apartment_filters") or {}
-        svc: Any = getattr(self, "_apartments_service", None)
-        count = data.get("apartment_total", 0)
-        if svc is not None:
-            with contextlib.suppress(Exception):
-                count = await svc.count_with_filters(filters=filters)
-
-        text = build_filter_panel_text(filters=filters, count=count)
-        kb = build_filter_panel_keyboard(count=count)
-        await message.answer(text, reply_markup=kb)
 
     async def handle_menu_action_text(self, message: Message, query_text: str) -> None:
         """Dispatch text query to agent pipeline (from ReplyKeyboard context) (#628)."""
@@ -4442,16 +4299,11 @@ class PropertyBot:
         # aiogram SDK: handlers match in registration order, first-match wins.
         from aiogram import Router as _Router
 
-        # Catalog mode router — intercepts ALL text when catalog_mode=True
-        # Registered BEFORE catch-all so catalog buttons don't leak to RAG
-        self._catalog_router = _Router(name="catalog_mode")
+        # Catalog browsing router — SDK StateFilter-based, intercepts text
+        # in CatalogBrowsingSG.browsing state. Registered BEFORE catch-all.
+        from telegram_bot.handlers.catalog_router import catalog_router
 
-        async def _catalog_mode_filter(message: Message, state: FSMContext) -> bool:
-            data = await state.get_data()
-            return bool(data.get("catalog_mode"))
-
-        self._catalog_router.message(_catalog_mode_filter, F.text)(self._handle_catalog_dispatch)
-        self.dp.include_router(self._catalog_router)
+        self.dp.include_router(catalog_router)
 
         self._catch_all_router = _Router(name="catch_all_query")
         self._catch_all_router.message(StateFilter(None), F.text)(self.handle_query)
