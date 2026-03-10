@@ -115,3 +115,13 @@ Do NOT switch branches. Do NOT cd to other directories.
 ```
 
 **Cleanup:** `git worktree list` → `git worktree remove <path>` for completed work. `make git-hygiene` includes orphan worktree check.
+
+## CI/CD Pipeline
+
+`.github/workflows/ci.yml`: lint (ruff + mypy) → full-stack deploy (SSH → git pull → docker compose up -d)
+
+Тесты гоняются **локально** перед merge (`make check && make test-unit`). CI только lint + deploy.
+
+**Деплой:** `make deploy-bot` | `gh workflow run ci.yml` | `./scripts/deploy-vps.sh` (`--clean` для пересоздания)
+
+**VPS:** `ssh vps` → `/opt/rag-fresh` → `.claude/rules/k3s.md`
