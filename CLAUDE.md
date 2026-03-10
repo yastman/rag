@@ -20,7 +20,7 @@ make check                 # Lint + types (ruff + mypy)
 make test-unit             # Unit tests (fast)
 uv run pytest tests/unit/ -n auto  # Parallel (4x faster)
 uv run pytest tests/integration/ -v  # Integration (~5s)
-make local-up              # Dev services (redis, qdrant, bge-m3, litellm)
+make local-up              # Dev services (redis, qdrant, bge-m3, docling, litellm)
 make run-bot               # Bot natively (no Docker)
 make docker-full-up        # All services (23 containers, COMPOSE_FILE from .env)
 make ingest-unified        # Unified ingestion (CocoIndex)
@@ -75,6 +75,10 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 | Small (1 issue, <200 LOC) | Один агент / inline |
 | Medium (1-2 issues, <400 LOC) | `/tmux-swarm-orchestration` — 1 Sonnet worker |
 | Large (3+ issues, параллельные) | `/tmux-swarm-orchestration` — N Sonnet workers |
+
+## Post-Work
+
+После PR/коммита с новыми файлами, сервисами или зависимостями → rules-sync (inline mode). Проверь diff → обнови затронутые `.claude/rules/`.
 
 ## Modular Docs
 
