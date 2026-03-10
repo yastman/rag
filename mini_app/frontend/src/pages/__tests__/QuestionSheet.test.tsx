@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QuestionSheet } from '../QuestionSheet';
 import * as api from '../../api';
-import * as sdkReact from '@telegram-apps/sdk-react';
+import * as sdkReact from '@tma.js/sdk-react';
 import type { AppConfig } from '../../types';
 
 const mockConfig: AppConfig = {
@@ -68,15 +68,13 @@ describe('QuestionSheet', () => {
     expect(sendDataMock.ifAvailable).toHaveBeenCalledWith('С чего начать поиск квартиры?');
   });
 
-  it('calls closeMiniApp.ifAvailable on prompt click', async () => {
-    const closeMiniAppMock = sdkReact.closeMiniApp as ReturnType<typeof vi.fn> & {
-      ifAvailable: ReturnType<typeof vi.fn>;
-    };
+  it('calls miniApp.close.ifAvailable on prompt click', async () => {
+    const miniAppMock = sdkReact.miniApp as { close: ReturnType<typeof vi.fn> & { ifAvailable: ReturnType<typeof vi.fn> } };
 
     renderQuestionSheet();
     await waitFor(() => screen.getByText('С чего начать поиск квартиры?'));
     fireEvent.click(screen.getByText('С чего начать поиск квартиры?'));
 
-    expect(closeMiniAppMock.ifAvailable).toHaveBeenCalled();
+    expect(miniAppMock.close.ifAvailable).toHaveBeenCalled();
   });
 });
