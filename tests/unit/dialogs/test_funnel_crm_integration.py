@@ -77,6 +77,7 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
 
     state_mock = MagicMock()
     state_mock.update_data = AsyncMock()
+    state_mock.set_state = AsyncMock()
 
     callback = MagicMock()
     callback.from_user = MagicMock(id=1)
