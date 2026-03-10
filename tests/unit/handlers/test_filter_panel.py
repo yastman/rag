@@ -17,6 +17,22 @@ from telegram_bot.handlers.filter_panel import (
 )
 
 
+# Helper to build callback + state mocks for handler tests
+def _make_handler_mocks(filters=None, svc_count=10):
+    svc = AsyncMock()
+    svc.count_with_filters = AsyncMock(return_value=svc_count)
+    state = AsyncMock()
+    state.get_data = AsyncMock(
+        return_value={"apartment_filters": filters or {}, "apartment_total": 50}
+    )
+    state.update_data = AsyncMock()
+    callback = AsyncMock()
+    callback.message = AsyncMock()
+    callback.message.edit_text = AsyncMock()
+    callback.answer = AsyncMock()
+    return callback, state, svc
+
+
 @pytest.mark.asyncio
 async def test_get_count_uses_service_when_available():
     """_get_count calls count_with_filters when service is provided."""
@@ -228,3 +244,110 @@ async def test_handle_set_budget_clear():
     update_kwargs = state.update_data.call_args[1]
     filters = update_kwargs["apartment_filters"]
     assert "price_eur" not in filters
+
+
+# ============================================================
+# All filter coercion tests
+# ============================================================
+
+
+@pytest.mark.parametrize(
+    "field,filter_key",
+    [
+        ("city", "city"),
+        ("rooms", "rooms"),
+        ("budget", "price_eur"),
+        ("view", "view_tags"),
+        ("area", "area_m2"),
+        ("floor", "floor"),
+        ("complex", "complex_name"),
+        ("furnished", "is_furnished"),
+        ("promotion", "is_promotion"),
+    ],
+)
+def test_all_field_to_filter_key_mappings(field, filter_key):
+    """Every panel field maps to the correct apartment_filters key."""
+    assert _field_to_filter_key(field) == filter_key
+
+
+@pytest.mark.parametrize(
+    "field,value,expected",
+    [
+        ("city", "Бургас", "Бургас"),
+        ("rooms", "3", 3),
+        ("floor", "5", 5),
+        ("floor", "abc", None),
+        ("area", "60", {"gte": 60}),
+        ("area", "bad", None),
+        ("view", "sea", ["sea"]),
+        ("view", "", None),
+        ("complex", "Harmony Suites", "Harmony Suites"),
+        ("complex", "", None),
+        ("furnished", "true", True),
+        ("furnished", "false", False),
+        ("promotion", "true", True),
+        ("promotion", "false", False),
+    ],
+)
+def test_coerce_value_all_fields(field, value, expected):
+    """_coerce_value returns correct type for each field."""
+    assert _coerce_value(field, value) == expected
+
+
+# ============================================================
+# Handler set/clear tests for all filter types
+# ============================================================
+
+
+@pytest.mark.parametrize(
+    "field,value,expected_key,expected_value",
+    [
+        ("city", "Варна", "city", "Варна"),
+        ("rooms", "2", "rooms", 2),
+        ("floor", "3", "floor", 3),
+        ("area", "50", "area_m2", {"gte": 50}),
+        ("view", "sea", "view_tags", ["sea"]),
+        ("complex", "Resort", "complex_name", "Resort"),
+        ("furnished", "true", "is_furnished", True),
+        ("promotion", "true", "is_promotion", True),
+    ],
+)
+@pytest.mark.asyncio
+async def test_handle_set_all_filters(field, value, expected_key, expected_value):
+    """Setting any filter stores correct key and coerced value."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks()
+    cb_data = FilterPanelCB(action="set", field=field, value=value)
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    filters = state.update_data.call_args[1]["apartment_filters"]
+    assert expected_key in filters
+    assert filters[expected_key] == expected_value
+
+
+@pytest.mark.parametrize(
+    "field,initial_key,initial_value",
+    [
+        ("city", "city", "Варна"),
+        ("rooms", "rooms", 2),
+        ("floor", "floor", 3),
+        ("area", "area_m2", {"gte": 50}),
+        ("view", "view_tags", ["sea"]),
+        ("complex", "complex_name", "Resort"),
+        ("furnished", "is_furnished", True),
+        ("promotion", "is_promotion", True),
+        ("budget", "price_eur", {"lte": 50_000}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_handle_clear_all_filters(field, initial_key, initial_value):
+    """Clearing any filter removes the key from apartment_filters."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks(filters={initial_key: initial_value})
+    cb_data = FilterPanelCB(action="set", field=field, value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    filters = state.update_data.call_args[1]["apartment_filters"]
+    assert initial_key not in filters
