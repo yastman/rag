@@ -820,63 +820,191 @@ class PropertyBot:
     async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
         """Handle Mini App deep link: /start q_<uuid>.
 
-        Reads one-time payload from Redis, creates forum topic via TopicManager,
-        echoes user message to topic, then triggers RAG pipeline.
+        Delegates to _process_miniapp_start with message for handle_query support.
+        """
+        await self._process_miniapp_start(
+            chat_id=message.chat.id, uuid_str=uuid_str, message=message
+        )
+
+    async def _process_miniapp_start(
+        self,
+        chat_id: int,
+        uuid_str: str,
+        message: Message | None = None,
+    ) -> None:
+        """Process Mini App expert start request.
+
+        Core logic shared by deep link handler and Redis pub/sub subscriber.
+        When called from pub/sub (no message), RAG runs without streaming.
         """
         if self._deeplink_redis is None or self._topic_manager is None:
-            logger.warning("Deep link received but TopicManager not initialized")
+            logger.warning("Mini App start received but TopicManager not initialized")
             return
 
         key = f"miniapp:q:{uuid_str}"
-        # Atomic GET+DEL — prevents race condition with duplicate requests
         raw = await self._deeplink_redis.getdel(key)
         if raw is None:
-            await message.answer("Ссылка устарела. Пожалуйста, вернитесь в приложение.")
+            if message:
+                await message.answer("Ссылка устарела. Пожалуйста, вернитесь в приложение.")
+            else:
+                logger.warning("Mini App payload expired: %s", uuid_str)
             return
 
         try:
             payload = json.loads(raw)
         except (ValueError, TypeError):
-            await message.answer("Ошибка обработки ссылки.")
+            if message:
+                await message.answer("Ошибка обработки ссылки.")
+            else:
+                logger.error("Invalid Mini App payload: %s", uuid_str)
             return
 
         expert_id = payload.get("expert_id", "")
         user_message = payload.get("message") or ""
 
-        # Look up expert config
         from .services.content_loader import load_mini_app_config
 
         config_data = load_mini_app_config()
         expert = next((e for e in config_data.get("experts", []) if e["id"] == expert_id), None)
         if not expert:
-            await message.answer("Эксперт не найден.")
+            if message:
+                await message.answer("Эксперт не найден.")
+            else:
+                logger.warning("Expert not found: %s", expert_id)
             return
 
-        # Create / get forum topic for this expert
+        # Note: answerWebAppQuery не поддерживает message_thread_id —
+        # сообщение попало бы в General topic, дублируя контент в треде.
+        # Поэтому пишем напрямую в forum topic через send_message.
+
         try:
             topic_id = await self._topic_manager.get_or_create_topic(
-                chat_id=message.chat.id,
+                chat_id=chat_id,
                 expert_id=expert_id,
                 expert_name=expert["name"],
                 expert_emoji=expert.get("emoji", "💬"),
             )
         except TelegramBadRequest as exc:
             logger.error("Failed to create forum topic: %s", exc)
-            await message.answer("Не удалось создать тему. Попробуйте позже.")
+            if message:
+                await message.answer("Не удалось создать тему. Попробуйте позже.")
             return
 
-        if user_message:
-            # Echo user question in the topic
+        if not user_message:
+            return
+
+        # Echo user question in the topic (retry on stale cache — deleted topic)
+        try:
             await self.bot.send_message(
-                chat_id=message.chat.id,
+                chat_id=chat_id,
                 message_thread_id=topic_id,
                 text=f"❝ {user_message} ❞",
             )
-            # Trigger RAG pipeline: synthetic message in the topic
+        except TelegramBadRequest:
+            logger.warning("Stale topic %d, invalidating and recreating", topic_id)
+            await self._topic_manager.invalidate_topic(chat_id, expert_id)
+            try:
+                topic_id = await self._topic_manager.get_or_create_topic(
+                    chat_id=chat_id,
+                    expert_id=expert_id,
+                    expert_name=expert["name"],
+                    expert_emoji=expert.get("emoji", "💬"),
+                )
+                await self.bot.send_message(
+                    chat_id=chat_id,
+                    message_thread_id=topic_id,
+                    text=f"❝ {user_message} ❞",
+                )
+            except TelegramBadRequest as exc2:
+                logger.error("Failed to recreate topic: %s", exc2)
+                return
+
+        if message:
+            # Deep link path: full handle_query with streaming support
             topic_msg = message.model_copy(
                 update={"text": user_message, "message_thread_id": topic_id}
             )
             await self.handle_query(topic_msg)
+        else:
+            # Pub/sub path: direct RAG pipeline + send result
+            await self._run_miniapp_rag(chat_id, topic_id, user_message)
+
+    async def _run_miniapp_rag(self, chat_id: int, topic_id: int, user_message: str) -> None:
+        """Run RAG pipeline for Mini App request (no aiogram Message available)."""
+        try:
+            from telegram_bot.agents.rag_pipeline import rag_pipeline
+            from telegram_bot.services.generate_response import generate_response
+
+            rag_result = await rag_pipeline(
+                query=user_message,
+                user_id=chat_id,
+                session_id=f"miniapp:{chat_id}",
+                cache=self._cache,
+                embeddings=self._embeddings,
+                sparse_embeddings=self._sparse,
+                qdrant=self._qdrant,
+                reranker=self._reranker,
+            )
+
+            documents = rag_result.get("documents", [])
+            if not documents:
+                await self.bot.send_message(
+                    chat_id=chat_id,
+                    message_thread_id=topic_id,
+                    text="К сожалению, я не нашёл информации по вашему запросу.",
+                )
+                return
+
+            gen_result = await generate_response(
+                query=user_message,
+                documents=documents,
+                config=self._graph_config,
+            )
+            answer = gen_result.get("response", "")
+            if answer:
+                await self.bot.send_message(
+                    chat_id=chat_id,
+                    message_thread_id=topic_id,
+                    text=answer,
+                )
+        except Exception:
+            logger.exception("RAG pipeline failed for miniapp (chat=%s)", chat_id)
+            await self.bot.send_message(
+                chat_id=chat_id,
+                message_thread_id=topic_id,
+                text="Произошла ошибка при обработке запроса. Попробуйте ещё раз.",
+            )
+
+    async def _miniapp_subscriber_loop(self) -> None:
+        """Subscribe to Redis miniapp:start channel and process requests."""
+        import redis.asyncio as aioredis
+
+        sub_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
+        pubsub = sub_redis.pubsub()
+        await pubsub.subscribe("miniapp:start")
+        logger.info("Mini App pub/sub subscriber started")
+
+        try:
+            async for raw_msg in pubsub.listen():
+                if raw_msg["type"] != "message":
+                    continue
+                try:
+                    data = json.loads(raw_msg["data"])
+                    uuid_str = data["uuid"]
+                    user_id = int(data["user_id"])
+                except (ValueError, TypeError, KeyError):
+                    logger.warning("Invalid miniapp:start message: %s", raw_msg["data"])
+                    continue
+
+                logger.info("Mini App pub/sub: user=%s uuid=%s", user_id, uuid_str)
+                await self._process_miniapp_start(chat_id=user_id, uuid_str=uuid_str)
+        except asyncio.CancelledError:
+            logger.info("Mini App pub/sub subscriber stopped")
+        except Exception:
+            logger.exception("Mini App pub/sub subscriber crashed")
+        finally:
+            await pubsub.unsubscribe("miniapp:start")
+            await sub_redis.aclose()
 
     async def cmd_help(self, message: Message):
         """Handle /help command."""
@@ -4009,6 +4137,7 @@ class PropertyBot:
         else:
             self._deeplink_redis = None
             self._topic_manager = None
+        self._miniapp_subscriber_task: asyncio.Task[None] | None = None
         # Initialize history service (Qdrant-backed Q&A history)
         try:
             history_service_cls = HistoryService
@@ -4383,11 +4512,22 @@ class PropertyBot:
 
             await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
+        # Start Mini App pub/sub subscriber (Redis → bot, bypasses openTelegramLink bug)
+        if self._topic_manager is not None:
+            self._miniapp_subscriber_task = asyncio.create_task(
+                self._miniapp_subscriber_loop(), name="miniapp-pubsub"
+            )
+
         await self.dp.start_polling(self.bot)
 
     async def stop(self):
         """Stop bot and cleanup."""
         logger.info("Stopping bot...")
+        if self._miniapp_subscriber_task is not None:
+            self._miniapp_subscriber_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._miniapp_subscriber_task
+            self._miniapp_subscriber_task = None
         await self._redis_monitor.stop()
         await self._cache.close()
         await self._qdrant.close()

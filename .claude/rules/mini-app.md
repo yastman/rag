@@ -33,20 +33,32 @@ swipeBehavior.disableVertical(); // 10. Disable vertical swipe
 
 | Функция | Пакет | Паттерн | Назначение |
 |---------|-------|---------|------------|
-| `openTelegramLink` | `@tma.js/sdk-react` | `.isAvailable()` + try/catch + `location.href` fallback | Deep link navigation |
-| `sendData` | `@tma.js/sdk-react` | `.ifAvailable(text)` | Отправка данных боту (закрывает Mini App) |
 | `miniApp.close` | `@tma.js/sdk-react` | `.ifAvailable()` | Закрытие Mini App |
 | `initData.user()` | `@tma.js/sdk-react` | Прямой вызов | `{ id, firstName, lastName, username }` |
+| `initData.queryId()` | `@tma.js/sdk-react` | Optional | Session ID (MenuButtonWebApp), передаётся в backend payload |
+| `sendData` | `@tma.js/sdk-react` | `.ifAvailable(text)` | Только для KeyboardButton Mini Apps |
 | `viewport.mount` | `@tma.js/sdk-react` | `.isAvailable()` — Computed signal | Async mount viewport |
 | `swipeBehavior.isSupported` | `@tma.js/sdk-react` | Computed signal `()` | true если платформа поддерживает |
 | `swipeBehavior.disableVertical` | `@tma.js/sdk-react` | Вызов после mount | Запрет вертикального свайпа |
 | `isTMA("complete")` | `@tma.js/bridge` | Async проверка | Promise<boolean>, строгая проверка |
 | `mockTelegramEnv` | `@tma.js/bridge` | `({ launchParams: {object}, onEvent })` | Фейк env для локальной разработки |
 
+### Передача данных из Mini App в бот
+
+| Способ | Когда работает | Ограничения |
+|--------|---------------|-------------|
+| `sendData` | Только KeyboardButton Mini Apps | НЕ работает для MenuButtonWebApp |
+| `answerWebAppQuery` | MenuButtonWebApp + InlineButton | Отправляет в General chat, НЕ в forum topic |
+| Backend relay (Redis pub/sub) | Всегда | Для тихой серверной логики без сообщения в чат |
+
+**У нас:** MenuButtonWebApp + forum topics → backend relay через Redis pub/sub.
+`answerWebAppQuery` не подходит — не поддерживает `message_thread_id`, дублирует в General.
+
 ### Anti-patterns
 
 - **НЕ** `window.Telegram.WebApp.*` — используй SDK хуки
-- **НЕ** `openTelegramLink(url)` без `.isAvailable()` guard — платформенные баги
+- **НЕ** `openTelegramLink(t.me/OUR_BOT?start=)` — deep link к своему боту молча игнорируется из Mini App
+- **НЕ** `answerWebAppQuery` для forum topics — не поддерживает `message_thread_id`, дублирует в General
 - **НЕ** `@telegram-apps/sdk-react` — мигрировано на `@tma.js/sdk-react`
 - **НЕ** `mountThemeParamsSync` / `bindThemeParamsCssVars` — устаревшие методы, используй `themeParams.mount()` + `themeParams.bindCssVars()`
 - **НЕ** `<script src="telegram-web-app.js">` в index.html — SDK сам управляет
@@ -77,7 +89,7 @@ mini_app/
     │   └── pages/
     │       ├── HomePage.tsx
     │       ├── QuestionSheet.tsx  # sendData.ifAvailable + miniApp.close
-    │       └── ExpertSheet.tsx    # openTelegramLink + fallback + remoteLog
+    │       └── ExpertSheet.tsx    # startExpert → Redis pub/sub → miniApp.close
     ├── Dockerfile      # node build → nginx (порт 80)
     ├── nginx.conf      # Reverse proxy config (API проксируется через /api/)
     ├── vite.config.ts  # proxy /api → localhost:8090, host:true для tunnel
@@ -111,7 +123,7 @@ ssh -R 8091:127.0.0.1:5173 vps -N
 |---------|-----------|-------|
 | Браузер | Chrome DevTools | Локальная разработка, mock env |
 | Telegram | Eruda (автоматически в dev) | Smoke test через tunnel |
-| После закрытия | Remote logging `/api/log` | Отлов ошибок openTelegramLink |
+| После закрытия | Remote logging `/api/log` | Отлов ошибок после закрытия Mini App |
 
 ### Telegram Test Environment (HTTP без tunnel)
 
@@ -188,24 +200,34 @@ ssh -R 8091:127.0.0.1:8091 vps -N
 | `UnknownEnvError` после reload | sessionStorage есть, window globals сброшены | mockEnv должен всегда переустанавливать mock |
 | remote port forwarding failed | Порт занят или GatewayPorts off | Остановить mini-app на VPS, проверить sshd_config |
 
-## Expert Start Flow (Deep Link)
+## Expert Start Flow (Redis Pub/Sub)
 
 ```
-ExpertSheet → startExpert(userId, expertId, text)
-  → POST /api/start-expert → Redis SET miniapp:q:{uuid} (TTL 300s)
-  → response: { start_link }
-  → SDK openTelegramLink.isAvailable() ? openTelegramLink(start_link) : location.href
-    → catch → fallback: location.href = start_link
-  → Mini App закрывается
-  → Бот: /start q_{uuid} → Redis GETDEL → TopicManager → RAG
+ExpertSheet → startExpert(userId, expertId, text, queryId)
+  → POST /api/start-expert
+    → Redis SET miniapp:q:{uuid} (TTL 300s, payload: expert_id, message, user_id, query_id)
+    → Redis PUBLISH miniapp:start {uuid, user_id, query_id}
+    → response: { status: "ok", expert_name }
+  → miniApp.close.ifAvailable()
+  → Бот (_miniapp_subscriber_loop):
+    → Redis SUBSCRIBE miniapp:start
+    → _process_miniapp_start(chat_id, uuid)
+    → Redis GETDEL miniapp:q:{uuid} → payload
+    → TopicManager.get_or_create → forum topic (с retry при stale cache)
+    → Echo вопрос в тред → RAG pipeline → ответ в тред
 ```
 
-**Важно:** `mini-app-api` и бот — **отдельные Docker-контейнеры**. Связь через **Redis** (одноразовый payload с TTL 300s).
+**Важно:** `mini-app-api` и бот — **отдельные Docker-контейнеры**. Связь через **Redis** (payload с TTL 300s + pub/sub для мгновенной доставки).
+
+**Почему не `answerWebAppQuery`:** не поддерживает `message_thread_id` → дублирует сообщение в General chat при forum topics.
+
+**Почему не `openTelegramLink`:** deep link к своему боту (`t.me/bot?start=`) молча игнорируется Telegram-клиентом из Mini App.
 
 ### Redis ключи
 
 ```
 miniapp:q:{uuid}                      → json payload (TTL 300s, одноразовый GETDEL)
+miniapp:start                         → pub/sub канал (uuid, user_id, query_id)
 topic:{chat_id}:{expert_id}           → thread_id (TTL 30 дней)
 topic_rev:{chat_id}:{thread_id}       → expert_id (reverse lookup)
 ```
@@ -214,25 +236,25 @@ topic_rev:{chat_id}:{thread_id}       → expert_id (reverse lookup)
 
 | Кейс | Поведение |
 |------|-----------|
-| UUID expired/replay | "Ссылка устарела" |
+| UUID expired/replay | "Ссылка устарела" (GETDEL вернул null) |
 | Forum topic уже есть | TopicManager.get_or_create → существующий |
+| Stale topic cache (удалён в Telegram) | TelegramBadRequest → invalidate_topic() → пересоздание |
 | Topics не включены в чате | TelegramBadRequest → "Не удалось создать тему" |
-| BOT_USERNAME не задан | API → HTTP 500 |
-| EXPERT_TOPICS_ENABLED=false | Deep link игнорируется, обычный /start |
-| openTelegramLink throws | remoteLog + fallback location.href |
+| EXPERT_TOPICS_ENABLED=false | Pub/sub игнорируется, обычный /start |
 | userId null (initData пуст) | alert + remoteLog, не отправляет запрос |
+| Pub/sub subscriber упал | Автоматический reconnect в цикле |
 
 ### Env переменные
 
 | Var | Описание |
 |-----|----------|
-| `BOT_USERNAME` | Username бота для deep link (compose: mini-app-api) |
-| `EXPERT_TOPICS_ENABLED` | Feature flag для TopicManager + deep link handler |
+| `REDIS_URL` | Redis для payload + pub/sub (compose: mini-app-api + bot) |
+| `EXPERT_TOPICS_ENABLED` | Feature flag для TopicManager + pub/sub handler |
 | `MINI_APP_URL` | URL Mini App для MenuButtonWebApp |
 
 ## Тесты
 
-### Frontend (Vitest, 16 файлов, 55 тестов)
+### Frontend (Vitest, 16 файлов, 53 теста)
 
 ```bash
 cd mini_app/frontend && npm test                    # Все тесты

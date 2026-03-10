@@ -30,6 +30,7 @@ export async function startExpert(
   userId: number,
   expertId: string,
   message?: string,
+  queryId?: string,
 ): Promise<StartExpertResponse> {
   const resp = await fetch(`${API_BASE}/start-expert`, {
     method: "POST",
@@ -38,6 +39,7 @@ export async function startExpert(
       user_id: userId,
       expert_id: expertId,
       message: message || undefined,
+      query_id: queryId || undefined,
     }),
   });
   if (!resp.ok) throw new Error(`start-expert failed: ${resp.status}`);
