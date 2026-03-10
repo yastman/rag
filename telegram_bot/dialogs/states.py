@@ -39,7 +39,6 @@ class FunnelSG(StatesGroup):
     pref_section = State()  ***REMOVED*** Step 4g: секция sub-options
     summary = State()  ***REMOVED*** Step 5: саммари + confirmation
     change_filter = State()  ***REMOVED*** Step 5a: выбор фильтра для изменения
-    results = State()  ***REMOVED*** Step 6: результаты
 
 
 class ViewingSG(StatesGroup):
@@ -176,6 +175,19 @@ class CrmQuickActionSG(StatesGroup):
     edit_task_choose_field = State()  ***REMOVED*** choose what to edit (text or due date)
     edit_task_text = State()  ***REMOVED*** waiting for new task text
     edit_task_date = State()  ***REMOVED*** waiting for new due date
+
+
+class HandoffSG(StatesGroup):
+    """Manager handoff qualification (***REMOVED***730)."""
+
+    goal = State()
+    contact = State()
+
+
+class CatalogBrowsingSG(StatesGroup):
+    """Catalog browsing mode (ReplyKeyboard pagination)."""
+
+    browsing = State()
 
 
 class DemoSG(StatesGroup):

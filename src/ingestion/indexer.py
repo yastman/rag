@@ -96,7 +96,7 @@ class DocumentIndexer:
                 print(f"Collection already exists: {collection_name}")
                 return True
         except Exception:
-            pass  ***REMOVED*** Collection doesn't exist, will create
+            logger.debug("Collection %s not found, will create", collection_name)
 
         ***REMOVED*** Create collection with optimized vector configuration
         ***REMOVED*** Optimizations based on Qdrant best practices (Nov 2025):
