@@ -109,7 +109,7 @@ def test_parse_menu_button_known():
     assert parse_menu_button("🏠 Подобрать квартиру") == "search"
     assert parse_menu_button("🔑 Услуги") == "services"
     assert parse_menu_button("📅 Запись на осмотр") == "viewing"
-    assert parse_menu_button("👤 Менеджер") == "manager"
+    assert parse_menu_button("👤 Связаться с менеджером") == "manager"
     assert parse_menu_button("💬 Задать вопрос") == "ask"
     assert parse_menu_button("📌 Мои закладки") == "bookmarks"
 
@@ -172,6 +172,55 @@ def test_parse_menu_button_i18n_hub_raises_fallback():
 
 def test_parse_menu_button_empty_returns_none():
     assert parse_menu_button("") is None
+
+
+# --- Task 1: Catalog button routing ---
+
+
+def test_get_menu_button_texts_includes_catalog_buttons():
+    """Catalog button texts must be in the menu filter set."""
+    from telegram_bot.keyboards.client_keyboard import get_menu_button_texts
+
+    texts = get_menu_button_texts()
+    assert "📥 Показать ещё 10" in texts
+    assert "🔍 Фильтры" in texts
+    assert "🏠 Главное меню" in texts
+
+
+def test_parse_catalog_button_counter_noop():
+    """Counter button 'N из M' should return catalog_noop."""
+    from telegram_bot.keyboards.client_keyboard import parse_catalog_button
+
+    assert parse_catalog_button("7 из 45") == "catalog_noop"
+    assert parse_catalog_button("100 из 297") == "catalog_noop"
+
+
+# --- Task 2: Catalog keyboard favorites ---
+
+
+def test_catalog_keyboard_has_favorites_button():
+    """Catalog keyboard must include Избранное button."""
+    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+    kb = build_catalog_keyboard(shown=10, total=50)
+    all_texts = [btn.text for row in kb.keyboard for btn in row]
+    assert "📌 Избранное" in all_texts
+
+
+def test_parse_catalog_button_bookmarks():
+    """Favorites button parses to catalog_bookmarks action."""
+    from telegram_bot.keyboards.client_keyboard import parse_catalog_button
+
+    assert parse_catalog_button("📌 Избранное") == "catalog_bookmarks"
+
+
+# --- MENU_BUTTONS key verification tests ---
+
+
+def test_menu_buttons_manager_key_is_updated():
+    """MENU_BUTTONS must use '👤 Связаться с менеджером', not old '👤 Менеджер'."""
+    assert MENU_BUTTONS["👤 Связаться с менеджером"] == "manager"
+    assert "👤 Менеджер" not in MENU_BUTTONS
 
 
 def test_get_menu_button_texts_includes_localized_labels():
