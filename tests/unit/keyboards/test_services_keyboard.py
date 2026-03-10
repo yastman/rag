@@ -34,7 +34,7 @@ def test_build_service_card_buttons():
     assert isinstance(kb, InlineKeyboardMarkup)
     callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
     assert "cta:get_offer:installment" in callbacks
-    assert "cta:manager" in callbacks
+    assert "cta:manager:installment" in callbacks
     assert "svc:menu" in callbacks
 
 
