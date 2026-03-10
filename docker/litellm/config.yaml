@@ -1,6 +1,6 @@
 ***REMOVED*** LiteLLM Proxy Configuration
 ***REMOVED*** Docs: https://docs.litellm.ai/docs/proxy/configs
-***REMOVED*** Image: ghcr.io/berriai/litellm:main-v1.81.3-stable
+***REMOVED*** Image: ghcr.io/berriai/litellm:main-v1.81.14-stable
 
 model_list:
   ***REMOVED*** Primary: Cerebras GLM 4.7 (reasoning disabled for low TTFT)
@@ -11,8 +11,10 @@ model_list:
     litellm_params:
       model: cerebras/zai-glm-4.7
       api_key: os.environ/CEREBRAS_API_KEY
-      max_completion_tokens: 1024
+      max_completion_tokens: 512
       disable_reasoning: true
+      timeout: 30
+      stream_timeout: 5
 
   ***REMOVED*** Standalone alias for benchmarking (reasoning model)
   - model_name: gpt-oss-120b
