@@ -412,3 +412,64 @@ def test_manager_prompt_has_crm_instructions():
         "подтвердите" in MANAGER_SYSTEM_PROMPT.lower()
         or "подтверждение" in MANAGER_SYSTEM_PROMPT.lower()
     )
+
+
+# --- supervisor_max_tokens ---
+
+
+def test_create_bot_agent_passes_max_tokens_to_chat_openai():
+    """max_tokens kwarg is forwarded to ChatOpenAI model_kwargs."""
+    from telegram_bot.agents.agent import create_bot_agent
+
+    with (
+        patch("telegram_bot.agents.agent.create_agent"),
+        patch("telegram_bot.agents.agent.ChatOpenAI") as mock_llm_cls,
+    ):
+        create_bot_agent(
+            model="openai/gpt-oss-120b",
+            tools=[],
+            checkpointer=None,
+            max_tokens=1024,
+        )
+        call_kwargs = mock_llm_cls.call_args[1]
+        assert call_kwargs["max_tokens"] == 1024
+
+
+def test_create_bot_agent_omits_max_tokens_when_none():
+    """When max_tokens is None (default), ChatOpenAI should not receive it."""
+    from telegram_bot.agents.agent import create_bot_agent
+
+    with (
+        patch("telegram_bot.agents.agent.create_agent"),
+        patch("telegram_bot.agents.agent.ChatOpenAI") as mock_llm_cls,
+    ):
+        create_bot_agent(
+            model="openai/gpt-oss-120b",
+            tools=[],
+            checkpointer=None,
+        )
+        call_kwargs = mock_llm_cls.call_args[1]
+        assert "max_tokens" not in call_kwargs
+
+
+def test_supervisor_max_tokens_config_default():
+    """BotConfig.supervisor_max_tokens defaults to 1024."""
+    from telegram_bot.config import BotConfig
+
+    config = BotConfig(
+        telegram_token="test:token",
+        qdrant_url="http://localhost:6333",
+    )
+    assert config.supervisor_max_tokens == 1024
+
+
+def test_supervisor_max_tokens_config_from_env(monkeypatch):
+    """BotConfig reads SUPERVISOR_MAX_TOKENS from env."""
+    monkeypatch.setenv("SUPERVISOR_MAX_TOKENS", "2048")
+    from telegram_bot.config import BotConfig
+
+    config = BotConfig(
+        telegram_token="test:token",
+        qdrant_url="http://localhost:6333",
+    )
+    assert config.supervisor_max_tokens == 2048
