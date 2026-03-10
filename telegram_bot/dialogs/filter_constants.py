@@ -155,15 +155,24 @@ FIELD_TO_FILTER_KEY: dict[str, str] = {
 
 
 def coerce_filter_value(field: str, value: str) -> Any:
-    """Coerce a string form value to the correct Python type for filters."""
+    """Coerce a string item_id from Radio widget to the correct Qdrant filter type."""
     if not value:
         return None
-    if field in ("rooms", "floor"):
+    if field == "rooms":
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+    if field == "floor":
+        if value in FLOOR_MAP:
+            return FLOOR_MAP[value]
         try:
             return int(value)
         except (ValueError, TypeError):
             return None
     if field == "area":
+        if value in AREA_MAP:
+            return AREA_MAP[value]
         try:
             return {"gte": int(value)}
         except (ValueError, TypeError):
@@ -190,21 +199,24 @@ def build_filters_dict(raw: dict[str, Any]) -> dict[str, Any]:
     """Convert raw filter data to apartment_filters dict.
 
     Handles:
+    - String item_ids from Radio widgets → coerce via coerce_filter_value
+    - Already-typed values (int, dict, bool) → passthrough
     - Field name translation via FIELD_TO_FILTER_KEY (complex → complex_name, etc.)
     - budget → price_eur coercion
     - None / "" / "any" → excluded
-    - Direct passthrough for typed values (rooms: int, etc.)
     """
     result: dict[str, Any] = {}
     for field, value in raw.items():
         if value is None or value == "" or value == "any":
             continue
+        # Coerce string item_ids from Radio widgets; passthrough typed values
+        coerced = coerce_filter_value(field, value) if isinstance(value, str) else value
+        if coerced is None:
+            continue
         if field == "budget":
-            price = BUDGET_MAP.get(str(value))
-            if price is not None:
-                result["price_eur"] = price
+            if isinstance(coerced, dict):
+                result["price_eur"] = coerced
         else:
-            # Translate dialog field name to Qdrant payload key
             filter_key = FIELD_TO_FILTER_KEY.get(field, field)
-            result[filter_key] = value
+            result[filter_key] = coerced
     return result
