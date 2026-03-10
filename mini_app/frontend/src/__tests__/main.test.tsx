@@ -27,4 +27,38 @@ describe('main.tsx', () => {
     await import('../main');
     expect(init).toHaveBeenCalled();
   });
+
+  it('calls setupMockEnv before init', async () => {
+    const callOrder: string[] = [];
+
+    vi.doMock('../mockEnv', () => ({
+      setupMockEnv: vi.fn(() => {
+        callOrder.push('setupMockEnv');
+      }),
+    }));
+    vi.doMock('@telegram-apps/sdk-react', () => ({
+      init: vi.fn(() => {
+        callOrder.push('init');
+      }),
+    }));
+
+    await import('../main');
+
+    const setupIdx = callOrder.indexOf('setupMockEnv');
+    const initIdx = callOrder.indexOf('init');
+
+    expect(setupIdx).toBeGreaterThanOrEqual(0);
+    expect(initIdx).toBeGreaterThanOrEqual(0);
+    expect(setupIdx).toBeLessThan(initIdx);
+  });
+
+  it('calls init after mockEnv', async () => {
+    const { init } = await import('@telegram-apps/sdk-react');
+    const { setupMockEnv } = await import('../mockEnv');
+
+    await import('../main');
+
+    expect(setupMockEnv).toHaveBeenCalled();
+    expect(init).toHaveBeenCalled();
+  });
 });
