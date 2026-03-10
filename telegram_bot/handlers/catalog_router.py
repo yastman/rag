@@ -70,7 +70,7 @@ async def handle_catalog_more(
         telegram_id = message.from_user.id if message.from_user else 0
         for result in results:
             await property_bot._send_property_card(message, result, telegram_id)
-        await message.answer("📋 Каталог", reply_markup=catalog_kb)
+        await message.answer("\u200b", reply_markup=catalog_kb)
 
     await state.update_data(
         apartment_offset=new_offset,
