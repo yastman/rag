@@ -182,19 +182,29 @@ class TestGetHubData:
 # ============================================================
 
 
+def _make_apply_mocks(dialog_data=None):
+    """Create callback + manager mocks for on_apply tests."""
+    state = AsyncMock()
+    state.update_data = AsyncMock()
+
+    callback = MagicMock()
+    callback.message = MagicMock()
+    callback.message.answer = AsyncMock()
+
+    manager = AsyncMock()
+    manager.dialog_data = dialog_data or {}
+    manager.middleware_data = {"state": state, "apartments_service": None}
+    manager.done = AsyncMock()
+
+    return callback, state, manager
+
+
 class TestOnApply:
     async def test_saves_filters_to_fsm(self):
         from telegram_bot.dialogs.filter_dialog import on_apply
 
-        state = AsyncMock()
-        state.update_data = AsyncMock()
-
-        manager = AsyncMock()
-        manager.dialog_data = {"city": "Несебр", "budget": "mid"}
-        manager.middleware_data = {"state": state}
-        manager.done = AsyncMock()
-
-        await on_apply(MagicMock(), MagicMock(), manager)
+        callback, state, manager = _make_apply_mocks({"city": "Несебр", "budget": "mid"})
+        await on_apply(callback, MagicMock(), manager)
 
         state.update_data.assert_awaited_once()
         call_kwargs = state.update_data.call_args[1]
@@ -206,32 +216,28 @@ class TestOnApply:
     async def test_calls_manager_done(self):
         from telegram_bot.dialogs.filter_dialog import on_apply
 
-        state = AsyncMock()
-        state.update_data = AsyncMock()
-
-        manager = AsyncMock()
-        manager.dialog_data = {}
-        manager.middleware_data = {"state": state}
-        manager.done = AsyncMock()
-
-        await on_apply(MagicMock(), MagicMock(), manager)
+        callback, _state, manager = _make_apply_mocks()
+        await on_apply(callback, MagicMock(), manager)
         manager.done.assert_awaited_once()
 
     async def test_resets_pagination_state(self):
         from telegram_bot.dialogs.filter_dialog import on_apply
 
-        state = AsyncMock()
-        state.update_data = AsyncMock()
-
-        manager = AsyncMock()
-        manager.dialog_data = {"city": "Варна"}
-        manager.middleware_data = {"state": state}
-        manager.done = AsyncMock()
-
-        await on_apply(MagicMock(), MagicMock(), manager)
+        callback, state, manager = _make_apply_mocks({"city": "Варна"})
+        await on_apply(callback, MagicMock(), manager)
 
         call_kwargs = state.update_data.call_args[1]
         assert call_kwargs.get("apartment_offset") == 0
+
+    async def test_sends_confirmation_message(self):
+        from telegram_bot.dialogs.filter_dialog import on_apply
+
+        callback, _state, manager = _make_apply_mocks({"city": "Бургас"})
+        await on_apply(callback, MagicMock(), manager)
+
+        callback.message.answer.assert_awaited_once()
+        msg_text = callback.message.answer.call_args[0][0]
+        assert "Фильтры применены" in msg_text
 
 
 # ============================================================
