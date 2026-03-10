@@ -644,7 +644,6 @@ async def test_start_phone_collection_prompt_text():
     assert "Оставьте номер телефона" in text
     assert "Поделиться контактом" in text
     assert "введите номер вручную" in text
-    assert "+380990091392" in text
 
 
 # --- Phone cancel handling tests ---

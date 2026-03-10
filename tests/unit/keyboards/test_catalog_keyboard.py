@@ -5,10 +5,10 @@ from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
 
 
 class TestBuildCatalogKeyboard:
-    def test_has_4_buttons(self):
+    def test_has_5_buttons(self):
         kb = build_catalog_keyboard(shown=10, total=47)
         buttons = [btn.text for row in kb.keyboard for btn in row]
-        assert len(buttons) == 4
+        assert len(buttons) == 5
 
     def test_show_more_button(self):
         kb = build_catalog_keyboard(shown=10, total=47)
@@ -24,7 +24,7 @@ class TestBuildCatalogKeyboard:
 
     def test_main_menu_button(self):
         kb = build_catalog_keyboard(shown=10, total=47)
-        assert kb.keyboard[1][1].text == "🏠 Главное меню"
+        assert kb.keyboard[2][0].text == "🏠 Главное меню"
 
     def test_all_shown_replaces_button(self):
         kb = build_catalog_keyboard(shown=47, total=47)
