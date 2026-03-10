@@ -31,4 +31,6 @@ vi.mock("@telegram-apps/sdk-react", () => ({
   mockTelegramEnv: vi.fn(),
   isTMA: () => false,
   parseInitData: vi.fn(),
+  mountThemeParamsSync: vi.fn(),
+  bindThemeParamsCssVars: vi.fn(),
 }));
