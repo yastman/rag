@@ -216,33 +216,8 @@ class TestCatalogExitHandler:
 
 
 class TestCatalogFiltersHandler:
-    async def test_starts_funnel_summary_with_dialog_manager(self):
-        """Filters button starts FunnelSG.summary dialog with saved data."""
-        from telegram_bot.handlers.catalog_router import handle_catalog_filters
-
-        state = _make_state(
-            {
-                "funnel_data": {"city": "varna", "budget": "mid"},
-                "apartment_filters": {"city": "varna"},
-            }
-        )
-        message = _make_message()
-        dialog_manager = AsyncMock()
-
-        await handle_catalog_filters(
-            message,
-            state,
-            dialog_manager=dialog_manager,
-        )
-
-        dialog_manager.start.assert_called_once()
-        call_args = dialog_manager.start.call_args
-        from telegram_bot.dialogs.states import FunnelSG
-
-        assert call_args[0][0] == FunnelSG.summary
-
-    async def test_fallback_inline_panel_without_dialog_manager(self):
-        """Without dialog_manager, sends inline filter panel."""
+    async def test_sends_inline_filter_panel(self):
+        """Filters button sends inline filter panel (stays in browsing state)."""
         from aiogram.types import InlineKeyboardMarkup
 
         from telegram_bot.handlers.catalog_router import handle_catalog_filters
