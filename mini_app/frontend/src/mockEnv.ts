@@ -1,4 +1,4 @@
-import { mockTelegramEnv, emitEvent, isTMA } from "@tma.js/bridge";
+import { mockTelegramEnv, emitEvent } from "@tma.js/bridge";
 
 const themeParams = {
   accent_text_color: "#6ab2f2",
@@ -20,11 +20,11 @@ const noInsets = { left: 0, top: 0, bottom: 0, right: 0 } as const;
 
 /**
  * Мок Telegram окружения для разработки в браузере.
- * В Telegram (isTMA=true) — ничего не делает.
- * В браузере — подставляет фейковые launchParams + onEvent handlers.
+ * Вызывается только из bootstrap.ts в dev mode.
+ * Всегда переустанавливает window.TelegramWebviewProxy
+ * (sessionStorage переживает reload, но window globals — нет).
  */
 export function setupMockEnv(): void {
-  if (isTMA()) return;
 
   mockTelegramEnv({
     launchParams: {
