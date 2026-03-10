@@ -137,15 +137,20 @@ await cache.initialize()
 ***REMOVED******REMOVED******REMOVED*** Prompt Manager (Langfuse)
 
 ```python
-from telegram_bot.integrations.prompt_manager import get_prompt
+from telegram_bot.integrations.prompt_manager import get_prompt, get_prompt_with_config
 
-***REMOVED*** Fetches prompt from Langfuse with fallback to hardcoded template
-***REMOVED*** Pre-checks via API probe → caches missing/known status with TTL → no SDK warning logs
+***REMOVED*** Text only (backwards compatible)
 prompt = get_prompt(name="rag-system", fallback="You are...", variables={"domain": "real estate"})
+
+***REMOVED*** Text + config (temperature, max_tokens editable in Langfuse UI)
+prompt_text, config = get_prompt_with_config(name="generate", fallback="...", variables={"domain": "..."})
+***REMOVED*** config = {"temperature": 0.7, "max_tokens": 512} or {} if fallback
 ```
 
 Flow: `_probe_prompt_available()` (API) → TTL cache hit/miss → `client.get_prompt()` (SDK) or fallback.
-Missing prompts cached 300s to avoid repeated API calls and SDK `generate-label:production` warnings.
+Missing prompts cached 1h to avoid repeated API calls and SDK `generate-label:production` warnings.
+
+**Seed prompts:** `uv run python scripts/seed_langfuse_prompts.py` — seeds 11 prompts with config (temperature, max_tokens) from code fallbacks. `--force` to overwrite.
 
 ***REMOVED******REMOVED******REMOVED*** GraphConfig (service factories + pipeline tuning)
 
