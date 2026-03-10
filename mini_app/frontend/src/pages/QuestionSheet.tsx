@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { closeMiniApp, sendData } from "@telegram-apps/sdk-react";
 import { fetchConfig } from "../api";
 import { BottomSheet } from "../components/BottomSheet";
 import { PromptRow } from "../components/PromptRow";
@@ -20,8 +21,8 @@ export function QuestionSheet() {
   if (!question) return null;
 
   const handlePrompt = (text: string) => {
-    window.Telegram?.WebApp?.sendData(text);
-    window.Telegram?.WebApp?.close();
+    sendData.ifAvailable(text);
+    closeMiniApp.ifAvailable();
   };
 
   return (
