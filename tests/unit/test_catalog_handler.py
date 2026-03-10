@@ -234,7 +234,7 @@ class TestCatalogNoopHandler:
 
 class TestCatalogBookmarksHandler:
     async def test_bookmarks_routes_to_handle_bookmarks(self):
-        """'📌 Избранное' should route to _handle_bookmarks."""
+        """'📌 Избранное' should route to _handle_bookmarks via catalog dispatch."""
         bot = _make_bot()
         bot._handle_bookmarks = AsyncMock()
 
@@ -242,14 +242,16 @@ class TestCatalogBookmarksHandler:
         message = _make_message()
         message.text = "📌 Избранное"
 
-        await bot.handle_menu_button(message, state)
+        await bot._handle_catalog_dispatch(message, state)
 
         bot._handle_bookmarks.assert_awaited_once_with(message, state)
 
 
 class TestCatalogFooterNoDuplicate:
-    async def test_catalog_more_sends_short_footer(self):
-        """_handle_catalog_more sends '📋 Каталог' not verbose counter text."""
+    async def test_catalog_more_sends_status_with_keyboard(self):
+        """_handle_catalog_more sends 'Показано X из Y' with catalog keyboard."""
+        from aiogram.types import ReplyKeyboardMarkup
+
         bot = _make_bot()
         new_page = [_APT] * 5
         mock_svc = MagicMock()
@@ -273,8 +275,9 @@ class TestCatalogFooterNoDuplicate:
 
         last_call = message.answer.call_args_list[-1]
         text = last_call.args[0] if last_call.args else last_call.kwargs.get("text", "")
-        assert text == "📋 Каталог"
-        assert "Найдено" not in text
+        assert "15 из 30" in text
+        reply_markup = last_call.kwargs.get("reply_markup")
+        assert isinstance(reply_markup, ReplyKeyboardMarkup)
 
 
 class TestCatalogFiltersHandler:
