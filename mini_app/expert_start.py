@@ -9,6 +9,7 @@ class StartExpertRequest(BaseModel):
     user_id: int
     expert_id: str
     message: str | None = None
+    query_id: str | None = None
 
 
 class StartExpertResponse(BaseModel):
