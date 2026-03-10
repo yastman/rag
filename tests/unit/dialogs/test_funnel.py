@@ -75,7 +75,6 @@ def test_funnel_has_all_windows():
     assert FunnelSG.pref_complex in states
     assert FunnelSG.summary in states
     assert FunnelSG.change_filter in states
-    assert FunnelSG.results in states
 
 
 # --- City getter/handler ---
@@ -426,61 +425,26 @@ async def test_summary_all_any_allows_search_and_shows_explicit_any_labels():
 # --- Summary actions ---
 
 
-@pytest.mark.asyncio
-async def test_on_summary_search_resets_scroll_and_goes_to_results(monkeypatch):
-    spawn_mock = MagicMock()
-    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", spawn_mock)
-    callback = SimpleNamespace(
-        from_user=SimpleNamespace(id=99),
-        message=SimpleNamespace(chat=SimpleNamespace(id=111)),
-    )
-    manager = SimpleNamespace(
-        dialog_data={
-            "city": "Солнечный берег",
-            "property_type": "2bed",
-            "budget": "high",
-        },
-        middleware_data={
-            "user_service": object(),
-            "pg_pool": object(),
-            "lead_scoring_store": object(),
-            "kommo_client": object(),
-            "hot_lead_notifier": object(),
-            "bot_config": object(),
-        },
-        switch_to=AsyncMock(),
-    )
-    await funnel_module.on_summary_search(callback, SimpleNamespace(), manager)
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
-    assert manager.dialog_data.get("scroll_start_from") is None
-
-
 def test_switchto_change_in_summary_targets_change_filter():
-    """SwitchTo 'change' in summary window targets FunnelSG.change_filter."""
+    """SwitchTo 'change' in summary window targets FunnelSG.change_filter (may be inside Row)."""
     from aiogram_dialog.widgets.kbd import SwitchTo as SwitchToWidget
 
     summary_window = funnel_dialog.windows[FunnelSG.summary]
-    found = False
-    for widget in summary_window.keyboard.buttons:
+    found_widget = None
+
+    def _find(widget):
+        nonlocal found_widget
         if isinstance(widget, SwitchToWidget) and widget.widget_id == "change":
-            assert widget.state == FunnelSG.change_filter
-            found = True
-            break
-    assert found, "SwitchTo 'change' not found in summary window"
+            found_widget = widget
+            return
+        for child in getattr(widget, "buttons", []):
+            _find(child)
 
+    for child in summary_window.keyboard.buttons:
+        _find(child)
 
-def test_switchto_refine_in_summary_targets_preferences():
-    """SwitchTo 'refine' in summary window targets FunnelSG.preferences."""
-    from aiogram_dialog.widgets.kbd import SwitchTo as SwitchToWidget
-
-    summary_window = funnel_dialog.windows[FunnelSG.summary]
-    found = False
-    for widget in summary_window.keyboard.buttons:
-        if isinstance(widget, SwitchToWidget) and widget.widget_id == "refine":
-            assert widget.state == FunnelSG.preferences
-            found = True
-            break
-    assert found, "SwitchTo 'refine' not found in summary window"
+    assert found_widget is not None, "SwitchTo 'change' not found in summary window"
+    assert found_widget.state == FunnelSG.change_filter
 
 
 # --- Change filter ---
@@ -510,57 +474,6 @@ async def test_change_filter_sets_return_flag():
     manager.switch_to.assert_awaited_once_with(FunnelSG.budget)
 
 
-# --- Results ---
-
-
-@pytest.mark.asyncio
-async def test_get_results_data_calls_apartments_service():
-    from telegram_bot.dialogs.funnel import get_results_data
-
-    results = [
-        {
-            "id": "p1",
-            "payload": {
-                "complex_name": "Sunrise",
-                "city": "Солнечный берег",
-                "property_type": "studio",
-                "floor": 2,
-                "area_m2": 42,
-                "view_primary": "sea",
-                "view_tags": ["sea"],
-                "price_eur": 48500,
-                "rooms": 1,
-            },
-        }
-    ]
-    mock_svc = MagicMock()
-    mock_svc.scroll_with_filters = AsyncMock(return_value=(results, 1, None, []))
-
-    manager = SimpleNamespace(
-        dialog_data={"property_type": "studio", "budget": "low"},
-        middleware_data={"apartments_service": mock_svc},
-    )
-
-    result = await get_results_data(manager)
-    mock_svc.scroll_with_filters.assert_awaited_once()
-    assert len(result["apartments"]) == 1
-    assert "Sunrise" in result["apartments"][0]["card"]
-
-
-@pytest.mark.asyncio
-async def test_get_results_data_fallback_without_service():
-    from telegram_bot.dialogs.funnel import get_results_data
-
-    manager = SimpleNamespace(
-        dialog_data={},
-        middleware_data={},
-    )
-
-    result = await get_results_data(manager)
-    assert result["no_results"] is True
-    assert "недоступен" in result["no_results_text"].lower()
-
-
 # --- Preference any clears ---
 
 
@@ -586,7 +499,7 @@ async def test_pref_promotion_any_clears_value():
 
 
 @pytest.mark.asyncio
-async def test_zero_suggestion_removes_area_and_refreshes_results():
+async def test_zero_suggestion_removes_area_and_refreshes_summary():
     manager = SimpleNamespace(
         dialog_data={"area": "large", "scroll_start_from": 50000.0, "scroll_seen_ids": ["id-1"]},
         switch_to=AsyncMock(),
@@ -596,11 +509,11 @@ async def test_zero_suggestion_removes_area_and_refreshes_results():
     )
     assert "area" not in manager.dialog_data
     assert manager.dialog_data.get("scroll_start_from") is None
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
-async def test_zero_suggestion_removes_floor_and_refreshes_results():
+async def test_zero_suggestion_removes_floor_and_refreshes_summary():
     manager = SimpleNamespace(
         dialog_data={"floor": "mid", "scroll_start_from": 50000.0, "scroll_seen_ids": ["id-1"]},
         switch_to=AsyncMock(),
@@ -614,7 +527,7 @@ async def test_zero_suggestion_removes_floor_and_refreshes_results():
     assert "floor" not in manager.dialog_data
     assert manager.dialog_data.get("scroll_start_from") is None
     assert manager.dialog_data.get("scroll_seen_ids") is None
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -663,7 +576,7 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
     manager.middleware_data = {
         "apartments_service": mock_svc,
         "property_bot": mock_bot,
-        "state": MagicMock(update_data=AsyncMock()),
+        "state": MagicMock(update_data=AsyncMock(), set_state=AsyncMock()),
     }
     manager.done = AsyncMock()
 
@@ -763,42 +676,6 @@ def test_switchto_back_in_pref_floor_targets_preferences():
 
 
 @pytest.mark.asyncio
-async def test_results_more_uses_start_from_and_seen_ids():
-    """on_results_more передаёт start_from и seen_ids в следующую страницу."""
-    manager = SimpleNamespace(
-        dialog_data={
-            "scroll_start_from": 50000.0,
-            "scroll_seen_ids": ["id-1", "id-2"],
-            "scroll_page": 1,
-        },
-    )
-    callback = MagicMock()
-    callback.answer = AsyncMock()
-    await funnel_module.on_results_more(callback, MagicMock(), manager)
-    assert manager.dialog_data["scroll_page"] == 2
-
-
-@pytest.mark.asyncio
-async def test_results_more_increments_page_and_offset():
-    manager = SimpleNamespace(
-        dialog_data={"scroll_start_from": 50000.0, "scroll_page": 1},
-    )
-    callback = MagicMock()
-    callback.answer = AsyncMock()
-    await funnel_module.on_results_more(callback, SimpleNamespace(), manager)
-    assert manager.dialog_data["scroll_page"] == 2
-
-
-@pytest.mark.asyncio
-async def test_results_more_no_next_offset_answers_all_shown():
-    manager = SimpleNamespace(dialog_data={})
-    callback = MagicMock()
-    callback.answer = AsyncMock()
-    await funnel_module.on_results_more(callback, SimpleNamespace(), manager)
-    callback.answer.assert_awaited_once_with("Все результаты показаны")
-
-
-@pytest.mark.asyncio
 async def test_property_type_return_to_summary():
     manager = SimpleNamespace(dialog_data={"_return_to_summary": True}, switch_to=AsyncMock())
     await funnel_module.on_property_type_selected(MagicMock(), SimpleNamespace(), manager, "2bed")
@@ -859,7 +736,7 @@ async def test_zero_suggestion_rm_view():
     )
     assert "view" not in manager.dialog_data
     assert manager.dialog_data.get("scroll_start_from") is None
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -872,7 +749,7 @@ async def test_zero_suggestion_rm_furnished():
         MagicMock(), SimpleNamespace(), manager, "rm_furnished"
     )
     assert "is_furnished" not in manager.dialog_data
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -885,7 +762,7 @@ async def test_zero_suggestion_rm_promotion():
         MagicMock(), SimpleNamespace(), manager, "rm_promotion"
     )
     assert "is_promotion" not in manager.dialog_data
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -898,7 +775,7 @@ async def test_zero_suggestion_rm_budget():
         MagicMock(), SimpleNamespace(), manager, "rm_budget"
     )
     assert manager.dialog_data["budget"] == "any"
-    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
+    manager.switch_to.assert_awaited_once_with(FunnelSG.summary)
 
 
 @pytest.mark.asyncio
@@ -1003,49 +880,303 @@ async def test_preferences_section_syncs_widget_state():
     assert "section" in checked
 
 
-@pytest.mark.asyncio
-async def test_on_search_list_resets_pagination():
-    """on_search_list must reset scroll state before switching to list view."""
-    manager = SimpleNamespace(
-        dialog_data={
-            "scroll_start_from": 50000.0,
-            "scroll_seen_ids": ["id-1"],
-            "scroll_page": 3,
-            "city": "Бургас",
-        },
-    )
-    callback = AsyncMock()
-    await funnel_module.on_search_list(callback, None, manager)
+def _collect_widget_ids(window) -> set:
+    """Collect all widget IDs in a window (recursing into Row etc)."""
+    ids: set = set()
 
-    assert "scroll_start_from" not in manager.dialog_data
-    assert "scroll_seen_ids" not in manager.dialog_data
-    assert manager.dialog_data["scroll_page"] == 1
-    assert manager.dialog_data["city"] == "Бургас"
-
-
-def test_summary_window_has_list_and_cards_buttons():
-    """Summary Window must have both 'list' and 'cards' result buttons."""
-    summary_window = funnel_dialog.windows[FunnelSG.summary]
-    assert summary_window is not None, "Summary window not found"
-
-    widgets = {}
-
-    def _collect(widget):
+    def _recurse(widget):
         if hasattr(widget, "widget_id") and widget.widget_id:
-            widgets[widget.widget_id] = widget
+            ids.add(widget.widget_id)
         for child in getattr(widget, "buttons", []):
-            _collect(child)
+            _recurse(child)
 
-    for child in summary_window.keyboard.buttons:
-        _collect(child)
+    for child in window.keyboard.buttons:
+        _recurse(child)
+    return ids
 
-    assert "search_list" in widgets, "Missing 'search_list' SwitchTo button"
-    assert "search_cards" in widgets, "Missing 'search_cards' Button"
-    assert "search" not in widgets, "Old 'search' button still present"
-    assert widgets["search_list"].state == FunnelSG.results, "search_list must target results"
+
+# ============================================================
+# Task 3 (redesign): Summary window — Find/Edit buttons, live count
+# ============================================================
+
+
+class TestSummaryRedesign:
+    async def test_summary_data_includes_count(self):
+        """Summary должен показывать 'Найдено: X апартаментов'."""
+        mock_svc = MagicMock()
+        mock_svc.count_with_filters = AsyncMock(return_value=23)
+        result = await funnel_module.get_summary_data(
+            dialog_manager=SimpleNamespace(
+                dialog_data={"city": "Солнечный берег", "property_type": "1bed", "budget": "mid"},
+                middleware_data={"apartments_service": mock_svc},
+            ),
+        )
+        assert "23" in result["summary_text"]
+        assert "Найдено" in result["summary_text"]
+
+    async def test_summary_data_includes_sort_info(self):
+        """Summary должен показывать сортировку."""
+        mock_svc = MagicMock()
+        mock_svc.count_with_filters = AsyncMock(return_value=10)
+        result = await funnel_module.get_summary_data(
+            dialog_manager=SimpleNamespace(
+                dialog_data={"city": "any", "property_type": "any", "budget": "any"},
+                middleware_data={"apartments_service": mock_svc},
+            ),
+        )
+        assert "цене" in result["summary_text"].lower()
+
+    def test_summary_window_has_edit_button(self):
+        """Summary должен иметь кнопку 'Изменить'."""
+        summary_window = funnel_dialog.windows[FunnelSG.summary]
+        button_ids = _collect_widget_ids(summary_window)
+        assert "change" in button_ids, "'change' button missing from summary window"
 
 
 def test_funnel_has_pref_section_window():
     windows = funnel_dialog.windows
     states = [w.get_state() for w in windows.values()]
     assert FunnelSG.pref_section in states
+
+
+# ============================================================
+# Task 4: on_summary_search redesign — catalog keyboard + FSM
+# ============================================================
+
+_APT_PAYLOAD = {
+    "id": "apt-1",
+    "payload": {
+        "complex_name": "Test",
+        "city": "Солнечный берег",
+        "property_type": "Студия",
+        "floor": 2,
+        "area_m2": 45,
+        "view_tags": [],
+        "view_primary": "sea",
+        "price_eur": 55000,
+        "rooms": 1,
+    },
+}
+
+
+def _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock):
+    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
+    callback = MagicMock()
+    callback.from_user = MagicMock(id=123)
+    callback.message = MagicMock()
+    callback.message.chat = MagicMock(id=456)
+    callback.message.answer = AsyncMock()
+    manager = MagicMock()
+    manager.dialog_data = {"city": "Солнечный берег", "property_type": "1bed", "budget": "mid"}
+    manager.middleware_data = {
+        "apartments_service": mock_svc,
+        "property_bot": mock_bot,
+        "state": state_mock,
+    }
+    manager.done = AsyncMock()
+    return callback, manager
+
+
+class TestOnSummarySearchRedesign:
+    async def test_sends_catalog_keyboard(self, monkeypatch):
+        """on_summary_search заменяет footer на ReplyKeyboardMarkup каталога."""
+        from aiogram.types import ReplyKeyboardMarkup
+
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+        state_mock.set_state = AsyncMock()
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        last_call = callback.message.answer.call_args_list[-1]
+        reply_markup = last_call.kwargs.get("reply_markup")
+        assert isinstance(reply_markup, ReplyKeyboardMarkup), (
+            "Ожидается ReplyKeyboardMarkup каталога"
+        )
+        button_texts = [btn.text for row in reply_markup.keyboard for btn in row]
+        assert any("Показать ещё" in t or "Все" in t for t in button_texts)
+        assert "🏠 Главное меню" in button_texts
+
+    async def test_sets_catalog_browsing_state(self, monkeypatch):
+        """on_summary_search sets CatalogBrowsingSG.browsing FSM state."""
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+        state_mock.set_state = AsyncMock()
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        from telegram_bot.dialogs.states import CatalogBrowsingSG
+
+        state_mock.set_state.assert_awaited_once_with(CatalogBrowsingSG.browsing)
+
+    async def test_sends_10_apartments(self, monkeypatch):
+        """on_summary_search запрашивает limit=10 карточек."""
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=([_APT_PAYLOAD] * 10, 30, 55000.0, ["apt-1"] * 10)
+        )
+        mock_bot = MagicMock()
+        mock_bot._send_property_card = AsyncMock()
+        state_mock = MagicMock()
+        state_mock.update_data = AsyncMock()
+        state_mock.set_state = AsyncMock()
+
+        callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
+        await funnel_module.on_summary_search(callback, MagicMock(), manager)
+
+        call_kwargs = mock_svc.scroll_with_filters.call_args.kwargs
+        assert call_kwargs.get("limit") == 10
+
+
+# ============================================================
+# Tasks 4-6: list/cards view mode in summary
+# ============================================================
+
+
+def test_summary_has_list_and_cards_buttons():
+    """Summary window must have both Списком and Карточками buttons."""
+
+    summary_window = funnel_dialog.windows[FunnelSG.summary]
+    button_ids = _collect_widget_ids(summary_window)
+    assert "search_list" in button_ids, "Missing 'Списком' button"
+    assert "search_cards" in button_ids, "Missing 'Карточками' button"
+
+
+def test_summary_has_no_results_window():
+    """Funnel dialog must NOT have a results window (inline pagination removed)."""
+    states = [w.get_state() for w in funnel_dialog.windows.values()]
+    assert not any(str(s).endswith("results") for s in states), (
+        "Results window should be removed — inline pagination replaced by ReplyKeyboard"
+    )
+
+
+# ============================================================
+# format_apartment_list
+# ============================================================
+
+
+class TestFormatApartmentList:
+    def test_basic_formatting(self):
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        results = [
+            {
+                "payload": {
+                    "complex_name": "Premier Fort",
+                    "rooms": 1,
+                    "price_eur": 55000,
+                    "floor": 3,
+                    "area_m2": 42.5,
+                    "view_primary": "sea",
+                },
+            },
+        ]
+        text = format_apartment_list(results, shown_start=1, total=5)
+        assert "Найдено <b>5</b>" in text
+        assert "показаны 1–1" in text
+        assert "<b>1. Premier Fort</b>" in text
+        assert "55 000 €" in text
+        assert "3 эт" in text
+        assert "42 м²" in text  # round(42.5) = 42 (banker's rounding)
+        # Multi-line format: details on separate lines
+        assert "\n    Студия" in text
+
+    def test_multiple_results_numbering(self):
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        results = [
+            {"payload": {"complex_name": f"C{i}", "rooms": 1, "price_eur": 50000}} for i in range(3)
+        ]
+        text = format_apartment_list(results, shown_start=5)
+        assert "<b>5." in text
+        assert "<b>6." in text
+        assert "<b>7." in text
+
+    def test_empty_results(self):
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        assert format_apartment_list([]) == ""
+
+    def test_section_and_apartment_number(self):
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        results = [
+            {
+                "payload": {
+                    "complex_name": "Test",
+                    "rooms": 2,
+                    "price_eur": 80000,
+                    "section": "D-1",
+                    "apartment_number": "42",
+                },
+            },
+        ]
+        text = format_apartment_list(results, shown_start=1)
+        assert "D-1" in text
+        assert "№42" in text
+
+
+# ============================================================
+# on_summary_search: list mode sends text, not cards
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_on_summary_search_list_mode_sends_text(monkeypatch):
+    """When button.widget_id == 'search_list', sends HTML text instead of photo cards."""
+    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
+
+    mock_svc = MagicMock()
+    mock_svc.scroll_with_filters = AsyncMock(
+        return_value=(
+            [_APT_PAYLOAD],
+            1,
+            None,
+            ["apt-1"],
+        )
+    )
+    mock_bot = MagicMock()
+    mock_bot._send_property_card = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user = MagicMock(id=123)
+    callback.message = MagicMock()
+    callback.message.chat = MagicMock(id=456)
+    callback.message.answer = AsyncMock()
+
+    button = MagicMock()
+    button.widget_id = "search_list"
+
+    manager = MagicMock()
+    manager.dialog_data = {"city": "Солнечный берег", "property_type": "1bed", "budget": "mid"}
+    manager.middleware_data = {
+        "apartments_service": mock_svc,
+        "property_bot": mock_bot,
+        "state": MagicMock(update_data=AsyncMock(), set_state=AsyncMock()),
+    }
+    manager.done = AsyncMock()
+
+    await funnel_module.on_summary_search(callback, button, manager)
+
+    # Should send text, not cards
+    mock_bot._send_property_card.assert_not_awaited()
+    # Should have at least one answer call with HTML (the list text)
+    html_calls = [
+        c for c in callback.message.answer.call_args_list if c.kwargs.get("parse_mode") == "HTML"
+    ]
+    assert len(html_calls) >= 1, "List mode should send HTML text"

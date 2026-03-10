@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from telegram_bot.callback_data import FavoriteCB, ResultsCB
+from telegram_bot.callback_data import FavoriteCB
 from telegram_bot.services.apartment_formatter import format_apartment_html
 
 
@@ -97,23 +97,38 @@ def build_card_buttons(
             text="📌 В избранное",
             callback_data=FavoriteCB(action="add", apartment_id=property_id).pack(),
         )
+    manager_btn = InlineKeyboardButton(
+        text="💬 Менеджеру",
+        callback_data=f"card:ask:{property_id}",
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [fav_btn, manager_btn],
             [
                 InlineKeyboardButton(
                     text="📅 На осмотр",
                     callback_data=f"card:viewing:{property_id}",
                 ),
-                fav_btn,
-            ],
-            [
-                InlineKeyboardButton(
-                    text="💬 Уточнить у менеджера",
-                    callback_data=f"card:ask:{property_id}",
-                ),
             ],
         ]
     )
+
+
+def format_card_context(payload: dict[str, Any]) -> str:
+    """Format short apartment context for action messages."""
+    name = payload.get("complex_name", "")
+    apt_num = payload.get("apartment_number", "")
+    prop_type = payload.get("property_type", "")
+    price = int(payload.get("price_eur", 0))
+    price_fmt = f"{price:,}".replace(",", " ")
+
+    parts = [f"<b>{name}</b>"]
+    if apt_num:
+        parts.append(f"№{apt_num}")
+    if prop_type:
+        parts.append(prop_type)
+    parts.append(f"{price_fmt} €")
+    return " · ".join(parts)
 
 
 async def send_property_card(
@@ -162,35 +177,3 @@ async def send_property_card(
     card_msg = await message.answer(card, reply_markup=reply_markup)
     card_msg._photo_message_ids = photo_message_ids  # type: ignore[attr-defined]
     return card_msg
-
-
-def build_results_footer(*, shown_total: int, total: int, has_more: bool) -> InlineKeyboardMarkup:
-    """Build footer buttons after property results."""
-    rows = []
-    if has_more:
-        remaining = max(total - shown_total, 0)
-        rows.append(
-            [
-                InlineKeyboardButton(
-                    text=f"🔄 Показать ещё ({remaining} осталось)",
-                    callback_data=ResultsCB(action="more").pack(),
-                )
-            ]
-        )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="⚙️ Изменить параметры",
-                callback_data=ResultsCB(action="refine").pack(),
-            )
-        ]
-    )
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="📅 Запись на осмотр",
-                callback_data=ResultsCB(action="viewing").pack(),
-            )
-        ]
-    )
-    return InlineKeyboardMarkup(inline_keyboard=rows)

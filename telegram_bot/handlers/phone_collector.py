@@ -120,18 +120,15 @@ async def start_phone_collection(
     viewing_objects: list[dict[str, Any]] | None = None,
 ) -> None:
     """Start phone collection flow with reply keyboard."""
-    config = get_phone_config(service_key)
-    phone_prompt = (
-        config["phone_prompt"]
-        if config and "phone_prompt" in config
-        else "Введите ваш номер телефона:"
-    )
-
     await state.set_state(PhoneCollectorStates.waiting_phone)
     await state.update_data(service_key=service_key, viewing_objects=viewing_objects or [])
 
     kb = build_phone_keyboard()
-    text = f"{phone_prompt}\n\n👇 Нажмите кнопку или введите номер вручную:"
+    text = (
+        "📞 Оставьте номер телефона, и мы свяжемся с вами:\n\n"
+        "👇 Нажмите «Поделиться контактом» — это самый быстрый способ\n"
+        "✍️ Или введите номер вручную"
+    )
 
     if isinstance(message_or_callback, CallbackQuery) and message_or_callback.message:
         await message_or_callback.message.answer(text, reply_markup=kb)
@@ -260,14 +257,24 @@ async def on_phone_received(
 ) -> None:
     """Handle phone number text input."""
     from telegram_bot.keyboards.client_keyboard import build_client_keyboard
+    from telegram_bot.keyboards.phone_keyboard import is_phone_cancel
 
     text = message.text or ""
+
+    # Cancel button pressed
+    if is_phone_cancel(text):
+        await state.clear()
+        await message.answer(
+            "Обращение отменено.",
+            reply_markup=build_client_keyboard(),
+        )
+        return
 
     # Not a phone attempt (no 5+ digits) — silently exit FSM
     if not is_phone_attempt(text):
         await state.clear()
         await message.answer(
-            "Ввод телефона отменён. Вы можете задать вопрос.",
+            "Обращение отменено.",
             reply_markup=build_client_keyboard(),
         )
         return

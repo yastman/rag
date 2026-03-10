@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { closeMiniApp, sendData } from "@telegram-apps/sdk-react";
 import { fetchConfig } from "../api";
 import { BottomSheet } from "../components/BottomSheet";
 import { PromptRow } from "../components/PromptRow";
@@ -20,7 +21,8 @@ export function QuestionSheet() {
   if (!question) return null;
 
   const handlePrompt = (text: string) => {
-    navigate(`/chat?message=${encodeURIComponent(text)}&question_id=${id}`);
+    sendData.ifAvailable(text);
+    closeMiniApp.ifAvailable();
   };
 
   return (
@@ -33,7 +35,7 @@ export function QuestionSheet() {
       {question.prompts.map((p, i) => (
         <PromptRow key={i} prompt={p} onClick={handlePrompt} />
       ))}
-      <ChatInput onSend={(text) => handlePrompt(text)} />
+      <ChatInput onSend={handlePrompt} />
     </BottomSheet>
   );
 }

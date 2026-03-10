@@ -1,5 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+export function remoteLog(level: "info" | "error" | "warn", message: string, data?: unknown) {
+  console.log(`[remote:${level}]`, message, data);
+  fetch(`${API_BASE}/log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ level, message, data: data ? JSON.stringify(data) : undefined }),
+  }).catch(() => {});
+}
+
 export async function fetchConfig() {
   try {
     const resp = await fetch(`${API_BASE}/config`);
@@ -12,7 +21,7 @@ export async function fetchConfig() {
 }
 
 export interface StartExpertResponse {
-  thread_id: number;
+  start_link: string;
   expert_name: string;
   status: string;
 }
