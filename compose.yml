@@ -179,7 +179,7 @@ services:
     # LiteLLM writes migration/UI artifacts under site-packages at startup.
     # Keep hardening defaults, but allow writes for this service.
     read_only: false
-    image: ghcr.io/berriai/litellm:main-v1.81.3-stable@sha256:3d80908e35230a0dfb58051ae4e2847371b2a327b44e105e79b8c4f67a65596c
+    image: ghcr.io/berriai/litellm:main-v1.81.14-stable@sha256:a3ce130137752e6b085de521b773eacbb641c8b6322c6f538453e860e7b9cf43
     restart: unless-stopped
     logging: *default-logging
     volumes:
@@ -196,12 +196,10 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
       LANGFUSE_OTEL_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
-      # Database for virtual keys
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/litellm
+      # Database disabled — config.yaml is source of truth for local dev
+      # DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/litellm
     command: ["--config", "/app/config.yaml"]
-    depends_on:
-      postgres:
-        condition: service_healthy
+    depends_on: {}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=5)"]
       interval: 30s
