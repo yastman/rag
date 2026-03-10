@@ -44,9 +44,7 @@ class FunnelSG(StatesGroup):
 class ViewingSG(StatesGroup):
     """Viewing appointment wizard."""
 
-    date = State()  # Шаг 1: желаемая дата
-    phone = State()  # Шаг 2: номер телефона
-    summary = State()  # Шаг 3: подтверждение + CRM
+    date = State()  # Шаг 1: желаемая дата → phone_collector FSM
 
 
 class FaqSG(StatesGroup):
