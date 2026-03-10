@@ -6,9 +6,9 @@
 
 ```bash
 git add <files> && git commit -m "feat(scope): msg"
-# Деплой:
-make check && make test-unit && git checkout main && git merge dev && git push && git checkout dev
 ```
+
+Деплой: см. `.claude/rules/git-workflow.md` → CI/CD Pipeline.
 
 **NEVER** `git add -A` — specific files only, `git diff --cached --stat` before commit.
 
@@ -67,15 +67,6 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 
 **Optional:** `TTFT_DRIFT_WARN_MS`, `KOMMO_ACCESS_TOKEN`, `KOMMO_DEFAULT_PIPELINE_ID`, `KOMMO_*_FIELD_ID`
 
-## Task Routing
-
-| Размер задачи | Подход |
-|---------------|--------|
-| Trivial (≤5 строк, 1-2 файла) | Inline fix |
-| Small (1 issue, <200 LOC) | Один агент / inline |
-| Medium (1-2 issues, <400 LOC) | `/tmux-swarm-orchestration` — 1 Sonnet worker |
-| Large (3+ issues, параллельные) | `/tmux-swarm-orchestration` — N Sonnet workers |
-
 ## Post-Work
 
 После PR/коммита с новыми файлами, сервисами или зависимостями → rules-sync (inline mode). Проверь diff → обнови затронутые `.claude/rules/`.
@@ -86,17 +77,10 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 
 | Rule | Когда грузится |
 |------|---------------|
-| `sdk-registry.md` | SDK-First проверка, добавление зависимостей |
-| `code-search.md` | Поиск кода (GrepAI, LSP, Grep, Glob) |
-| `testing.md` | Работа с `tests/**/*.py` |
-| `mini-app.md` | Работа с `mini_app/**` |
-| `docker.md` | Docker, compose, infrastructure |
-| `git-workflow.md` | PR, ветки, Renovate, worktrees |
-| `services.md` | telegram_bot/services, pipelines |
-| `search.md` | src/retrieval (RAG search) |
-| `build.md` | Makefile, pyproject.toml, pre-commit |
-| `observability.md` | Langfuse, baseline tests |
-| `k3s.md` | VPS Kubernetes |
-| `troubleshooting.md` | Известные ошибки и фиксы |
-| `context-mode.md` | context-mode MCP plugin |
-| `peon-ping.md` | Звуковые уведомления |
+| `sdk-registry.md` | SDK-First проверка |
+| `testing.md` | `tests/**` |
+| `mini-app.md` | `mini_app/**` |
+| `docker.md` | Docker, compose |
+| `git-workflow.md` | PR, CI/CD, deploy |
+| `services.md` | `telegram_bot/services/` |
+| `features/*.md` | telegram-bot, voice, search, caching, ingestion и др. |
