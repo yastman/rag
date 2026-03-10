@@ -9,7 +9,7 @@ import logging
 import re
 import time
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
@@ -55,7 +55,6 @@ from .observability import (
     observe,
     propagate_attributes,
 )
-from .pipelines.client import _NO_RAG_QUERY_TYPES, _split_telegram_response, run_client_pipeline
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     score,
@@ -65,11 +64,16 @@ from .scoring import (
 from .services.business_hours import is_business_hours
 from .services.forum_bridge import ForumBridge
 from .services.handoff_state import HandoffData, HandoffState
-from .services.handoff_summary import generate_handoff_summary
-from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 from .services.topic_service import TopicService
+
+
+if TYPE_CHECKING:
+    from .services.history_service import HistoryService
+
+# Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
+HistoryService: Any = None
 
 
 logger = logging.getLogger(__name__)
@@ -78,6 +82,8 @@ logger = logging.getLogger(__name__)
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
+_TELEGRAM_MESSAGE_LIMIT = 4096
+_NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 
 
 def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
@@ -98,6 +104,15 @@ def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
             seen_ids.add(item_key)
         merged.append(item)
     return merged
+
+
+def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
+    """Split text into Telegram-safe chunks without importing the full client pipeline."""
+    if not text:
+        return []
+    if len(text) <= limit:
+        return [text]
+    return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
 # Re-export from shared module (avoid circular imports with middlewares)
@@ -696,12 +711,16 @@ class PropertyBot:
         self.dp.message(Command("clearcache"))(self.cmd_clearcache)
         self.dp.message(StateFilter(None), F.voice)(self.handle_voice)
         # ReplyKeyboard buttons — registered before catch-all F.text (#628)
+        from telegram_bot.dialogs.states import CatalogBrowsingSG
+
         from .keyboards.client_keyboard import get_menu_button_texts
 
         menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
-        self.dp.message(F.text.in_(menu_button_texts), flags={"menu_nav": True})(
-            self.handle_menu_button
-        )
+        self.dp.message(
+            ~StateFilter(CatalogBrowsingSG.browsing),
+            F.text.in_(menu_button_texts),
+            flags={"menu_nav": True},
+        )(self.handle_menu_button)
         # NOTE: catch-all handle_query is registered on self._catch_all_router
         # which is included AFTER dialog routers in _setup_dialogs().
         # This ensures dialog MessageInput (e.g. viewing phone input)
@@ -1547,6 +1566,8 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to fetch chat history for handoff summary")
         if len(history) >= self.config.handoff_summary_min_messages:
+            from .services.handoff_summary import generate_handoff_summary
+
             summary = await generate_handoff_summary(history, llm=self._llm)
 
         # 3. Kommo lead (optional).
@@ -2477,7 +2498,7 @@ class PropertyBot:
             None if the pipeline signals needs_agent=True (caller falls through to sdk_agent).
         """
         # Apartment fast path: intent check → regex filters → hybrid search → generate (#629)
-        from .pipelines.client import detect_agent_intent
+        from .pipelines.client import detect_agent_intent, run_client_pipeline
 
         if detect_agent_intent(user_text) == "apartment":
             apt_answer = await self._handle_apartment_fast_path(
@@ -3986,7 +4007,11 @@ class PropertyBot:
             self._topic_manager = None
         # Initialize history service (Qdrant-backed Q&A history)
         try:
-            self._history_service = HistoryService(
+            history_service_cls = HistoryService
+            if history_service_cls is None:
+                from .services.history_service import HistoryService as history_service_cls
+
+            self._history_service = history_service_cls(
                 client=self._qdrant.client,
                 embeddings=self._embeddings,
                 collection_name=self.config.qdrant_history_collection,
