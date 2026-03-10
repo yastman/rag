@@ -104,7 +104,7 @@ def _fav_bot(favorites: list | None = None) -> PropertyBot:
 
 
 async def test_handle_viewing_starts_dialog_when_manager_available() -> None:
-    """_handle_viewing starts ViewingSG.objects via dialog_manager (#719)."""
+    """_handle_viewing starts ViewingSG.date via dialog_manager (#719)."""
     from unittest.mock import AsyncMock
 
     from aiogram_dialog import StartMode
@@ -119,7 +119,7 @@ async def test_handle_viewing_starts_dialog_when_manager_available() -> None:
 
     await bot._handle_viewing(msg, state, dialog_manager=dialog_manager)
 
-    dialog_manager.start.assert_awaited_once_with(ViewingSG.objects, mode=StartMode.RESET_STACK)
+    dialog_manager.start.assert_awaited_once_with(ViewingSG.date, mode=StartMode.RESET_STACK)
 
 
 async def test_handle_viewing_fallback_without_dialog_manager() -> None:
