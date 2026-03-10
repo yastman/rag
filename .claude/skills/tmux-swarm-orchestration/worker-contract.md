@@ -19,6 +19,12 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
     - Спавн субагентов (Agent tool) → ЗАПРЕЩЕНО
     - SDK исследование (Context7/Exa) → ЗАПРЕЩЕНО для A/B/D (orch уже сделал). Разрешено ТОЛЬКО для C.
 
+    SDK-FIRST ПРАВИЛО:
+    Если задача покрывается SDK из реестра — используй SDK, НЕ пиши кастом.
+    Проверь {sdk_registry_excerpt} ниже ПЕРЕД написанием кода.
+    Нашёл SDK решение → используй его паттерны и gotchas.
+    Не нашёл → кастом допустим, но обоснуй в коммите почему.
+
     ПРИ ОШИБКЕ:
     Skill(skill="systematic-debugging") — структурная отладка, НЕ слепой повтор.
     echo "[SKILL:debugging]" >> logs/worker-{name}.log
@@ -95,11 +101,15 @@ Part-workers коммитят и пушат, но **НЕ создают PR**. PR
     Agent(
         description="SDK исследование для #{N}: {library}",
         prompt="""
-        Context7: resolve-library-id("{library}") → query-docs("{topic}")
+        РЕЕСТР (из .claude/rules/sdk-registry.md):
+        {sdk_registry_excerpt_for_this_library}
+
+        Context7: resolve-library-id("{context7_id_from_registry}") → query-docs("{topic}")
         Exa: get_code_context_exa("{library} {topic} 2026")
 
         РЕЗУЛЬТАТ:
         А) Резюме (верни мне, макс 300 слов): ключевые сигнатуры, подход, SDK покрывает? ДА/НЕТ
+           Сравни с "как_у_нас" из реестра — отметь если паттерн устарел.
         Б) Полный контекст (Write → .claude/cache/sdk-{library}-{N}.md):
            все сигнатуры, примеры, лучшие практики, анти-паттерны
         """,
@@ -180,6 +190,9 @@ Haiku НЕ классифицирует сложность — только фи
     {sdk_summary}
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
 
+    SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
+    {sdk_registry_excerpt}
+
     КОНТРАКТ ИНТЕРФЕЙСА (если параллельная работа):
     {interface_contract}
 
@@ -213,6 +226,9 @@ Haiku НЕ классифицирует сложность — только фи
     {sdk_summary}
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
 
+    SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
+    {sdk_registry_excerpt}
+
     ЗАРЕЗЕРВИРОВАННЫЕ ФАЙЛЫ (только ты их редактируешь):
     {reserved_files}
 
@@ -243,6 +259,15 @@ Haiku НЕ классифицирует сложность — только фи
     {sdk_summary}
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
     Углуби SDK исследование если нужно (Context7, Exa). Включи SDK контекст в план.
+
+    SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
+    {sdk_registry_excerpt}
+
+    ОБЯЗАТЕЛЬНО: Read .claude/rules/sdk-registry.md (если существует).
+    В плане — секция "SDK Coverage":
+    - Какие SDK из реестра затронуты этой задачей
+    - Какие SDK-паттерны использовать (из как_у_нас)
+    - Если план предлагает кастом для чего-то из SDK — обосновать ПОЧЕМУ
 
     CODEBASE КОНТЕКСТ (3 системы — ИСПОЛЬЗУЙ ВСЕ):
 
@@ -325,6 +350,9 @@ Haiku НЕ классифицирует сложность — только фи
     SDK КОНТЕКСТ (если есть):
     {sdk_summary}
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
+
+    SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
+    {sdk_registry_excerpt}
 
     <HARD-GATE>
     Skill(skill="writing-plans") → Skill(skill="executing-plans") →
