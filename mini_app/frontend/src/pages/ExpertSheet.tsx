@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { openTelegramLink, initData } from "@telegram-apps/sdk-react";
+import { openTelegramLink, initData } from "@tma.js/sdk-react";
 import { fetchConfig, remoteLog, startExpert } from "../api";
 import { BottomSheet } from "../components/BottomSheet";
 import { ChatInput } from "../components/ChatInput";
