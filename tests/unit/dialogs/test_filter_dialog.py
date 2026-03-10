@@ -229,7 +229,7 @@ class TestOnApply:
         call_kwargs = state.update_data.call_args[1]
         assert call_kwargs.get("apartment_offset") == 0
 
-    async def test_sends_confirmation_message(self):
+    async def test_sends_empty_results_message(self):
         from telegram_bot.dialogs.filter_dialog import on_apply
 
         callback, _state, manager = _make_apply_mocks({"city": "Бургас"})
@@ -237,7 +237,7 @@ class TestOnApply:
 
         callback.message.answer.assert_awaited_once()
         msg_text = callback.message.answer.call_args[0][0]
-        assert "Фильтры применены" in msg_text
+        assert "ничего не найдено" in msg_text
 
 
 # ============================================================
