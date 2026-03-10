@@ -11,7 +11,7 @@ dependencies = [
     "sentence-transformers==3.4.1",
     # FastAPI & Web Server
     "fastapi==0.129.0",
-    "uvicorn[standard]==0.40.0",
+    "uvicorn[standard]==0.41.0",
     "python-multipart==0.0.22",
     "pydantic==2.12.5",
     "pydantic-settings==2.12.0",
