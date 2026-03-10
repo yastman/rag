@@ -1,3 +1,7 @@
+---
+description: "Peon-ping sound notification management"
+---
+
 ***REMOVED*** Peon-Ping: быстрое управление
 
 ***REMOVED******REMOVED*** Конфиг
