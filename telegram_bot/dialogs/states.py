@@ -39,7 +39,6 @@ class FunnelSG(StatesGroup):
     pref_section = State()  # Step 4g: секция sub-options
     summary = State()  # Step 5: саммари + confirmation
     change_filter = State()  # Step 5a: выбор фильтра для изменения
-    results = State()  # Step 6: список результатов (list view)
 
 
 class ViewingSG(StatesGroup):
