@@ -284,7 +284,7 @@ svc-infotour-card =
 
 # Services — buttons
 svc-back = Back
-svc-get-offer = Get an Offer
+svc-get-offer = Submit Request
 svc-contact-manager = Contact Manager
 svc-back-to-services = Back to Services
 
