@@ -184,6 +184,12 @@ class HandoffSG(StatesGroup):
     contact = State()
 
 
+class CatalogBrowsingSG(StatesGroup):
+    """Catalog browsing mode (ReplyKeyboard pagination)."""
+
+    browsing = State()
+
+
 class DemoSG(StatesGroup):
     """Demo apartment search dialog (aiogram-dialog, #907)."""
 
