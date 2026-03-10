@@ -105,9 +105,7 @@ async def _restore_menu_keyboard(bot: Any, chat_id: int) -> None:
 
     await bot.send_message(
         chat_id=chat_id,
-        text="✅ Ваша заявка на осмотр получена!\n\n"
-        "Наш менеджер свяжется с вами в ближайшее время "
-        "для согласования деталей. Спасибо за обращение! 🙏",
+        text="✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.",
         reply_markup=build_client_keyboard(),
     )
 

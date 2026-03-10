@@ -11,3 +11,9 @@
 {"ts":"2026-03-05T11:30:56+00:00","event":"done","worker":"W-DOCKER-UNIFY","pr":"https://github.com/yastman/rag/pull/819","duration_s":"~1200"}
 {"ts":"2026-03-09T13:52:39+00:00","event":"classify","issue":924,"level":"CLEAR","contract":"A"}
 {"ts":"2026-03-09T13:52:49+00:00","event":"spawn","worker":"W-FIX-924","worktree":"/home/user/projects/rag-fresh-wt-fix-924","timeout":900}
+{"ts":"2026-03-10T13:36:47+00:00","event":"spawn","worker":"W-MINI-APP-SDK","worktree":"/home/user/projects/rag-fresh-wt-mini-app-sdk","timeout":1800}
+{"ts":"2026-03-10T13:37:55+00:00","event":"timeout","worker":"W-MINI-APP-SDK","escalate":"D"}
+{"ts":"2026-03-10T13:38:13+00:00","event":"spawn","worker":"W-MINI-APP-SDK","contract":"D","model":"opus","worktree":"/home/user/projects/rag-fresh-wt-mini-app-sdk","timeout":2700}
+{"ts":"2026-03-10T13:41:46+00:00","event":"classify","issue":942,"level":"COMPLEX","contract":"B"}
+{"ts":"2026-03-10T13:41:46+00:00","event":"spawn","worker":"W-MINIAPP","worktree":"/home/user/projects/rag-fresh-wt-miniapp","timeout":1800}
+{"ts":"2026-03-10T14:02:43+00:00","event":"done","worker":"W-MINIAPP","pr":"https://github.com/yastman/rag/pull/944","duration_s":1155,"verification":"PASS+WARNING"}
