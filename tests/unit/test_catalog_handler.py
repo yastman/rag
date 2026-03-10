@@ -167,7 +167,7 @@ class TestCatalogMoreHandler:
 
         last_call = message.answer.call_args_list[-1]
         kb = last_call.kwargs.get("reply_markup")
-        assert len(kb.keyboard) == 2  # filters+bookmarks and menu only
+        assert len(kb.keyboard) == 3  # filters+bookmarks, viewing+manager, menu
         button_texts = [btn.text for row in kb.keyboard for btn in row]
         assert not any("Показать" in t for t in button_texts)
 
@@ -295,6 +295,78 @@ class TestCatalogBookmarksHandler:
 
 
 # ============================================================
+# handle_catalog_viewing
+# ============================================================
+
+
+class TestCatalogViewingHandler:
+    async def test_routes_to_handle_viewing(self):
+        """'📅 Запись на осмотр' routes to property_bot._handle_viewing."""
+        from telegram_bot.handlers.catalog_router import handle_catalog_viewing
+
+        property_bot = MagicMock()
+        property_bot._handle_viewing = AsyncMock()
+
+        state = _make_state({})
+        message = _make_message()
+        dialog_manager = MagicMock()
+
+        await handle_catalog_viewing(
+            message, state, property_bot=property_bot, dialog_manager=dialog_manager
+        )
+
+        property_bot._handle_viewing.assert_awaited_once_with(message, state, dialog_manager)
+
+    async def test_no_property_bot_does_nothing(self):
+        """Without property_bot, handler does nothing."""
+        from telegram_bot.handlers.catalog_router import handle_catalog_viewing
+
+        state = _make_state({})
+        message = _make_message()
+
+        await handle_catalog_viewing(message, state, property_bot=None)
+
+        message.answer.assert_not_awaited()
+
+
+# ============================================================
+# handle_catalog_manager
+# ============================================================
+
+
+class TestCatalogManagerHandler:
+    async def test_routes_to_handle_manager(self):
+        """'👤 Написать менеджеру' routes to property_bot._handle_manager."""
+        from telegram_bot.handlers.catalog_router import handle_catalog_manager
+
+        property_bot = MagicMock()
+        property_bot._handle_manager = AsyncMock()
+
+        state = _make_state({})
+        message = _make_message()
+        dialog_manager = MagicMock()
+
+        await handle_catalog_manager(
+            message, state, property_bot=property_bot, dialog_manager=dialog_manager
+        )
+
+        property_bot._handle_manager.assert_awaited_once_with(
+            message, state=state, dialog_manager=dialog_manager
+        )
+
+    async def test_no_property_bot_does_nothing(self):
+        """Without property_bot, handler does nothing."""
+        from telegram_bot.handlers.catalog_router import handle_catalog_manager
+
+        state = _make_state({})
+        message = _make_message()
+
+        await handle_catalog_manager(message, state, property_bot=None)
+
+        message.answer.assert_not_awaited()
+
+
+# ============================================================
 # handle_catalog_more — list view mode
 # ============================================================
 
@@ -333,3 +405,29 @@ class TestCatalogListViewMode:
         assert message.answer.await_count == 1
         call = message.answer.call_args
         assert call.kwargs.get("parse_mode") == "HTML"
+
+
+# ============================================================
+# build_catalog_keyboard — viewing + manager buttons
+# ============================================================
+
+
+class TestCatalogKeyboardButtons:
+    def test_keyboard_has_viewing_and_manager_buttons(self):
+        """Catalog keyboard includes viewing and manager buttons."""
+        from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+        kb = build_catalog_keyboard(shown=5, total=20)
+        button_texts = [btn.text for row in kb.keyboard for btn in row]
+        assert "📅 Запись на осмотр" in button_texts
+        assert "👤 Написать менеджеру" in button_texts
+
+    def test_keyboard_viewing_manager_row_present_when_no_more(self):
+        """Even when all shown, viewing/manager row is present."""
+        from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+        kb = build_catalog_keyboard(shown=20, total=20)
+        button_texts = [btn.text for row in kb.keyboard for btn in row]
+        assert "📅 Запись на осмотр" in button_texts
+        assert "👤 Написать менеджеру" in button_texts
+        assert not any("Показать" in t for t in button_texts)
