@@ -25,7 +25,7 @@ swipeBehavior.disableVertical(); // 10. Disable vertical swipe
 ```
 
 Пакеты:
-- `@tma.js/sdk-react` — init, initData, themeParams, viewport, swipeBehavior, openTelegramLink, closeMiniApp, sendData
+- `@tma.js/sdk-react` — init, initData, themeParams, viewport, swipeBehavior, openTelegramLink, miniApp, sendData
 - `@tma.js/bridge` — isTMA, mockTelegramEnv
 
 ### Ключевые API
@@ -34,7 +34,7 @@ swipeBehavior.disableVertical(); // 10. Disable vertical swipe
 |---------|-------|---------|------------|
 | `openTelegramLink` | `@tma.js/sdk-react` | `.isAvailable()` + try/catch + `location.href` fallback | Deep link navigation |
 | `sendData` | `@tma.js/sdk-react` | `.ifAvailable(text)` | Отправка данных боту (закрывает Mini App) |
-| `closeMiniApp` | `@tma.js/sdk-react` | `.ifAvailable()` | Закрытие Mini App |
+| `miniApp.close` | `@tma.js/sdk-react` | `.ifAvailable()` | Закрытие Mini App |
 | `initData.user()` | `@tma.js/sdk-react` | Прямой вызов | `{ id, firstName, lastName, username }` |
 | `viewport.mount` | `@tma.js/sdk-react` | `.isAvailable()` — Computed signal | Async mount viewport |
 | `swipeBehavior.isSupported` | `@tma.js/sdk-react` | Computed signal `()` | true если платформа поддерживает |
@@ -72,7 +72,7 @@ mini_app/
     │   │   └── TelegramGate.tsx  # Guard: fallback если не в Telegram (prod)
     │   └── pages/
     │       ├── HomePage.tsx
-    │       ├── QuestionSheet.tsx  # sendData.ifAvailable + closeMiniApp
+    │       ├── QuestionSheet.tsx  # sendData.ifAvailable + miniApp.close
     │       └── ExpertSheet.tsx    # openTelegramLink + fallback + remoteLog
     ├── Dockerfile      # node build → nginx (порт 80)
     ├── nginx.conf      # Reverse proxy config (API проксируется через /api/)
