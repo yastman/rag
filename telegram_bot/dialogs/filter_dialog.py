@@ -257,18 +257,37 @@ async def on_apply(
     button: Any,
     manager: DialogManager,
 ) -> None:
-    """Apply current filters: write to FSMContext, reset pagination, close dialog."""
+    """Apply current filters: write to FSMContext, show first page, close dialog."""
     state: FSMContext = manager.middleware_data["state"]
     dd = manager.dialog_data
     raw_filters = {k: v for k, v in dd.items() if k in FIELD_TO_FILTER_KEY}
     filters = build_filters_dict(raw_filters)
+
+    # Fetch first page with new filters
+    svc = manager.middleware_data.get("apartments_service")
+    count = 0
+    if svc is not None:
+        with contextlib.suppress(Exception):
+            count = await svc.count_with_filters(filters=filters)
+
     await state.update_data(
         apartment_filters=filters,
         apartment_offset=0,
+        apartment_total=count,
         apartment_next_offset=None,
         apartment_scroll_seen_ids=None,
     )
     await manager.done()
+
+    # Show confirmation with catalog keyboard so user can browse results
+    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+    kb = build_catalog_keyboard(shown=0, total=count)
+    if callback.message:
+        await callback.message.answer(
+            f"✅ Фильтры применены\nНайдено: {count} апартаментов",
+            reply_markup=kb,
+        )
 
 
 # ============================================================
