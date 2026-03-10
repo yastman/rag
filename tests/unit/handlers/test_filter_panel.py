@@ -351,3 +351,107 @@ async def test_handle_clear_all_filters(field, initial_key, initial_value):
 
     filters = state.update_data.call_args[1]["apartment_filters"]
     assert initial_key not in filters
+
+
+# ============================================================
+# select action — opens sub-menu
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_select_shows_submenu():
+    """Select action edits message with sub-menu keyboard."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks(filters={"city": "Бургас"})
+    cb_data = FilterPanelCB(action="select", field="city", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    callback.message.edit_text.assert_awaited_once()
+    call_text = callback.message.edit_text.call_args[0][0]
+    assert "город" in call_text.lower()
+    callback.answer.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_select_shows_current_value():
+    """Select action displays current filter value in sub-menu."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks(filters={"rooms": 3})
+    cb_data = FilterPanelCB(action="select", field="rooms", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    call_text = callback.message.edit_text.call_args[0][0]
+    assert "3" in call_text
+
+
+@pytest.mark.asyncio
+async def test_handle_select_budget_shows_current():
+    """Select budget shows current value via reverse lookup."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks(
+        filters={"price_eur": {"gte": 50_000, "lte": 100_000}}
+    )
+    cb_data = FilterPanelCB(action="select", field="budget", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    call_text = callback.message.edit_text.call_args[0][0]
+    assert "mid" in call_text
+
+
+# ============================================================
+# apply action — applies filters
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_apply_resets_offset_and_deletes_message():
+    """Apply action resets offset to 0 and deletes filter panel message."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks()
+    cb_data = FilterPanelCB(action="apply", field="", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    state.update_data.assert_awaited_once_with(apartment_offset=0)
+    callback.message.delete.assert_awaited_once()
+    callback.answer.assert_awaited_once()
+    answer_text = callback.answer.call_args[0][0]
+    assert "применен" in answer_text.lower()
+
+
+# ============================================================
+# back action — returns to catalog results
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_back_deletes_panel():
+    """Back action deletes filter panel message."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks()
+    cb_data = FilterPanelCB(action="back", field="", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    callback.message.delete.assert_awaited_once()
+    callback.answer.assert_awaited_once()
+
+
+# ============================================================
+# unknown action — logs warning
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_unknown_action_answers_callback():
+    """Unknown action answers callback without error."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks()
+    cb_data = FilterPanelCB(action="unknown_action", field="", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    callback.answer.assert_awaited_once()
