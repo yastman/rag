@@ -44,6 +44,7 @@ async def handle_filter_panel(
     state: FSMContext,
     callback_data: FilterPanelCB,
     apartments_service: Any = None,
+    property_bot: Any = None,
 ) -> None:
     """Dispatch filter panel callback by action."""
     action = callback_data.action
@@ -56,7 +57,7 @@ async def handle_filter_panel(
         elif action == "set":
             await _handle_set(callback, state, field, value, apartments_service)
         elif action == "apply":
-            await _handle_apply(callback, state)
+            await _handle_apply(callback, state, apartments_service, property_bot)
         elif action == "reset":
             await _handle_reset(callback, state, apartments_service)
         elif action == "back":
@@ -142,11 +143,53 @@ async def _handle_set(
 async def _handle_apply(
     callback: CallbackQuery,
     state: FSMContext,
+    apartments_service: Any = None,
+    property_bot: Any = None,
 ) -> None:
-    """Apply current filters — reset offset to start fresh search."""
-    await state.update_data(apartment_offset=0)
+    """Apply current filters — reload results with updated filters."""
+    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+    data = await state.get_data()
+    filters: dict[str, Any] = data.get("apartment_filters") or {}
+
     await callback.message.delete()  # type: ignore[union-attr]
     await callback.answer("Фильтры применены")
+
+    svc = apartments_service or (
+        getattr(property_bot, "_apartments_service", None) if property_bot else None
+    )
+    if svc is None:
+        return
+
+    results, total_count, next_start, page_ids = await svc.scroll_with_filters(
+        filters=filters,
+        limit=10,
+        start_from=None,
+        exclude_ids=None,
+    )
+
+    shown = len(results)
+    catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
+    msg = callback.message  # type: ignore[union-attr]
+
+    view_mode = data.get("catalog_view_mode", "cards")
+    if view_mode == "list":
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        text = format_apartment_list(results, shown_start=1, total=total_count)
+        await msg.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
+    else:
+        telegram_id = callback.from_user.id if callback.from_user else 0
+        for result in results:
+            await property_bot._send_property_card(msg, result, telegram_id)
+        await msg.answer("📋 Каталог", reply_markup=catalog_kb)
+
+    await state.update_data(
+        apartment_offset=shown,
+        apartment_total=total_count,
+        apartment_next_offset=next_start,
+        apartment_scroll_seen_ids=page_ids,
+    )
 
 
 async def _handle_reset(
