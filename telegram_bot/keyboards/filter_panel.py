@@ -123,6 +123,7 @@ def build_filter_options_keyboard(
     field: str,
     *,
     current_value: str | int | None = None,
+    dynamic_options: list[str] | None = None,
 ) -> InlineKeyboardMarkup:
     """Build sub-menu keyboard for selecting a filter value."""
     rows: list[list[InlineKeyboardButton]] = []
@@ -247,8 +248,26 @@ def build_filter_options_keyboard(
             ]
         )
 
+    elif dynamic_options:
+        # Dynamic options loaded from service (e.g. complex names)
+        any_btn = InlineKeyboardButton(
+            text="✅ Любое" if current_value is None else "Любое",
+            callback_data=FilterPanelCB(action="set", field=field, value="").pack(),
+        )
+        rows.append([any_btn])
+        for option in dynamic_options:
+            label = f"✅ {option}" if option == current_value else option
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=label,
+                        callback_data=FilterPanelCB(action="set", field=field, value=option).pack(),
+                    )
+                ]
+            )
+
     else:
-        # Generic text-based filter (view, area, floor, complex) — placeholder
+        # Generic fallback (view, area, floor without dynamic data)
         rows.append(
             [
                 InlineKeyboardButton(
