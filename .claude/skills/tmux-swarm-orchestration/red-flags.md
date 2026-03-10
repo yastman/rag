@@ -39,6 +39,8 @@
 - Orch пропустил Phase 2.7 при наличии `.claude/rules/sdk-registry.md`
 - Worker не проверил `{sdk_registry_excerpt}` перед кодом
 - Контракт C план без секции "SDK Coverage"
+- Worker добавил новый SDK/паттерн, но orch не обновил реестр (Фаза 5.2)
+- Новая зависимость в pyproject.toml без записи в реестре
 
 **Скиллы:**
 - Worker коммит БЕЗ `Skill(skill="requesting-code-review")`
@@ -79,6 +81,7 @@
 | "SDK слишком сложный" | Прочитай как_у_нас в реестре — паттерн уже отработан. |
 | "Мне нужна кастомная логика" | 90% случаев SDK покрывает. Проверь gotchas в реестре. |
 | "Не нашёл в SDK" | Context7 query-docs? Exa search? Реестр проверил? |
+| "Реестр обновлю потом" | Потом = никогда. Фаза 5.2 = сразу после PASS. |
 | "Сам быстрее inline" | Opus inline = $15. Sonnet worker = $3. |
 | "Sonnet справится без плана" | COMPLEX без плана = провал. |
 | "Детальный план — сам выполню" | План = идеальный промт для Sonnet. |
@@ -134,6 +137,8 @@
 - [ ] Артефактная проверка через context-mode execute: тесты + `make check` + PR
 - [ ] Маркеры: `grep '\[SKILL:' logs/worker-{name}.log` (дополнительно)
 - [ ] Решение: Code Review OK + артефакты OK → PASS, Code Review FAIL → эскалация
+- [ ] **Фаза 5.2:** Проверить `sdk_updates` в сигнале + новые imports в diff
+- [ ] **Фаза 5.2:** Обновить `.claude/rules/sdk-registry.md` если есть находки (отдельный коммит в dev)
 - [ ] `orch_log` записать результат
 - [ ] Переименовать сигнал → `done-worker-{name}.json`
 - [ ] Очистка: убить окно + удалить worktree
