@@ -150,7 +150,7 @@ async def test_cta_manager_starts_phone_collection() -> None:
         "telegram_bot.handlers.phone_collector.start_phone_collection",
         new=AsyncMock(),
     ) as mock_collect:
-        await bot.handle_cta_callback(cb, state)
+        await bot.handle_cta_callback(cb, state, dialog_manager=None)
 
     mock_collect.assert_awaited_once_with(cb, state, service_key="manager")
 
