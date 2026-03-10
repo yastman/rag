@@ -13,8 +13,10 @@ data:
         litellm_params:
           model: cerebras/zai-glm-4.7
           api_key: os.environ/CEREBRAS_API_KEY
-          max_completion_tokens: 1024
+          max_completion_tokens: 512
           disable_reasoning: true
+          timeout: 30
+          stream_timeout: 5
 
       # Standalone alias for benchmarking (reasoning model)
       - model_name: gpt-oss-120b
