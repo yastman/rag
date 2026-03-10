@@ -110,8 +110,8 @@ class TestCatalogMoreHandler:
         button_texts = [btn.text for row in kb.keyboard for btn in row]
         assert "20 из 30" in button_texts
 
-    async def test_all_shown_changes_button(self):
-        """Когда всё показано, кнопка меняется на '✅ Все N показаны'."""
+    async def test_all_shown_hides_more_button(self):
+        """Когда всё показано, строка 'Показать ещё' исчезает из клавиатуры."""
         bot = _make_bot()
         new_page = [_APT] * 5
         mock_svc = MagicMock()
@@ -135,8 +135,9 @@ class TestCatalogMoreHandler:
 
         last_call = message.answer.call_args_list[-1]
         kb = last_call.kwargs.get("reply_markup")
+        assert len(kb.keyboard) == 2  # no more row, just filters+bookmarks and menu
         button_texts = [btn.text for row in kb.keyboard for btn in row]
-        assert any("✅ Все 15 показаны" in t for t in button_texts)
+        assert not any("Показать" in t for t in button_texts)
 
     async def test_no_more_does_nothing(self):
         """Если всё уже показано, handler не отправляет карточек."""
