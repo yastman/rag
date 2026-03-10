@@ -190,6 +190,7 @@ def build_filters_dict(raw: dict[str, Any]) -> dict[str, Any]:
     """Convert raw filter data to apartment_filters dict.
 
     Handles:
+    - Field name translation via FIELD_TO_FILTER_KEY (complex → complex_name, etc.)
     - budget → price_eur coercion
     - None / "" / "any" → excluded
     - Direct passthrough for typed values (rooms: int, etc.)
@@ -203,5 +204,7 @@ def build_filters_dict(raw: dict[str, Any]) -> dict[str, Any]:
             if price is not None:
                 result["price_eur"] = price
         else:
-            result[field] = value
+            # Translate dialog field name to Qdrant payload key
+            filter_key = FIELD_TO_FILTER_KEY.get(field, field)
+            result[filter_key] = value
     return result
