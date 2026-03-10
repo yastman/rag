@@ -3022,6 +3022,7 @@ class PropertyBot:
                 api_key=self.config.llm_api_key,
                 role=role,
                 max_history_messages=self.config.agent_max_history_messages,
+                max_tokens=self.config.supervisor_max_tokens,
             )
 
             # Build context for tool DI
@@ -3368,6 +3369,7 @@ class PropertyBot:
             language=self.config.domain_language,
             base_url=self.config.llm_base_url,
             api_key=self.config.llm_api_key,
+            max_tokens=self.config.supervisor_max_tokens,
         )
         fallback_result: dict[str, Any] = await fallback_agent.ainvoke(payload, config=config)
         return fallback_result
@@ -3677,6 +3679,7 @@ class PropertyBot:
             api_key=self.config.llm_api_key,
             role=role,
             max_history_messages=self.config.agent_max_history_messages,
+            max_tokens=self.config.supervisor_max_tokens,
         )
 
         ctx = BotContext(
@@ -4012,6 +4015,7 @@ class PropertyBot:
             api_key=self.config.llm_api_key,
             role=role,
             max_history_messages=self.config.agent_max_history_messages,
+            max_tokens=self.config.supervisor_max_tokens,
         )
 
         ctx = BotContext(
