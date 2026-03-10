@@ -180,6 +180,21 @@ class HandoffSG(StatesGroup):
     contact = State()
 
 
+class FilterSG(StatesGroup):
+    """Filter panel dialog (aiogram-dialog, replaces custom inline filter panel)."""
+
+    hub = State()  # Main filter hub: summary + 9 filter buttons
+    city = State()  # City sub-menu
+    rooms = State()  # Rooms sub-menu
+    budget = State()  # Budget sub-menu
+    view = State()  # View sub-menu
+    area = State()  # Area sub-menu
+    floor = State()  # Floor sub-menu
+    complex_name = State()  # Complex sub-menu
+    furnished = State()  # Furnished sub-menu
+    promotion = State()  # Promotion sub-menu
+
+
 class CatalogBrowsingSG(StatesGroup):
     """Catalog browsing mode (ReplyKeyboard pagination)."""
 
