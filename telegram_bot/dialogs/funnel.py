@@ -856,6 +856,9 @@ async def on_summary_search(
     # Store results in FSMContext for pagination
     state = manager.middleware_data.get("state")
     if state is not None:
+        from telegram_bot.dialogs.states import CatalogBrowsingSG
+
+        await state.set_state(CatalogBrowsingSG.browsing)
         await state.update_data(
             apartment_results=results,
             apartment_query=f"funnel:{data.get('city', 'any')}",
@@ -866,7 +869,6 @@ async def on_summary_search(
             apartment_scroll_seen_ids=_page_ids,
             apartment_filters=filters,
             funnel_data=dict(data),
-            catalog_mode=True,
             catalog_view_mode=view_mode,
         )
 

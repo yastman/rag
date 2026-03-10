@@ -576,7 +576,7 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
     manager.middleware_data = {
         "apartments_service": mock_svc,
         "property_bot": mock_bot,
-        "state": MagicMock(update_data=AsyncMock()),
+        "state": MagicMock(update_data=AsyncMock(), set_state=AsyncMock()),
     }
     manager.done = AsyncMock()
 
@@ -990,6 +990,7 @@ class TestOnSummarySearchRedesign:
         mock_bot._send_property_card = AsyncMock()
         state_mock = MagicMock()
         state_mock.update_data = AsyncMock()
+        state_mock.set_state = AsyncMock()
 
         callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
         await funnel_module.on_summary_search(callback, MagicMock(), manager)
@@ -1003,26 +1004,25 @@ class TestOnSummarySearchRedesign:
         assert any("Показать ещё" in t or "Все" in t for t in button_texts)
         assert "🏠 Главное меню" in button_texts
 
-    async def test_stores_catalog_mode_in_fsm(self, monkeypatch):
-        """on_summary_search сохраняет catalog_mode=True в FSMContext."""
+    async def test_sets_catalog_browsing_state(self, monkeypatch):
+        """on_summary_search sets CatalogBrowsingSG.browsing FSM state."""
         mock_svc = MagicMock()
         mock_svc.scroll_with_filters = AsyncMock(
             return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
         )
         mock_bot = MagicMock()
         mock_bot._send_property_card = AsyncMock()
-        captured: dict = {}
-
-        async def capture_update(**kwargs):
-            captured.update(kwargs)
 
         state_mock = MagicMock()
-        state_mock.update_data = capture_update
+        state_mock.update_data = AsyncMock()
+        state_mock.set_state = AsyncMock()
 
         callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
         await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-        assert captured.get("catalog_mode") is True, "catalog_mode должен быть True"
+        from telegram_bot.dialogs.states import CatalogBrowsingSG
+
+        state_mock.set_state.assert_awaited_once_with(CatalogBrowsingSG.browsing)
 
     async def test_sends_10_apartments(self, monkeypatch):
         """on_summary_search запрашивает limit=10 карточек."""
@@ -1034,6 +1034,7 @@ class TestOnSummarySearchRedesign:
         mock_bot._send_property_card = AsyncMock()
         state_mock = MagicMock()
         state_mock.update_data = AsyncMock()
+        state_mock.set_state = AsyncMock()
 
         callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
         await funnel_module.on_summary_search(callback, MagicMock(), manager)
@@ -1166,7 +1167,7 @@ async def test_on_summary_search_list_mode_sends_text(monkeypatch):
     manager.middleware_data = {
         "apartments_service": mock_svc,
         "property_bot": mock_bot,
-        "state": MagicMock(update_data=AsyncMock()),
+        "state": MagicMock(update_data=AsyncMock(), set_state=AsyncMock()),
     }
     manager.done = AsyncMock()
 
