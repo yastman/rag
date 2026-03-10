@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { closeMiniApp, sendData } from "@tma.js/sdk-react";
+import { miniApp, sendData } from "@tma.js/sdk-react";
 import { fetchConfig } from "../api";
 import { BottomSheet } from "../components/BottomSheet";
 import { PromptRow } from "../components/PromptRow";
@@ -22,7 +22,7 @@ export function QuestionSheet() {
 
   const handlePrompt = (text: string) => {
     sendData.ifAvailable(text);
-    closeMiniApp.ifAvailable();
+    miniApp.close.ifAvailable();
   };
 
   return (
