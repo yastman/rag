@@ -4422,6 +4422,7 @@ class PropertyBot:
         from .dialogs.crm_tasks import create_task_dialog, my_tasks_dialog, tasks_menu_dialog
         from .dialogs.demo import demo_dialog
         from .dialogs.faq import faq_dialog
+        from .dialogs.filter_dialog import filter_dialog
         from .dialogs.funnel import funnel_dialog
         from .dialogs.handoff import handoff_dialog
         from .dialogs.manager_menu import manager_menu_dialog
@@ -4448,6 +4449,7 @@ class PropertyBot:
         self.dp.include_router(settings_dialog)
         self.dp.include_router(demo_dialog)
         self.dp.include_router(funnel_dialog)
+        self.dp.include_router(filter_dialog)
         self.dp.include_router(faq_dialog)
         self.dp.include_router(viewing_dialog)
         self.dp.include_router(handoff_dialog)
