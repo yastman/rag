@@ -92,24 +92,8 @@ async def handle_catalog_filters(
     message: Message,
     state: FSMContext,
     property_bot: Any = None,
-    dialog_manager: Any = None,
 ) -> None:
-    """Return to funnel summary with saved filter data."""
-    if dialog_manager is not None:
-        data = await state.get_data()
-        funnel_data = data.get("funnel_data", {})
-        from aiogram_dialog import StartMode
-
-        from telegram_bot.dialogs.states import FunnelSG
-
-        await dialog_manager.start(
-            FunnelSG.summary,
-            mode=StartMode.RESET_STACK,
-            data=funnel_data,
-        )
-        return
-
-    # Fallback: inline filter panel
+    """Show inline filter panel (keeps CatalogBrowsingSG.browsing state)."""
     from telegram_bot.keyboards.filter_panel import (
         build_filter_panel_keyboard,
         build_filter_panel_text,
