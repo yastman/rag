@@ -785,6 +785,7 @@ class TestHistorySaveOnResponse:
                 mock_cas.typing.return_value = _make_typing_cm()
                 await bot.handle_query(message)
 
+        await asyncio.sleep(0)  # drain fire-and-forget history-save task
         bot._history_service.save_turn.assert_awaited_once()
         call_kwargs = bot._history_service.save_turn.call_args.kwargs
         assert call_kwargs["user_id"] == 12345

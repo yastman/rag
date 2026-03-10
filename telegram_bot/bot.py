@@ -3289,26 +3289,31 @@ class PropertyBot:
                     score(lf, tid, name="sources_shown", value=1, data_type="BOOLEAN")
                     score(lf, tid, name="sources_count", value=float(sources_count_actual))
 
-            # Persist Q&A to history
+            # Persist Q&A to history (fire-and-forget — response already sent)
             if self._history_service and response_text:
-                try:
-                    saved = await self._history_service.save_turn(
-                        user_id=user_id,
-                        session_id=session_id,
-                        query=message.text or "",
-                        response=response_text,
-                        input_type="text",
-                    )
-                    if tid:
-                        lf.create_score(
-                            trace_id=tid,
-                            name="history_save_success",
-                            value=1 if saved else 0,
-                            data_type="BOOLEAN",
-                            score_id=f"{tid}-history_save_success",
+
+                async def _bg_save_history() -> None:
+                    try:
+                        saved = await self._history_service.save_turn(
+                            user_id=user_id,
+                            session_id=session_id,
+                            query=message.text or "",
+                            response=response_text,
+                            input_type="text",
+                            query_embedding=rag_result_store.get("query_embedding"),
                         )
-                except Exception:
-                    logger.warning("Failed to save history turn", exc_info=True)
+                        if tid:
+                            lf.create_score(
+                                trace_id=tid,
+                                name="history_save_success",
+                                value=1 if saved else 0,
+                                data_type="BOOLEAN",
+                                score_id=f"{tid}-history_save_success",
+                            )
+                    except Exception:
+                        logger.warning("Failed to save history turn", exc_info=True)
+
+                asyncio.create_task(_bg_save_history(), name=f"history-save-{user_id}")  # noqa: RUF006
 
         return response_text
 
