@@ -243,3 +243,131 @@ class TestFilterWindowGetters:
         result = await get_rooms_data(dialog_manager=manager)
         assert "rooms_options" in result
         assert len(result["rooms_options"]) > 0
+
+    async def test_all_getters_use_any_sentinel_not_empty_string(self):
+        """Verify "Любой"/"Любое" options use 'any' item_id, not empty string.
+
+        aiogram-dialog Select skips items with empty string item_id.
+        """
+        from telegram_bot.dialogs.filter_dialog import (
+            get_area_data,
+            get_budget_data,
+            get_city_data,
+            get_floor_data,
+            get_furnished_data,
+            get_promotion_data,
+            get_rooms_data,
+            get_view_data,
+        )
+
+        manager = SimpleNamespace(dialog_data={})
+        getters = [
+            ("city_options", get_city_data),
+            ("rooms_options", get_rooms_data),
+            ("budget_options", get_budget_data),
+            ("view_options", get_view_data),
+            ("area_options", get_area_data),
+            ("floor_options", get_floor_data),
+            ("furnished_options", get_furnished_data),
+            ("promotion_options", get_promotion_data),
+        ]
+        for key, getter in getters:
+            result = await getter(dialog_manager=manager)
+            options = result[key]
+            # First option should be "Любой"/"Любое" with "any" as value
+            first_label, first_value = options[0]
+            assert "Люб" in first_label, f"{key}: first option should be Любой/Любое"
+            assert first_value == "any", f"{key}: sentinel should be 'any', got '{first_value}'"
+
+
+# ============================================================
+# _make_select_handler — item_id="any" clears filter
+# ============================================================
+
+
+class TestSelectHandlerAnySentinel:
+    async def test_any_clears_filter_from_dialog_data(self):
+        from telegram_bot.dialogs.filter_dialog import _make_select_handler
+
+        handler = _make_select_handler("city")
+        manager = AsyncMock()
+        manager.dialog_data = {"city": "Несебр"}
+        manager.switch_to = AsyncMock()
+
+        await handler(MagicMock(), MagicMock(), manager, "any")
+
+        assert "city" not in manager.dialog_data
+        manager.switch_to.assert_awaited_once_with(FilterSG.hub)
+
+    async def test_any_clears_translated_key_too(self):
+        from telegram_bot.dialogs.filter_dialog import _make_select_handler
+
+        handler = _make_select_handler("complex")
+        manager = AsyncMock()
+        manager.dialog_data = {"complex": "Fort Noks", "complex_name": "Fort Noks"}
+        manager.switch_to = AsyncMock()
+
+        await handler(MagicMock(), MagicMock(), manager, "any")
+
+        assert "complex" not in manager.dialog_data
+        assert "complex_name" not in manager.dialog_data
+
+    async def test_valid_value_stores_coerced(self):
+        from telegram_bot.dialogs.filter_dialog import _make_select_handler
+
+        handler = _make_select_handler("rooms")
+        manager = AsyncMock()
+        manager.dialog_data = {}
+        manager.switch_to = AsyncMock()
+
+        await handler(MagicMock(), MagicMock(), manager, "3")
+
+        assert manager.dialog_data["rooms"] == 3
+
+    async def test_valid_city_stores_string(self):
+        from telegram_bot.dialogs.filter_dialog import _make_select_handler
+
+        handler = _make_select_handler("city")
+        manager = AsyncMock()
+        manager.dialog_data = {}
+        manager.switch_to = AsyncMock()
+
+        await handler(MagicMock(), MagicMock(), manager, "Бургас")
+
+        assert manager.dialog_data["city"] == "Бургас"
+
+
+# ============================================================
+# _filters_to_dialog_data — reverse mapping
+# ============================================================
+
+
+class TestFiltersToDialogData:
+    def test_reverse_maps_complex_name(self):
+        from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
+
+        result = _filters_to_dialog_data({"complex_name": "Fort Noks"})
+        assert result["complex"] == "Fort Noks"
+
+    def test_reverse_maps_view_tags(self):
+        from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
+
+        result = _filters_to_dialog_data({"view_tags": ["sea"]})
+        assert result["view"] == "sea"
+
+    def test_reverse_maps_price_eur_to_budget(self):
+        from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
+
+        result = _filters_to_dialog_data({"price_eur": {"gte": 50_000, "lte": 100_000}})
+        assert result["budget"] == "mid"
+
+    def test_reverse_maps_area_m2(self):
+        from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
+
+        result = _filters_to_dialog_data({"area_m2": {"gte": 60}})
+        assert result["area"] == {"gte": 60}
+
+    def test_empty_filters(self):
+        from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
+
+        assert _filters_to_dialog_data({}) == {}
