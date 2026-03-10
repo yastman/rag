@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
@@ -41,6 +42,7 @@ _ACTION_IDS: dict[str, str] = {
 def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
     """Return all supported menu labels for handler filters."""
     texts = set(MENU_BUTTONS.keys())
+    texts.update(CATALOG_BUTTONS.keys())  # catalog mode buttons
     if i18n_hub is None:
         return texts
 
@@ -90,6 +92,7 @@ def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
 CATALOG_BUTTONS: dict[str, str] = {
     "📥 Показать ещё 10": "catalog_more",
     "🔍 Фильтры": "catalog_filters",
+    "📌 Избранное": "catalog_bookmarks",
     "🏠 Главное меню": "catalog_exit",
 }
 
@@ -102,7 +105,8 @@ def build_catalog_keyboard(*, shown: int, total: int) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=more_text), KeyboardButton(text=counter_text)],
-            [KeyboardButton(text="🔍 Фильтры"), KeyboardButton(text="🏠 Главное меню")],
+            [KeyboardButton(text="🔍 Фильтры"), KeyboardButton(text="📌 Избранное")],
+            [KeyboardButton(text="🏠 Главное меню")],
         ],
         resize_keyboard=True,
     )
@@ -114,6 +118,8 @@ def parse_catalog_button(text: str) -> str | None:
         return "catalog_more"
     if text.startswith("✅ Все"):
         return "catalog_more"  # no-op, всё показано
+    if re.match(r"^\d+ из \d+$", text):
+        return "catalog_noop"
     return CATALOG_BUTTONS.get(text)
 
 

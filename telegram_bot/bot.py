@@ -1174,11 +1174,16 @@ class PropertyBot:
         data = await state.get_data()
         if data.get("catalog_mode"):
             catalog_action = parse_catalog_button(message.text or "")
+            if catalog_action == "catalog_noop":
+                return  # счётчик — не действие
             if catalog_action == "catalog_more":
                 await self._handle_catalog_more(message, state)
                 return
             if catalog_action == "catalog_filters":
-                await self._handle_catalog_filters(message, state)
+                await self._handle_catalog_filters(message, state, dialog_manager)
+                return
+            if catalog_action == "catalog_bookmarks":
+                await self._handle_bookmarks(message, state)
                 return
             if catalog_action == "catalog_exit":
                 await self._handle_catalog_exit(message, state)
@@ -1270,10 +1275,7 @@ class PropertyBot:
         )
 
         catalog_kb = build_catalog_keyboard(shown=new_offset, total=total_count)
-        await message.answer(
-            f"Показаны {new_offset} из {total_count} апартаментов",
-            reply_markup=catalog_kb,
-        )
+        await message.answer("📋 Каталог", reply_markup=catalog_kb)
 
     async def _handle_catalog_exit(self, message: Message, state: FSMContext) -> None:
         """Handle 'Главное меню' — exit catalog mode and restore main keyboard."""
@@ -1285,10 +1287,30 @@ class PropertyBot:
             apartment_scroll_seen_ids=None,
             apartment_filters=None,
         )
-        await message.answer("Главное меню", reply_markup=build_client_keyboard())
+        await message.answer("Вы вернулись в главное меню 🏠", reply_markup=build_client_keyboard())
 
-    async def _handle_catalog_filters(self, message: Message, state: FSMContext) -> None:
-        """Handle 'Фильтры' — show inline filter panel with current filters."""
+    async def _handle_catalog_filters(
+        self,
+        message: Message,
+        state: FSMContext,
+        dialog_manager: Any = None,
+    ) -> None:
+        """Handle 'Фильтры' — return to funnel summary with saved filter data."""
+        if dialog_manager is not None:
+            data = await state.get_data()
+            funnel_data = data.get("funnel_data", {})
+            from aiogram_dialog import StartMode
+
+            from .dialogs.states import FunnelSG
+
+            await dialog_manager.start(
+                FunnelSG.summary,
+                mode=StartMode.RESET_STACK,
+                data=funnel_data,
+            )
+            return
+
+        # Fallback: inline filter panel (если dialog_manager недоступен)
         import contextlib
 
         from telegram_bot.keyboards.filter_panel import (
