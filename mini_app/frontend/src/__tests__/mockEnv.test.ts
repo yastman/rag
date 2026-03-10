@@ -10,18 +10,7 @@ describe('setupMockEnv', () => {
     vi.restoreAllMocks();
   });
 
-  it('does nothing when isTMA returns true', async () => {
-    vi.spyOn(bridge, 'isTMA').mockReturnValue(true as unknown as ReturnType<typeof bridge.isTMA>);
-    const mockTelegramEnvSpy = vi.spyOn(bridge, 'mockTelegramEnv');
-
-    const { setupMockEnv } = await import('../mockEnv');
-    setupMockEnv();
-
-    expect(mockTelegramEnvSpy).not.toHaveBeenCalled();
-  });
-
-  it('calls mockTelegramEnv when not in TMA', async () => {
-    vi.spyOn(bridge, 'isTMA').mockReturnValue(false as unknown as ReturnType<typeof bridge.isTMA>);
+  it('always calls mockTelegramEnv (no isTMA guard)', async () => {
     const mockTelegramEnvSpy = vi.spyOn(bridge, 'mockTelegramEnv');
 
     const { setupMockEnv } = await import('../mockEnv');
@@ -31,7 +20,6 @@ describe('setupMockEnv', () => {
   });
 
   it('passes correct launchParams structure', async () => {
-    vi.spyOn(bridge, 'isTMA').mockReturnValue(false as unknown as ReturnType<typeof bridge.isTMA>);
     const mockTelegramEnvSpy = vi.spyOn(bridge, 'mockTelegramEnv');
 
     const { setupMockEnv } = await import('../mockEnv');
@@ -39,15 +27,33 @@ describe('setupMockEnv', () => {
 
     expect(mockTelegramEnvSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        launchParams: expect.any(URLSearchParams),
+        launchParams: expect.objectContaining({
+          tgWebAppVersion: '8',
+          tgWebAppPlatform: 'tdesktop',
+          tgWebAppThemeParams: expect.objectContaining({
+            bg_color: '#17212b',
+            text_color: '#f5f5f5',
+          }),
+          tgWebAppData: expect.any(URLSearchParams),
+        }),
+        onEvent: expect.any(Function),
       }),
     );
+  });
 
-    const callArg = mockTelegramEnvSpy.mock.calls[0][0] as { launchParams: URLSearchParams };
-    const launchParams = callArg.launchParams;
-    expect(launchParams.get('tgWebAppVersion')).toBe('8');
-    expect(launchParams.get('tgWebAppPlatform')).toBe('tdesktop');
-    expect(launchParams.get('tgWebAppData')).toBeTruthy();
-    expect(launchParams.get('tgWebAppThemeParams')).toBeTruthy();
+  it('passes user data in tgWebAppData', async () => {
+    const mockTelegramEnvSpy = vi.spyOn(bridge, 'mockTelegramEnv');
+
+    const { setupMockEnv } = await import('../mockEnv');
+    setupMockEnv();
+
+    const callArg = mockTelegramEnvSpy.mock.calls[0][0] as {
+      launchParams: { tgWebAppData: URLSearchParams };
+    };
+    const data = callArg.launchParams.tgWebAppData;
+    expect(data.get('hash')).toBe('mock_hash_for_dev');
+    const user = JSON.parse(data.get('user')!);
+    expect(user.id).toBe(99999999);
+    expect(user.username).toBe('dev_user');
   });
 });
