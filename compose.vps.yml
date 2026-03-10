@@ -12,6 +12,10 @@ services:
       RERANK_PROVIDER: "colbert"
       RERANK_CANDIDATES_MAX: "3"
 
+  mini-app-frontend:
+    ports:
+      - "127.0.0.1:8091:80"
+
   langfuse:
     ports:
       - "127.0.0.1:3001:3000"
