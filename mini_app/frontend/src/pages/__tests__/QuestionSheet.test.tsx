@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QuestionSheet } from '../QuestionSheet';
 import * as api from '../../api';
+import * as sdkReact from '@telegram-apps/sdk-react';
 import type { AppConfig } from '../../types';
 
 const mockConfig: AppConfig = {
@@ -53,5 +54,29 @@ describe('QuestionSheet', () => {
       expect(screen.getByText('С чего начать поиск квартиры?')).toBeInTheDocument();
     });
     expect(screen.getByText('Как рассчитать бюджет?')).toBeInTheDocument();
+  });
+
+  it('calls sendData.ifAvailable on prompt click', async () => {
+    const sendDataMock = sdkReact.sendData as ReturnType<typeof vi.fn> & {
+      ifAvailable: ReturnType<typeof vi.fn>;
+    };
+
+    renderQuestionSheet();
+    await waitFor(() => screen.getByText('С чего начать поиск квартиры?'));
+    fireEvent.click(screen.getByText('С чего начать поиск квартиры?'));
+
+    expect(sendDataMock.ifAvailable).toHaveBeenCalledWith('С чего начать поиск квартиры?');
+  });
+
+  it('calls closeMiniApp.ifAvailable on prompt click', async () => {
+    const closeMiniAppMock = sdkReact.closeMiniApp as ReturnType<typeof vi.fn> & {
+      ifAvailable: ReturnType<typeof vi.fn>;
+    };
+
+    renderQuestionSheet();
+    await waitFor(() => screen.getByText('С чего начать поиск квартиры?'));
+    fireEvent.click(screen.getByText('С чего начать поиск квартиры?'));
+
+    expect(closeMiniAppMock.ifAvailable).toHaveBeenCalled();
   });
 });
