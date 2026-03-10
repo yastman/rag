@@ -356,6 +356,13 @@ class BotConfig(BaseSettings):
             "CLIENT_DIRECT_PIPELINE_ENABLED",
         ),
     )
+    supervisor_max_tokens: int = Field(
+        default=1024,
+        validation_alias=AliasChoices(
+            "supervisor_max_tokens",
+            "SUPERVISOR_MAX_TOKENS",
+        ),
+    )
 
     # Session summary + CRM (#305)
     session_summary_enabled: bool = Field(
