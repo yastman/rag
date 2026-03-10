@@ -4,7 +4,7 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 
 # Docker & Infrastructure
 
-## Services (docker-compose.dev.yml)
+## Services (compose.dev.yml)
 
 ### Default services (no profile — always started with `docker-core-up`)
 
@@ -32,7 +32,7 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 ## Makefile Commands
 
 ```bash
-COMPOSE_CMD = docker compose --compatibility -f docker-compose.dev.yml
+COMPOSE_CMD = docker compose --compatibility
 ```
 
 | Command | Profile | Services started |
@@ -49,22 +49,22 @@ COMPOSE_CMD = docker compose --compatibility -f docker-compose.dev.yml
 
 **Combining profiles manually:**
 ```bash
-docker compose -f docker-compose.dev.yml --profile bot --profile obs up -d
-COMPOSE_PROFILES=bot,obs docker compose -f docker-compose.dev.yml up -d
+docker compose --profile bot --profile obs up -d
+COMPOSE_PROFILES=bot,obs docker compose up -d
 ```
 
 **Voice preflight:** `make docker-voice-up` checks for `docker/livekit/livekit.yaml` before starting.
 
-## VPS Stack (docker-compose.vps.yml)
+## VPS Stack (compose.vps.yml)
 
 **VPS:** `admin@95.111.252.29:1654` | Alias: `ssh vps` | Path: `/opt/rag-fresh`
 
 ```bash
 # Start all VPS services
-ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml up -d"
+ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f compose.vps.yml up -d"
 
 # With ingestion pipeline
-ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml --profile ingest up -d"
+ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f compose.vps.yml --profile ingest up -d"
 ```
 
 | Service | Memory | Notes |
@@ -96,7 +96,7 @@ ssh vps "docker restart vps-bot"   # ~5 seconds
 
 Force-recreate after compose changes:
 ```bash
-ssh vps "cd /opt/rag-fresh && docker compose -f docker-compose.vps.yml up -d --force-recreate ingestion"
+ssh vps "cd /opt/rag-fresh && docker compose -f compose.vps.yml up -d --force-recreate ingestion"
 ```
 
 ### VPS Quick Commands
@@ -145,10 +145,10 @@ Note: `gpt-oss-120b` uses `merge_reasoning_content_in_choices: true` (reasoning 
 
 ```bash
 # Build all custom services (docker compose)
-docker compose -f docker-compose.dev.yml build
+docker compose -f compose.dev.yml build
 
 # Build a single service
-docker compose -f docker-compose.dev.yml build bot
+docker compose -f compose.dev.yml build bot
 
 # Transfer image to VPS k3s
 make k3s-push-bot   # docker save rag/bot:latest | ssh vps k3s ctr import
@@ -213,7 +213,7 @@ make monitoring-logs        # View logs
 
 **Verify config:**
 ```bash
-docker compose --compatibility -f docker-compose.dev.yml config --quiet
+docker compose --compatibility -f compose.dev.yml config --quiet
 docker inspect dev-bge-m3 --format '{{.HostConfig.Memory}}'  # != 0
 TELEGRAM_BOT_TOKEN= make docker-bot-up  # Must fail with "is required"
 ```
