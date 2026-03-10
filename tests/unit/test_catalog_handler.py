@@ -246,16 +246,10 @@ class TestCatalogExitHandler:
 
 
 class TestCatalogFiltersHandler:
-    async def test_sends_inline_filter_panel(self):
-        """Filters button sends inline filter panel (stays in browsing state)."""
-        from aiogram.types import InlineKeyboardMarkup
-
+    async def test_launches_filter_dialog(self):
+        """Filters button launches FilterDialog via dialog_manager.start(FilterSG.hub)."""
+        from telegram_bot.dialogs.states import FilterSG
         from telegram_bot.handlers.catalog_router import handle_catalog_filters
-
-        mock_svc = MagicMock()
-        mock_svc.count_with_filters = AsyncMock(return_value=23)
-        property_bot = MagicMock()
-        property_bot._apartments_service = mock_svc
 
         state = _make_state(
             {
@@ -264,13 +258,15 @@ class TestCatalogFiltersHandler:
             }
         )
         message = _make_message()
+        dialog_manager = MagicMock()
+        dialog_manager.start = AsyncMock()
 
-        await handle_catalog_filters(message, state, property_bot=property_bot)
+        await handle_catalog_filters(message, state, dialog_manager=dialog_manager)
 
-        call = message.answer.call_args
-        assert isinstance(call.kwargs.get("reply_markup"), InlineKeyboardMarkup)
-        text = call.args[0] if call.args else call.kwargs.get("text", "")
-        assert "Солнечный берег" in text
+        dialog_manager.start.assert_awaited_once()
+        call_args = dialog_manager.start.call_args
+        assert call_args.args[0] == FilterSG.hub
+        assert call_args.kwargs.get("data") == {"filters": {"city": "Солнечный берег", "rooms": 2}}
 
 
 # ============================================================
