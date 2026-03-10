@@ -1169,8 +1169,12 @@ class PropertyBot:
         i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
-        # Catalog buttons are now handled by _handle_catalog_dispatch router
-        # (registered before catch-all, matches any text when catalog_mode=True)
+        # Catalog mode: delegate to catalog dispatcher (menu handler is matched
+        # first because menu_button_texts includes CATALOG_BUTTONS keys)
+        data = await state.get_data()
+        if data.get("catalog_mode"):
+            await self._handle_catalog_dispatch(message, state, dialog_manager)
+            return
         action_id = parse_menu_button(
             message.text or "",
             i18n_hub=getattr(self, "_i18n_hub", None),
