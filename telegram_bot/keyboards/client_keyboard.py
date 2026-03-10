@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
@@ -104,8 +103,7 @@ def build_catalog_keyboard(*, shown: int, total: int) -> ReplyKeyboardMarkup:
     if has_more:
         rows.append(
             [
-                KeyboardButton(text="📥 Показать ещё 10"),
-                KeyboardButton(text=f"{shown} из {total}"),
+                KeyboardButton(text=f"📥 Показать ещё ({shown} из {total})"),
             ]
         )
     rows.append([KeyboardButton(text="🔍 Фильтры"), KeyboardButton(text="📌 Избранное")])
@@ -117,8 +115,6 @@ def parse_catalog_button(text: str) -> str | None:
     """Parse catalog keyboard button text to action ID."""
     if text.startswith("📥 Показать"):
         return "catalog_more"
-    if re.match(r"^\d+ из \d+$", text):
-        return "catalog_noop"
     return CATALOG_BUTTONS.get(text)
 
 

@@ -107,7 +107,7 @@ class TestCatalogMoreHandler:
         kb = last_call.kwargs.get("reply_markup")
         assert isinstance(kb, ReplyKeyboardMarkup)
         button_texts = [btn.text for row in kb.keyboard for btn in row]
-        assert "20 из 30" in button_texts
+        assert any("20 из 30" in t for t in button_texts)
 
     async def test_all_shown_hides_more_button(self):
         """When all shown, 'Показать ещё' row is removed from keyboard."""
@@ -262,24 +262,6 @@ class TestCatalogBookmarksHandler:
         await handle_catalog_bookmarks(message, state, property_bot=property_bot)
 
         property_bot._handle_bookmarks.assert_awaited_once_with(message, state)
-
-
-# ============================================================
-# handle_catalog_noop (counter button)
-# ============================================================
-
-
-class TestCatalogNoopHandler:
-    async def test_noop_returns_silently(self):
-        """Counter button 'N из M' does nothing."""
-        from telegram_bot.handlers.catalog_router import handle_catalog_noop
-
-        message = _make_message()
-        message.text = "7 из 45"
-
-        await handle_catalog_noop(message)
-
-        message.answer.assert_not_awaited()
 
 
 # ============================================================
