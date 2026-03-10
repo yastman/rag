@@ -926,14 +926,11 @@ class TestSummaryRedesign:
         )
         assert "цене" in result["summary_text"].lower()
 
-    def test_summary_window_has_find_and_edit_buttons(self):
-        """Summary должен иметь кнопки 'Найти' и 'Изменить', без 'Списком/Карточками'."""
+    def test_summary_window_has_edit_button(self):
+        """Summary должен иметь кнопку 'Изменить'."""
         summary_window = funnel_dialog.windows[FunnelSG.summary]
         button_ids = _collect_widget_ids(summary_window)
-        assert "search_find" in button_ids, "'search_find' button missing from summary window"
         assert "change" in button_ids, "'change' button missing from summary window"
-        assert "search_list" not in button_ids, "'search_list' should be removed"
-        assert "search_cards" not in button_ids, "'search_cards' should be removed"
 
 
 def test_funnel_has_pref_section_window():
@@ -1046,25 +1043,14 @@ class TestOnSummarySearchRedesign:
 
 
 # ============================================================
-# Task 12: results window removed from funnel dialog
+# Tasks 4-6: results window restored in funnel dialog
 # ============================================================
 
 
-class TestResultsWindowRemoved:
-    def test_get_results_data_not_exported(self):
-        """get_results_data должен быть удалён из funnel (результаты теперь вне dialog)."""
-        import telegram_bot.dialogs.funnel as m
+def test_summary_has_list_and_cards_buttons():
+    """Summary window must have both Списком and Карточками buttons."""
 
-        assert not hasattr(m, "get_results_data"), "get_results_data должен быть удалён"
-
-    def test_on_search_list_not_exported(self):
-        """on_search_list должен быть удалён из funnel."""
-        import telegram_bot.dialogs.funnel as m
-
-        assert not hasattr(m, "on_search_list"), "on_search_list должен быть удалён"
-
-    def test_funnel_results_state_removed(self):
-        """FunnelSG.results должен быть удалён из states."""
-        from telegram_bot.dialogs.states import FunnelSG
-
-        assert not hasattr(FunnelSG, "results"), "FunnelSG.results должен быть удалён"
+    summary_window = funnel_dialog.windows[FunnelSG.summary]
+    button_ids = _collect_widget_ids(summary_window)
+    assert "search_list" in button_ids, "Missing 'Списком' button"
+    assert "search_cards" in button_ids, "Missing 'Карточками' button"
