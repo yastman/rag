@@ -1,4 +1,4 @@
-import { mockTelegramEnv, isTMA } from "@telegram-apps/sdk-react";
+import { mockTelegramEnv, isTMA } from "@tma.js/bridge";
 
 /**
  * Мок Telegram окружения для разработки в браузере.
