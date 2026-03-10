@@ -64,8 +64,6 @@ class TestFilterDialogStructure:
     def test_filter_dialog_has_hub_window(self):
         from telegram_bot.dialogs.filter_dialog import filter_dialog
 
-        # filter_dialog.windows is a dict: State → Window
-        # State.state has format "FilterSG:hub"
         state_names = {s.state.split(":")[-1] for s in filter_dialog.windows}
         assert "hub" in state_names
 
@@ -87,6 +85,44 @@ class TestFilterDialogStructure:
         }
         assert required == state_names
 
+    def test_filter_windows_use_radio_widgets(self):
+        """All filter sub-windows should use Radio (not Select) for checked indicators."""
+        from aiogram_dialog.widgets.kbd import Radio
+
+        from telegram_bot.dialogs.filter_dialog import filter_dialog
+
+        for window_state in filter_dialog.windows:
+            state_name = window_state.state.split(":")[-1]
+            if state_name == "hub":
+                continue  # hub has no Radio
+            # Walk widget tree to find Radio
+            found_radio = False
+            for widget in _iter_widgets(filter_dialog.windows[window_state]):
+                if isinstance(widget, Radio):
+                    found_radio = True
+                    break
+            assert found_radio, f"Window '{state_name}' should use Radio widget"
+
+
+def _iter_widgets(window):
+    """Recursively iterate all widgets in a Window."""
+
+    if hasattr(window, "keyboard"):
+        kbd = window.keyboard
+        if kbd is not None:
+            yield from _iter_kbd_widgets(kbd)
+
+
+def _iter_kbd_widgets(widget):
+    """Recursively yield keyboard widgets."""
+    yield widget
+    if hasattr(widget, "buttons"):
+        for btn in widget.buttons:
+            yield from _iter_kbd_widgets(btn)
+    if hasattr(widget, "widgets"):
+        for w in widget.widgets:
+            yield from _iter_kbd_widgets(w)
+
 
 # ============================================================
 # Hub getter — get_hub_data
@@ -94,26 +130,6 @@ class TestFilterDialogStructure:
 
 
 class TestGetHubData:
-    async def test_returns_city_options(self):
-        from telegram_bot.dialogs.filter_dialog import get_hub_data
-
-        manager = SimpleNamespace(
-            dialog_data={"city": "Солнечный берег"},
-            middleware_data={"apartments_service": None},
-        )
-        result = await get_hub_data(dialog_manager=manager)
-        assert "city_options" in result
-
-    async def test_returns_budget_options(self):
-        from telegram_bot.dialogs.filter_dialog import get_hub_data
-
-        manager = SimpleNamespace(
-            dialog_data={},
-            middleware_data={"apartments_service": None},
-        )
-        result = await get_hub_data(dialog_manager=manager)
-        assert "budget_options" in result
-
     async def test_returns_count(self):
         from telegram_bot.dialogs.filter_dialog import get_hub_data
 
@@ -135,6 +151,18 @@ class TestGetHubData:
         )
         result = await get_hub_data(dialog_manager=manager)
         assert result["count"] == 0
+
+    async def test_returns_display_labels(self):
+        from telegram_bot.dialogs.filter_dialog import get_hub_data
+
+        manager = SimpleNamespace(
+            dialog_data={"city": "Бургас", "rooms": 3, "budget": "mid"},
+            middleware_data={"apartments_service": None},
+        )
+        result = await get_hub_data(dialog_manager=manager)
+        assert result["city_val"] == "Бургас"
+        assert result["rooms_val"] == "2-спальни"
+        assert "50 000" in result["budget_val"]
 
 
 # ============================================================
@@ -205,6 +233,7 @@ class TestOnReset:
 
         manager = AsyncMock()
         manager.dialog_data = {"city": "Варна", "budget": "mid", "rooms": 2}
+        manager.find = MagicMock(return_value=AsyncMock(set_checked=AsyncMock()))
 
         await on_reset(MagicMock(), MagicMock(), manager)
 
@@ -213,7 +242,7 @@ class TestOnReset:
 
 
 # ============================================================
-# Getter for individual filter windows
+# Getter tests — all use "any" sentinel
 # ============================================================
 
 
@@ -233,7 +262,6 @@ class TestFilterWindowGetters:
         manager = SimpleNamespace(dialog_data={})
         result = await get_budget_data(dialog_manager=manager)
         assert "budget_options" in result
-        # 5 tiers + optional "Любой" clear option
         assert len(result["budget_options"]) >= 5
 
     async def test_get_rooms_data_returns_options(self):
@@ -245,10 +273,7 @@ class TestFilterWindowGetters:
         assert len(result["rooms_options"]) > 0
 
     async def test_all_getters_use_any_sentinel_not_empty_string(self):
-        """Verify "Любой"/"Любое" options use 'any' item_id, not empty string.
-
-        aiogram-dialog Select skips items with empty string item_id.
-        """
+        """Verify "Любой"/"Любое" options use 'any' item_id, not empty string."""
         from telegram_bot.dialogs.filter_dialog import (
             get_area_data,
             get_budget_data,
@@ -274,22 +299,21 @@ class TestFilterWindowGetters:
         for key, getter in getters:
             result = await getter(dialog_manager=manager)
             options = result[key]
-            # First option should be "Любой"/"Любое" with "any" as value
             first_label, first_value = options[0]
             assert "Люб" in first_label, f"{key}: first option should be Любой/Любое"
             assert first_value == "any", f"{key}: sentinel should be 'any', got '{first_value}'"
 
 
 # ============================================================
-# _make_select_handler — item_id="any" clears filter
+# Radio handler — item_id="any" clears filter, valid stores coerced
 # ============================================================
 
 
-class TestSelectHandlerAnySentinel:
+class TestRadioHandlerAnySentinel:
     async def test_any_clears_filter_from_dialog_data(self):
-        from telegram_bot.dialogs.filter_dialog import _make_select_handler
+        from telegram_bot.dialogs.filter_dialog import _make_radio_handler
 
-        handler = _make_select_handler("city")
+        handler = _make_radio_handler("city")
         manager = AsyncMock()
         manager.dialog_data = {"city": "Несебр"}
         manager.switch_to = AsyncMock()
@@ -300,9 +324,9 @@ class TestSelectHandlerAnySentinel:
         manager.switch_to.assert_awaited_once_with(FilterSG.hub)
 
     async def test_any_clears_translated_key_too(self):
-        from telegram_bot.dialogs.filter_dialog import _make_select_handler
+        from telegram_bot.dialogs.filter_dialog import _make_radio_handler
 
-        handler = _make_select_handler("complex")
+        handler = _make_radio_handler("complex")
         manager = AsyncMock()
         manager.dialog_data = {"complex": "Fort Noks", "complex_name": "Fort Noks"}
         manager.switch_to = AsyncMock()
@@ -313,9 +337,9 @@ class TestSelectHandlerAnySentinel:
         assert "complex_name" not in manager.dialog_data
 
     async def test_valid_value_stores_coerced(self):
-        from telegram_bot.dialogs.filter_dialog import _make_select_handler
+        from telegram_bot.dialogs.filter_dialog import _make_radio_handler
 
-        handler = _make_select_handler("rooms")
+        handler = _make_radio_handler("rooms")
         manager = AsyncMock()
         manager.dialog_data = {}
         manager.switch_to = AsyncMock()
@@ -325,9 +349,9 @@ class TestSelectHandlerAnySentinel:
         assert manager.dialog_data["rooms"] == 3
 
     async def test_valid_city_stores_string(self):
-        from telegram_bot.dialogs.filter_dialog import _make_select_handler
+        from telegram_bot.dialogs.filter_dialog import _make_radio_handler
 
-        handler = _make_select_handler("city")
+        handler = _make_radio_handler("city")
         manager = AsyncMock()
         manager.dialog_data = {}
         manager.switch_to = AsyncMock()
