@@ -20,8 +20,8 @@ export async function initApp(): Promise<AppBootstrapResult> {
     setupMockEnv();
   }
 
-  // 2. Detect environment (setupMockEnv ensures isTMA returns true in browser dev)
-  const isTelegram = await isTMA("complete");
+  // 2. Detect environment (in dev, mockEnv may not fool isTMA("complete") — force true)
+  const isTelegram = isDev ? true : await isTMA("complete");
 
   if (!isTelegram) {
     return { isTelegram: false };
