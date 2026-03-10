@@ -42,7 +42,7 @@ _ACTION_IDS: dict[str, str] = {
 def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
     """Return all supported menu labels for handler filters."""
     texts = set(MENU_BUTTONS.keys())
-    texts.update(CATALOG_BUTTONS.keys())  # catalog mode buttons
+    # CATALOG_BUTTONS handled by catalog_router (StateFilter-based), not here
     if i18n_hub is None:
         return texts
 
