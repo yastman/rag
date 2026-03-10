@@ -4,7 +4,7 @@ paths: "tests/**/*.py"
 
 # Testing Guide
 
-Coverage: ~85% unit, 3657 tests passing. Full audit: `logs/full-pipeline-coverage-audit.txt`
+Coverage: ~85% unit, 4990 tests passing. Full audit: `logs/full-pipeline-coverage-audit.txt`
 
 **Markers:**
 
