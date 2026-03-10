@@ -6,18 +6,16 @@ proper aiogram FSM state routing.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import Any
 
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import Message
+from aiogram_dialog import DialogManager, StartMode
 
-from telegram_bot.callback_data import FilterPanelCB
-from telegram_bot.dialogs.states import CatalogBrowsingSG
-from telegram_bot.handlers.filter_panel import handle_filter_panel
+from telegram_bot.dialogs.states import CatalogBrowsingSG, FilterSG
 from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard, build_client_keyboard
 
 
@@ -92,25 +90,18 @@ async def handle_catalog_more(
 async def handle_catalog_filters(
     message: Message,
     state: FSMContext,
+    dialog_manager: DialogManager,
     property_bot: Any = None,
 ) -> None:
-    """Show inline filter panel (keeps CatalogBrowsingSG.browsing state)."""
-    from telegram_bot.keyboards.filter_panel import (
-        build_filter_panel_keyboard,
-        build_filter_panel_text,
-    )
-
+    """Launch aiogram-dialog FilterDialog for filter editing."""
     data = await state.get_data()
     filters: dict = data.get("apartment_filters") or {}
-    svc: Any = getattr(property_bot, "_apartments_service", None) if property_bot else None
-    count = data.get("apartment_total", 0)
-    if svc is not None:
-        with contextlib.suppress(Exception):
-            count = await svc.count_with_filters(filters=filters)
-
-    text = build_filter_panel_text(filters=filters, count=count)
-    kb = build_filter_panel_keyboard(count=count)
-    await message.answer(text, reply_markup=kb)
+    # Pass current filters as start_data so dialog can pre-populate dialog_data
+    await dialog_manager.start(
+        FilterSG.hub,
+        data={"filters": filters},
+        mode=StartMode.NORMAL,
+    )
 
 
 # --- Избранное ---
@@ -186,24 +177,6 @@ async def handle_catalog_exit(message: Message, state: FSMContext) -> None:
         apartment_filters=None,
     )
     await message.answer("Вы вернулись в главное меню 🏠", reply_markup=build_client_keyboard())
-
-
-# --- Filter panel inline callbacks ---
-
-
-@catalog_router.callback_query(
-    FilterPanelCB.filter(),
-    flags={"rate_limit": {"rate": 0.3, "key": "filter_panel"}},
-)
-async def handle_filter_panel_callback(
-    callback: CallbackQuery,
-    state: FSMContext,
-    callback_data: FilterPanelCB,
-    apartments_service: Any = None,
-    property_bot: Any = None,
-) -> None:
-    """Dispatch filter panel inline button callbacks."""
-    await handle_filter_panel(callback, state, callback_data, apartments_service, property_bot)
 
 
 # --- Catch-all: any other text in catalog mode ---
