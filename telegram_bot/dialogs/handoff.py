@@ -143,10 +143,10 @@ async def _on_contact_phone(
     manager.show_mode = ShowMode.NO_UPDATE
     await manager.done()
 
-    # Replace dialog message with status text (removes inline buttons).
-    if msg and hasattr(msg, "edit_text"):
+    # Remove inline keyboard message — phone_collector sends its own prompt.
+    if msg and hasattr(msg, "delete"):
         with contextlib.suppress(Exception):
-            await msg.edit_text("📞 Сейчас попрошу номер телефона...")
+            await msg.delete()
 
     if state is None:
         logger.warning("FSMContext not in middleware_data for phone handoff")
