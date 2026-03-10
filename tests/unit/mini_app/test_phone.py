@@ -1,8 +1,12 @@
 """Tests for Mini App phone collection endpoint."""
 
+import pytest
+
+
+pytest.importorskip("fastapi")
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from httpx import ASGITransport, AsyncClient
 
 from mini_app.api import app
