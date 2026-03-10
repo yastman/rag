@@ -109,6 +109,36 @@ class TestCatalogMoreHandler:
         button_texts = [btn.text for row in kb.keyboard for btn in row]
         assert any("20 из 30" in t for t in button_texts)
 
+    async def test_cards_mode_no_counter_text(self):
+        """In cards mode, status message should NOT contain 'Показано N из M'."""
+        from telegram_bot.handlers.catalog_router import handle_catalog_more
+
+        new_page = [_APT] * 5
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(
+            return_value=(new_page, 30, 65000.0, ["apt-1"]),
+        )
+        property_bot = MagicMock()
+        property_bot._apartments_service = mock_svc
+        property_bot._send_property_card = AsyncMock()
+
+        state = _make_state(
+            {
+                "apartment_offset": 10,
+                "apartment_total": 30,
+                "apartment_next_offset": 55000.0,
+                "apartment_filters": {},
+                "apartment_scroll_seen_ids": [],
+            }
+        )
+        message = _make_message()
+
+        await handle_catalog_more(message, state, property_bot=property_bot)
+
+        last_call = message.answer.call_args_list[-1]
+        text = last_call.args[0] if last_call.args else last_call.kwargs.get("text", "")
+        assert "Показано" not in text
+
     async def test_all_shown_hides_more_button(self):
         """When all shown, 'Показать ещё' row is removed from keyboard."""
         from telegram_bot.handlers.catalog_router import handle_catalog_more
