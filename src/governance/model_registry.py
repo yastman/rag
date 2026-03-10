@@ -1,9 +1,13 @@
 """MLflow Model Registry for RAG pipeline governance."""
 
+import logging
 from datetime import datetime
 
 import mlflow
 from mlflow.tracking import MlflowClient
+
+
+logger = logging.getLogger(__name__)
 
 
 class RAGModelRegistry:
@@ -105,7 +109,7 @@ class RAGModelRegistry:
                 print(f"📦 Archived previous production version: {current_prod.version}")
 
             except Exception:
-                pass  # No current production version
+                logger.warning("No current production version to archive", exc_info=True)
 
         # Promote new version via alias
         self.client.set_registered_model_alias(

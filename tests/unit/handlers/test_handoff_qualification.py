@@ -1,23 +1,27 @@
-"""Tests for handoff qualification inline-button flow."""
+"""Tests for handoff qualification dialog (aiogram-dialog migration)."""
 
+from telegram_bot.dialogs.handoff import (
+    _GOAL_OPTIONS,
+    handoff_dialog,
+)
+from telegram_bot.dialogs.states import HandoffSG
 from telegram_bot.handlers.handoff import (
-    build_budget_keyboard,
-    build_contact_keyboard,
-    build_goal_keyboard,
+    HandoffStates,
     parse_qual_callback,
+    start_qualification,
 )
 
 
 def test_parse_qual_callback_goal():
-    step, value = parse_qual_callback("qual:goal:buy")
+    step, value = parse_qual_callback("qual:goal:search")
     assert step == "goal"
-    assert value == "buy"
+    assert value == "search"
 
 
-def test_parse_qual_callback_budget():
-    step, value = parse_qual_callback("qual:budget:50-100")
-    assert step == "budget"
-    assert value == "50-100"
+def test_parse_qual_callback_services():
+    step, value = parse_qual_callback("qual:goal:services")
+    assert step == "goal"
+    assert value == "services"
 
 
 def test_parse_qual_callback_invalid():
@@ -25,26 +29,78 @@ def test_parse_qual_callback_invalid():
     assert result is None
 
 
-def test_build_goal_keyboard():
-    # Pass a mock i18n that returns the key as-is.
-    kb = build_goal_keyboard(i18n=None)
-    # Row 1: buy + rent, Row 2: consult.
-    assert len(kb.inline_keyboard) == 2
-    assert len(kb.inline_keyboard[0]) == 2
-    assert len(kb.inline_keyboard[1]) == 1
-    assert kb.inline_keyboard[0][0].callback_data == "qual:goal:buy"
-    assert kb.inline_keyboard[0][1].callback_data == "qual:goal:rent"
-    assert kb.inline_keyboard[1][0].callback_data == "qual:goal:consult"
+def test_handoff_sg_states():
+    """HandoffSG must have goal and contact states."""
+    assert hasattr(HandoffSG, "goal")
+    assert hasattr(HandoffSG, "contact")
 
 
-def test_build_budget_keyboard():
-    kb = build_budget_keyboard(i18n=None)
-    assert len(kb.inline_keyboard) == 2  # 2 rows: [3 buttons] + [1 button]
-    assert kb.inline_keyboard[0][0].callback_data == "qual:budget:low"
+def test_handoff_states_active():
+    """HandoffStates.active FSM state must exist for handoff guard."""
+    assert hasattr(HandoffStates, "active")
 
 
-def test_build_contact_keyboard():
-    kb = build_contact_keyboard(i18n=None)
-    assert len(kb.inline_keyboard) == 1  # 1 row: 2 buttons
-    assert kb.inline_keyboard[0][0].callback_data == "qual:contact:chat"
-    assert kb.inline_keyboard[0][1].callback_data == "qual:contact:phone"
+def test_goal_options_no_buy_rent():
+    """buy/rent must not exist in goal options."""
+    ids = [item[1] for item in _GOAL_OPTIONS]
+    assert "buy" not in ids
+    assert "rent" not in ids
+
+
+def test_goal_options_values():
+    """Goal options must contain search, services, consult, other."""
+    ids = [item[1] for item in _GOAL_OPTIONS]
+    assert ids == ["search", "services", "consult", "other"]
+
+
+def test_goal_options_2_column_layout():
+    """4 goal options should fit in 2x2 grid (width=2)."""
+    assert len(_GOAL_OPTIONS) == 4
+
+
+def test_handoff_dialog_has_two_windows():
+    """Dialog must have exactly 2 windows (goal + contact)."""
+    assert len(handoff_dialog.windows) == 2
+
+
+def test_no_build_budget_keyboard():
+    """build_budget_keyboard must not exist as module attribute."""
+    from telegram_bot.handlers import handoff
+
+    assert not hasattr(handoff, "build_budget_keyboard")
+
+
+def test_no_build_goal_keyboard():
+    """build_goal_keyboard removed — replaced by dialog."""
+    from telegram_bot.handlers import handoff
+
+    assert not hasattr(handoff, "build_goal_keyboard")
+
+
+def test_no_build_contact_keyboard():
+    """build_contact_keyboard removed — replaced by dialog."""
+    from telegram_bot.handlers import handoff
+
+    assert not hasattr(handoff, "build_contact_keyboard")
+
+
+def test_no_qual_cache():
+    """_qual_cache removed — dialog uses dialog_data."""
+    from telegram_bot.handlers import handoff
+
+    assert not hasattr(handoff, "_qual_cache")
+
+
+def test_no_create_handoff_router():
+    """create_handoff_router removed — replaced by handoff_dialog."""
+    from telegram_bot.handlers import handoff
+
+    assert not hasattr(handoff, "create_handoff_router")
+
+
+def test_start_qualification_accepts_dialog_manager():
+    """start_qualification must accept dialog_manager kwarg."""
+    import inspect
+
+    sig = inspect.signature(start_qualification)
+    assert "dialog_manager" in sig.parameters
