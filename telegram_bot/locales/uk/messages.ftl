@@ -284,7 +284,7 @@ svc-infotour-card =
 
 # Services — buttons
 svc-back = Назад
-svc-get-offer = Отримати пропозицію
+svc-get-offer = Залишити заявку
 svc-contact-manager = Зв'язатися з менеджером
 svc-back-to-services = Назад до послуг
 

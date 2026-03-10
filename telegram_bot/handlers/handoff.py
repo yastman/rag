@@ -39,8 +39,13 @@ async def start_qualification(
     i18n: Any | None = None,
     state: FSMContext | None = None,
     dialog_manager: Any | None = None,
+    goal: str | None = None,
 ) -> None:
-    """Launch handoff qualification dialog (aiogram-dialog)."""
+    """Launch handoff qualification dialog (aiogram-dialog).
+
+    Args:
+        goal: Pre-selected goal (e.g. "services") — skips goal selection step.
+    """
     # FSM guard: if handoff already active, don't start again.
     if state is not None and await state.get_state() == HandoffStates.active:
         reply = "Вы уже на связи с менеджером, ожидайте ответа 💬"
@@ -58,7 +63,15 @@ async def start_qualification(
 
         from telegram_bot.dialogs.states import HandoffSG
 
-        await dialog_manager.start(HandoffSG.goal, mode=StartMode.RESET_STACK)
+        if goal:
+            # Context already known — skip goal step, go directly to contact.
+            await dialog_manager.start(
+                HandoffSG.contact,
+                data={"goal": goal},
+                mode=StartMode.RESET_STACK,
+            )
+        else:
+            await dialog_manager.start(HandoffSG.goal, mode=StartMode.RESET_STACK)
     else:
         # Fallback when dialog_manager not available — send plain text.
         logger.warning("start_qualification called without dialog_manager")
