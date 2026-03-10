@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { fetchConfig, startExpert } from "../api";
+import { openTelegramLink, initData } from "@telegram-apps/sdk-react";
+import { fetchConfig, remoteLog, startExpert } from "../api";
 import { BottomSheet } from "../components/BottomSheet";
 import { ChatInput } from "../components/ChatInput";
 import { PromptRow } from "../components/PromptRow";
@@ -20,17 +21,37 @@ export function ExpertSheet() {
 
   if (!expert) return null;
 
-  const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  const user = initData.user();
+  const userId = user?.id;
 
   const handleStart = async (text: string) => {
-    if (!userId || !id || loading) return;
+    remoteLog("info", "handleStart", { userId, id, text });
+
+    if (!userId) {
+      remoteLog("error", "userId undefined — initData.user() is null");
+      alert("Ошибка: не удалось определить пользователя.");
+      return;
+    }
+    if (!id || loading) return;
     setLoading(true);
+
     try {
-      await startExpert(userId, id, text);
-      // Close Mini App — user lands in bot chat with the topic
-      window.Telegram?.WebApp?.close();
+      const data = await startExpert(userId, id, text);
+      remoteLog("info", "startExpert OK", { start_link: data.start_link });
+
+      try {
+        if (openTelegramLink.isAvailable()) {
+          openTelegramLink(data.start_link);
+        } else {
+          remoteLog("warn", "openTelegramLink not available, fallback");
+          window.location.href = data.start_link;
+        }
+      } catch (e) {
+        remoteLog("warn", "openTelegramLink threw, fallback", { error: String(e) });
+        window.location.href = data.start_link;
+      }
     } catch (err) {
-      console.error("Failed to start expert:", err);
+      remoteLog("error", "startExpert failed", { error: String(err) });
       setLoading(false);
     }
   };
