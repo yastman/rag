@@ -107,6 +107,12 @@ def build_catalog_keyboard(*, shown: int, total: int) -> ReplyKeyboardMarkup:
             ]
         )
     rows.append([KeyboardButton(text="🔍 Фильтры"), KeyboardButton(text="📌 Избранное")])
+    rows.append(
+        [
+            KeyboardButton(text="📅 Запись на осмотр"),
+            KeyboardButton(text="👤 Написать менеджеру"),
+        ]
+    )
     rows.append([KeyboardButton(text="🏠 Главное меню")])
     return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
 
