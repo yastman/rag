@@ -1266,7 +1266,11 @@ class PropertyBot:
         if view_mode == "list":
             from telegram_bot.dialogs.funnel import format_apartment_list
 
-            text = format_apartment_list(results, shown_start=offset + 1)
+            text = format_apartment_list(
+                results,
+                shown_start=offset + 1,
+                total=total_count,
+            )
             await message.answer(text, parse_mode="HTML")
         else:
             telegram_id = message.from_user.id if message.from_user else 0
