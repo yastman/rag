@@ -151,17 +151,6 @@ async def handle_catalog_exit(message: Message, state: FSMContext) -> None:
     await message.answer("Вы вернулись в главное меню 🏠", reply_markup=build_client_keyboard())
 
 
-# --- Counter noop ---
-
-
-@catalog_router.message(
-    StateFilter(CatalogBrowsingSG.browsing),
-    F.text.regexp(r"^\d+ из \d+$"),
-)
-async def handle_catalog_noop(message: Message) -> None:
-    """Counter button — no action."""
-
-
 # --- Filter panel inline callbacks ---
 
 
