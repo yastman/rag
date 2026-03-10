@@ -122,6 +122,25 @@ def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) ->
     return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
+class _LazyApartmentLlmExtractor:
+    """Defer instructor client construction until apartment extraction is actually used."""
+
+    def __init__(self, llm: Any, model: str) -> None:
+        self._llm = llm
+        self._model = model
+        self._delegate: Any = None
+
+    def _get_delegate(self) -> Any:
+        if self._delegate is None:
+            from .services.apartment_llm_extractor import ApartmentLlmExtractor
+
+            self._delegate = ApartmentLlmExtractor(llm=self._llm, model=self._model)
+        return self._delegate
+
+    async def extract(self, query: str, partial_filters: Any = None) -> Any:
+        return await self._get_delegate().extract(query=query, partial_filters=partial_filters)
+
+
 # Re-export from shared module (avoid circular imports with middlewares)
 from .tracing_context import make_session_id as make_session_id  # noqa: E402
 
@@ -397,9 +416,11 @@ class PropertyBot:
         # Apartment extraction pipeline: LLM first → regex fallback
         from .services.apartment_extraction_pipeline import ApartmentExtractionPipeline
         from .services.apartment_filter_extractor import ApartmentFilterExtractor
-        from .services.apartment_llm_extractor import ApartmentLlmExtractor
 
-        _apt_llm = ApartmentLlmExtractor(llm=self._llm, model=config.apartment_extraction_model)
+        _apt_llm = _LazyApartmentLlmExtractor(
+            llm=self._llm,
+            model=config.apartment_extraction_model,
+        )
         self._apartment_pipeline = ApartmentExtractionPipeline(
             regex_extractor=ApartmentFilterExtractor(),
             llm_extractor=_apt_llm,

@@ -18,6 +18,7 @@ async def test_bot_has_topic_service_attr(monkeypatch):
         telegram_token="123456789:AABBCCDDEEFFaabbccddeeff-1234567890",
         llm_api_key="test",
         voyage_api_key="test",
+        rerank_provider="none",
     )
 
     with (
