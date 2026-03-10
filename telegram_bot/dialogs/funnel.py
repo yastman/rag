@@ -880,18 +880,19 @@ async def on_summary_search(
     if view_mode == "list":
         # Send compact text list as one message
         text = format_apartment_list(results, shown_start=1, total=total_count)
-        await callback.message.answer(text, parse_mode="HTML")
+        catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
     else:
         # Send photo cards
         if property_bot is not None:
             for result in results:
                 telegram_id = callback.from_user.id if callback.from_user else 0
                 await property_bot._send_property_card(callback.message, result, telegram_id)
-
-    # Catalog keyboard (счётчик на кнопке — без дублирующего текста)
-    shown = len(results)
-    catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
-    await callback.message.answer("📋 Каталог", reply_markup=catalog_kb)
+        # Attach catalog keyboard to a short status message after cards
+        shown = len(results)
+        catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
+        status = f"Показано {shown} из {total_count}"
+        await callback.message.answer(status, reply_markup=catalog_kb)
 
 
 async def on_change_filter_selected(
