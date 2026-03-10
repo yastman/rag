@@ -11,6 +11,9 @@ describe('main.tsx', () => {
     vi.doMock('../mockEnv', () => ({ setupMockEnv: vi.fn() }));
     vi.doMock('@telegram-apps/sdk-react', () => ({
       init: vi.fn(),
+      initData: { restore: vi.fn() },
+      mountThemeParamsSync: vi.fn(),
+      bindThemeParamsCssVars: vi.fn(),
     }));
   });
 
@@ -28,6 +31,12 @@ describe('main.tsx', () => {
     expect(init).toHaveBeenCalled();
   });
 
+  it('restores initData after init', async () => {
+    const { initData } = await import('@telegram-apps/sdk-react');
+    await import('../main');
+    expect(initData.restore).toHaveBeenCalled();
+  });
+
   it('calls setupMockEnv before init', async () => {
     const callOrder: string[] = [];
 
@@ -40,6 +49,9 @@ describe('main.tsx', () => {
       init: vi.fn(() => {
         callOrder.push('init');
       }),
+      initData: { restore: vi.fn() },
+      mountThemeParamsSync: vi.fn(),
+      bindThemeParamsCssVars: vi.fn(),
     }));
 
     await import('../main');
