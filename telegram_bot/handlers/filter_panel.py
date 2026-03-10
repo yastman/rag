@@ -23,6 +23,21 @@ from telegram_bot.keyboards.filter_panel import (
 
 logger = logging.getLogger(__name__)
 
+_BUDGET_TO_PRICE: dict[str, dict[str, int]] = {
+    "low": {"lte": 50_000},
+    "mid": {"gte": 50_000, "lte": 100_000},
+    "high": {"gte": 100_000, "lte": 150_000},
+    "premium": {"gte": 150_000, "lte": 200_000},
+    "luxury": {"gte": 200_000},
+}
+
+_PRICE_TO_BUDGET: dict[str, str] = {str(v): k for k, v in _BUDGET_TO_PRICE.items()}
+
+
+def _price_to_budget(price_filter: dict) -> str | None:
+    """Reverse-map price_eur filter dict to budget label."""
+    return _PRICE_TO_BUDGET.get(str(price_filter))
+
 
 async def handle_filter_panel(
     callback: CallbackQuery,
@@ -64,7 +79,11 @@ async def _handle_select(
     """Show sub-menu for a specific filter field."""
     data = await state.get_data()
     filters: dict[str, Any] = data.get("apartment_filters") or {}
-    current_value = filters.get(field)
+    filter_key = _field_to_filter_key(field)
+    current_value = filters.get(filter_key)
+    # For budget, reverse-map price_eur dict back to budget label
+    if field == "budget" and isinstance(current_value, dict):
+        current_value = _price_to_budget(current_value)
 
     kb = build_filter_options_keyboard(field, current_value=current_value)
 
@@ -185,7 +204,7 @@ def _field_to_filter_key(field: str) -> str:
     _MAP = {
         "city": "city",
         "rooms": "rooms",
-        "budget": "budget",
+        "budget": "price_eur",
         "view": "view_tags",
         "area": "area_m2",
         "floor": "floor",
@@ -203,6 +222,8 @@ def _coerce_value(field: str, value: str) -> Any:
             return int(value)
         except (ValueError, TypeError):
             return None
+    if field == "budget":
+        return _BUDGET_TO_PRICE.get(value)
     if field == "furnished":
         return value == "true"
     if field == "promotion":
