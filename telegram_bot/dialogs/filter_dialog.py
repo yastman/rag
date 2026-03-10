@@ -347,8 +347,8 @@ filter_dialog = Dialog(
         Const("📍 Выберите город:"),
         Column(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_city",
                 item_id_getter=lambda item: item[1],
                 items="city_options",
@@ -363,8 +363,8 @@ filter_dialog = Dialog(
         Const("🛏 Выберите количество комнат:"),
         Column(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_rooms",
                 item_id_getter=lambda item: item[1],
                 items="rooms_options",
@@ -379,8 +379,8 @@ filter_dialog = Dialog(
         Const("💰 Выберите бюджет:"),
         Column(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_budget",
                 item_id_getter=lambda item: item[1],
                 items="budget_options",
@@ -395,8 +395,8 @@ filter_dialog = Dialog(
         Const("🌅 Выберите вид:"),
         Column(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_view",
                 item_id_getter=lambda item: item[1],
                 items="view_options",
@@ -411,8 +411,8 @@ filter_dialog = Dialog(
         Const("📐 Выберите площадь:"),
         Column(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_area",
                 item_id_getter=lambda item: item[1],
                 items="area_options",
@@ -427,8 +427,8 @@ filter_dialog = Dialog(
         Const("🏢 Выберите этаж:"),
         Column(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_floor",
                 item_id_getter=lambda item: item[1],
                 items="floor_options",
@@ -443,8 +443,8 @@ filter_dialog = Dialog(
         Const("🏘 Выберите комплекс:"),
         ScrollingGroup(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_complex",
                 item_id_getter=lambda item: item[1],
                 items="complex_options",
@@ -462,8 +462,8 @@ filter_dialog = Dialog(
         Const("🛋 Наличие мебели:"),
         Column(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_furnished",
                 item_id_getter=lambda item: item[1],
                 items="furnished_options",
@@ -478,8 +478,8 @@ filter_dialog = Dialog(
         Const("🏷 Акционные предложения:"),
         Column(
             Radio(
-                Format("✓ {item[0]}"),
-                Format("  {item[0]}"),
+                Format("✅ {item[0]}"),
+                Format("  ◻️ {item[0]}"),
                 id="r_promotion",
                 item_id_getter=lambda item: item[1],
                 items="promotion_options",
