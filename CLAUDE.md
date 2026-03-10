@@ -47,6 +47,12 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 
 **Services:** Postgres:5432, Qdrant:6333, Redis:6379, BGE-M3:8000, LiteLLM:4000, Langfuse:3001, LiveKit:7880, RAG API:8080
 
+## SDK-First
+
+**Правило:** перед написанием кода проверь `.claude/rules/sdk-registry.md` — если задача покрывается SDK, используй SDK.
+
+**Обновление реестра:** при добавлении/удалении зависимости из `pyproject.toml` — обнови `.claude/rules/sdk-registry.md`.
+
 ## Code Style
 
 - **Ruff** (lint+format) | **MyPy** strict | Line length: 100 | Google docstrings
