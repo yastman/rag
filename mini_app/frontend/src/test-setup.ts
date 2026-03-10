@@ -29,7 +29,9 @@ vi.mock("@tma.js/sdk-react", () => ({
     isAvailable: vi.fn(() => true),
     ifAvailable: vi.fn(),
   }),
-  closeMiniApp: Object.assign(vi.fn(), { ifAvailable: vi.fn() }),
+  miniApp: {
+    close: Object.assign(vi.fn(), { ifAvailable: vi.fn() }),
+  },
   sendData: Object.assign(vi.fn(), { ifAvailable: vi.fn() }),
   initData: {
     user: () => ({ id: 99999, firstName: "Test" }),
