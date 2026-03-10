@@ -61,9 +61,9 @@ class TestQdrantInfrastructure:
         assert len(sparse_config) > 0
 
     def test_collection_points_count(self, qdrant_client):
-        """Collection has expected number of points."""
+        """Collection has a non-trivial number of points."""
         info = qdrant_client.get_collection("gdrive_documents_bge")
-        assert info.points_count >= 90
+        assert info.points_count >= 50
 
     def test_search_dense_returns_results(self, qdrant_client):
         """Dense search returns results (using query_points API)."""

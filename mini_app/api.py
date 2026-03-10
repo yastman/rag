@@ -5,10 +5,13 @@ from __future__ import annotations
 import json
 import os
 import uuid as _uuid_lib
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from mini_app.expert_start import StartExpertRequest, StartExpertResponse
 from mini_app.phone import PhoneRequest, submit_phone
@@ -29,6 +32,12 @@ _redis_client: Any = None
 _DEEPLINK_TTL = 300  # seconds
 
 
+class ChatRequest(BaseModel):
+    message: str
+    user_id: int
+    expert_id: str | None = None
+
+
 async def _get_redis() -> Any:
     """Lazy-init Redis client from REDIS_URL env var."""
     global _redis_client
@@ -44,6 +53,35 @@ async def _get_redis() -> Any:
 async def get_config() -> dict:
     """Return Mini App UI config: questions + experts."""
     return load_mini_app_config()
+
+
+async def _chat_event_stream(request: ChatRequest) -> AsyncIterator[str]:
+    """Legacy SSE fallback for older Mini App chat clients."""
+    payload = {
+        "type": "message",
+        "role": "assistant",
+        "content": (
+            "Inline Mini App chat is deprecated. "
+            "Use /api/start-expert to continue the conversation in Telegram."
+        ),
+        "echo": request.message,
+        "user_id": request.user_id,
+        "expert_id": request.expert_id,
+    }
+    yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@app.post("/api/chat")
+async def chat(request: ChatRequest) -> StreamingResponse:
+    """Backward-compatible SSE endpoint kept for smoke tests and legacy clients."""
+    return StreamingResponse(
+        _chat_event_stream(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.post("/api/start-expert")

@@ -45,7 +45,13 @@ from .keyboards.client_keyboard import (
     build_client_keyboard,
     parse_menu_button,
 )
-from .middlewares import setup_error_handler, setup_throttling_middleware
+from .middlewares import (
+    setup_error_handler,
+    setup_throttling_middleware,
+)
+from .middlewares import (
+    setup_error_middleware as _setup_error_middleware,
+)
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
 from .observability import (
@@ -74,6 +80,7 @@ if TYPE_CHECKING:
 
 # Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
 HistoryService: Any = None
+setup_error_middleware = _setup_error_middleware
 
 
 logger = logging.getLogger(__name__)

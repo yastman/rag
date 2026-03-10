@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 _ERROR_TEXT = (
     "❌ Произошла ошибка при обработке запроса. Попробуйте позже или обратитесь к администратору."
 )
+_LANGFUSE_ERROR_LEVEL = "ERROR"
 
 
 class ErrorHandlerMiddleware(BaseMiddleware):
@@ -64,7 +65,7 @@ async def handle_error(event: ErrorEvent) -> None:
         lf = get_client()
         if lf is not None and lf.get_current_trace_id():
             lf.update_current_observation(
-                level="ERROR",
+                level=_LANGFUSE_ERROR_LEVEL,
                 status_message=f"{type(exception).__name__}: {str(exception)[:200]}",
             )
     except Exception:

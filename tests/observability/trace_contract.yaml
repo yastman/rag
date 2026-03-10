@@ -29,6 +29,13 @@ spans:
     - node-respond
     - node-summarize
 
+  graph_edges:
+    - edge-route-start
+    - edge-route-query-type
+    - edge-route-guard
+    - edge-route-cache
+    - edge-route-grade
+
   agent_pipeline:
     - rag-pipeline
     - cache-check
@@ -118,13 +125,58 @@ spans:
     - history-delete
     - history-get-session-turns
 
+  bot_commands:
+    - cmd-start
+    - cmd-clear
+    - cmd-clearcache
+    - cmd-call
+
+  bot_menu:
+    - menu-router
+    - menu-search
+    - menu-services
+    - menu-viewing
+    - menu-bookmarks
+    - menu-ask
+    - menu-manager
+
+  bot_callbacks:
+    - cb-ask
+    - cb-service
+    - cb-cta
+    - cb-favorite
+    - cb-results
+    - cb-card
+    - cb-feedback
+    - cb-feedback-reason
+    - cb-clearcache
+
   pipeline:
     - detect-agent-intent
     - client-direct-pipeline
 
+  dialogs:
+    - dialog-crm-create-contact
+    - dialog-crm-create-lead
+    - dialog-crm-create-note
+    - dialog-crm-create-task
+    - dialog-funnel-search
+    - dialog-viewing-confirm
+
+  handlers:
+    - crm-quick-complete
+    - crm-quick-note
+    - phone-lead-capture
+    - demo-search
+    - demo-transcribe-voice
+
   services:
+    - advisor-llm-call
     - apartments-hybrid-search
     - apartments-filtered-search
+    - apartments-scroll
+    - apartments-count
+    - apartment-filter-parse
     - apartment-extraction-pipeline
     - apartment-llm-extract
     - service-generate-response
@@ -138,11 +190,12 @@ spans:
     - funnel-rollup
     - funnel-store-upsert
     - nurturing-batch-run
+    - nurturing-llm-generate
     - nurturing-scheduler-tick
     - handoff-generate-summary
+    - session-summary-generate
     - search-event-append
     - search-event-get-user
-    - demo-search
 
   kommo_client:
     - kommo-create-lead
@@ -236,16 +289,57 @@ sensitive_spans:
   - history-search
   - history-delete
   - history-get-session-turns
+  # bot commands
+  - cmd-start
+  - cmd-clear
+  - cmd-clearcache
+  - cmd-call
+  # bot menu routing
+  - menu-router
+  - menu-search
+  - menu-services
+  - menu-viewing
+  - menu-bookmarks
+  - menu-ask
+  - menu-manager
+  # bot callbacks
+  - cb-ask
+  - cb-service
+  - cb-cta
+  - cb-favorite
+  - cb-results
+  - cb-card
+  - cb-feedback
+  - cb-feedback-reason
+  - cb-clearcache
   # pipeline
   - detect-agent-intent
   - client-direct-pipeline
   # services
+  - advisor-llm-call
+  - apartment-filter-parse
+  - apartments-scroll
+  - apartment-extraction-pipeline
+  - apartment-llm-extract
+  - session-summary-generate
+  - nurturing-llm-generate
   - service-generate-response
   - detect-response-style
   - get-prompt
   - kommo-token-get
   - kommo-token-refresh
   - apartments-hybrid-search
+  # dialogs and handlers
+  - dialog-crm-create-contact
+  - dialog-crm-create-lead
+  - dialog-crm-create-note
+  - dialog-crm-create-task
+  - dialog-funnel-search
+  - dialog-viewing-confirm
+  - phone-lead-capture
+  - demo-search
+  - crm-quick-complete
+  - crm-quick-note
   # voice + api entry points
   - voice-session
   - rag-api-query

@@ -23,6 +23,25 @@ async def test_health_endpoint():
 
 
 @pytest.mark.asyncio
+async def test_chat_endpoint_streams_sse_event():
+    """Legacy /api/chat endpoint should emit at least one SSE data event."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with client.stream(
+            "POST",
+            "/api/chat",
+            json={"message": "Привет", "user_id": 123},
+        ) as resp:
+            assert resp.status_code == 200
+            assert "text/event-stream" in resp.headers.get("content-type", "")
+            async for line in resp.aiter_lines():
+                if line.startswith("data:"):
+                    assert "Mini App chat is deprecated" in line
+                    break
+            else:
+                pytest.fail("Expected at least one SSE data event")
+
+
+@pytest.mark.asyncio
 async def test_start_expert_not_found():
     """Unknown expert_id should return 404."""
     mock_redis = AsyncMock()
