@@ -175,6 +175,29 @@ async def test_handle_menu_button_parses_localized_labels_with_hub():
         bot._handle_services.assert_called_once()
 
 
+def test_handoff_dialog_registered():
+    """handoff_dialog must be registered via include_router (fixes UnregisteredDialogError)."""
+    import ast
+    from pathlib import Path
+
+    bot_py = Path("telegram_bot/bot.py").read_text()
+    tree = ast.parse(bot_py)
+
+    found = False
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "include_router"
+            and node.args
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "handoff_dialog"
+        ):
+            found = True
+            break
+    assert found, "handoff_dialog is not registered via dp.include_router()"
+
+
 def test_client_menu_dialog_not_in_register_handlers():
     """client_menu_dialog should NOT be registered on the dispatcher (#658)."""
     import ast
