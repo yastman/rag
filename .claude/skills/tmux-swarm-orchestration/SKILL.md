@@ -208,47 +208,48 @@ Orch **лично** читает diff через context-mode. Worker может
     Code Review OK + Артефакты FAIL → FAIL → эскалация (код верный, но CI не проходит)
     Code Review FAIL → FAIL → эскалация (артефакты не проверяем)
 
-### Фаза 5.2: Обновление SDK реестра
+### Фаза 5.2: Обновление SDK реестра (orch лично)
 
-После PASS верификации — orch проверяет `sdk_updates` из сигнала worker'а и diff.
+После PASS верификации — **orch сам** анализирует diff и обновляет реестр. Worker'ы НЕ участвуют (Sonnet ненадёжен для мета-анализа).
 
-    # 1. Читать sdk_updates из сигнала:
-    updates=$(cat .signals/worker-{name}.json | python3 -c "
-      import sys,json
-      d=json.load(sys.stdin)
-      for u in d.get('sdk_updates',[]):
-        print(f\"{u['type']}: {u['sdk']} — {u['detail']}\")
-    ")
-
-    # 2. Если есть updates ИЛИ diff затрагивает новую зависимость:
+    # 1. Orch анализирует diff через context-mode (уже прочитан в Phase 5.0):
     mcp execute(language="shell", code="""
       cd '{WT_PATH}'
-      # Новые импорты из diff:
-      git diff dev...HEAD | grep -E '^\+.*from .* import|^\+.*import ' | head -20
-      # Изменения в pyproject.toml:
-      git diff dev...HEAD -- pyproject.toml 2>/dev/null | head -20
-    """, intent="check for new SDK patterns or dependencies in worker diff")
+      echo '=== Новые импорты ==='
+      git diff dev...HEAD | grep -E '^\+.*from .* import|^\+.*import ' | sort -u
+      echo '=== pyproject.toml ==='
+      git diff dev...HEAD -- pyproject.toml 2>/dev/null | grep -E '^\+' | head -20
+      echo '=== Новые файлы ==='
+      git diff dev...HEAD --name-only --diff-filter=A
+    """, intent="SDK registry update: detect new imports, deps, patterns in worker diff")
 
-    # 3. При обнаружении обновлений — orch редактирует реестр:
-    test -f .claude/rules/sdk-registry.md && {
-      # Обновить существующую секцию SDK (новый паттерн/gotcha)
-      # ИЛИ добавить новый SDK по шаблону в конце реестра
-      Edit .claude/rules/sdk-registry.md
-      git add .claude/rules/sdk-registry.md
-      git commit -m "docs(sdk): update registry — {краткое описание}"
-    }
+    # 2. Orch ЛИЧНО сверяет с реестром:
+    Read .claude/rules/sdk-registry.md
+    # Для каждого нового import/dep:
+    #   - Есть в реестре? → проверить: новый паттерн использования?
+    #   - Нет в реестре? → добавить секцию по шаблону
+    # Для изменённых файлов:
+    #   - Новый паттерн SDK (отличается от как_у_нас)? → обновить
 
-| Тип обновления | Действие orch |
-|----------------|---------------|
-| `new_pattern` | Добавить в `паттерны` существующего SDK |
-| `outdated_pattern` | Обновить/заменить в `паттерны` + `как_у_нас` |
-| `new_sdk` | Добавить новую секцию по шаблону |
-| `new_gotcha` | Добавить в `gotchas` существующего SDK |
-| Новый import в diff, нет в реестре | Добавить новую секцию по шаблону |
-| Изменения в pyproject.toml (add/remove dep) | Добавить/удалить секцию SDK |
+    # 3. При обнаружении обновлений — orch редактирует реестр в dev:
+    git stash  # если есть незакоммиченное в dev
+    Edit .claude/rules/sdk-registry.md
+    git add .claude/rules/sdk-registry.md
+    git commit -m "docs(sdk): update registry — {краткое описание}"
+    git stash pop  # вернуть если было
+
+| Что orch ищет в diff | Действие |
+|----------------------|----------|
+| Новый `from X import` где X — известный SDK | Обновить `как_у_нас` + `паттерны` |
+| Новый `from X import` где X — неизвестный SDK | Новая секция по шаблону |
+| Новая dep в pyproject.toml | Новая секция по шаблону |
+| Удалённая dep из pyproject.toml | Удалить/пометить deprecated |
+| Новый файл в известной SDK-директории | Обновить `как_у_нас` (новый модуль) |
+| Паттерн отличается от `как_у_нас` | Обновить `паттерны` + добавить `gotcha` если старый был неверный |
 
 **Правила:**
-- Обновление реестра — **в основной ветке** (dev), НЕ в worktree worker'а
+- Orch делает это **лично** — worker'ы не трогают реестр
+- Обновление в **dev** ветке, НЕ в worktree worker'а
 - Коммит отдельный от PR worker'а
 - Нет обновлений → пропустить (не коммитить пустое)
 - Реестр не существует → пропустить фазу
