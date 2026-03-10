@@ -40,8 +40,8 @@ class StreamingPartialDeliveryError(Exception):
         super().__init__(f"Streaming failed after delivering {len(partial_text)} chars")
 
 
-***REMOVED*** 3 context docs: saves ~50ms TTFT vs 5 docs while top-3 capture 90%+ relevant context.
-_MAX_CONTEXT_DOCS = 3
+***REMOVED*** 5 context docs: more context diversity, marginal TTFT impact (~50ms).
+_MAX_CONTEXT_DOCS = 5
 ***REMOVED*** 200ms draft interval — sendMessageDraft has no rate limit.
 _DRAFT_INTERVAL = 0.2
 _MAX_HISTORY_MESSAGES = 12
