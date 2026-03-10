@@ -211,6 +211,50 @@
 - **gotchas:**
   - НЕ писать raw SQL где можно — но ORM не используем, asyncpg напрямую
 
+## openai (Python SDK)
+- **triggers:** LLM, генерация, completion, chat, AsyncOpenAI, OpenAI, модель, generate, structured output
+- **context7_id:** /openai/openai-python
+- **как_у_нас:**
+  - `telegram_bot/services/llm.py` — основной LLM-клиент через `langfuse.openai.AsyncOpenAI`
+  - `telegram_bot/services/query_preprocessor.py` — query classification
+  - `telegram_bot/services/query_analyzer.py` — intent analysis
+  - `telegram_bot/services/apartment_llm_extractor.py` — structured extraction (OpenAI direct)
+  - `src/contextualization/openai.py` — chunk contextualization
+- **паттерны:**
+  - Всегда через `langfuse.openai.AsyncOpenAI` (обёртка для трейсинга), НЕ `openai.AsyncOpenAI`
+  - `response_format=` для structured output (вместо instructor где возможно)
+  - `LLM_BASE_URL` → LiteLLM proxy, НЕ напрямую к провайдеру
+- **gotchas:**
+  - НЕ импортировать `from openai import AsyncOpenAI` — только `from langfuse.openai import AsyncOpenAI`
+  - НЕ хардкодить model name — брать из config/env (`LLM_MODEL`)
+  - `LLM_BASE_URL` ОБЯЗАТЕЛЬНО через LiteLLM (unified routing)
+
+## voyageai
+- **triggers:** rerank, embedding, voyage, ColBERT, contextualized embedding
+- **context7_id:** /voyage-ai/voyageai-python
+- **как_у_нас:**
+  - `telegram_bot/services/voyage.py` — reranking service
+  - `src/models/contextualized_embedding.py` — contextualized late-interaction embeddings
+- **паттерны:**
+  - `voyageai.Client()` для sync, lazy import (тяжёлые deps: pandas, scipy)
+  - Rerank: `client.rerank(query, documents, model="rerank-2")`
+- **gotchas:**
+  - Тяжёлый import (pandas, scipy.stats) — lazy import ОБЯЗАТЕЛЬНО
+  - НЕ импортировать на top-level в модулях бота (замедляет старт)
+
+## anthropic
+- **triggers:** Claude, Anthropic, contextualization, claude judge
+- **context7_id:** /anthropics/anthropic-sdk-python
+- **как_у_нас:**
+  - `src/contextualization/claude.py` — chunk contextualization через Claude
+  - `scripts/e2e/claude_judge.py` — e2e evaluation judge
+- **паттерны:**
+  - `AsyncAnthropic()` для async, `Anthropic()` для sync scripts
+  - Только для contextualization и eval — основной LLM через openai SDK + LiteLLM
+- **gotchas:**
+  - НЕ использовать для основной генерации — только через LiteLLM unified routing
+  - Прямой вызов Anthropic API = обход трейсинга Langfuse
+
 ---
 
 ## Шаблон для нового SDK
