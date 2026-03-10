@@ -20,7 +20,7 @@ from typing import Any
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from aiogram_dialog import Dialog, DialogManager, Window
-from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, ScrollingGroup, SwitchTo
+from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
 from telegram_bot.dialogs.filter_constants import (
@@ -257,7 +257,7 @@ async def on_apply(
     button: Any,
     manager: DialogManager,
 ) -> None:
-    """Apply current filters: write to FSMContext, show first page, close dialog."""
+    """Apply current filters: fetch first page, show cards, close dialog."""
     state: FSMContext = manager.middleware_data["state"]
     dd = manager.dialog_data
     raw_filters = {k: v for k, v in dd.items() if k in FIELD_TO_FILTER_KEY}
@@ -265,27 +265,49 @@ async def on_apply(
 
     # Fetch first page with new filters
     svc = manager.middleware_data.get("apartments_service")
-    count = 0
+    results: list = []
+    total_count = 0
+    next_start: float | None = None
+    page_ids: list[str] | None = None
     if svc is not None:
         with contextlib.suppress(Exception):
-            count = await svc.count_with_filters(filters=filters)
+            results, total_count, next_start, page_ids = await svc.scroll_with_filters(
+                filters=filters,
+                limit=10,
+            )
 
     await state.update_data(
         apartment_filters=filters,
-        apartment_offset=0,
-        apartment_total=count,
-        apartment_next_offset=None,
-        apartment_scroll_seen_ids=None,
+        apartment_offset=len(results),
+        apartment_total=total_count,
+        apartment_next_offset=next_start,
+        apartment_scroll_seen_ids=page_ids,
     )
     await manager.done()
 
-    # Show confirmation with catalog keyboard so user can browse results
-    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+    # Show apartment cards directly
+    msg = callback.message
+    if not msg:
+        return
 
-    kb = build_catalog_keyboard(shown=0, total=count)
-    if callback.message:
-        await callback.message.answer(
-            f"✅ Фильтры применены\nНайдено: {count} апартаментов",
+    if not results:
+        await msg.answer("По заданным фильтрам ничего не найдено")
+        return
+
+    property_bot = manager.middleware_data.get("property_bot")
+    if property_bot is not None:
+        telegram_id = callback.from_user.id if callback.from_user else 0
+        for result in results:
+            with contextlib.suppress(Exception):
+                await property_bot._send_property_card(msg, result, telegram_id)
+
+    # Show catalog keyboard only if there are more results
+    if len(results) < total_count:
+        from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+        kb = build_catalog_keyboard(shown=len(results), total=total_count)
+        await msg.answer(
+            f"Показано {len(results)} из {total_count}",
             reply_markup=kb,
         )
 
@@ -462,10 +484,10 @@ filter_dialog = Dialog(
         getter=get_floor_data,
         state=FilterSG.floor,
     ),
-    # Complex window — ScrollingGroup for dynamic list
+    # Complex window
     Window(
         Const("🏘 Выберите комплекс:"),
-        ScrollingGroup(
+        Column(
             Radio(
                 Format("✅ {item[0]}"),
                 Format("  ◻️ {item[0]}"),
@@ -474,9 +496,6 @@ filter_dialog = Dialog(
                 items="complex_options",
                 on_state_changed=on_radio_complex,
             ),
-            id="sg_complex",
-            width=1,
-            height=8,
         ),
         getter=get_complex_data,
         state=FilterSG.complex_name,
