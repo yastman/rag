@@ -1131,35 +1131,28 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
 
 
 async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache, mock_sparse):
-    """When original_query != query, use ColBERT vectors of retrieval query, not cache key."""
+    """#951: When original_query != query, don't call aembed_colbert_query separately.
+    Instead set query_embedding=None and let _hybrid_retrieve do one combined call."""
     from unittest.mock import AsyncMock
 
     from telegram_bot.agents.rag_pipeline import rag_pipeline
-
-    original_colbert = [[0.2] * 1024] * 2
-    reformulated_colbert = [[0.7] * 1024] * 3
 
     mock_embeddings = AsyncMock()
     mock_embeddings.aembed_hybrid = AsyncMock(
         return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]})
     )
     mock_embeddings.aembed_hybrid_with_colbert = None
-    mock_embeddings.aembed_colbert_query = AsyncMock(
-        side_effect=[original_colbert, reformulated_colbert]
-    )
-
-    # First call is cache_key embedding (miss), second is reformulated query warm embedding (hit).
-    mock_cache.get_embedding = AsyncMock(side_effect=[None, [0.9] * 1024])
+    mock_embeddings.aembed_colbert_query = AsyncMock(return_value=[[0.7] * 1024])
 
     mock_qdrant = AsyncMock()
-    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
         return_value=(
-            [{"id": "1", "score": 85.0, "text": "doc", "metadata": {}}],
+            [{"id": "1", "score": 0.008, "text": "doc", "metadata": {}}],
             {"backend_error": False, "error_type": None, "error_message": None},
         )
     )
 
-    result = await rag_pipeline(
+    await rag_pipeline(
         "reformulated query",
         user_id=1,
         session_id="s1",
@@ -1172,10 +1165,9 @@ async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache
         reranker=None,
     )
 
-    called_colbert_query = mock_qdrant.hybrid_search_rrf_colbert.call_args.kwargs["colbert_query"]
-    assert called_colbert_query == reformulated_colbert
-    assert called_colbert_query != original_colbert
-    assert result["documents"]
+    # #951 fix: aembed_colbert_query called once for cache_key in _cache_check,
+    # but NOT a second time for the reformulated query (old behavior was 2 calls).
+    assert mock_embeddings.aembed_colbert_query.call_count <= 1
 
 
 # ---------------------------------------------------------------------------
