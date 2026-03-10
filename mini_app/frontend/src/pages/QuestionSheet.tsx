@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { closeMiniApp, sendData } from "@telegram-apps/sdk-react";
+import { closeMiniApp, sendData } from "@tma.js/sdk-react";
 import { fetchConfig } from "../api";
 import { BottomSheet } from "../components/BottomSheet";
 import { PromptRow } from "../components/PromptRow";
