@@ -91,6 +91,37 @@ ssh -R 8091:127.0.0.1:5173 vps -N
 | Telegram | Eruda (автоматически в dev) | Smoke test через tunnel |
 | После закрытия | Remote logging `/api/log` | Отлов ошибок openTelegramLink |
 
+### Telegram Test Environment (HTTP без tunnel)
+
+Для тестирования с реальным initData без VPS/tunnel:
+
+1. **Создать аккаунт в Test DC:**
+   - iOS: Settings → 10 быстрых тапов на версию → "Switch to Test DC"
+   - Android: Settings → 10 тапов на версию → "Enable Test Backend"
+   - Desktop: Settings → Alt + Shift + клик "Add Account" → test server
+
+2. **Создать тестового бота:**
+   - В Test DC написать @BotFather → /newbot
+   - Сохранить токен в `.env.test` как `TELEGRAM_BOT_TOKEN_TEST`
+
+3. **Настроить Mini App URL:**
+   - @BotFather → /newapp (или /setmenubutton)
+   - URL: `http://<WSL-IP>:5173` (HTTP разрешён в test DC)
+   - Узнать IP: `hostname -I | awk '{print $1}'`
+
+4. **Запустить:**
+   ```bash
+   docker compose --profile bot up -d mini-app-api
+   cd mini_app/frontend && npm run dev  # host: true уже в vite.config.ts
+   # Открыть мини-ап в Telegram Test DC
+   ```
+
+| Среда | URL | HTTPS | initData |
+|-------|-----|-------|----------|
+| Браузер (mock) | localhost:5173 | Нет | Фейковый |
+| Test DC | http://WSL-IP:5173 | Нет | Реальный |
+| Production | miniapp.awdawdawd.space | Да | Реальный |
+
 ## Docker-сервисы
 
 - `mini-app-api` — FastAPI, порт **8090** (dev: 127.0.0.1:8090)
