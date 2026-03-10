@@ -74,7 +74,9 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/middlewares/throttling.py` | ThrottlingMiddleware |
 | `telegram_bot/middlewares/error_handler.py` | ErrorHandlerMiddleware |
 | `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection, injects `i18n`, `locale`, `property_bot`, `apartments_service` (#660) |
-| `telegram_bot/dialogs/` | aiogram-dialog menus: `crm_submenu`, `faq`, `funnel`, `manager_menu`, `settings` |
+| `telegram_bot/dialogs/` | aiogram-dialog menus: `crm_submenu`, `faq`, `filter_dialog`, `funnel`, `manager_menu`, `settings` |
+| `telegram_bot/dialogs/filter_constants.py` | Shared filter constants + `build_filters_dict()` — single source of truth for funnel + filter dialog |
+| `telegram_bot/dialogs/filter_dialog.py` | FilterDialog (aiogram-dialog) — hub + 9 filter sub-windows (Select/SwitchTo), replaces custom filter_panel (687 LOC) |
 | `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler + Kommo CRM lead creation (#628) |
 | `telegram_bot/keyboards/client_keyboard.py` | Client ReplyKeyboard — `build_client_keyboard(i18n=)`, `get_menu_button_texts(i18n_hub=)`, `parse_menu_button(text, i18n_hub=)` with .ftl keys (#660) |
 | `telegram_bot/keyboards/property_card.py` | Property listing card with bookmark + results footer |
@@ -403,6 +405,8 @@ pytest tests/unit/handlers/test_phone_collector.py -v    # Phone collector FSM +
 pytest tests/unit/handlers/test_phone_crm_integration.py -v  # CRM integration tests (#628)
 pytest tests/unit/dialogs/test_funnel.py -v              # Funnel dialog + hybrid search tests (#628)
 pytest tests/unit/dialogs/test_funnel_results.py -v      # Funnel filter building + results getter (#628)
+pytest tests/unit/dialogs/test_filter_constants.py -v    # Shared filter constants + build_filters_dict
+pytest tests/unit/dialogs/test_filter_dialog.py -v       # FilterDialog hub, select handlers, on_apply/reset
 pytest tests/unit/services/test_content_loader_promotions.py -v  # Promotions config tests (#628)
 pytest tests/unit/services/test_favorites_service.py -v  # Favorites service tests
 pytest tests/integration/test_graph_paths.py -v          # Graph path tests incl. voice flow (~5s, no Docker)
