@@ -284,7 +284,7 @@ async def test_on_confirm_graceful_when_no_kommo():
     # Verify confirmation goes to correct chat with expected text
     send_kwargs = callback.bot.send_message.await_args
     assert send_kwargs.kwargs["chat_id"] == 12345
-    assert "заявка на осмотр получена" in send_kwargs.kwargs["text"].lower()
+    assert "заявка оформлена" in send_kwargs.kwargs["text"].lower()
     manager.done.assert_awaited_once()
 
 
@@ -327,8 +327,8 @@ async def test_on_confirm_sends_confirmation_with_correct_text():
     callback.bot.send_message.assert_awaited_once()
     call_kwargs = callback.bot.send_message.await_args.kwargs
     assert call_kwargs["chat_id"] == 99999
-    assert "заявка на осмотр получена" in call_kwargs["text"].lower()
-    assert "менеджер свяжется" in call_kwargs["text"].lower()
+    assert "заявка оформлена" in call_kwargs["text"].lower()
+    assert "менеджер перезвонит" in call_kwargs["text"].lower()
 
     # 2. Lead title simplified (no objects)
     lead_arg = kommo.create_lead.await_args.args[0]
