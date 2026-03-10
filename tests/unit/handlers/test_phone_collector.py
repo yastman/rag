@@ -209,7 +209,7 @@ async def test_on_phone_received_creates_crm_lead():
             "entry_points": {
                 "viewing": {
                     "crm_title": "Осмотр объектов",
-                    "phone_success": "Спасибо! Менеджер свяжется для записи на осмотр",
+                    "phone_success": "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.",
                 }
             }
         }
@@ -219,7 +219,7 @@ async def test_on_phone_received_creates_crm_lead():
     mock_kommo.create_lead.assert_awaited_once()
     mock_kommo.link_contact_to_lead.assert_awaited_once_with(201, 101)
     answer_text = message.answer.call_args[0][0]
-    assert "Спасибо" in answer_text
+    assert "Заявка оформлена" in answer_text
 
 
 async def test_on_phone_received_works_without_kommo():
@@ -236,7 +236,7 @@ async def test_on_phone_received_works_without_kommo():
             "entry_points": {
                 "viewing": {
                     "crm_title": "Осмотр объектов",
-                    "phone_success": "Спасибо! Менеджер свяжется для записи на осмотр",
+                    "phone_success": "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.",
                 }
             }
         }
@@ -244,7 +244,7 @@ async def test_on_phone_received_works_without_kommo():
 
     message.answer.assert_awaited_once()
     answer_text = message.answer.call_args[0][0]
-    assert "Спасибо" in answer_text
+    assert "Заявка оформлена" in answer_text
 
 
 async def test_on_phone_received_uses_crm_title_in_lead_name():
@@ -265,7 +265,7 @@ async def test_on_phone_received_uses_crm_title_in_lead_name():
             "services": {
                 "installment": {
                     "crm_title": "Рассрочка",
-                    "phone_success": "Спасибо! Менеджер свяжется с расчётом рассрочки под ваши условия",
+                    "phone_success": "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.",
                 }
             }
         }
@@ -290,14 +290,14 @@ async def test_on_phone_received_sends_personalized_success():
             "services": {
                 "infotour": {
                     "crm_title": "Инфотур",
-                    "phone_success": "Спасибо! Менеджер свяжется для бронирования инфотура",
+                    "phone_success": "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.",
                 }
             }
         }
         await mod.on_phone_received(message, state, kommo_client=None)
 
     answer_text = message.answer.call_args[0][0]
-    assert "бронирования инфотура" in answer_text
+    assert "Заявка оформлена" in answer_text
 
 
 async def test_on_phone_received_none_responsible_id_does_not_break_crm():
@@ -328,7 +328,7 @@ async def test_on_phone_received_none_responsible_id_does_not_break_crm():
             "entry_points": {
                 "manager": {
                     "crm_title": "Консультация",
-                    "phone_success": "Спасибо! Менеджер свяжется с вами в ближайшее время",
+                    "phone_success": "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.",
                 }
             }
         }
@@ -365,7 +365,7 @@ async def test_on_phone_received_zero_responsible_id_normalized_to_none():
             "entry_points": {
                 "manager": {
                     "crm_title": "Консультация",
-                    "phone_success": "Спасибо! Менеджер свяжется с вами в ближайшее время",
+                    "phone_success": "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.",
                 }
             }
         }
@@ -602,7 +602,7 @@ async def test_on_phone_contact_valid_processes_phone():
 
     state.clear.assert_awaited_once()
     message.answer.assert_awaited_once()
-    assert "Спасибо" in message.answer.call_args[0][0]
+    assert "Заявка оформлена" in message.answer.call_args[0][0]
 
 
 async def test_on_phone_contact_no_contact_asks_manual_input():
