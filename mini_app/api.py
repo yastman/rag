@@ -63,6 +63,7 @@ async def start_expert(request: StartExpertRequest) -> StartExpertResponse:
             "expert_id": request.expert_id,
             "message": request.message,
             "user_id": request.user_id,
+            "query_id": request.query_id,
         }
     )
     redis = await _get_redis()
@@ -73,10 +74,32 @@ async def start_expert(request: StartExpertRequest) -> StartExpertResponse:
         raise HTTPException(status_code=500, detail="BOT_USERNAME not configured")
     start_link = f"https://t.me/{bot_username}?start=q_{uid}"
 
+    # Notify bot via Redis pub/sub — bot calls answerWebAppQuery + creates topic + RAG
+    await redis.publish(
+        "miniapp:start",
+        json.dumps(
+            {
+                "uuid": uid,
+                "user_id": request.user_id,
+                "query_id": request.query_id,
+            }
+        ),
+    )
+
     return StartExpertResponse(
         start_link=start_link,
         expert_name=expert["name"],
     )
+
+
+@app.post("/api/log")
+async def remote_log(request: dict) -> dict:
+    """Receive frontend remote logs (Eruda / remoteLog helper)."""
+    level = request.get("level", "info")
+    message = request.get("message", "")
+    data = request.get("data")
+    print(f"[REMOTE:{level}] {message} {data or ''}", flush=True)
+    return {"status": "ok"}
 
 
 @app.post("/api/phone")
