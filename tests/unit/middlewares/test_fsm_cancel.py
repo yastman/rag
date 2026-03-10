@@ -98,7 +98,7 @@ class TestFSMCancelMiddleware:
             await middleware(handler, msg, {"state": state})
 
         msg.answer.assert_awaited_once_with(
-            "😊 Запрос на звонок отменён. Когда будете готовы — менеджер на связи!",
+            "😊 Заявка отменена. Когда будете готовы — мы на связи!",
             reply_markup=sentinel_kb,
         )
         mock_kb.assert_called_once()
