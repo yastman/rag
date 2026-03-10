@@ -37,11 +37,3 @@ class DemoCB(CallbackData, prefix="demo"):
 
     action: str  ***REMOVED*** "apartments", "example"
     idx: int = 0
-
-
-class FilterPanelCB(CallbackData, prefix="fpanel"):
-    """Filter panel callback data."""
-
-    action: str  ***REMOVED*** "select", "set", "apply", "reset", "back", "main"
-    field: str  ***REMOVED*** "city", "rooms", "budget", "view", "area", "floor", "complex", "furnished", "promotion"
-    value: str = ""  ***REMOVED*** значение при action="set"
