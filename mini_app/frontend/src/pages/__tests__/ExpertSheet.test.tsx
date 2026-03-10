@@ -60,7 +60,7 @@ describe('ExpertSheet', () => {
     expect(screen.getByText('Что проверить перед покупкой?')).toBeInTheDocument();
   });
 
-  it('handleStart calls startExpert with correct params', async () => {
+  it('handleStart calls startExpert with correct params including queryId', async () => {
     const startExpertMock = vi.spyOn(api, 'startExpert').mockResolvedValue({
       start_link: 'https://t.me/testbot?start=abc',
       expert_name: 'Консультант',
@@ -73,38 +73,16 @@ describe('ExpertSheet', () => {
     fireEvent.click(screen.getByText('Как выбрать квартиру?'));
 
     await waitFor(() => {
-      expect(startExpertMock).toHaveBeenCalledWith(99999, 'consultant', 'Как выбрать квартиру?');
+      expect(startExpertMock).toHaveBeenCalledWith(
+        99999, 'consultant', 'Как выбрать квартиру?', undefined,
+      );
     });
   });
 
-  it('handleStart calls openTelegramLink on success', async () => {
-    const openTelegramLinkMock = sdkReact.openTelegramLink as ReturnType<typeof vi.fn>;
-    vi.spyOn(api, 'startExpert').mockResolvedValue({
-      start_link: 'https://t.me/testbot?start=abc',
-      expert_name: 'Консультант',
-      status: 'ok',
-    });
-
-    renderExpertSheet();
-    await waitFor(() => screen.getByText('Как выбрать квартиру?'));
-    fireEvent.click(screen.getByText('Как выбрать квартиру?'));
-
-    await waitFor(() => {
-      expect(openTelegramLinkMock).toHaveBeenCalledWith('https://t.me/testbot?start=abc');
-    });
-  });
-
-  it('falls back to location.href when openTelegramLink unavailable', async () => {
-    const openTelegramLink = sdkReact.openTelegramLink as ReturnType<typeof vi.fn> & {
-      isAvailable: ReturnType<typeof vi.fn>;
+  it('closes Mini App after successful startExpert', async () => {
+    const closeMock = sdkReact.miniApp.close as ReturnType<typeof vi.fn> & {
+      ifAvailable: ReturnType<typeof vi.fn>;
     };
-    openTelegramLink.isAvailable.mockReturnValue(false);
-
-    const originalLocation = window.location;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (window as any).location;
-    window.location = { ...originalLocation, href: '' };
-
     vi.spyOn(api, 'startExpert').mockResolvedValue({
       start_link: 'https://t.me/testbot?start=abc',
       expert_name: 'Консультант',
@@ -116,44 +94,8 @@ describe('ExpertSheet', () => {
     fireEvent.click(screen.getByText('Как выбрать квартиру?'));
 
     await waitFor(() => {
-      expect(window.location.href).toBe('https://t.me/testbot?start=abc');
+      expect(closeMock.ifAvailable).toHaveBeenCalled();
     });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).location = originalLocation;
-    openTelegramLink.isAvailable.mockReturnValue(true);
-  });
-
-  it('falls back to location.href when openTelegramLink throws', async () => {
-    const openTelegramLink = sdkReact.openTelegramLink as ReturnType<typeof vi.fn> & {
-      isAvailable: ReturnType<typeof vi.fn>;
-    };
-    openTelegramLink.isAvailable.mockReturnValue(true);
-    openTelegramLink.mockImplementationOnce(() => {
-      throw new Error('TG link failed');
-    });
-
-    const originalLocation = window.location;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (window as any).location;
-    window.location = { ...originalLocation, href: '' };
-
-    vi.spyOn(api, 'startExpert').mockResolvedValue({
-      start_link: 'https://t.me/testbot?start=abc',
-      expert_name: 'Консультант',
-      status: 'ok',
-    });
-
-    renderExpertSheet();
-    await waitFor(() => screen.getByText('Как выбрать квартиру?'));
-    fireEvent.click(screen.getByText('Как выбрать квартиру?'));
-
-    await waitFor(() => {
-      expect(window.location.href).toBe('https://t.me/testbot?start=abc');
-    });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).location = originalLocation;
   });
 
   it('shows error alert when userId is null', async () => {
