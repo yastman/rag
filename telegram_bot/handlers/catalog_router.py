@@ -70,10 +70,7 @@ async def handle_catalog_more(
         telegram_id = message.from_user.id if message.from_user else 0
         for result in results:
             await property_bot._send_property_card(message, result, telegram_id)
-        await message.answer(
-            f"Показано {new_offset} из {total_count}",
-            reply_markup=catalog_kb,
-        )
+        await message.answer("📋 Каталог", reply_markup=catalog_kb)
 
     await state.update_data(
         apartment_offset=new_offset,
@@ -160,9 +157,10 @@ async def handle_filter_panel_callback(
     state: FSMContext,
     callback_data: FilterPanelCB,
     apartments_service: Any = None,
+    property_bot: Any = None,
 ) -> None:
     """Dispatch filter panel inline button callbacks."""
-    await handle_filter_panel(callback, state, callback_data, apartments_service)
+    await handle_filter_panel(callback, state, callback_data, apartments_service, property_bot)
 
 
 # --- Catch-all: any other text in catalog mode ---
