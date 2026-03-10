@@ -38,6 +38,7 @@ telegram_bot/
 │   ├── user_service.py    # User profile management
 │   ├── response_style_detector.py  # Detect response style preference
 │   ├── llm_guard_client.py         # LLM Guard integration
+│   ├── draft_streamer.py           # Draft message streaming to Telegram
 │   ├── ingestion_cocoindex.py      # Ingestion service client
 │   ├── manager_menu.py             # Manager menu handlers
 │   ├── hot_lead_notifier.py        # Hot lead Telegram notifications
@@ -53,6 +54,8 @@ telegram_bot/
 │   ├── funnel_analytics_store.py   # FunnelAnalyticsStore (daily metrics)
 │   ├── funnel_analytics_service.py # FunnelAnalyticsService
 │   ├── nurturing_service.py    # NurturingService
+│   ├── topic_manager.py         # Forum topic create/archive (supergroup topics)
+│   ├── topic_service.py         # TopicService — topic routing for manager notifications
 │   └── nurturing_scheduler.py  # NurturingScheduler (APScheduler v3)
 ├── integrations/          # LangGraph-compatible wrappers
 │   ├── cache.py           # CacheLayerManager (6-tier, Redis pipelines)
