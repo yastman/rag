@@ -4,12 +4,12 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { TelegramGate } from "./guards/TelegramGate";
 import { initApp } from "./bootstrap";
 
-const { isTelegram } = await initApp();
-
-createRoot(document.getElementById("root")!).render(
-  <ErrorBoundary>
-    <TelegramGate isTelegram={isTelegram}>
-      <App />
-    </TelegramGate>
-  </ErrorBoundary>,
-);
+initApp().then(({ isTelegram }) => {
+  createRoot(document.getElementById("root")!).render(
+    <ErrorBoundary>
+      <TelegramGate isTelegram={isTelegram}>
+        <App />
+      </TelegramGate>
+    </ErrorBoundary>,
+  );
+});
