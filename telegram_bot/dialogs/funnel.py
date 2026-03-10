@@ -168,9 +168,20 @@ _CITY_DISPLAY: dict[str, str] = {
 }
 
 
-def format_apartment_list(results: list[dict[str, Any]], *, shown_start: int = 1) -> str:
-    """Format apartments as compact HTML text for list view mode."""
-    lines: list[str] = []
+def format_apartment_list(
+    results: list[dict[str, Any]],
+    *,
+    shown_start: int = 1,
+    total: int | None = None,
+) -> str:
+    """Format apartments as multi-line HTML text for list view mode."""
+    parts: list[str] = []
+
+    # Header
+    shown_end = shown_start + len(results) - 1
+    if total is not None and len(results) > 0:
+        parts.append(f"Найдено <b>{total}</b> апартаментов (показаны {shown_start}–{shown_end})\n")
+
     for i, apt in enumerate(results):
         p = apt.get("payload", apt)
         rooms_num = p.get("rooms", 1)
@@ -178,27 +189,35 @@ def format_apartment_list(results: list[dict[str, Any]], *, shown_start: int = 1
         price_raw = int(p.get("price_eur", 0))
         price_fmt = f"{price_raw:,}".replace(",", " ")
 
-        parts = [f"<b>{shown_start + i}. {p.get('complex_name', '')}</b>"]
+        # Line 1: number + complex + section + apt number
+        line1_parts = [f"<b>{shown_start + i}. {p.get('complex_name', '')}</b>"]
         section = p.get("section", "")
         if section:
-            parts.append(section)
+            line1_parts.append(section)
         apt_num = p.get("apartment_number", "")
         if apt_num:
-            parts.append(f"№{apt_num}")
-        parts.append(prop_type)
+            line1_parts.append(f"№{apt_num}")
+
+        # Line 2: type + floor + area + view
+        line2_parts = [prop_type]
         floor = p.get("floor", 0)
         if floor:
-            parts.append(f"{floor} эт")
+            line2_parts.append(f"{floor} эт")
         area = p.get("area_m2", 0)
         if area:
-            parts.append(f"{round(area)} м²")
+            line2_parts.append(f"{round(area)} м²")
         view = p.get("view_primary", "")
         if view:
-            parts.append(_VIEW_DISPLAY.get(view, view))
-        parts.append(f"<b>{price_fmt} €</b>")
+            line2_parts.append(_VIEW_DISPLAY.get(view, view))
 
-        lines.append(" · ".join(parts))
-    return "\n".join(lines)
+        # Line 3: price
+        line3 = f"<b>{price_fmt} €</b>"
+
+        parts.append(
+            " · ".join(line1_parts) + "\n    " + " · ".join(line2_parts) + "\n    " + line3
+        )
+
+    return "\n\n".join(parts)
 
 
 # Preference category items for Multiselect widget
@@ -860,7 +879,7 @@ async def on_summary_search(
 
     if view_mode == "list":
         # Send compact text list as one message
-        text = format_apartment_list(results, shown_start=1)
+        text = format_apartment_list(results, shown_start=1, total=total_count)
         await callback.message.answer(text, parse_mode="HTML")
     else:
         # Send photo cards
