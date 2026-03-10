@@ -407,19 +407,63 @@ async def test_handle_select_budget_shows_current():
 
 
 @pytest.mark.asyncio
-async def test_handle_apply_resets_offset_and_deletes_message():
-    """Apply action resets offset to 0 and deletes filter panel message."""
+async def test_handle_apply_reloads_results():
+    """Apply action deletes panel, reloads results with current filters."""
+    from unittest.mock import MagicMock
+
     from telegram_bot.callback_data import FilterPanelCB
 
-    callback, state, svc = _make_handler_mocks()
-    cb_data = FilterPanelCB(action="apply", field="", value="")
-    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+    apt = {
+        "id": "a1",
+        "payload": {
+            "complex_name": "X",
+            "city": "Y",
+            "rooms": 1,
+            "floor": 1,
+            "area_m2": 40,
+            "view_primary": "sea",
+            "price_eur": 50000,
+        },
+    }
+    svc = AsyncMock()
+    svc.count_with_filters = AsyncMock(return_value=5)
+    svc.scroll_with_filters = AsyncMock(return_value=([apt] * 3, 5, 60000.0, ["a1"]))
 
-    state.update_data.assert_awaited_once_with(apartment_offset=0)
+    property_bot = MagicMock()
+    property_bot._apartments_service = svc
+    property_bot._send_property_card = AsyncMock()
+
+    state = AsyncMock()
+    state.get_data = AsyncMock(
+        return_value={
+            "apartment_filters": {"city": "Бургас"},
+            "apartment_total": 50,
+        }
+    )
+    state.update_data = AsyncMock()
+
+    callback = AsyncMock()
+    callback.from_user = MagicMock(id=123)
+    callback.message = AsyncMock()
+    callback.message.delete = AsyncMock()
+    callback.message.answer = AsyncMock()
+    callback.answer = AsyncMock()
+
+    cb_data = FilterPanelCB(action="apply", field="", value="")
+    await handle_filter_panel(
+        callback, state, cb_data, apartments_service=svc, property_bot=property_bot
+    )
+
     callback.message.delete.assert_awaited_once()
     callback.answer.assert_awaited_once()
-    answer_text = callback.answer.call_args[0][0]
-    assert "применен" in answer_text.lower()
+    svc.scroll_with_filters.assert_awaited_once()
+    # Cards sent
+    assert property_bot._send_property_card.await_count == 3
+    # State updated with new offset
+    update_calls = state.update_data.call_args_list
+    last_update = update_calls[-1][1]
+    assert last_update["apartment_offset"] == 3
+    assert last_update["apartment_total"] == 5
 
 
 # ============================================================
