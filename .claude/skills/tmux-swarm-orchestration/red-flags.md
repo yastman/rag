@@ -34,6 +34,12 @@
 - Нет LSP findReferences при file reservation (неточные резервации → merge conflicts)
 - Нет batch_execute для сбора project_scope (N Bash вызовов засоряют контекст)
 
+**SDK-first:**
+- Worker пишет кастомный код для задачи, покрытой SDK из реестра
+- Orch пропустил Phase 2.7 при наличии `.claude/rules/sdk-registry.md`
+- Worker не проверил `{sdk_registry_excerpt}` перед кодом
+- Контракт C план без секции "SDK Coverage"
+
 **Скиллы:**
 - Worker коммит БЕЗ `Skill(skill="requesting-code-review")`
 - Worker коммит БЕЗ `Skill(skill="verification-before-completion")`
@@ -69,6 +75,10 @@
 
 | Отговорка | Реальность |
 |-----------|------------|
+| "Быстрее написать кастом" | SDK уже протестирован и поддерживается. Кастом = tech debt. |
+| "SDK слишком сложный" | Прочитай как_у_нас в реестре — паттерн уже отработан. |
+| "Мне нужна кастомная логика" | 90% случаев SDK покрывает. Проверь gotchas в реестре. |
+| "Не нашёл в SDK" | Context7 query-docs? Exa search? Реестр проверил? |
 | "Сам быстрее inline" | Opus inline = $15. Sonnet worker = $3. |
 | "Sonnet справится без плана" | COMPLEX без плана = провал. |
 | "Детальный план — сам выполню" | План = идеальный промт для Sonnet. |
@@ -103,7 +113,8 @@
 - [ ] COMPLEX+: Волна 1 (исследование) до Волны 2 (выполнение)
 - [ ] Фаза 2.5: file overlap проверен, `{reserved_files}` назначены
 - [ ] Фаза 2.3 (GrepAI + LSP + context-mode) — semantic search, trace, types, references
-- [ ] Фаза 2.7 (SDK контекст) если issue про библиотеку
+- [ ] Фаза 2.7 (SDK контекст) — ОБЯЗАТЕЛЬНА если `.claude/rules/sdk-registry.md` существует
+- [ ] `{sdk_registry_excerpt}` включён в промт каждого worker'а
 - [ ] project_scope через batch_execute (НЕ inline Bash)
 - [ ] `git worktree add` (НЕ `claude --worktree`)
 - [ ] `.env.test` скопирован в worktree (НЕ `.env`)
