@@ -5,18 +5,14 @@ from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
 
 
 class TestBuildCatalogKeyboard:
-    def test_has_5_buttons(self):
+    def test_has_6_buttons(self):
         kb = build_catalog_keyboard(shown=10, total=47)
         buttons = [btn.text for row in kb.keyboard for btn in row]
-        assert len(buttons) == 5
+        assert len(buttons) == 6  # show_more + filters + bookmarks + viewing + manager + main_menu
 
     def test_show_more_button(self):
         kb = build_catalog_keyboard(shown=10, total=47)
-        assert kb.keyboard[0][0].text == "📥 Показать ещё 10"
-
-    def test_counter_button(self):
-        kb = build_catalog_keyboard(shown=10, total=47)
-        assert kb.keyboard[0][1].text == "10 из 47"
+        assert kb.keyboard[0][0].text == "📥 Показать ещё (10 из 47)"
 
     def test_filters_button(self):
         kb = build_catalog_keyboard(shown=10, total=47)
@@ -24,12 +20,12 @@ class TestBuildCatalogKeyboard:
 
     def test_main_menu_button(self):
         kb = build_catalog_keyboard(shown=10, total=47)
-        assert kb.keyboard[2][0].text == "🏠 Главное меню"
+        assert kb.keyboard[3][0].text == "🏠 Главное меню"
 
     def test_all_shown_hides_more_row(self):
-        """When all shown, first row (more + counter) is removed entirely."""
+        """When all shown, show_more row is removed; 3 rows remain."""
         kb = build_catalog_keyboard(shown=47, total=47)
-        assert len(kb.keyboard) == 2  # only filters+bookmarks and menu
+        assert len(kb.keyboard) == 3  # filters+bookmarks, viewing+manager, main_menu
         assert kb.keyboard[0][0].text == "🔍 Фильтры"
 
     def test_resize_keyboard_true(self):
