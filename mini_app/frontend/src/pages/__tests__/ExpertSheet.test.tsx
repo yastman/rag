@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ExpertSheet } from '../ExpertSheet';
 import * as api from '../../api';
-import * as sdkReact from '@telegram-apps/sdk-react';
+import * as sdkReact from '@tma.js/sdk-react';
 import type { AppConfig } from '../../types';
 
 const mockConfig: AppConfig = {
