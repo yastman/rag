@@ -217,15 +217,20 @@ def _field_to_filter_key(field: str) -> str:
 
 def _coerce_value(field: str, value: str) -> Any:
     """Coerce string value to appropriate Python type for filter."""
-    if field == "rooms":
+    if field in ("rooms", "floor"):
         try:
             return int(value)
         except (ValueError, TypeError):
             return None
+    if field == "area":
+        try:
+            return {"gte": int(value)}
+        except (ValueError, TypeError):
+            return None
     if field == "budget":
         return _BUDGET_TO_PRICE.get(value)
-    if field == "furnished":
+    if field in ("furnished", "promotion"):
         return value == "true"
-    if field == "promotion":
-        return value == "true"
+    if field == "view":
+        return [value] if value else None
     return value or None
