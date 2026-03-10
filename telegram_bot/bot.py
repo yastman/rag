@@ -1839,7 +1839,12 @@ class PropertyBot:
             await callback.answer()
 
     @observe(name="cb-cta", capture_input=False, capture_output=False)
-    async def handle_cta_callback(self, callback: CallbackQuery, state: FSMContext) -> None:
+    async def handle_cta_callback(
+        self,
+        callback: CallbackQuery,
+        state: FSMContext,
+        dialog_manager: Any = None,
+    ) -> None:
         """Handle CTA button clicks (get_offer, manager) (#628)."""
         from .handlers.phone_collector import start_phone_collection
         from .keyboards.services_keyboard import parse_service_callback
@@ -1855,8 +1860,13 @@ class PropertyBot:
             await start_phone_collection(callback, state, service_key=param or "unknown")
         elif action == "manager":
             if self._forum_bridge is not None:
-                # Forum Topics enabled — same qualification flow as menu (#730).
-                await start_qualification(callback, i18n=None, state=state)
+                # Forum Topics enabled — skip goal step, context already known (#730).
+                await start_qualification(
+                    callback,
+                    state=state,
+                    dialog_manager=dialog_manager,
+                    goal="services",
+                )
             else:
                 await start_phone_collection(callback, state, service_key="manager")
         else:
