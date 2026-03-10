@@ -31,7 +31,7 @@ digraph flow {
   codebase [label="Фаза 2.3: CODEBASE КОНТЕКСТ\nGrepAI + LSP + context-mode"];
   classify [label="Фаза 2: КЛАССИФИКАЦИЯ\nRead classification.md"];
   parallel [label="Фаза 2.5: ПАРАЛЛЕЛИЗАЦИЯ\nfile overlap + резервации"];
-  sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nSonnet субагент (если нужно)"];
+  sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nОБЯЗАТЕЛЬНО если sdk-registry.md\nматч triggers → Sonnet субагент"];
   spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md"];
   wait [label="Фаза 4: ОЖИДАНИЕ\n0 токенов, мониторинг .signals/"];
   review [label="Фаза 5.0: CODE REVIEW\norch лично читает diff\nчерез context-mode"];
@@ -44,11 +44,29 @@ digraph flow {
 }
 ```
 
-**Фаза 2.7: SDK КОНТЕКСТ** — если issue затрагивает SDK/библиотеку:
+**Фаза 2.7: SDK КОНТЕКСТ** — **ОБЯЗАТЕЛЬНА** если `.claude/rules/sdk-registry.md` существует:
 
+    # 1. Проверить наличие реестра:
+    test -f .claude/rules/sdk-registry.md || echo "NO_REGISTRY → skip to Phase 3"
+
+    # 2. Если есть — прочитать и матчить triggers:
+    Read .claude/rules/sdk-registry.md
+    Для каждого SDK: сравнить triggers с issue body keywords
+    Матч = SDK затронут → запомнить context7_id + как_у_нас + gotchas
+
+    # 3. При матче — Sonnet субагент для актуальной документации:
     Agent(model="sonnet", subagent_type="general-purpose",
-      prompt="Context7 + Exa → сигнатуры, паттерны для {library}.
-      Резюме (300 слов) верни мне. Полный контекст запиши в .claude/cache/sdk-{lib}-{N}.md")
+      prompt="РЕЕСТР: {sdk_registry_excerpt_for_matched_sdk}
+      Context7: resolve-library-id('{context7_id}') → query-docs('{topic из issue}')
+      Exa: get_code_context_exa('{library} {topic} 2026')
+      Сравни с как_у_нас из реестра — отметь если паттерн устарел.
+      Резюме (300 слов) верни мне. Полный контекст → .claude/cache/sdk-{lib}-{N}.md")
+
+    # 4. Собрать {sdk_registry_excerpt} — релевантные блоки из реестра для промта worker'а
+    # Включает: как_у_нас + паттерны + gotchas для каждого совпавшего SDK
+
+    # 5. Даже без матча — список SDK (имена + triggers) для awareness в промте worker'а
+    # 6. Нет реестра → поведение как раньше (по усмотрению orch)
 
 Переиспользование: одно исследование → N воркеров.
 
