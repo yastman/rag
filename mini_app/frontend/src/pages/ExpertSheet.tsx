@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { openTelegramLink, initData } from "@tma.js/sdk-react";
+import { initData, miniApp } from "@tma.js/sdk-react";
 import { fetchConfig, remoteLog, startExpert } from "../api";
 import { BottomSheet } from "../components/BottomSheet";
 import { ChatInput } from "../components/ChatInput";
@@ -23,9 +23,10 @@ export function ExpertSheet() {
 
   const user = initData.user();
   const userId = user?.id;
+  const queryId = initData.queryId?.();
 
   const handleStart = async (text: string) => {
-    remoteLog("info", "handleStart", { userId, id, text });
+    remoteLog("info", "handleStart", { userId, id, text, queryId });
 
     if (!userId) {
       remoteLog("error", "userId undefined — initData.user() is null");
@@ -36,20 +37,12 @@ export function ExpertSheet() {
     setLoading(true);
 
     try {
-      const data = await startExpert(userId, id, text);
-      remoteLog("info", "startExpert OK", { start_link: data.start_link });
+      // Send payload + query_id to backend; bot will call answerWebAppQuery
+      const data = await startExpert(userId, id, text, queryId);
+      remoteLog("info", "startExpert OK", { expert_name: data.expert_name });
 
-      try {
-        if (openTelegramLink.isAvailable()) {
-          openTelegramLink(data.start_link);
-        } else {
-          remoteLog("warn", "openTelegramLink not available, fallback");
-          window.location.href = data.start_link;
-        }
-      } catch (e) {
-        remoteLog("warn", "openTelegramLink threw, fallback", { error: String(e) });
-        window.location.href = data.start_link;
-      }
+      // Close Mini App — bot handles the rest via pub/sub + answerWebAppQuery
+      miniApp.close.ifAvailable();
     } catch (err) {
       remoteLog("error", "startExpert failed", { error: String(err) });
       setLoading(false);
