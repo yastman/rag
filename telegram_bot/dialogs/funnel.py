@@ -25,6 +25,33 @@ from aiogram_dialog.widgets.text import Format
 
 from telegram_bot.observability import observe
 
+from .filter_constants import (
+    AREA_DISPLAY as _AREA_DISPLAY,
+)
+from .filter_constants import (
+    AREA_MAP as _AREA_MAP,
+)
+from .filter_constants import (
+    BUDGET_DISPLAY as _BUDGET_DISPLAY,
+)
+from .filter_constants import (
+    BUDGET_MAP as _BUDGET_MAP,
+)
+from .filter_constants import (
+    FLOOR_DISPLAY as _FLOOR_DISPLAY,
+)
+from .filter_constants import (
+    FLOOR_MAP as _FLOOR_MAP,
+)
+from .filter_constants import (
+    ROOMS_DISPLAY as _ROOMS_DISPLAY,
+)
+from .filter_constants import (
+    ROOMS_MAP as _ROOMS_MAP,
+)
+from .filter_constants import (
+    VIEW_DISPLAY as _VIEW_DISPLAY,
+)
 from .states import FunnelSG
 
 
@@ -81,7 +108,6 @@ _SECTION_OPTIONS: list[tuple[str, str]] = [
     ("Любая секция", "any"),
 ]
 
-_ROOMS_MAP: dict[str, int | list[int]] = {"studio": [0, 1], "1bed": 2, "2bed": 3, "3bed": 4}
 _PROPERTY_TYPE_QUERY_TEXT: dict[str, str] = {
     "studio": "студия",
     "1bed": "1 спальня",
@@ -89,70 +115,6 @@ _PROPERTY_TYPE_QUERY_TEXT: dict[str, str] = {
     "3bed": "3 спальни",
 }
 
-_BUDGET_MAP: dict[str, dict[str, int]] = {
-    "low": {"lte": 50000},
-    "mid": {"gte": 50000, "lte": 100000},
-    "high": {"gte": 100000, "lte": 150000},
-    "premium": {"gte": 150000, "lte": 200000},
-    "luxury": {"gte": 200000},
-}
-
-_FLOOR_MAP: dict[str, dict[str, int]] = {
-    "low": {"gte": 0, "lte": 1},
-    "mid": {"gte": 2, "lte": 3},
-    "high": {"gte": 4, "lte": 5},
-    "top": {"gte": 6},
-}
-
-_AREA_MAP: dict[str, dict[str, int]] = {
-    "small": {"lte": 40},
-    "mid": {"gte": 40, "lte": 60},
-    "large": {"gte": 60, "lte": 80},
-    "xlarge": {"gte": 80, "lte": 120},
-    "xxlarge": {"gte": 120},
-}
-
-_ROOMS_DISPLAY: dict[int, str] = {
-    0: "Студия",
-    1: "Студия",
-    2: "1-спальня",
-    3: "2-спальни",
-    4: "3-спальни",
-}
-
-# Display labels for summary
-_BUDGET_DISPLAY: dict[str, str] = {
-    "low": "До 50 000 €",
-    "mid": "50 000 – 100 000 €",
-    "high": "100 000 – 150 000 €",
-    "premium": "150 000 – 200 000 €",
-    "luxury": "Более 200 000 €",
-}
-
-_FLOOR_DISPLAY: dict[str, str] = {
-    "low": "0-1 этаж",
-    "mid": "2-3 этаж",
-    "high": "4-5 этаж",
-    "top": "6+ этаж",
-}
-
-_AREA_DISPLAY: dict[str, str] = {
-    "small": "До 40 m²",
-    "mid": "40–60 m²",
-    "large": "60–80 m²",
-    "xlarge": "80–120 m²",
-    "xxlarge": "120+ m²",
-}
-
-_VIEW_DISPLAY: dict[str, str] = {
-    "sea": "Море",
-    "sea_panorama": "Панорама моря",
-    "ultra_sea_panorama": "Ультра панорама моря",
-    "ultra_sea": "Ультра море",
-    "pool": "Бассейн",
-    "garden": "Газон/сад",
-    "forest": "Лес/горы",
-}
 
 _PROPERTY_TYPE_DISPLAY: dict[str, str] = {
     "studio": "Студия",
