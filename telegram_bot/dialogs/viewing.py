@@ -57,7 +57,7 @@ async def get_date_options(
     """Getter for date range selection."""
     items = list(DATE_LABELS.items())  # [(key, label), ...]
     return {
-        "title": "📅 Когда удобно осмотреть?",
+        "title": "📅 Выберите удобную дату для осмотра апартаментов",
         "items": [(label, key) for key, label in items],
         "btn_cancel": "✉ Написать менеджеру",
     }
@@ -101,7 +101,17 @@ async def on_date_selected(
 
     from telegram_bot.handlers.phone_collector import start_phone_collection
 
-    await start_phone_collection(callback, state, service_key="viewing")
+    await start_phone_collection(
+        callback,
+        state,
+        service_key="viewing",
+        prompt_text=(
+            "Отлично! Оставьте номер телефона — менеджер свяжется с вами"
+            " и подтвердит время осмотра\n\n"
+            "👇 Нажмите «Поделиться контактом» — это самый быстрый способ\n"
+            "✍️ Или введите номер вручную"
+        ),
+    )
 
 
 # ── Dialog Assembly ──────────────────────────────────────────────────
