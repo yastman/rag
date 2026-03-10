@@ -114,6 +114,23 @@ def build_card_buttons(
     )
 
 
+def format_card_context(payload: dict[str, Any]) -> str:
+    """Format short apartment context for action messages."""
+    name = payload.get("complex_name", "")
+    apt_num = payload.get("apartment_number", "")
+    prop_type = payload.get("property_type", "")
+    price = int(payload.get("price_eur", 0))
+    price_fmt = f"{price:,}".replace(",", " ")
+
+    parts = [f"<b>{name}</b>"]
+    if apt_num:
+        parts.append(f"№{apt_num}")
+    if prop_type:
+        parts.append(prop_type)
+    parts.append(f"{price_fmt} €")
+    return " · ".join(parts)
+
+
 async def send_property_card(
     message: Message,
     result: dict[str, Any],
