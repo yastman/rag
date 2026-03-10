@@ -51,7 +51,7 @@ def mock_config():
         "entry_points": {
             "manager": {
                 "crm_title": "Консультация",
-                "phone_success": "Спасибо! Менеджер свяжется с вами в ближайшее время",
+                "phone_success": "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.",
             }
         }
     }
@@ -100,7 +100,7 @@ async def test_graceful_when_kommo_disabled(mock_message, mock_state, mock_confi
 
     mock_message.answer.assert_awaited_once()
     text = mock_message.answer.call_args[0][0]
-    assert "Спасибо" in text
+    assert "Заявка оформлена" in text
 
 
 async def test_graceful_on_kommo_error(mock_kommo, mock_message, mock_state, mock_config):
@@ -116,7 +116,7 @@ async def test_graceful_on_kommo_error(mock_kommo, mock_message, mock_state, moc
 
     mock_message.answer.assert_awaited_once()
     text = mock_message.answer.call_args[0][0]
-    assert "Спасибо" in text
+    assert "Заявка оформлена" in text
 
 
 async def test_source_tracking_in_lead_name(mock_kommo, mock_message, mock_state, mock_config):
@@ -136,7 +136,7 @@ async def test_source_tracking_in_lead_name(mock_kommo, mock_message, mock_state
 
 class TestPhoneCollectorSearchSummary:
     async def test_sends_success_before_crm_work(self, mock_kommo, mock_config) -> None:
-        """Юзер получает 'Спасибо' до CRM-работы."""
+        """Юзер получает подтверждение до CRM-работы."""
         from telegram_bot.handlers.phone_collector import on_phone_received
 
         message = AsyncMock()
@@ -171,7 +171,7 @@ class TestPhoneCollectorSearchSummary:
                 search_event_store=mock_store,
             )
 
-        # message.answer вызван — "Спасибо"
+        # message.answer вызван — подтверждение заявки
         message.answer.assert_called_once()
 
     async def test_note_includes_search_summary(self, mock_kommo, mock_config) -> None:
