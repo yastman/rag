@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+
+
+logger = logging.getLogger(__name__)
 
 
 # Fallback button text -> action ID mapping (used when i18n not available)
@@ -13,7 +17,7 @@ MENU_BUTTONS: dict[str, str] = {
     "🏠 Подобрать квартиру": "search",
     "🔑 Услуги": "services",
     "📅 Запись на осмотр": "viewing",
-    "👤 Менеджер": "manager",
+    "👤 Связаться с менеджером": "manager",
     "💬 Задать вопрос": "ask",
     "📌 Мои закладки": "bookmarks",
     "🎯 Демонстрация": "demo",
@@ -37,6 +41,7 @@ _ACTION_IDS: dict[str, str] = {
 def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
     """Return all supported menu labels for handler filters."""
     texts = set(MENU_BUTTONS.keys())
+    # CATALOG_BUTTONS handled by catalog_router (StateFilter-based), not here
     if i18n_hub is None:
         return texts
 
@@ -81,6 +86,38 @@ def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
     )
 
 
+# --- Catalog mode keyboard ---
+
+CATALOG_BUTTONS: dict[str, str] = {
+    "📥 Показать ещё 10": "catalog_more",
+    "🔍 Фильтры": "catalog_filters",
+    "📌 Избранное": "catalog_bookmarks",
+    "🏠 Главное меню": "catalog_exit",
+}
+
+
+def build_catalog_keyboard(*, shown: int, total: int) -> ReplyKeyboardMarkup:
+    """Build ReplyKeyboard for catalog browsing mode."""
+    has_more = shown < total
+    rows: list[list[KeyboardButton]] = []
+    if has_more:
+        rows.append(
+            [
+                KeyboardButton(text=f"📥 Показать ещё ({shown} из {total})"),
+            ]
+        )
+    rows.append([KeyboardButton(text="🔍 Фильтры"), KeyboardButton(text="📌 Избранное")])
+    rows.append([KeyboardButton(text="🏠 Главное меню")])
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True)
+
+
+def parse_catalog_button(text: str) -> str | None:
+    """Parse catalog keyboard button text to action ID."""
+    if text.startswith("📥 Показать"):
+        return "catalog_more"
+    return CATALOG_BUTTONS.get(text)
+
+
 def parse_menu_button(text: str, i18n_hub: Any = None) -> str | None:
     """Parse button text to action ID, checking all supported locales.
 
@@ -100,7 +137,7 @@ def parse_menu_button(text: str, i18n_hub: Any = None) -> str | None:
                     if t.get(ftl_key) == text:
                         return action_id
             except Exception:
-                pass
+                logger.warning("Failed to parse menu button via i18n locale=%s", locale)
 
     # Fallback: check hardcoded MENU_BUTTONS (text -> action)
     return MENU_BUTTONS.get(text)

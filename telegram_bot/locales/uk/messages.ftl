@@ -155,7 +155,7 @@ crm-error-postpone-task = ⚠️ Помилка при відкладанні з
 kb-search = 🏠 Підібрати квартиру
 kb-services = 🔑 Послуги
 kb-viewing = 📅 Запис на огляд
-kb-manager = 👤 Менеджер
+kb-manager = 👤 Зв'язатися з менеджером
 kb-ask = 💬 Задати питання
 kb-bookmarks = 📌 Мої закладки
 
@@ -289,18 +289,14 @@ svc-contact-manager = Зв'язатися з менеджером
 svc-back-to-services = Назад до послуг
 
 # ── Handoff (Forum Topics) ──────────────────────────────────────
-handoff-qual-prompt = Щоб менеджер одразу допоміг — кілька питань:
-handoff-goal-buy = 🏠 Купівля
-handoff-goal-rent = 🔑 Оренда
-handoff-goal-consult = 📋 Консультація
-handoff-budget-prompt = Який бюджет приблизно?
-handoff-budget-low = до 50к€
-handoff-budget-mid = 50-100к€
-handoff-budget-high = 100к€+
-handoff-budget-unknown = Поки не знаю
-handoff-contact-prompt = Як зручніше зв'язатися?
-handoff-contact-chat = 💬 Написати зараз
-handoff-contact-phone = 📞 Залишити номер
+handoff-qual-prompt = 📋 Яка тема вас цікавить?
+handoff-goal-search = 🏠 Підбір нерухомості
+handoff-goal-services = 🔑 Послуги
+handoff-goal-consult = 💬 Консультація
+handoff-goal-other = 📎 Інше
+handoff-contact-prompt = Який спосіб зв'язку вам зручніше?
+handoff-contact-chat = 💬 Чат з менеджером
+handoff-contact-phone = 📞 Передзвоніть мені
 handoff-connecting = З'єдную з менеджером. Поки чекаєте — можу відповісти на питання!
 handoff-offline = 📨 Ваш запит прийнято!
 
