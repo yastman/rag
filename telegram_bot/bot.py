@@ -1282,7 +1282,7 @@ class PropertyBot:
 
             from .dialogs.states import ViewingSG
 
-            await dialog_manager.start(ViewingSG.objects, mode=StartMode.RESET_STACK)
+            await dialog_manager.start(ViewingSG.date, mode=StartMode.RESET_STACK)
         else:
             await message.answer("📅 Для записи на осмотр используйте кнопку меню.")
 
