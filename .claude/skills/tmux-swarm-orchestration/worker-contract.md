@@ -24,6 +24,12 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
     Проверь {sdk_registry_excerpt} ниже ПЕРЕД написанием кода.
     Нашёл SDK решение → используй его паттерны и gotchas.
     Не нашёл → кастом допустим, но обоснуй в коммите почему.
+    Кастом ВМЕСТО SDK из реестра = нарушение контракта = FAIL задачи.
+
+    SDK-CHECK маркер (ОБЯЗАТЕЛЬНО перед написанием кода):
+    echo "[SDK-CHECK:covered] {sdk_name} — {что покрывает}" >> logs/worker-{name}.log
+    # ИЛИ если кастом обоснован:
+    echo "[SDK-CHECK:custom] {причина почему не SDK}" >> logs/worker-{name}.log
 
     ПРИ ОШИБКЕ:
     Skill(skill="systematic-debugging") — структурная отладка, НЕ слепой повтор.
