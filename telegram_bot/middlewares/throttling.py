@@ -15,44 +15,54 @@ from cachetools import TTLCache  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
+# Defaults when no rate_limit flag is set on the handler
+_DEFAULT_MESSAGE_RATE = 1.0
+_DEFAULT_CALLBACK_RATE = 0.3
+_DEFAULT_KEY = "default"
+
 
 class ThrottlingMiddleware(BaseMiddleware):
     """
-    Middleware for rate limiting user requests.
+    Middleware for per-handler rate limiting via aiogram flags.
 
-    Uses in-memory TTL cache to track user requests.
+    Handlers declare ``flags={"rate_limit": {"rate": 0.3, "key": "catalog_more"}}``
+    to get isolated throttle buckets.  Handlers without the flag fall back to
+    sensible defaults (1.0 s for messages, 0.3 s for callback queries).
+
+    Uses lazy-created ``TTLCache`` instances keyed by rate value.
     Admins are exempt from rate limiting.
-    Callback queries (button clicks) and menu buttons use shorter rate limits
-    for snappy navigation.  Per-handler rates via aiogram flags (``menu_nav``).
     """
 
     def __init__(
         self,
-        rate_limit: float = 1.5,
-        callback_rate_limit: float = 0.3,
-        menu_rate_limit: float = 0.3,
+        default_rate: float = _DEFAULT_MESSAGE_RATE,
         admin_ids: list[int] | None = None,
     ) -> None:
         """
         Initialize throttling middleware.
 
         Args:
-            rate_limit: Time window in seconds for message rate limiting
-            callback_rate_limit: Time window in seconds for callback query rate limiting
-            menu_rate_limit: Time window in seconds for menu button rate limiting
-            admin_ids: List of admin user IDs exempt from throttling
+            default_rate: Default rate limit for messages (seconds).
+            admin_ids: List of admin user IDs exempt from throttling.
         """
-        self.cache: TTLCache[Any, None] = TTLCache(maxsize=10_000, ttl=rate_limit)
-        self.callback_cache: TTLCache[Any, None] = TTLCache(maxsize=10_000, ttl=callback_rate_limit)
-        self.menu_cache: TTLCache[Any, None] = TTLCache(maxsize=10_000, ttl=menu_rate_limit)
+        self._caches: dict[float, TTLCache[Any, None]] = {}
         self.admin_ids = set(admin_ids or [])
-        self.rate_limit = rate_limit
-        self.callback_rate_limit = callback_rate_limit
-        self.menu_rate_limit = menu_rate_limit
-        logger.info(
-            f"ThrottlingMiddleware initialized: "
-            f"msg={rate_limit}s, callback={callback_rate_limit}s, menu={menu_rate_limit}s"
-        )
+        self.default_rate = default_rate
+        logger.info(f"ThrottlingMiddleware initialized: default_rate={default_rate}s")
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_cache(self, rate: float) -> TTLCache[Any, None]:
+        """Return (or lazily create) a TTLCache for the given *rate*."""
+        cache = self._caches.get(rate)
+        if cache is None:
+            cache = TTLCache(maxsize=10_000, ttl=rate)
+            self._caches[rate] = cache
+        return cache
+
+    # ------------------------------------------------------------------
 
     async def __call__(
         self,
@@ -71,24 +81,25 @@ class ThrottlingMiddleware(BaseMiddleware):
         if user_id in self.admin_ids:
             return await handler(event, data)
 
-        # Route to the right cache based on event type / handler flags
-        if isinstance(event, CallbackQuery):
-            cache = self.callback_cache
-            cache_key = (user_id, event.message.message_id if event.message else 0)
-            throttle_type = "callback"
-        elif get_flag(data, "menu_nav"):
-            # Menu buttons (ReplyKeyboard) — navigation, use short rate limit
-            cache = self.menu_cache
-            cache_key = user_id
-            throttle_type = "menu"
+        # Resolve rate & key from handler flag or defaults
+        rate_config: dict[str, Any] | None = get_flag(data, "rate_limit")
+
+        if rate_config is not None:
+            rate: float = float(rate_config.get("rate", self.default_rate))
+            key: str = str(rate_config.get("key", _DEFAULT_KEY))
+        elif isinstance(event, CallbackQuery):
+            rate = _DEFAULT_CALLBACK_RATE
+            key = _DEFAULT_KEY
         else:
-            cache = self.cache
-            cache_key = user_id
-            throttle_type = "message"
+            rate = self.default_rate
+            key = _DEFAULT_KEY
+
+        cache = self._get_cache(rate)
+        cache_key = (user_id, key)
 
         # Check if user is throttled
         if cache_key in cache:
-            logger.warning(f"User {user_id} throttled ({throttle_type})")
+            logger.warning(f"User {user_id} throttled (key={key}, rate={rate}s)")
 
             if isinstance(event, CallbackQuery):
                 await event.answer("Слишком часто, подожди немного", show_alert=True)
@@ -104,9 +115,7 @@ class ThrottlingMiddleware(BaseMiddleware):
 
 def setup_throttling_middleware(
     dp: Dispatcher,
-    rate_limit: float = 1.5,
-    callback_rate_limit: float = 0.3,
-    menu_rate_limit: float = 0.3,
+    default_rate: float = _DEFAULT_MESSAGE_RATE,
     admin_ids: list[int] | None = None,
 ) -> None:
     """
@@ -114,12 +123,10 @@ def setup_throttling_middleware(
 
     Args:
         dp: Dispatcher instance
-        rate_limit: Time window in seconds for messages
-        callback_rate_limit: Time window in seconds for callback queries
-        menu_rate_limit: Time window in seconds for menu buttons
+        default_rate: Default rate limit for messages (seconds).
         admin_ids: List of admin user IDs
     """
-    middleware = ThrottlingMiddleware(rate_limit, callback_rate_limit, menu_rate_limit, admin_ids)
+    middleware = ThrottlingMiddleware(default_rate=default_rate, admin_ids=admin_ids)
     dp.message.middleware.register(middleware)
     dp.callback_query.middleware.register(middleware)
     # Auto-answer callbacks (pre=True) to dismiss Telegram "loading" spinner immediately
