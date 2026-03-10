@@ -160,9 +160,11 @@ async def _process_valid_phone(
     config = get_phone_config(service_key)
     crm_title = config.get("crm_title", service_key) if config else service_key
     phone_success = (
-        config.get("phone_success", "Спасибо! Менеджер свяжется с вами в ближайшее время.")
+        config.get(
+            "phone_success", "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время."
+        )
         if config
-        else "Спасибо! Менеджер свяжется с вами в ближайшее время."
+        else "✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время."
     )
 
     display_name = build_display_name(user, phone)
