@@ -44,11 +44,9 @@ class FunnelSG(StatesGroup):
 class ViewingSG(StatesGroup):
     """Viewing appointment wizard."""
 
-    objects = State()  # Шаг 1: выбор объектов из закладок
-    objects_text = State()  # Шаг 1b: ручной ввод (опционально)
-    date = State()  # Шаг 2: желаемая дата
-    phone = State()  # Шаг 3: номер телефона
-    summary = State()  # Шаг 4: подтверждение + CRM
+    date = State()  # Шаг 1: желаемая дата
+    phone = State()  # Шаг 2: номер телефона
+    summary = State()  # Шаг 3: подтверждение + CRM
 
 
 class FaqSG(StatesGroup):
