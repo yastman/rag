@@ -192,7 +192,7 @@ async def _handle_apply(
         telegram_id = callback.from_user.id if callback.from_user else 0
         for result in results:
             await property_bot._send_property_card(msg, result, telegram_id)
-        await msg.answer("📋 Каталог", reply_markup=catalog_kb)
+        await msg.answer("\u200b", reply_markup=catalog_kb)
 
     await state.update_data(
         apartment_offset=shown,
