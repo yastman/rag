@@ -128,18 +128,20 @@ ssh vps "docker builder prune -f && docker image prune -f"
 Bot → LiteLLM Proxy (:4000) → Cerebras/Groq → Langfuse OTEL tracing
 ```
 
-**Config:** `docker/litellm/config.yaml`
+**Config:** `docker/litellm/config.yaml` | **Image:** `v1.81.14-stable`
 
 | Model Alias | Provider / Model | Notes |
 |-------------|-----------------|-------|
-| `gpt-4o-mini` | Cerebras `gpt-oss-120b` | Primary (reasoning model, 3000 tok/s) |
-| `gpt-oss-120b` | Cerebras `gpt-oss-120b` | Standalone alias for benchmarking |
-| `gpt-4o-mini-cerebras-glm` | Cerebras `zai-glm-4.7` | Legacy fallback |
-| `gpt-4o-mini-fallback` | Groq `llama-3.1-70b-versatile` | Groq fallback |
-| `gpt-4o-mini-openai` | OpenAI `gpt-4o-mini` | OpenAI fallback |
+| `gpt-4o-mini` | Cerebras `zai-glm-4.7` | Primary, `disable_reasoning: true` (fast TTFT) |
+| `gpt-oss-120b` | Cerebras `gpt-oss-120b` | Reasoning model, benchmarking |
+| `gpt-4o-mini-cerebras-oss` | Cerebras `gpt-oss-120b` | Fallback 1 (reasoning, slower) |
+| `gpt-4o-mini-fallback` | Groq `llama-3.1-70b-versatile` | Fallback 2 |
+| `gpt-4o-mini-openai` | OpenAI `gpt-4o-mini` | Fallback 3 |
 | `whisper` | OpenAI `whisper-1` | STT (audio_transcription mode) |
 
-Note: `gpt-oss-120b` uses `merge_reasoning_content_in_choices: true` (reasoning model delta fix).
+Note: `gpt-oss-120b` uses `merge_reasoning_content_in_choices: true` (reasoning model delta fix). GLM 4.7: `disable_reasoning: true` отключает reasoning, `clear_thinking: false` сохраняет traces.
+
+**DATABASE_URL:** Закомментирован в compose.yml для локальной разработки — prisma OOM в 512MB контейнере. Без DB LiteLLM работает из config.yaml (`allow_requests_on_db_unavailable: true`). На VPS/prod — раскомментировать если нужны virtual keys/UI.
 
 ## Building Custom Images
 
