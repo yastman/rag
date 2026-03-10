@@ -156,13 +156,25 @@ class TestGetHubData:
         from telegram_bot.dialogs.filter_dialog import get_hub_data
 
         manager = SimpleNamespace(
-            dialog_data={"city": "Бургас", "rooms": 3, "budget": "mid"},
+            dialog_data={"city": "Бургас", "rooms": "3", "budget": "mid"},
             middleware_data={"apartments_service": None},
         )
         result = await get_hub_data(dialog_manager=manager)
         assert result["city_val"] == "Бургас"
         assert result["rooms_val"] == "2-спальни"
         assert "50 000" in result["budget_val"]
+
+    async def test_empty_filters_show_any(self):
+        from telegram_bot.dialogs.filter_dialog import get_hub_data
+
+        manager = SimpleNamespace(
+            dialog_data={},
+            middleware_data={"apartments_service": None},
+        )
+        result = await get_hub_data(dialog_manager=manager)
+        assert result["city_val"] == "Любой"
+        assert result["rooms_val"] == "Любой"
+        assert result["budget_val"] == "Любой"
 
 
 # ============================================================
@@ -336,7 +348,7 @@ class TestRadioHandlerAnySentinel:
         assert "complex" not in manager.dialog_data
         assert "complex_name" not in manager.dialog_data
 
-    async def test_valid_value_stores_coerced(self):
+    async def test_valid_value_stores_raw_item_id(self):
         from telegram_bot.dialogs.filter_dialog import _make_radio_handler
 
         handler = _make_radio_handler("rooms")
@@ -346,7 +358,7 @@ class TestRadioHandlerAnySentinel:
 
         await handler(MagicMock(), MagicMock(), manager, "3")
 
-        assert manager.dialog_data["rooms"] == 3
+        assert manager.dialog_data["rooms"] == "3"
 
     async def test_valid_city_stores_string(self):
         from telegram_bot.dialogs.filter_dialog import _make_radio_handler
@@ -385,11 +397,29 @@ class TestFiltersToDialogData:
         result = _filters_to_dialog_data({"price_eur": {"gte": 50_000, "lte": 100_000}})
         assert result["budget"] == "mid"
 
-    def test_reverse_maps_area_m2(self):
+    def test_reverse_maps_area_m2_to_string_key(self):
         from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
 
-        result = _filters_to_dialog_data({"area_m2": {"gte": 60}})
-        assert result["area"] == {"gte": 60}
+        result = _filters_to_dialog_data({"area_m2": {"gte": 60, "lte": 80}})
+        assert result["area"] == "large"
+
+    def test_reverse_maps_floor_to_string_key(self):
+        from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
+
+        result = _filters_to_dialog_data({"floor": {"gte": 4, "lte": 5}})
+        assert result["floor"] == "high"
+
+    def test_reverse_maps_rooms_to_string(self):
+        from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
+
+        result = _filters_to_dialog_data({"rooms": 3})
+        assert result["rooms"] == "3"
+
+    def test_reverse_maps_furnished_to_string(self):
+        from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
+
+        result = _filters_to_dialog_data({"is_furnished": True})
+        assert result["furnished"] == "true"
 
     def test_empty_filters(self):
         from telegram_bot.dialogs.filter_dialog import _filters_to_dialog_data
