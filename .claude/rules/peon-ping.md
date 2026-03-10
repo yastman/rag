@@ -1,3 +1,7 @@
+---
+description: "Peon-ping sound notification management"
+---
+
 # Peon-Ping: быстрое управление
 
 ## Конфиг
