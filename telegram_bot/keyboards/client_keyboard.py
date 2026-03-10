@@ -89,7 +89,6 @@ def build_client_keyboard(i18n: Any = None) -> ReplyKeyboardMarkup:
 # --- Catalog mode keyboard ---
 
 CATALOG_BUTTONS: dict[str, str] = {
-    "📥 Показать ещё 10": "catalog_more",
     "🔍 Фильтры": "catalog_filters",
     "📌 Избранное": "catalog_bookmarks",
     "🏠 Главное меню": "catalog_exit",
