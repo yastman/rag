@@ -213,6 +213,28 @@ class TestCatalogExitHandler:
 
 
 class TestCatalogFiltersHandler:
+    async def test_handle_catalog_filters_starts_funnel_summary(self):
+        """Filters button should start FunnelSG.summary dialog with saved data."""
+        bot = _make_bot()
+
+        state = _make_state(
+            {
+                "catalog_mode": True,
+                "funnel_data": {"city": "varna", "budget": "mid"},
+                "apartment_filters": {"city": "varna"},
+            }
+        )
+        message = _make_message()
+        dialog_manager = AsyncMock()
+
+        await bot._handle_catalog_filters(message, state, dialog_manager)
+
+        dialog_manager.start.assert_called_once()
+        call_args = dialog_manager.start.call_args
+        from telegram_bot.dialogs.states import FunnelSG
+
+        assert call_args[0][0] == FunnelSG.summary
+
     async def test_filters_sends_inline_panel(self):
         """'Фильтры' отправляет inline-сообщение с текущими фильтрами."""
         from aiogram.types import InlineKeyboardMarkup
