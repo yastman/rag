@@ -31,7 +31,7 @@ python -m src.ingestion.apartments.runner --incremental  # Apartments
 
 **Contextual RAG Pipeline** — hybrid search (RRF + ColBERT rerank), BGE-M3 embeddings (local), multi-level caching, Telegram bot.
 
-**Stack:** Python 3.12 | gpt-oss-120b via LiteLLM | BGE-M3 | Qdrant | Redis | CocoIndex
+**Stack:** Python 3.12 | GLM 4.7 via LiteLLM | BGE-M3 | Qdrant | Redis | CocoIndex
 
 ## Architecture
 
