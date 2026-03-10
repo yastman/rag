@@ -63,7 +63,7 @@ Project uses **uv** package manager with **Ruff** linter/formatter and **pre-com
 | `make docker-voice-up` | voice | + livekit, sip, voice-agent |
 | `make docker-full-up` | full | all services |
 | `make docker-down` | full | stop all |
-| `make local-up` | - | redis, qdrant, bge-m3, docling (minimal) |
+| `make local-up` | - | redis, qdrant, bge-m3, docling, litellm |
 
 All compose commands use `docker compose --compatibility` (COMPOSE_FILE from `.env`).
 

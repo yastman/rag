@@ -121,9 +121,10 @@ CI has **one job: `checks`** (self-hosted runner). Runs lint + format + type-che
 
 | Step | Command |
 |------|---------|
-| Ruff lint | `ruff check src/ telegram_bot/ tests/` |
-| Ruff format | `ruff format --check src/ telegram_bot/ tests/` |
-| Type check | `mypy src/ telegram_bot/ --ignore-missing-imports` |
+| Ruff lint | `ruff check src/ telegram_bot/ --output-format=github` |
+| Ruff format | `ruff format --check src/ telegram_bot/` |
+| Type check | `mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary` |
+| Security scan | `bandit -r src/ telegram_bot/ -c pyproject.toml` + `vulture src/ telegram_bot/ --min-confidence 80` |
 
 Install: `uv sync --frozen` (base deps).
 
@@ -179,7 +180,6 @@ uv run pytest tests/baseline/ -v
 
 - `asyncio_mode = "auto"` — async tests don't need `@pytest.mark.asyncio`
 - Integration tests require: `make docker-up`
-- CI runs unit tests sharded across 4 matrix jobs (see `.github/workflows/ci.yml`)
 - `--dist loadscope` groups tests by module to avoid fixture teardown/setup overhead
 
 ## Test Dependencies
