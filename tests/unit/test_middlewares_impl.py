@@ -105,7 +105,7 @@ class TestThrottlingMiddleware:
         """Create ThrottlingMiddleware instance."""
         from telegram_bot.middlewares.throttling import ThrottlingMiddleware
 
-        return ThrottlingMiddleware(rate_limit=1.5, admin_ids=[123, 456])
+        return ThrottlingMiddleware(default_rate=1.0, admin_ids=[123, 456])
 
     async def test_first_request_passes_through(self, middleware):
         """Test that first request from a user passes through."""
@@ -182,9 +182,6 @@ class TestThrottlingMiddleware:
         handler = AsyncMock(return_value="result")
         event = MagicMock(spec=CallbackQuery)
         event.answer = AsyncMock()
-        # Callback key uses user_id + message_id
-        event.message = MagicMock()
-        event.message.message_id = 100
         user = MagicMock()
         user.id = 789
         data = {"event_from_user": user}
@@ -208,7 +205,7 @@ class TestThrottlingMiddleware:
         with patch("telegram_bot.middlewares.throttling.logger"):
             middleware = ThrottlingMiddleware()
 
-        assert middleware.rate_limit == 1.5
+        assert middleware.default_rate == 1.0
         assert middleware.admin_ids == set()
 
     def test_initialization_with_custom_values(self):
@@ -216,10 +213,57 @@ class TestThrottlingMiddleware:
         from telegram_bot.middlewares.throttling import ThrottlingMiddleware
 
         with patch("telegram_bot.middlewares.throttling.logger"):
-            middleware = ThrottlingMiddleware(rate_limit=3.0, admin_ids=[100, 200])
+            middleware = ThrottlingMiddleware(default_rate=3.0, admin_ids=[100, 200])
 
-        assert middleware.rate_limit == 3.0
+        assert middleware.default_rate == 3.0
         assert middleware.admin_ids == {100, 200}
+
+    async def test_handler_with_rate_limit_flag(self):
+        """Handler with rate_limit flag uses its rate, not default."""
+        from telegram_bot.middlewares.throttling import ThrottlingMiddleware
+
+        middleware = ThrottlingMiddleware(default_rate=1.0)
+        handler = AsyncMock(return_value="result")
+        event = MagicMock()
+        event.answer = AsyncMock()
+        user = MagicMock()
+        user.id = 789
+        data = {"event_from_user": user}
+
+        with patch(
+            "telegram_bot.middlewares.throttling.get_flag",
+            return_value={"rate": 0.3, "key": "catalog_more"},
+        ):
+            result1 = await middleware(handler, event, data)
+            assert result1 == "result"
+
+            with patch("telegram_bot.middlewares.throttling.logger"):
+                result2 = await middleware(handler, event, data)
+            assert result2 is None
+
+    async def test_different_keys_independent(self):
+        """Different keys do not block each other for the same user."""
+        from telegram_bot.middlewares.throttling import ThrottlingMiddleware
+
+        middleware = ThrottlingMiddleware(default_rate=1.0)
+        handler = AsyncMock(return_value="result")
+        event = MagicMock()
+        user = MagicMock()
+        user.id = 789
+        data = {"event_from_user": user}
+
+        with patch(
+            "telegram_bot.middlewares.throttling.get_flag",
+            return_value={"rate": 0.3, "key": "catalog_more"},
+        ):
+            await middleware(handler, event, data)
+
+        with patch(
+            "telegram_bot.middlewares.throttling.get_flag",
+            return_value={"rate": 0.3, "key": "catalog_filters"},
+        ):
+            result = await middleware(handler, event, data)
+            assert result == "result", "Different keys must not block each other"
 
 
 class TestSetupThrottlingMiddleware:
@@ -232,7 +276,7 @@ class TestSetupThrottlingMiddleware:
         mock_dp = MagicMock()
 
         with patch("telegram_bot.middlewares.throttling.logger"):
-            setup_throttling_middleware(mock_dp, rate_limit=2.0, admin_ids=[111])
+            setup_throttling_middleware(mock_dp, default_rate=2.0, admin_ids=[111])
 
         mock_dp.message.middleware.register.assert_called_once()
         # 2 registrations: ThrottlingMiddleware + CallbackAnswerMiddleware
