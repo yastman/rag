@@ -59,72 +59,6 @@ Voice Bot:  /call → LiveKit Agent (ElevenLabs) → RAG API
 - **Pre-commit:** ruff-check → ruff-format → trailing-whitespace → check-yaml/toml/json
 - **Commits:** `feat(scope): msg` | `fix(scope): msg` | `docs(scope): msg`
 
-## Code Search Tools
-
-| Задача | Инструмент | Tool |
-|--------|-----------|------|
-| Понять что делает код / найти по описанию | **GrepAI** | `grepai_search(query, format="toon", compact=true)` |
-| Кто вызывает функцию (impact analysis) | **GrepAI** | `grepai_trace_callers(symbol, format="toon")` |
-| Что вызывает функция (зависимости) | **GrepAI** | `grepai_trace_callees(symbol, format="toon")` |
-| Полный call graph | **GrepAI** | `grepai_trace_graph(symbol, depth=1, format="toon")` |
-| Тип / сигнатура / docstring | **LSP** | `hover(filePath, line, character)` |
-| Go-to-definition | **LSP** | `goToDefinition(filePath, line, character)` |
-| Все references (для refactoring) | **LSP** | `findReferences(filePath, line, character)` |
-| Структура файла (все символы) | **LSP** | `documentSymbol(filePath)` |
-| Точный текст / regex | **Grep** | `pattern="cache.*ttl"` |
-| Найти файл по имени | **Glob** | `pattern="**/*cache*.py"` |
-
-GrepAI daemon автостартует через SessionStart hook (`~/.claude/hooks/grepai-ensure.sh`).
-
-## Context-Mode (MCP plugin)
-
-Экономия контекста ~87%. Сырой output остаётся в sandbox, в контекст — только резюме.
-
-| Вместо | Используй | Когда |
-|--------|-----------|-------|
-| `Bash` (>20 строк output) | `execute(language, code)` | make check, git log, docker ps, pytest |
-| `Read` (анализ) | `execute_file(path, language, code)` | Логи, JSON, CSV, большие файлы |
-| N × Bash | `batch_execute(commands, queries)` | Исследование, сбор контекста |
-| `WebFetch` | `fetch_and_index(url)` + `search(queries)` | Документация, API reference |
-
-**Read** — только для файлов, которые будешь **Edit**-ить. **Bash** — только git, mkdir, mv, rm, echo.
-
-## Continuous Claude (v3)
-
-Скиллы и агенты автообнаруживаются через description matching. Размер: Small → inline | Medium → /build | Large → /tmux-swarm-orchestration
-
-**Агенты:** sonnet по умолчанию. Opus только для kraken, sleuth, phoenix, architect, profiler, maestro, aegis.
-
-**Memory** (`python -m`, не `python scripts/...`):
-
-```bash
-cd /home/user/projects/Continuous-Claude-v3/opc && uv run python -m scripts.core.recall_learnings --query "тема" --k 5 --text-only
-cd /home/user/projects/Continuous-Claude-v3/opc && uv run python -m scripts.core.store_learning \
-  --session-id "id" --type WORKING_SOLUTION --content "что узнал" \
-  --context "контекст" --tags "tag1,tag2" --confidence high
-```
-
-**Continuity:** `/create_handoff` перед завершением | `/resume_handoff` при возобновлении | при 90%+ контекста → handoff → `/clear`
-
-## Troubleshooting
-
-| Error | Fix |
-|-------|-----|
-| Redis connection refused | `docker compose up -d redis` (requires `REDIS_PASSWORD`) |
-| Qdrant timeout | `QDRANT_TIMEOUT=30` |
-| Docling 0 chunks | Don't set `tokenizer="word"`, use `None` |
-| `Model gpt-4o-mini not found` (404) | `LLM_BASE_URL` must point to LiteLLM, not directly to Cerebras |
-| Langfuse traces missing locally | `make run-bot` uses `uv run --env-file .env` to load env vars |
-| Cache always MISS | Store guard threshold on RRF scale (~0.005), not cosine [0-1] |
-| `qdrant-client .search()` AttributeError | Migrated to `.query_points()` in v1.17 — never use `.search()` |
-| ColBERT rerank 16s on CPU | Server-side ColBERT via Qdrant nested prefetch, or `RERANK_PROVIDER=none` |
-| Kommo `kommo_client = None` | `KOMMO_CLIENT_ID` (not `KOMMO_INTEGRATION_ID`), `KOMMO_CLIENT_SECRET`, `KOMMO_REDIRECT_URI` |
-| TTFT drift warnings spam | `TTFT_DRIFT_WARN_MS=500`; raise for reasoning models behind proxy |
-
-## Parallel Sessions
-
-**NEVER** 2+ sessions в одной директории. `claude --worktree <name>` для изоляции.
-
 ## Environment
 
 `cp .env.example .env` → `uv sync && make local-up && make run-bot`
@@ -133,25 +67,32 @@ cd /home/user/projects/Continuous-Claude-v3/opc && uv run python -m scripts.core
 
 **Optional:** `TTFT_DRIFT_WARN_MS`, `KOMMO_ACCESS_TOKEN`, `KOMMO_DEFAULT_PIPELINE_ID`, `KOMMO_*_FIELD_ID`
 
-## Docker Compose
+## Task Routing
 
-Unified layout: `compose.yml` (base) + override через `COMPOSE_FILE` в `.env`.
-
-| Среда | COMPOSE_FILE | COMPOSE_PROJECT_NAME |
-|-------|-------------|---------------------|
-| Dev | `compose.yml:compose.dev.yml` | `dev` |
-| VPS | `compose.yml:compose.vps.yml` | `vps` |
-
-## CI/CD Pipeline
-
-`.github/workflows/ci.yml`: lint (ruff + mypy) → full-stack deploy (SSH → git pull → docker compose up -d)
-
-Тесты гоняются **локально** перед merge (`make check && make test-unit`). CI только lint + deploy.
-
-**Деплой:** `make deploy-bot` | `gh workflow run ci.yml` | `./scripts/deploy-vps.sh` (`--clean` для пересоздания)
-
-**VPS:** `ssh vps` → `/opt/rag-fresh` → `.claude/rules/k3s.md`
+| Размер задачи | Подход |
+|---------------|--------|
+| Trivial (≤5 строк, 1-2 файла) | Inline fix |
+| Small (1 issue, <200 LOC) | Один агент / inline |
+| Medium (1-2 issues, <400 LOC) | `/tmux-swarm-orchestration` — 1 Sonnet worker |
+| Large (3+ issues, параллельные) | `/tmux-swarm-orchestration` — N Sonnet workers |
 
 ## Modular Docs
 
 `.claude/rules/` — автозагрузка по `paths:` globs при работе с matching файлами.
+
+| Rule | Когда грузится |
+|------|---------------|
+| `sdk-registry.md` | SDK-First проверка, добавление зависимостей |
+| `code-search.md` | Поиск кода (GrepAI, LSP, Grep, Glob) |
+| `testing.md` | Работа с `tests/**/*.py` |
+| `mini-app.md` | Работа с `mini_app/**` |
+| `docker.md` | Docker, compose, infrastructure |
+| `git-workflow.md` | PR, ветки, Renovate, worktrees |
+| `services.md` | telegram_bot/services, pipelines |
+| `search.md` | src/retrieval (RAG search) |
+| `build.md` | Makefile, pyproject.toml, pre-commit |
+| `observability.md` | Langfuse, baseline tests |
+| `k3s.md` | VPS Kubernetes |
+| `troubleshooting.md` | Известные ошибки и фиксы |
+| `context-mode.md` | context-mode MCP plugin |
+| `peon-ping.md` | Звуковые уведомления |
