@@ -136,8 +136,9 @@
 - [ ] **Уровень 0: Code Review** через context-mode execute (diff в sandbox, НЕ Read)
 - [ ] Артефактная проверка через context-mode execute: тесты + `make check` + PR
 - [ ] Маркеры: `grep '\[SKILL:' logs/worker-{name}.log` (дополнительно)
+- [ ] SDK-CHECK: `grep '\[SDK-CHECK:' logs/worker-{name}.log` — worker проверил реестр?
 - [ ] Решение: Code Review OK + артефакты OK → PASS, Code Review FAIL → эскалация
-- [ ] **Фаза 5.2:** Проверить `sdk_updates` в сигнале + новые imports в diff
+- [ ] **Фаза 5.2:** Orch лично анализирует diff: новые imports, pyproject.toml, новые файлы
 - [ ] **Фаза 5.2:** Обновить `.claude/rules/sdk-registry.md` если есть находки (отдельный коммит в dev)
 - [ ] `orch_log` записать результат
 - [ ] Переименовать сигнал → `done-worker-{name}.json`
