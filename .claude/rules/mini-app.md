@@ -12,16 +12,17 @@ paths: "mini_app/**/*.py, mini_app/**/*.tsx, mini_app/**/*.ts, telegram_bot/conf
 
 ```typescript
 // bootstrap.ts — порядок инициализации:
-setupMockEnv();              // 1. Mock env (dev only, до SDK)
-await isTMA("complete");     // 2. Detect TMA environment (@tma.js/bridge)
+setupMockEnv();              // 1. Mock env (dev only, до SDK — ставит TelegramWebviewProxy)
+// isDev ? true : await isTMA("complete")  // 2. Dev = всегда true, prod = строгая проверка
 init();                      // 3. SDK init (@tma.js/sdk-react)
 initData.restore();          // 4. Restore user/auth_date/hash
 themeParams.mount();         // 5. Mount theme params
 themeParams.bindCssVars();   // 6. Bind --tg-theme-* CSS vars
-await viewport.mount();      // 7. Viewport (async)
+await viewport.mount();      // 7. Viewport (async, .isAvailable() guard)
 viewport.bindCssVars();      // 8. Viewport CSS vars
-swipeBehavior.mount();       // 9. Swipe protection
+swipeBehavior.mount();       // 9. Swipe protection (.isSupported() guard)
 swipeBehavior.disableVertical(); // 10. Disable vertical swipe
+// try/catch: если init() бросает UnknownEnvError в dev → applyFallbackTheme()
 ```
 
 Пакеты:
@@ -40,7 +41,7 @@ swipeBehavior.disableVertical(); // 10. Disable vertical swipe
 | `swipeBehavior.isSupported` | `@tma.js/sdk-react` | Computed signal `()` | true если платформа поддерживает |
 | `swipeBehavior.disableVertical` | `@tma.js/sdk-react` | Вызов после mount | Запрет вертикального свайпа |
 | `isTMA("complete")` | `@tma.js/bridge` | Async проверка | Promise<boolean>, строгая проверка |
-| `mockTelegramEnv` | `@tma.js/bridge` | `({ launchParams: URLSearchParams })` | Фейк env для локальной разработки |
+| `mockTelegramEnv` | `@tma.js/bridge` | `({ launchParams: {object}, onEvent })` | Фейк env для локальной разработки |
 
 ### Anti-patterns
 
@@ -50,6 +51,9 @@ swipeBehavior.disableVertical(); // 10. Disable vertical swipe
 - **НЕ** `mountThemeParamsSync` / `bindThemeParamsCssVars` — устаревшие методы, используй `themeParams.mount()` + `themeParams.bindCssVars()`
 - **НЕ** `<script src="telegram-web-app.js">` в index.html — SDK сам управляет
 - **НЕ** инициализировать SDK в main.tsx напрямую — только через `bootstrap.ts`
+- **НЕ** `if (isTMA()) return` в mockEnv — sessionStorage переживает reload, window globals нет → UnknownEnvError
+- **НЕ** `mockTelegramEnv({ launchParams: new URLSearchParams(...) })` — object format: `{ tgWebAppThemeParams, tgWebAppData, tgWebAppVersion, tgWebAppPlatform }` + `onEvent` handler
+- **НЕ** `closeMiniApp()` — используй `miniApp.close.ifAvailable()`
 
 ## Архитектура
 
@@ -180,6 +184,8 @@ ssh -R 8091:127.0.0.1:8091 vps -N
 | 502 Bad Gateway | mini-app-frontend не запущен | `docker compose --profile bot up -d` |
 | API ошибки | mini-app-api не healthy | `docker compose logs mini-app-api` |
 | CSS пустые/белый экран | `themeParams.mount()` не вызван | Проверить bootstrap.ts порядок инициализации |
+| `UnknownEnvError` в dev | `mockEnv` не поставил `TelegramWebviewProxy` | Убедиться что mockEnv вызывается без `isTMA()` guard |
+| `UnknownEnvError` после reload | sessionStorage есть, window globals сброшены | mockEnv должен всегда переустанавливать mock |
 | remote port forwarding failed | Порт занят или GatewayPorts off | Остановить mini-app на VPS, проверить sshd_config |
 
 ## Expert Start Flow (Deep Link)
@@ -234,7 +240,7 @@ cd mini_app/frontend && npm run build               # TS build check
 ```
 
 Моки SDK в `test-setup.ts`:
-- Глобальный `vi.mock("@tma.js/sdk-react")` — init, initData, themeParams, viewport, swipeBehavior, openTelegramLink, closeMiniApp, sendData
+- Глобальный `vi.mock("@tma.js/sdk-react")` — init, initData, themeParams, viewport, swipeBehavior, openTelegramLink, miniApp.close, sendData
 - Глобальный `vi.mock("@tma.js/bridge")` — mockTelegramEnv, isTMA
 - `vi.mock("eruda")` — заглушка dev-инструмента
 
