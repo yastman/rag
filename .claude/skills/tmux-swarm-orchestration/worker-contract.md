@@ -36,15 +36,8 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
     ПРОГРЕСС (для задач >10 мин):
     echo "[PROGRESS:50%] {что сделано}" >> logs/worker-{name}.log
 
-    SDK ОБНОВЛЕНИЯ (если обнаружил новый паттерн/SDK):
-    Добавь в сигнал завершения поле "sdk_updates" — массив объектов:
-    - sdk: имя SDK (из реестра или новый)
-    - type: "new_pattern" | "outdated_pattern" | "new_sdk" | "new_gotcha"
-    - detail: что именно (краткое описание, ≤50 слов)
-    Нет обновлений → не добавляй поле.
-
     СИГНАЛ ЗАВЕРШЕНИЯ (атомарный — write .tmp → mv):
-    echo '{"status":"done","worker":"W-{NAME}","pr":"{url}","ts":"'$(date -Iseconds)'","sdk_updates":[...]}' \
+    echo '{"status":"done","worker":"W-{NAME}","pr":"{url}","ts":"'$(date -Iseconds)'"}' \
       > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
       && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
