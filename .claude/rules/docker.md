@@ -4,7 +4,7 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 
 ***REMOVED*** Docker & Infrastructure
 
-***REMOVED******REMOVED*** Services (docker-compose.dev.yml)
+***REMOVED******REMOVED*** Services (compose.dev.yml)
 
 ***REMOVED******REMOVED******REMOVED*** Default services (no profile — always started with `docker-core-up`)
 
@@ -32,7 +32,7 @@ paths: "docker/**/*.*, docker-compose*.yml, **/monitoring/**"
 ***REMOVED******REMOVED*** Makefile Commands
 
 ```bash
-COMPOSE_CMD = docker compose --compatibility -f docker-compose.dev.yml
+COMPOSE_CMD = docker compose --compatibility
 ```
 
 | Command | Profile | Services started |
@@ -49,22 +49,22 @@ COMPOSE_CMD = docker compose --compatibility -f docker-compose.dev.yml
 
 **Combining profiles manually:**
 ```bash
-docker compose -f docker-compose.dev.yml --profile bot --profile obs up -d
-COMPOSE_PROFILES=bot,obs docker compose -f docker-compose.dev.yml up -d
+docker compose --profile bot --profile obs up -d
+COMPOSE_PROFILES=bot,obs docker compose up -d
 ```
 
 **Voice preflight:** `make docker-voice-up` checks for `docker/livekit/livekit.yaml` before starting.
 
-***REMOVED******REMOVED*** VPS Stack (docker-compose.vps.yml)
+***REMOVED******REMOVED*** VPS Stack (compose.vps.yml)
 
 **VPS:** `admin@REDACTED_VPS_ENDPOINT` | Alias: `ssh vps` | Path: `/opt/rag-fresh`
 
 ```bash
 ***REMOVED*** Start all VPS services
-ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml up -d"
+ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f compose.vps.yml up -d"
 
 ***REMOVED*** With ingestion pipeline
-ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f docker-compose.vps.yml --profile ingest up -d"
+ssh vps "cd /opt/rag-fresh && docker compose --compatibility -f compose.vps.yml --profile ingest up -d"
 ```
 
 | Service | Memory | Notes |
@@ -96,7 +96,7 @@ ssh vps "docker restart vps-bot"   ***REMOVED*** ~5 seconds
 
 Force-recreate after compose changes:
 ```bash
-ssh vps "cd /opt/rag-fresh && docker compose -f docker-compose.vps.yml up -d --force-recreate ingestion"
+ssh vps "cd /opt/rag-fresh && docker compose -f compose.vps.yml up -d --force-recreate ingestion"
 ```
 
 ***REMOVED******REMOVED******REMOVED*** VPS Quick Commands
@@ -145,10 +145,10 @@ Note: `gpt-oss-120b` uses `merge_reasoning_content_in_choices: true` (reasoning 
 
 ```bash
 ***REMOVED*** Build all custom services (docker compose)
-docker compose -f docker-compose.dev.yml build
+docker compose -f compose.dev.yml build
 
 ***REMOVED*** Build a single service
-docker compose -f docker-compose.dev.yml build bot
+docker compose -f compose.dev.yml build bot
 
 ***REMOVED*** Transfer image to VPS k3s
 make k3s-push-bot   ***REMOVED*** docker save rag/bot:latest | ssh vps k3s ctr import
@@ -213,7 +213,7 @@ make monitoring-logs        ***REMOVED*** View logs
 
 **Verify config:**
 ```bash
-docker compose --compatibility -f docker-compose.dev.yml config --quiet
+docker compose --compatibility -f compose.dev.yml config --quiet
 docker inspect dev-bge-m3 --format '{{.HostConfig.Memory}}'  ***REMOVED*** != 0
 TELEGRAM_BOT_TOKEN= make docker-bot-up  ***REMOVED*** Must fail with "is required"
 ```

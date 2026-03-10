@@ -26,7 +26,7 @@
 - **context7_id:** /aiogram/aiogram-dialog
 - **как_у_нас:**
   - `telegram_bot/dialogs/` — все диалоги (funnel, client_menu, viewing, settings, CRM, ...)
-  - `telegram_bot/dialogs/states.py` — все StatesGroup (19 классов)
+  - `telegram_bot/dialogs/states.py` — все StatesGroup (25 классов)
   - `telegram_bot/bot.py:_setup_dialogs()` — регистрация через dp.include_router()
 - **паттерны:**
   - Window: Format() + Column(Select/Button/Start) + Back/Cancel + getter= + state=
