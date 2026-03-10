@@ -26,9 +26,11 @@ class TestBuildCatalogKeyboard:
         kb = build_catalog_keyboard(shown=10, total=47)
         assert kb.keyboard[2][0].text == "🏠 Главное меню"
 
-    def test_all_shown_replaces_button(self):
+    def test_all_shown_hides_more_row(self):
+        """When all shown, first row (more + counter) is removed entirely."""
         kb = build_catalog_keyboard(shown=47, total=47)
-        assert kb.keyboard[0][0].text == "✅ Все 47 показаны"
+        assert len(kb.keyboard) == 2  # only filters+bookmarks and menu
+        assert kb.keyboard[0][0].text == "🔍 Фильтры"
 
     def test_resize_keyboard_true(self):
         kb = build_catalog_keyboard(shown=10, total=47)
