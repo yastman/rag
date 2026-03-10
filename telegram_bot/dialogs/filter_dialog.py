@@ -2,11 +2,11 @@
 
 Replaces telegram_bot/handlers/filter_panel.py (289 LOC) and
 telegram_bot/keyboards/filter_panel.py (290 LOC) with SDK-native
-Dialog/Window/Select/SwitchTo widgets.
+Dialog/Window/Radio/SwitchTo widgets.
 
 Flow:
     CatalogBrowsingSG.browsing → manager.start(FilterSG.hub)
-    → user selects filters via Windows
+    → user selects filters via Windows (Radio widgets with ✓ indicator)
     → on_apply: saves to FSMContext, manager.done()
     → returns to CatalogBrowsingSG.browsing
 """
@@ -20,7 +20,7 @@ from typing import Any
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from aiogram_dialog import Dialog, DialogManager, Window
-from aiogram_dialog.widgets.kbd import Button, Column, Row, ScrollingGroup, Select, SwitchTo
+from aiogram_dialog.widgets.kbd import Button, Column, Radio, Row, ScrollingGroup, SwitchTo
 from aiogram_dialog.widgets.text import Const, Format
 
 from telegram_bot.dialogs.filter_constants import (
@@ -40,7 +40,7 @@ from telegram_bot.dialogs.states import FilterSG
 logger = logging.getLogger(__name__)
 
 # "Любой" option used in every filter sub-menu to clear that filter.
-# IMPORTANT: use "any" (not "") — aiogram-dialog Select skips empty item_ids.
+# IMPORTANT: use "any" (not "") — aiogram-dialog widgets skip empty item_ids.
 _ANY_OPTION = ("Любой", "any")
 
 # ============================================================
@@ -76,9 +76,6 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
         "city_val": city_val,
         "rooms_val": rooms_label,
         "budget_val": budget_label,
-        "city_options": [_ANY_OPTION, *CITY_OPTIONS],
-        "budget_options": list(BUDGET_OPTIONS),
-        "rooms_options": list(ROOMS_OPTIONS),
     }
 
 
@@ -132,16 +129,16 @@ async def get_promotion_data(dialog_manager: DialogManager, **kwargs: Any) -> di
 
 
 # ============================================================
-# on_select_* handlers — store selection in dialog_data
+# Radio on_state_changed handlers — store selection in dialog_data + switch to hub
 # ============================================================
 
 
-def _make_select_handler(field: str):
-    """Factory: returns an on_click handler that stores selected value in dialog_data."""
+def _make_radio_handler(field: str):
+    """Factory: returns on_state_changed handler for Radio widget."""
 
     async def handler(
         callback: CallbackQuery,
-        widget: Any,
+        radio: Any,
         manager: DialogManager,
         item_id: str,
     ) -> None:
@@ -158,8 +155,24 @@ def _make_select_handler(field: str):
                 manager.dialog_data[field] = coerced
         await manager.switch_to(FilterSG.hub)
 
-    handler.__name__ = f"on_select_{field}"
+    handler.__name__ = f"on_radio_{field}"
     return handler
+
+
+on_radio_city = _make_radio_handler("city")
+on_radio_rooms = _make_radio_handler("rooms")
+on_radio_budget = _make_radio_handler("budget")
+on_radio_view = _make_radio_handler("view")
+on_radio_area = _make_radio_handler("area")
+on_radio_floor = _make_radio_handler("floor")
+on_radio_complex = _make_radio_handler("complex")
+on_radio_furnished = _make_radio_handler("furnished")
+on_radio_promotion = _make_radio_handler("promotion")
+
+
+# ============================================================
+# Reverse mapping: Qdrant filters → dialog_data field names
+# ============================================================
 
 
 def _filters_to_dialog_data(filters: dict[str, Any]) -> dict[str, Any]:
@@ -195,27 +208,38 @@ def _filters_to_dialog_data(filters: dict[str, Any]) -> dict[str, Any]:
     return dd
 
 
+# Map dialog_data field → (radio_widget_id, value_to_str converter)
+_FIELD_TO_RADIO_ID: dict[str, str] = {
+    "city": "r_city",
+    "rooms": "r_rooms",
+    "budget": "r_budget",
+    "view": "r_view",
+    "area": "r_area",
+    "floor": "r_floor",
+    "complex": "r_complex",
+    "furnished": "r_furnished",
+    "promotion": "r_promotion",
+}
+
+
 async def on_filter_dialog_start(
     start_data: dict[str, Any] | None,
     manager: DialogManager,
 ) -> None:
-    """Pre-populate dialog_data from existing apartment_filters on dialog start."""
+    """Pre-populate dialog_data and Radio checked states from existing filters."""
     if not start_data:
         return
     filters = start_data.get("filters") or {}
     dialog_data = _filters_to_dialog_data(filters)
     manager.dialog_data.update(dialog_data)
 
-
-on_select_city = _make_select_handler("city")
-on_select_rooms = _make_select_handler("rooms")
-on_select_budget = _make_select_handler("budget")
-on_select_view = _make_select_handler("view")
-on_select_area = _make_select_handler("area")
-on_select_floor = _make_select_handler("floor")
-on_select_complex = _make_select_handler("complex")
-on_select_furnished = _make_select_handler("furnished")
-on_select_promotion = _make_select_handler("promotion")
+    # Sync Radio widget checked states with dialog_data
+    for field, radio_id in _FIELD_TO_RADIO_ID.items():
+        value = dialog_data.get(field)
+        if value is not None:
+            with contextlib.suppress(Exception):
+                radio_widget = manager.find(radio_id)
+                await radio_widget.set_checked(str(value))
 
 
 # ============================================================
@@ -231,7 +255,7 @@ async def on_apply(
     """Apply current filters: write to FSMContext, reset pagination, close dialog."""
     state: FSMContext = manager.middleware_data["state"]
     dd = manager.dialog_data
-    raw_filters = {k: v for k, v in dd.items() if k in FIELD_TO_FILTER_KEY or k == "city"}
+    raw_filters = {k: v for k, v in dd.items() if k in FIELD_TO_FILTER_KEY}
     filters = build_filters_dict(raw_filters)
     await state.update_data(
         apartment_filters=filters,
@@ -243,7 +267,7 @@ async def on_apply(
 
 
 # ============================================================
-# on_reset — clear all filter fields in dialog_data
+# on_reset — clear all filter fields in dialog_data + Radio states
 # ============================================================
 
 
@@ -252,10 +276,9 @@ async def on_reset(
     button: Any,
     manager: DialogManager,
 ) -> None:
-    """Clear all filters from dialog_data."""
+    """Clear all filters from dialog_data and reset Radio widgets."""
     for field in FIELD_TO_FILTER_KEY:
         manager.dialog_data.pop(field, None)
-    # Also clear direct filter keys
     for key in (
         "city",
         "rooms",
@@ -268,10 +291,15 @@ async def on_reset(
         "promotion",
     ):
         manager.dialog_data.pop(key, None)
+    # Reset all Radio widgets to unchecked
+    for radio_id in _FIELD_TO_RADIO_ID.values():
+        with contextlib.suppress(Exception):
+            radio_widget = manager.find(radio_id)
+            await radio_widget.set_checked(None)
 
 
 # ============================================================
-# Dialog definition
+# Dialog definition — Radio widgets with ✓/○ indicators
 # ============================================================
 
 filter_dialog = Dialog(
@@ -314,20 +342,18 @@ filter_dialog = Dialog(
         getter=get_hub_data,
         state=FilterSG.hub,
     ),
-    # City window
+    # City window — Radio with ✓ indicator
     Window(
         Const("📍 Выберите город:"),
-        ScrollingGroup(
-            Select(
-                Format("{item[0]}"),
-                id="s_city",
+        Column(
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_city",
                 item_id_getter=lambda item: item[1],
                 items="city_options",
-                on_click=on_select_city,
+                on_state_changed=on_radio_city,
             ),
-            id="sg_city",
-            width=1,
-            height=10,
         ),
         getter=get_city_data,
         state=FilterSG.city,
@@ -336,12 +362,13 @@ filter_dialog = Dialog(
     Window(
         Const("🛏 Выберите количество комнат:"),
         Column(
-            Select(
-                Format("{item[0]}"),
-                id="s_rooms",
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_rooms",
                 item_id_getter=lambda item: item[1],
                 items="rooms_options",
-                on_click=on_select_rooms,
+                on_state_changed=on_radio_rooms,
             ),
         ),
         getter=get_rooms_data,
@@ -351,12 +378,13 @@ filter_dialog = Dialog(
     Window(
         Const("💰 Выберите бюджет:"),
         Column(
-            Select(
-                Format("{item[0]}"),
-                id="s_budget",
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_budget",
                 item_id_getter=lambda item: item[1],
                 items="budget_options",
-                on_click=on_select_budget,
+                on_state_changed=on_radio_budget,
             ),
         ),
         getter=get_budget_data,
@@ -366,12 +394,13 @@ filter_dialog = Dialog(
     Window(
         Const("🌅 Выберите вид:"),
         Column(
-            Select(
-                Format("{item[0]}"),
-                id="s_view",
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_view",
                 item_id_getter=lambda item: item[1],
                 items="view_options",
-                on_click=on_select_view,
+                on_state_changed=on_radio_view,
             ),
         ),
         getter=get_view_data,
@@ -381,12 +410,13 @@ filter_dialog = Dialog(
     Window(
         Const("📐 Выберите площадь:"),
         Column(
-            Select(
-                Format("{item[0]}"),
-                id="s_area",
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_area",
                 item_id_getter=lambda item: item[1],
                 items="area_options",
-                on_click=on_select_area,
+                on_state_changed=on_radio_area,
             ),
         ),
         getter=get_area_data,
@@ -396,27 +426,29 @@ filter_dialog = Dialog(
     Window(
         Const("🏢 Выберите этаж:"),
         Column(
-            Select(
-                Format("{item[0]}"),
-                id="s_floor",
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_floor",
                 item_id_getter=lambda item: item[1],
                 items="floor_options",
-                on_click=on_select_floor,
+                on_state_changed=on_radio_floor,
             ),
         ),
         getter=get_floor_data,
         state=FilterSG.floor,
     ),
-    # Complex window
+    # Complex window — ScrollingGroup for dynamic list
     Window(
         Const("🏘 Выберите комплекс:"),
         ScrollingGroup(
-            Select(
-                Format("{item[0]}"),
-                id="s_complex",
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_complex",
                 item_id_getter=lambda item: item[1],
                 items="complex_options",
-                on_click=on_select_complex,
+                on_state_changed=on_radio_complex,
             ),
             id="sg_complex",
             width=1,
@@ -429,12 +461,13 @@ filter_dialog = Dialog(
     Window(
         Const("🛋 Наличие мебели:"),
         Column(
-            Select(
-                Format("{item[0]}"),
-                id="s_furnished",
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_furnished",
                 item_id_getter=lambda item: item[1],
                 items="furnished_options",
-                on_click=on_select_furnished,
+                on_state_changed=on_radio_furnished,
             ),
         ),
         getter=get_furnished_data,
@@ -444,12 +477,13 @@ filter_dialog = Dialog(
     Window(
         Const("🏷 Акционные предложения:"),
         Column(
-            Select(
-                Format("{item[0]}"),
-                id="s_promotion",
+            Radio(
+                Format("✓ {item[0]}"),
+                Format("  {item[0]}"),
+                id="r_promotion",
                 item_id_getter=lambda item: item[1],
                 items="promotion_options",
-                on_click=on_select_promotion,
+                on_state_changed=on_radio_promotion,
             ),
         ),
         getter=get_promotion_data,
