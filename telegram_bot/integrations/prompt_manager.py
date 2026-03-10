@@ -24,6 +24,24 @@ _missing_prompts_until: dict[str, float] = {}
 _known_prompts_until: dict[str, float] = {}
 
 
+def get_prompt_with_config(
+    name: str,
+    *,
+    fallback: str,
+    cache_ttl: int = DEFAULT_CACHE_TTL,
+    variables: dict[str, str] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Fetch prompt text and config dict from Langfuse.
+
+    Config may contain temperature, max_tokens, model, etc. — editable in Langfuse UI.
+
+    Returns:
+        Tuple of (compiled_prompt_text, config_dict).
+        Returns empty dict for config when using fallback.
+    """
+    return _fetch_prompt_core(name, fallback=fallback, cache_ttl=cache_ttl, variables=variables)
+
+
 @observe(name="get-prompt", capture_input=False, capture_output=False)
 def get_prompt(
     name: str,
@@ -37,44 +55,35 @@ def get_prompt(
     Args:
         name: Prompt name in Langfuse.
         fallback: Hardcoded fallback prompt used when Langfuse is unavailable.
-        cache_ttl: Cache TTL in seconds (default 300).
+        cache_ttl: Cache TTL in seconds (default 3600).
         variables: Variables for prompt.compile() (e.g. {"domain": "недвижимость"}).
 
     Returns:
         Compiled prompt string from Langfuse, or the fallback.
     """
-    vars_ = variables or {}
-    lf = get_client()
-    lf.update_current_span(
-        input={
-            "prompt_name": name,
-            "cache_ttl_s": cache_ttl,
-            "has_variables": bool(vars_),
-            "variables_count": len(vars_),
-        }
-    )
+    text, _ = _fetch_prompt_core(name, fallback=fallback, cache_ttl=cache_ttl, variables=variables)
+    return text
 
-    def _finish(value: str, *, source: str, reason: str, prompt_version: int | None = None) -> str:
-        output: dict[str, Any] = {"source": source, "reason": reason, "result_length": len(value)}
-        if prompt_version is not None:
-            output["prompt_version"] = prompt_version
-        lf.update_current_span(output=output)
-        return value
+
+def _fetch_prompt_core(
+    name: str,
+    *,
+    fallback: str,
+    cache_ttl: int,
+    variables: dict[str, str] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    """Core prompt fetcher returning (text, config) tuple."""
+    vars_ = variables or {}
+
+    def _fallback_result() -> tuple[str, dict[str, Any]]:
+        return _apply_fallback_vars(fallback, vars_), {}
 
     client = get_client()
     if client is None:
-        return _finish(
-            _apply_fallback_vars(fallback, vars_),
-            source="fallback",
-            reason="client_unavailable",
-        )
+        return _fallback_result()
 
     if _is_temporarily_missing(name):
-        return _finish(
-            _apply_fallback_vars(fallback, vars_),
-            source="fallback",
-            reason="missing_cache_ttl",
-        )
+        return _fallback_result()
 
     if not _is_temporarily_known(name):
         available = _probe_prompt_available(client, name)
@@ -85,51 +94,29 @@ def get_prompt(
                 name,
                 cache_ttl,
             )
-            return _finish(
-                _apply_fallback_vars(fallback, vars_),
-                source="fallback",
-                reason="probe_not_found",
-            )
+            return _fallback_result()
         if available is True:
             _known_prompts_until[name] = time.monotonic() + cache_ttl
 
     try:
-        # Do not pass fallback to SDK: for missing prompts SDK logs noisy warnings on each call.
-        # We handle fallback ourselves and cache "not found" locally.
         prompt = client.get_prompt(name, cache_ttl_seconds=cache_ttl)
         _missing_prompts_until.pop(name, None)
-        version: int | None = getattr(prompt, "version", None)
+        config: dict[str, Any] = getattr(prompt, "config", None) or {}
         if vars_:
-            return _finish(
-                str(prompt.compile(**vars_)),
-                source="langfuse",
-                reason="compiled_with_variables",
-                prompt_version=version,
-            )
-        return _finish(
-            str(prompt.compile()), source="langfuse", reason="compiled", prompt_version=version
-        )
+            return str(prompt.compile(**vars_)), config
+        return str(prompt.compile()), config
     except Exception as e:
         if _is_prompt_not_found(e):
-            # Avoid hitting Langfuse on every request when prompt/label is absent.
             _missing_prompts_until[name] = time.monotonic() + cache_ttl
             logger.debug(
                 "Prompt '%s' not found in Langfuse, using fallback for %ds",
                 name,
                 cache_ttl,
             )
-            return _finish(
-                _apply_fallback_vars(fallback, vars_),
-                source="fallback",
-                reason="prompt_not_found",
-            )
+            return _fallback_result()
 
         logger.warning("Failed to fetch prompt '%s', using fallback", name, exc_info=True)
-        return _finish(
-            _apply_fallback_vars(fallback, vars_),
-            source="fallback",
-            reason="fetch_error",
-        )
+        return _fallback_result()
 
 
 def _apply_fallback_vars(fallback: str, compile_vars: dict[str, str]) -> str:
@@ -173,13 +160,7 @@ def _is_temporarily_known(name: str) -> bool:
 
 
 def _probe_prompt_available(client: Any, name: str) -> bool | None:
-    """Probe prompt existence via Langfuse API without triggering SDK warning logs.
-
-    Returns:
-        True: prompt exists for target label
-        False: prompt not found (404)
-        None: probing unavailable/failed, caller may proceed with optimistic fetch
-    """
+    """Probe prompt existence via Langfuse API without triggering SDK warning logs."""
     api = getattr(client, "api", None)
     if api is None or not hasattr(api, "prompts"):
         return None
@@ -190,7 +171,6 @@ def _probe_prompt_available(client: Any, name: str) -> bool | None:
         api.prompts.get(prompt_name=name, label=label)
         return True
     except Exception as e:
-        # Avoid hard dependency on specific SDK exception type at import time.
         status = getattr(e, "status_code", None)
         if status == 404 or _is_prompt_not_found(e):
             return False
