@@ -32,7 +32,7 @@ digraph flow {
   classify [label="Фаза 2: КЛАССИФИКАЦИЯ\nRead classification.md"];
   parallel [label="Фаза 2.5: ПАРАЛЛЕЛИЗАЦИЯ\nfile overlap + резервации"];
   sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nОБЯЗАТЕЛЬНО если sdk-registry.md\nматч triggers → Sonnet субагент"];
-  spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md"];
+  spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md\nЗаполнить {sdk_registry_excerpt}"];
   wait [label="Фаза 4: ОЖИДАНИЕ\n0 токенов, мониторинг .signals/"];
   review [label="Фаза 5.0: CODE REVIEW\norch лично читает diff\nчерез context-mode"];
   verify [label="Фаза 5.1: ВЕРИФИКАЦИЯ\nартефакты + маркеры"];
@@ -69,6 +69,28 @@ digraph flow {
     # 6. Нет реестра → поведение как раньше (по усмотрению orch)
 
 Переиспользование: одно исследование → N воркеров.
+
+**Фаза 3: ЗАПОЛНЕНИЕ SDK-плейсхолдеров в промте worker'а:**
+
+При записи промта в `.claude/prompts/worker-{name}.md` orch ОБЯЗАН заполнить:
+
+    {sdk_summary}           → Резюме (300 слов) от Sonnet субагента из Фазы 2.7 (или пусто)
+    {sdk_registry_excerpt}  → Релевантные блоки из .claude/rules/sdk-registry.md:
+                               для каждого SDK с совпавшими triggers — скопировать:
+                               - как_у_нас (файлы + паттерны)
+                               - gotchas (антипаттерны)
+                               Без матча → краткий список всех SDK (имя + triggers) для awareness
+
+Пример {sdk_registry_excerpt} для issue "добавить кнопку в меню":
+
+    ## aiogram-dialog
+    как_у_нас: telegram_bot/dialogs/ — Window+Select+Button, states.py централизованно
+    паттерны: SwitchTo для навигации, Start для дочерних, getter= для данных
+    gotchas: НЕ писать кастомные InlineKeyboard — использовать Select/Button/SwitchTo
+
+    ## Другие SDK в проекте (awareness):
+    aiogram, langgraph, qdrant-client, instructor, redisvl, langfuse, langmem,
+    apscheduler, fluentogram, cocoindex, livekit-agents, asyncpg
 
 **Фаза 2.3: CODEBASE КОНТЕКСТ** — orch использует 3 системы:
 
