@@ -337,6 +337,7 @@ services:
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
       KOMMO_ACCESS_TOKEN: "${KOMMO_ACCESS_TOKEN:-}"
+      BOT_USERNAME: "${BOT_USERNAME:-}"
     depends_on:
       redis:
         condition: service_healthy

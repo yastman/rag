@@ -9,12 +9,12 @@ import logging
 import re
 import time
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BotCommand,
@@ -39,12 +39,12 @@ from .graph.nodes.guard import _BLOCKED_RESPONSE, detect_injection
 from .graph.state import make_initial_state
 from .handlers.handoff import (
     HandoffStates,
-    create_handoff_router,
-    get_user_qualification,
-    parse_qual_callback,
     start_qualification,
 )
-from .keyboards.client_keyboard import build_client_keyboard, parse_menu_button
+from .keyboards.client_keyboard import (
+    build_client_keyboard,
+    parse_menu_button,
+)
 from .middlewares import setup_error_handler, setup_throttling_middleware
 from .middlewares.fsm_cancel import FSMCancelMiddleware
 from .middlewares.langfuse_middleware import LangfuseContextMiddleware
@@ -55,7 +55,6 @@ from .observability import (
     observe,
     propagate_attributes,
 )
-from .pipelines.client import _NO_RAG_QUERY_TYPES, _split_telegram_response, run_client_pipeline
 from .scoring import (
     compute_checkpointer_overhead_proxy_ms,
     score,
@@ -65,11 +64,16 @@ from .scoring import (
 from .services.business_hours import is_business_hours
 from .services.forum_bridge import ForumBridge
 from .services.handoff_state import HandoffData, HandoffState
-from .services.handoff_summary import generate_handoff_summary
-from .services.history_service import HistoryService
 from .services.metrics import PipelineMetrics
 from .services.redis_monitor import RedisHealthMonitor
 from .services.topic_service import TopicService
+
+
+if TYPE_CHECKING:
+    from .services.history_service import HistoryService
+
+# Keep a patchable module-level symbol for tests without importing qdrant-heavy code.
+HistoryService: Any = None
 
 
 logger = logging.getLogger(__name__)
@@ -78,6 +82,8 @@ logger = logging.getLogger(__name__)
 _CHECKPOINT_NS_VOICE = "tg:voice:v1"
 _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
+_TELEGRAM_MESSAGE_LIMIT = 4096
+_NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
 
 
 def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
@@ -98,6 +104,15 @@ def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
             seen_ids.add(item_key)
         merged.append(item)
     return merged
+
+
+def _split_telegram_response(text: str, limit: int = _TELEGRAM_MESSAGE_LIMIT) -> list[str]:
+    """Split text into Telegram-safe chunks without importing the full client pipeline."""
+    if not text:
+        return []
+    if len(text) <= limit:
+        return [text]
+    return [text[i : i + limit] for i in range(0, len(text), limit)]
 
 
 # Re-export from shared module (avoid circular imports with middlewares)
@@ -675,11 +690,6 @@ class PropertyBot:
 
         self.dp.include_router(create_phone_router())
 
-        # Handoff qualification callbacks — qual:goal/budget (#730)
-        self.dp.include_router(create_handoff_router())
-        # Final qualification step — triggers handoff completion (#730 review)
-        self.dp.callback_query(F.data.startswith("qual:contact:"))(self._on_qual_contact)
-
         # Group message handler — manager → client relay (#730)
         if self.config.managers_group_id:
             self.dp.message(
@@ -687,6 +697,10 @@ class PropertyBot:
                 F.message_thread_id,
             )(self._handle_group_message)
 
+        # Deep link: /start q_<uuid> — must be registered BEFORE generic /start
+        self.dp.message(CommandStart(deep_link=True, magic=F.args.startswith("q_")))(
+            self.cmd_start_deeplink
+        )
         self.dp.message(Command("start"))(self.cmd_start)
         self.dp.message(Command("help"))(self.cmd_help)
         self.dp.message(Command("clear"))(self.cmd_clear)
@@ -697,12 +711,16 @@ class PropertyBot:
         self.dp.message(Command("clearcache"))(self.cmd_clearcache)
         self.dp.message(StateFilter(None), F.voice)(self.handle_voice)
         # ReplyKeyboard buttons — registered before catch-all F.text (#628)
+        from telegram_bot.dialogs.states import CatalogBrowsingSG
+
         from .keyboards.client_keyboard import get_menu_button_texts
 
         menu_button_texts = tuple(get_menu_button_texts(self._i18n_hub))
-        self.dp.message(F.text.in_(menu_button_texts), flags={"menu_nav": True})(
-            self.handle_menu_button
-        )
+        self.dp.message(
+            ~StateFilter(CatalogBrowsingSG.browsing),
+            F.text.in_(menu_button_texts),
+            flags={"menu_nav": True},
+        )(self.handle_menu_button)
         # NOTE: catch-all handle_query is registered on self._catch_all_router
         # which is included AFTER dialog routers in _setup_dialogs().
         # This ensures dialog MessageInput (e.g. viewing phone input)
@@ -753,9 +771,27 @@ class PropertyBot:
         return db_role or "client"
 
     @observe(name="cmd-start", capture_input=False, capture_output=False)
-    async def cmd_start(self, message: Message, dialog_manager: Any = None, i18n: Any = None):
+    async def cmd_start_deeplink(
+        self,
+        message: Message,
+        command: CommandObject,
+    ):
+        """Handle /start q_<uuid> — Mini App deep link flow."""
+        assert message.from_user is not None
+        assert command.args is not None
+        uuid_str = command.args[2:]  # strip "q_" prefix
+        await self._handle_deeplink_start(message, uuid_str)
+
+    async def cmd_start(
+        self,
+        message: Message,
+        command: CommandObject | None = None,
+        dialog_manager: Any = None,
+        i18n: Any = None,
+    ):
         """Handle /start command — ReplyKeyboard for clients, dialog for managers."""
         assert message.from_user is not None
+
         role = await self._resolve_user_role(message.from_user.id)
 
         kommo_enabled = getattr(self.config, "kommo_enabled", False)
@@ -777,6 +813,67 @@ class PropertyBot:
                 welcome = cfg.get("welcome", {}).get("text", "Добро пожаловать!")
             await message.answer(welcome, reply_markup=build_client_keyboard(i18n=i18n))
 
+    async def _handle_deeplink_start(self, message: Message, uuid_str: str) -> None:
+        """Handle Mini App deep link: /start q_<uuid>.
+
+        Reads one-time payload from Redis, creates forum topic via TopicManager,
+        echoes user message to topic, then triggers RAG pipeline.
+        """
+        if self._deeplink_redis is None or self._topic_manager is None:
+            logger.warning("Deep link received but TopicManager not initialized")
+            return
+
+        key = f"miniapp:q:{uuid_str}"
+        # Atomic GET+DEL — prevents race condition with duplicate requests
+        raw = await self._deeplink_redis.getdel(key)
+        if raw is None:
+            await message.answer("Ссылка устарела. Пожалуйста, вернитесь в приложение.")
+            return
+
+        try:
+            payload = json.loads(raw)
+        except (ValueError, TypeError):
+            await message.answer("Ошибка обработки ссылки.")
+            return
+
+        expert_id = payload.get("expert_id", "")
+        user_message = payload.get("message") or ""
+
+        # Look up expert config
+        from .services.content_loader import load_mini_app_config
+
+        config_data = load_mini_app_config()
+        expert = next((e for e in config_data.get("experts", []) if e["id"] == expert_id), None)
+        if not expert:
+            await message.answer("Эксперт не найден.")
+            return
+
+        # Create / get forum topic for this expert
+        try:
+            topic_id = await self._topic_manager.get_or_create_topic(
+                chat_id=message.chat.id,
+                expert_id=expert_id,
+                expert_name=expert["name"],
+                expert_emoji=expert.get("emoji", "💬"),
+            )
+        except TelegramBadRequest as exc:
+            logger.error("Failed to create forum topic: %s", exc)
+            await message.answer("Не удалось создать тему. Попробуйте позже.")
+            return
+
+        if user_message:
+            # Echo user question in the topic
+            await self.bot.send_message(
+                chat_id=message.chat.id,
+                message_thread_id=topic_id,
+                text=f"❝ {user_message} ❞",
+            )
+            # Trigger RAG pipeline: synthetic message in the topic
+            topic_msg = message.model_copy(
+                update={"text": user_message, "message_thread_id": topic_id}
+            )
+            await self.handle_query(topic_msg)
+
     async def cmd_help(self, message: Message):
         """Handle /help command."""
         await message.answer(
@@ -797,6 +894,9 @@ class PropertyBot:
             "Команды:\n"
             "/clear - Очистить историю диалога\n"
             "/stats - Показать статистику кеша\n"
+            "/history <запрос> - Поиск по истории диалогов\n"
+            "/metrics - Метрики пайплайна (p50/p95)\n"
+            "/clearcache - Очистить кеш Redis\n"
         )
 
     @observe(name="cmd-clear", capture_input=False, capture_output=False)
@@ -1087,6 +1187,7 @@ class PropertyBot:
         i18n: Any = None,
     ) -> None:
         """Route ReplyKeyboard button press to dedicated handler (#628, #658)."""
+        # Catalog browsing is handled by catalog_router (StateFilter-based)
         action_id = parse_menu_button(
             message.text or "",
             i18n_hub=getattr(self, "_i18n_hub", None),
@@ -1121,7 +1222,12 @@ class PropertyBot:
             elif action_id == "services":
                 await handler(message, i18n=i18n)
             elif action_id == "manager":
-                await handler(message, i18n=i18n, state=state)
+                await handler(
+                    message,
+                    i18n=i18n,
+                    state=state,
+                    dialog_manager=dialog_manager,
+                )
             elif action_id == "demo":
                 await handler(message)
             else:
@@ -1275,22 +1381,6 @@ class PropertyBot:
                 bookmark_photo_ids=bookmark_photo_ids,
             )
 
-    @observe(name="menu-promotions", capture_input=False, capture_output=False)
-    async def _handle_promotions(self, message: Message) -> None:
-        """Show promotions from config (#628)."""
-        from .services.content_loader import get_promotions
-
-        promos = get_promotions()
-        if not promos:
-            await message.answer("Актуальных акций пока нет.")
-            return
-
-        lines = []
-        for p in promos:
-            lines.append(f"{p['emoji']} {p['title']}\n{p['text']}")
-        text = "\n\n".join(lines)
-        await message.answer(text)
-
     # Mapping callback_data -> query text for RAG pipeline
     _ASK_QUERIES: dict[str, str] = {
         "ask:docs": "Какие документы нужны для покупки?",
@@ -1359,11 +1449,20 @@ class PropertyBot:
 
     @observe(name="menu-manager", capture_input=False, capture_output=False)
     async def _handle_manager(
-        self, message: Message, i18n: Any = None, state: FSMContext | None = None
+        self,
+        message: Message,
+        i18n: Any = None,
+        state: FSMContext | None = None,
+        dialog_manager: Any = None,
     ) -> None:
         """Handoff to manager (#628, #730)."""
         if self._forum_bridge is not None:
-            await start_qualification(message, i18n=i18n, state=state)
+            await start_qualification(
+                message,
+                i18n=i18n,
+                state=state,
+                dialog_manager=dialog_manager,
+            )
         elif state is not None:
             from .handlers.phone_collector import start_phone_collection
 
@@ -1408,45 +1507,6 @@ class PropertyBot:
                 )
             except TelegramBadRequest:
                 logger.warning("Failed to relay message to client %s", handoff.client_id)
-
-    async def _on_qual_contact(self, callback: CallbackQuery, state: FSMContext) -> None:
-        """Handle final qualification step — create topic + state (#730 review)."""
-        await callback.answer()
-        parsed = parse_qual_callback(callback.data or "")
-        if not parsed:
-            return
-        _, value = parsed
-
-        qualification = get_user_qualification(callback.from_user.id)
-        qualification["contact"] = value
-
-        user_id = callback.from_user.id
-        msg = callback.message
-        if value == "chat" and self._forum_bridge is not None:
-            if msg and hasattr(msg, "edit_text"):
-                await msg.edit_text("Соединяю с менеджером...")
-            display_name = callback.from_user.full_name or "User"
-            username = callback.from_user.username
-            locale = "ru"
-            await self._complete_handoff(
-                user_id=user_id,
-                username=username,
-                display_name=display_name,
-                locale=locale,
-                qualification=qualification,
-                message=msg,
-                state=state,
-            )
-        elif value == "phone":
-            if msg and hasattr(msg, "edit_text"):
-                await msg.edit_text("Сейчас попросим номер телефона...")
-            from .handlers.phone_collector import start_phone_collection
-
-            await start_phone_collection(callback, state, service_key="manager")
-        else:
-            # Fallback — delegate to agent pipeline.
-            if msg and hasattr(msg, "edit_text"):
-                await msg.edit_text("Соединяю с менеджером...")
 
     async def _complete_handoff(
         self,
@@ -1506,6 +1566,8 @@ class PropertyBot:
             except Exception:
                 logger.warning("Failed to fetch chat history for handoff summary")
         if len(history) >= self.config.handoff_summary_min_messages:
+            from .services.handoff_summary import generate_handoff_summary
+
             summary = await generate_handoff_summary(history, llm=self._llm)
 
         # 3. Kommo lead (optional).
@@ -1937,8 +1999,6 @@ class PropertyBot:
         dialog_manager: Any = None,
     ) -> None:
         """Handle property results callbacks (more/refine/viewing) (#654)."""
-        from .keyboards.property_card import build_results_footer
-
         # Resolve action from CallbackData or legacy string
         if callback_data is not None:
             action = callback_data.action
@@ -2020,13 +2080,35 @@ class PropertyBot:
             total = apartment_total_value
             has_more = shown_total < total
             if callback.message:
+                _footer_rows: list[list[InlineKeyboardButton]] = []
+                if has_more:
+                    _footer_rows.append(
+                        [
+                            InlineKeyboardButton(
+                                text=f"🔄 Показать ещё ({max(total - shown_total, 0)} осталось)",
+                                callback_data=ResultsCB(action="more").pack(),
+                            )
+                        ]
+                    )
+                _footer_rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="⚙️ Изменить параметры",
+                            callback_data=ResultsCB(action="refine").pack(),
+                        )
+                    ]
+                )
+                _footer_rows.append(
+                    [
+                        InlineKeyboardButton(
+                            text="📅 Запись на осмотр",
+                            callback_data=ResultsCB(action="viewing").pack(),
+                        )
+                    ]
+                )
                 footer_msg = await callback.message.answer(
                     f"Найдено {total} апартаментов (показаны {new_offset + 1}–{shown_total})",
-                    reply_markup=build_results_footer(
-                        shown_total=shown_total,
-                        total=total,
-                        has_more=has_more,
-                    ),
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=_footer_rows),
                 )
                 await state.update_data(
                     apartment_offset=new_offset,
@@ -2348,8 +2430,6 @@ class PropertyBot:
 
         # Store results in FSMContext and send property cards (#654)
         if state is not None and results:
-            from .keyboards.property_card import build_results_footer
-
             await state.update_data(
                 apartment_results=results,
                 apartment_query=user_text,
@@ -2364,13 +2444,36 @@ class PropertyBot:
                 await self._send_property_card(message, result, message.from_user.id)  # type: ignore[union-attr]
             shown = len(page)
             total = len(results)
+            _has_more = total > _APARTMENT_PAGE_SIZE
+            _footer_rows2: list[list[InlineKeyboardButton]] = []
+            if _has_more:
+                _footer_rows2.append(
+                    [
+                        InlineKeyboardButton(
+                            text=f"🔄 Показать ещё ({max(total - shown, 0)} осталось)",
+                            callback_data=ResultsCB(action="more").pack(),
+                        )
+                    ]
+                )
+            _footer_rows2.append(
+                [
+                    InlineKeyboardButton(
+                        text="⚙️ Изменить параметры",
+                        callback_data=ResultsCB(action="refine").pack(),
+                    )
+                ]
+            )
+            _footer_rows2.append(
+                [
+                    InlineKeyboardButton(
+                        text="📅 Запись на осмотр",
+                        callback_data=ResultsCB(action="viewing").pack(),
+                    )
+                ]
+            )
             footer_msg = await message.answer(
                 f"Найдено {total} апартаментов (показаны 1–{shown})",
-                reply_markup=build_results_footer(
-                    shown_total=shown,
-                    total=total,
-                    has_more=total > _APARTMENT_PAGE_SIZE,
-                ),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=_footer_rows2),
             )
             await state.update_data(apartment_footer_msg_id=footer_msg.message_id)
 
@@ -2395,7 +2498,7 @@ class PropertyBot:
             None if the pipeline signals needs_agent=True (caller falls through to sdk_agent).
         """
         # Apartment fast path: intent check → regex filters → hybrid search → generate (#629)
-        from .pipelines.client import detect_agent_intent
+        from .pipelines.client import detect_agent_intent, run_client_pipeline
 
         if detect_agent_intent(user_text) == "apartment":
             apt_answer = await self._handle_apartment_fast_path(
@@ -3890,24 +3993,25 @@ class PropertyBot:
         self._topic_service = TopicService(redis=topic_redis)
         logger.info("TopicService ready (Redis)")
 
-        # Initialize bot bridge for Mini App API
-        from mini_app.bot_bridge import BotBridge, set_bot_bridge
+        # Initialize TopicManager + deeplink Redis for Mini App deep link flow
+        if self.config.expert_topics_enabled:
+            from telegram_bot.services.topic_manager import TopicManager
 
-        async def _noop_rag(**kwargs: Any) -> dict[str, Any]:
-            return {}
-
-        set_bot_bridge(
-            BotBridge(
-                bot=self.bot,
-                topic_service=self._topic_service,
-                rag_fn=_noop_rag,
+            self._deeplink_redis = aioredis.from_url(self.config.redis_url, decode_responses=True)
+            self._topic_manager: TopicManager | None = TopicManager(
+                bot=self.bot, redis=self._deeplink_redis
             )
-        )
-        logger.info("BotBridge initialized for Mini App API")
-
+            logger.info("TopicManager ready (expert deep link flow)")
+        else:
+            self._deeplink_redis = None
+            self._topic_manager = None
         # Initialize history service (Qdrant-backed Q&A history)
         try:
-            self._history_service = HistoryService(
+            history_service_cls = HistoryService
+            if history_service_cls is None:
+                from .services.history_service import HistoryService as history_service_cls
+
+            self._history_service = history_service_cls(
                 client=self._qdrant.client,
                 embeddings=self._embeddings,
                 collection_name=self.config.qdrant_history_collection,
@@ -4186,6 +4290,7 @@ class PropertyBot:
         from .dialogs.demo import demo_dialog
         from .dialogs.faq import faq_dialog
         from .dialogs.funnel import funnel_dialog
+        from .dialogs.handoff import handoff_dialog
         from .dialogs.manager_menu import manager_menu_dialog
         from .dialogs.settings import settings_dialog
         from .dialogs.viewing import viewing_dialog
@@ -4212,11 +4317,18 @@ class PropertyBot:
         self.dp.include_router(funnel_dialog)
         self.dp.include_router(faq_dialog)
         self.dp.include_router(viewing_dialog)
+        self.dp.include_router(handoff_dialog)
 
         # Catch-all text handler — AFTER all dialog routers so that dialog
         # MessageInput (e.g. viewing phone input) is resolved first.
         # aiogram SDK: handlers match in registration order, first-match wins.
         from aiogram import Router as _Router
+
+        # Catalog browsing router — SDK StateFilter-based, intercepts text
+        # in CatalogBrowsingSG.browsing state. Registered BEFORE catch-all.
+        from telegram_bot.handlers.catalog_router import catalog_router
+
+        self.dp.include_router(catalog_router)
 
         self._catch_all_router = _Router(name="catch_all_query")
         self._catch_all_router.message(StateFilter(None), F.text)(self.handle_query)
@@ -4234,6 +4346,7 @@ class PropertyBot:
         await self._redis_monitor.start()
 
         # Register bot commands in Telegram menu
+        # Note: /call is intentionally excluded — it's admin-only (gated by _is_admin)
         await self.bot.set_my_commands(
             [
                 BotCommand(command="start", description="Начать работу с ботом"),

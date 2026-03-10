@@ -64,6 +64,16 @@ class TestParseFeedbackCallback:
 
         assert parse_feedback_callback("fb:1:") is None
 
+    def test_malformed_new_format_logs_warning(self, caplog):
+        """FeedbackCB.unpack failure triggers logger.warning (#860)."""
+        import logging
+
+        from telegram_bot.feedback import parse_feedback_callback
+
+        with caplog.at_level(logging.WARNING, logger="telegram_bot.feedback"):
+            result = parse_feedback_callback("fb:INVALID_ACTION:trace123")
+        assert result is None
+
 
 class TestBuildFeedbackConfirmation:
     def test_like_confirmation(self):
