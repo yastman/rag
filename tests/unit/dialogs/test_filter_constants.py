@@ -155,9 +155,51 @@ class TestBuildFiltersDict:
         result = build_filters_dict({"city": "any"})
         assert "city" not in result
 
+    def test_complex_maps_to_complex_name(self):
+        result = build_filters_dict({"complex": "Premier Fort"})
+        assert result == {"complex_name": "Premier Fort"}
+        assert "complex" not in result
+
+    def test_view_maps_to_view_tags(self):
+        result = build_filters_dict({"view": ["sea"]})
+        assert result == {"view_tags": ["sea"]}
+        assert "view" not in result
+
+    def test_area_maps_to_area_m2(self):
+        result = build_filters_dict({"area": {"gte": 60}})
+        assert result == {"area_m2": {"gte": 60}}
+        assert "area" not in result
+
+    def test_furnished_maps_to_is_furnished(self):
+        result = build_filters_dict({"furnished": True})
+        assert result == {"is_furnished": True}
+        assert "furnished" not in result
+
+    def test_promotion_maps_to_is_promotion(self):
+        result = build_filters_dict({"promotion": True})
+        assert result == {"is_promotion": True}
+        assert "promotion" not in result
+
     def test_combined_filters(self):
         result = build_filters_dict({"city": "Несебр", "budget": "high", "rooms": 3})
         assert result["city"] == "Несебр"
         assert result["price_eur"] == {"gte": 100_000, "lte": 150_000}
         assert result["rooms"] == 3
+        assert "budget" not in result
+
+    def test_combined_filters_with_translated_keys(self):
+        result = build_filters_dict(
+            {
+                "city": "Несебр",
+                "complex": "Fort Noks",
+                "view": ["sea"],
+                "budget": "mid",
+            }
+        )
+        assert result["city"] == "Несебр"
+        assert result["complex_name"] == "Fort Noks"
+        assert result["view_tags"] == ["sea"]
+        assert result["price_eur"] == {"gte": 50_000, "lte": 100_000}
+        assert "complex" not in result
+        assert "view" not in result
         assert "budget" not in result
