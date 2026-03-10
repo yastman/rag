@@ -38,7 +38,7 @@ class FSMCancelMiddleware(BaseMiddleware):
 
         await state.clear()
         await event.answer(
-            "😊 Запрос на звонок отменён. Когда будете готовы — менеджер на связи!",
+            "😊 Заявка отменена. Когда будете готовы — мы на связи!",
             reply_markup=build_client_keyboard(),
         )
         return None
