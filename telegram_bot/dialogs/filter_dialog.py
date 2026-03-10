@@ -39,8 +39,9 @@ from telegram_bot.dialogs.states import FilterSG
 
 logger = logging.getLogger(__name__)
 
-# "Любой" option used in every filter sub-menu to clear that filter
-_ANY_OPTION = ("Любой", "")
+# "Любой" option used in every filter sub-menu to clear that filter.
+# IMPORTANT: use "any" (not "") — aiogram-dialog Select skips empty item_ids.
+_ANY_OPTION = ("Любой", "any")
 
 # ============================================================
 # Hub getter
@@ -123,11 +124,11 @@ async def get_complex_data(dialog_manager: DialogManager, **kwargs: Any) -> dict
 
 
 async def get_furnished_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"furnished_options": [("Любое", ""), ("Да", "true"), ("Нет", "false")]}
+    return {"furnished_options": [("Любое", "any"), ("Да", "true"), ("Нет", "false")]}
 
 
 async def get_promotion_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"promotion_options": [("Любое", ""), ("Только акции", "true")]}
+    return {"promotion_options": [("Любое", "any"), ("Только акции", "true")]}
 
 
 # ============================================================
@@ -144,12 +145,17 @@ def _make_select_handler(field: str):
         manager: DialogManager,
         item_id: str,
     ) -> None:
-        coerced = coerce_filter_value(field, item_id)
-        if coerced is None:
+        if item_id == "any":
+            # "Любой" selected — clear this filter
             manager.dialog_data.pop(field, None)
             manager.dialog_data.pop(FIELD_TO_FILTER_KEY.get(field, field), None)
         else:
-            manager.dialog_data[field] = coerced
+            coerced = coerce_filter_value(field, item_id)
+            if coerced is None:
+                manager.dialog_data.pop(field, None)
+                manager.dialog_data.pop(FIELD_TO_FILTER_KEY.get(field, field), None)
+            else:
+                manager.dialog_data[field] = coerced
         await manager.switch_to(FilterSG.hub)
 
     handler.__name__ = f"on_select_{field}"
