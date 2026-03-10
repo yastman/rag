@@ -43,19 +43,19 @@ All LLM-calling code uses `langfuse.openai.AsyncOpenAI` (OpenAI SDK drop-in with
 
 | Model Name | Provider | Actual Model | Notes |
 |------------|----------|--------------|-------|
-| `gpt-4o-mini` | Cerebras | gpt-oss-120b (primary) | Reasoning model, 3000 tok/s, `merge_reasoning_content_in_choices: true` |
-| `gpt-4o-mini-cerebras-glm` | Cerebras | zai-glm-4.7 | Fallback 1 (former primary) |
+| `gpt-4o-mini` | Cerebras | zai-glm-4.7 (primary) | `disable_reasoning: true`, fast TTFT |
+| `gpt-oss-120b` | Cerebras | gpt-oss-120b | Reasoning model, `merge_reasoning_content_in_choices: true` |
+| `gpt-4o-mini-cerebras-oss` | Cerebras | gpt-oss-120b | Fallback 1 (reasoning, slower TTFT) |
 | `gpt-4o-mini-fallback` | Groq | llama-3.1-70b-versatile | Fallback 2 |
 | `gpt-4o-mini-openai` | OpenAI | gpt-4o-mini | Fallback 3 (reliable) |
-| `gpt-oss-120b` | Cerebras | gpt-oss-120b | Standalone alias for benchmarking |
 | `whisper` | OpenAI | whisper-1 | STT (audio_transcription mode) |
 
-**Note:** `gpt-oss-120b` sends reasoning tokens as `delta.reasoning` — `merge_reasoning_content_in_choices: true` merges them into `delta.content`.
+**GLM 4.7 reasoning controls:** `disable_reasoning: true` отключает reasoning полностью (снижает latency). `clear_thinking: false` сохраняет reasoning traces (для агентов). По умолчанию reasoning включён.
 
 ## Fallback Chain
 
 ```
-gpt-4o-mini (Cerebras/gpt-oss-120b) → cerebras-glm → Groq → OpenAI
+gpt-4o-mini (Cerebras/zai-glm-4.7) → cerebras-oss → Groq → OpenAI
 ```
 
 ## Configuration
