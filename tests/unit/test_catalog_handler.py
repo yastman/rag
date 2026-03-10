@@ -212,6 +212,71 @@ class TestCatalogExitHandler:
         assert update_call.get("catalog_mode") is False
 
 
+class TestCatalogNoopHandler:
+    async def test_noop_counter_returns_silently(self):
+        """Counter button 'N из M' should return without any action."""
+        bot = _make_bot()
+        bot._handle_catalog_more = AsyncMock()
+        bot._handle_catalog_exit = AsyncMock()
+        bot._handle_bookmarks = AsyncMock()
+
+        state = _make_state({"catalog_mode": True})
+        message = _make_message()
+        message.text = "7 из 45"
+
+        await bot.handle_menu_button(message, state)
+
+        bot._handle_catalog_more.assert_not_awaited()
+        bot._handle_catalog_exit.assert_not_awaited()
+        bot._handle_bookmarks.assert_not_awaited()
+        message.answer.assert_not_awaited()
+
+
+class TestCatalogBookmarksHandler:
+    async def test_bookmarks_routes_to_handle_bookmarks(self):
+        """'📌 Избранное' should route to _handle_bookmarks."""
+        bot = _make_bot()
+        bot._handle_bookmarks = AsyncMock()
+
+        state = _make_state({"catalog_mode": True})
+        message = _make_message()
+        message.text = "📌 Избранное"
+
+        await bot.handle_menu_button(message, state)
+
+        bot._handle_bookmarks.assert_awaited_once_with(message, state)
+
+
+class TestCatalogFooterNoDuplicate:
+    async def test_catalog_more_sends_short_footer(self):
+        """_handle_catalog_more sends '📋 Каталог' not verbose counter text."""
+        bot = _make_bot()
+        new_page = [_APT] * 5
+        mock_svc = MagicMock()
+        mock_svc.scroll_with_filters = AsyncMock(return_value=(new_page, 30, 65000.0, ["apt-1"]))
+        bot._apartments_service = mock_svc
+        bot._send_property_card = AsyncMock()
+
+        state = _make_state(
+            {
+                "catalog_mode": True,
+                "apartment_offset": 10,
+                "apartment_total": 30,
+                "apartment_next_offset": 55000.0,
+                "apartment_filters": {},
+                "apartment_scroll_seen_ids": [],
+            }
+        )
+        message = _make_message()
+
+        await bot._handle_catalog_more(message, state)
+
+        last_call = message.answer.call_args_list[-1]
+        text = last_call.args[0] if last_call.args else last_call.kwargs.get("text", "")
+        assert text == "📋 Каталог"
+        assert "Найдено" not in text
+
+
 class TestCatalogFiltersHandler:
     async def test_handle_catalog_filters_starts_funnel_summary(self):
         """Filters button should start FunnelSG.summary dialog with saved data."""
