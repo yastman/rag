@@ -1043,7 +1043,7 @@ class TestOnSummarySearchRedesign:
 
 
 # ============================================================
-# Tasks 4-6: results window restored in funnel dialog
+# Tasks 4-6: list/cards view mode in summary
 # ============================================================
 
 
@@ -1054,3 +1054,124 @@ def test_summary_has_list_and_cards_buttons():
     button_ids = _collect_widget_ids(summary_window)
     assert "search_list" in button_ids, "Missing 'Списком' button"
     assert "search_cards" in button_ids, "Missing 'Карточками' button"
+
+
+def test_summary_has_no_results_window():
+    """Funnel dialog must NOT have a results window (inline pagination removed)."""
+    states = [w.get_state() for w in funnel_dialog.windows.values()]
+    assert not any(str(s).endswith("results") for s in states), (
+        "Results window should be removed — inline pagination replaced by ReplyKeyboard"
+    )
+
+
+# ============================================================
+# format_apartment_list
+# ============================================================
+
+
+class TestFormatApartmentList:
+    def test_basic_formatting(self):
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        results = [
+            {
+                "payload": {
+                    "complex_name": "Premier Fort",
+                    "rooms": 1,
+                    "price_eur": 55000,
+                    "floor": 3,
+                    "area_m2": 42.5,
+                    "view_primary": "sea",
+                },
+            },
+        ]
+        text = format_apartment_list(results, shown_start=1)
+        assert "<b>1. Premier Fort</b>" in text
+        assert "55 000 €" in text
+        assert "3 эт" in text
+        assert "42 м²" in text  # round(42.5) = 42 (banker's rounding)
+
+    def test_multiple_results_numbering(self):
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        results = [
+            {"payload": {"complex_name": f"C{i}", "rooms": 1, "price_eur": 50000}} for i in range(3)
+        ]
+        text = format_apartment_list(results, shown_start=5)
+        assert "<b>5." in text
+        assert "<b>6." in text
+        assert "<b>7." in text
+
+    def test_empty_results(self):
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        assert format_apartment_list([]) == ""
+
+    def test_section_and_apartment_number(self):
+        from telegram_bot.dialogs.funnel import format_apartment_list
+
+        results = [
+            {
+                "payload": {
+                    "complex_name": "Test",
+                    "rooms": 2,
+                    "price_eur": 80000,
+                    "section": "D-1",
+                    "apartment_number": "42",
+                },
+            },
+        ]
+        text = format_apartment_list(results, shown_start=1)
+        assert "D-1" in text
+        assert "№42" in text
+
+
+# ============================================================
+# on_summary_search: list mode sends text, not cards
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_on_summary_search_list_mode_sends_text(monkeypatch):
+    """When button.widget_id == 'search_list', sends HTML text instead of photo cards."""
+    monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
+
+    mock_svc = MagicMock()
+    mock_svc.scroll_with_filters = AsyncMock(
+        return_value=(
+            [_APT_PAYLOAD],
+            1,
+            None,
+            ["apt-1"],
+        )
+    )
+    mock_bot = MagicMock()
+    mock_bot._send_property_card = AsyncMock()
+
+    callback = MagicMock()
+    callback.from_user = MagicMock(id=123)
+    callback.message = MagicMock()
+    callback.message.chat = MagicMock(id=456)
+    callback.message.answer = AsyncMock()
+
+    button = MagicMock()
+    button.widget_id = "search_list"
+
+    manager = MagicMock()
+    manager.dialog_data = {"city": "Солнечный берег", "property_type": "1bed", "budget": "mid"}
+    manager.middleware_data = {
+        "apartments_service": mock_svc,
+        "property_bot": mock_bot,
+        "state": MagicMock(update_data=AsyncMock()),
+    }
+    manager.done = AsyncMock()
+
+    await funnel_module.on_summary_search(callback, button, manager)
+
+    # Should send text, not cards
+    mock_bot._send_property_card.assert_not_awaited()
+    # Should have at least one answer call with HTML (the list text)
+    html_calls = [
+        c for c in callback.message.answer.call_args_list if c.kwargs.get("parse_mode") == "HTML"
+    ]
+    assert len(html_calls) >= 1, "List mode should send HTML text"
