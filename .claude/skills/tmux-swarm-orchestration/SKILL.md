@@ -31,26 +31,67 @@ digraph flow {
   codebase [label="Фаза 2.3: CODEBASE КОНТЕКСТ\nGrepAI + LSP + context-mode"];
   classify [label="Фаза 2: КЛАССИФИКАЦИЯ\nRead classification.md"];
   parallel [label="Фаза 2.5: ПАРАЛЛЕЛИЗАЦИЯ\nfile overlap + резервации"];
-  sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nSonnet субагент (если нужно)"];
-  spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md"];
+  sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nОБЯЗАТЕЛЬНО если sdk-registry.md\nматч triggers → Sonnet субагент"];
+  spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md\nЗаполнить {sdk_registry_excerpt}"];
   wait [label="Фаза 4: ОЖИДАНИЕ\n0 токенов, мониторинг .signals/"];
   review [label="Фаза 5.0: CODE REVIEW\norch лично читает diff\nчерез context-mode"];
   verify [label="Фаза 5.1: ВЕРИФИКАЦИЯ\nартефакты + маркеры"];
+  sdkupd [label="Фаза 5.2: SDK РЕЕСТР\nобновить паттерны/gotchas\nновые SDK из diff"];
   report [label="Фаза 6: ОТЧЁТ\nPR URLs + метрики → юзеру\nочистка"];
 
-  init -> codebase -> classify -> parallel -> sdk -> spawn -> wait -> review -> verify -> report;
+  init -> codebase -> classify -> parallel -> sdk -> spawn -> wait -> review -> verify -> sdkupd -> report;
   review -> spawn [label="diff неверный\nэскалация 1x", style=dashed];
   verify -> spawn [label="артефакты провал\nэскалация 1x", style=dashed];
 }
 ```
 
-**Фаза 2.7: SDK КОНТЕКСТ** — если issue затрагивает SDK/библиотеку:
+**Фаза 2.7: SDK КОНТЕКСТ** — **ОБЯЗАТЕЛЬНА** если `.claude/rules/sdk-registry.md` существует:
 
+    # 1. Проверить наличие реестра:
+    test -f .claude/rules/sdk-registry.md || echo "NO_REGISTRY → skip to Phase 3"
+
+    # 2. Если есть — прочитать и матчить triggers:
+    Read .claude/rules/sdk-registry.md
+    Для каждого SDK: сравнить triggers с issue body keywords
+    Матч = SDK затронут → запомнить context7_id + как_у_нас + gotchas
+
+    # 3. При матче — Sonnet субагент для актуальной документации:
     Agent(model="sonnet", subagent_type="general-purpose",
-      prompt="Context7 + Exa → сигнатуры, паттерны для {library}.
-      Резюме (300 слов) верни мне. Полный контекст запиши в .claude/cache/sdk-{lib}-{N}.md")
+      prompt="РЕЕСТР: {sdk_registry_excerpt_for_matched_sdk}
+      Context7: resolve-library-id('{context7_id}') → query-docs('{topic из issue}')
+      Exa: get_code_context_exa('{library} {topic} 2026')
+      Сравни с как_у_нас из реестра — отметь если паттерн устарел.
+      Резюме (300 слов) верни мне. Полный контекст → .claude/cache/sdk-{lib}-{N}.md")
+
+    # 4. Собрать {sdk_registry_excerpt} — релевантные блоки из реестра для промта worker'а
+    # Включает: как_у_нас + паттерны + gotchas для каждого совпавшего SDK
+
+    # 5. Даже без матча — список SDK (имена + triggers) для awareness в промте worker'а
+    # 6. Нет реестра → поведение как раньше (по усмотрению orch)
 
 Переиспользование: одно исследование → N воркеров.
+
+**Фаза 3: ЗАПОЛНЕНИЕ SDK-плейсхолдеров в промте worker'а:**
+
+При записи промта в `.claude/prompts/worker-{name}.md` orch ОБЯЗАН заполнить:
+
+    {sdk_summary}           → Резюме (300 слов) от Sonnet субагента из Фазы 2.7 (или пусто)
+    {sdk_registry_excerpt}  → Релевантные блоки из .claude/rules/sdk-registry.md:
+                               для каждого SDK с совпавшими triggers — скопировать:
+                               - как_у_нас (файлы + паттерны)
+                               - gotchas (антипаттерны)
+                               Без матча → краткий список всех SDK (имя + triggers) для awareness
+
+Пример {sdk_registry_excerpt} для issue "добавить кнопку в меню":
+
+    ## aiogram-dialog
+    как_у_нас: telegram_bot/dialogs/ — Window+Select+Button, states.py централизованно
+    паттерны: SwitchTo для навигации, Start для дочерних, getter= для данных
+    gotchas: НЕ писать кастомные InlineKeyboard — использовать Select/Button/SwitchTo
+
+    ## Другие SDK в проекте (awareness):
+    aiogram, langgraph, qdrant-client, instructor, redisvl, langfuse, langmem,
+    apscheduler, fluentogram, cocoindex, livekit-agents, asyncpg
 
 **Фаза 2.3: CODEBASE КОНТЕКСТ** — orch использует 3 системы:
 
@@ -166,6 +207,52 @@ Orch **лично** читает diff через context-mode. Worker может
     Code Review OK + Артефакты OK + маркеры MISSING → PASS + WARNING в отчёте
     Code Review OK + Артефакты FAIL → FAIL → эскалация (код верный, но CI не проходит)
     Code Review FAIL → FAIL → эскалация (артефакты не проверяем)
+
+### Фаза 5.2: Обновление SDK реестра (orch лично)
+
+После PASS верификации — **orch сам** анализирует diff и обновляет реестр. Worker'ы НЕ участвуют (Sonnet ненадёжен для мета-анализа).
+
+    # 1. Orch анализирует diff через context-mode (уже прочитан в Phase 5.0):
+    mcp execute(language="shell", code="""
+      cd '{WT_PATH}'
+      echo '=== Новые импорты ==='
+      git diff dev...HEAD | grep -E '^\+.*from .* import|^\+.*import ' | sort -u
+      echo '=== pyproject.toml ==='
+      git diff dev...HEAD -- pyproject.toml 2>/dev/null | grep -E '^\+' | head -20
+      echo '=== Новые файлы ==='
+      git diff dev...HEAD --name-only --diff-filter=A
+    """, intent="SDK registry update: detect new imports, deps, patterns in worker diff")
+
+    # 2. Orch ЛИЧНО сверяет с реестром:
+    Read .claude/rules/sdk-registry.md
+    # Для каждого нового import/dep:
+    #   - Есть в реестре? → проверить: новый паттерн использования?
+    #   - Нет в реестре? → добавить секцию по шаблону
+    # Для изменённых файлов:
+    #   - Новый паттерн SDK (отличается от как_у_нас)? → обновить
+
+    # 3. При обнаружении обновлений — orch редактирует реестр в dev:
+    git stash  # если есть незакоммиченное в dev
+    Edit .claude/rules/sdk-registry.md
+    git add .claude/rules/sdk-registry.md
+    git commit -m "docs(sdk): update registry — {краткое описание}"
+    git stash pop  # вернуть если было
+
+| Что orch ищет в diff | Действие |
+|----------------------|----------|
+| Новый `from X import` где X — известный SDK | Обновить `как_у_нас` + `паттерны` |
+| Новый `from X import` где X — неизвестный SDK | Новая секция по шаблону |
+| Новая dep в pyproject.toml | Новая секция по шаблону |
+| Удалённая dep из pyproject.toml | Удалить/пометить deprecated |
+| Новый файл в известной SDK-директории | Обновить `как_у_нас` (новый модуль) |
+| Паттерн отличается от `как_у_нас` | Обновить `паттерны` + добавить `gotcha` если старый был неверный |
+
+**Правила:**
+- Orch делает это **лично** — worker'ы не трогают реестр
+- Обновление в **dev** ветке, НЕ в worktree worker'а
+- Коммит отдельный от PR worker'а
+- Нет обновлений → пропустить (не коммитить пустое)
+- Реестр не существует → пропустить фазу
 
 ## Эскалация
 
