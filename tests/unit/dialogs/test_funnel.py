@@ -1085,11 +1085,15 @@ class TestFormatApartmentList:
                 },
             },
         ]
-        text = format_apartment_list(results, shown_start=1)
+        text = format_apartment_list(results, shown_start=1, total=5)
+        assert "Найдено <b>5</b>" in text
+        assert "показаны 1–1" in text
         assert "<b>1. Premier Fort</b>" in text
         assert "55 000 €" in text
         assert "3 эт" in text
         assert "42 м²" in text  # round(42.5) = 42 (banker's rounding)
+        # Multi-line format: details on separate lines
+        assert "\n    Студия" in text
 
     def test_multiple_results_numbering(self):
         from telegram_bot.dialogs.funnel import format_apartment_list
