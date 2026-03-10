@@ -776,22 +776,11 @@ async def rag_pipeline(
     ***REMOVED*** Subsequent iterations after _rewrite_query set query_embedding = None and
     ***REMOVED*** let _hybrid_retrieve handle cache lookup for those new rewritten queries.
     if cache_key != query:
-        query_embedding = await cache.get_embedding(query)
-        ***REMOVED*** cache_result.colbert_query was computed for cache_key (original user text).
-        ***REMOVED*** Reset and re-encode for the actual retrieval query to avoid query mismatch.
+        ***REMOVED*** Agent reformulated query — all pre-computed embeddings are for original text.
+        ***REMOVED*** Let _hybrid_retrieve do ONE combined aembed_hybrid_with_colbert call (***REMOVED***951).
+        query_embedding = None
         colbert_query = None
-        query_sparse: Any = None  ***REMOVED*** pre-computed sparse is for cache_key, not reformulated query
-        if (
-            query_embedding is not None
-            and callable(getattr(embeddings, "aembed_colbert_query", None))
-            and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
-        ):
-            try:
-                colbert_query = await embeddings.aembed_colbert_query(query)
-            except Exception:
-                logger.debug(
-                    "ColBERT query encode failed for reformulated query, using RRF fallback"
-                )
+        query_sparse: Any = None
     else:
         query_embedding = cache_embedding
         query_sparse = cache_sparse  ***REMOVED*** reuse sparse from _cache_check for this query (***REMOVED***571)
