@@ -242,6 +242,7 @@ def create_bot_agent(
     api_key: str | None = None,
     role: str = "client",
     max_history_messages: int = 15,
+    max_tokens: int | None = None,
 ) -> Any:
     """Create the bot agent using langchain create_agent SDK.
 
@@ -288,6 +289,8 @@ def create_bot_agent(
     else:
         # Dummy key — LiteLLM proxy doesn't need a real OpenAI key
         model_kwargs["api_key"] = "sk-not-needed"
+    if max_tokens:
+        model_kwargs["max_tokens"] = max_tokens
 
     llm = ChatOpenAI(**model_kwargs)
 
