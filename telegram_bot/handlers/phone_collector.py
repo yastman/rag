@@ -125,13 +125,14 @@ async def start_phone_collection(
     *,
     service_key: str,
     viewing_objects: list[dict[str, Any]] | None = None,
+    prompt_text: str | None = None,
 ) -> None:
     """Start phone collection flow with reply keyboard."""
     await state.set_state(PhoneCollectorStates.waiting_phone)
     await state.update_data(service_key=service_key, viewing_objects=viewing_objects or [])
 
     kb = build_phone_keyboard()
-    text = (
+    text = prompt_text or (
         "📞 Оставьте номер телефона, и мы свяжемся с вами:\n\n"
         "👇 Нажмите «Поделиться контактом» — это самый быстрый способ\n"
         "✍️ Или введите номер вручную"

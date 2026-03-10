@@ -110,8 +110,12 @@ async def test_on_date_selected_closes_dialog_and_starts_phone_collector():
     # date_range saved to FSM state
     state.update_data.assert_awaited_once_with(date_range="next_week")
 
-    # phone_collector started
-    mock_start.assert_awaited_once_with(callback, state, service_key="viewing")
+    # phone_collector started with custom prompt
+    mock_start.assert_awaited_once()
+    call_kwargs = mock_start.await_args
+    assert call_kwargs.args == (callback, state)
+    assert call_kwargs.kwargs["service_key"] == "viewing"
+    assert "осмотра" in call_kwargs.kwargs["prompt_text"]
 
 
 @pytest.mark.asyncio
