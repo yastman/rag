@@ -475,7 +475,7 @@ class PropertyBot:
         # Langfuse context must be outermost to wrap all handlers
         self.dp.message.outer_middleware(LangfuseContextMiddleware())
         self.dp.callback_query.outer_middleware(LangfuseContextMiddleware())
-        setup_throttling_middleware(self.dp, rate_limit=1.5, admin_ids=self.config.admin_ids)
+        setup_throttling_middleware(self.dp, default_rate=1.0, admin_ids=self.config.admin_ids)
         setup_error_handler(self.dp)
         self.dp.message.outer_middleware(FSMCancelMiddleware())
         logger.info("Middlewares configured")
@@ -709,7 +709,11 @@ class PropertyBot:
         self.dp.message(Command("call"))(self.cmd_call)
         self.dp.message(Command("history"))(self.cmd_history)
         self.dp.message(Command("clearcache"))(self.cmd_clearcache)
-        self.dp.message(StateFilter(None), F.voice)(self.handle_voice)
+        self.dp.message(
+            StateFilter(None),
+            F.voice,
+            flags={"rate_limit": {"rate": 3.5, "key": "voice"}},
+        )(self.handle_voice)
         # ReplyKeyboard buttons — registered before catch-all F.text (#628)
         from telegram_bot.dialogs.states import CatalogBrowsingSG
 
@@ -719,7 +723,7 @@ class PropertyBot:
         self.dp.message(
             ~StateFilter(CatalogBrowsingSG.browsing),
             F.text.in_(menu_button_texts),
-            flags={"menu_nav": True},
+            flags={"rate_limit": {"rate": 0.6, "key": "menu"}},
         )(self.handle_menu_button)
         # NOTE: catch-all handle_query is registered on self._catch_all_router
         # which is included AFTER dialog routers in _setup_dialogs().
@@ -4331,7 +4335,11 @@ class PropertyBot:
         self.dp.include_router(catalog_router)
 
         self._catch_all_router = _Router(name="catch_all_query")
-        self._catch_all_router.message(StateFilter(None), F.text)(self.handle_query)
+        self._catch_all_router.message(
+            StateFilter(None),
+            F.text,
+            flags={"rate_limit": {"rate": 2.0, "key": "query"}},
+        )(self.handle_query)
         self.dp.include_router(self._catch_all_router)
 
         aiogram_setup_dialogs(self.dp)
