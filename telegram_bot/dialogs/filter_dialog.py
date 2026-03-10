@@ -32,7 +32,6 @@ from telegram_bot.dialogs.filter_constants import (
     ROOMS_OPTIONS,
     VIEW_OPTIONS,
     build_filters_dict,
-    coerce_filter_value,
 )
 from telegram_bot.dialogs.states import FilterSG
 
@@ -60,16 +59,19 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
             count = await svc.count_with_filters(filters=filters)
 
     dd = dialog_manager.dialog_data
-    city_val = dd.get("city") or "—"
+    city_val = dd.get("city") or "Любой"
     rooms_val = dd.get("rooms")
     budget_val = dd.get("budget")
 
     from telegram_bot.dialogs.filter_constants import BUDGET_DISPLAY, ROOMS_DISPLAY
 
-    rooms_label = (
-        ROOMS_DISPLAY.get(int(rooms_val), str(rooms_val)) if rooms_val is not None else "—"
-    )
-    budget_label = BUDGET_DISPLAY.get(str(budget_val), str(budget_val)) if budget_val else "—"
+    rooms_label = "Любой"
+    if rooms_val is not None:
+        try:
+            rooms_label = ROOMS_DISPLAY.get(int(rooms_val), str(rooms_val))
+        except (ValueError, TypeError):
+            rooms_label = str(rooms_val)
+    budget_label = BUDGET_DISPLAY.get(str(budget_val), str(budget_val)) if budget_val else "Любой"
 
     return {
         "count": count,
@@ -147,12 +149,8 @@ def _make_radio_handler(field: str):
             manager.dialog_data.pop(field, None)
             manager.dialog_data.pop(FIELD_TO_FILTER_KEY.get(field, field), None)
         else:
-            coerced = coerce_filter_value(field, item_id)
-            if coerced is None:
-                manager.dialog_data.pop(field, None)
-                manager.dialog_data.pop(FIELD_TO_FILTER_KEY.get(field, field), None)
-            else:
-                manager.dialog_data[field] = coerced
+            # Store raw item_id string — coercion happens in build_filters_dict
+            manager.dialog_data[field] = item_id
         await manager.switch_to(FilterSG.hub)
 
     handler.__name__ = f"on_radio_{field}"
@@ -176,16 +174,15 @@ on_radio_promotion = _make_radio_handler("promotion")
 
 
 def _filters_to_dialog_data(filters: dict[str, Any]) -> dict[str, Any]:
-    """Reverse-map apartment_filters dict to dialog_data field names."""
-    from telegram_bot.dialogs.filter_constants import BUDGET_MAP
+    """Reverse-map apartment_filters dict to dialog_data string item_ids for Radio widgets."""
+    from telegram_bot.dialogs.filter_constants import AREA_MAP, BUDGET_MAP, FLOOR_MAP
 
     dd: dict[str, Any] = {}
     if filters.get("city"):
         dd["city"] = filters["city"]
     if filters.get("rooms") is not None:
-        dd["rooms"] = filters["rooms"]
+        dd["rooms"] = str(filters["rooms"])
     if filters.get("price_eur"):
-        # Reverse-lookup budget key from BUDGET_MAP
         price = filters["price_eur"]
         for key, val in BUDGET_MAP.items():
             if val == price:
@@ -196,15 +193,23 @@ def _filters_to_dialog_data(filters: dict[str, Any]) -> dict[str, Any]:
         if isinstance(tags, list) and tags:
             dd["view"] = tags[0]
     if filters.get("area_m2"):
-        dd["area"] = filters["area_m2"]
+        area = filters["area_m2"]
+        for key, val in AREA_MAP.items():
+            if val == area:
+                dd["area"] = key
+                break
     if filters.get("floor"):
-        dd["floor"] = filters["floor"]
+        floor_val = filters["floor"]
+        for key, val in FLOOR_MAP.items():
+            if val == floor_val:
+                dd["floor"] = key
+                break
     if filters.get("complex_name"):
         dd["complex"] = filters["complex_name"]
     if filters.get("is_furnished") is not None:
-        dd["furnished"] = filters["is_furnished"]
+        dd["furnished"] = str(filters["is_furnished"]).lower()
     if filters.get("is_promotion") is not None:
-        dd["promotion"] = filters["is_promotion"]
+        dd["promotion"] = str(filters["is_promotion"]).lower()
     return dd
 
 
