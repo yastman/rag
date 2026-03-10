@@ -53,7 +53,7 @@ async def handle_filter_panel(
 
     try:
         if action == "select":
-            await _handle_select(callback, state, field)
+            await _handle_select(callback, state, field, apartments_service)
         elif action == "set":
             await _handle_set(callback, state, field, value, apartments_service)
         elif action == "apply":
@@ -76,6 +76,7 @@ async def _handle_select(
     callback: CallbackQuery,
     state: FSMContext,
     field: str,
+    apartments_service: Any = None,
 ) -> None:
     """Show sub-menu for a specific filter field."""
     data = await state.get_data()
@@ -86,7 +87,16 @@ async def _handle_select(
     if field == "budget" and isinstance(current_value, dict):
         current_value = _price_to_budget(current_value)
 
-    kb = build_filter_options_keyboard(field, current_value=current_value)
+    # Load dynamic options for complex field
+    dynamic_options: list[str] | None = None
+    if field == "complex" and apartments_service is not None:
+        with contextlib.suppress(Exception):
+            stats = await apartments_service.get_collection_stats()
+            dynamic_options = stats.get("complexes") or []
+
+    kb = build_filter_options_keyboard(
+        field, current_value=current_value, dynamic_options=dynamic_options
+    )
 
     # Build sub-menu header text
     _FIELD_LABELS = {
