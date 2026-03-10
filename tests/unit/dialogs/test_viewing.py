@@ -9,11 +9,12 @@ from telegram_bot.dialogs.states import ViewingSG
 
 
 def test_viewing_sg_has_all_states():
-    assert hasattr(ViewingSG, "objects")
-    assert hasattr(ViewingSG, "objects_text")
     assert hasattr(ViewingSG, "date")
     assert hasattr(ViewingSG, "phone")
     assert hasattr(ViewingSG, "summary")
+    # objects states removed
+    assert not hasattr(ViewingSG, "objects")
+    assert not hasattr(ViewingSG, "objects_text")
 
 
 # --- Date options ---
@@ -54,95 +55,6 @@ async def test_on_date_selected_saves_and_switches_to_phone():
     callback.bot.send_message.assert_awaited_once()
 
 
-# --- Objects getter (empty favorites) ---
-
-
-@pytest.mark.asyncio
-async def test_get_objects_options_empty_favorites():
-    from telegram_bot.dialogs.viewing import get_objects_options
-
-    result = await get_objects_options(
-        event_from_user=SimpleNamespace(id=12345),
-        favorites_service=None,
-    )
-    items = result["items"]
-    assert len(items) == 0
-    assert result["has_favorites"] is False
-
-
-@pytest.mark.asyncio
-async def test_get_objects_options_reads_favorites_from_middleware_data():
-    from telegram_bot.dialogs.viewing import get_objects_options
-
-    favorites_service = SimpleNamespace(
-        list=AsyncMock(
-            return_value=[
-                SimpleNamespace(
-                    property_id="prop-1",
-                    property_data={
-                        "complex_name": "Sunset",
-                        "property_type": "1+1",
-                        "area_m2": 61,
-                        "price_eur": 95000,
-                    },
-                )
-            ]
-        )
-    )
-    manager = SimpleNamespace(dialog_data={})
-
-    result = await get_objects_options(
-        event_from_user=SimpleNamespace(id=12345),
-        middleware_data={"favorites_service": favorites_service},
-        dialog_manager=manager,
-    )
-
-    assert result["has_favorites"] is True
-    assert len(result["items"]) == 1
-    assert result["items"][0][1] == "prop-1"
-    assert "Sunset" in result["items"][0][0]
-    assert manager.dialog_data["favorites_by_id"]["prop-1"]["complex_name"] == "Sunset"
-
-
-# --- Objects skip handler ---
-
-
-@pytest.mark.asyncio
-async def test_on_objects_skip_switches_to_date():
-    from telegram_bot.dialogs.viewing import on_objects_skip
-
-    manager = SimpleNamespace(dialog_data={}, switch_to=AsyncMock())
-    await on_objects_skip(MagicMock(), MagicMock(), manager)
-    manager.switch_to.assert_awaited_once_with(ViewingSG.date)
-
-
-@pytest.mark.asyncio
-async def test_on_object_selected_keeps_object_metadata_for_summary_and_crm():
-    from telegram_bot.dialogs.viewing import on_object_selected
-
-    manager = SimpleNamespace(
-        dialog_data={
-            "favorites_by_id": {
-                "prop-1": {
-                    "id": "prop-1",
-                    "complex_name": "Sunset",
-                    "property_type": "1+1",
-                    "area_m2": 61,
-                    "price_eur": 95000,
-                }
-            }
-        }
-    )
-
-    await on_object_selected(MagicMock(), MagicMock(), manager, "prop-1")
-
-    selected = manager.dialog_data["selected_objects"]
-    assert len(selected) == 1
-    assert selected[0]["id"] == "prop-1"
-    assert selected[0]["complex_name"] == "Sunset"
-    assert selected[0]["price_eur"] == 95000
-
-
 # --- Summary getter ---
 
 
@@ -152,15 +64,15 @@ async def test_get_summary_data_formats_all_fields():
 
     manager = SimpleNamespace(
         dialog_data={
-            "selected_objects": [{"complex_name": "Sunset", "property_type": "1+1"}],
             "date_range": "nearest",
             "phone": "+380990091392",
         }
     )
     result = await get_summary_data(dialog_manager=manager)
     assert "+380990091392" in result["summary_text"]
-    assert "Sunset" in result["summary_text"]
     assert "Ближайшие дни" in result["summary_text"]
+    # Objects section removed from summary
+    assert "Объекты" not in result["summary_text"]
 
 
 # --- Due date calculation ---
@@ -203,8 +115,6 @@ def test_viewing_dialog_has_all_windows():
 
     windows = viewing_dialog.windows
     states = [w.get_state() for w in windows.values()]
-    assert ViewingSG.objects in states
-    assert ViewingSG.objects_text in states
     assert ViewingSG.date in states
     assert ViewingSG.phone in states
     assert ViewingSG.summary in states
@@ -215,7 +125,7 @@ def test_viewing_dialog_importable_from_module():
     from telegram_bot.dialogs.viewing import viewing_dialog
 
     assert viewing_dialog is not None
-    assert len(viewing_dialog.windows) == 5
+    assert len(viewing_dialog.windows) == 3
 
 
 @pytest.mark.asyncio
@@ -269,21 +179,33 @@ async def test_phone_text_handler_sets_delete_and_send_mode():
 
 
 @pytest.mark.asyncio
-async def test_phone_contact_handler_sets_delete_and_send_mode():
-    """After contact share, dialog should DELETE_AND_SEND to avoid stale messages."""
+async def test_phone_contact_auto_confirm():
+    """Contact share should auto-confirm: submit CRM and call manager.done()."""
     from aiogram_dialog import ShowMode
 
     from telegram_bot.dialogs.viewing import on_phone_contact_received
 
     manager = AsyncMock()
-    manager.dialog_data = {}
+    manager.dialog_data = {"date_range": "nearest"}
+    manager.middleware_data = {"kommo_client": None, "bot_config": None}
     message = AsyncMock()
     message.contact = MagicMock()
     message.contact.phone_number = "+380501234567"
+    message.from_user = SimpleNamespace(
+        id=12345, first_name="Test", last_name=None, username="testuser"
+    )
+    message.bot = AsyncMock()
 
     await on_phone_contact_received(message, None, manager)
 
-    assert manager.show_mode == ShowMode.DELETE_AND_SEND
+    assert manager.show_mode == ShowMode.EDIT
+    assert manager.dialog_data["phone"] == "+380501234567"
+    # Should call done() directly (no switch to summary)
+    manager.done.assert_awaited_once()
+    # Should NOT switch to summary
+    manager.switch_to.assert_not_awaited()
+    # Should send confirmation message
+    message.bot.send_message.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -313,15 +235,6 @@ async def test_on_confirm_creates_crm_entities():
 
     manager = MagicMock()
     manager.dialog_data = {
-        "selected_objects": [
-            {
-                "id": "prop-1",
-                "complex_name": "Sunset",
-                "property_type": "1+1",
-                "area_m2": 61,
-                "price_eur": 95000,
-            }
-        ],
         "date_range": "nearest",
         "phone": "+380990091392",
     }
@@ -335,19 +248,15 @@ async def test_on_confirm_creates_crm_entities():
 
     kommo.upsert_contact.assert_awaited_once()
     kommo.create_lead.assert_awaited_once()
-    # Lead name should contain the object name
+    # Lead name should NOT contain objects (simplified)
     lead_arg = kommo.create_lead.await_args.args[0]
-    assert "Sunset" in lead_arg.name
-    assert "1+1" in lead_arg.name
+    assert "Осмотр —" in lead_arg.name
     kommo.link_contact_to_lead.assert_awaited_once_with(200, 100)
     kommo.add_note.assert_awaited_once()
     note_text = kommo.add_note.await_args.args[2]
-    assert "Sunset" in note_text
-    assert "ID: prop-1" in note_text
+    assert "Запись на осмотр" in note_text
+    assert "+380990091392" in note_text
     kommo.create_task.assert_awaited_once()
-    # Task text should contain the object name
-    task_arg = kommo.create_task.await_args.args[0]
-    assert "Sunset" in task_arg.text
     callback.bot.send_message.assert_awaited_once()
     manager.done.assert_awaited_once()
 
@@ -406,15 +315,6 @@ async def test_on_confirm_sends_confirmation_with_correct_text():
 
     manager = MagicMock()
     manager.dialog_data = {
-        "selected_objects": [
-            {
-                "id": "prop-42",
-                "complex_name": "Panorama",
-                "property_type": "2+1",
-                "area_m2": 85,
-                "price_eur": 120000,
-            }
-        ],
         "date_range": "next_week",
         "phone": "+359881234567",
     }
@@ -430,9 +330,28 @@ async def test_on_confirm_sends_confirmation_with_correct_text():
     assert "заявка на осмотр получена" in call_kwargs["text"].lower()
     assert "менеджер свяжется" in call_kwargs["text"].lower()
 
-    # 2. Lead title contains object name
+    # 2. Lead title simplified (no objects)
     lead_arg = kommo.create_lead.await_args.args[0]
-    assert "Panorama" in lead_arg.name
+    assert "Осмотр —" in lead_arg.name
 
     # 3. Dialog closed
     manager.done.assert_awaited_once()
+
+
+# --- Cancel → HandoffSG ---
+
+
+@pytest.mark.asyncio
+async def test_cancel_starts_handoff_dialog():
+    """Cancel button should start HandoffSG.goal dialog."""
+    from aiogram_dialog import StartMode
+
+    from telegram_bot.dialogs.states import HandoffSG
+    from telegram_bot.dialogs.viewing import on_cancel_to_manager
+
+    manager = AsyncMock()
+    callback = MagicMock()
+
+    await on_cancel_to_manager(callback, MagicMock(), manager)
+
+    manager.start.assert_awaited_once_with(HandoffSG.goal, mode=StartMode.RESET_STACK)
