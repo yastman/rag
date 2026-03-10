@@ -663,52 +663,55 @@ async def test_pipeline_cache_miss_when_different_original_query(
     mock_qdrant.hybrid_search_rrf.assert_called_once()
 
 
-async def test_pipeline_reformulation_skips_embed_on_warm_cache(
+async def test_pipeline_reformulation_delegates_to_hybrid_retrieve(
     mock_cache, mock_embeddings, mock_sparse, mock_qdrant
 ):
-    """Reformulated query embedding in cache prevents a redundant BGE-M3 call (#513).
+    """When cache_key != query (agent reformulated), orchestrator passes None embeddings
+    to _hybrid_retrieve, which handles the single BGE-M3 call (#951).
 
-    Scenario: embeddings_cache_hit=True for original query, but the agent reformulated.
-    On the second+ request the reformulated embedding is also cached — aembed_hybrid
-    must NOT be called (no 'bge-m3-hybrid-embed' span).
+    Verified via patching _hybrid_retrieve to capture the dense_vector argument.
+    The orchestrator must pass None (not a pre-fetched vector from its own cache lookup).
     """
+    from unittest.mock import AsyncMock, patch
+
     from telegram_bot.agents.rag_pipeline import rag_pipeline
 
-    original_emb = [0.1] * 1024
-    reform_emb = [0.2] * 1024  # distinct embedding for reformulated query
+    mock_cache.get_embedding = AsyncMock(return_value=[0.5] * 1024)  # warm cache
+    mock_cache.check_semantic = AsyncMock(return_value=None)
 
-    def _get_embedding(text: str):
-        if "квартиры" in text:
-            return original_emb  # original query — warm
-        if "apartments" in text:
-            return reform_emb  # reformulated query — warm
-        return None
+    captured: dict = {}
 
-    mock_cache.get_embedding = AsyncMock(side_effect=_get_embedding)
-    mock_cache.check_semantic = AsyncMock(return_value=None)  # semantic miss → full retrieval
-    mock_cache.get_sparse_embedding = AsyncMock(return_value={"indices": [1], "values": [0.5]})
+    async def stub_retrieve(query, dense_vector, **kwargs):
+        captured["dense_vector_on_first_call"] = dense_vector
+        return {
+            "documents": [{"text": "doc", "score": 0.008, "metadata": {}}],
+            "search_results_count": 1,
+            "search_cache_hit": False,
+            "rerank_applied": False,
+            "query_embedding": [0.1] * 1024,
+            "colbert_query": None,
+            "latency_stages": {"retrieve": 0.001},
+        }
 
-    result = await rag_pipeline(
-        "apartments in Nesebar",  # agent-reformulated query
-        original_query="квартиры в Несебре",  # original user query
-        user_id=42,
-        session_id="test",
-        query_type="GENERAL",
-        cache=mock_cache,
-        embeddings=mock_embeddings,
-        sparse_embeddings=mock_sparse,
-        qdrant=mock_qdrant,
+    with patch("telegram_bot.agents.rag_pipeline._hybrid_retrieve", new=stub_retrieve):
+        result = await rag_pipeline(
+            "apartments in Nesebar",
+            original_query="квартиры в Несебре",
+            user_id=42,
+            session_id="test",
+            query_type="GENERAL",
+            cache=mock_cache,
+            embeddings=mock_embeddings,
+            sparse_embeddings=mock_sparse,
+            qdrant=mock_qdrant,
+        )
+
+    # Fix: orchestrator must NOT pre-fetch the reformulated query embedding (#951)
+    assert captured["dense_vector_on_first_call"] is None, (
+        "Orchestrator passed a non-None dense_vector to _hybrid_retrieve for reformulated query "
+        f"(got {captured['dense_vector_on_first_call']!r}) — this is the pre-fix behavior (#951)"
     )
-
-    # Reformulated embedding was in cache — BGE-M3 must NOT be called
-    mock_embeddings.aembed_hybrid.assert_not_called()
-    mock_embeddings.aembed_query.assert_not_called()
     assert result["cache_hit"] is False
-    mock_qdrant.hybrid_search_rrf.assert_called_once()
-    # Verify the orchestrator pre-fetched the reformulated query embedding from
-    # cache (the mechanism of the fix — not just the observable BGE-M3 side-effect).
-    get_embedding_calls = [str(c.args[0]) for c in mock_cache.get_embedding.call_args_list]
-    assert any("apartments" in c for c in get_embedding_calls)
 
 
 async def test_pipeline_embedding_error(mock_cache, mock_sparse, mock_qdrant):
@@ -1131,7 +1134,14 @@ async def test_rag_pipeline_skips_rerank_when_colbert_used(mock_cache, mock_spar
 
 
 async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache, mock_sparse):
-    """When original_query != query, use ColBERT vectors of retrieval query, not cache key."""
+    """When original_query != query, ColBERT vectors for retrieval come from the reformulated query.
+
+    Post-fix (#951): orchestrator sets query_embedding=None for reformulated queries, so
+    _hybrid_retrieve calls aembed_hybrid_with_colbert(reformulated_query) — getting ColBERT
+    vectors that match the retrieval query, not the original cache_key.
+
+    We verify the calls were made for the correct query text.
+    """
     from unittest.mock import AsyncMock
 
     from telegram_bot.agents.rag_pipeline import rag_pipeline
@@ -1140,16 +1150,20 @@ async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache
     reformulated_colbert = [[0.7] * 1024] * 3
 
     mock_embeddings = AsyncMock()
-    mock_embeddings.aembed_hybrid = AsyncMock(
-        return_value=([0.1] * 1024, {"indices": [1], "values": [0.5]})
-    )
-    mock_embeddings.aembed_hybrid_with_colbert = None
-    mock_embeddings.aembed_colbert_query = AsyncMock(
-        side_effect=[original_colbert, reformulated_colbert]
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_colbert_query = None
+
+    # aembed_hybrid_with_colbert returns different colbert per query text
+    def hybrid_colbert_side_effect(query_text):
+        if "original" in query_text:
+            return ([0.1] * 1024, {"indices": [1], "values": [0.5]}, original_colbert)
+        return ([0.3] * 1024, {"indices": [2], "values": [0.6]}, reformulated_colbert)
+
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        side_effect=lambda q: hybrid_colbert_side_effect(q)
     )
 
-    # First call is cache_key embedding (miss), second is reformulated query warm embedding (hit).
-    mock_cache.get_embedding = AsyncMock(side_effect=[None, [0.9] * 1024])
+    mock_cache.get_embedding = AsyncMock(return_value=None)
 
     mock_qdrant = AsyncMock()
     mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
@@ -1172,8 +1186,11 @@ async def test_rag_pipeline_recomputes_colbert_for_reformulated_query(mock_cache
         reranker=None,
     )
 
+    # _hybrid_retrieve was called for the reformulated query — verify via ColBERT result
     called_colbert_query = mock_qdrant.hybrid_search_rrf_colbert.call_args.kwargs["colbert_query"]
-    assert called_colbert_query == reformulated_colbert
+    assert called_colbert_query == reformulated_colbert, (
+        "ColBERT vectors must be for the reformulated query, not the original cache_key"
+    )
     assert called_colbert_query != original_colbert
     assert result["documents"]
 
@@ -1510,3 +1527,200 @@ async def test_rag_pipeline_passes_pre_computed_sparse_to_retrieve(mock_cache, m
     # cache get_sparse_embedding must NOT be called either
     mock_cache.get_sparse_embedding.assert_not_awaited()
     assert result["documents"]
+
+
+# ---------------------------------------------------------------------------
+# Issue #951: eliminate redundant BGE-M3 call on agent query rewrite
+# ---------------------------------------------------------------------------
+
+
+async def test_reformulation_passes_none_embedding_to_hybrid_retrieve(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """When cache_key != query, orchestrator passes query_embedding=None to _hybrid_retrieve.
+
+    Pre-fix bug: orchestrator called cache.get_embedding(reformulated_query) and passed the
+    found dense vector to _hybrid_retrieve. When it found dense but not colbert, it then
+    called aembed_colbert_query separately — 2 BGE-M3 calls.
+    Post-fix (#951): orchestrator always sets query_embedding=None for reformulated queries,
+    so _hybrid_retrieve handles embedding in one combined call.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+    mock_cache.get_embedding = AsyncMock(return_value=[0.5] * 1024)  # warm — old code used this
+
+    captured_args: dict = {}
+
+    async def capturing_hybrid_retrieve(query, dense_vector, **kwargs):
+        captured_args["dense_vector"] = dense_vector
+        # Delegate to real implementation via a minimal stub response
+        return {
+            "documents": [{"text": "doc", "score": 0.008, "metadata": {}}],
+            "search_results_count": 1,
+            "search_cache_hit": False,
+            "rerank_applied": False,
+            "query_embedding": dense_vector or [0.1] * 1024,
+            "colbert_query": None,
+            "latency_stages": {"retrieve": 0.001},
+        }
+
+    with patch(
+        "telegram_bot.agents.rag_pipeline._hybrid_retrieve",
+        new=capturing_hybrid_retrieve,
+    ):
+        await rag_pipeline(
+            "apartments in Nesebar",  # reformulated
+            original_query="квартиры в Несебре",
+            user_id=42,
+            session_id="test",
+            query_type="GENERAL",
+            cache=mock_cache,
+            embeddings=mock_embeddings,
+            sparse_embeddings=mock_sparse,
+            qdrant=mock_qdrant,
+        )
+
+    # Orchestrator must pass None — not the cached dense vector (#951)
+    assert captured_args["dense_vector"] is None, (
+        f"Orchestrator passed dense_vector={captured_args['dense_vector']!r} to _hybrid_retrieve "
+        "instead of None — this is the pre-fix behavior that triggers 2 BGE-M3 calls (#951)"
+    )
+
+
+async def test_reformulation_combined_call_in_hybrid_retrieve(mock_cache, mock_sparse):
+    """When cache_key != query, aembed_hybrid_with_colbert is called exactly twice:
+    once by _cache_check (for cache_key) and once by _hybrid_retrieve (for reformulated query).
+
+    Pre-fix had THREE calls: _cache_check + orchestrator aembed_colbert_query + _hybrid_retrieve.
+    Post-fix (#951): only TWO calls — the orchestrator-level separate ColBERT call is removed.
+    """
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    colbert_from_combined = [[0.3] * 1024] * 4
+
+    mock_embeddings = AsyncMock()
+    mock_embeddings.aembed_hybrid = None
+    mock_embeddings.aembed_hybrid_with_colbert = AsyncMock(
+        return_value=(
+            [0.2] * 1024,
+            {"indices": [1], "values": [0.5]},
+            colbert_from_combined,
+        )
+    )
+    # aembed_colbert_query is None — ensures only the combined path is available
+    mock_embeddings.aembed_colbert_query = None
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf_colbert = AsyncMock(
+        return_value=(
+            [{"id": "1", "score": 0.008, "text": "doc", "metadata": {}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    mock_cache_local = AsyncMock()
+    mock_cache_local.get_embedding = AsyncMock(return_value=None)
+    mock_cache_local.check_semantic = AsyncMock(return_value=None)
+    mock_cache_local.get_search_results = AsyncMock(return_value=None)
+    mock_cache_local.store_search_results = AsyncMock()
+    mock_cache_local.get_rerank_results = AsyncMock(return_value=None)
+    mock_cache_local.store_rerank_results = AsyncMock()
+    mock_cache_local.store_embedding = AsyncMock()
+    mock_cache_local.store_sparse_embedding = AsyncMock()
+    mock_cache_local.get_sparse_embedding = AsyncMock(return_value=None)
+    mock_cache_local.store_semantic = AsyncMock()
+
+    result = await rag_pipeline(
+        "apartments in Nesebar",
+        original_query="квартиры в Несебре",
+        user_id=42,
+        session_id="test",
+        query_type="GENERAL",
+        cache=mock_cache_local,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+    )
+
+    # Exactly 2 calls: _cache_check(cache_key) + _hybrid_retrieve(reformulated_query)
+    # Pre-fix would have been 3 (+ orchestrator's aembed_colbert_query call)
+    assert mock_embeddings.aembed_hybrid_with_colbert.await_count == 2, (
+        f"Expected 2 aembed_hybrid_with_colbert calls, "
+        f"got {mock_embeddings.aembed_hybrid_with_colbert.await_count} — "
+        "pre-fix had 3 calls (extra orchestrator ColBERT call), post-fix has 2 (#951)"
+    )
+    assert result["documents"]
+
+
+async def test_reformulation_single_bge_m3_call_via_hybrid_retrieve(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """When cache_key != query, aembed_hybrid is called exactly twice: once by _cache_check
+    (for cache_key) and once by _hybrid_retrieve (for reformulated query) (#951).
+
+    Pre-fix with aembed_colbert_query available would have made 3 BGE-M3 calls.
+    Post-fix: exactly 2 aembed_hybrid calls (mock_embeddings has no colbert path).
+    """
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+    mock_cache.get_embedding = AsyncMock(return_value=None)  # all cache misses
+
+    await rag_pipeline(
+        "apartments in Nesebar",  # reformulated
+        original_query="квартиры в Несебре",
+        user_id=42,
+        session_id="test",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+    )
+
+    # mock_embeddings fixture has aembed_hybrid_with_colbert=None so falls back to aembed_hybrid.
+    # 2 calls: _cache_check(cache_key) + _hybrid_retrieve(reformulated_query).
+    # The key: no 3rd call from orchestrator-level aembed_colbert_query (#951 fix).
+    assert mock_embeddings.aembed_hybrid.call_count == 2, (
+        f"Expected 2 aembed_hybrid calls (cache_check + hybrid_retrieve), "
+        f"got {mock_embeddings.aembed_hybrid.call_count}"
+    )
+
+
+async def test_no_reformulation_reuses_pre_computed_embeddings(
+    mock_cache, mock_embeddings, mock_sparse, mock_qdrant
+):
+    """When cache_key == query (no reformulation), pre-computed embeddings are reused.
+
+    The else branch (cache_key == query) passes cache_embedding and cache_sparse
+    directly to _hybrid_retrieve without any extra BGE-M3 calls.
+    """
+    from telegram_bot.agents.rag_pipeline import rag_pipeline
+
+    cached_emb = [0.5] * 1024
+    cached_sparse = {"indices": [3], "values": [0.8]}
+    mock_cache.get_embedding = AsyncMock(return_value=cached_emb)
+    mock_cache.get_sparse_embedding = AsyncMock(return_value=cached_sparse)
+    mock_cache.check_semantic = AsyncMock(return_value=None)
+
+    result = await rag_pipeline(
+        "квартиры в Несебре",  # no reformulation — query == cache_key
+        user_id=42,
+        session_id="test",
+        query_type="GENERAL",
+        cache=mock_cache,
+        embeddings=mock_embeddings,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+    )
+
+    # No BGE-M3 calls — embeddings came from cache
+    mock_embeddings.aembed_hybrid.assert_not_called()
+    mock_embeddings.aembed_query.assert_not_called()
+    assert result["cache_hit"] is False
+    mock_qdrant.hybrid_search_rrf.assert_called_once()

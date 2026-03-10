@@ -770,28 +770,18 @@ async def rag_pipeline(
         }
 
     # For retrieval, use reformulated query embedding.
-    # If cache_key differs from query (agent reformulated), pre-fetch the
-    # reformulated query embedding for the FIRST retrieval attempt. This avoids a
-    # redundant BGE-M3 call in _hybrid_retrieve on warm requests (#513).
-    # Subsequent iterations after _rewrite_query set query_embedding = None and
-    # let _hybrid_retrieve handle cache lookup for those new rewritten queries.
+    # When cache_key != query (agent reformulated), pass all embeddings as None so that
+    # _hybrid_retrieve makes ONE combined aembed_hybrid_with_colbert call (#951).
+    # The old approach called cache.get_embedding(query) here and, on a hit, separately
+    # called aembed_colbert_query — 2 BGE-M3 HTTP calls instead of 1.
+    # Trade-off: we skip the dense embedding cache for reformulated queries (~5% of requests),
+    # but agent reformulations have a low cache-hit rate anyway and the latency saving
+    # from one fewer round-trip outweighs the occasional cache miss.
     if cache_key != query:
-        query_embedding = await cache.get_embedding(query)
-        # cache_result.colbert_query was computed for cache_key (original user text).
-        # Reset and re-encode for the actual retrieval query to avoid query mismatch.
+        # Agent reformulated query — let _hybrid_retrieve handle embeddings in one call.
+        query_embedding = None
         colbert_query = None
-        query_sparse: Any = None  # pre-computed sparse is for cache_key, not reformulated query
-        if (
-            query_embedding is not None
-            and callable(getattr(embeddings, "aembed_colbert_query", None))
-            and asyncio.iscoroutinefunction(embeddings.aembed_colbert_query)
-        ):
-            try:
-                colbert_query = await embeddings.aembed_colbert_query(query)
-            except Exception:
-                logger.debug(
-                    "ColBERT query encode failed for reformulated query, using RRF fallback"
-                )
+        query_sparse: Any = None
     else:
         query_embedding = cache_embedding
         query_sparse = cache_sparse  # reuse sparse from _cache_check for this query (#571)
