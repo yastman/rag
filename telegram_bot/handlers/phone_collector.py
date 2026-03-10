@@ -135,7 +135,7 @@ async def start_phone_collection(
     text = prompt_text or (
         "📞 Оставьте номер телефона, и мы свяжемся с вами:\n\n"
         "👇 Нажмите «Поделиться контактом» — это самый быстрый способ\n"
-        "✍️ Или введите номер вручную"
+        "✍️ Или введите номер вручную (например, +380 99 009 13 92)"
     )
 
     if isinstance(message_or_callback, CallbackQuery) and message_or_callback.message:

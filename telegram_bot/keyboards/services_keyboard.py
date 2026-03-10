@@ -37,9 +37,7 @@ def build_services_menu(i18n: Any = None) -> InlineKeyboardMarkup:
 
 def build_service_card_buttons(service_key: str, i18n: Any = None) -> InlineKeyboardMarkup:
     """Build CTA buttons for a service card."""
-    get_offer_text = (
-        i18n.get("svc-get-offer") if i18n is not None else None
-    ) or "Получить предложение"  # type: ignore[union-attr]
+    get_offer_text = (i18n.get("svc-get-offer") if i18n is not None else None) or "Оставить заявку"  # type: ignore[union-attr]
     manager_text = (
         i18n.get("svc-contact-manager") if i18n is not None else None
     ) or "Связаться с менеджером"  # type: ignore[union-attr]
@@ -57,7 +55,7 @@ def build_service_card_buttons(service_key: str, i18n: Any = None) -> InlineKeyb
             [
                 InlineKeyboardButton(
                     text=f"👤 {manager_text}",
-                    callback_data=f"{_CTA_PREFIX}manager",
+                    callback_data=f"{_CTA_PREFIX}manager:{service_key}",
                 )
             ],
             [

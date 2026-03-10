@@ -285,7 +285,7 @@ async def on_apply(
     )
     await manager.done()
 
-    # Show apartment cards directly
+    # Show apartment results respecting view mode
     msg = callback.message
     if not msg:
         return
@@ -294,22 +294,36 @@ async def on_apply(
         await msg.answer("По заданным фильтрам ничего не найдено")
         return
 
-    property_bot = manager.middleware_data.get("property_bot")
-    if property_bot is not None:
-        telegram_id = callback.from_user.id if callback.from_user else 0
-        for result in results:
-            with contextlib.suppress(Exception):
-                await property_bot._send_property_card(msg, result, telegram_id)
+    fsm_data = await state.get_data()
+    view_mode = fsm_data.get("catalog_view_mode", "cards")
 
-    # Show catalog keyboard only if there are more results
-    if len(results) < total_count:
+    if view_mode == "list":
+        from telegram_bot.dialogs.funnel import format_apartment_list
         from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
 
-        kb = build_catalog_keyboard(shown=len(results), total=total_count)
-        await msg.answer(
-            f"Показано {len(results)} из {total_count}",
-            reply_markup=kb,
+        kb = (
+            build_catalog_keyboard(shown=len(results), total=total_count)
+            if len(results) < total_count
+            else None
         )
+        text = format_apartment_list(results, shown_start=1, total=total_count)
+        await msg.answer(text, parse_mode="HTML", reply_markup=kb)
+    else:
+        property_bot = manager.middleware_data.get("property_bot")
+        if property_bot is not None:
+            telegram_id = callback.from_user.id if callback.from_user else 0
+            for result in results:
+                with contextlib.suppress(Exception):
+                    await property_bot._send_property_card(msg, result, telegram_id)
+
+        if len(results) < total_count:
+            from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+            kb = build_catalog_keyboard(shown=len(results), total=total_count)
+            await msg.answer(
+                f"Показано {len(results)} из {total_count}",
+                reply_markup=kb,
+            )
 
 
 # ============================================================
