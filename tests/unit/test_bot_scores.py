@@ -1,6 +1,8 @@
 ***REMOVED*** tests/unit/test_bot_scores.py
 """Tests for Langfuse score writing (***REMOVED***310: scoring logic moved to scoring.py)."""
 
+import asyncio
+
 import pytest
 
 
@@ -145,6 +147,7 @@ async def _run_handle_query_supervisor(mock_config, mock_lf_client, *, history_s
             mock_cas.typing.return_value = _make_typing_cm()
             await bot.handle_query(message)
 
+    await asyncio.sleep(0)  ***REMOVED*** drain fire-and-forget history-save task
     return mock_lf_client, bot
 
 
