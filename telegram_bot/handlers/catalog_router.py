@@ -32,6 +32,7 @@ catalog_router = Router(name="catalog_browsing")
 @catalog_router.message(
     StateFilter(CatalogBrowsingSG.browsing),
     F.text.startswith("📥 Показать"),
+    flags={"rate_limit": {"rate": 0.3, "key": "catalog_more"}},
 )
 async def handle_catalog_more(
     message: Message,
@@ -86,6 +87,7 @@ async def handle_catalog_more(
 @catalog_router.message(
     StateFilter(CatalogBrowsingSG.browsing),
     F.text == "🔍 Фильтры",
+    flags={"rate_limit": {"rate": 0.3, "key": "catalog_filters"}},
 )
 async def handle_catalog_filters(
     message: Message,
@@ -117,6 +119,7 @@ async def handle_catalog_filters(
 @catalog_router.message(
     StateFilter(CatalogBrowsingSG.browsing),
     F.text == "📌 Избранное",
+    flags={"rate_limit": {"rate": 0.3, "key": "catalog_bookmarks"}},
 )
 async def handle_catalog_bookmarks(
     message: Message,
@@ -170,6 +173,7 @@ async def handle_catalog_manager(
 @catalog_router.message(
     StateFilter(CatalogBrowsingSG.browsing),
     F.text == "🏠 Главное меню",
+    flags={"rate_limit": {"rate": 0.6, "key": "catalog_exit"}},
 )
 async def handle_catalog_exit(message: Message, state: FSMContext) -> None:
     """Exit catalog mode and restore main keyboard."""
@@ -187,7 +191,10 @@ async def handle_catalog_exit(message: Message, state: FSMContext) -> None:
 # --- Filter panel inline callbacks ---
 
 
-@catalog_router.callback_query(FilterPanelCB.filter())
+@catalog_router.callback_query(
+    FilterPanelCB.filter(),
+    flags={"rate_limit": {"rate": 0.3, "key": "filter_panel"}},
+)
 async def handle_filter_panel_callback(
     callback: CallbackQuery,
     state: FSMContext,
