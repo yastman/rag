@@ -499,3 +499,80 @@ async def test_handle_unknown_action_answers_callback():
     await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
 
     callback.answer.assert_awaited_once()
+
+
+# ============================================================
+# complex filter — dynamic options from service
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_handle_select_complex_loads_from_service():
+    """Select complex loads dynamic options via get_collection_stats."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    svc = AsyncMock()
+    svc.get_collection_stats = AsyncMock(
+        return_value={"complexes": ["Premier Fort", "Harmony Suites", "Grand Resort"]}
+    )
+
+    callback, state, _ = _make_handler_mocks()
+    cb_data = FilterPanelCB(action="select", field="complex", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    svc.get_collection_stats.assert_awaited_once()
+    call_text = callback.message.edit_text.call_args[0][0]
+    assert "комплекс" in call_text.lower()
+    # Keyboard should contain dynamic options
+    kb = callback.message.edit_text.call_args[1]["reply_markup"]
+    button_texts = [btn.text for row in kb.inline_keyboard for btn in row]
+    assert "Premier Fort" in button_texts
+    assert "Harmony Suites" in button_texts
+    assert "Grand Resort" in button_texts
+
+
+@pytest.mark.asyncio
+async def test_handle_select_complex_current_value_checked():
+    """Selected complex shows checkmark on current value."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    svc = AsyncMock()
+    svc.get_collection_stats = AsyncMock(
+        return_value={"complexes": ["Premier Fort", "Harmony Suites"]}
+    )
+
+    callback, state, _ = _make_handler_mocks(filters={"complex_name": "Premier Fort"})
+    cb_data = FilterPanelCB(action="select", field="complex", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    kb = callback.message.edit_text.call_args[1]["reply_markup"]
+    button_texts = [btn.text for row in kb.inline_keyboard for btn in row]
+    assert "✅ Premier Fort" in button_texts
+    assert "Harmony Suites" in button_texts  # no checkmark
+
+
+@pytest.mark.asyncio
+async def test_handle_select_complex_no_service_shows_fallback():
+    """Without service, complex shows generic fallback."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, _ = _make_handler_mocks()
+    cb_data = FilterPanelCB(action="select", field="complex", value="")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=None)
+
+    kb = callback.message.edit_text.call_args[1]["reply_markup"]
+    button_texts = [btn.text for row in kb.inline_keyboard for btn in row]
+    assert "Любое" in button_texts
+
+
+@pytest.mark.asyncio
+async def test_handle_set_complex_stores_complex_name():
+    """Setting complex stores complex_name in filters."""
+    from telegram_bot.callback_data import FilterPanelCB
+
+    callback, state, svc = _make_handler_mocks()
+    cb_data = FilterPanelCB(action="set", field="complex", value="Premier Fort")
+    await handle_filter_panel(callback, state, cb_data, apartments_service=svc)
+
+    filters = state.update_data.call_args[1]["apartment_filters"]
+    assert filters["complex_name"] == "Premier Fort"
