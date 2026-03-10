@@ -13,9 +13,11 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
+from telegram_bot.callback_data import FilterPanelCB
 from telegram_bot.dialogs.states import CatalogBrowsingSG
+from telegram_bot.handlers.filter_panel import handle_filter_panel
 from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard, build_client_keyboard
 
 
@@ -158,6 +160,20 @@ async def handle_catalog_exit(message: Message, state: FSMContext) -> None:
 )
 async def handle_catalog_noop(message: Message) -> None:
     """Counter button — no action."""
+
+
+# --- Filter panel inline callbacks ---
+
+
+@catalog_router.callback_query(FilterPanelCB.filter())
+async def handle_filter_panel_callback(
+    callback: CallbackQuery,
+    state: FSMContext,
+    callback_data: FilterPanelCB,
+    apartments_service: Any = None,
+) -> None:
+    """Dispatch filter panel inline button callbacks."""
+    await handle_filter_panel(callback, state, callback_data, apartments_service)
 
 
 # --- Catch-all: any other text in catalog mode ---
