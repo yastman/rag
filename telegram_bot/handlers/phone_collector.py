@@ -77,6 +77,7 @@ def _build_note_text(
     telegram_id: int | str,
     display_name: str,
     viewing_objects: list[dict[str, Any]],
+    date_range: str | None = None,
 ) -> str:
     """Build rich note text for CRM."""
     tg_link = (
@@ -92,6 +93,12 @@ def _build_note_text(
         f"Telegram: {tg_link}",
         f"Имя в Telegram: {display_name}",
     ]
+
+    if date_range:
+        from telegram_bot.dialogs.viewing import DATE_LABELS
+
+        date_label = DATE_LABELS.get(date_range, date_range)
+        lines.append(f"Желаемая дата осмотра: {date_label}")
 
     if viewing_objects:
         lines.append("")
@@ -152,6 +159,7 @@ async def _process_valid_phone(
     data = await state.get_data()
     service_key = data.get("service_key", "unknown")
     viewing_objects: list[dict[str, Any]] = data.get("viewing_objects", [])
+    date_range: str | None = data.get("date_range")
     user = message.from_user
     user_id: int | str = user.id if user else "unknown"
 
@@ -217,7 +225,13 @@ async def _process_valid_phone(
             await kommo_client.link_contact_to_lead(lead.id, contact.id)
 
             note_text = _build_note_text(
-                crm_title, phone, username, user_id, display_name, viewing_objects
+                crm_title,
+                phone,
+                username,
+                user_id,
+                display_name,
+                viewing_objects,
+                date_range=date_range,
             )
 
             if search_event_store:
@@ -238,11 +252,17 @@ async def _process_valid_phone(
 
             await kommo_client.add_note("leads", lead.id, note_text)
 
+            if date_range:
+                from telegram_bot.dialogs.viewing import compute_due_date
+
+                due = compute_due_date(date_range)
+            else:
+                due = int(time.time()) + 86400
             await kommo_client.create_task(
                 TaskCreate(
                     text=f"Перезвонить: {phone} ({display_name}) — {crm_title}",
                     entity_id=lead.id,
-                    complete_till=int(time.time()) + 86400,
+                    complete_till=due,
                 )
             )
         except Exception:
