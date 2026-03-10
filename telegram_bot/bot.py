@@ -1262,9 +1262,16 @@ class PropertyBot:
             exclude_ids=seen_ids if next_start is not None else None,
         )
 
-        telegram_id = message.from_user.id if message.from_user else 0
-        for result in results:
-            await self._send_property_card(message, result, telegram_id)
+        view_mode = data.get("catalog_view_mode", "cards")
+        if view_mode == "list":
+            from telegram_bot.dialogs.funnel import format_apartment_list
+
+            text = format_apartment_list(results, shown_start=offset + 1)
+            await message.answer(text, parse_mode="HTML")
+        else:
+            telegram_id = message.from_user.id if message.from_user else 0
+            for result in results:
+                await self._send_property_card(message, result, telegram_id)
 
         new_offset = offset + len(results)
         await state.update_data(
@@ -4376,6 +4383,7 @@ class PropertyBot:
         from .dialogs.demo import demo_dialog
         from .dialogs.faq import faq_dialog
         from .dialogs.funnel import funnel_dialog
+        from .dialogs.handoff import handoff_dialog
         from .dialogs.manager_menu import manager_menu_dialog
         from .dialogs.settings import settings_dialog
         from .dialogs.viewing import viewing_dialog
@@ -4402,6 +4410,7 @@ class PropertyBot:
         self.dp.include_router(funnel_dialog)
         self.dp.include_router(faq_dialog)
         self.dp.include_router(viewing_dialog)
+        self.dp.include_router(handoff_dialog)
 
         # Catch-all text handler — AFTER all dialog routers so that dialog
         # MessageInput (e.g. viewing phone input) is resolved first.
