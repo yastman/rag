@@ -4533,6 +4533,13 @@ class PropertyBot:
 
             await self.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
 
+        # Warm up BGE-M3 connection pool (#953)
+        try:
+            await self._hybrid.aembed_query("warmup")
+            logger.info("BGE-M3 warmup complete")
+        except Exception:
+            logger.warning("BGE-M3 warmup failed (will retry on first query)", exc_info=True)
+
         # Start Mini App pub/sub subscriber (Redis → bot, bypasses openTelegramLink bug)
         if self._topic_manager is not None:
             self._miniapp_subscriber_task = asyncio.create_task(
