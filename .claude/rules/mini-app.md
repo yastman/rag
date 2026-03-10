@@ -6,35 +6,50 @@ paths: "mini_app/**/*.py, mini_app/**/*.tsx, mini_app/**/*.ts, telegram_bot/conf
 
 ## SDK
 
-**@telegram-apps/sdk-react v3** — официальный React SDK для Telegram Mini Apps. Заменяет raw `window.Telegram.WebApp`.
+**@tma.js/sdk-react** — официальный React SDK для Telegram Mini Apps. Заменяет raw `window.Telegram.WebApp`.
+
+Инициализация через `bootstrap.ts` (единый orchestrator):
 
 ```typescript
-// main.tsx — порядок инициализации КРИТИЧЕН:
-setupMockEnv();              // 1. Mock env (только в браузере, до SDK)
-init();                      // 2. SDK init
-mountThemeParamsSync();       // 3. Mount theme params
-bindThemeParamsCssVars();     // 4. Bind --tg-theme-* CSS vars
+// bootstrap.ts — порядок инициализации:
+setupMockEnv();              // 1. Mock env (dev only, до SDK)
+await isTMA("complete");     // 2. Detect TMA environment (@tma.js/bridge)
+init();                      // 3. SDK init (@tma.js/sdk-react)
+initData.restore();          // 4. Restore user/auth_date/hash
+themeParams.mount();         // 5. Mount theme params
+themeParams.bindCssVars();   // 6. Bind --tg-theme-* CSS vars
+await viewport.mount();      // 7. Viewport (async)
+viewport.bindCssVars();      // 8. Viewport CSS vars
+swipeBehavior.mount();       // 9. Swipe protection
+swipeBehavior.disableVertical(); // 10. Disable vertical swipe
 ```
+
+Пакеты:
+- `@tma.js/sdk-react` — init, initData, themeParams, viewport, swipeBehavior, openTelegramLink, closeMiniApp, sendData
+- `@tma.js/bridge` — isTMA, mockTelegramEnv
 
 ### Ключевые API
 
-| Функция | Паттерн | Назначение |
-|---------|---------|------------|
-| `openTelegramLink` | `.isAvailable()` + try/catch + `location.href` fallback | Deep link navigation |
-| `sendData` | `.ifAvailable(text)` | Отправка данных боту (закрывает Mini App) |
-| `closeMiniApp` | `.ifAvailable()` | Закрытие Mini App |
-| `initData.user()` | Прямой вызов | `{ id, firstName, lastName, username }` |
-| `isTMA()` | Sync проверка | `true` в Telegram, `false` в браузере |
-| `mockTelegramEnv` | `({ launchParams: URLSearchParams })` | Фейк env для локальной разработки |
-| `mountThemeParamsSync` | Вызов после `init()` | Загрузка theme params |
-| `bindThemeParamsCssVars` | Вызов после mount | Привязка `--tg-theme-*` CSS переменных |
+| Функция | Пакет | Паттерн | Назначение |
+|---------|-------|---------|------------|
+| `openTelegramLink` | `@tma.js/sdk-react` | `.isAvailable()` + try/catch + `location.href` fallback | Deep link navigation |
+| `sendData` | `@tma.js/sdk-react` | `.ifAvailable(text)` | Отправка данных боту (закрывает Mini App) |
+| `closeMiniApp` | `@tma.js/sdk-react` | `.ifAvailable()` | Закрытие Mini App |
+| `initData.user()` | `@tma.js/sdk-react` | Прямой вызов | `{ id, firstName, lastName, username }` |
+| `viewport.mount` | `@tma.js/sdk-react` | `.isAvailable()` — Computed signal | Async mount viewport |
+| `swipeBehavior.isSupported` | `@tma.js/sdk-react` | Computed signal `()` | true если платформа поддерживает |
+| `swipeBehavior.disableVertical` | `@tma.js/sdk-react` | Вызов после mount | Запрет вертикального свайпа |
+| `isTMA("complete")` | `@tma.js/bridge` | Async проверка | Promise<boolean>, строгая проверка |
+| `mockTelegramEnv` | `@tma.js/bridge` | `({ launchParams: URLSearchParams })` | Фейк env для локальной разработки |
 
 ### Anti-patterns
 
 - **НЕ** `window.Telegram.WebApp.*` — используй SDK хуки
 - **НЕ** `openTelegramLink(url)` без `.isAvailable()` guard — платформенные баги
-- **НЕ** забывай `mountThemeParamsSync()` + `bindThemeParamsCssVars()` — без них CSS переменные пустые
-- **НЕ** `<script src="telegram-web-app.js">` в index.html — SDK v3 сам управляет
+- **НЕ** `@telegram-apps/sdk-react` — мигрировано на `@tma.js/sdk-react`
+- **НЕ** `mountThemeParamsSync` / `bindThemeParamsCssVars` — устаревшие методы, используй `themeParams.mount()` + `themeParams.bindCssVars()`
+- **НЕ** `<script src="telegram-web-app.js">` в index.html — SDK сам управляет
+- **НЕ** инициализировать SDK в main.tsx напрямую — только через `bootstrap.ts`
 
 ## Архитектура
 
@@ -47,11 +62,14 @@ mini_app/
 ├── Dockerfile          # uv sync → uvicorn
 └── frontend/
     ├── src/
-    │   ├── main.tsx        # SDK init, mockEnv, Eruda, theme CSS vars
-    │   ├── mockEnv.ts      # mockTelegramEnv для dev в браузере
+    │   ├── main.tsx        # Entry point: await initApp() → TelegramGate → App
+    │   ├── bootstrap.ts    # TMA lifecycle orchestrator (init, theme, viewport, swipe)
+    │   ├── mockEnv.ts      # mockTelegramEnv для dev в браузере (@tma.js/bridge)
     │   ├── App.tsx         # Routes: /, /question/:id, /expert/:id
     │   ├── api.ts          # fetchConfig(), startExpert(), submitPhone(), remoteLog()
     │   ├── types.ts        # Prompt, Question, Expert, AppConfig
+    │   ├── guards/
+    │   │   └── TelegramGate.tsx  # Guard: fallback если не в Telegram (prod)
     │   └── pages/
     │       ├── HomePage.tsx
     │       ├── QuestionSheet.tsx  # sendData.ifAvailable + closeMiniApp
@@ -90,6 +108,37 @@ ssh -R 8091:127.0.0.1:5173 vps -N
 | Браузер | Chrome DevTools | Локальная разработка, mock env |
 | Telegram | Eruda (автоматически в dev) | Smoke test через tunnel |
 | После закрытия | Remote logging `/api/log` | Отлов ошибок openTelegramLink |
+
+### Telegram Test Environment (HTTP без tunnel)
+
+Для тестирования с реальным initData без VPS/tunnel:
+
+1. **Создать аккаунт в Test DC:**
+   - iOS: Settings → 10 быстрых тапов на версию → "Switch to Test DC"
+   - Android: Settings → 10 тапов на версию → "Enable Test Backend"
+   - Desktop: Settings → Alt + Shift + клик "Add Account" → test server
+
+2. **Создать тестового бота:**
+   - В Test DC написать @BotFather → /newbot
+   - Сохранить токен в `.env.test` как `TELEGRAM_BOT_TOKEN_TEST`
+
+3. **Настроить Mini App URL:**
+   - @BotFather → /newapp (или /setmenubutton)
+   - URL: `http://<WSL-IP>:5173` (HTTP разрешён в test DC)
+   - Узнать IP: `hostname -I | awk '{print $1}'`
+
+4. **Запустить:**
+   ```bash
+   docker compose --profile bot up -d mini-app-api
+   cd mini_app/frontend && npm run dev  # host: true уже в vite.config.ts
+   # Открыть мини-ап в Telegram Test DC
+   ```
+
+| Среда | URL | HTTPS | initData |
+|-------|-----|-------|----------|
+| Браузер (mock) | localhost:5173 | Нет | Фейковый |
+| Test DC | http://WSL-IP:5173 | Нет | Реальный |
+| Production | miniapp.awdawdawd.space | Да | Реальный |
 
 ## Docker-сервисы
 
@@ -130,7 +179,7 @@ ssh -R 8091:127.0.0.1:8091 vps -N
 | Mini app не открывается | `MINI_APP_URL` не обновлён | Обновить .env + перезапустить бота |
 | 502 Bad Gateway | mini-app-frontend не запущен | `docker compose --profile bot up -d` |
 | API ошибки | mini-app-api не healthy | `docker compose logs mini-app-api` |
-| CSS пустые/белый экран | `mountThemeParamsSync` не вызван | Проверить main.tsx порядок инициализации |
+| CSS пустые/белый экран | `themeParams.mount()` не вызван | Проверить bootstrap.ts порядок инициализации |
 | remote port forwarding failed | Порт занят или GatewayPorts off | Остановить mini-app на VPS, проверить sshd_config |
 
 ## Expert Start Flow (Deep Link)
@@ -177,15 +226,20 @@ topic_rev:{chat_id}:{thread_id}       → expert_id (reverse lookup)
 
 ## Тесты
 
-### Frontend (Vitest, 14 файлов, 51 тест)
+### Frontend (Vitest, 16 файлов, 55 тестов)
 
 ```bash
 cd mini_app/frontend && npm test                    # Все тесты
 cd mini_app/frontend && npm run build               # TS build check
 ```
 
-Моки SDK в `test-setup.ts` — глобальный `vi.mock("@telegram-apps/sdk-react")`.
-Для `main.test.tsx` используется `vi.doMock` с `vi.resetModules()`.
+Моки SDK в `test-setup.ts`:
+- Глобальный `vi.mock("@tma.js/sdk-react")` — init, initData, themeParams, viewport, swipeBehavior, openTelegramLink, closeMiniApp, sendData
+- Глобальный `vi.mock("@tma.js/bridge")` — mockTelegramEnv, isTMA
+- `vi.mock("eruda")` — заглушка dev-инструмента
+
+Для `main.test.tsx` используется `vi.doMock` (mock bootstrap, не реальный SDK).
+Для `bootstrap.test.ts` используется `vi.useFakeTimers()` + `vi.clearAllMocks()` в beforeEach.
 
 ### Backend (pytest)
 
