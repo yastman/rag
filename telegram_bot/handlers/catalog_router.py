@@ -128,6 +128,42 @@ async def handle_catalog_bookmarks(
         await property_bot._handle_bookmarks(message, state)
 
 
+# --- Запись на осмотр ---
+
+
+@catalog_router.message(
+    StateFilter(CatalogBrowsingSG.browsing),
+    F.text == "📅 Запись на осмотр",
+)
+async def handle_catalog_viewing(
+    message: Message,
+    state: FSMContext,
+    property_bot: Any = None,
+    dialog_manager: Any = None,
+) -> None:
+    """Route to viewing appointment from catalog mode."""
+    if property_bot is not None:
+        await property_bot._handle_viewing(message, state, dialog_manager)
+
+
+# --- Написать менеджеру ---
+
+
+@catalog_router.message(
+    StateFilter(CatalogBrowsingSG.browsing),
+    F.text == "👤 Написать менеджеру",
+)
+async def handle_catalog_manager(
+    message: Message,
+    state: FSMContext,
+    property_bot: Any = None,
+    dialog_manager: Any = None,
+) -> None:
+    """Route to manager contact from catalog mode."""
+    if property_bot is not None:
+        await property_bot._handle_manager(message, state=state, dialog_manager=dialog_manager)
+
+
 # --- Главное меню ---
 
 
