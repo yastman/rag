@@ -1,3 +1,7 @@
+---
+paths: "telegram_bot/**,src/**,mini_app/**,pyproject.toml"
+---
+
 # SDK Registry — rag-fresh
 
 > Источник правды о SDK-решениях проекта. Агенты и воркеры проверяют этот файл
