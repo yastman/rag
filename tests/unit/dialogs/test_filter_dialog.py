@@ -103,6 +103,25 @@ class TestFilterDialogStructure:
                     break
             assert found_radio, f"Window '{state_name}' should use Radio widget"
 
+    def test_filter_subwindows_have_back_button(self):
+        """All filter sub-windows should have a SwitchTo back button to hub."""
+        from aiogram_dialog.widgets.kbd import SwitchTo
+
+        from telegram_bot.dialogs.filter_dialog import filter_dialog
+
+        for window_state in filter_dialog.windows:
+            state_name = window_state.state.split(":")[-1]
+            if state_name == "hub":
+                continue
+            found_back = False
+            for widget in _iter_widgets(filter_dialog.windows[window_state]):
+                if isinstance(widget, SwitchTo):
+                    target = widget.state.state.split(":")[-1] if widget.state else ""
+                    if target == "hub":
+                        found_back = True
+                        break
+            assert found_back, f"Window '{state_name}' should have a back button to hub"
+
 
 def _iter_widgets(window):
     """Recursively iterate all widgets in a Window."""
