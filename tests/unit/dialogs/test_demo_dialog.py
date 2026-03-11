@@ -158,7 +158,7 @@ async def test_results_getter_degraded_mode() -> None:
 
 
 @pytest.mark.asyncio
-async def test_on_text_input_calls_pipeline_and_switches_to_results() -> None:
+async def test_on_text_input_calls_pipeline_and_searches() -> None:
     from telegram_bot.dialogs.demo import on_text_input
     from telegram_bot.services.apartment_models import (
         ApartmentSearchFilters,
@@ -168,6 +168,8 @@ async def test_on_text_input_calls_pipeline_and_switches_to_results() -> None:
 
     message = AsyncMock()
     message.text = "двушка до 100к"
+    message.from_user = MagicMock(id=123)
+    message.chat = MagicMock(id=456)
     widget = MagicMock()
     manager = MagicMock()
     manager.dialog_data = {}
@@ -178,25 +180,20 @@ async def test_on_text_input_calls_pipeline_and_switches_to_results() -> None:
         meta=ExtractionMeta(source="llm", confidence="HIGH"),
     )
     apartments_service = AsyncMock()
-    apartments_service.search_with_filters.return_value = ([], 0)
-    embeddings = AsyncMock()
-    embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
+    apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
 
+    state = AsyncMock()
     manager.middleware_data = {
         "pipeline": pipeline,
         "apartments_service": apartments_service,
-        "embeddings": embeddings,
+        "state": state,
     }
-    manager.switch_to = AsyncMock()
+    manager.done = AsyncMock()
 
     await on_text_input(message, widget, manager)
 
     pipeline.extract.assert_awaited_once_with("двушка до 100к")
-    manager.switch_to.assert_awaited_once_with(DemoSG.results)
-
-    # Verify top_k passed to service
-    call_kwargs = apartments_service.search_with_filters.await_args
-    assert call_kwargs.kwargs["top_k"] == 10
+    apartments_service.scroll_with_filters.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -233,6 +230,8 @@ async def test_on_voice_input_transcribes_then_searches() -> None:
 
     message = AsyncMock()
     message.voice = MagicMock()
+    message.from_user = MagicMock(id=123)
+    message.chat = MagicMock(id=456)
     widget = MagicMock()
     manager = MagicMock()
     manager.dialog_data = {}
@@ -243,16 +242,15 @@ async def test_on_voice_input_transcribes_then_searches() -> None:
         meta=ExtractionMeta(source="llm", confidence="HIGH"),
     )
     apartments_service = AsyncMock()
-    apartments_service.search_with_filters.return_value = ([], 0)
-    embeddings = AsyncMock()
-    embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
+    apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
 
+    state = AsyncMock()
     manager.middleware_data = {
         "pipeline": pipeline,
         "apartments_service": apartments_service,
-        "embeddings": embeddings,
+        "state": state,
     }
-    manager.switch_to = AsyncMock()
+    manager.done = AsyncMock()
 
     with patch(
         "telegram_bot.dialogs.demo.transcribe_voice", return_value="двушка до 100к"
@@ -261,7 +259,7 @@ async def test_on_voice_input_transcribes_then_searches() -> None:
         mock_stt.assert_awaited_once_with(message)
 
     pipeline.extract.assert_awaited_once_with("двушка до 100к")
-    manager.switch_to.assert_awaited_once_with(DemoSG.results)
+    apartments_service.scroll_with_filters.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -299,6 +297,8 @@ async def test_on_example_selected_runs_search() -> None:
 
     callback = AsyncMock()
     callback.message = AsyncMock()
+    callback.message.from_user = MagicMock(id=123)
+    callback.message.chat = MagicMock(id=456)
     widget = MagicMock()
     manager = MagicMock()
     manager.dialog_data = {}
@@ -309,18 +309,17 @@ async def test_on_example_selected_runs_search() -> None:
         meta=ExtractionMeta(source="llm", confidence="HIGH"),
     )
     apartments_service = AsyncMock()
-    apartments_service.search_with_filters.return_value = ([], 0)
-    embeddings = AsyncMock()
-    embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
+    apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
 
+    state = AsyncMock()
     manager.middleware_data = {
         "pipeline": pipeline,
         "apartments_service": apartments_service,
-        "embeddings": embeddings,
+        "state": state,
     }
-    manager.switch_to = AsyncMock()
+    manager.done = AsyncMock()
 
     await on_example_selected(callback, widget, manager, "Студия в Солнечном берегу до 100 000€")
 
     pipeline.extract.assert_awaited_once_with("Студия в Солнечном берегу до 100 000€")
-    manager.switch_to.assert_awaited_once_with(DemoSG.results)
+    apartments_service.scroll_with_filters.assert_awaited_once()

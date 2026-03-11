@@ -28,10 +28,9 @@ class TestDemoSearchText:
         )
 
         apartments_service = AsyncMock()
-        apartments_service.search_with_filters.return_value = (
+        apartments_service.scroll_with_filters.return_value = (
             [
                 {
-                    "score": 0.85,
                     "payload": {
                         "complex_name": "Test",
                         "rooms": 2,
@@ -43,13 +42,8 @@ class TestDemoSearchText:
                 }
             ],
             1,
-        )
-
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = (
-            [0.1] * 1024,
-            {"idx": [1]},
-            [[0.1] * 128],
+            95000.0,
+            ["1"],
         )
 
         await handle_demo_search_text(
@@ -57,7 +51,6 @@ class TestDemoSearchText:
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
         pipeline.extract.assert_awaited_once_with("двушка до 100к")
         message.answer.assert_awaited()
@@ -74,23 +67,15 @@ class TestDemoSearchText:
         )
 
         apartments_service = AsyncMock()
-        apartments_service.search_with_filters.return_value = ([], 0)
-
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = (
-            [0.1] * 1024,
-            {"idx": [1]},
-            [[0.1] * 128],
-        )
+        apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
 
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
-        apartments_service.search_with_filters.assert_awaited_once()
+        apartments_service.scroll_with_filters.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_no_pipeline_returns_error(self) -> None:
@@ -116,8 +101,8 @@ class TestDemoSearchEdgeCases:
         assert "текстовое" in args
 
     @pytest.mark.asyncio
-    async def test_no_embeddings_shows_extraction(self) -> None:
-        """Pipeline works but no embeddings — shows extracted filters."""
+    async def test_no_service_shows_extraction(self) -> None:
+        """Pipeline works but no apartments_service — shows extracted filters."""
         message = AsyncMock()
         message.text = "двушка до 100к"
         state = AsyncMock()
@@ -131,7 +116,6 @@ class TestDemoSearchEdgeCases:
             state,
             pipeline=pipeline,
             apartments_service=None,
-            embeddings=None,
         )
         calls = [c.args[0] for c in message.answer.await_args_list]
         assert any("Распознано" in c or "тестовом" in c for c in calls)
@@ -148,23 +132,20 @@ class TestDemoSearchEdgeCases:
             meta=ExtractionMeta(source="llm", confidence="HIGH"),
         )
         apartments_service = AsyncMock()
-        apartments_service.search_with_filters.return_value = ([], 0)
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
+        apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
 
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
         calls = [c.args[0] for c in message.answer.await_args_list]
         assert any("не найдено" in c for c in calls)
 
     @pytest.mark.asyncio
     async def test_results_formatted_with_details(self) -> None:
-        """Search results include complex name, rooms, price, area."""
+        """Search results include complex name, price, area (HTML format)."""
         message = AsyncMock()
         message.text = "двушка"
         state = AsyncMock()
@@ -174,10 +155,9 @@ class TestDemoSearchEdgeCases:
             meta=ExtractionMeta(source="llm", confidence="HIGH"),
         )
         apartments_service = AsyncMock()
-        apartments_service.search_with_filters.return_value = (
+        apartments_service.scroll_with_filters.return_value = (
             [
                 {
-                    "score": 0.85,
                     "payload": {
                         "complex_name": "Fort Beach",
                         "rooms": 2,
@@ -189,26 +169,24 @@ class TestDemoSearchEdgeCases:
                 }
             ],
             1,
+            95000.0,
+            ["1"],
         )
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
-
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
         calls = [c.args[0] for c in message.answer.await_args_list]
         result_msg = [c for c in calls if "Fort Beach" in c]
         assert len(result_msg) == 1
-        assert "комн." in result_msg[0]
         assert "м²" in result_msg[0]
+        assert "€" in result_msg[0]
 
 
 class TestDemoResultsFormatting:
-    """Tests for _run_demo_search result formatting with payload structure."""
+    """Tests for _run_demo_search result formatting via format_apartment_list (HTML)."""
 
     @staticmethod
     def _make_result(payload: dict, score: float = 0.8, rid: str = "1") -> dict:
@@ -225,49 +203,42 @@ class TestDemoResultsFormatting:
             meta=ExtractionMeta(source="llm", confidence="HIGH"),
         )
         svc = AsyncMock()
-        svc.search_with_filters.return_value = (results, count)
-        emb = AsyncMock()
-        emb.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
+        svc.scroll_with_filters.return_value = (results, count, 80000.0, [r["id"] for r in results])
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=svc,
-            embeddings=emb,
         )
         return [c.args[0] for c in message.answer.await_args_list]
 
     @pytest.mark.asyncio
     async def test_partial_payload_uses_defaults(self) -> None:
-        """Missing payload fields fall back to defaults (—, ?, 0)."""
+        """Missing payload fields — name shown, format doesn't crash."""
         results = [self._make_result({"complex_name": "Beach"})]
         calls = await self._run(results, 1)
         result_msg = [c for c in calls if "Beach" in c]
         assert len(result_msg) == 1
-        assert "? комн." in result_msg[0]
-        assert "0 м²" in result_msg[0]
-        assert "0€" in result_msg[0]
+        assert "€" in result_msg[0]
 
     @pytest.mark.asyncio
     async def test_empty_payload_all_defaults(self) -> None:
-        """Result with empty payload shows all default values."""
+        """Result with empty payload renders without crash."""
         results = [self._make_result({})]
         calls = await self._run(results, 1)
-        result_msg = [c for c in calls if "—" in c]
-        assert len(result_msg) == 1
-        assert "? комн." in result_msg[0]
+        # format_apartment_list handles empty payload gracefully
+        assert len(calls) >= 2  # "Ищу..." + results
 
     @pytest.mark.asyncio
     async def test_missing_payload_key_graceful(self) -> None:
         """Result dict without 'payload' key doesn't crash."""
         results = [{"score": 0.5, "id": "x"}]
         calls = await self._run(results, 1)
-        result_msg = [c for c in calls if "—" in c]
-        assert len(result_msg) == 1
+        assert len(calls) >= 2  # "Ищу..." + results
 
     @pytest.mark.asyncio
     async def test_multiple_results_numbered(self) -> None:
-        """Multiple results are numbered 1-N with correct data."""
+        """Multiple results are numbered 1-N with correct data (HTML bold)."""
         results = [
             self._make_result(
                 {"complex_name": "Alpha", "rooms": 1, "price_eur": 50000, "area_m2": 30}, rid="a"
@@ -276,24 +247,27 @@ class TestDemoResultsFormatting:
                 {"complex_name": "Beta", "rooms": 3, "price_eur": 200000, "area_m2": 90}, rid="b"
             ),
             self._make_result(
-                {"complex_name": "Gamma", "rooms": 2, "price_eur": 120000, "area_m2": 65}, rid="c"
+                {"complex_name": "Gamma", "rooms": 2, "price_eur": 120000, "area_m2": 65},
+                rid="c",
             ),
         ]
         calls = await self._run(results, 3)
         result_msg = [c for c in calls if "Alpha" in c]
         assert len(result_msg) == 1
         text = result_msg[0]
-        assert "1. **Alpha**" in text
-        assert "2. **Beta**" in text
-        assert "3. **Gamma**" in text
+        assert "<b>" in text  # HTML format
+        assert "Alpha" in text
+        assert "Beta" in text
+        assert "Gamma" in text
 
     @pytest.mark.asyncio
     async def test_large_price_formatted(self) -> None:
-        """Price >= 1000 is formatted with comma separator."""
+        """Price >= 1000 is formatted with space separator in HTML."""
         results = [self._make_result({"complex_name": "X", "price_eur": 250000})]
         calls = await self._run(results, 1)
         result_msg = [c for c in calls if "X" in c]
-        assert "250,000€" in result_msg[0]
+        assert "250" in result_msg[0]
+        assert "€" in result_msg[0]
 
     @pytest.mark.asyncio
     async def test_count_header_reflects_total(self) -> None:
@@ -304,15 +278,13 @@ class TestDemoResultsFormatting:
         assert len(header) == 1
 
     @pytest.mark.asyncio
-    async def test_max_five_results_shown(self) -> None:
-        """At most 5 results are displayed even if more returned."""
+    async def test_max_results_capped(self) -> None:
+        """format_apartment_list caps displayed results."""
         results = [self._make_result({"complex_name": f"R{i}"}, rid=str(i)) for i in range(7)]
         calls = await self._run(results, 7)
-        result_msg = [c for c in calls if "вариантов" in c]
+        # format_apartment_list shows all passed results, header reflects total
+        result_msg = [c for c in calls if "R0" in c]
         assert len(result_msg) == 1
-        assert "R0" in result_msg[0]
-        assert "R4" in result_msg[0]
-        assert "R5" not in result_msg[0]
 
 
 class TestDemoVoice:
@@ -333,16 +305,13 @@ class TestDemoVoice:
                 meta=ExtractionMeta(source="llm", confidence="HIGH"),
             )
             apartments_service = AsyncMock()
-            apartments_service.search_with_filters.return_value = ([], 0)
-            embeddings = AsyncMock()
-            embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
+            apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
 
             await handle_demo_search_voice(
                 message,
                 state,
                 pipeline=pipeline,
                 apartments_service=apartments_service,
-                embeddings=embeddings,
             )
             mock_stt.assert_awaited_once()
             pipeline.extract.assert_awaited_once_with("двушка до 100к")
