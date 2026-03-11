@@ -63,7 +63,13 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
     rooms_val = dd.get("rooms")
     budget_val = dd.get("budget")
 
-    from telegram_bot.dialogs.filter_constants import BUDGET_DISPLAY, ROOMS_DISPLAY
+    from telegram_bot.dialogs.filter_constants import (
+        AREA_DISPLAY,
+        BUDGET_DISPLAY,
+        FLOOR_DISPLAY,
+        ROOMS_DISPLAY,
+        VIEW_DISPLAY,
+    )
 
     rooms_label = "Любой"
     if rooms_val is not None:
@@ -73,11 +79,36 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
             rooms_label = str(rooms_val)
     budget_label = BUDGET_DISPLAY.get(str(budget_val), str(budget_val)) if budget_val else "Любой"
 
+    view_val = dd.get("view")
+    view_label = VIEW_DISPLAY.get(view_val, view_val) if view_val else "Любой"
+
+    area_val = dd.get("area")
+    area_label = AREA_DISPLAY.get(area_val, area_val) if area_val else "Любая"
+
+    floor_val = dd.get("floor")
+    floor_label = FLOOR_DISPLAY.get(floor_val, floor_val) if floor_val else "Любой"
+
+    complex_val = dd.get("complex") or "Любой"
+
+    furnished_val = dd.get("furnished")
+    furnished_label = (
+        {"true": "Да", "false": "Нет"}.get(furnished_val, "Любое") if furnished_val else "Любое"
+    )
+
+    promotion_val = dd.get("promotion")
+    promotion_label = "Только акции" if promotion_val == "true" else "Любое"
+
     return {
         "count": count,
         "city_val": city_val,
         "rooms_val": rooms_label,
         "budget_val": budget_label,
+        "view_val": view_label,
+        "area_val": area_label,
+        "floor_val": floor_label,
+        "complex_val": complex_val,
+        "furnished_val": furnished_label,
+        "promotion_val": promotion_label,
     }
 
 
@@ -181,7 +212,12 @@ def _filters_to_dialog_data(filters: dict[str, Any]) -> dict[str, Any]:
     if filters.get("city"):
         dd["city"] = filters["city"]
     if filters.get("rooms") is not None:
-        dd["rooms"] = str(filters["rooms"])
+        rooms = filters["rooms"]
+        if isinstance(rooms, list):
+            # Studio from funnel: [0, 1] → "1" for FilterDialog Radio
+            dd["rooms"] = "1"
+        else:
+            dd["rooms"] = str(rooms)
     if filters.get("price_eur"):
         price = filters["price_eur"]
         for key, val in BUDGET_MAP.items():
@@ -369,7 +405,13 @@ filter_dialog = Dialog(
             "🏠 Фильтры поиска\n\n"
             "📍 Город: {city_val}\n"
             "🛏 Комнаты: {rooms_val}\n"
-            "💰 Бюджет: {budget_val}\n\n"
+            "💰 Бюджет: {budget_val}\n"
+            "🌅 Вид: {view_val}\n"
+            "📐 Площадь: {area_val}\n"
+            "🏢 Этаж: {floor_val}\n"
+            "🏘 Комплекс: {complex_val}\n"
+            "🛋 Мебель: {furnished_val}\n"
+            "🏷 Акции: {promotion_val}\n\n"
             "Найдено: {count} апартаментов"
         ),
         Row(
