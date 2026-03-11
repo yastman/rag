@@ -331,24 +331,31 @@ def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQuer
 class HardFilters(BaseModel):
     """Hard filters that map directly to Qdrant payload conditions."""
 
-    city: str | None = Field(
+    city: Literal["Солнечный берег", "Свети Влас", "Элените"] | None = Field(
         default=None,
-        description="Город: 'Солнечный берег', 'Свети Влас' или 'Элените'. None если не указан.",
+        description="Город. None если не указан.",
     )
     rooms: int | None = Field(
         default=None,
+        ge=1,
+        le=5,
         description=(
-            "Общее число комнат (спальни + гостиная). "
-            "Студия=1, 1 спальня=2, 2 спальни (двушка)=3, 3 спальни (трёшка)=4. "
-            "ВАЖНО: 'двушка'=2 спальни=rooms 3, 'трёшка'=3 спальни=rooms 4."
+            "Общее кол-во комнат (спальни + гостиная). "
+            "N-комнатная→N напрямую: однокомнатная→1, двухкомнатная/двушка→2, "
+            "трехкомнатная/трёхкомнатный→3, четырехкомнатная→4. "
+            "СЛЕНГ ПО СПАЛЬНЯМ (нужно +1): двушка=2 спальни→3, трёшка=3 спальни→4. "
+            "'N спален'→N+1. НЕ путать: трехкомнатный→3, трёшка→4."
         ),
     )
     min_price_eur: float | None = Field(
-        default=None, description="Минимальная цена в EUR. 'дороже 200000'→200000."
+        default=None,
+        ge=1000,
+        description="Мин. цена в EUR. 'дороже 200000'→200000.",
     )
     max_price_eur: float | None = Field(
         default=None,
-        description="Максимальная цена в EUR. 'до 100к'→100000, 'дешевле 200000'→200000.",
+        ge=1000,
+        description="Макс. цена в EUR. 'до 100к'→100000, 'до 200 тысяч'→200000.",
     )
     min_area_m2: float | None = Field(
         default=None,

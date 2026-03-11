@@ -29,9 +29,12 @@ Marina View Fort Beach, Messambria Fort Beach, Imperial Fort Club,
 Crown Fort Club, Green Fort Suites, Premier Fort Suites, Nessebar Fort Residence.
 
 Правила:
-- Цены всегда в EUR
-- rooms = общее число комнат (спальни + гостиная): студия=1, 1-спальня=2, 2-спальни=3, 3-спальни=4
-- "двушка" = 2 спальни = rooms 3, "трешка" = 3 спальни = rooms 4, "студия" = rooms 1
+- Цены всегда в EUR. "200 тысяч"=200000, "100к"=100000
+- rooms = ОБЩЕЕ число комнат (спальни + гостиная):
+  - N-комнатная → rooms=N напрямую: однокомнатная→1, двухкомнатная→2, трехкомнатная→3
+  - Сленг ПО СПАЛЬНЯМ (нужно +1): двушка=2 спальни→rooms 3, трёшка=3 спальни→rooms 4
+  - НЕ ПУТАТЬ: "трехкомнатный"→rooms 3, "трёшка"→rooms 4
+  - студия→rooms 1
 - "у моря" = near_sea preference, НЕ view_tags (если не сказано "вид на море")
 - "недорого"/"бюджетно" = budget_friendly preference + sort_bias="price_asc"
 - "просторная" = spacious preference + min_area_m2 >= 60
