@@ -179,9 +179,27 @@ async def handle_catalog_exit(message: Message, state: FSMContext) -> None:
     await message.answer("Вы вернулись в главное меню 🏠", reply_markup=build_client_keyboard())
 
 
-# --- Catch-all: any other text in catalog mode ---
+# --- Catch-all: treat free text as new search ---
 
 
 @catalog_router.message(StateFilter(CatalogBrowsingSG.browsing), F.text)
-async def handle_catalog_fallback(message: Message) -> None:
-    """Ignore unknown text in catalog mode — don't leak to RAG."""
+async def handle_catalog_fallback(
+    message: Message,
+    state: FSMContext,
+    property_bot: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Treat free text in catalog mode as a new search query."""
+    from telegram_bot.handlers.demo_handler import _run_demo_search
+
+    pipeline = getattr(property_bot, "_extraction_pipeline", None) if property_bot else None
+    svc = getattr(property_bot, "_apartments_service", None) if property_bot else None
+    if not pipeline or not message.text:
+        return
+    await _run_demo_search(
+        message.text,
+        message,
+        state,
+        pipeline=pipeline,
+        apartments_service=svc,
+    )
