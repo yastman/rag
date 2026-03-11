@@ -76,7 +76,7 @@ Voice: Voice Message → PropertyBot.handle_voice()
 | `telegram_bot/middlewares/i18n.py` | I18nMiddleware — locale detection, injects `i18n`, `locale`, `property_bot`, `apartments_service` (#660) |
 | `telegram_bot/dialogs/` | aiogram-dialog menus: `crm_submenu`, `faq`, `filter_dialog`, `funnel`, `manager_menu`, `settings` |
 | `telegram_bot/dialogs/filter_constants.py` | Shared filter constants + `build_filters_dict()` — single source of truth for funnel + filter dialog |
-| `telegram_bot/dialogs/filter_dialog.py` | FilterDialog (aiogram-dialog) — hub + 9 filter sub-windows (Select/SwitchTo), replaces custom filter_panel (687 LOC) |
+| `telegram_bot/dialogs/filter_dialog.py` | FilterDialog (aiogram-dialog) — dynamic hub + 9 filter sub-windows with back buttons (Radio/SwitchTo) |
 | `telegram_bot/handlers/phone_collector.py` | Phone number collection FSM handler + Kommo CRM lead creation (#628) |
 | `telegram_bot/keyboards/client_keyboard.py` | Client ReplyKeyboard — `build_client_keyboard(i18n=)`, `get_menu_button_texts(i18n_hub=)`, `parse_menu_button(text, i18n_hub=)` with .ftl keys (#660) |
 | `telegram_bot/keyboards/property_card.py` | Property listing card with bookmark + results footer |
@@ -204,6 +204,23 @@ Promotions section: `config/services.yaml` → `promotions:` list with `emoji`, 
 4. `_build_funnel_filters(dialog_data)` → Qdrant payload filters (rooms, price_eur, city, floor, view_tags)
 5. `svc.search(dense_vector, sparse_vector, filters, top_k=5)` → results
 6. Formats via `format_property_card()` or returns fallback text
+
+### FilterDialog — Dynamic Hub + Back Buttons
+
+`filter_dialog.py` — 10-window aiogram-dialog (hub + 9 filter sub-windows):
+
+**Hub (`get_hub_data`):** Динамически показывает только активные фильтры (не все 9 с "Любой"). Если ни один фильтр не выбран — "Фильтры не заданы".
+
+**Back buttons:** Каждое суб-окно имеет `SwitchTo("← Назад", state=FilterSG.hub)` для возврата в hub. Radio виджеты сохраняют выбранное значение при повторном входе.
+
+**`_filters_to_dialog_data()`:** Reverse-mapping из Qdrant-фильтров (от funnel) в dialog_data:
+- `rooms=[0, 1]` (studio из funnel) → `"1"` (Radio item_id)
+- `is_promotion` → `promotion` field
+- Скалярные значения конвертируются в строки для Radio
+
+**Два entry-point фильтрации:**
+- `build_funnel_filters()` (funnel.py) — из FunnelSG dialog_data
+- `build_filters_dict()` (filter_constants.py) — из FilterSG dialog_data
 
 ### PhoneCollector → Kommo CRM (#628)
 
