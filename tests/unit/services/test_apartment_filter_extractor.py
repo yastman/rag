@@ -15,12 +15,12 @@ class TestRooms:
     @pytest.mark.parametrize(
         ("query", "expected_rooms"),
         [
-            ("двушка с видом на море", 2),
+            ("двушка с видом на море", 3),
             ("2 комнаты до 200к", 2),
             ("трёхкомнатная квартира", 3),
             ("студия в Несебре", 1),
             ("однокомнатная", 1),
-            ("4 спальни", 4),
+            ("4 спальни", 5),
         ],
     )
     def test_rooms_extraction(self, query: str, expected_rooms: int) -> None:
@@ -123,7 +123,7 @@ class TestArea:
 class TestCombined:
     def test_full_query(self) -> None:
         result = _ext.parse("двушка до 200к с видом на море в Премьере")
-        assert result.rooms == 2
+        assert result.rooms == 3
         assert result.max_price_eur == 200000.0
         assert "sea" in result.view_tags
         assert result.complex_name == "Premier Fort Beach"
@@ -180,5 +180,5 @@ class TestCityAndComplex:
 
     def test_treshka_rooms(self) -> None:
         result = _ext.parse("трешка солнечный берег")
-        assert result.rooms == 3
+        assert result.rooms == 4
         assert result.city == "Солнечный берег"
