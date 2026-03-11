@@ -44,11 +44,21 @@ _COMPLEX_ALIASES_SORTED = sorted(_COMPLEX_ALIASES, key=len, reverse=True)
 
 # City aliases — sorted longest-first for greedy match
 _CITY_ALIASES: dict[str, str] = {
+    # Солнечный берег — все падежи
     "солнечный берег": "Солнечный берег",
+    "солнечного берега": "Солнечный берег",
+    "солнечном берегу": "Солнечный берег",
+    "солнечному берегу": "Солнечный берег",
     "sunny beach": "Солнечный берег",
     "санни бич": "Солнечный берег",
+    # Свети Влас — все падежи
     "свети влас": "Свети Влас",
+    "свети власе": "Свети Влас",
+    "свети власа": "Свети Влас",
     "святой влас": "Свети Влас",
+    "святом власе": "Свети Влас",
+    "святого власа": "Свети Влас",
+    # Элените — не склоняется
     "элените": "Элените",
     "elenite": "Элените",
 }
@@ -97,29 +107,45 @@ class ApartmentFilterExtractor:
     # --- Rooms ---
 
     def _extract_rooms(self, text: str, consumed: list[tuple[int, int]]) -> int | None:
-        _num_map = {"одно": 1, "дву": 2, "трех": 3, "трёх": 3, "четырех": 4, "пяти": 5}
-        patterns: list[tuple[str, int | None]] = [
-            (r"двушка", 2),
-            (r"трёшка|трешка", 3),
-            (r"трёхкомнатная|трехкомнатная", 3),
-            (r"однокомнатная", 1),
+        """Extract rooms count.
+
+        Data uses total rooms (bedrooms + living room):
+        studio=0/1, 1-bed=2, 2-bed=3, 3-bed=4.
+        User slang: "двушка"=2 bedrooms=rooms 3, "трёшка"=3 bedrooms=rooms 4.
+        """
+        # Slang → rooms (total rooms in Qdrant data)
+        _slang: list[tuple[str, int]] = [
+            (r"двушка", 3),
+            (r"трёшка|трешка", 4),
             (r"студия", 1),
-            (r"(\d+)\s*комнат", None),
-            (r"(\d+)\s*спальн", None),
-            (r"(одно|дву|трех|трёх|четырех|пяти)комнатн", None),
         ]
-        for pat, val in patterns:
+        for pat, val in _slang:
             m = re.search(pat, text)
             if m:
                 consumed.append(m.span())
-                if val is not None:
-                    return val
-                g = m.group(1)
-                if g.isdigit():
-                    return int(g)
-                for word, num in _num_map.items():
-                    if g.startswith(word):
-                        return num
+                return val
+
+        # "N спален/спальни" → rooms = N + 1 (bedrooms + living room)
+        m = re.search(r"(\d+)\s*спальн", text)
+        if m:
+            consumed.append(m.span())
+            return int(m.group(1)) + 1
+
+        # "N комнат" → rooms = N (direct)
+        m = re.search(r"(\d+)\s*комнат", text)
+        if m:
+            consumed.append(m.span())
+            return int(m.group(1))
+
+        # "двухкомнатная" etc → total rooms (direct)
+        _num_map = {"одно": 1, "дву": 2, "трех": 3, "трёх": 3, "четырех": 4, "пяти": 5}
+        m = re.search(r"(одно|дву|трех|трёх|четырех|пяти)комнатн", text)
+        if m:
+            consumed.append(m.span())
+            g = m.group(1)
+            for word, num in _num_map.items():
+                if g.startswith(word):
+                    return num
         return None
 
     # --- Price ---

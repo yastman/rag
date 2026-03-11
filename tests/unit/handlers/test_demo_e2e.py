@@ -38,7 +38,7 @@ async def test_pipeline_regex_fallback_works():
     """Without LLM, pipeline falls back to regex."""
     pipe = ApartmentExtractionPipeline(regex_extractor=ApartmentFilterExtractor())
     result = await pipe.extract("двушка до 100000")
-    assert result.hard.rooms == 2
+    assert result.hard.rooms == 3
     assert result.meta.source == "regex"
 
 
