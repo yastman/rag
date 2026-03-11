@@ -82,7 +82,12 @@ class KommoClient:
         response = await self._client.request(method, path, headers=headers, **kwargs)
 
         if response.status_code == 401:
-            token = await self._token_store.force_refresh()
+            try:
+                token = await self._token_store.force_refresh()
+            except RuntimeError:
+                # Seeded long-lived tokens have no refresh_token — re-raise as HTTP error.
+                response.raise_for_status()
+                return {}  # unreachable, raise_for_status always throws on 401
             headers["Authorization"] = f"Bearer {token}"
             response = await self._client.request(method, path, headers=headers, **kwargs)
 
