@@ -59,9 +59,6 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
             count = await svc.count_with_filters(filters=filters)
 
     dd = dialog_manager.dialog_data
-    city_val = dd.get("city") or "Любой"
-    rooms_val = dd.get("rooms")
-    budget_val = dd.get("budget")
 
     from telegram_bot.dialogs.filter_constants import (
         AREA_DISPLAY,
@@ -71,44 +68,55 @@ async def get_hub_data(dialog_manager: DialogManager, **kwargs: Any) -> dict[str
         VIEW_DISPLAY,
     )
 
-    rooms_label = "Любой"
+    # Build dynamic active filters summary — only show selected (non-default) filters
+    lines: list[str] = []
+
+    city_val = dd.get("city")
+    if city_val:
+        lines.append(f"📍 Город: {city_val}")
+
+    rooms_val = dd.get("rooms")
     if rooms_val is not None:
         try:
-            rooms_label = ROOMS_DISPLAY.get(int(rooms_val), str(rooms_val))
+            label = ROOMS_DISPLAY.get(int(rooms_val), str(rooms_val))
         except (ValueError, TypeError):
-            rooms_label = str(rooms_val)
-    budget_label = BUDGET_DISPLAY.get(str(budget_val), str(budget_val)) if budget_val else "Любой"
+            label = str(rooms_val)
+        lines.append(f"🛏 Комнаты: {label}")
+
+    budget_val = dd.get("budget")
+    if budget_val:
+        lines.append(f"💰 Бюджет: {BUDGET_DISPLAY.get(str(budget_val), str(budget_val))}")
 
     view_val = dd.get("view")
-    view_label = VIEW_DISPLAY.get(view_val, view_val) if view_val else "Любой"
+    if view_val:
+        lines.append(f"🌅 Вид: {VIEW_DISPLAY.get(view_val, view_val)}")
 
     area_val = dd.get("area")
-    area_label = AREA_DISPLAY.get(area_val, area_val) if area_val else "Любая"
+    if area_val:
+        lines.append(f"📐 Площадь: {AREA_DISPLAY.get(area_val, area_val)}")
 
     floor_val = dd.get("floor")
-    floor_label = FLOOR_DISPLAY.get(floor_val, floor_val) if floor_val else "Любой"
+    if floor_val:
+        lines.append(f"🏢 Этаж: {FLOOR_DISPLAY.get(floor_val, floor_val)}")
 
-    complex_val = dd.get("complex") or "Любой"
+    complex_val = dd.get("complex")
+    if complex_val:
+        lines.append(f"🏘 Комплекс: {complex_val}")
 
     furnished_val = dd.get("furnished")
-    furnished_label = (
-        {"true": "Да", "false": "Нет"}.get(furnished_val, "Любое") if furnished_val else "Любое"
-    )
+    if furnished_val:
+        label = {"true": "Да", "false": "Нет"}.get(furnished_val, furnished_val)
+        lines.append(f"🛋 Мебель: {label}")
 
     promotion_val = dd.get("promotion")
-    promotion_label = "Только акции" if promotion_val == "true" else "Любое"
+    if promotion_val == "true":
+        lines.append("🏷 Только акции")
+
+    active_filters = "\n".join(lines) if lines else "Фильтры не заданы"
 
     return {
         "count": count,
-        "city_val": city_val,
-        "rooms_val": rooms_label,
-        "budget_val": budget_label,
-        "view_val": view_label,
-        "area_val": area_label,
-        "floor_val": floor_label,
-        "complex_val": complex_val,
-        "furnished_val": furnished_label,
-        "promotion_val": promotion_label,
+        "active_filters": active_filters,
     }
 
 
@@ -401,19 +409,7 @@ async def on_reset(
 filter_dialog = Dialog(
     # Hub window: filter summary + navigation
     Window(
-        Format(
-            "🏠 Фильтры поиска\n\n"
-            "📍 Город: {city_val}\n"
-            "🛏 Комнаты: {rooms_val}\n"
-            "💰 Бюджет: {budget_val}\n"
-            "🌅 Вид: {view_val}\n"
-            "📐 Площадь: {area_val}\n"
-            "🏢 Этаж: {floor_val}\n"
-            "🏘 Комплекс: {complex_val}\n"
-            "🛋 Мебель: {furnished_val}\n"
-            "🏷 Акции: {promotion_val}\n\n"
-            "Найдено: {count} апартаментов"
-        ),
+        Format("🏠 Фильтры поиска\n\n{active_filters}\n\nНайдено: {count} апартаментов"),
         Row(
             SwitchTo(Const("📍 Город"), id="sw_city", state=FilterSG.city),
             SwitchTo(Const("🛏 Комнаты"), id="sw_rooms", state=FilterSG.rooms),
