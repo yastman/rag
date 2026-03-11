@@ -135,6 +135,7 @@ async def _run_demo_search(
     state: FSMContext,
     pipeline: Any = None,
     apartments_service: Any = None,
+    **kwargs: Any,
 ) -> None:
     """Core search logic: extraction → scroll_with_filters → catalog browsing."""
     if not pipeline:
