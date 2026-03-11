@@ -230,6 +230,8 @@ class ApartmentQueryParseResult:
     def to_filters_dict(self) -> dict:
         """Convert to Qdrant-compatible filters dict for _build_apartment_filter()."""
         f: dict = {}
+        if self.city is not None:
+            f["city"] = self.city
         if self.rooms is not None:
             f["rooms"] = self.rooms
         if self.min_price_eur is not None or self.max_price_eur is not None:
@@ -329,18 +331,51 @@ def compute_confidence(parse_result: ApartmentQueryParseResult) -> ApartmentQuer
 class HardFilters(BaseModel):
     """Hard filters that map directly to Qdrant payload conditions."""
 
-    city: str | None = None
-    rooms: int | None = None
-    min_price_eur: float | None = None
-    max_price_eur: float | None = None
-    min_area_m2: float | None = None
-    max_area_m2: float | None = None
-    min_floor: int | None = None
-    max_floor: int | None = None
-    complex_name: str | None = None
-    view_tags: list[str] = Field(default_factory=list)
+    city: str | None = Field(
+        default=None,
+        description="Город: 'Солнечный берег', 'Свети Влас' или 'Элените'. None если не указан.",
+    )
+    rooms: int | None = Field(
+        default=None,
+        description=(
+            "Общее число комнат (спальни + гостиная). "
+            "Студия=1, 1 спальня=2, 2 спальни (двушка)=3, 3 спальни (трёшка)=4. "
+            "ВАЖНО: 'двушка'=2 спальни=rooms 3, 'трёшка'=3 спальни=rooms 4."
+        ),
+    )
+    min_price_eur: float | None = Field(
+        default=None, description="Минимальная цена в EUR. 'дороже 200000'→200000."
+    )
+    max_price_eur: float | None = Field(
+        default=None,
+        description="Максимальная цена в EUR. 'до 100к'→100000, 'дешевле 200000'→200000.",
+    )
+    min_area_m2: float | None = Field(
+        default=None,
+        description="Минимальная площадь в м². 'больше 120 м²'→120, 'от 80 кв.м'→80.",
+    )
+    max_area_m2: float | None = Field(
+        default=None, description="Максимальная площадь в м². 'до 60 м²'→60."
+    )
+    min_floor: int | None = Field(default=None, description="Минимальный этаж. 'от 3 этажа'→3.")
+    max_floor: int | None = Field(default=None, description="Максимальный этаж. 'не выше 5'→5.")
+    complex_name: str | None = Field(
+        default=None,
+        description=(
+            "Название комплекса (EN): Premier Fort Beach, Prestige Fort Beach, "
+            "Panorama Fort Beach, Marina View Fort Beach, Messambria Fort Beach, "
+            "Imperial Fort Club, Crown Fort Club, Green Fort Suites, "
+            "Premier Fort Suites, Nessebar Fort Residence."
+        ),
+    )
+    view_tags: list[str] = Field(
+        default_factory=list,
+        description="Теги вида: 'sea', 'pool', 'garden', 'forest', 'panorama'.",
+    )
     section: str | None = None
-    is_furnished: bool | None = None
+    is_furnished: bool | None = Field(
+        default=None, description="С мебелью (true) / без мебели (false). None если не указано."
+    )
 
     @model_validator(mode="after")
     def fix_ranges(self) -> HardFilters:
