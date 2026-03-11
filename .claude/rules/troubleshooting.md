@@ -15,4 +15,7 @@ description: "Known errors and fixes for common development issues"
 | `qdrant-client .search()` AttributeError | Migrated to `.query_points()` in v1.17 — never use `.search()` |
 | ColBERT rerank 16s on CPU | Server-side ColBERT via Qdrant nested prefetch, or `RERANK_PROVIDER=none` |
 | Kommo `kommo_client = None` | `KOMMO_CLIENT_ID` (not `KOMMO_INTEGRATION_ID`), `KOMMO_CLIENT_SECRET`, `KOMMO_REDIRECT_URI` |
+| Kommo `create_lead` 400 Bad Request | `KOMMO_NEW_STATUS_ID` не может быть unsorted (type=1). Используй первый обычный статус (type=0) |
+| Kommo `RuntimeError: No refresh_token` | Seeded long-lived токен без refresh_token → 401 → crash. Фикс в `kommo_client.py:_request` (graceful re-raise) |
+| Kommo старый токен после смены аккаунта | `redis-cli DEL kommo:oauth:tokens` — ключ общий, не per-subdomain |
 | TTFT drift warnings spam | `TTFT_DRIFT_WARN_MS=500`; raise for reasoning models behind proxy |
