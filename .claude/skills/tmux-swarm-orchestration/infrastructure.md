@@ -67,6 +67,13 @@ System-reminder **автоматически** пушит состояние tas
 
 **КРИТИЧНО:** `mkdir -p logs` в worktree ОБЯЗАТЕЛЬНО — worktree не копирует gitignored директории (`logs/`).
 
+**КРИТИЧНО:** Untracked файлы (планы, промты) НЕ попадают в worktree. `git worktree add` копирует только tracked (committed) файлы. Если промт ссылается на untracked файл — скопировать вручную:
+
+    # После создания worktree — копировать untracked файлы, на которые ссылается промт:
+    WT="${PROJECT_ROOT}-wt-{name}"
+    cp "${PROJECT_ROOT}/docs/plans/{plan}.md" "${WT}/docs/plans/" 2>/dev/null
+    # Или: закоммитить план ДО создания worktree (предпочтительно)
+
 **НИКОГДА `claude --worktree`** для tmux workers — удаляет worktree при exit, коммиты ПОТЕРЯНЫ.
 
 ### Изоляция секретов
