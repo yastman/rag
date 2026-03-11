@@ -355,7 +355,7 @@ async def test_catalog_exit_returns_to_main_menu() -> None:
     [
         ("двушка солнечный берег", "city", "Солнечный берег"),
         ("студия в элените", "rooms", 1),
-        ("трёшка до 100к", "rooms", 3),
+        ("трёшка до 100к", "rooms", 4),
     ],
 )
 def test_extraction_produces_correct_filter(

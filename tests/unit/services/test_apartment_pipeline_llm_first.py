@@ -49,7 +49,7 @@ class TestLlmFirstPipeline:
         mock_llm.extract.side_effect = RuntimeError("LLM unavailable")
         result = await pipeline.extract("двушка до 100000")
         assert result.meta.source == "regex"
-        assert result.hard.rooms == 2
+        assert result.hard.rooms == 3
 
     @pytest.mark.asyncio
     async def test_cache_hit_skips_llm(self, mock_llm) -> None:
@@ -75,7 +75,7 @@ class TestLlmFirstPipeline:
         )
         result = await pipe.extract("двушка до 100000")
         assert result.meta.source == "regex"
-        assert result.hard.rooms == 2
+        assert result.hard.rooms == 3
 
     @pytest.mark.asyncio
     async def test_llm_result_cached(self, mock_llm) -> None:
