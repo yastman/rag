@@ -142,38 +142,35 @@ async def _run_demo_search(
     embeddings: Any = None,
     **kwargs: Any,
 ) -> None:
-    """Core search logic: LLM extraction → Qdrant → format results."""
+    """Core search logic: extraction → scroll_with_filters → catalog browsing."""
     if not pipeline:
         await message.answer("Сервис поиска временно недоступен.")
         return
 
     await message.answer("🔍 Ищу подходящие варианты...")
 
-    # 1. LLM extraction
+    # 1. Extraction
     extraction = await pipeline.extract(query)
 
-    if not apartments_service or not embeddings:
+    if not apartments_service:
         await message.answer(
             f"📋 Распознано: {extraction.hard.model_dump(exclude_none=True)}\n"
             "(поиск недоступен в тестовом режиме)"
         )
         return
 
-    # 2. Embeddings
-    semantic_query = extraction.meta.semantic_remainder or query
-    dense, sparse, colbert = await embeddings.aembed_hybrid_with_colbert(semantic_query)
+    # 2. Scroll with extracted filters
+    from telegram_bot.dialogs.funnel import format_apartment_list
+    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
 
-    # 3. Search
-    filters = extraction.hard.to_filters_dict()
-    results, count = await apartments_service.search_with_filters(
-        dense_vector=dense,
-        colbert_query=colbert or None,
-        sparse_vector=sparse,
-        filters=filters or None,
-        top_k=5,
+    filters = extraction.hard.to_filters_dict() or None
+    _PAGE_SIZE = 10
+
+    results, total_count, next_start, page_ids = await apartments_service.scroll_with_filters(
+        filters=filters,
+        limit=_PAGE_SIZE,
     )
 
-    # 4. Format results
     if not results:
         await message.answer(
             "К сожалению, ничего не найдено по вашему запросу.\n"
@@ -181,17 +178,23 @@ async def _run_demo_search(
         )
         return
 
-    text_parts = [f"Найдено {count} вариантов:\n"]
-    for i, r in enumerate(results[:5], 1):
-        p = r.get("payload", {})
-        name = p.get("complex_name", "—")
-        rooms = p.get("rooms", "?")
-        price = p.get("price_eur", 0)
-        area = p.get("area_m2", 0)
-        city = p.get("city", "")
-        text_parts.append(f"{i}. **{name}** — {rooms} комн., {area:.0f} м², {price:,.0f}€, {city}")
+    # 3. Format and send
+    text = format_apartment_list(results, shown_start=1, total=total_count)
+    catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
+    await message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
 
-    await message.answer("\n".join(text_parts), parse_mode="Markdown")
+    # 4. Transition to catalog browsing
+    from telegram_bot.dialogs.states import CatalogBrowsingSG
+
+    await state.set_state(CatalogBrowsingSG.browsing)
+    await state.update_data(
+        apartment_filters=filters if isinstance(filters, dict) else {},
+        apartment_offset=len(results),
+        apartment_total=total_count,
+        apartment_next_offset=next_start,
+        apartment_scroll_seen_ids=page_ids,
+        apartment_query=query,
+    )
 
 
 async def handle_demo_search_voice(
