@@ -91,7 +91,7 @@ class TestDemoExampleClick:
             meta=ExtractionMeta(source="llm", confidence="HIGH"),
         )
         apartments_service = AsyncMock()
-        apartments_service.search_with_filters.return_value = (
+        apartments_service.scroll_with_filters.return_value = (
             [
                 {
                     "score": 0.85,
@@ -106,9 +106,9 @@ class TestDemoExampleClick:
                 }
             ],
             1,
+            None,
+            ["1"],
         )
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
 
         await handle_demo_example(
             callback,
@@ -116,7 +116,6 @@ class TestDemoExampleClick:
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
         pipeline.extract.assert_awaited_once()
 
@@ -143,7 +142,7 @@ class TestDemoVoiceFlow:
             meta=ExtractionMeta(source="llm", confidence="HIGH"),
         )
         apartments_service = AsyncMock()
-        apartments_service.search_with_filters.return_value = (
+        apartments_service.scroll_with_filters.return_value = (
             [
                 {
                     "score": 0.9,
@@ -158,9 +157,9 @@ class TestDemoVoiceFlow:
                 }
             ],
             1,
+            None,
+            ["1"],
         )
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
 
         transcribed = "Солнечный берег, квартиры дороже 200 тысяч евро"
         with patch(
@@ -172,12 +171,11 @@ class TestDemoVoiceFlow:
                 state,
                 pipeline=pipeline,
                 apartments_service=apartments_service,
-                embeddings=embeddings,
             )
             mock_transcribe.assert_awaited_once_with(message, llm=None)
 
         pipeline.extract.assert_awaited_once_with(transcribed)
-        apartments_service.search_with_filters.assert_awaited_once()
+        apartments_service.scroll_with_filters.assert_awaited_once()
 
     async def test_demo_voice_shows_transcription(self) -> None:
         """Voice in demo shows '📝 Распознано: ...' before search."""
