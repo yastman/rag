@@ -14,6 +14,50 @@
     PROJECT_ROOT=$(git rev-parse --show-toplevel)
     mkdir -p logs .signals
 
+## Task List координация (cross-session)
+
+Shared Task List — основной канал координации orch ↔ workers. Работает через `CLAUDE_CODE_TASK_LIST_ID`.
+
+    # Orch обычно запускается БЕЗ CLAUDE_CODE_TASK_LIST_ID → получает случайный UUID.
+    # Шаг 1: Создать хотя бы 1 задачу (чтобы task list появился на диске):
+    TaskCreate(subject="...", description="...", metadata={issue: N, contract: "A"})
+
+    # Шаг 2: Обнаружить свой task list ID (самая свежая директория):
+    TASK_LIST_ID=$(ls -t ~/.claude/tasks/ | head -1)
+
+    # Шаг 3: DAG зависимости:
+    TaskUpdate(taskId="2", addBlockedBy=["1"])
+
+    # Шаг 4: Worker спавнится с тем же ID (см. Запуск воркеров)
+    # Worker видит задачи через TaskList, берёт через TaskUpdate(in_progress)
+    # Orch АВТОМАТИЧЕСКИ видит изменения через system-reminder — БЕЗ polling
+
+    # АЛЬТЕРНАТИВА: если orch запущен С CLAUDE_CODE_TASK_LIST_ID (named):
+    # TASK_LIST_ID="$CLAUDE_CODE_TASK_LIST_ID"  # уже задан
+
+### Как orch узнаёт о прогрессе
+
+System-reminder **автоматически** пушит состояние task list в контекст orch:
+
+    # Orch НЕ вызывает TaskList — система сама показывает:
+    # > #1 [completed] Fix auth bug
+    # > #2 [in_progress] Add tests  [owner: W-AUTH]
+    # > #3 [pending] Integration check  [blocked by #1, #2]
+
+    # Orch видит completed → сразу переходит к Phase 5 (code review)
+    # Orch видит in_progress → продолжает свою работу (другие workers, SDK research)
+
+**Completed задачи удаляются с диска.** Поэтому:
+- Task List = **live координация** (статус, DAG, owner, real-time UI через Ctrl+T)
+- `.signals/` = **persist** (PR url, learnings, quality metrics — нужны после завершения)
+
+### Named task lists (для multi-session)
+
+    # Вместо UUID — именованный ID:
+    export CLAUDE_CODE_TASK_LIST_ID="sprint-42"
+    # Хранится в ~/.claude/tasks/sprint-42/
+    # Полезно для: возобновление после крэша, аудит
+
 ## Worktree
 
 | Контракт | Метод |
@@ -38,24 +82,39 @@
 
 Промты → `.claude/prompts/worker-{name}.md`. **НИКОГДА** inline.
 
+**КРИТИЧНО:** `env VAR=val command` вместо `VAR=val command` — tmux send-keys может разбить длинную строку, и shell увидит `VAR=val` как отдельную команду. `env` решает это.
+
     # Sonnet (Контракт A/B) — worktree:
     TMUX="" tmux new-window -n "W-{NAME}" -c "$WT_PATH"
-    sleep 3
-    TMUX="" tmux send-keys -t "W-{NAME}" 'claude --model sonnet --dangerously-skip-permissions "$(cat {PROJECT_ROOT}/.claude/prompts/worker-{name}.md)"' Enter
+    sleep 5
+    TMUX="" tmux send-keys -t "W-{NAME}" C-c
+    sleep 0.5
+    TMUX="" tmux send-keys -t "W-{NAME}" "env CLAUDE_CODE_TASK_LIST_ID=${TASK_LIST_ID} claude --model sonnet --dangerously-skip-permissions \"\$(cat ${PROJECT_ROOT}/.claude/prompts/worker-{name}.md)\"" Enter
 
     # Opus (Контракт C) — корень проекта:
     TMUX="" tmux new-window -n "W-{NAME}" -c "$PROJECT_ROOT"
-    sleep 3
-    TMUX="" tmux send-keys -t "W-{NAME}" 'claude --dangerously-skip-permissions "$(cat {PROJECT_ROOT}/.claude/prompts/worker-{name}.md)"' Enter
+    sleep 5
+    TMUX="" tmux send-keys -t "W-{NAME}" C-c
+    sleep 0.5
+    TMUX="" tmux send-keys -t "W-{NAME}" "env CLAUDE_CODE_TASK_LIST_ID=${TASK_LIST_ID} claude --dangerously-skip-permissions \"\$(cat ${PROJECT_ROOT}/.claude/prompts/worker-{name}.md)\"" Enter
 
     # Opus Соло (Контракт D) — worktree:
     TMUX="" tmux new-window -n "W-{NAME}" -c "$WT_PATH"
-    sleep 3
-    TMUX="" tmux send-keys -t "W-{NAME}" 'claude --dangerously-skip-permissions "$(cat ${PROJECT_ROOT}/.claude/prompts/worker-{name}.md)"' Enter
+    sleep 5
+    TMUX="" tmux send-keys -t "W-{NAME}" C-c
+    sleep 0.5
+    TMUX="" tmux send-keys -t "W-{NAME}" "env CLAUDE_CODE_TASK_LIST_ID=${TASK_LIST_ID} claude --dangerously-skip-permissions \"\$(cat ${PROJECT_ROOT}/.claude/prompts/worker-{name}.md)\"" Enter
 
-**КРИТИЧНО:** `sleep 3` обязателен. `--dangerously-skip-permissions` обязателен. `TMUX=""` перед `send-keys` обязателен.
+**КРИТИЧНО:**
+- `sleep 5` + `C-c` + `sleep 0.5` перед командой (shell gruzится, zshrc фонит background jobs — `C-c` чистит буфер от мусорных символов)
+- `--dangerously-skip-permissions` обязателен
+- `TMUX=""` перед `tmux` обязателен (вложенные операции)
+- `env VAR=val` вместо `VAR=val` (tmux send-keys ломает bare assignment при длинных строках)
 
-**НЕ ИСПОЛЬЗОВАТЬ `| tee`** — claude CLI использует TUI (интерактивный терминал), pipe ломает рендеринг. Worker сам пишет в лог через `echo >> logs/worker-{name}.log`.
+**НЕ ИСПОЛЬЗОВАТЬ:**
+- `| tee` — claude CLI использует TUI, pipe ломает рендеринг
+- `export VAR && command` через send-keys — tmux может подхватить активную раскладку и добавить мусорные символы
+- `VAR=val command` (без `env`) — при длинных строках tmux разбивает на линии, shell видит `VAR=val` как отдельную команду
 
 ## Сигнализация
 
@@ -78,19 +137,21 @@ Worker → orch через JSON-файлы в `.signals/`. **Атомарная 
       > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
       && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
-### Orch мониторинг
+### Orch мониторинг (event-driven через Task List)
 
-Выбор метода: проверь `which inotifywait` — если есть, используй Вариант 1 (мгновенный). Иначе — Вариант 2.
+**Основной метод:** system-reminder автоматически пушит состояние task list в контекст orch. Orch **не поллит** — он продолжает работу (SDK research, спавн других workers), и система сама уведомляет о смене статусов.
 
-    # Вариант 1: inotifywait (мгновенный, предпочтительный)
-    Bash(command="inotifywait -m -e moved_to .signals/ --format '%f' 2>/dev/null | while read f; do [[ \"$f\" == worker-*.json ]] && cat \".signals/$f\"; done", run_in_background=true)
+    # Orch НЕ делает sleep/polling. Вместо этого:
+    # 1. Спавнит worker'ов
+    # 2. Продолжает свою работу (Phase 2.7 для следующего issue, etc.)
+    # 3. System-reminder показывает: "#1 [completed]" → orch переходит к Phase 5
+    #
+    # Если orch хочет явно проверить:
+    TaskList  # → текущее состояние всех задач
 
-    # Вариант 2: polling (универсальный, 10 сек)
-    Bash(command="while true; do for f in .signals/worker-*.json; do [ -f \"$f\" ] && cat \"$f\" && mv \"$f\" \".signals/done-$(basename $f)\"; done; sleep 10; done", run_in_background=true)
+**Fallback (`.signals/`):** для rich metadata (PR url, learnings, execution plan) worker по-прежнему пишет `.signals/worker-{name}.json`. Orch читает при Phase 5 review.
 
-**Примечание:** inotifywait отслеживает `moved_to` (не `create`), т.к. атомарная запись использует `mv`. Polling проверяет только `.json` (не `.tmp`).
-
-**КРИТИЧНО:** orch обработал сигнал → переименовать файл (`done-*`) чтобы не обработать повторно.
+**КРИТИЧНО:** orch обработал `.signals/` → переименовать файл (`done-*`) чтобы не обработать повторно.
 
 ### Чтение сигналов через context-mode
 
