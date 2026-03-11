@@ -189,6 +189,7 @@ async def _run_demo_search(
         apartment_next_offset=next_start,
         apartment_scroll_seen_ids=page_ids,
         apartment_query=query,
+        catalog_view_mode="list",
     )
 
 
