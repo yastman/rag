@@ -179,6 +179,33 @@ async def handle_catalog_exit(message: Message, state: FSMContext) -> None:
     await message.answer("Вы вернулись в главное меню 🏠", reply_markup=build_client_keyboard())
 
 
+# --- Voice in catalog mode → transcribe + new search ---
+
+
+@catalog_router.message(StateFilter(CatalogBrowsingSG.browsing), F.voice)
+async def handle_catalog_voice(
+    message: Message,
+    state: FSMContext,
+    property_bot: Any = None,
+    **kwargs: Any,
+) -> None:
+    """Transcribe voice and run new search from catalog mode."""
+    from telegram_bot.handlers.demo_handler import handle_demo_search_voice
+
+    pipeline = getattr(property_bot, "_apartment_pipeline", None) if property_bot else None
+    svc = getattr(property_bot, "_apartments_service", None) if property_bot else None
+    llm = getattr(property_bot, "_llm", None) if property_bot else None
+    if not pipeline:
+        return
+    await handle_demo_search_voice(
+        message,
+        state,
+        pipeline=pipeline,
+        apartments_service=svc,
+        llm=llm,
+    )
+
+
 # --- Catch-all: treat free text as new search ---
 
 
@@ -192,7 +219,7 @@ async def handle_catalog_fallback(
     """Treat free text in catalog mode as a new search query."""
     from telegram_bot.handlers.demo_handler import _run_demo_search
 
-    pipeline = getattr(property_bot, "_extraction_pipeline", None) if property_bot else None
+    pipeline = getattr(property_bot, "_apartment_pipeline", None) if property_bot else None
     svc = getattr(property_bot, "_apartments_service", None) if property_bot else None
     if not pipeline or not message.text:
         return
