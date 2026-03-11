@@ -72,6 +72,13 @@ digraph flow {
 
 Переиспользование: одно исследование → N воркеров.
 
+**Фаза 2.9: КОММИТ АРТЕФАКТОВ** — перед созданием worktree:
+
+    # Планы, промты — всё что нужно worker'у — ЗАКОММИТИТЬ:
+    git add docs/plans/{plan}.md .claude/prompts/worker-{name}.md
+    git commit -m "chore: add plan + worker prompts for issue #{N}"
+    # Без этого worktree НЕ будет содержать эти файлы (git worktree = snapshot коммита)
+
 **Фаза 3: ЗАПУСК — ОБЯЗАТЕЛЬНЫЙ ЧЕКЛИСТ (HARD-GATE):**
 
 <HARD-GATE>
@@ -98,6 +105,7 @@ digraph flow {
 БЕЗ `env CLAUDE_CODE_TASK_LIST_ID` worker НЕ видит задачи → координация сломана.
 БЕЗ `C-c` перед командой → мусорные символы от shell init → `ienv`/`вexport` → команда не найдена.
 БЕЗ секции "## TASK LIST" в промте → worker не знает свой taskId → не обновляет статус.
+Untracked файлы (планы, промты) НЕ попадают в worktree — скопировать вручную или закоммитить ДО создания worktree.
 </HARD-GATE>
 
 **Фаза 3 (продолжение): ЗАПОЛНЕНИЕ SDK-плейсхолдеров в промте worker'а:**
