@@ -13,7 +13,7 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button, Column, Select
 from aiogram_dialog.widgets.text import Format
 
-from telegram_bot.dialogs.states import DemoSG
+from telegram_bot.dialogs.states import CatalogBrowsingSG, DemoSG
 from telegram_bot.handlers.demo_handler import transcribe_voice
 from telegram_bot.keyboards.demo_keyboard import DEFAULT_EXAMPLES
 
@@ -101,10 +101,12 @@ async def results_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[s
 
 
 async def _dialog_search(query: str, message: Message, manager: DialogManager) -> None:
-    """LLM extraction → Qdrant search → store results → switch to DemoSG.results."""
+    """LLM extraction → scroll_with_filters → catalog browsing mode."""
+    from aiogram.fsm.context import FSMContext
+
     pipeline = manager.middleware_data.get("pipeline")
     apartments_service = manager.middleware_data.get("apartments_service")
-    embeddings = manager.middleware_data.get("embeddings")
+    state: FSMContext | None = manager.middleware_data.get("state")
 
     if not pipeline:
         await message.answer("Сервис поиска временно недоступен.")
@@ -114,7 +116,7 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
 
     extraction = await pipeline.extract(query)
 
-    if not apartments_service or not embeddings:
+    if not apartments_service:
         manager.dialog_data["results"] = []
         manager.dialog_data["count"] = 0
         manager.dialog_data["query"] = query
@@ -125,25 +127,44 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
         await manager.switch_to(DemoSG.results)
         return
 
-    semantic_query = extraction.meta.semantic_remainder or query
-    dense, sparse, colbert = await embeddings.aembed_hybrid_with_colbert(semantic_query)
+    # Build filters from extraction
+    filters = extraction.hard.to_filters_dict() or None
 
-    filters = extraction.hard.to_filters_dict()
-    results, count = await apartments_service.search_with_filters(
-        dense_vector=dense,
-        colbert_query=colbert or None,
-        sparse_vector=sparse,
-        filters=filters or None,
-        top_k=10,
+    # Scroll (payload-only, sorted by price)
+    _PAGE_SIZE = 10
+    results, total_count, next_start, page_ids = await apartments_service.scroll_with_filters(
+        filters=filters,
+        limit=_PAGE_SIZE,
     )
 
-    manager.dialog_data["results"] = results
-    manager.dialog_data["count"] = count
-    manager.dialog_data["query"] = query
-    manager.dialog_data["page"] = 0
-    manager.dialog_data.pop("degraded_text", None)
+    if not results:
+        await message.answer(
+            "К сожалению, ничего не найдено по вашему запросу.\n"
+            "Попробуйте изменить параметры или напишите другой запрос."
+        )
+        return
 
-    await manager.switch_to(DemoSG.results)
+    from telegram_bot.dialogs.funnel import format_apartment_list
+    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+    text = format_apartment_list(results, shown_start=1, total=total_count)
+    catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
+    await message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
+
+    # Transition to CatalogBrowsingSG.browsing
+    if state is not None:
+        await state.set_state(CatalogBrowsingSG.browsing)
+        await state.update_data(
+            apartment_filters=filters if isinstance(filters, dict) else {},
+            apartment_offset=len(results),
+            apartment_total=total_count,
+            apartment_next_offset=next_start,
+            apartment_scroll_seen_ids=page_ids,
+            apartment_query=query,
+        )
+
+    # Close demo dialog
+    await manager.done()
 
 
 # ---------------------------------------------------------------------------
