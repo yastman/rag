@@ -46,19 +46,11 @@ class TestDemoSearchText:
             ["1"],
         )
 
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = (
-            [0.1] * 1024,
-            {"idx": [1]},
-            [[0.1] * 128],
-        )
-
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
         pipeline.extract.assert_awaited_once_with("двушка до 100к")
         message.answer.assert_awaited()
@@ -77,19 +69,11 @@ class TestDemoSearchText:
         apartments_service = AsyncMock()
         apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
 
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = (
-            [0.1] * 1024,
-            {"idx": [1]},
-            [[0.1] * 128],
-        )
-
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
         apartments_service.scroll_with_filters.assert_awaited_once()
 
@@ -117,8 +101,8 @@ class TestDemoSearchEdgeCases:
         assert "текстовое" in args
 
     @pytest.mark.asyncio
-    async def test_no_embeddings_shows_extraction(self) -> None:
-        """Pipeline works but no embeddings — shows extracted filters."""
+    async def test_no_service_shows_extraction(self) -> None:
+        """Pipeline works but no apartments_service — shows extracted filters."""
         message = AsyncMock()
         message.text = "двушка до 100к"
         state = AsyncMock()
@@ -132,7 +116,6 @@ class TestDemoSearchEdgeCases:
             state,
             pipeline=pipeline,
             apartments_service=None,
-            embeddings=None,
         )
         calls = [c.args[0] for c in message.answer.await_args_list]
         assert any("Распознано" in c or "тестовом" in c for c in calls)
@@ -150,15 +133,12 @@ class TestDemoSearchEdgeCases:
         )
         apartments_service = AsyncMock()
         apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
 
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
         calls = [c.args[0] for c in message.answer.await_args_list]
         assert any("не найдено" in c for c in calls)
@@ -192,15 +172,11 @@ class TestDemoSearchEdgeCases:
             95000.0,
             ["1"],
         )
-        embeddings = AsyncMock()
-        embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
-
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=apartments_service,
-            embeddings=embeddings,
         )
         calls = [c.args[0] for c in message.answer.await_args_list]
         result_msg = [c for c in calls if "Fort Beach" in c]
@@ -228,14 +204,11 @@ class TestDemoResultsFormatting:
         )
         svc = AsyncMock()
         svc.scroll_with_filters.return_value = (results, count, 80000.0, [r["id"] for r in results])
-        emb = AsyncMock()
-        emb.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
         await handle_demo_search_text(
             message,
             state,
             pipeline=pipeline,
             apartments_service=svc,
-            embeddings=emb,
         )
         return [c.args[0] for c in message.answer.await_args_list]
 
@@ -333,15 +306,12 @@ class TestDemoVoice:
             )
             apartments_service = AsyncMock()
             apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
-            embeddings = AsyncMock()
-            embeddings.aembed_hybrid_with_colbert.return_value = ([0.1] * 1024, {}, [])
 
             await handle_demo_search_voice(
                 message,
                 state,
                 pipeline=pipeline,
                 apartments_service=apartments_service,
-                embeddings=embeddings,
             )
             mock_stt.assert_awaited_once()
             pipeline.extract.assert_awaited_once_with("двушка до 100к")

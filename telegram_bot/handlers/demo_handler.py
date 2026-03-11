@@ -69,7 +69,6 @@ async def handle_demo_example(
     state: FSMContext | None = None,
     pipeline: Any = None,
     apartments_service: Any = None,
-    embeddings: Any = None,
 ) -> None:
     """Handle example button click — treat as text query."""
     await callback.answer()
@@ -105,7 +104,6 @@ async def handle_demo_example(
         state,
         pipeline=pipeline,
         apartments_service=apartments_service,
-        embeddings=embeddings,
     )
 
 
@@ -114,7 +112,6 @@ async def handle_demo_search_text(
     state: FSMContext,
     pipeline: Any = None,
     apartments_service: Any = None,
-    embeddings: Any = None,
     **kwargs: Any,
 ) -> None:
     """Handle text input in demo mode — LLM extraction → search → results."""
@@ -127,7 +124,6 @@ async def handle_demo_search_text(
         state,
         pipeline=pipeline,
         apartments_service=apartments_service,
-        embeddings=embeddings,
         **kwargs,
     )
 
@@ -139,8 +135,6 @@ async def _run_demo_search(
     state: FSMContext,
     pipeline: Any = None,
     apartments_service: Any = None,
-    embeddings: Any = None,
-    **kwargs: Any,
 ) -> None:
     """Core search logic: extraction → scroll_with_filters → catalog browsing."""
     if not pipeline:
@@ -202,7 +196,6 @@ async def handle_demo_search_voice(
     state: FSMContext,
     pipeline: Any = None,
     apartments_service: Any = None,
-    embeddings: Any = None,
     llm: Any = None,
     **kwargs: Any,
 ) -> None:
@@ -222,8 +215,6 @@ async def handle_demo_search_voice(
         state,
         pipeline=pipeline,
         apartments_service=apartments_service,
-        embeddings=embeddings,
-        **kwargs,
     )
 
 
