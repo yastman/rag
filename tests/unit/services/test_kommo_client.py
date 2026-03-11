@@ -79,6 +79,28 @@ async def test_auto_refresh_on_401(kommo_client, mock_token_store, httpx_mock):
     mock_token_store.force_refresh.assert_called_once()
 
 
+async def test_401_with_seeded_token_raises_http_error(mock_token_store, httpx_mock):
+    """401 with seeded token (no refresh_token) raises HTTPStatusError, not RuntimeError."""
+    from httpx import HTTPStatusError
+
+    from telegram_bot.services.kommo_client import KommoClient
+
+    mock_token_store.force_refresh = AsyncMock(
+        side_effect=RuntimeError("No refresh_token available for Kommo.")
+    )
+    client = KommoClient(subdomain="test-co", token_store=mock_token_store)
+
+    httpx_mock.add_response(
+        url="https://test-co.kommo.com/api/v4/leads/1",
+        status_code=401,
+    )
+
+    with pytest.raises(HTTPStatusError, match="401"):
+        await client.get_lead(1)
+
+    mock_token_store.force_refresh.assert_called_once()
+
+
 async def test_upsert_contact_find_existing(kommo_client, httpx_mock):
     """upsert_contact finds existing contact by phone."""
     import re
