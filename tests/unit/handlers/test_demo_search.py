@@ -373,6 +373,63 @@ class TestDemoApartmentsWithDynamicExamples:
         assert saved == DEFAULT_EXAMPLES
 
 
+class TestKwargsPassthrough:
+    """Handlers must accept extra kwargs from aiogram DI (user_service, etc.)."""
+
+    @pytest.mark.asyncio
+    async def test_demo_search_text_accepts_extra_kwargs(self) -> None:
+        """handle_demo_search_text forwards unknown DI kwargs to _run_demo_search."""
+        message = AsyncMock()
+        message.text = "студия"
+        state = AsyncMock()
+        pipeline = AsyncMock()
+        pipeline.extract.return_value = ApartmentSearchFilters(
+            hard=HardFilters(rooms=1),
+            meta=ExtractionMeta(source="llm", confidence="MEDIUM"),
+        )
+        apartments_service = AsyncMock()
+        apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
+
+        # aiogram DI injects extra services; must not raise TypeError
+        await handle_demo_search_text(
+            message,
+            state,
+            pipeline=pipeline,
+            apartments_service=apartments_service,
+            user_service=AsyncMock(),
+            i18n=AsyncMock(),
+        )
+        pipeline.extract.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_demo_voice_accepts_extra_kwargs(self) -> None:
+        """handle_demo_search_voice forwards unknown DI kwargs without error."""
+        from telegram_bot.handlers.demo_handler import handle_demo_search_voice
+
+        message = AsyncMock()
+        message.voice = AsyncMock()
+        state = AsyncMock()
+
+        with patch("telegram_bot.handlers.demo_handler.transcribe_voice") as mock_stt:
+            mock_stt.return_value = "студия"
+            pipeline = AsyncMock()
+            pipeline.extract.return_value = ApartmentSearchFilters(
+                hard=HardFilters(rooms=1),
+                meta=ExtractionMeta(source="llm", confidence="MEDIUM"),
+            )
+            apartments_service = AsyncMock()
+            apartments_service.scroll_with_filters.return_value = ([], 0, None, [])
+
+            await handle_demo_search_voice(
+                message,
+                state,
+                pipeline=pipeline,
+                apartments_service=apartments_service,
+                user_service=AsyncMock(),
+            )
+            pipeline.extract.assert_awaited_once()
+
+
 class TestDemoSearchObservability:
     def test_run_demo_search_is_observed(self) -> None:
         """_run_demo_search must be @observe-decorated (span: demo-search)."""

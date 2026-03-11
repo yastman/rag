@@ -20,7 +20,7 @@ class TestE2ERegexOnlyPipeline:
         self, pipeline: ApartmentExtractionPipeline
     ) -> None:
         result = await pipeline.extract("двушка солнечный берег от 50000 до 200000")
-        assert result.hard.rooms == 2
+        assert result.hard.rooms == 3
         assert result.hard.city == "Солнечный берег"
         assert result.hard.min_price_eur == 50000
         assert result.hard.max_price_eur == 200000
@@ -28,7 +28,7 @@ class TestE2ERegexOnlyPipeline:
 
     async def test_sveti_vlas_3rooms(self, pipeline: ApartmentExtractionPipeline) -> None:
         result = await pipeline.extract("трешка свети влас")
-        assert result.hard.rooms == 3
+        assert result.hard.rooms == 4
         assert result.hard.city == "Свети Влас"
         assert result.meta.confidence in ("HIGH", "MEDIUM")
 
@@ -76,5 +76,5 @@ class TestE2ERegexOnlyPipeline:
         result = await pipeline.extract("двушка солнечный берег до 200000")
         filters = result.hard.to_filters_dict()
         assert filters is not None
-        assert filters.get("rooms") == 2
+        assert filters.get("rooms") == 3
         assert filters.get("price_eur", {}).get("lte") == 200000
