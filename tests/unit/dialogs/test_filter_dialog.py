@@ -152,7 +152,7 @@ class TestGetHubData:
         result = await get_hub_data(dialog_manager=manager)
         assert result["count"] == 0
 
-    async def test_returns_display_labels(self):
+    async def test_returns_active_filters_text(self):
         from telegram_bot.dialogs.filter_dialog import get_hub_data
 
         manager = SimpleNamespace(
@@ -160,11 +160,12 @@ class TestGetHubData:
             middleware_data={"apartments_service": None},
         )
         result = await get_hub_data(dialog_manager=manager)
-        assert result["city_val"] == "Бургас"
-        assert result["rooms_val"] == "2-спальни"
-        assert "50 000" in result["budget_val"]
+        text = result["active_filters"]
+        assert "Бургас" in text
+        assert "2-спальни" in text
+        assert "50 000" in text
 
-    async def test_empty_filters_show_any(self):
+    async def test_empty_filters_show_no_filters(self):
         from telegram_bot.dialogs.filter_dialog import get_hub_data
 
         manager = SimpleNamespace(
@@ -172,9 +173,7 @@ class TestGetHubData:
             middleware_data={"apartments_service": None},
         )
         result = await get_hub_data(dialog_manager=manager)
-        assert result["city_val"] == "Любой"
-        assert result["rooms_val"] == "Любой"
-        assert result["budget_val"] == "Любой"
+        assert result["active_filters"] == "Фильтры не заданы"
 
 
 # ============================================================
@@ -451,68 +450,54 @@ class TestFiltersToDialogData:
 # ============================================================
 
 
-class TestHubDisplaysAllFilters:
-    async def test_hub_shows_view_label(self):
+class TestHubDisplaysActiveFilters:
+    async def test_hub_shows_only_active_filters(self):
         from telegram_bot.dialogs.filter_dialog import get_hub_data
 
         manager = SimpleNamespace(
-            dialog_data={"view": "sea"},
+            dialog_data={"city": "Варна", "view": "sea", "area": "large"},
             middleware_data={"apartments_service": None},
         )
         result = await get_hub_data(dialog_manager=manager)
-        assert result["view_val"] == "Море"
+        text = result["active_filters"]
+        assert "Варна" in text
+        assert "Море" in text
+        assert "60–80 m²" in text
+        # Unset filters should NOT appear
+        assert "Комнаты" not in text
+        assert "Бюджет" not in text
+        assert "Мебель" not in text
 
-    async def test_hub_shows_area_label(self):
+    async def test_hub_shows_all_set_filters(self):
         from telegram_bot.dialogs.filter_dialog import get_hub_data
 
         manager = SimpleNamespace(
-            dialog_data={"area": "large"},
+            dialog_data={
+                "city": "Бургас",
+                "rooms": "2",
+                "budget": "mid",
+                "view": "pool",
+                "area": "xlarge",
+                "floor": "high",
+                "complex": "Crown Fort Club",
+                "furnished": "true",
+                "promotion": "true",
+            },
             middleware_data={"apartments_service": None},
         )
         result = await get_hub_data(dialog_manager=manager)
-        assert result["area_val"] == "60–80 m²"
+        text = result["active_filters"]
+        assert "Бургас" in text
+        assert "1-спальня" in text
+        assert "50 000" in text
+        assert "Бассейн" in text
+        assert "80–120 m²" in text
+        assert "4-5 этаж" in text
+        assert "Crown Fort Club" in text
+        assert "Мебель: Да" in text
+        assert "акции" in text.lower()
 
-    async def test_hub_shows_floor_label(self):
-        from telegram_bot.dialogs.filter_dialog import get_hub_data
-
-        manager = SimpleNamespace(
-            dialog_data={"floor": "high"},
-            middleware_data={"apartments_service": None},
-        )
-        result = await get_hub_data(dialog_manager=manager)
-        assert result["floor_val"] == "4-5 этаж"
-
-    async def test_hub_shows_complex_val(self):
-        from telegram_bot.dialogs.filter_dialog import get_hub_data
-
-        manager = SimpleNamespace(
-            dialog_data={"complex": "Crown Fort Club"},
-            middleware_data={"apartments_service": None},
-        )
-        result = await get_hub_data(dialog_manager=manager)
-        assert result["complex_val"] == "Crown Fort Club"
-
-    async def test_hub_shows_furnished_label(self):
-        from telegram_bot.dialogs.filter_dialog import get_hub_data
-
-        manager = SimpleNamespace(
-            dialog_data={"furnished": "true"},
-            middleware_data={"apartments_service": None},
-        )
-        result = await get_hub_data(dialog_manager=manager)
-        assert result["furnished_val"] == "Да"
-
-    async def test_hub_shows_promotion_label(self):
-        from telegram_bot.dialogs.filter_dialog import get_hub_data
-
-        manager = SimpleNamespace(
-            dialog_data={"promotion": "true"},
-            middleware_data={"apartments_service": None},
-        )
-        result = await get_hub_data(dialog_manager=manager)
-        assert result["promotion_val"] == "Только акции"
-
-    async def test_hub_defaults_to_any_for_empty_filters(self):
+    async def test_hub_empty_shows_no_filters(self):
         from telegram_bot.dialogs.filter_dialog import get_hub_data
 
         manager = SimpleNamespace(
@@ -520,9 +505,4 @@ class TestHubDisplaysAllFilters:
             middleware_data={"apartments_service": None},
         )
         result = await get_hub_data(dialog_manager=manager)
-        assert result["view_val"] == "Любой"
-        assert result["area_val"] == "Любая"
-        assert result["floor_val"] == "Любой"
-        assert result["complex_val"] == "Любой"
-        assert result["furnished_val"] == "Любое"
-        assert result["promotion_val"] == "Любое"
+        assert result["active_filters"] == "Фильтры не заданы"
