@@ -1,6 +1,11 @@
-# Контракты воркеров v9
+# Контракты воркеров v10
 
 Orch заполняет `{...}` → сохраняет в `.claude/prompts/worker-{name}.md`.
+
+**Task List:** Orch создаёт задачи (TaskCreate + DAG) ПЕРЕД запуском worker'а.
+Worker спавнится с `CLAUDE_CODE_TASK_LIST_ID` → видит задачи через TaskList.
+Worker отмечает прогресс (TaskUpdate) → orch видит мгновенно через system-reminder.
+Промт worker'а = полный контракт (sandbox, SDK, HARD-GATE, финал) + инструкция работать по TaskList.
 
 ## Общие правила
 
@@ -42,12 +47,20 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
     ПРОГРЕСС (для задач >10 мин):
     echo "[PROGRESS:50%] {что сделано}" >> logs/worker-{name}.log
 
-    СИГНАЛ ЗАВЕРШЕНИЯ (атомарный — write .tmp → mv):
-    echo '{"status":"done","worker":"W-{NAME}","pr":"{url}","ts":"'$(date -Iseconds)'"}' \
+    TASK LIST КООРДИНАЦИЯ (orch видит в реалтайме):
+    # При старте задачи:
+    TaskUpdate(taskId="{task_id}", status="in_progress", owner="W-{NAME}")
+    # При завершении задачи:
+    TaskUpdate(taskId="{task_id}", status="completed")
+    # Orch АВТОМАТИЧЕСКИ видит смену статуса через system-reminder — БЕЗ polling.
+
+    СИГНАЛ ЗАВЕРШЕНИЯ (rich metadata — persist после completed):
+    echo '{"status":"done","worker":"W-{NAME}","pr":"{url}","ts":"'$(date -Iseconds)'","learnings":[]}' \
       > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
       && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
     СИГНАЛ ПРОВАЛА:
+    TaskUpdate(taskId="{task_id}", status="in_progress", metadata={"error": "{msg}"})
     echo '{"status":"failed","worker":"W-{NAME}","error":"{msg}","ts":"'$(date -Iseconds)'"}' \
       > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
       && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
@@ -71,9 +84,12 @@ Orch заполняет `{...}` → сохраняет в `.claude/prompts/worke
     git push -u origin {branch_name}
     gh pr create --title "{type}({scope}): {desc}" --body "Closes #{N}"
 
-    # Атомарный сигнал:
+    # Task List — orch узнает мгновенно:
+    TaskUpdate(taskId="{task_id}", status="completed")
+
+    # Rich metadata — persist для Phase 5 review:
     PR_URL=$(gh pr view --json url -q .url)
-    echo '{"status":"done","worker":"W-{NAME}","pr":"'"$PR_URL"'","ts":"'$(date -Iseconds)'"}' \
+    echo '{"status":"done","worker":"W-{NAME}","pr":"'"$PR_URL"'","ts":"'$(date -Iseconds)'","learnings":[]}' \
       > ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp \
       && mv ${PROJECT_ROOT}/.signals/worker-{name}.json.tmp ${PROJECT_ROOT}/.signals/worker-{name}.json
 
@@ -192,12 +208,25 @@ Haiku НЕ классифицирует сложность — только фи
     {Общие правила}
     Ветка: {branch_name} в {worktree_path}. НЕ ПЕРЕКЛЮЧАЙСЯ.
 
+    ## TASK LIST (твои задачи — orch видит прогресс в реалтайме)
+
+    TaskList покажет задачи с DAG зависимостями. АЛГОРИТМ:
+    1. TaskList → найди незаблокированную задачу (blockedBy пуст)
+    2. TaskUpdate(taskId=X, status="in_progress", owner="W-{NAME}")
+    3. Выполни задачу
+    4. TaskUpdate(taskId=X, status="completed")
+    5. Повторяй пока все задачи не completed
+    Orch АВТОМАТИЧЕСКИ видит каждый TaskUpdate — не нужны файлы/сигналы для статуса.
+
     SDK КОНТЕКСТ (если есть):
     {sdk_summary}
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
 
     SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
     {sdk_registry_excerpt}
+
+    CODEBASE КОНТЕКСТ (orch собрал в Phase 2.3):
+    {codebase_context}
 
     КОНТРАКТ ИНТЕРФЕЙСА (если параллельная работа):
     {interface_contract}
@@ -228,12 +257,26 @@ Haiku НЕ классифицирует сложность — только фи
     {Общие правила}
     Ветка: {branch_name} в {worktree_path}. НЕ ПЕРЕКЛЮЧАЙСЯ.
 
+    ## TASK LIST (шаги плана = задачи с DAG — orch видит прогресс в реалтайме)
+
+    Orch уже создал задачи из плана с зависимостями. TaskList покажет их.
+    АЛГОРИТМ:
+    1. TaskList → найди незаблокированную задачу (blockedBy пуст)
+    2. TaskUpdate(taskId=X, status="in_progress", owner="W-{NAME}")
+    3. Выполни задачу (Read план для деталей шага)
+    4. TaskUpdate(taskId=X, status="completed")
+    5. Повторяй пока все задачи не completed
+    Задачи в TaskList соответствуют шагам плана. Используй план для деталей, TaskList для порядка.
+
     SDK КОНТЕКСТ (если есть):
     {sdk_summary}
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
 
     SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
     {sdk_registry_excerpt}
+
+    CODEBASE КОНТЕКСТ (orch собрал в Phase 2.3):
+    {codebase_context}
 
     ЗАРЕЗЕРВИРОВАННЫЕ ФАЙЛЫ (только ты их редактируешь):
     {reserved_files}
@@ -353,12 +396,22 @@ Haiku НЕ классифицирует сложность — только фи
     {Общие правила}
     Ветка: {branch_name} в {worktree_path}. НЕ ПЕРЕКЛЮЧАЙСЯ.
 
+    ## TASK LIST (orch видит твой прогресс в реалтайме)
+
+    Orch создал начальную задачу. По мере работы ты САМ создаёшь подзадачи:
+    1. После writing-plans — TaskCreate для каждого шага плана + DAG
+    2. При executing-plans — TaskUpdate(in_progress/completed) для каждого шага
+    Orch видит декомпозицию и прогресс без вмешательства.
+
     SDK КОНТЕКСТ (если есть):
     {sdk_summary}
     Полная документация: Read .claude/cache/sdk-{library}-{N}.md
 
     SDK РЕЕСТР (релевантные записи из .claude/rules/sdk-registry.md):
     {sdk_registry_excerpt}
+
+    CODEBASE КОНТЕКСТ (orch собрал в Phase 2.3):
+    {codebase_context}
 
     <HARD-GATE>
     Skill(skill="writing-plans") → Skill(skill="executing-plans") →

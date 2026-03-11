@@ -3,13 +3,14 @@ name: tmux-swarm-orchestration
 description: Use when given GitHub issues to solve, problems to fix, or "review all open issues". Also for running heavy commands on VPS through user's terminal. Triggers on "реши issue", "fix #123", "изучи все открытые", "parallel workers", "swarm", "spawn-claude", "tmux воркеры", "VPS команда"
 ---
 
-# tmux Swarm Оркестрация v9
+# tmux Swarm Оркестрация v10
 
 <HARD-GATE>
 ТЫ = OPUS = ДИСПЕТЧЕР. Юзер дал issues — дальше ВСЁ автоматом до PR URLs.
 НЕ исследуешь файлы напрямую, НЕ пишешь код. ЛЮБАЯ задача → worker.
 ПОСЛЕ worker: ЛИЧНО читаешь diff (Фаза 5.0) — это твоя ответственность, не worker'а.
 Opus inline = $15, Sonnet worker = $3.
+КООРДИНАЦИЯ: Task List (CLAUDE_CODE_TASK_LIST_ID) — orch видит статус worker'ов через system-reminder автоматически. БЕЗ polling, БЕЗ sleep.
 </HARD-GATE>
 
 ## Конвейер
@@ -32,8 +33,8 @@ digraph flow {
   classify [label="Фаза 2: КЛАССИФИКАЦИЯ\nRead classification.md"];
   parallel [label="Фаза 2.5: ПАРАЛЛЕЛИЗАЦИЯ\nfile overlap + резервации"];
   sdk [label="Фаза 2.7: SDK КОНТЕКСТ\nОБЯЗАТЕЛЬНО если sdk-registry.md\nматч triggers → Sonnet субагент"];
-  spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md\nЗаполнить {sdk_registry_excerpt}"];
-  wait [label="Фаза 4: ОЖИДАНИЕ\n0 токенов, мониторинг .signals/"];
+  spawn [label="Фаза 3: ЗАПУСК\nRead infrastructure.md\nRead worker-contract.md\nTaskCreate + DAG + TASK_LIST_ID"];
+  wait [label="Фаза 4: EVENT-DRIVEN\norch продолжает работу\nsystem-reminder пушит статус задач"];
   review [label="Фаза 5.0: CODE REVIEW\norch лично читает diff\nчерез context-mode"];
   verify [label="Фаза 5.1: ВЕРИФИКАЦИЯ\nартефакты + маркеры"];
   sdkupd [label="Фаза 5.2: SDK РЕЕСТР\nобновить паттерны/gotchas\nновые SDK из diff"];
@@ -71,7 +72,35 @@ digraph flow {
 
 Переиспользование: одно исследование → N воркеров.
 
-**Фаза 3: ЗАПОЛНЕНИЕ SDK-плейсхолдеров в промте worker'а:**
+**Фаза 3: ЗАПУСК — ОБЯЗАТЕЛЬНЫЙ ЧЕКЛИСТ (HARD-GATE):**
+
+<HARD-GATE>
+ПЕРЕД спавном КАЖДОГО worker'а orch ОБЯЗАН выполнить ВСЕ 4 шага. Пропуск = сломанный worker.
+
+    # ШАГ 1: Создать задачи в Task List
+    TaskCreate(subject="...", description="...", metadata={issue: N, contract: "A"})
+    # DAG если нужно:
+    TaskUpdate(taskId="2", addBlockedBy=["1"])
+
+    # ШАГ 2: Найти TASK_LIST_ID
+    TASK_LIST_ID=$(ls -t ~/.claude/tasks/ | head -1)
+
+    # ШАГ 3: Написать промт в файл (см. worker-contract.md)
+    # Промт ОБЯЗАН содержать секцию "## TASK LIST" с taskId и алгоритмом
+
+    # ШАГ 4: Спавнить через tmux (см. infrastructure.md)
+    TMUX="" tmux new-window -n "W-{NAME}" -c "$WT_PATH"
+    sleep 5
+    TMUX="" tmux send-keys -t "W-{NAME}" C-c
+    sleep 0.5
+    TMUX="" tmux send-keys -t "W-{NAME}" "env CLAUDE_CODE_TASK_LIST_ID=${TASK_LIST_ID} claude --model sonnet --dangerously-skip-permissions \"\$(cat ${PROJECT_ROOT}/.claude/prompts/worker-{name}.md)\"" Enter
+
+БЕЗ `env CLAUDE_CODE_TASK_LIST_ID` worker НЕ видит задачи → координация сломана.
+БЕЗ `C-c` перед командой → мусорные символы от shell init → `ienv`/`вexport` → команда не найдена.
+БЕЗ секции "## TASK LIST" в промте → worker не знает свой taskId → не обновляет статус.
+</HARD-GATE>
+
+**Фаза 3 (продолжение): ЗАПОЛНЕНИЕ SDK-плейсхолдеров в промте worker'а:**
 
 При записи промта в `.claude/prompts/worker-{name}.md` orch ОБЯЗАН заполнить:
 
