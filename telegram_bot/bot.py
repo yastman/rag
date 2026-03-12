@@ -2162,6 +2162,7 @@ class PropertyBot:
             )
             apartment_next_offset = state_data.get("apartment_next_offset")
             apartment_filters = state_data.get("apartment_filters")
+            apartment_scroll_seen_ids = state_data.get("apartment_scroll_seen_ids")
             new_offset = offset + _APARTMENT_PAGE_SIZE
 
             # Funnel flow stores only the first page; lazily append more pages on demand.
@@ -2187,10 +2188,12 @@ class PropertyBot:
                             extra_results,
                             total_count,
                             next_offset,
+                            page_ids,
                         ) = await apartments_service.scroll_with_filters(  # type: ignore[union-attr]
                             filters=apartment_filters,
                             limit=scroll_limit,
-                            offset=scroll_offset,
+                            start_from=scroll_offset,
+                            exclude_ids=apartment_scroll_seen_ids or None,
                         )
                     except Exception:
                         logger.exception("Failed to fetch next results page")
@@ -2209,6 +2212,7 @@ class PropertyBot:
                                 apartment_results=results,
                                 apartment_total=apartment_total,
                                 apartment_next_offset=apartment_next_offset,
+                                apartment_scroll_seen_ids=page_ids,
                             )
                 if new_offset >= len(results):
                     await callback.answer("Все результаты уже показаны")
