@@ -109,20 +109,8 @@ class VoyageEmbedFunction:
         async def _embed():
             return await self.service.embed_documents(texts)
 
-        # Run async in sync context
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If we're in an async context, create a new task
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    future = pool.submit(asyncio.run, _embed())
-                    embeddings = future.result()
-            else:
-                embeddings = loop.run_until_complete(_embed())
-        except RuntimeError:
-            embeddings = asyncio.run(_embed())
+        # Run async in fresh event loop (CocoIndex calls mutate() synchronously).
+        embeddings = asyncio.run(_embed())
 
         return [np.array(emb, dtype=np.float32) for emb in embeddings]
 
