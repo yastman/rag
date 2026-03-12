@@ -70,14 +70,67 @@ async def test_get_valid_token_refreshes_when_expired(mock_redis):
         assert token == "new-token"
 
 
-async def test_store_initial_sets_redis(mock_redis):
-    """store_initial saves token data to Redis hash."""
+async def test_force_refresh_concurrent_calls_serialized(mock_redis):
+    """Concurrent force_refresh calls must be serialized via asyncio.Lock (#948 bug 5).
+
+    Without a lock, two concurrent refreshes can interleave and both use the
+    same (now-invalidated) refresh_token, causing the second to fail with 400.
+    With a lock, only one HTTP refresh runs at a time.
+    """
+    import asyncio
+
     from telegram_bot.services.kommo_token_store import KommoTokenStore
 
-    store = KommoTokenStore(redis=mock_redis, subdomain="test")
-    await store.store_initial(
-        access_token="tok-1",
-        refresh_token="ref-1",
-        expires_in=86400,
+    mock_redis.hgetall = AsyncMock(
+        return_value={
+            b"access_token": b"expired-token",
+            b"refresh_token": b"refresh-456",
+            b"expires_at": b"1000000000",  # Past
+        }
     )
-    mock_redis.hset.assert_called_once()
+
+    store = KommoTokenStore(
+        redis=mock_redis,
+        subdomain="test",
+        client_id="id",
+        client_secret="secret",
+        redirect_uri="https://example.com/callback",
+    )
+
+    call_log: list[str] = []
+    can_proceed = asyncio.Event()
+
+    async def controlled_post(*args, **kwargs):
+        call_log.append("http_start")
+        await can_proceed.wait()
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json.return_value = {
+            "access_token": "new-token",
+            "refresh_token": "new-refresh",
+            "expires_in": 86400,
+        }
+        call_log.append("http_end")
+        return resp
+
+    with patch("telegram_bot.services.kommo_token_store.httpx.AsyncClient") as mock_httpx:
+        mock_httpx.return_value.__aenter__ = AsyncMock(return_value=mock_httpx.return_value)
+        mock_httpx.return_value.__aexit__ = AsyncMock()
+        mock_httpx.return_value.post = controlled_post
+
+        task1 = asyncio.create_task(store.force_refresh())
+        await asyncio.sleep(0)  # Let task1 acquire lock and reach controlled_post
+        task2 = asyncio.create_task(store.force_refresh())
+        await asyncio.sleep(0)  # Let task2 try to acquire lock
+
+        # With lock: task1 is in controlled_post (http_start logged), task2 waits for lock
+        assert call_log == ["http_start"], (
+            "With asyncio.Lock, only one force_refresh HTTP call should be in-flight at a time. "
+            f"Got call_log={call_log!r} — Lock missing in force_refresh()"
+        )
+
+        can_proceed.set()
+        await asyncio.gather(task1, task2)
+
+    # Both calls completed, second one also made HTTP request after first finished
+    assert "http_end" in call_log
