@@ -786,7 +786,12 @@ sync-drive-status: ## Show sync status and recent files
 # DOCUMENT INGESTION (CocoIndex Pipeline)
 # =============================================================================
 
-.PHONY: ingest-setup ingest-dir ingest-gdrive ingest-status ingest-test
+.PHONY: ingest-setup ingest-dir ingest-gdrive ingest-status ingest-test ingest-services
+
+ingest-services: ## Index services.yaml content into Qdrant (idempotent)
+	@echo "$(BLUE)Indexing services.yaml → Qdrant...$(NC)"
+	uv run python scripts/index_services.py
+	@echo "$(GREEN)✓ Services indexed$(NC)"
 
 ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
 	@echo "$(BLUE)Setting up ingestion infrastructure...$(NC)"
