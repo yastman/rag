@@ -38,6 +38,12 @@ jobs:
       - name: Type check
         run: uv run mypy src/ telegram_bot/ --ignore-missing-imports --no-error-summary
 
+      - name: Install dev dependencies
+        run: uv sync --frozen
+
+      - name: Unit tests
+        run: uv run pytest tests/unit/ -n auto --dist=worksteal -x -q --timeout=30
+
       - name: Security scan (bandit + vulture)
         run: |
           uv run bandit -r src/ telegram_bot/ -c pyproject.toml

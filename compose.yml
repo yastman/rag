@@ -750,7 +750,7 @@ services:
     logging: *default-logging
     volumes:
       - ./docker/livekit:/etc/livekit:ro
-    command: --config /etc/livekit/livekit.yaml --dev
+    command: --config /etc/livekit/livekit.yaml
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7880 || exit 1"]
       interval: 15s

@@ -20,8 +20,8 @@ async def setup_lifecell_trunk() -> str:
         "LiveKitAPI",
         api.LiveKitAPI(
             url=os.getenv("LIVEKIT_URL", "http://localhost:7880"),
-            api_key=os.getenv("LIVEKIT_API_KEY", "devkey"),
-            api_secret=os.getenv("LIVEKIT_API_SECRET", "secret"),
+            api_key=os.getenv("LIVEKIT_API_KEY", ""),
+            api_secret=os.getenv("LIVEKIT_API_SECRET", ""),
         ),
     )
 
