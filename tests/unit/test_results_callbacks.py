@@ -154,7 +154,10 @@ async def test_results_more_fetches_next_scroll_page_for_funnel_state() -> None:
     first_page = all_results[:_PAGE_SIZE]
     next_page = all_results[_PAGE_SIZE:]
     bot._apartments_service = MagicMock()
-    bot._apartments_service.scroll_with_filters = AsyncMock(return_value=(next_page, 8, None))
+    next_page_ids = [r["id"] for r in next_page]
+    bot._apartments_service.scroll_with_filters = AsyncMock(
+        return_value=(next_page, 8, None, next_page_ids)
+    )
 
     state = _make_state(
         {
@@ -172,7 +175,8 @@ async def test_results_more_fetches_next_scroll_page_for_funnel_state() -> None:
     bot._apartments_service.scroll_with_filters.assert_awaited_once_with(
         filters={"city": "Бургас"},
         limit=_PAGE_SIZE,
-        offset="offset-2",
+        start_from="offset-2",
+        exclude_ids=None,
     )
     assert bot._send_property_card.await_count == 3
     assert callback.message.answer.await_count == 1
@@ -194,7 +198,10 @@ async def test_results_more_backfills_from_start_when_next_offset_missing() -> N
     all_results = _make_results(8)
     first_page = all_results[:_PAGE_SIZE]
     bot._apartments_service = MagicMock()
-    bot._apartments_service.scroll_with_filters = AsyncMock(return_value=(all_results, 8, None))
+    all_page_ids = [r["id"] for r in all_results]
+    bot._apartments_service.scroll_with_filters = AsyncMock(
+        return_value=(all_results, 8, None, all_page_ids)
+    )
 
     state = _make_state(
         {
@@ -212,7 +219,8 @@ async def test_results_more_backfills_from_start_when_next_offset_missing() -> N
     bot._apartments_service.scroll_with_filters.assert_awaited_once_with(
         filters={"city": "Бургас"},
         limit=_PAGE_SIZE * 2,
-        offset=None,
+        start_from=None,
+        exclude_ids=None,
     )
     sent_ids = [call.args[1]["id"] for call in bot._send_property_card.await_args_list]
     assert sent_ids == ["prop-5", "prop-6", "prop-7"]
