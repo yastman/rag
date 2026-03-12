@@ -594,7 +594,7 @@ async def get_change_filter_options(**kwargs: Any) -> dict[str, Any]:
     return {"title": "Что хотите изменить?", "items": items, "btn_back": "← Назад"}
 
 
-async def get_results_data(**kwargs: Any) -> dict[str, Any]:
+async def get_results_data(i18n: Any = None, **kwargs: Any) -> dict[str, Any]:
     """Getter for results window — reads cached search results from dialog_data (#935)."""
     dialog_manager = kwargs.get("dialog_manager")
     data: dict[str, Any] = {}
@@ -606,16 +606,24 @@ async def get_results_data(**kwargs: Any) -> dict[str, Any]:
     has_results = len(results) > 0
 
     if has_results:
-        results_text = f"Найдено <b>{total}</b> апартаментов. Выберите формат отображения:"
+        if i18n is not None:
+            results_text = i18n.get("funnel-results-choose-format", total=str(total))
+        else:
+            results_text = f"Найдено <b>{total}</b> апартаментов. Выберите формат отображения:"
     else:
-        results_text = (
-            "К сожалению, по вашим критериям ничего не найдено.\nПопробуйте изменить параметры."
-        )
+        if i18n is not None:
+            results_text = i18n.get("results-no-results")
+        else:
+            results_text = (
+                "К сожалению, по вашим критериям ничего не найдено.\nПопробуйте изменить параметры."
+            )
+
+    btn_back = i18n.get("results-refine") if i18n is not None else "⚙️ Изменить параметры"
 
     return {
         "results_text": results_text,
         "has_results": has_results,
-        "btn_back": "✏️ Изменить параметры",
+        "btn_back": btn_back,
     }
 
 
@@ -955,12 +963,18 @@ async def on_results_browse(
     # Close dialog before sending messages
     await manager.done()
 
+    i18n = manager.middleware_data.get("i18n")
+
     if not results or callback.message is None:
         if callback.message is not None:
-            await callback.message.answer(
-                "К сожалению, по вашим критериям ничего не найдено.\n"
-                "Попробуйте изменить параметры поиска."
-            )
+            if i18n is not None:
+                no_results_text = i18n.get("results-no-results")
+            else:
+                no_results_text = (
+                    "К сожалению, по вашим критериям ничего не найдено.\n"
+                    "Попробуйте изменить параметры поиска."
+                )
+            await callback.message.answer(no_results_text)
         return
 
     if view_mode == "list":
@@ -974,7 +988,11 @@ async def on_results_browse(
                 await property_bot._send_property_card(callback.message, result, telegram_id)
         shown = len(results)
         catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
-        await callback.message.answer(f"Показано {shown} из {total_count}", reply_markup=catalog_kb)
+        if i18n is not None:
+            shown_text = i18n.get("results-shown", shown=str(shown), total=str(total_count))
+        else:
+            shown_text = f"Показано {shown} из {total_count}"
+        await callback.message.answer(shown_text, reply_markup=catalog_kb)
 
 
 # --- Dialog ---
