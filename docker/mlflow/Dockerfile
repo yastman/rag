@@ -2,8 +2,14 @@
 FROM ghcr.io/mlflow/mlflow:v3.10.1@sha256:bb350de1ae29025e3f78d70a3443047ca863429cc577a28e050c7156ed8d388d
 
 # Install PostgreSQL driver for backend store
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install psycopg2-binary==2.9.11
+RUN --mount=type=cache,target=/tmp/pip-cache \
+    PIP_CACHE_DIR=/tmp/pip-cache pip install psycopg2-binary==2.9.11
+
+# Non-root user
+RUN useradd -r -m -s /bin/false mlflow && \
+    mkdir -p /mlflow/artifacts && \
+    chown -R mlflow:mlflow /mlflow
+USER mlflow
 
 # Default port
 EXPOSE 5000
