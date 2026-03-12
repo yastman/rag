@@ -5,6 +5,7 @@ Steps: classify → agent intent gate → RAG → generate → send → post-pro
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -102,6 +103,92 @@ def _build_non_rag_response(query_type: str) -> str:
             "Сформулируйте вопрос по объектам, ценам, районам или процессу покупки."
         )
     return ""
+
+
+# ---------------------------------------------------------------------------
+# Two-phase pre-agent embedding (#954)
+# ---------------------------------------------------------------------------
+
+
+async def _pre_agent_embed_phases(
+    user_text: str,
+    embeddings: Any,
+    cache: Any,
+    query_type: str,
+    role: str,
+) -> dict[str, Any]:
+    """Two-phase pre-agent embedding: dense → cache check → ColBERT only on miss.
+
+    Phase 1 (cheap): compute dense+sparse via aembed_hybrid (no ColBERT) and
+    check the semantic cache using the dense vector.
+
+    Phase 2 (expensive, only on cache MISS): compute ColBERT vectors so that
+    rag_pipeline can use server-side MaxSim reranking.
+
+    Args:
+        user_text: Raw user query.
+        embeddings: BGEM3HybridEmbeddings (or compatible).
+        cache: CacheLayerManager instance.
+        query_type: Pre-classified query type string.
+        role: Agent role ("client" or "manager").
+
+    Returns:
+        Dict with keys: embedding, sparse, colbert, cache_hit, cached_response.
+    """
+    _has_hybrid_colbert = callable(
+        getattr(embeddings, "aembed_hybrid_with_colbert", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid_with_colbert)
+    _has_hybrid = callable(
+        getattr(embeddings, "aembed_hybrid", None)
+    ) and asyncio.iscoroutinefunction(embeddings.aembed_hybrid)
+
+    # --- Phase 1: get/compute dense + sparse (no ColBERT) ---
+    embedding: list[float] | None = await cache.get_embedding(user_text)
+    sparse: dict | None = await cache.get_sparse_embedding(user_text)
+
+    if embedding is None:
+        if _has_hybrid_colbert or _has_hybrid:
+            embedding, sparse = await embeddings.aembed_hybrid(user_text)
+        else:
+            embedding = await embeddings.aembed_query(user_text)
+        await cache.store_embedding(user_text, embedding)
+        if sparse is not None:
+            await cache.store_sparse_embedding(user_text, sparse)
+    elif sparse is None:
+        if _has_hybrid_colbert or _has_hybrid:
+            _, sparse = await embeddings.aembed_hybrid(user_text)
+            await cache.store_sparse_embedding(user_text, sparse)
+
+    # --- Cache check (dense only — cheap) ---
+    cached_response = await cache.check_semantic(
+        query=user_text,
+        vector=embedding,
+        query_type=query_type,
+        cache_scope="rag",
+        agent_role=role,
+    )
+
+    if cached_response:
+        return {
+            "embedding": embedding,
+            "sparse": sparse,
+            "colbert": None,
+            "cache_hit": True,
+            "cached_response": cached_response,
+        }
+
+    # --- Phase 2: ColBERT only on cache MISS (expensive) ---
+    colbert: list[list[float]] | None = None
+    if _has_hybrid_colbert:
+        _, _, colbert = await embeddings.aembed_hybrid_with_colbert(user_text)
+
+    return {
+        "embedding": embedding,
+        "sparse": sparse,
+        "colbert": colbert,
+        "cache_hit": False,
+        "cached_response": None,
+    }
 
 
 # ---------------------------------------------------------------------------

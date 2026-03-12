@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from qdrant_client import models
 
@@ -246,8 +247,34 @@ class ApartmentsService:
         )
         return result.count
 
-    async def get_distinct_values(self, field: str) -> list[str]:
-        """Get sorted unique non-empty values for a payload field via scroll."""
+    async def get_distinct_values(
+        self,
+        field: str,
+        redis: Any = None,
+        ttl: int = 3600,
+    ) -> list[str]:
+        """Get sorted unique non-empty values for a payload field via scroll.
+
+        Results are cached in Redis with the given TTL (default 1 h) when a
+        Redis client is provided, avoiding repeated full-collection scrolls.
+
+        Args:
+            field: Payload field name to collect distinct values for.
+            redis: Optional async Redis client (redis.asyncio compatible).
+            ttl: Cache TTL in seconds (default 3600).
+
+        Returns:
+            Sorted list of unique non-empty string values.
+        """
+        import json as _json
+
+        cache_key = f"distinct:{self._qdrant.collection_name}:{field}"
+
+        if redis is not None:
+            cached = await redis.get(cache_key)
+            if cached is not None:
+                return _json.loads(cached)
+
         values: set[str] = set()
         offset = None
         while True:
@@ -265,7 +292,13 @@ class ApartmentsService:
             if next_offset is None:
                 break
             offset = next_offset
-        return sorted(values)
+
+        result = sorted(values)
+
+        if redis is not None:
+            await redis.setex(cache_key, ttl, _json.dumps(result))
+
+        return result
 
     async def get_collection_stats(self) -> dict:
         """Get unique cities, complexes, rooms, price range for example generation."""

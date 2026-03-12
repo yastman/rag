@@ -291,18 +291,19 @@ class UnifiedStateManager:
             # Inside sync_context - reuse runner
             return self._runner.run(coro)
 
-        # Standalone call - create fresh loop (backwards compatible)
-        if self._pool is not None:
-            self._pool = None  # Reset to avoid loop mismatch
+        # Standalone call — use asyncio.run() which manages its own event loop.
+        # Pool is reset first to avoid loop mismatch; cleanup runs inside the loop.
+        self._pool = None
 
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(coro)
-        finally:
-            if self._pool is not None:
-                loop.run_until_complete(self._pool.close())
-                self._pool = None
-            loop.close()
+        async def _run_with_cleanup():
+            try:
+                return await coro
+            finally:
+                if self._pool is not None:
+                    await self._pool.close()
+                    self._pool = None
+
+        return asyncio.run(_run_with_cleanup())
 
     def get_state_sync(self, file_id: str) -> FileState | None:
         """Sync version of get_state()."""
