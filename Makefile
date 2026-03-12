@@ -335,7 +335,7 @@ test-bot-health: ***REMOVED******REMOVED*** Preflight: verify Qdrant collection 
 
 test-bot-health-vps: ***REMOVED******REMOVED*** Preflight: verify Qdrant + LLM from inside Docker network (VPS)
 	@echo "$(BLUE)Running VPS bot health preflight...$(NC)"
-	@docker exec vps-bot python -c "\
+	@docker compose exec bot python -c "\
 	import urllib.request, json, sys; \
 	r = json.loads(urllib.request.urlopen('http://qdrant:6333/collections', timeout=10).read()); \
 	names = [c['name'] for c in r['result']['collections']]; \
