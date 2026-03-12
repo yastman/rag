@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -33,17 +34,21 @@ _REASON_LABELS: dict[str, str] = {
 }
 
 
-def build_feedback_keyboard(trace_id: str) -> InlineKeyboardMarkup:
+def build_feedback_keyboard(trace_id: str, *, i18n: Any | None = None) -> InlineKeyboardMarkup:
     """Build inline keyboard with like/dislike buttons encoding trace_id."""
+    useful_label = i18n.get("feedback-useful") if i18n is not None else "\U0001f44d Полезно"
+    not_helpful_label = (
+        i18n.get("feedback-not-helpful") if i18n is not None else "\U0001f44e Не помогло"
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="\U0001f44d Полезно",
+                    text=useful_label,
                     callback_data=FeedbackCB(action="like", trace_id=trace_id).pack(),
                 ),
                 InlineKeyboardButton(
-                    text="\U0001f44e Не помогло",
+                    text=not_helpful_label,
                     callback_data=FeedbackCB(action="dislike", trace_id=trace_id).pack(),
                 ),
             ]

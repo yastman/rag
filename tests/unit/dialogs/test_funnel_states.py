@@ -1,11 +1,11 @@
 """Tests for FunnelSG states."""
 
 
-def test_funnel_sg_has_no_results_state():
-    """FunnelSG must NOT have a results state (removed: inline pagination replaced by ReplyKeyboard)."""
+def test_funnel_sg_has_results_state():
+    """FunnelSG must have a results State for the results preview window (#935)."""
     from telegram_bot.dialogs.states import FunnelSG
 
-    assert not hasattr(FunnelSG, "results")
+    assert hasattr(FunnelSG, "results"), "FunnelSG must have 'results' State (#935)"
 
 
 def test_funnel_sg_has_summary_state():

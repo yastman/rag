@@ -287,19 +287,15 @@ async def on_phone_received(
     # Cancel button pressed
     if is_phone_cancel(text):
         await state.clear()
-        await message.answer(
-            "Обращение отменено.",
-            reply_markup=build_client_keyboard(),
-        )
+        cancel_text = i18n.get("phone-cancelled") if i18n else "Обращение отменено."
+        await message.answer(cancel_text, reply_markup=build_client_keyboard())
         return
 
     # Not a phone attempt (no 5+ digits) — silently exit FSM
     if not is_phone_attempt(text):
         await state.clear()
-        await message.answer(
-            "Обращение отменено.",
-            reply_markup=build_client_keyboard(),
-        )
+        cancel_text = i18n.get("phone-cancelled") if i18n else "Обращение отменено."
+        await message.answer(cancel_text, reply_markup=build_client_keyboard())
         return
 
     if not validate_phone(text):

@@ -531,8 +531,10 @@ async def test_zero_suggestion_removes_floor_and_refreshes_summary():
 
 
 @pytest.mark.asyncio
-async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch):
-    """on_summary_search should search, send cards via property_bot, then close dialog."""
+async def test_on_summary_search_caches_results_and_switches_to_results_window(monkeypatch):
+    """on_summary_search searches, caches results in dialog_data, switches to results (#935)."""
+    from telegram_bot.dialogs.states import FunnelSG
+
     spawn_mock = MagicMock()
     monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", spawn_mock)
 
@@ -579,11 +581,17 @@ async def test_on_summary_search_sends_photo_cards_and_closes_dialog(monkeypatch
         "state": MagicMock(update_data=AsyncMock(), set_state=AsyncMock()),
     }
     manager.done = AsyncMock()
+    manager.switch_to = AsyncMock()
 
     await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-    mock_bot._send_property_card.assert_awaited_once()
-    manager.done.assert_awaited_once()
+    # Cards NOT sent here — deferred to on_results_browse
+    mock_bot._send_property_card.assert_not_awaited()
+    # Results cached in dialog_data
+    assert manager.dialog_data["_search_results"] is not None
+    assert manager.dialog_data["_search_total"] == 1
+    # Switched to results window
+    manager.switch_to.assert_awaited_once_with(FunnelSG.results)
 
 
 @pytest.mark.asyncio
@@ -974,13 +982,14 @@ def _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock):
         "state": state_mock,
     }
     manager.done = AsyncMock()
+    manager.switch_to = AsyncMock()
     return callback, manager
 
 
 class TestOnSummarySearchRedesign:
-    async def test_sends_catalog_keyboard(self, monkeypatch):
-        """on_summary_search заменяет footer на ReplyKeyboardMarkup каталога."""
-        from aiogram.types import ReplyKeyboardMarkup
+    async def test_switches_to_results_window(self, monkeypatch):
+        """on_summary_search switches to FunnelSG.results after fetching results (#935)."""
+        from telegram_bot.dialogs.states import FunnelSG
 
         mock_svc = MagicMock()
         mock_svc.scroll_with_filters = AsyncMock(
@@ -995,17 +1004,10 @@ class TestOnSummarySearchRedesign:
         callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
         await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-        last_call = callback.message.answer.call_args_list[-1]
-        reply_markup = last_call.kwargs.get("reply_markup")
-        assert isinstance(reply_markup, ReplyKeyboardMarkup), (
-            "Ожидается ReplyKeyboardMarkup каталога"
-        )
-        button_texts = [btn.text for row in reply_markup.keyboard for btn in row]
-        assert any("Показать ещё" in t or "Все" in t for t in button_texts)
-        assert "🏠 Главное меню" in button_texts
+        manager.switch_to.assert_awaited_once_with(FunnelSG.results)
 
-    async def test_sets_catalog_browsing_state(self, monkeypatch):
-        """on_summary_search sets CatalogBrowsingSG.browsing FSM state."""
+    async def test_caches_results_in_dialog_data(self, monkeypatch):
+        """on_summary_search stores _search_results in dialog_data for results window (#935)."""
         mock_svc = MagicMock()
         mock_svc.scroll_with_filters = AsyncMock(
             return_value=([_APT_PAYLOAD], 15, 55000.0, ["apt-1"])
@@ -1020,9 +1022,8 @@ class TestOnSummarySearchRedesign:
         callback, manager = _make_search_manager(monkeypatch, mock_svc, mock_bot, state_mock)
         await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-        from telegram_bot.dialogs.states import CatalogBrowsingSG
-
-        state_mock.set_state.assert_awaited_once_with(CatalogBrowsingSG.browsing)
+        assert "_search_results" in manager.dialog_data
+        assert manager.dialog_data["_search_total"] == 15
 
     async def test_sends_10_apartments(self, monkeypatch):
         """on_summary_search запрашивает limit=10 карточек."""
@@ -1057,11 +1058,12 @@ def test_summary_has_list_and_cards_buttons():
     assert "search_cards" in button_ids, "Missing 'Карточками' button"
 
 
-def test_summary_has_no_results_window():
-    """Funnel dialog must NOT have a results window (inline pagination removed)."""
-    states = [w.get_state() for w in funnel_dialog.windows.values()]
-    assert not any(str(s).endswith("results") for s in states), (
-        "Results window should be removed — inline pagination replaced by ReplyKeyboard"
+def test_funnel_has_results_window():
+    """Funnel dialog must have a results window for FunnelSG.results (#935)."""
+    from telegram_bot.dialogs.states import FunnelSG
+
+    assert FunnelSG.results in funnel_dialog.windows, (
+        "funnel_dialog must have a results window for FunnelSG.results (#935)"
     )
 
 
@@ -1137,8 +1139,8 @@ class TestFormatApartmentList:
 
 
 @pytest.mark.asyncio
-async def test_on_summary_search_list_mode_sends_text(monkeypatch):
-    """When button.widget_id == 'search_list', sends HTML text instead of photo cards."""
+async def test_on_summary_search_list_mode_stores_view_mode(monkeypatch):
+    """When button.widget_id == 'search_list', stores _view_mode='list' in dialog_data (#935)."""
     monkeypatch.setattr(funnel_module, "_spawn_persist_funnel_lead_score", MagicMock())
 
     mock_svc = MagicMock()
@@ -1170,13 +1172,11 @@ async def test_on_summary_search_list_mode_sends_text(monkeypatch):
         "state": MagicMock(update_data=AsyncMock(), set_state=AsyncMock()),
     }
     manager.done = AsyncMock()
+    manager.switch_to = AsyncMock()
 
     await funnel_module.on_summary_search(callback, button, manager)
 
-    # Should send text, not cards
+    # Cards not sent in on_summary_search anymore — that's on_results_browse
     mock_bot._send_property_card.assert_not_awaited()
-    # Should have at least one answer call with HTML (the list text)
-    html_calls = [
-        c for c in callback.message.answer.call_args_list if c.kwargs.get("parse_mode") == "HTML"
-    ]
-    assert len(html_calls) >= 1, "List mode should send HTML text"
+    # View mode stored for the results window
+    assert manager.dialog_data.get("_view_mode") == "list"
