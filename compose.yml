@@ -297,7 +297,7 @@ services:
       litellm:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import os, signal; os.kill(1, 0)"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8443/health', timeout=5)\" 2>/dev/null || pgrep -f 'python.*telegram_bot\\|python.*__main__' > /dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -382,6 +382,8 @@ services:
   # =============================================================================
 
   ingestion:
+    <<: *security-defaults
+    read_only: false
     build:
       context: .
       dockerfile: Dockerfile.ingestion
@@ -416,6 +418,12 @@ services:
         condition: service_healthy
       bge-m3:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'python' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -434,7 +442,7 @@ services:
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
@@ -451,6 +459,8 @@ services:
 
   # MinIO S3-compatible storage for Langfuse v3
   minio:
+    <<: *security-defaults
+    read_only: false
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3
     restart: unless-stopped
     logging: *default-logging
@@ -458,7 +468,7 @@ services:
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
     environment:
       MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -474,12 +484,14 @@ services:
 
   # Redis for Langfuse v3 (separate from app Redis)
   redis-langfuse:
+    <<: *security-defaults
+    read_only: false
     image: redis:8.6.1@sha256:1c054d54ecd1597bba52f4304bca5afbc5565ebe614c5b3d7dc5b7f8a0cd768d
     restart: unless-stopped
     logging: *default-logging
-    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-langfuseredis}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -490,6 +502,8 @@ services:
 
   # Langfuse v3 Worker
   langfuse-worker:
+    <<: *security-defaults
+    read_only: false
     image: langfuse/langfuse-worker:3.150.0@sha256:e4c98263d86593e2ba76e104c7e62e1c0c306785b84d83e21f74ef9f2d9bd0c9
     restart: always
     depends_on:
@@ -513,30 +527,36 @@ services:
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
       # S3/MinIO
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
       # Redis
       REDIS_HOST: redis-langfuse
       REDIS_PORT: 6379
-      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}
       # Telemetry
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'node' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     logging:
       driver: "json-file"
       options:
@@ -549,6 +569,8 @@ services:
 
   # Langfuse v3 Web
   langfuse:
+    <<: *security-defaults
+    read_only: false
     image: langfuse/langfuse:3.150.0@sha256:7f47fd823a5d6f8b1195e0ca6830f8f99e78a659b150ccdb077d188674efb1b6
     restart: always
     depends_on:
@@ -586,6 +608,8 @@ services:
   # =============================================================================
 
   mlflow:
+    <<: *security-defaults
+    read_only: false
     build:
       context: ./docker/mlflow
       dockerfile: Dockerfile
@@ -617,6 +641,7 @@ services:
   # =============================================================================
 
   loki:
+    <<: *security-defaults
     image: grafana/loki:3.6.7@sha256:3c8fd3570dd9219951a60d3f919c7f31923d10baee578b77bc26c4a0b32d092d
     profiles: ["obs", "full"]
     restart: unless-stopped
@@ -645,13 +670,15 @@ services:
       loki:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "/usr/bin/promtail", "--version"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9080/ready || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 10s
 
   alertmanager:
+    <<: *security-defaults
+    read_only: false
     image: prom/alertmanager:v0.31.1@sha256:88b605de9aba0410775c1eb3438f951115054e0d307f23f274a4c705f51630c1
     profiles: ["obs", "full"]
     restart: unless-stopped
@@ -705,6 +732,7 @@ services:
   # =============================================================================
 
   rag-api:
+    <<: *security-defaults
     build:
       context: .
       dockerfile: src/api/Dockerfile
@@ -744,6 +772,7 @@ services:
           memory: 512M
 
   livekit-server:
+    <<: *security-defaults
     image: livekit/livekit-server:v1.9@sha256:289262ffae8b827f45186331aa315d08ed275eb30f9b0add337ec57948e44ca1
     profiles: ["voice", "full"]
     restart: unless-stopped
@@ -802,6 +831,8 @@ services:
           memory: 256M
 
   voice-agent:
+    <<: *security-defaults
+    read_only: false
     build:
       context: .
       dockerfile: src/voice/Dockerfile
