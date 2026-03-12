@@ -84,6 +84,64 @@ _FEEDBACK_CONFIRMATION_TTL_S = 5.0
 _APARTMENT_PAGE_SIZE = 5
 _TELEGRAM_MESSAGE_LIMIT = 4096
 _NO_RAG_QUERY_TYPES: frozenset[str] = frozenset({"CHITCHAT", "OFF_TOPIC"})
+_AGENT_DRAFT_INTERVAL: float = 0.2  # seconds between sendMessageDraft calls
+
+
+async def _stream_agent_to_draft(
+    agent: Any,
+    payload: dict[str, Any],
+    config: dict[str, Any],
+    bot: Any,
+    chat_id: int,
+    thread_id: int | None = None,
+) -> dict[str, Any]:
+    """Stream agent astream() output to Telegram via sendMessageDraft.
+
+    Uses stream_mode=["messages", "values"]:
+    - "messages": forward AIMessage content chunks from the "agent" node as drafts.
+    - "values": capture final state.
+
+    Only streams content-only chunks (not tool-call chunks). Returns final state dict.
+    """
+    import contextlib
+    import random
+
+    accumulated = ""
+    last_draft = 0.0
+    final_state: dict[str, Any] = {}
+    draft_id = random.randint(1, 2**31 - 1)
+
+    async for mode, data in agent.astream(
+        payload, config=config, stream_mode=["messages", "values"]
+    ):
+        if mode == "values":
+            final_state = data
+        elif mode == "messages":
+            msg, metadata = data
+            node = metadata.get("langgraph_node", "")
+            if node != "agent":
+                continue
+            content = getattr(msg, "content", None)
+            if not content:
+                continue
+            # Skip tool-call chunks — they carry tool routing JSON, not user-facing text.
+            if getattr(msg, "tool_calls", None):
+                continue
+            accumulated += content
+            now = time.monotonic()
+            if now - last_draft >= _AGENT_DRAFT_INTERVAL:
+                draft_kwargs: dict[str, Any] = {
+                    "chat_id": chat_id,
+                    "draft_id": draft_id,
+                    "text": accumulated,
+                }
+                if thread_id is not None:
+                    draft_kwargs["message_thread_id"] = thread_id
+                with contextlib.suppress(Exception):
+                    await bot.send_message_draft(**draft_kwargs)
+                last_draft = now
+
+    return final_state
 
 
 def _merge_results(existing: list[dict], extra: list[dict]) -> list[dict]:
@@ -3518,13 +3576,13 @@ class PropertyBot:
         bot_context: BotContext,
         rag_result_store: dict[str, Any],
         forum_thread_id: int | None = None,
-        message: Message | None = None,
+        message: Any | None = None,
     ) -> dict[str, Any]:
         """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures.
 
-        When *message* is provided and streaming is enabled, uses agent.astream() to
-        forward LLM tokens via sendMessageDraft for real-time delivery (#952).
-        Falls back to ainvoke on any streaming error.
+        When *message* is provided and STREAMING_ENABLED is True, uses agent.astream()
+        to forward token chunks to Telegram via sendMessageDraft during generation (#952).
+        Falls back to ainvoke() on streaming errors.
         """
         payload = {"messages": [{"role": "user", "content": user_text}]}
         config = {
@@ -3539,20 +3597,22 @@ class PropertyBot:
             },
         }
 
-        # --- Streaming path: forward tokens via sendMessageDraft (#952) ---
-        if message is not None and getattr(self.config, "streaming_enabled", False):
-            try:
-                return await self._astream_agent_response(
-                    agent=agent,
-                    payload=payload,
-                    config=config,
-                    message=message,
-                    forum_thread_id=forum_thread_id,
-                    rag_result_store=rag_result_store,
-                )
-            except Exception:
-                logger.warning("Agent streaming failed; falling back to ainvoke", exc_info=True)
-                # fall through to ainvoke path below
+        # --- Streaming path (#952) ---
+        streaming_enabled = bool(getattr(self.config, "streaming_enabled", False))
+        if message is not None and streaming_enabled:
+            bot = getattr(message, "bot", None)
+            if bot is not None:
+                try:
+                    return await _stream_agent_to_draft(
+                        agent=agent,
+                        payload=payload,
+                        config=config,
+                        bot=bot,
+                        chat_id=chat_id,
+                        thread_id=forum_thread_id,
+                    )
+                except Exception:
+                    logger.warning("Agent streaming failed; falling back to ainvoke", exc_info=True)
 
         try:
             result: dict[str, Any] = await agent.ainvoke(payload, config=config)
@@ -3588,68 +3648,6 @@ class PropertyBot:
         )
         fallback_result: dict[str, Any] = await fallback_agent.ainvoke(payload, config=config)
         return fallback_result
-
-    async def _astream_agent_response(
-        self,
-        *,
-        agent: Any,
-        payload: dict[str, Any],
-        config: dict[str, Any],
-        message: Message,
-        forum_thread_id: int | None,
-        rag_result_store: dict[str, Any],
-    ) -> dict[str, Any]:
-        """Stream agent response tokens to Telegram via sendMessageDraft.
-
-        Uses agent.astream(stream_mode=["values", "messages"]) to receive both
-        token-level chunks (for live preview) and the final state dict (for
-        interrupt detection and message extraction).
-
-        Only forwards AIMessageChunk tokens that have non-empty content and no
-        tool_calls — i.e. the final response, not intermediate tool decisions.
-        Draft updates are throttled to _DRAFT_INTERVAL (200 ms) to match the
-        client-pipeline streaming pattern in generate_response.py.
-        """
-        from .services.draft_streamer import DraftStreamer
-        from .services.generate_response import _DRAFT_INTERVAL
-
-        assert message.bot is not None
-        streamer = DraftStreamer(
-            bot=message.bot,
-            chat_id=message.chat.id,
-            thread_id=forum_thread_id,
-        )
-
-        accumulated = ""
-        last_draft = 0.0
-        ttft_ms: float = 0.0
-        t_start = time.perf_counter()
-        result: dict[str, Any] = {"messages": []}
-
-        async for event in agent.astream(
-            payload, config=config, stream_mode=["values", "messages"]
-        ):
-            mode, data = event
-            if mode == "messages":
-                msg_chunk, _meta = data
-                text = msg_chunk.content if isinstance(msg_chunk.content, str) else ""
-                # Skip tool-call decisions (content empty or tool_calls present)
-                if text and not getattr(msg_chunk, "tool_calls", None):
-                    if ttft_ms == 0.0:
-                        ttft_ms = (time.perf_counter() - t_start) * 1000
-                    accumulated += text
-                    now = time.monotonic()
-                    if now - last_draft >= _DRAFT_INTERVAL:
-                        with contextlib.suppress(Exception):
-                            await streamer.send_chunk(accumulated)
-                        last_draft = now
-            elif mode == "values":
-                result = data
-
-        if ttft_ms > 0:
-            rag_result_store["agent_ttft_ms"] = round(ttft_ms, 1)
-
-        return result
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):
