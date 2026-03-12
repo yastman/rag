@@ -61,26 +61,41 @@ services:
     ports:
       - "127.0.0.1:8123:8123"
       - "127.0.0.1:9009:9000"
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
 
   minio:
     profiles: ["ml", "full"]
     ports:
       - "127.0.0.1:9090:9000"
       - "127.0.0.1:9091:9001"
+    environment:
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
 
   redis-langfuse:
     profiles: ["ml", "full"]
     ports:
       - "127.0.0.1:6380:6379"
+    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
 
   langfuse-worker:
     profiles: ["ml", "full"]
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
 
   langfuse:
     profiles: ["ml", "full"]
     ports:
       - "127.0.0.1:3001:3000"
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
 
   mlflow:
     ports:

@@ -24,10 +24,20 @@ services:
     image: pgvector/pgvector:pg17@sha256:494dff7e67e7bc2c826b94c331364978d145ebb86fd338154138b084223b7f67
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
+      - langfuse
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: postgres
+      # Per-service DB passwords (used by 00-init-databases.sh)
+      LANGFUSE_DB_PASSWORD: ${LANGFUSE_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+      LITELLM_DB_PASSWORD: ${LITELLM_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+      MLFLOW_DB_PASSWORD: ${MLFLOW_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+      COCOINDEX_DB_PASSWORD: ${COCOINDEX_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+      REALESTATE_DB_PASSWORD: ${REALESTATE_DB_PASSWORD:-${POSTGRES_PASSWORD}}
+      VOICE_DB_PASSWORD: ${VOICE_DB_PASSWORD:-${POSTGRES_PASSWORD}}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -46,6 +56,9 @@ services:
     image: redis:8.6.1@sha256:1c054d54ecd1597bba52f4304bca5afbc5565ebe614c5b3d7dc5b7f8a0cd768d
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
+      - voice
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     command: >
@@ -70,6 +83,8 @@ services:
     image: qdrant/qdrant:v1.17.0@sha256:f1c7272cdac52b38c1a0e89313922d940ba50afd90d593a1605dbbc214e66ffb
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
@@ -96,6 +111,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
     volumes:
       - hf_cache:/models
     environment:
@@ -123,6 +140,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
     volumes:
       - hf_cache:/models
     environment:
@@ -148,6 +167,8 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
     read_only: false
     environment:
       UVICORN_HOST: 0.0.0.0
@@ -182,6 +203,9 @@ services:
     image: ghcr.io/berriai/litellm:main-v1.81.14-stable@sha256:a3ce130137752e6b085de521b773eacbb641c8b6322c6f538453e860e7b9cf43
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
+      - langfuse
     volumes:
       - ./docker/litellm/config.yaml:/app/config.yaml:ro
     environment:
@@ -223,6 +247,8 @@ services:
       dockerfile: telegram_bot/Dockerfile
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
     environment:
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required}
@@ -282,7 +308,7 @@ services:
       MANAGER_HOT_LEAD_THRESHOLD: "${MANAGER_HOT_LEAD_THRESHOLD:-60}"
       MANAGER_HOT_LEAD_DEDUPE_SEC: "${MANAGER_HOT_LEAD_DEDUPE_SEC:-3600}"
       # Real Estate DB
-      REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
+      REALESTATE_DATABASE_URL: "postgresql://realestate_user:${REALESTATE_DB_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/realestate"
     depends_on:
       postgres:
         condition: service_healthy
@@ -320,6 +346,8 @@ services:
     profiles: ["bot", "full"]
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
     environment:
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       QDRANT_URL: http://qdrant:6333
@@ -331,7 +359,7 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
-      REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
+      REALESTATE_DATABASE_URL: "postgresql://realestate_user:${REALESTATE_DB_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/realestate"
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
       KOMMO_SUBDOMAIN: "${KOMMO_SUBDOMAIN:-}"
       KOMMO_ACCESS_TOKEN: "${KOMMO_ACCESS_TOKEN:-}"
@@ -363,6 +391,8 @@ services:
     profiles: ["bot", "full"]
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
     depends_on:
       mini-app-api:
         condition: service_healthy
@@ -389,12 +419,14 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
+    networks:
+      - backend
     environment:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
       - GDRIVE_SYNC_DIR=/data/drive-sync
-      - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
+      - INGESTION_DATABASE_URL=postgresql://cocoindex_user:${COCOINDEX_DB_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/cocoindex
       - QDRANT_URL=http://qdrant:6333
       - DOCLING_URL=http://docling:5001
       - GDRIVE_COLLECTION_NAME=gdrive_documents_bge
@@ -430,11 +462,13 @@ services:
     image: clickhouse/clickhouse-server:26.1@sha256:7f6546e5e293cfcdb812675fde424dc9bce3d32ac86f18051fedc23bff75a724
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - langfuse
     user: "101:101"
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
@@ -454,11 +488,13 @@ services:
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z@sha256:1dce27c494a16bae114774f1cec295493f3613142713130c2d22dd5696be6ad3
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - langfuse
     entrypoint: sh
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
     environment:
       MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -477,9 +513,11 @@ services:
     image: redis:8.6.1@sha256:1c054d54ecd1597bba52f4304bca5afbc5565ebe614c5b3d7dc5b7f8a0cd768d
     restart: unless-stopped
     logging: *default-logging
-    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+    networks:
+      - langfuse
+    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-langfuseredis}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -492,6 +530,8 @@ services:
   langfuse-worker:
     image: langfuse/langfuse-worker:3.150.0@sha256:e4c98263d86593e2ba76e104c7e62e1c0c306785b84d83e21f74ef9f2d9bd0c9
     restart: always
+    networks:
+      - langfuse
     depends_on:
       postgres:
         condition: service_healthy
@@ -503,7 +543,7 @@ services:
         condition: service_healthy
     environment: &langfuse-env
       # Database
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/langfuse
+      DATABASE_URL: postgresql://langfuse_user:${LANGFUSE_DB_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/langfuse
       # Auth
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3001}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
@@ -513,27 +553,27 @@ services:
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
       # S3/MinIO
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
       # Redis
       REDIS_HOST: redis-langfuse
       REDIS_PORT: 6379
-      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:?LANGFUSE_REDIS_PASSWORD is required}
       # Telemetry
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "true"
@@ -551,6 +591,8 @@ services:
   langfuse:
     image: langfuse/langfuse:3.150.0@sha256:7f47fd823a5d6f8b1195e0ca6830f8f99e78a659b150ccdb077d188674efb1b6
     restart: always
+    networks:
+      - langfuse
     depends_on:
       postgres:
         condition: service_healthy
@@ -591,14 +633,19 @@ services:
       dockerfile: Dockerfile
     profiles: ["eval", "ml", "full"]
     restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - backend
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
     environment:
-      MLFLOW_BACKEND_STORE_URI: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/mlflow
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow_user:${MLFLOW_DB_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/mlflow
       MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
     volumes:
       - mlflow_artifacts:/mlflow/artifacts
     entrypoint: >
       mlflow server
-      --backend-store-uri postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/mlflow
+      --backend-store-uri postgresql://mlflow_user:${MLFLOW_DB_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/mlflow
       --default-artifact-root /mlflow/artifacts
       --host 0.0.0.0
       --port 5000
@@ -611,6 +658,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   # =============================================================================
   # MONITORING & ALERTING (dev-only)
@@ -620,6 +671,8 @@ services:
     image: grafana/loki:3.6.7@sha256:3c8fd3570dd9219951a60d3f919c7f31923d10baee578b77bc26c4a0b32d092d
     profiles: ["obs", "full"]
     restart: unless-stopped
+    networks:
+      - monitoring
     volumes:
       - ./docker/monitoring/loki.yaml:/etc/loki/local-config.yaml:ro
       - ./docker/monitoring/rules:/etc/loki/rules/fake:ro
@@ -636,6 +689,8 @@ services:
     image: grafana/promtail:3.6.7@sha256:51346af8682f7a664affaca4f34a62f5a4f0f83ace9931df94590375a94ff8f1
     profiles: ["obs", "full"]
     restart: unless-stopped
+    networks:
+      - monitoring
     volumes:
       - ./docker/monitoring/promtail.yaml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -655,6 +710,8 @@ services:
     image: prom/alertmanager:v0.31.1@sha256:88b605de9aba0410775c1eb3438f951115054e0d307f23f274a4c705f51630c1
     profiles: ["obs", "full"]
     restart: unless-stopped
+    networks:
+      - monitoring
     volumes:
       - ./docker/monitoring/alertmanager.yaml:/etc/alertmanager/alertmanager.tmpl:ro
       - alertmanager_data:/alertmanager
@@ -711,6 +768,9 @@ services:
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - backend
+      - voice
     environment:
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
       QDRANT_URL: http://qdrant:6333
@@ -748,6 +808,8 @@ services:
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - voice
     volumes:
       - ./docker/livekit:/etc/livekit:ro
     command: --config /etc/livekit/livekit.yaml --dev
@@ -767,6 +829,8 @@ services:
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - voice
     environment:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
@@ -808,13 +872,16 @@ services:
     profiles: ["voice", "full"]
     restart: unless-stopped
     logging: *default-logging
+    networks:
+      - voice
+      - backend
     environment:
       LIVEKIT_URL: ws://livekit-server:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
       ELEVEN_API_KEY: ${ELEVENLABS_API_KEY:-}
       RAG_API_URL: http://rag-api:8080
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
+      DATABASE_URL: postgresql://voice_user:${VOICE_DB_PASSWORD:-${POSTGRES_PASSWORD}}@postgres:5432/postgres
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
@@ -839,6 +906,16 @@ services:
 # =============================================================================
 # VOLUMES
 # =============================================================================
+
+networks:
+  backend:
+    driver: bridge
+  langfuse:
+    driver: bridge
+  monitoring:
+    driver: bridge
+  voice:
+    driver: bridge
 
 volumes:
   postgres_data:

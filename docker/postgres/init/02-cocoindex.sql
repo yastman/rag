@@ -1,7 +1,5 @@
--- CocoIndex state database for document ingestion pipeline
--- Created as part of Milestone J: Document Ingestion Pipeline
-
-CREATE DATABASE cocoindex;
+-- CocoIndex state tables for document ingestion pipeline
+-- Database created by 00-init-databases.sh
 
 \c cocoindex;
 
@@ -45,6 +43,9 @@ CREATE TABLE ingestion_dead_letter (
 CREATE INDEX idx_dead_letter_file_id ON ingestion_dead_letter(file_id);
 CREATE INDEX idx_dead_letter_created_at ON ingestion_dead_letter(created_at);
 
--- Grant permissions
+-- Grant permissions to dedicated user (created by 00-init-databases.sh)
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO cocoindex_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO cocoindex_user;
+-- Backward compat: superuser retains access
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO postgres;
