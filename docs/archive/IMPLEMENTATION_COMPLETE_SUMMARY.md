@@ -211,7 +211,7 @@ Savings from caching: 56%
 ```bash
 # Check one point to see context + metadata
 curl "http://localhost:6333/collections/uk_civil_code_contextual_kg/points/1" \
-  -H "api-key: REDACTED_QDRANT_KEY" | jq '.result.payload'
+  -H "api-key: <REDACTED-QDRANT-API-KEY>" | jq '.result.payload'
 ```
 
 **Look for:**
