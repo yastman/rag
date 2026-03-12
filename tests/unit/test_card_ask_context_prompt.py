@@ -93,6 +93,28 @@ async def test_card_ask_passes_apartment_context_in_prompt() -> None:
         assert "250 000" in prompt
 
 
+async def test_card_ask_uses_i18n_when_available() -> None:
+    """card:ask uses i18n.get('card-ask-prompt') when i18n is passed as kwarg."""
+    bot = _create_bot()
+    mock_i18n = MagicMock()
+    mock_i18n.get = MagicMock(return_value="i18n prompt text")
+    state = _make_state(
+        {
+            "apartment_results": [_sample_result("prop-42")],
+        }
+    )
+    callback = _make_callback("card:ask:prop-42")
+
+    _patch = "telegram_bot.handlers.phone_collector.start_phone_collection"
+    with patch(_patch, new_callable=AsyncMock) as mock_spc:
+        await bot.handle_card_callback(callback, state, i18n=mock_i18n)
+
+        mock_spc.assert_awaited_once()
+        call_kwargs = mock_spc.call_args.kwargs
+        assert call_kwargs.get("prompt_text") == "i18n prompt text"
+        mock_i18n.get.assert_called_once()
+
+
 async def test_card_ask_swaps_keyboard() -> None:
     """card:ask edits the card message to remove inline buttons (keyboard swap)."""
     bot = _create_bot()
