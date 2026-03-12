@@ -226,3 +226,11 @@ docs/artifacts/*.md
 .claude/hooks/
 .grepai/
 .signals/
+
+# Build artifacts & test outputs
+test_output*.txt
+test_coverage_pipeline*.txt
+coverage_report*.txt
+coverage.json
+.test_durations
+=*
