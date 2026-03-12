@@ -6,6 +6,7 @@ Auto-refreshes via Kommo OAuth2 endpoint when expired.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
@@ -39,6 +40,7 @@ class KommoTokenStore:
         self._client_secret = client_secret
         self._redirect_uri = redirect_uri
         self._key = f"{REDIS_KEY_PREFIX}{subdomain}"
+        self._refresh_lock = asyncio.Lock()
 
     @observe(name="kommo-token-get", capture_input=False, capture_output=False)
     async def get_valid_token(self) -> str:
@@ -58,48 +60,47 @@ class KommoTokenStore:
 
     @observe(name="kommo-token-refresh", capture_input=False, capture_output=False)
     async def force_refresh(self) -> str:
-        """Force token refresh via Kommo OAuth2."""
-        lf = get_client()
-        data = await self._redis.hgetall(self._key)
-        refresh_token = self._to_str_token(data.get(b"refresh_token", b""), field="refresh_token")
+        """Force token refresh via Kommo OAuth2.
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"https://{self._subdomain}.kommo.com/oauth2/access_token",
-                json={
-                    "client_id": self._client_id,
-                    "client_secret": self._client_secret,
-                    "grant_type": "refresh_token",
-                    "refresh_token": refresh_token,
-                    "redirect_uri": self._redirect_uri,
-                },
+        Serialized via asyncio.Lock to prevent concurrent refreshes from sending
+        duplicate requests with the same (soon-to-be-invalidated) refresh_token.
+        """
+        async with self._refresh_lock:
+            lf = get_client()
+            data = await self._redis.hgetall(self._key)
+            refresh_token = self._to_str_token(
+                data.get(b"refresh_token", b""), field="refresh_token"
             )
-            response.raise_for_status()
-            tokens_raw = response.json()
 
-        if not isinstance(tokens_raw, dict):
-            raise ValueError("Invalid token response from Kommo")
-        access_token = self._to_str_token(tokens_raw.get("access_token"), field="access_token")
-        refreshed_token = self._to_str_token(tokens_raw.get("refresh_token"), field="refresh_token")
-        expires_in = self._to_int(tokens_raw.get("expires_in", 86400), default=86400)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"https://{self._subdomain}.kommo.com/oauth2/access_token",
+                    json={
+                        "client_id": self._client_id,
+                        "client_secret": self._client_secret,
+                        "grant_type": "refresh_token",
+                        "refresh_token": refresh_token,
+                        "redirect_uri": self._redirect_uri,
+                    },
+                )
+                response.raise_for_status()
+                tokens_raw = response.json()
 
-        await self._store_tokens(
-            access_token,
-            refreshed_token,
-            expires_in,
-        )
-        lf.update_current_span(output={"refreshed": True, "expires_in_s": expires_in})
-        return access_token
+            if not isinstance(tokens_raw, dict):
+                raise ValueError("Invalid token response from Kommo")
+            access_token = self._to_str_token(tokens_raw.get("access_token"), field="access_token")
+            refreshed_token = self._to_str_token(
+                tokens_raw.get("refresh_token"), field="refresh_token"
+            )
+            expires_in = self._to_int(tokens_raw.get("expires_in", 86400), default=86400)
 
-    async def store_initial(
-        self,
-        *,
-        access_token: str,
-        refresh_token: str,
-        expires_in: int,
-    ) -> None:
-        """Store initial token set (from OAuth2 authorization code flow)."""
-        await self._store_tokens(access_token, refresh_token, expires_in)
+            await self._store_tokens(
+                access_token,
+                refreshed_token,
+                expires_in,
+            )
+            lf.update_current_span(output={"refreshed": True, "expires_in_s": expires_in})
+            return access_token
 
     async def _store_tokens(
         self,
