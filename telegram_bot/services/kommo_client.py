@@ -97,7 +97,7 @@ class KommoClient:
         # Raises for 429/5xx so tenacity can retry.
         response.raise_for_status()
 
-        ***REMOVED*** can return empty body on some successful endpoints.
+        # Kommo can return empty body on some successful endpoints.
         if not response.content:
             return {}
 

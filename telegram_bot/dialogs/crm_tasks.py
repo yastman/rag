@@ -36,7 +36,7 @@ TASK_TYPE_OPTIONS: list[tuple[str, str]] = [
     ("📋 Другое", "other"),
 ]
 
-***REMOVED*** task_type_id mapping
+# Kommo task_type_id mapping
 _TASK_TYPE_ID_MAP: dict[str, int] = {
     "call": 1,
     "meeting": 2,

@@ -65,7 +65,7 @@ class KommoTokenStore:
         except (TypeError, ValueError):
             expires_at = 0
 
-        ***REMOVED*** OAuth refresh flow requires refresh_token. If only access_token is
+        # Kommo OAuth refresh flow requires refresh_token. If only access_token is
         # available (seed/manual mode), use it as-is and let API 401 trigger handling.
         if not refresh_token:
             logger.info("Kommo token has no refresh_token; using cached access_token as-is")

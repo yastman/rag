@@ -61,7 +61,7 @@ class ForumBridge:
         if summary:
             lines.append("")
             lines.append(f"AI-саммари:\n{summary}")
-        ***REMOVED*** link
+        # Kommo link
         if lead_url:
             lines.append("")
             lines.append(f"Kommo: {lead_url}")

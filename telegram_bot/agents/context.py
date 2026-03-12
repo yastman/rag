@@ -20,18 +20,18 @@ class BotContext:
     telegram_user_id: int
     session_id: str
     language: str
-    kommo_client: Any | None  ***REMOVED***Client (lazy import to avoid circular)
+    kommo_client: Any | None  # KommoClient (lazy import to avoid circular)
     history_service: Any  # HistoryService
     embeddings: Any  # BGEM3HybridEmbeddings
     sparse_embeddings: Any  # BGEM3SparseEmbeddings
-    qdrant: Any  ***REMOVED***Service
+    qdrant: Any  # QdrantService
     cache: Any  # CacheLayerManager
     reranker: Any | None  # ColbertRerankerService or None
     llm: Any  # AsyncOpenAI
     content_filter_enabled: bool = True
     guard_mode: str = "hard"
     role: str = "client"
-    manager_id: int | None = None  ***REMOVED*** responsible_user_id for manager-role flows
+    manager_id: int | None = None  # kommo responsible_user_id for manager-role flows
     # Set to True by tools that deliver response directly (e.g. streaming) to prevent
     # bot.py from sending the message a second time (#428).
     response_sent: bool = False

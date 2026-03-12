@@ -84,7 +84,7 @@ class BotConfig(BaseSettings):
     top_k: int = 5
     min_score: float = 0.3
 
-    ***REMOVED*** AI Configuration
+    # Voyage AI Configuration
     voyage_api_key: str = Field(
         default="", validation_alias=AliasChoices("voyage_api_key", "VOYAGE_API_KEY")
     )
@@ -165,7 +165,7 @@ class BotConfig(BaseSettings):
         validation_alias=AliasChoices("hybrid_sparse_weight", "HYBRID_SPARSE_WEIGHT"),
     )
 
-    ***REMOVED*** Connection
+    # Qdrant Connection
     qdrant_timeout: int = Field(
         default=30,
         validation_alias=AliasChoices("qdrant_timeout", "QDRANT_TIMEOUT"),
@@ -193,7 +193,7 @@ class BotConfig(BaseSettings):
         default=0.7, validation_alias=AliasChoices("mmr_lambda", "MMR_LAMBDA")
     )
 
-    ***REMOVED*** Quantization Configuration
+    # Qdrant Quantization Configuration
     qdrant_quantization_mode: str = Field(
         default="off",
         validation_alias=AliasChoices("qdrant_quantization_mode", "QDRANT_QUANTIZATION_MODE"),
