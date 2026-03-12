@@ -22,7 +22,7 @@ cp .env.example .env
 ```bash
 ***REMOVED*** .env
 ANTHROPIC_API_KEY=[REDACTED-ANTHROPIC-KEY]
-QDRANT_API_KEY=REDACTED_QDRANT...
+QDRANT_API_KEY=3e7321df905ee908...
 QDRANT_URL=http://localhost:6333
 ```
 
