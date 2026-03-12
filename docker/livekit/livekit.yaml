@@ -6,4 +6,4 @@ rtc:
   port_range_end: 50100
   use_external_ip: true
 keys:
-  devkey: secret
+  REDACTED_API_KEY: ${LIVEKIT_API_SECRET:-secret}
