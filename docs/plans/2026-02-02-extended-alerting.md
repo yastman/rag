@@ -250,8 +250,8 @@ git commit -m "feat(monitoring): add alert rules for docling, minio, mlflow, red
 Add these lines:
 ```bash
 # Alerting (Telegram)
-TELEGRAM_ALERTING_BOT_TOKEN=REDACTED_TELEGRAM_TOKEN
-TELEGRAM_ALERTING_CHAT_ID=REDACTED_CHAT_ID
+TELEGRAM_ALERTING_BOT_TOKEN=7546342785:AAEuuFw8nAZCEEf6Ye6gFybszW5a9ok2ZQI
+TELEGRAM_ALERTING_CHAT_ID=7933283409
 ```
 
 **Step 2: Verify .env has the values**
@@ -259,8 +259,8 @@ TELEGRAM_ALERTING_CHAT_ID=REDACTED_CHAT_ID
 Run: `grep TELEGRAM_ALERTING .env`
 Expected:
 ```
-TELEGRAM_ALERTING_BOT_TOKEN=REDACTED_TELEGRAM_TOKEN
-TELEGRAM_ALERTING_CHAT_ID=REDACTED_CHAT_ID
+TELEGRAM_ALERTING_BOT_TOKEN=7546342785:AAEuuFw8nAZCEEf6Ye6gFybszW5a9ok2ZQI
+TELEGRAM_ALERTING_CHAT_ID=7933283409
 ```
 
 **Note:** Do NOT commit .env (it's in .gitignore)
@@ -310,7 +310,7 @@ Expected: Empty response `[]` or success status
 
 **Step 2: Check Telegram for the test alert**
 
-Expected: Message in chat REDACTED_CHAT_ID with "TestExtendedAlerting"
+Expected: Message in chat 7933283409 with "TestExtendedAlerting"
 
 **Step 3: Verify alert shows in Alertmanager UI**
 
@@ -372,4 +372,4 @@ git commit -m "docs(alerting): add extended services alert rules reference"
 | 5 | `docs/ALERTING.md` | Documentation |
 
 **Total new alerts:** 18 rules for 5 services
-**Credentials:** Bot `7546342785`, Chat `REDACTED_CHAT_ID`
+**Credentials:** Bot `7546342785`, Chat `7933283409`

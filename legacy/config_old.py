@@ -40,7 +40,7 @@ BGE_M3_TIMEOUT = 60
 # Qdrant
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv(
-    "QDRANT_API_KEY", "REDACTED_QDRANT_KEY"
+    "QDRANT_API_KEY", "3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395"
 )
 
 # =============================================================================

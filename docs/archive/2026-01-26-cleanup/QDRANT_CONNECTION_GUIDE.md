@@ -18,7 +18,7 @@ Qdrant is deployed on a remote server and is accessible both locally (on the ser
 - **Docker Container**: `ai-qdrant`
 - **HTTP Port**: 6333
 - **gRPC Port**: 6334
-- **API Key**: REDACTED_QDRANT_KEY
+- **API Key**: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395
 
 ## Current State
 
@@ -47,7 +47,7 @@ Use the main `.env` file:
 ```bash
 # .env
 QDRANT_URL=http://95.111.252.29:6333
-QDRANT_API_KEY=REDACTED_QDRANT_KEY
+QDRANT_API_KEY=3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395
 ```
 
 ### 2. For Working on the Server
@@ -65,7 +65,7 @@ ln -sf .env.server .env
 Contents of `.env.server`:
 ```bash
 QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=REDACTED_QDRANT_KEY
+QDRANT_API_KEY=3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395
 ```
 
 ## Connection Testing
@@ -74,11 +74,11 @@ QDRANT_API_KEY=REDACTED_QDRANT_KEY
 
 ```bash
 # Get list of collections
-curl -s -H 'api-key: REDACTED_QDRANT_KEY' \
+curl -s -H 'api-key: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395' \
   http://95.111.252.29:6333/collections
 
 # Information about a specific collection
-curl -s -H 'api-key: REDACTED_QDRANT_KEY' \
+curl -s -H 'api-key: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395' \
   http://95.111.252.29:6333/collections/legal_documents
 ```
 
@@ -92,7 +92,7 @@ ssh -i ~/.ssh/vps_access_key -p 1654 admin@95.111.252.29
 zsh -c "$(grep 'alias vps=' ~/.zshrc | cut -d'=' -f2-)"
 
 # Check collections
-curl -s -H 'api-key: REDACTED_QDRANT_KEY' \
+curl -s -H 'api-key: 3e7321df905ee908fd95a959a0301b5a2d5eb2b5e6f709a7e31251a7386e8395' \
   http://localhost:6333/collections
 ```
 
