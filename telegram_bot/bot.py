@@ -430,7 +430,7 @@ class PropertyBot:
         # PostgreSQL pool — initialized in start()
         self._pg_pool: Any = None
 
-        ***REMOVED*** CRM client (initialized in start() if enabled)
+        # Kommo CRM client (initialized in start() if enabled)
         self._kommo_client: Any | None = None
 
         # Lead scoring store (initialized in start() with pg_pool)
@@ -2174,7 +2174,7 @@ class PropertyBot:
                     and len(results) < apartment_total_value
                 )
                 if can_fetch_more:
-                    ***REMOVED*** may return None offset while more rows still exist in count().
+                    # Qdrant may return None offset while more rows still exist in count().
                     # In that case, fetch a wider prefix from start and replace cached list.
                     backfill_from_start = apartment_next_offset is None
                     scroll_limit = (
@@ -3079,6 +3079,7 @@ class PropertyBot:
                     bot_context=ctx,
                     rag_result_store=rag_result_store,
                     forum_thread_id=forum_thread_id,
+                    message=message,
                 )
 
             # Check for HITL interrupt (#443)
@@ -3344,8 +3345,14 @@ class PropertyBot:
         bot_context: BotContext,
         rag_result_store: dict[str, Any],
         forum_thread_id: int | None = None,
+        message: Message | None = None,
     ) -> dict[str, Any]:
-        """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures."""
+        """Invoke supervisor agent and retry once with MemorySaver on checkpointer failures.
+
+        When *message* is provided and streaming is enabled, uses agent.astream() to
+        forward LLM tokens via sendMessageDraft for real-time delivery (#952).
+        Falls back to ainvoke on any streaming error.
+        """
         payload = {"messages": [{"role": "user", "content": user_text}]}
         config = {
             "callbacks": callbacks,
@@ -3358,6 +3365,22 @@ class PropertyBot:
                 "session_id": bot_context.session_id,
             },
         }
+
+        # --- Streaming path: forward tokens via sendMessageDraft (#952) ---
+        if message is not None and getattr(self.config, "streaming_enabled", False):
+            try:
+                return await self._astream_agent_response(
+                    agent=agent,
+                    payload=payload,
+                    config=config,
+                    message=message,
+                    forum_thread_id=forum_thread_id,
+                    rag_result_store=rag_result_store,
+                )
+            except Exception:
+                logger.warning("Agent streaming failed; falling back to ainvoke", exc_info=True)
+                # fall through to ainvoke path below
+
         try:
             result: dict[str, Any] = await agent.ainvoke(payload, config=config)
             return result
@@ -3392,6 +3415,68 @@ class PropertyBot:
         )
         fallback_result: dict[str, Any] = await fallback_agent.ainvoke(payload, config=config)
         return fallback_result
+
+    async def _astream_agent_response(
+        self,
+        *,
+        agent: Any,
+        payload: dict[str, Any],
+        config: dict[str, Any],
+        message: Message,
+        forum_thread_id: int | None,
+        rag_result_store: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Stream agent response tokens to Telegram via sendMessageDraft.
+
+        Uses agent.astream(stream_mode=["values", "messages"]) to receive both
+        token-level chunks (for live preview) and the final state dict (for
+        interrupt detection and message extraction).
+
+        Only forwards AIMessageChunk tokens that have non-empty content and no
+        tool_calls — i.e. the final response, not intermediate tool decisions.
+        Draft updates are throttled to _DRAFT_INTERVAL (200 ms) to match the
+        client-pipeline streaming pattern in generate_response.py.
+        """
+        from .services.draft_streamer import DraftStreamer
+        from .services.generate_response import _DRAFT_INTERVAL
+
+        assert message.bot is not None
+        streamer = DraftStreamer(
+            bot=message.bot,
+            chat_id=message.chat.id,
+            thread_id=forum_thread_id,
+        )
+
+        accumulated = ""
+        last_draft = 0.0
+        ttft_ms: float = 0.0
+        t_start = time.perf_counter()
+        result: dict[str, Any] = {"messages": []}
+
+        async for event in agent.astream(
+            payload, config=config, stream_mode=["values", "messages"]
+        ):
+            mode, data = event
+            if mode == "messages":
+                msg_chunk, _meta = data
+                text = msg_chunk.content if isinstance(msg_chunk.content, str) else ""
+                # Skip tool-call decisions (content empty or tool_calls present)
+                if text and not getattr(msg_chunk, "tool_calls", None):
+                    if ttft_ms == 0.0:
+                        ttft_ms = (time.perf_counter() - t_start) * 1000
+                    accumulated += text
+                    now = time.monotonic()
+                    if now - last_draft >= _DRAFT_INTERVAL:
+                        with contextlib.suppress(Exception):
+                            await streamer.send_chunk(accumulated)
+                        last_draft = now
+            elif mode == "values":
+                result = data
+
+        if ttft_ms > 0:
+            rag_result_store["agent_ttft_ms"] = round(ttft_ms, 1)
+
+        return result
 
     @observe(name="telegram-rag-voice")
     async def handle_voice(self, message: Message):

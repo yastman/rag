@@ -27,8 +27,8 @@ dependencies = [
     "requests",
     "qdrant-client>=1.17.0",  # Vector database client (v1.17+ for weighted RRF, relevance feedback)
     "langfuse>=3.14.0",       # LLM observability & tracing
-    ***REMOVED*** AI Integration (2026-01-21)
-    "voyageai>=0.3.0",        ***REMOVED*** AI embeddings and reranking
+    # Voyage AI Integration (2026-01-21)
+    "voyageai>=0.3.0",        # Voyage AI embeddings and reranking
     "tenacity>=8.2.0",        # Retry logic with exponential backoff
     "redis>=7.1.0",
     "redisvl>=0.13.2",
