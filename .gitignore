@@ -191,6 +191,21 @@ reports/
 .claude/worktrees/
 drive-sync/
 CLAUDE.local.md
+CLAUDE.md
+**/AGENTS.override.md
+
+# Internal dev tools & AI agent configs
+.claude/rules/
+.claude/cache/
+.claude/prompts/
+docs/plans/
+docs/archive/
+
+# Build artifacts & test outputs
+test_output*.txt
+coverage.json
+.test_durations
+=*
 
 # k8s secrets (never commit)
 k8s/secrets/
