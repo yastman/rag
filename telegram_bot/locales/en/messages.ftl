@@ -206,6 +206,7 @@ results-shown = Showing { $shown } of { $total } options
 results-show-more = 🔄 Show more
 results-show-more-remaining = 🔄 Show more ({ $remaining } left)
 results-found = Found { $total } apartments
+funnel-results-choose-format = Found <b>{ $total }</b> apartments. Choose display format:
 results-found-range = Found { $total } apartments (showing { $start }–{ $end })
 results-service-unavailable = Search service is unavailable.
 results-refine = ⚙️ Change filters
@@ -312,6 +313,11 @@ handoff-closed-client = The conversation with the manager has ended.
 handoff-closed-topic = ✅ Conversation closed, client returned to bot.
 handoff-wait-more = ⏳ I'll wait
 handoff-leave-phone = 📞 Yes, call me back
+
+# Card details (#937)
+card-ask-prompt = About property: { $context }
+
+    Leave your number — a manager will get back to you:
 
 # Feedback (#866)
 feedback-useful = 👍 Helpful

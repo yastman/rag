@@ -206,6 +206,7 @@ results-shown = Показано { $shown } з { $total } варіантів
 results-show-more = 🔄 Показати ще
 results-show-more-remaining = 🔄 Показати ще ({ $remaining } залишилось)
 results-found = Знайдено { $total } апартаментів
+funnel-results-choose-format = Знайдено <b>{ $total }</b> апартаментів. Оберіть формат відображення:
 results-found-range = Знайдено { $total } апартаментів (показано { $start }–{ $end })
 results-service-unavailable = Сервіс пошуку недоступний.
 results-refine = ⚙️ Змінити параметри
@@ -312,6 +313,11 @@ handoff-closed-client = Діалог з менеджером завершено.
 handoff-closed-topic = ✅ Діалог закрито, клієнт повернений боту.
 handoff-wait-more = ⏳ Почекаю ще
 handoff-leave-phone = 📞 Так, передзвоніть
+
+# Картка об'єкту (#937)
+card-ask-prompt = Питання по об'єкту: { $context }
+
+    Залиште номер — менеджер відповість:
 
 # Зворотній зв'язок (#866)
 feedback-useful = 👍 Корисно
