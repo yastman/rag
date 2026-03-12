@@ -2314,6 +2314,7 @@ class PropertyBot:
         callback: CallbackQuery,
         state: FSMContext,
         dialog_manager: Any = None,
+        i18n: Any = None,
     ) -> None:
         """Handle card action callbacks: card:viewing, card:ask (#722)."""
         from .handlers.phone_collector import start_phone_collection
@@ -2397,7 +2398,13 @@ class PropertyBot:
 
                 p = matched.get("payload", {})
                 ctx = format_card_context(p)
-                prompt_text = f"Вопрос по объекту: {ctx}\n\nОставьте номер — менеджер ответит:"
+                if i18n is not None:
+                    prompt_text = i18n.get(
+                        "card-ask-prompt",
+                        context=ctx,
+                    )
+                else:
+                    prompt_text = f"Вопрос по объекту: {ctx}\n\nОставьте номер — менеджер ответит:"
 
             # Swap keyboard: remove card buttons to show action in progress (#937)
             with contextlib.suppress(Exception):
