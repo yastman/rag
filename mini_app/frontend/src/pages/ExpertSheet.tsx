@@ -41,8 +41,13 @@ export function ExpertSheet() {
       const data = await startExpert(userId, id, text, queryId);
       remoteLog("info", "startExpert OK", { expert_name: data.expert_name });
 
-      // Close Mini App — bot handles the rest via pub/sub + answerWebAppQuery
-      miniApp.close.ifAvailable();
+      // Close Mini App — bot handles the rest via pub/sub
+      try {
+        miniApp.close();
+      } catch {
+        remoteLog("warn", "miniApp.close() threw, trying raw WebApp API");
+        (window as any).Telegram?.WebApp?.close();
+      }
     } catch (err) {
       remoteLog("error", "startExpert failed", { error: String(err) });
       setLoading(false);

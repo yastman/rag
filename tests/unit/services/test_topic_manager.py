@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiogram.exceptions import TelegramBadRequest
 
 from telegram_bot.services.topic_manager import TopicManager
 
@@ -69,7 +70,7 @@ async def test_reuse_existing_topic(manager, mock_bot, mock_redis):
     )
     mock_bot.create_forum_topic.reset_mock()
 
-    # Второй вызов — переиспользует
+    # Второй вызов — переиспользует (edit_forum_topic probe succeeds)
     topic_id = await manager.get_or_create_topic(
         chat_id=111,
         expert_id="consultant",
@@ -78,6 +79,10 @@ async def test_reuse_existing_topic(manager, mock_bot, mock_redis):
     )
     assert topic_id == 42
     mock_bot.create_forum_topic.assert_not_called()
+    # Verify probe was called
+    mock_bot.edit_forum_topic.assert_called_with(
+        chat_id=111, message_thread_id=42, name="👷 Консультант"
+    )
 
 
 @pytest.mark.asyncio
@@ -114,6 +119,37 @@ async def test_rename_truncates_long_name(manager, mock_bot):
     await manager.rename_topic(chat_id=111, topic_id=42, new_name=long_name)
     call_name = mock_bot.edit_forum_topic.call_args.kwargs["name"]
     assert len(call_name) <= 128
+
+
+@pytest.mark.asyncio
+async def test_stale_topic_recovery(manager, mock_bot):
+    """When cached topic is deleted by user, verify + invalidate + recreate."""
+    # Create initial topic
+    await manager.get_or_create_topic(
+        chat_id=111,
+        expert_id="consultant",
+        expert_name="Консультант",
+        expert_emoji="👷",
+    )
+    mock_bot.create_forum_topic.reset_mock()
+
+    # Simulate deleted topic: edit_forum_topic probe throws
+    mock_bot.edit_forum_topic = AsyncMock(
+        side_effect=TelegramBadRequest(
+            method="editForumTopic", message="Bad Request: TOPIC_DELETED"
+        )
+    )
+    # New topic gets ID 99
+    mock_bot.create_forum_topic = AsyncMock(return_value=MagicMock(message_thread_id=99))
+
+    topic_id = await manager.get_or_create_topic(
+        chat_id=111,
+        expert_id="consultant",
+        expert_name="Консультант",
+        expert_emoji="👷",
+    )
+    assert topic_id == 99
+    mock_bot.create_forum_topic.assert_called_once()
 
 
 @pytest.mark.asyncio

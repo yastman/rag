@@ -1,6 +1,7 @@
 import {
   init,
   initData,
+  miniApp,
   themeParams,
   viewport,
   swipeBehavior,
@@ -53,6 +54,8 @@ export async function initApp(): Promise<AppBootstrapResult> {
     initData.restore();
     themeParams.mount();
     themeParams.bindCssVars();
+    miniApp.mount();
+    miniApp.ready();
 
     if (viewport.mount.isAvailable()) {
       await viewport.mount();

@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
+    allowedHosts: ["miniapp.awdawdawd.space"],
     proxy: {
       "/api": "http://localhost:8090",
     },

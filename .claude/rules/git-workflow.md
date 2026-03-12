@@ -84,12 +84,16 @@ claude --worktree                 # → random name (e.g. bright-running-fox)
 - Branch: `worktree-<name>`, based on HEAD (note: agents should base off `dev`, not `main`)
 - Cleanup: auto-remove if no changes; prompt if changes exist
 - Subagents: `isolation: worktree` in agent frontmatter
+- **GrepAI:** run `grepai init --inherit --yes` in new worktree to inherit index config
 
 ### Method 2: Manual `git worktree` (custom paths/branches)
 
 ```bash
 # Create worktree based on dev (not main!)
 git worktree add /home/user/projects/rag-fresh-wt-{name} -b feat/{name} dev
+
+# Init grepai index (inherits config from main worktree)
+cd /home/user/projects/rag-fresh-wt-{name} && grepai init --inherit --yes
 
 # Agent works in its own directory — no branch conflicts
 # After done: merge feat branch into dev, then clean up

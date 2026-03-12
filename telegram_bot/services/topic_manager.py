@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from aiogram.exceptions import TelegramBadRequest
+
 
 if TYPE_CHECKING:
     from aiogram import Bot
@@ -40,6 +42,15 @@ class TopicManager:
     def _rev_key(self, chat_id: int, topic_id: int) -> str:
         return f"topic_rev:{chat_id}:{topic_id}"
 
+    async def _verify_topic(self, chat_id: int, topic_id: int, name: str) -> bool:
+        """Check if cached topic still exists via edit_forum_topic probe."""
+        try:
+            await self._bot.edit_forum_topic(chat_id=chat_id, message_thread_id=topic_id, name=name)
+            return True
+        except TelegramBadRequest:
+            logger.warning("Stale topic %d in chat %d — deleted by user", topic_id, chat_id)
+            return False
+
     async def get_or_create_topic(
         self,
         chat_id: int,
@@ -49,11 +60,17 @@ class TopicManager:
     ) -> int:
         """Return existing topic_id or create a new one."""
         fwd = self._fwd_key(chat_id, expert_id)
+        name = _truncate(f"{expert_emoji} {expert_name}")
+
         cached = await self._redis.get(fwd)
         if cached is not None:
-            return int(cached)
+            tid = int(cached)
+            if await self._verify_topic(chat_id, tid, name):
+                return tid
+            # Topic deleted — invalidate cache and fall through to create
+            await self._redis.delete(fwd, self._rev_key(chat_id, tid))
+            logger.info("Invalidated stale topic %d for expert=%s chat=%d", tid, expert_id, chat_id)
 
-        name = _truncate(f"{expert_emoji} {expert_name}")
         topic = await self._bot.create_forum_topic(chat_id=chat_id, name=name)
         tid = topic.message_thread_id
 
