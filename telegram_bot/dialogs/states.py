@@ -38,6 +38,7 @@ class FunnelSG(StatesGroup):
     pref_complex = State()  # Step 4e: комплекс sub-options
     pref_section = State()  # Step 4g: секция sub-options
     summary = State()  # Step 5: саммари + confirmation
+    results = State()  # Step 6: результаты поиска (#935)
     change_filter = State()  # Step 5a: выбор фильтра для изменения
 
 

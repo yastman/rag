@@ -594,6 +594,31 @@ async def get_change_filter_options(**kwargs: Any) -> dict[str, Any]:
     return {"title": "Что хотите изменить?", "items": items, "btn_back": "← Назад"}
 
 
+async def get_results_data(**kwargs: Any) -> dict[str, Any]:
+    """Getter for results window — reads cached search results from dialog_data (#935)."""
+    dialog_manager = kwargs.get("dialog_manager")
+    data: dict[str, Any] = {}
+    if dialog_manager is not None:
+        data = getattr(dialog_manager, "dialog_data", {})
+
+    results: list[Any] = data.get("_search_results") or []
+    total: int = data.get("_search_total", 0)
+    has_results = len(results) > 0
+
+    if has_results:
+        results_text = f"Найдено <b>{total}</b> апартаментов. Выберите формат отображения:"
+    else:
+        results_text = (
+            "К сожалению, по вашим критериям ничего не найдено.\nПопробуйте изменить параметры."
+        )
+
+    return {
+        "results_text": results_text,
+        "has_results": has_results,
+        "btn_back": "✏️ Изменить параметры",
+    }
+
+
 _SCROLL_PAGE_SIZE = 10
 
 
@@ -755,9 +780,7 @@ async def on_summary_search(
     button: Button,
     manager: DialogManager,
 ) -> None:
-    """Search, send photo cards, close dialog, show catalog keyboard."""
-    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
-
+    """Search apartments and switch to results window (#935)."""
     data = manager.dialog_data
     data.pop("scroll_start_from", None)
     data.pop("scroll_seen_ids", None)
@@ -809,54 +832,19 @@ async def on_summary_search(
         await manager.done()
         return
 
-    # Close dialog before sending cards
-    await manager.done()
-
     # Determine view mode from button id
     view_mode = "list" if button.widget_id == "search_list" else "cards"
 
-    # Store results in FSMContext for pagination
-    state = manager.middleware_data.get("state")
-    if state is not None:
-        from telegram_bot.dialogs.states import CatalogBrowsingSG
+    # Cache results in dialog_data for results window (#935)
+    data["_search_results"] = results
+    data["_search_total"] = total_count
+    data["_search_next_start"] = _next_start
+    data["_search_page_ids"] = _page_ids
+    data["_search_filters"] = filters
+    data["_view_mode"] = view_mode
 
-        await state.set_state(CatalogBrowsingSG.browsing)
-        await state.update_data(
-            apartment_results=results,
-            apartment_query=f"funnel:{data.get('city', 'any')}",
-            apartment_offset=len(results),
-            bookmarks_context=False,
-            apartment_total=total_count,
-            apartment_next_offset=_next_start,
-            apartment_scroll_seen_ids=_page_ids,
-            apartment_filters=filters,
-            funnel_data=dict(data),
-            catalog_view_mode=view_mode,
-        )
-
-    if not results:
-        await callback.message.answer(
-            "К сожалению, по вашим критериям ничего не найдено.\n"
-            "Попробуйте изменить параметры поиска."
-        )
-        return
-
-    if view_mode == "list":
-        # Send compact text list as one message
-        text = format_apartment_list(results, shown_start=1, total=total_count)
-        catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
-        await callback.message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
-    else:
-        # Send photo cards
-        if property_bot is not None:
-            for result in results:
-                telegram_id = callback.from_user.id if callback.from_user else 0
-                await property_bot._send_property_card(callback.message, result, telegram_id)
-        # Attach catalog keyboard to a short status message after cards
-        shown = len(results)
-        catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
-        status = f"Показано {shown} из {total_count}"
-        await callback.message.answer(status, reply_markup=catalog_kb)
+    # Switch to results window (instead of done + sending cards directly)
+    await manager.switch_to(FunnelSG.results)
 
 
 async def on_change_filter_selected(
@@ -925,6 +913,68 @@ async def on_zero_suggestion_selected(
     data.pop("scroll_seen_ids", None)
     data["scroll_page"] = 1
     await manager.switch_to(FunnelSG.summary)
+
+
+async def on_results_browse(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """Send apartment cards/list and enter catalog browsing mode (#935)."""
+    from telegram_bot.keyboards.client_keyboard import build_catalog_keyboard
+
+    data = manager.dialog_data
+    results: list[Any] = data.get("_search_results") or []
+    total_count: int = data.get("_search_total", 0)
+    _next_start = data.get("_search_next_start")
+    _page_ids = data.get("_search_page_ids")
+    filters: dict[str, Any] = data.get("_search_filters") or {}
+    view_mode: str = "list" if button.widget_id == "results_list" else "cards"
+
+    # Store in FSMContext for catalog pagination
+    state = manager.middleware_data.get("state")
+    if state is not None:
+        from telegram_bot.dialogs.states import CatalogBrowsingSG
+
+        await state.set_state(CatalogBrowsingSG.browsing)
+        await state.update_data(
+            apartment_results=results,
+            apartment_query=f"funnel:{data.get('city', 'any')}",
+            apartment_offset=len(results),
+            bookmarks_context=False,
+            apartment_total=total_count,
+            apartment_next_offset=_next_start,
+            apartment_scroll_seen_ids=_page_ids,
+            apartment_filters=filters,
+            funnel_data=dict(data),
+            catalog_view_mode=view_mode,
+        )
+
+    property_bot = manager.middleware_data.get("property_bot")
+
+    # Close dialog before sending messages
+    await manager.done()
+
+    if not results or callback.message is None:
+        if callback.message is not None:
+            await callback.message.answer(
+                "К сожалению, по вашим критериям ничего не найдено.\n"
+                "Попробуйте изменить параметры поиска."
+            )
+        return
+
+    if view_mode == "list":
+        text = format_apartment_list(results, shown_start=1, total=total_count)
+        catalog_kb = build_catalog_keyboard(shown=len(results), total=total_count)
+        await callback.message.answer(text, parse_mode="HTML", reply_markup=catalog_kb)
+    else:
+        if property_bot is not None:
+            for result in results:
+                telegram_id = callback.from_user.id if callback.from_user else 0
+                await property_bot._send_property_card(callback.message, result, telegram_id)
+        shown = len(results)
+        catalog_kb = build_catalog_keyboard(shown=shown, total=total_count)
+        await callback.message.answer(f"Показано {shown} из {total_count}", reply_markup=catalog_kb)
 
 
 # --- Dialog ---
@@ -1156,5 +1206,30 @@ funnel_dialog = Dialog(
         Back(Format("{btn_back}")),
         getter=get_change_filter_options,
         state=FunnelSG.change_filter,
+    ),
+    # Step 6: Results preview (#935)
+    Window(
+        Format("{results_text}"),
+        Row(
+            Button(
+                Format("📋 Списком"),
+                id="results_list",
+                on_click=on_results_browse,
+                when="has_results",
+            ),
+            Button(
+                Format("🏠 Карточками"),
+                id="results_cards",
+                on_click=on_results_browse,
+                when="has_results",
+            ),
+        ),
+        SwitchTo(
+            Format("{btn_back}"),
+            id="results_back",
+            state=FunnelSG.summary,
+        ),
+        getter=get_results_data,
+        state=FunnelSG.results,
     ),
 )

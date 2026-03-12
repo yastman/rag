@@ -96,11 +96,10 @@ async def test_summary_search_stores_filters_in_fsm(monkeypatch):
 
     await funnel_module.on_summary_search(callback, MagicMock(), manager)
 
-    state_mock.update_data.assert_awaited_once()
-    call_kwargs = state_mock.update_data.call_args[1]
-    assert "apartment_filters" in call_kwargs
-    assert "funnel_data" in call_kwargs
-    assert call_kwargs["funnel_data"]["city"] == "Элените"
+    # Filters now cached in dialog_data for results window (#935), not directly in FSM
+    assert "_search_filters" in manager.dialog_data
+    assert "_search_results" in manager.dialog_data
+    assert manager.dialog_data.get("city") == "Элените"
 
 
 async def test_zero_suggestion_rm_section():

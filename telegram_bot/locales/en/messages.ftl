@@ -312,3 +312,10 @@ handoff-closed-client = The conversation with the manager has ended.
 handoff-closed-topic = ✅ Conversation closed, client returned to bot.
 handoff-wait-more = ⏳ I'll wait
 handoff-leave-phone = 📞 Yes, call me back
+
+# Feedback (#866)
+feedback-useful = 👍 Helpful
+feedback-not-helpful = 👎 Not helpful
+
+# Phone (#938)
+phone-cancelled = Request cancelled.

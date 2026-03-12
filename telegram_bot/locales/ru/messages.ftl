@@ -219,6 +219,7 @@ results-no-results =
 phone-prompt = Введите ваш номер телефона:
 phone-invalid = Пожалуйста, введите корректный номер телефона. Например: +359 88 123 4567
 phone-success = ✅ Заявка оформлена! Менеджер перезвонит вам в ближайшее время.
+phone-cancelled = Обращение отменено.
 
 # Акции (#660)
 promotions-title = 🎁 Актуальные акции
@@ -313,3 +314,7 @@ handoff-closed-client = Диалог с менеджером завершён.
 handoff-closed-topic = ✅ Диалог закрыт, клиент возвращён боту.
 handoff-wait-more = ⏳ Подожду ещё
 handoff-leave-phone = 📞 Да, перезвоните
+
+# Обратная связь (#866)
+feedback-useful = 👍 Полезно
+feedback-not-helpful = 👎 Не помогло

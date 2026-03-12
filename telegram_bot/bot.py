@@ -2390,11 +2390,25 @@ class PropertyBot:
                     viewing_objects=viewing_objects or None,
                 )
         elif action == "ask":
+            # Build context-aware prompt using card details (#937)
+            prompt_text: str | None = None
+            if matched:
+                from telegram_bot.keyboards.property_card import format_card_context
+
+                p = matched.get("payload", {})
+                ctx = format_card_context(p)
+                prompt_text = f"Вопрос по объекту: {ctx}\n\nОставьте номер — менеджер ответит:"
+
+            # Swap keyboard: remove card buttons to show action in progress (#937)
+            with contextlib.suppress(Exception):
+                await callback.message.edit_reply_markup(reply_markup=None)  # type: ignore[union-attr]
+
             await start_phone_collection(
                 callback,
                 state,
                 service_key="manager_question",
                 viewing_objects=viewing_objects or None,
+                prompt_text=prompt_text,
             )
         else:
             await callback.answer()

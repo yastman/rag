@@ -312,3 +312,10 @@ handoff-closed-client = Діалог з менеджером завершено.
 handoff-closed-topic = ✅ Діалог закрито, клієнт повернений боту.
 handoff-wait-more = ⏳ Почекаю ще
 handoff-leave-phone = 📞 Так, передзвоніть
+
+# Зворотній зв'язок (#866)
+feedback-useful = 👍 Корисно
+feedback-not-helpful = 👎 Не допомогло
+
+# Телефон (#938)
+phone-cancelled = Звернення скасовано.
