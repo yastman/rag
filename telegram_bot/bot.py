@@ -487,6 +487,9 @@ class PropertyBot:
         # Expert topic service (user+expert → thread_id mapping)
         self._topic_service: TopicService | None = None
         self._topics_enabled: bool = False
+        self._deeplink_redis: Any | None = None
+        self._topic_manager: Any = None
+        self._miniapp_subscriber_task: asyncio.Task[None] | None = None
 
         # Track initialization state
         self._cache_initialized = False
@@ -3417,8 +3420,26 @@ class PropertyBot:
 
             accumulated = ""
             stream_messages: list[Any] = []
-            stream = current_agent.astream(payload, config=config, stream_mode="messages")
-            async for message_chunk, metadata in stream:
+            latest_state: dict[str, Any] | None = None
+            stream = current_agent.astream(
+                payload,
+                config=config,
+                stream_mode=["messages", "values"],
+                version="v2",
+            )
+            async for part in stream:
+                if isinstance(part, dict) and "type" in part:
+                    part_type = part.get("type")
+                    part_data = part.get("data")
+                    if part_type == "values":
+                        if isinstance(part_data, dict):
+                            latest_state = part_data
+                        continue
+                    if part_type != "messages" or not isinstance(part_data, tuple):
+                        continue
+                    message_chunk, metadata = part_data
+                else:
+                    message_chunk, metadata = part
                 if isinstance(metadata, dict):
                     langgraph_node = metadata.get("langgraph_node")
                     if isinstance(langgraph_node, str) and langgraph_node != "model":
@@ -3436,7 +3457,7 @@ class PropertyBot:
                 # Finalize later in _handle_query_supervisor after feedback/sources assembly.
                 rag_result_store["_draft_streamer"] = draft_streamer
 
-            return accumulated, {"messages": stream_messages}
+            return accumulated, latest_state or {"messages": stream_messages}
 
         try:
             return await _run_once(agent)
