@@ -2508,6 +2508,51 @@ class TestStreamingCoordination:
         bot.bot.send_message.assert_awaited_once()
         assert bot.bot.send_message.await_args.kwargs["text"] == "Добрый день"
 
+    async def test_astream_supervisor_preserves_final_state_from_values_stream(self, mock_config):
+        """Streaming path must keep final state so interrupts/metadata are not lost."""
+        from langchain_core.messages import AIMessageChunk
+
+        bot, _ = _create_bot(mock_config)
+        bot.bot.send_message_draft = AsyncMock(return_value=True)
+
+        interrupt_obj = MagicMock()
+        interrupt_obj.value = {"tool": "crm_create_lead"}
+
+        async def _agent_stream(*args, **kwargs):
+            assert kwargs["stream_mode"] == ["messages", "values"]
+            assert kwargs["version"] == "v2"
+            yield {
+                "type": "messages",
+                "data": (AIMessageChunk(content="Соз"), {"langgraph_node": "model"}),
+            }
+            yield {
+                "type": "messages",
+                "data": (AIMessageChunk(content="дать"), {"langgraph_node": "model"}),
+            }
+            yield {
+                "type": "values",
+                "data": _mock_agent_result(__interrupt__=[interrupt_obj]),
+            }
+
+        mock_agent = AsyncMock()
+        mock_agent.astream = _agent_stream
+
+        response_text, result = await bot._astream_supervisor_with_recovery(
+            agent=mock_agent,
+            tools=[],
+            role="client",
+            user_text="создай сделку",
+            chat_id=12345,
+            callbacks=[],
+            bot_context=types.SimpleNamespace(telegram_user_id=12345, session_id="sess-1"),
+            rag_result_store={},
+            forum_thread_id=None,
+            use_streaming=True,
+        )
+
+        assert response_text == "Создать"
+        assert result["__interrupt__"] == [interrupt_obj]
+
     @pytest.mark.parametrize(
         ("manager_mode", "should_retry"),
         [(False, True), (True, False)],
