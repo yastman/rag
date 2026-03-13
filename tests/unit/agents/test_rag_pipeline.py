@@ -231,7 +231,61 @@ async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock
         latency_stages={},
     )
 
-    assert mock_qdrant.hybrid_search_rrf.call_args.kwargs["filters"] == {"topic": "finance"}
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    assert first_call["filters"] == {"topic": "finance"}
+
+
+async def test_hybrid_retrieve_omits_topic_filter_by_default(mock_cache, mock_sparse, mock_qdrant):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    await _hybrid_retrieve(
+        "квартиры",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        latency_stages={},
+    )
+
+    assert mock_qdrant.hybrid_search_rrf.call_args.kwargs["filters"] is None
+
+
+async def test_hybrid_retrieve_retries_without_topic_filter_when_results_too_small(
+    mock_cache, mock_sparse
+):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        side_effect=[
+            ([{"text": "narrow", "score": 0.9, "metadata": {}}], {"backend_error": False}),
+            (
+                [
+                    {"text": "broad-1", "score": 0.9, "metadata": {}},
+                    {"text": "broad-2", "score": 0.8, "metadata": {}},
+                    {"text": "broad-3", "score": 0.7, "metadata": {}},
+                ],
+                {"backend_error": False},
+            ),
+        ]
+    )
+
+    result = await _hybrid_retrieve(
+        "рассрочка",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        topic_hint="finance",
+        latency_stages={},
+    )
+
+    assert len(result["documents"]) == 3
+    assert mock_qdrant.hybrid_search_rrf.await_count == 2
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    second_call = mock_qdrant.hybrid_search_rrf.await_args_list[1].kwargs
+    assert first_call["filters"] == {"topic": "finance"}
+    assert second_call["filters"] is None
 
 
 # ---------------------------------------------------------------------------

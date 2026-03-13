@@ -22,6 +22,7 @@ from qdrant_client.models import (
     HnswConfigDiff,
     Modifier,
     OptimizersConfigDiff,
+    PayloadSchemaType,
     ScalarQuantization,
     ScalarQuantizationConfig,
     ScalarType,
@@ -154,7 +155,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
             client.create_payload_index(
                 collection_name=collection_name,
                 field_name=field,
-                field_schema="keyword",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
             print(f"  Created keyword index (required): {field}")
         except Exception as e:
@@ -171,7 +172,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
             client.create_payload_index(
                 collection_name=collection_name,
                 field_name=field,
-                field_schema="integer",
+                field_schema=PayloadSchemaType.INTEGER,
             )
             print(f"  Created integer index (required): {field}")
         except Exception as e:
@@ -186,6 +187,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
         "metadata.source_type",
         "metadata.source",
         "metadata.topic",
+        "metadata.doc_type",
     ]
 
     for field in keyword_fields:
@@ -193,7 +195,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
             client.create_payload_index(
                 collection_name=collection_name,
                 field_name=field,
-                field_schema="keyword",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
             print(f"  Created keyword index: {field}")
         except Exception as e:
@@ -217,7 +219,7 @@ def create_payload_indexes(client: QdrantClient, collection_name: str) -> None:
             client.create_payload_index(
                 collection_name=collection_name,
                 field_name=field,
-                field_schema="integer",
+                field_schema=PayloadSchemaType.INTEGER,
             )
             print(f"  Created integer index: {field}")
         except Exception as e:
@@ -236,6 +238,8 @@ def verify_collection_indexes(client: QdrantClient, collection_name: str) -> lis
         "metadata.file_id": "keyword",
         "metadata.doc_id": "keyword",
         "metadata.source": "keyword",
+        "metadata.topic": "keyword",
+        "metadata.doc_type": "keyword",
         # Integer indexes (required for small-to-big)
         "metadata.order": "integer",
         "metadata.chunk_order": "integer",
@@ -304,12 +308,13 @@ def print_collection_info(client: QdrantClient, collection_name: str) -> None:
         print("=" * 60)
         print(f"  Status:         {info.status}")
         print(f"  Points count:   {info.points_count}")
-        print(f"  Vectors count:  {info.vectors_count}")
+        print(f"  Vectors count:  {getattr(info, 'vectors_count', 'n/a')}")
 
         # Vector config
         print("\n  Vector configurations:")
-        if info.config.params.vectors:
-            for name, config in info.config.params.vectors.items():
+        vectors_config = info.config.params.vectors
+        if isinstance(vectors_config, dict):
+            for name, config in vectors_config.items():
                 if hasattr(config, "size"):
                     quant_type = "none"
                     if config.quantization_config:
@@ -318,12 +323,16 @@ def print_collection_info(client: QdrantClient, collection_name: str) -> None:
                         elif hasattr(config.quantization_config, "scalar"):
                             quant_type = "scalar (INT8)"
                     print(f"    - {name}: {config.size}-dim, {config.distance}, quant={quant_type}")
+        elif vectors_config is not None and hasattr(vectors_config, "size"):
+            print(
+                f"    - default: {vectors_config.size}-dim, {vectors_config.distance}, quant=none"
+            )
 
         # Sparse vectors
         if info.config.params.sparse_vectors:
             print("\n  Sparse vector configurations:")
-            for name, config in info.config.params.sparse_vectors.items():
-                modifier = getattr(config, "modifier", "none")
+            for name, sparse_config in info.config.params.sparse_vectors.items():
+                modifier = getattr(sparse_config, "modifier", "none")
                 print(f"    - {name}: modifier={modifier}")
 
         print("=" * 60 + "\n")
