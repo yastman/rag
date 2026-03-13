@@ -36,6 +36,14 @@ def test_get_query_topic_hint_finance() -> None:
     assert get_query_topic_hint("какие есть варианты рассрочки") == TopicLabel.FINANCE
 
 
+def test_get_query_topic_hint_legal() -> None:
+    assert get_query_topic_hint("какие документы нужны для внж") == TopicLabel.LEGAL
+
+
+def test_get_query_topic_hint_returns_none_for_property_query() -> None:
+    assert get_query_topic_hint("подбери квартиру у моря") is None
+
+
 def test_detect_score_gap_marks_dense_cluster_not_confident() -> None:
     result = detect_score_gap([0.0164, 0.0160, 0.0158])
 
