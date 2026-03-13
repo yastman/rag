@@ -369,6 +369,8 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
         "metadata.source",
         "metadata.file_name",
         "metadata.mime_type",
+        "metadata.topic",
+        "metadata.doc_type",
     ]:
         try:
             client.create_payload_index(
