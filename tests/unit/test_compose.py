@@ -156,6 +156,8 @@ def test_qdrant_ensure_indexes_creates_keyword_indexes():
         "metadata.source",
         "metadata.file_name",
         "metadata.mime_type",
+        "metadata.topic",
+        "metadata.doc_type",
     }
     for field in expected_keyword_fields:
         assert field in created_fields, f"ensure_indexes() must create keyword index for '{field}'"
