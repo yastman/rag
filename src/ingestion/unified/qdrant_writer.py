@@ -18,6 +18,7 @@ from qdrant_client.models import (
 )
 
 from src.ingestion.unified.observability import observe, try_update_ingestion_trace
+from src.retrieval.topic_classifier import classify_chunk_topic, classify_doc_type
 from telegram_bot.services import VoyageService
 
 
@@ -95,6 +96,8 @@ class QdrantHybridWriter:
                 f"QdrantHybridWriter dense: local BGE-M3 (concurrency={bge_m3_concurrency})"
             )
         else:
+            if not voyage_api_key:
+                raise ValueError("voyage_api_key is required when use_local_embeddings=False")
             self.voyage = VoyageService(
                 api_key=voyage_api_key,
                 model_docs=voyage_model,
@@ -228,6 +231,10 @@ class QdrantHybridWriter:
             "modified_time": file_metadata.get("modified_time"),
             "content_hash": file_metadata.get("content_hash"),
         }
+        metadata["topic"] = classify_chunk_topic(getattr(chunk, "text", ""))
+        metadata["doc_type"] = classify_doc_type(
+            source_path, str(file_metadata.get("mime_type", ""))
+        )
 
         # Clean None values
         metadata = {k: v for k, v in metadata.items() if v is not None}
@@ -445,9 +452,12 @@ class QdrantHybridWriter:
             texts = [chunk.text for chunk in chunks]
 
             # Step 3: Generate embeddings — single hybrid call when local BGE-M3
+            all_dense_embeddings: list[list[float]]
             if self.use_local_embeddings:
                 hybrid_result = self._bge_client.encode_hybrid(texts)
-                all_dense_embeddings = hybrid_result.dense_vecs
+                all_dense_embeddings = [
+                    [float(value) for value in embedding] for embedding in hybrid_result.dense_vecs
+                ]
                 sparse_embeddings = hybrid_result.lexical_weights
                 colbert_embeddings = hybrid_result.colbert_vecs or []
             else:
@@ -461,7 +471,9 @@ class QdrantHybridWriter:
                         model=self.voyage._model_docs,
                         input_type="document",
                     )
-                    all_dense_embeddings.extend(response.embeddings)
+                    all_dense_embeddings.extend(
+                        [[float(value) for value in embedding] for embedding in response.embeddings]
+                    )
                 sparse_embeddings = self._embed_sparse(texts)
                 colbert_embeddings = []
 
