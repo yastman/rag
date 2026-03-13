@@ -81,7 +81,7 @@ python -m telegram_bot.main
 
 - **EmbeddingService** - генерация embeddings через BGE-M3 API
 - **RetrieverService** - поиск в Qdrant с фильтрами
-- **LLMService** - генерация ответов через OpenAI API
+- **generate_response()** - канонический путь генерации ответов через OpenAI-compatible client / LiteLLM
 - **CacheService** - 4-уровневое кеширование (semantic, embeddings, analyzer, search)
 - **QueryAnalyzer** - анализ запросов и извлечение фильтров через LLM
 - **UserContextService** - управление контекстом пользователя (CESC)
