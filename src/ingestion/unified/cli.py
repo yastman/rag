@@ -274,6 +274,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
         MultiVectorComparator,
         MultiVectorConfig,
         OptimizersConfigDiff,
+        PayloadSchemaType,
         SparseVectorParams,
         VectorParams,
     )
@@ -373,7 +374,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
             client.create_payload_index(
                 collection_name=collection_name,
                 field_name=field,
-                field_schema="keyword",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")
@@ -383,7 +384,7 @@ async def cmd_bootstrap(args: argparse.Namespace) -> int:
             client.create_payload_index(
                 collection_name=collection_name,
                 field_name=field,
-                field_schema="integer",
+                field_schema=PayloadSchemaType.INTEGER,
             )
         except Exception as e:
             print(f"  Warning: Could not create index {field}: {e}")

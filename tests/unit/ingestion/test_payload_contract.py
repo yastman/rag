@@ -54,6 +54,8 @@ class TestPayloadContract:
         assert payload["metadata"]["order"] == 0
         assert payload["metadata"]["chunk_order"] == 0
         assert payload["metadata"]["source"] == "docs/test.pdf"
+        assert payload["metadata"]["topic"] == "general"
+        assert payload["metadata"]["doc_type"] == "legal"
 
     def test_chunk_location_stability(self):
         """chunk_location should be stable for same input."""

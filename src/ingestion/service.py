@@ -71,7 +71,8 @@ class IngestionService:
             chunk_size: Tokens per chunk
             chunk_overlap: Overlap between chunks
         """
-        self.qdrant_url = qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
+        resolved_qdrant_url = qdrant_url or os.getenv("QDRANT_URL")
+        self.qdrant_url: str = resolved_qdrant_url or "http://localhost:6333"
         self.qdrant_api_key = qdrant_api_key or os.getenv("QDRANT_API_KEY")
         self.voyage_api_key = voyage_api_key or os.getenv("VOYAGE_API_KEY")
         self.collection_name = collection_name
@@ -231,7 +232,7 @@ class IngestionService:
             return {
                 "name": self.collection_name,
                 "points_count": info.points_count,
-                "vectors_count": info.vectors_count,
+                "vectors_count": getattr(info, "vectors_count", info.indexed_vectors_count),
                 "indexed_vectors_count": info.indexed_vectors_count,
                 "status": str(info.status),
             }

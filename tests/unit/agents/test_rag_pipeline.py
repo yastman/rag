@@ -218,6 +218,22 @@ async def test_hybrid_retrieve_search_cache_hit(mock_cache, mock_sparse, mock_qd
     mock_qdrant.hybrid_search_rrf.assert_not_called()
 
 
+async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock_qdrant):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    await _hybrid_retrieve(
+        "рассрочка",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        topic_hint="finance",
+        latency_stages={},
+    )
+
+    assert mock_qdrant.hybrid_search_rrf.call_args.kwargs["filters"] == {"topic": "finance"}
+
+
 # ---------------------------------------------------------------------------
 # _grade_documents tests
 # ---------------------------------------------------------------------------
@@ -249,6 +265,15 @@ async def test_grade_documents_irrelevant():
     result = await _grade_documents(docs, 0.0, latency_stages={})
 
     assert result["documents_relevant"] is False
+
+
+async def test_grade_documents_includes_score_gap_confident():
+    from telegram_bot.agents.rag_pipeline import _grade_documents
+
+    docs = [{"score": 0.0164}, {"score": 0.0160}, {"score": 0.0158}]
+    result = await _grade_documents(docs, 0.0, latency_stages={})
+
+    assert result["score_gap_confident"] is False
 
 
 # ---------------------------------------------------------------------------

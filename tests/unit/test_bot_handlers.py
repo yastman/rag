@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import sys
+import time
 import types
 
 import pytest
@@ -2462,6 +2463,117 @@ class TestStreamingCoordination:
 
         # Streaming already sent the message — bot.py must NOT send again.
         message.answer.assert_not_called()
+
+    async def test_handle_query_streams_private_sdk_agent_via_drafts(self, mock_config):
+        """Private sdk_agent path streams chunks with sendMessageDraft and finalizes once."""
+        from langchain_core.messages import AIMessageChunk
+
+        bot, _ = _create_bot(mock_config)
+        bot.bot.send_message_draft = AsyncMock(return_value=True)
+        bot.bot.send_message = AsyncMock(return_value=MagicMock())
+
+        captured_ctx = {}
+
+        async def _agent_stream(*args, **kwargs):
+            config = kwargs["config"]
+            ctx = config["configurable"]["bot_context"]
+            captured_ctx["ctx"] = ctx
+            assert ctx.response_sent is False
+            yield AIMessageChunk(content="Добрый "), {"langgraph_node": "model"}
+            yield AIMessageChunk(content="день"), {"langgraph_node": "model"}
+
+        mock_agent = AsyncMock()
+        mock_agent.astream = _agent_stream
+        mock_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+
+        with (
+            patch("telegram_bot.bot.create_bot_agent", return_value=mock_agent),
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры")
+            message.chat.type = "private"
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                response_text = await bot._handle_query_supervisor(
+                    message=message,
+                    pipeline_start=time.perf_counter(),
+                )
+
+        assert response_text == "Добрый день"
+        assert captured_ctx["ctx"].response_sent is True
+        message.answer.assert_not_called()
+        assert bot.bot.send_message_draft.await_count >= 1
+        bot.bot.send_message.assert_awaited_once()
+        assert bot.bot.send_message.await_args.kwargs["text"] == "Добрый день"
+
+    @pytest.mark.parametrize(
+        ("manager_mode", "should_retry"),
+        [(False, True), (True, False)],
+        ids=["client_retries", "manager_no_retry"],
+    )
+    async def test_streaming_checkpointer_recovery_honors_role(
+        self, mock_config, manager_mode, should_retry
+    ):
+        """Streaming helper retries only for client role on checkpointer errors."""
+        from langchain_core.messages import AIMessageChunk
+
+        if manager_mode:
+            mock_config.manager_ids = [12345]
+
+        bot, _ = _create_bot(mock_config)
+        bot.bot.send_message_draft = AsyncMock(return_value=True)
+        bot.bot.send_message = AsyncMock(return_value=MagicMock())
+
+        calls = {"fail": 0, "fallback": 0}
+
+        def _failing_stream(*args, **kwargs):
+            calls["fail"] += 1
+            raise RuntimeError("checkpointer aput not JSON serializable")
+
+        async def _fallback_stream(*args, **kwargs):
+            calls["fallback"] += 1
+            yield AIMessageChunk(content="ok"), {"langgraph_node": "model"}
+
+        failing_agent = AsyncMock()
+        failing_agent.astream = _failing_stream
+        failing_agent.ainvoke = AsyncMock(
+            side_effect=AssertionError("ainvoke fallback not expected")
+        )
+
+        fallback_agent = AsyncMock()
+        fallback_agent.astream = _fallback_stream
+        fallback_agent.ainvoke = AsyncMock(return_value=_mock_agent_result())
+        fallback_cp = MagicMock(name="memory-saver-fallback")
+
+        with (
+            patch(
+                "telegram_bot.bot.create_bot_agent",
+                side_effect=[failing_agent, fallback_agent],
+            ) as mock_factory,
+            patch(
+                "telegram_bot.integrations.memory.create_fallback_checkpointer",
+                return_value=fallback_cp,
+            ) as mock_create_fallback_cp,
+            patch("telegram_bot.bot.get_client", return_value=MagicMock()),
+            patch("telegram_bot.bot.propagate_attributes"),
+            patch("telegram_bot.bot.create_callback_handler", return_value=None),
+        ):
+            message = _make_text_message("квартиры", user_id=12345)
+            message.chat.type = "private"
+            with patch("telegram_bot.bot.ChatActionSender") as mock_cas:
+                mock_cas.typing.return_value = _make_typing_cm()
+                if should_retry:
+                    await bot.handle_query(message)
+                else:
+                    with pytest.raises(RuntimeError, match="checkpointer aput"):
+                        await bot.handle_query(message)
+
+        assert calls["fail"] == 1
+        assert calls["fallback"] == (1 if should_retry else 0)
+        assert mock_factory.call_count == (2 if should_retry else 1)
+        assert mock_create_fallback_cp.call_count == (1 if should_retry else 0)
 
     async def test_handle_query_sends_when_response_not_sent(self, mock_config):
         """When ctx.response_sent=False (non-streaming), bot.py sends response (#428)."""

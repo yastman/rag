@@ -287,6 +287,33 @@ def _is_checkpointer_runtime_error(exc: Exception) -> bool:
     return False
 
 
+def _extract_stream_chunk_text(message_chunk: Any) -> str:
+    """Extract human text from LangChain stream chunk payload."""
+    text_attr = getattr(message_chunk, "text", None)
+    if isinstance(text_attr, str) and text_attr:
+        return text_attr
+
+    content = getattr(message_chunk, "content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if isinstance(item, dict):
+                item_text = item.get("text")
+                if isinstance(item_text, str):
+                    parts.append(item_text)
+                continue
+            item_text = getattr(item, "text", None)
+            if isinstance(item_text, str):
+                parts.append(item_text)
+        return "".join(parts)
+    return ""
+
+
 async def _seed_kommo_access_token(
     *,
     redis: Any,
@@ -3069,7 +3096,7 @@ class PropertyBot:
             langfuse_handler = create_callback_handler()
             callbacks = [langfuse_handler] if langfuse_handler else []
             async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-                result = await self._ainvoke_supervisor_with_recovery(
+                response_text, result = await self._astream_supervisor_with_recovery(
                     agent=agent,
                     tools=tools,
                     role=role,
@@ -3079,6 +3106,7 @@ class PropertyBot:
                     bot_context=ctx,
                     rag_result_store=rag_result_store,
                     forum_thread_id=forum_thread_id,
+                    use_streaming=message.chat.type == "private",
                 )
 
             # Check for HITL interrupt (#443)
@@ -3094,8 +3122,7 @@ class PropertyBot:
 
             # Extract response from final message
             messages = result.get("messages", [])
-            response_text = ""
-            if messages:
+            if not response_text and messages:
                 last_msg = messages[-1]
                 response_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
 
@@ -3165,17 +3192,20 @@ class PropertyBot:
                 from telegram_bot.services.draft_streamer import DraftStreamer
 
                 if message.chat.type == "private":
+                    draft_streamer = rag_result_store.get("_draft_streamer")
                     try:
-                        streamer = DraftStreamer(
-                            bot=self.bot,
-                            chat_id=message.chat.id,
-                            thread_id=forum_thread_id,
-                        )
-                        await streamer.finalize(
+                        if draft_streamer is None:
+                            draft_streamer = DraftStreamer(
+                                bot=self.bot,
+                                chat_id=message.chat.id,
+                                thread_id=forum_thread_id,
+                            )
+                        await draft_streamer.finalize(
                             full_response,
                             parse_mode="Markdown",
                             reply_markup=reply_markup,
                         )
+                        ctx.response_sent = True
                     except Exception:
                         logger.warning("DraftStreamer failed, falling back to message.answer")
                         try:
@@ -3184,9 +3214,11 @@ class PropertyBot:
                                 parse_mode="Markdown",
                                 reply_markup=reply_markup,
                             )
+                            ctx.response_sent = True
                         except Exception:
                             logger.exception("Failed to send text response")
                             await message.answer(full_response)
+                            ctx.response_sent = True
                 else:
                     # Send with Markdown, fallback to plain text
                     chunks = list(_split_telegram_response(full_response))
@@ -3202,6 +3234,8 @@ class PropertyBot:
                             except Exception:
                                 logger.exception("Failed to send text response chunk")
                                 await message.answer(chunk)
+                    if chunks:
+                        ctx.response_sent = True
 
             # Store final agent response in semantic cache for cacheable query types.
             # Use cache_key_embedding (original query embedding) so that future
@@ -3331,6 +3365,111 @@ class PropertyBot:
                 asyncio.create_task(_bg_save_history(), name=f"history-save-{user_id}")  # noqa: RUF006
 
         return response_text
+
+    async def _astream_supervisor_with_recovery(
+        self,
+        *,
+        agent: Any,
+        tools: list[Any],
+        role: str,
+        user_text: str,
+        chat_id: int,
+        callbacks: list[Any],
+        bot_context: BotContext,
+        rag_result_store: dict[str, Any],
+        forum_thread_id: int | None = None,
+        use_streaming: bool = True,
+    ) -> tuple[str, dict[str, Any]]:
+        """Stream supervisor agent output and retry once on checkpointer runtime errors."""
+        payload = {"messages": [{"role": "user", "content": user_text}]}
+        config = {
+            "callbacks": callbacks,
+            "configurable": {
+                "thread_id": _supervisor_thread_id(chat_id, forum_thread_id),
+                "bot_context": bot_context,
+                "rag_result_store": rag_result_store,
+                "role": role,
+                "user_id": bot_context.telegram_user_id,
+                "session_id": bot_context.session_id,
+            },
+        }
+
+        async def _run_once(current_agent: Any) -> tuple[str, dict[str, Any]]:
+            can_stream = use_streaming and callable(getattr(current_agent, "astream", None))
+            if not can_stream:
+                result: dict[str, Any] = await current_agent.ainvoke(payload, config=config)
+                messages = result.get("messages", [])
+                response_text = ""
+                if messages:
+                    last_msg = messages[-1]
+                    response_text = (
+                        last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+                    )
+                return response_text, result
+
+            from telegram_bot.services.draft_streamer import DraftStreamer
+
+            draft_streamer = DraftStreamer(
+                bot=self.bot,
+                chat_id=chat_id,
+                thread_id=forum_thread_id,
+            )
+
+            accumulated = ""
+            stream_messages: list[Any] = []
+            stream = current_agent.astream(payload, config=config, stream_mode="messages")
+            async for message_chunk, metadata in stream:
+                if isinstance(metadata, dict):
+                    langgraph_node = metadata.get("langgraph_node")
+                    if isinstance(langgraph_node, str) and langgraph_node != "model":
+                        continue
+
+                text = _extract_stream_chunk_text(message_chunk)
+                if not text:
+                    continue
+                accumulated += text
+                stream_messages.append(message_chunk)
+                with contextlib.suppress(Exception):
+                    await draft_streamer.send_chunk(accumulated)
+
+            if accumulated:
+                # Finalize later in _handle_query_supervisor after feedback/sources assembly.
+                rag_result_store["_draft_streamer"] = draft_streamer
+
+            return accumulated, {"messages": stream_messages}
+
+        try:
+            return await _run_once(agent)
+        except Exception as exc:
+            if not _is_checkpointer_runtime_error(exc):
+                raise
+            if role in {"manager", "admin"}:
+                # Manager toolsets include write-side effects (CRM/nurturing).
+                # Retrying the full agent run can duplicate external actions.
+                logger.exception(
+                    "Supervisor stream failed with checkpointer runtime error; "
+                    "skip retry for role=%s to avoid duplicate side effects",
+                    role,
+                )
+                raise
+            logger.exception(
+                "Supervisor stream failed due to checkpointer runtime error; "
+                "retrying once with MemorySaver"
+            )
+
+        from .integrations.memory import create_fallback_checkpointer
+
+        self._agent_checkpointer = create_fallback_checkpointer()
+        fallback_agent = create_bot_agent(
+            model=self.config.supervisor_model,
+            tools=tools,
+            checkpointer=self._agent_checkpointer,
+            language=self.config.domain_language,
+            base_url=self.config.llm_base_url,
+            api_key=self.config.llm_api_key,
+            max_tokens=self.config.supervisor_max_tokens,
+        )
+        return await _run_once(fallback_agent)
 
     async def _ainvoke_supervisor_with_recovery(
         self,

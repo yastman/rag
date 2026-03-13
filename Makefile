@@ -3,7 +3,7 @@
 	test-load-update-baseline test-all-smoke-load smoke-fast smoke-zoo \
 	monitoring-up monitoring-down monitoring-logs monitoring-status monitoring-test-alert \
 	rclone-install sync-drive-install sync-drive-run sync-drive-status \
-	ingest-dir ingest-gdrive ingest-status \
+	ingest-dir ingest-gdrive ingest-status ingest-services \
 	ingest-gdrive-setup ingest-gdrive-run ingest-gdrive-watch ingest-gdrive-status \
 	ingest-unified ingest-unified-watch ingest-unified-status ingest-unified-reprocess ingest-unified-logs \
 	lock update update-pkg reinstall setup-hooks \
@@ -786,7 +786,7 @@ sync-drive-status: ## Show sync status and recent files
 # DOCUMENT INGESTION (CocoIndex Pipeline)
 # =============================================================================
 
-.PHONY: ingest-setup ingest-dir ingest-gdrive ingest-status ingest-test
+.PHONY: ingest-setup ingest-dir ingest-gdrive ingest-status ingest-services ingest-test
 
 ingest-setup: ## Setup ingestion (DB + Qdrant indexes)
 	@echo "$(BLUE)Setting up ingestion infrastructure...$(NC)"
@@ -818,6 +818,11 @@ ingest-gdrive: ## [DEPRECATED] Use ingest-gdrive-run instead (rclone + CocoIndex
 ingest-status: ## Show collection statistics
 	@echo "$(BLUE)Collection status:$(NC)"
 	uv run python -m telegram_bot.services.ingestion_cocoindex status
+
+ingest-services: ## Index curated services.yaml content into Qdrant
+	@echo "$(BLUE)Indexing services.yaml content...$(NC)"
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python scripts/index_services.py
+	@echo "$(GREEN)✓ services.yaml indexing complete$(NC)"
 
 # =============================================================================
 # GOOGLE DRIVE INGESTION (rclone + watcher pipeline)
