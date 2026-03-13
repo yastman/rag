@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import openai
 import pytest
 
+import telegram_bot.services as services
 from telegram_bot.services.llm import LLMService
 
 
@@ -49,6 +50,11 @@ class TestLLMServiceInit:
 
         assert service.client is not None
         assert isinstance(service.client, AsyncOpenAI)
+
+    def test_services_package_no_longer_exports_llmservice(self):
+        """Package-level API should steer callers to generate_response()."""
+        assert "LLMService" not in services.__all__
+        assert not hasattr(services, "LLMService")
 
 
 class TestFormatContext:
