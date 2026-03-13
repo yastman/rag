@@ -118,7 +118,7 @@ class ContextualizeProvider(ABC):
             *[_process_with_semaphore(i, chunk) for i, chunk in enumerate(chunks)],
             return_exceptions=True,
         )
-        return [r for r in results if not isinstance(r, Exception)]
+        return [r for r in results if isinstance(r, ContextualizedChunk)]
 
     @staticmethod
     def get_system_prompt() -> str:

@@ -6,15 +6,18 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+from collections.abc import Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import asyncpg
 
 
 if TYPE_CHECKING:
     from typing import Self
+
+T = TypeVar("T")
 
 
 class _SyncContext:
@@ -35,12 +38,15 @@ class _SyncContext:
 
     def __exit__(self, *args) -> None:
         # Close pool before closing runner
+        runner = self._runner
         if self._manager._pool is not None:
             with contextlib.suppress(Exception):
-                self._runner.run(self._manager._pool.close())
+                if runner is not None:
+                    runner.run(self._manager._pool.close())
             self._manager._pool = None
         self._manager._runner = None
-        self._runner.close()
+        if runner is not None:
+            runner.close()
 
 
 @dataclass
@@ -240,19 +246,23 @@ class UnifiedStateManager:
             error_message[:2000],
             json.dumps(payload) if payload else None,
         )
-        return row["id"]
+        if row is None:
+            raise RuntimeError("Failed to insert DLQ row")
+        return int(row["id"])
 
     async def get_stats(self) -> dict[str, int]:
         pool = await self._get_pool()
         rows = await pool.fetch(
             f"SELECT status, COUNT(*) as count FROM {self._table} GROUP BY status"
         )
-        return {row["status"]: row["count"] for row in rows}
+        return {str(row["status"]): int(row["count"]) for row in rows}
 
     async def get_dlq_count(self) -> int:
         pool = await self._get_pool()
         row = await pool.fetchrow(f"SELECT COUNT(*) as count FROM {self._dlq_table}")
-        return row["count"]
+        if row is None:
+            return 0
+        return int(row["count"])
 
     # =========================================================================
     # SYNC METHODS (for CocoIndex target connector)
@@ -268,7 +278,7 @@ class UnifiedStateManager:
 
     _runner: asyncio.Runner | None = None
 
-    def sync_context(self):
+    def sync_context(self) -> _SyncContext:
         """Context manager for batch sync operations.
 
         Creates a single asyncio.Runner for multiple sync calls,
@@ -281,7 +291,7 @@ class UnifiedStateManager:
         """
         return _SyncContext(self)
 
-    def _run_sync(self, coro):
+    def _run_sync(self, coro: Coroutine[Any, Any, T]) -> T:
         """Run coroutine synchronously.
 
         If called within sync_context(), reuses the shared Runner/loop.

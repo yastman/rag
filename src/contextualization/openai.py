@@ -18,7 +18,7 @@ class OpenAIContextualizer(ContextualizeProvider):
     - Quality: Very good
     """
 
-    def __init__(self, settings: Settings | None = None):
+    def __init__(self, settings: Settings | None = None) -> None:
         """Initialize OpenAI contextualizer."""
         self.settings = settings or Settings()
         self.client = AsyncOpenAI(api_key=self.settings.openai_api_key)
@@ -65,9 +65,10 @@ class OpenAIContextualizer(ContextualizeProvider):
         """Contextualize a single chunk using OpenAI."""
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
+        model_name = self.settings.model_name or "gpt-4o-mini"
 
         response = await self.client.chat.completions.create(
-            model=self.settings.model_name,
+            model=model_name,
             max_tokens=256,
             temperature=self.settings.temperature,
             messages=[
@@ -78,13 +79,17 @@ class OpenAIContextualizer(ContextualizeProvider):
 
         # Track tokens and cost
         usage = response.usage
-        self.total_tokens += usage.total_tokens
-        # OpenAI pricing: $5/MTok input (gpt-4), $15/MTok output
-        self.total_cost += (usage.prompt_tokens * 5 + usage.completion_tokens * 15) / 1_000_000
+        if usage is not None:
+            total_tokens = int(usage.total_tokens or 0)
+            prompt_tokens = int(usage.prompt_tokens or 0)
+            completion_tokens = int(usage.completion_tokens or 0)
+            self.total_tokens += total_tokens
+            # OpenAI pricing: $5/MTok input (gpt-4), $15/MTok output
+            self.total_cost += (prompt_tokens * 5 + completion_tokens * 15) / 1_000_000
 
         return ContextualizedChunk(
             original_text=text,
-            contextual_summary=response.choices[0].message.content,
+            contextual_summary=response.choices[0].message.content or "",
             article_number=article_number,
             context_method="openai",
         )
@@ -103,9 +108,10 @@ class OpenAIContextualizer(ContextualizeProvider):
         """Synchronous contextualization using OpenAI."""
         system_prompt = self.get_system_prompt()
         user_prompt = self.get_user_prompt(text, query)
+        model_name = self.settings.model_name or "gpt-4o-mini"
 
         response = self.sync_client.chat.completions.create(
-            model=self.settings.model_name,
+            model=model_name,
             max_tokens=256,
             temperature=self.settings.temperature,
             messages=[
@@ -115,16 +121,17 @@ class OpenAIContextualizer(ContextualizeProvider):
         )
 
         usage = response.usage
-        self.total_tokens += usage.total_tokens
+        if usage is not None:
+            self.total_tokens += int(usage.total_tokens or 0)
 
         return ContextualizedChunk(
             original_text=text,
-            contextual_summary=response.choices[0].message.content,
+            contextual_summary=response.choices[0].message.content or "",
             article_number=article_number,
             context_method="openai",
         )
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, int | float]:
         """Get contextualization statistics."""
         return {
             "total_tokens": self.total_tokens,
