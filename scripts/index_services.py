@@ -7,7 +7,7 @@ import argparse
 import os
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from src.ingestion.chunker import Chunk
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
