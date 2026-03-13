@@ -20,7 +20,7 @@ class GroqContextualizer(ContextualizeProvider):
     Note: Fast inference on LLaMA, trade-off with quality.
     """
 
-    def __init__(self, settings: Settings | None = None):
+    def __init__(self, settings: Settings | None = None) -> None:
         """Initialize Groq contextualizer."""
         self.settings = settings or Settings()
         self.client = AsyncGroq(api_key=self.settings.groq_api_key)
@@ -78,12 +78,13 @@ class GroqContextualizer(ContextualizeProvider):
         )
 
         # Track tokens
-        if hasattr(response, "usage"):
-            self.total_tokens += response.usage.total_tokens
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self.total_tokens += int(usage.total_tokens or 0)
 
         return ContextualizedChunk(
             original_text=text,
-            contextual_summary=response.choices[0].message.content,
+            contextual_summary=response.choices[0].message.content or "",
             article_number=article_number,
             context_method="groq",
         )
@@ -113,17 +114,18 @@ class GroqContextualizer(ContextualizeProvider):
             ],
         )
 
-        if hasattr(response, "usage"):
-            self.total_tokens += response.usage.total_tokens
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self.total_tokens += int(usage.total_tokens or 0)
 
         return ContextualizedChunk(
             original_text=text,
-            contextual_summary=response.choices[0].message.content,
+            contextual_summary=response.choices[0].message.content or "",
             article_number=article_number,
             context_method="groq",
         )
 
-    def get_stats(self) -> dict:
+    def get_stats(self) -> dict[str, int | float]:
         """Get contextualization statistics."""
         return {
             "total_tokens": self.total_tokens,
