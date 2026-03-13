@@ -1,6 +1,6 @@
-"""LLM service for answer generation with confidence scoring.
+"""Deprecated compatibility shim for legacy answer generation helpers.
 
-Uses OpenAI SDK via Langfuse drop-in replacement for auto-tracing.
+Prefer telegram_bot.services.generate_response for active runtime paths.
 """
 
 import json
