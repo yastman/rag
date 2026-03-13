@@ -12,9 +12,10 @@
 
 - Remove remaining runtime dependencies on deprecated `LLMService`.
 - Simplify Langfuse prompt access toward SDK-native `get_prompt(...)` behavior and remove extra probe/cache complexity.
+- Keep LiteLLM retries/fallbacks/routing in proxy config rather than rebuilding that policy in bot-local wrappers.
 - Continue `PropertyBot` decomposition into domain routers/handlers.
 - Keep aiogram-native patterns (`CallbackData`, `dp.errors`, workflow DI) as primary path.
-- Keep `qdrant-client` and `redisvl` as the current keeper SDKs rather than reopening migration scope around them.
+- Keep `qdrant-client`, `redisvl`, and `LiteLLM` as the current keeper SDKs rather than reopening migration scope around them.
 
 ## Phase 3: Bounded SDK Spikes
 
@@ -32,6 +33,7 @@
 - No big-bang framework replacement.
 - No extra Telegram orchestration layer on top of `aiogram` + `aiogram-dialog` without a demonstrated gap.
 - Keep direct Qdrant SDK in main retrieval path unless parity on advanced features is demonstrated.
+- Keep LiteLLM as the centralized provider-routing layer; do not duplicate gateway fallbacks/retries inside application services.
 - Treat `Langfuse` eval/experiment work as a bounded spike first, not a repo-wide observability rewrite.
 - Treat native `Docling` as opt-in until contract parity is proven against the HTTP path.
 - Every migration task must have explicit acceptance criteria and rollback path.
