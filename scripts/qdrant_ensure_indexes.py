@@ -28,6 +28,8 @@ KEYWORD_FIELDS = [
     "metadata.source",
     "metadata.file_name",
     "metadata.mime_type",
+    "metadata.topic",
+    "metadata.doc_type",
 ]
 
 INTEGER_FIELDS = [
