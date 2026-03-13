@@ -12,6 +12,7 @@ The original SDK migration audit is partially stale. Several "to-do migration" i
 - `aiogram` already covers the main transport-layer primitives we need: modular `Router` composition, dispatcher workflow-data injection, typed `CallbackData`, and centralized `dp.errors` handlers. Continue refactors inside aiogram instead of adding another routing/DI layer.
 - `aiogram-dialog` already covers dialog stack transitions via `Start`, `SwitchTo`, `StartMode`, and `ShowMode`. Keep menu/navigation flows on `aiogram-dialog` rather than expanding custom FSM machinery.
 - `qdrant-client` remains the correct primary retrieval SDK. Official Query API patterns (`query_points`, `prefetch`, fusion, filters, groups) match the repo's dense+sparse+ColBERT requirements better than higher-level wrappers.
+- `LiteLLM` is already correctly positioned as the centralized LLM gateway layer. Its official proxy/router surface covers retries, fallbacks, model aliases, and provider routing better than duplicating that logic in app-local wrappers.
 - `redisvl` already provides the right ready-made primitives for this repo's classifier/cache layer: `SemanticRouter`, `SemanticCache`, and `EmbeddingsCache`. Prefer calibration of current thresholds over speculative optimizer migrations.
 - `langfuse` should stay scoped to prompt management and a bounded evaluation/experiment follow-up. This is an incremental SDK improvement area, not a broad migration track.
 - `docling` official Python `DocumentConverter` is a valid migration candidate, but only as a feature-flagged spike. We still need proof that native runtime/deployment behavior matches the current `docling-serve` path in unified ingestion.
@@ -24,12 +25,14 @@ The original SDK migration audit is partially stale. Several "to-do migration" i
 - Favorite callback monolith is already split into per-action handlers with compatibility shim.
 - RedisVL `SemanticRouter` path exists behind classifier mode.
 - RedisVL `EmbeddingsCache` is integrated in cache layer.
+- LiteLLM proxy config already carries retries, fallbacks, and Langfuse callbacks at the gateway layer.
 - aiogram `dp.errors` error registration is implemented.
 
 ## Keep Active
 
 - Continue reducing `PropertyBot` surface area into routers/modules.
 - Retire legacy `LLMService` usage and keep `generate_response` as canonical runtime path.
+- Keep application code on the OpenAI-compatible client path to LiteLLM Proxy instead of adding another in-process LiteLLM abstraction layer.
 - Remove extra client-side prompt probing around Langfuse where the official SDK already exposes `get_prompt(...)` fallback/cache behavior.
 - Evaluate Langfuse experiment APIs for eval workflow consolidation.
 - Keep direct Qdrant SDK for main retrieval path where advanced prefetch/fusion/ColBERT is required.
@@ -51,7 +54,7 @@ The original SDK migration audit is partially stale. Several "to-do migration" i
 
 - Repository implementation checks
 - Installed package introspection
-- Official SDK docs via Context7 / vendor docs for `aiogram`, `qdrant-client`, `langfuse`, and `docling`
+- Official SDK docs via Context7 / vendor docs for `aiogram`, `qdrant-client`, `LiteLLM`, `langfuse`, and `docling`
 - Official docs search via Exa for `aiogram-dialog` and `redisvl`
 
 ## Source Pointers
@@ -61,6 +64,7 @@ The original SDK migration audit is partially stale. Several "to-do migration" i
 - aiogram-dialog transitions and show modes: `https://aiogram-dialog.readthedocs.io/en/stable/`
 - Qdrant Query API / hybrid queries: `https://qdrant.tech/documentation/concepts/hybrid-queries/`
 - Qdrant API reference for `query_points`: `https://api.qdrant.tech/api-reference/search/query-points`
+- LiteLLM proxy / reliability docs: `https://docs.litellm.ai/docs/proxy/reliability`
 - Langfuse Python prompts/evaluations: `https://langfuse.com/docs/sdk/python/overview`
 - RedisVL Semantic Router / EmbeddingsCache: `https://docs.redisvl.com/en/latest/`
 - Docling Python quickstart / `DocumentConverter`: `https://docling-project.github.io/docling/getting_started/quickstart/`
