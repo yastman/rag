@@ -19,6 +19,7 @@ from pathlib import Path
 from cocoindex.op import TargetSpec, target_connector
 
 from src.ingestion.docling_client import DoclingClient, DoclingConfig
+from src.ingestion.docling_native import NativeDoclingAdapter
 from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 from src.ingestion.unified.state_manager import FileState, UnifiedStateManager
@@ -45,6 +46,7 @@ class QdrantHybridTargetSpec(TargetSpec):
     collection_name: str = "gdrive_documents_bge"
 
     # Docling
+    docling_backend: str = "docling_http"
     docling_url: str = "http://localhost:5001"
     docling_timeout: float = 300.0
     max_tokens_per_chunk: int = 512
@@ -73,6 +75,7 @@ class QdrantHybridTargetSpec(TargetSpec):
             qdrant_url=config.qdrant_url,
             qdrant_api_key=config.qdrant_api_key,
             collection_name=config.collection_name,
+            docling_backend=config.docling_backend,
             docling_url=config.docling_url,
             docling_timeout=config.docling_timeout,
             max_tokens_per_chunk=config.max_tokens_per_chunk,
@@ -116,7 +119,8 @@ class QdrantHybridTargetConnector:
     # Shared resources (initialized lazily)
     # Note: StateManager is created fresh per mutate() call to avoid asyncpg pool issues
     _writer: QdrantHybridWriter | None = None
-    _docling: DoclingClient | None = None
+    _docling: DoclingClient | NativeDoclingAdapter | None = None
+    _docling_key: tuple[str, str, float, int] | None = None
     _writer_lock = threading.Lock()
     _docling_lock = threading.Lock()
 
@@ -173,17 +177,27 @@ class QdrantHybridTargetConnector:
         return cls._writer
 
     @classmethod
-    def _get_docling(cls, spec: QdrantHybridTargetSpec) -> DoclingClient:
+    def _get_docling(cls, spec: QdrantHybridTargetSpec) -> DoclingClient | NativeDoclingAdapter:
         """Get or create DoclingClient."""
-        if cls._docling is None:
+        cache_key = (
+            spec.docling_backend,
+            spec.docling_url,
+            spec.docling_timeout,
+            spec.max_tokens_per_chunk,
+        )
+        if cls._docling is None or cls._docling_key != cache_key:
             with cls._docling_lock:
-                if cls._docling is None:
-                    config = DoclingConfig(
-                        base_url=spec.docling_url,
-                        timeout=spec.docling_timeout,
-                        max_tokens=spec.max_tokens_per_chunk,
-                    )
-                    cls._docling = DoclingClient(config)
+                if cls._docling is None or cls._docling_key != cache_key:
+                    if spec.docling_backend == "docling_native":
+                        cls._docling = NativeDoclingAdapter(max_tokens=spec.max_tokens_per_chunk)
+                    else:
+                        config = DoclingConfig(
+                            base_url=spec.docling_url,
+                            timeout=spec.docling_timeout,
+                            max_tokens=spec.max_tokens_per_chunk,
+                        )
+                        cls._docling = DoclingClient(config)
+                    cls._docling_key = cache_key
         return cls._docling
 
     @classmethod
