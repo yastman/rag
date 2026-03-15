@@ -41,6 +41,10 @@ class UnifiedConfig:
         default_factory=lambda: os.getenv("DOCLING_URL", "http://localhost:5001")
     )
     docling_timeout: float = 300.0
+    docling_backend: str = field(default_factory=lambda: os.getenv("DOCLING_BACKEND", "http"))
+    docling_native_enabled: bool = field(
+        default_factory=lambda: os.getenv("DOCLING_NATIVE_ENABLED", "false").lower() == "true"
+    )
     max_tokens_per_chunk: int = 512
 
     # Voyage
