@@ -47,6 +47,9 @@ services:
     profiles: ["bot", "voice", "full"]
     ports:
       - "127.0.0.1:4000:4000"
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
 
   bot:
     profiles: ["bot", "full"]
@@ -54,6 +57,8 @@ services:
       RERANK_PROVIDER: colbert
       RERANK_CANDIDATES_MAX: "${RERANK_CANDIDATES_MAX:-10}"
       COLBERT_TIMEOUT: "${COLBERT_TIMEOUT:-120}"
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
 
   # ML services — profile-gated on dev (VPS: always-on via compose.yml base)
   clickhouse:
@@ -61,6 +66,8 @@ services:
     ports:
       - "127.0.0.1:8123:8123"
       - "127.0.0.1:9009:9000"
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
 
   minio:
     profiles: ["ml", "full"]
@@ -68,19 +75,43 @@ services:
       - "127.0.0.1:9090:9000"
       - "127.0.0.1:9091:9001"
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
 
   redis-langfuse:
     profiles: ["ml", "full"]
     ports:
       - "127.0.0.1:6380:6379"
+    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-langfuseredis}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
 
   langfuse-worker:
     profiles: ["ml", "full"]
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
 
   langfuse:
     profiles: ["ml", "full"]
     ports:
       - "127.0.0.1:3001:3000"
+    environment:
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+
+  ingestion:
+    profiles: ["ingest", "full"]
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
 
   mlflow:
     ports:
@@ -93,6 +124,9 @@ services:
   rag-api:
     ports:
       - "127.0.0.1:8080:8080"
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
 
   livekit-server:
     ports:
@@ -105,10 +139,23 @@ services:
       - "5060:5060/udp"
       - "5061:5061/tcp"
       - "10000-10100:10000-10100/udp"
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
+
+  voice-agent:
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
 
   mini-app-api:
     ports:
       - "127.0.0.1:8090:8090"
+    environment:
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
 
   mini-app-frontend:
     ports:

@@ -13,7 +13,9 @@ def test_config_reads_kommo_scoring_field_ids(monkeypatch):
     assert cfg.kommo_lead_band_field_id == 702
 
 
-def test_config_kommo_scoring_fields_default_to_zero():
+def test_config_kommo_scoring_fields_default_to_zero(monkeypatch):
+    monkeypatch.delenv("KOMMO_LEAD_SCORE_FIELD_ID", raising=False)
+    monkeypatch.delenv("KOMMO_LEAD_BAND_FIELD_ID", raising=False)
     cfg = BotConfig()
 
     assert cfg.kommo_lead_score_field_id == 0

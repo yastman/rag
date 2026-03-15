@@ -200,6 +200,11 @@ CLAUDE.md
 .claude/prompts/
 docs/plans/
 docs/archive/
+!docs/plans/
+!docs/plans/2026-03-02-sdk-migration-audit.md
+!docs/plans/2026-03-13-issue-728-sdk-realignment-plan.md
+!docs/plans/2026-03-13-sdk-first-remediation-plan.md
+!docs/plans/2026-03-15-sdk-canonical-remediation-plan.md
 
 # Build artifacts & test outputs
 test_output*.txt

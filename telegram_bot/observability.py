@@ -12,10 +12,8 @@ import atexit
 import json
 import logging
 import os
-import socket
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlparse
 
 from langfuse import (
     Langfuse,
@@ -31,6 +29,12 @@ from langfuse import (
 )
 
 from src.security.pii_redaction import PIIRedactor
+from telegram_bot.observability_bootstrap import (
+    disable_otel_exporter as _bootstrap_disable_otel_exporter,
+)
+from telegram_bot.observability_bootstrap import (
+    is_endpoint_reachable as _bootstrap_is_endpoint_reachable,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -48,21 +52,14 @@ _pii_redactor = PIIRedactor()
 _langfuse_endpoint_warned = False
 
 
-# ---------------------------------------------------------------------------
-# Endpoint reachability check
-# ---------------------------------------------------------------------------
-
-
 def _is_endpoint_reachable(url: str, *, timeout: float = 2.0) -> bool:
-    """Return True if host:port from *url* accepts a TCP connection within *timeout* seconds."""
-    parsed = urlparse(url)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
+    """Compatibility wrapper used by unit tests and init flow."""
+    return _bootstrap_is_endpoint_reachable(url, timeout=timeout)
+
+
+def _disable_otel_exporter() -> None:
+    """Compatibility wrapper used by unit tests and init flow."""
+    _bootstrap_disable_otel_exporter()
 
 
 # ---------------------------------------------------------------------------
@@ -324,30 +321,6 @@ def sync_langfuse_model_definitions(
             )
 
     return created_or_updated
-
-
-def _disable_otel_exporter() -> None:
-    """Shutdown any active OTel TracerProvider to stop span exports.
-
-    Shuts down the SDK TracerProvider (if present) but keeps it in place so that
-    Langfuse SDK lazy-init can still call ``add_span_processor`` without crashing.
-    Replacing with ``NoOpTracerProvider`` would break Langfuse v3 which assumes the
-    provider always has ``add_span_processor``.
-
-    Also sets ``LANGFUSE_TRACING_ENABLED=false`` so that Langfuse SDK's own
-    lazy-init path skips OTEL setup entirely.
-    """
-    os.environ.setdefault("LANGFUSE_TRACING_ENABLED", "false")
-    try:
-        from opentelemetry import trace as otel_trace_api
-        from opentelemetry.sdk.trace import TracerProvider as SdkTracerProvider
-
-        current = otel_trace_api.get_tracer_provider()
-        actual = getattr(current, "_real_provider", current)
-        if isinstance(actual, SdkTracerProvider):
-            actual.shutdown()
-    except ImportError:
-        pass
 
 
 def initialize_langfuse(

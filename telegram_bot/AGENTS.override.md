@@ -27,6 +27,5 @@
 ## References
 - `telegram_bot/README.md`
 - `docs/PIPELINE_OVERVIEW.md`
-- `docs/agent-rules/workflow.md`
-- `docs/agent-rules/testing-and-validation.md`
-- `docs/agent-rules/architecture-map.md`
+- `docs/LOCAL-DEVELOPMENT.md`
+- `docs/PROJECT_STACK.md`
