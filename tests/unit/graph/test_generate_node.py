@@ -413,8 +413,8 @@ class TestGenerateNode:
         system_msg = messages[0]
         assert "недвижимость" in system_msg["content"]
 
-    async def test_limits_to_top_3_docs(self) -> None:
-        """generate_node formats only top-3 documents for context."""
+    async def test_limits_to_top_5_docs(self) -> None:
+        """generate_node formats only top-5 documents for context."""
         from telegram_bot.graph.nodes.generate import generate_node
 
         mock_config, mock_client = _make_mock_config()
@@ -431,13 +431,13 @@ class TestGenerateNode:
         ):
             await generate_node(state)
 
-        # Check that context has at most 3 documents
+        # Check that context has at most 5 documents
         call_kwargs = mock_client.chat.completions.create.call_args
         messages = call_kwargs.kwargs.get("messages") or call_kwargs[1].get("messages")
         messages_text = " ".join(m["content"] for m in messages)
         assert "Doc 0" in messages_text
-        assert "Doc 2" in messages_text
-        assert "Doc 3" not in messages_text
+        assert "Doc 4" in messages_text
+        assert "Doc 5" not in messages_text
 
     async def test_respects_generate_max_tokens(self) -> None:
         """generate_node passes generate_max_tokens from config to LLM call."""
