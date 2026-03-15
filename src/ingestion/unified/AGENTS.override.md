@@ -29,6 +29,6 @@
 
 ***REMOVED******REMOVED*** References
 - `docs/INGESTION.md`
-- `docs/agent-rules/workflow.md`
-- `docs/agent-rules/testing-and-validation.md`
+- `docs/LOCAL-DEVELOPMENT.md`
+- `docs/PIPELINE_OVERVIEW.md`
 - `src/ingestion/unified/cli.py`
