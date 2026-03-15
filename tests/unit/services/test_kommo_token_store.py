@@ -134,3 +134,29 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
 
     # Both calls completed, second one also made HTTP request after first finished
     assert "http_end" in call_log
+
+
+async def test_legacy_store_tokens_method_still_available(mock_redis):
+    """Compatibility shim must preserve _store_tokens for legacy callers/scripts."""
+    from unittest.mock import AsyncMock
+
+    from telegram_bot.services.kommo_token_store import KommoTokenStore
+
+    storage: dict[str, str] = {}
+
+    async def hset(_key, *, mapping):
+        storage.update({str(k): str(v) for k, v in mapping.items()})
+
+    async def hgetall(_key):
+        return {k.encode(): v.encode() for k, v in storage.items()}
+
+    redis = AsyncMock()
+    redis.hset.side_effect = hset
+    redis.hgetall.side_effect = hgetall
+
+    store = KommoTokenStore(redis=redis, subdomain="test")
+
+    await store._store_tokens("seed-token", "", 3600)
+
+    token = await store.get_valid_token()
+    assert token == "seed-token"
