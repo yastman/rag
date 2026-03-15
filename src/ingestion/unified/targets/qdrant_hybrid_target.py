@@ -19,6 +19,7 @@ from pathlib import Path
 from cocoindex.op import TargetSpec, target_connector
 
 from src.ingestion.docling_client import DoclingClient, DoclingConfig
+from src.ingestion.docling_native import DoclingNativeConfig, DoclingNativeConverter
 from src.ingestion.unified.config import UnifiedConfig
 from src.ingestion.unified.qdrant_writer import QdrantHybridWriter
 from src.ingestion.unified.state_manager import FileState, UnifiedStateManager
@@ -47,6 +48,8 @@ class QdrantHybridTargetSpec(TargetSpec):
     # Docling
     docling_url: str = "http://localhost:5001"
     docling_timeout: float = 300.0
+    docling_backend: str = "http"
+    docling_native_enabled: bool = False
     max_tokens_per_chunk: int = 512
 
     # Voyage
@@ -75,6 +78,8 @@ class QdrantHybridTargetSpec(TargetSpec):
             collection_name=config.collection_name,
             docling_url=config.docling_url,
             docling_timeout=config.docling_timeout,
+            docling_backend=config.docling_backend,
+            docling_native_enabled=config.docling_native_enabled,
             max_tokens_per_chunk=config.max_tokens_per_chunk,
             voyage_api_key=config.voyage_api_key,
             voyage_model=config.voyage_model,
@@ -117,8 +122,10 @@ class QdrantHybridTargetConnector:
     # Note: StateManager is created fresh per mutate() call to avoid asyncpg pool issues
     _writer: QdrantHybridWriter | None = None
     _docling: DoclingClient | None = None
+    _docling_native: DoclingNativeConverter | None = None
     _writer_lock = threading.Lock()
     _docling_lock = threading.Lock()
+    _docling_native_lock = threading.Lock()
 
     # Sequential processing: Semaphore(1) ensures only one file is processed at a time.
     # Critical for CPU-only VPS where BGE-M3 is slow (~10-50s per batch).
@@ -185,6 +192,17 @@ class QdrantHybridTargetConnector:
                     )
                     cls._docling = DoclingClient(config)
         return cls._docling
+
+    @classmethod
+    def _get_docling_native(cls, spec: QdrantHybridTargetSpec) -> DoclingNativeConverter:
+        """Get or create native Docling converter."""
+        if cls._docling_native is None:
+            with cls._docling_native_lock:
+                if cls._docling_native is None:
+                    cls._docling_native = DoclingNativeConverter(
+                        DoclingNativeConfig(max_tokens=spec.max_tokens_per_chunk)
+                    )
+        return cls._docling_native
 
     @classmethod
     def mutate(
@@ -256,7 +274,9 @@ class QdrantHybridTargetConnector:
         logger.debug(f"Upsert: file_id={file_id}, path={mutation.abs_path}")
 
         writer = cls._get_writer(spec)
-        docling = cls._get_docling(spec)
+        use_native_docling = spec.docling_native_enabled or spec.docling_backend.lower() == "native"
+        docling_http = cls._get_docling(spec)
+        docling_native = cls._get_docling_native(spec) if use_native_docling else None
 
         abs_path = Path(mutation.abs_path)
         source_path = mutation.source_path
@@ -288,14 +308,17 @@ class QdrantHybridTargetConnector:
 
         try:
             # Parse and chunk (sync)
-            docling_chunks = docling.chunk_file_sync(abs_path)
+            if docling_native is not None:
+                docling_chunks = docling_native.chunk_file_sync(abs_path)
+            else:
+                docling_chunks = docling_http.chunk_file_sync(abs_path)
             if not docling_chunks:
                 state_manager.mark_indexed_sync(file_id, 0, content_hash)
                 logger.warning(f"No chunks from: {source_path}")
                 return
 
             # Convert to ingestion chunks
-            chunks = docling.to_ingestion_chunks(
+            chunks = docling_http.to_ingestion_chunks(
                 docling_chunks,
                 source=source_path,
                 source_type=abs_path.suffix.lstrip("."),

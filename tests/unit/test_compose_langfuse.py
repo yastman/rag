@@ -10,10 +10,11 @@ import yaml
 
 ROOT = Path(__file__).parents[2]
 BASE_COMPOSE = ROOT / "compose.yml"
+DEV_COMPOSE = ROOT / "compose.dev.yml"
 
 
-def _load_compose() -> dict:
-    return yaml.safe_load(BASE_COMPOSE.read_text())
+def _load_compose(path: Path) -> dict:
+    return yaml.safe_load(path.read_text())
 
 
 def _get_service_env(compose: dict, service: str) -> dict[str, str]:
@@ -39,8 +40,13 @@ REQUIRED_LANGFUSE_VARS = [
 
 
 @pytest.fixture(scope="module")
-def compose() -> dict:
-    return _load_compose()
+def compose_base() -> dict:
+    return _load_compose(BASE_COMPOSE)
+
+
+@pytest.fixture(scope="module")
+def compose_dev() -> dict:
+    return _load_compose(DEV_COMPOSE)
 
 
 class TestLangfuseEnvVarsPresent:
@@ -48,41 +54,52 @@ class TestLangfuseEnvVarsPresent:
 
     @pytest.mark.parametrize("service", TRACED_SERVICES)
     @pytest.mark.parametrize("var", REQUIRED_LANGFUSE_VARS)
-    def test_service_has_langfuse_var(self, compose: dict, service: str, var: str):
-        env = _get_service_env(compose, service)
+    def test_service_has_langfuse_var(self, compose_base: dict, service: str, var: str):
+        env = _get_service_env(compose_base, service)
         assert var in env, f"compose.yml: {service} missing {var} in environment block"
 
 
-# Сервисы где дефолт ДОЛЖЕН быть непустым (dev-ready)
 SERVICES_WITH_DEV_DEFAULTS = ["bot", "litellm", "rag-api", "voice-agent", "ingestion"]
 
-# Паттерн для пустого дефолта: ${VAR:-} или ${VAR:-""} или просто ""
-_EMPTY_PATTERNS = ("${", "")
 
-
-class TestLangfuseDevDefaults:
-    """Services must have non-empty dev defaults for LANGFUSE keys (pk-lf-dev/sk-lf-dev)."""
+class TestLangfuseSecretPosture:
+    """Base compose avoids predictable secrets; dev compose restores convenience defaults."""
 
     @pytest.mark.parametrize("service", SERVICES_WITH_DEV_DEFAULTS)
-    def test_public_key_has_dev_default(self, compose: dict, service: str):
-        env = _get_service_env(compose, service)
+    def test_base_compose_has_no_dev_public_key_default(self, compose_base: dict, service: str):
+        env = _get_service_env(compose_base, service)
         val = str(env.get("LANGFUSE_PUBLIC_KEY", ""))
-        # Проверяем что дефолт содержит pk-lf-dev
-        assert "pk-lf-dev" in val, (
-            f"compose.yml: {service}.LANGFUSE_PUBLIC_KEY must default to pk-lf-dev, got: {val!r}"
+        assert "pk-lf-dev" not in val, (
+            f"compose.yml: {service}.LANGFUSE_PUBLIC_KEY must not hardcode dev defaults, got: {val!r}"
         )
 
     @pytest.mark.parametrize("service", SERVICES_WITH_DEV_DEFAULTS)
-    def test_secret_key_has_dev_default(self, compose: dict, service: str):
-        env = _get_service_env(compose, service)
+    def test_base_compose_has_no_dev_secret_key_default(self, compose_base: dict, service: str):
+        env = _get_service_env(compose_base, service)
+        val = str(env.get("LANGFUSE_SECRET_KEY", ""))
+        assert "sk-lf-dev" not in val, (
+            f"compose.yml: {service}.LANGFUSE_SECRET_KEY must not hardcode dev defaults, got: {val!r}"
+        )
+
+    @pytest.mark.parametrize("service", SERVICES_WITH_DEV_DEFAULTS)
+    def test_dev_compose_restores_public_key_default(self, compose_dev: dict, service: str):
+        env = _get_service_env(compose_dev, service)
+        val = str(env.get("LANGFUSE_PUBLIC_KEY", ""))
+        assert "pk-lf-dev" in val, (
+            f"compose.dev.yml: {service}.LANGFUSE_PUBLIC_KEY must provide dev default, got: {val!r}"
+        )
+
+    @pytest.mark.parametrize("service", SERVICES_WITH_DEV_DEFAULTS)
+    def test_dev_compose_restores_secret_key_default(self, compose_dev: dict, service: str):
+        env = _get_service_env(compose_dev, service)
         val = str(env.get("LANGFUSE_SECRET_KEY", ""))
         assert "sk-lf-dev" in val, (
-            f"compose.yml: {service}.LANGFUSE_SECRET_KEY must default to sk-lf-dev, got: {val!r}"
+            f"compose.dev.yml: {service}.LANGFUSE_SECRET_KEY must provide dev default, got: {val!r}"
         )
 
     @pytest.mark.parametrize("service", SERVICES_WITH_DEV_DEFAULTS)
-    def test_host_has_docker_default(self, compose: dict, service: str):
-        env = _get_service_env(compose, service)
+    def test_host_has_docker_default(self, compose_base: dict, service: str):
+        env = _get_service_env(compose_base, service)
         val = str(env.get("LANGFUSE_HOST", ""))
         assert "langfuse:3000" in val, (
             f"compose.yml: {service}.LANGFUSE_HOST must default to http://langfuse:3000, "
