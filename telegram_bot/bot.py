@@ -460,6 +460,7 @@ class PropertyBot:
         # Expert topic service (user+expert → thread_id mapping)
         self._topic_service: TopicService | None = None
         self._topics_enabled: bool = False
+        self._miniapp_subscriber_task: asyncio.Task[None] | None = None
 
         # Track initialization state
         self._cache_initialized = False
