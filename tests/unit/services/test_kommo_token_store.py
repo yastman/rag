@@ -53,7 +53,7 @@ async def test_get_valid_token_refreshes_when_expired(mock_redis):
         redirect_uri="https://example.com/callback",
     )
 
-    with patch("telegram_bot.services.kommo_token_store.httpx.AsyncClient") as mock_httpx:
+    with patch("telegram_bot.services.kommo_tokens.httpx.AsyncClient") as mock_httpx:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -113,7 +113,7 @@ async def test_force_refresh_concurrent_calls_serialized(mock_redis):
         call_log.append("http_end")
         return resp
 
-    with patch("telegram_bot.services.kommo_token_store.httpx.AsyncClient") as mock_httpx:
+    with patch("telegram_bot.services.kommo_tokens.httpx.AsyncClient") as mock_httpx:
         mock_httpx.return_value.__aenter__ = AsyncMock(return_value=mock_httpx.return_value)
         mock_httpx.return_value.__aexit__ = AsyncMock()
         mock_httpx.return_value.post = controlled_post

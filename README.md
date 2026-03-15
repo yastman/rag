@@ -5,7 +5,7 @@
 **AI-powered Telegram bot for real estate — RAG search, apartment finder, voice calls, CRM automation**
 
 [![CI](https://github.com/yastman/rag/actions/workflows/ci.yml/badge.svg)](https://github.com/yastman/rag/actions/workflows/ci.yml)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
@@ -129,7 +129,7 @@ CocoIndex pipeline: Docling parses PDFs/DOCX → semantic chunking → BGE-M3 de
 
 ### Prerequisites
 
-- Python 3.12+, [uv](https://docs.astral.sh/uv/), Docker
+- Python 3.11+ (3.12 recommended), [uv](https://docs.astral.sh/uv/), Docker
 
 ### 1. Install & Configure
 
@@ -209,7 +209,7 @@ src/
 
 mini_app/                  # Telegram Mini App (React + TypeScript)
 k8s/                       # Kubernetes manifests (k3s deployment)
-evaluation/                # RAG evaluation (RAGAS, A/B testing)
+src/evaluation/            # RAG evaluation (RAGAS, A/B testing)
 ```
 
 ## Entry Points

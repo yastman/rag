@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import numpy as np
 from qdrant_client import AsyncQdrantClient, models
 
+from src.config.qdrant_policy import resolve_collection_name
 from telegram_bot.observability import get_client, observe
 
 
@@ -82,17 +83,7 @@ class QdrantService:
         Returns:
             Collection name with suffix
         """
-        # Strip existing suffixes
-        for suffix in ["_binary", "_scalar"]:
-            base_name = base_name.removesuffix(suffix)
-
-        mode = mode.lower()
-        if mode == "scalar":
-            return f"{base_name}_scalar"
-        if mode == "binary":
-            return f"{base_name}_binary"
-        # off or any other value
-        return base_name
+        return resolve_collection_name(base_name, mode)
 
     @property
     def collection_name(self) -> str:

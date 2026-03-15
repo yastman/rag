@@ -120,20 +120,19 @@ class TestGetPrompt:
         # 2nd call should use local missing-cache and skip Langfuse call.
         assert mock_client.get_prompt.call_count == 1
 
-    def test_api_probe_skips_sdk_get_prompt_for_missing_prompt(self):
-        from langfuse.api.core.api_error import ApiError
-
+    def test_no_manual_api_probe_for_missing_prompt(self):
         mock_client = MagicMock()
-        mock_client.api.prompts.get.side_effect = ApiError(
-            status_code=404, body={"message": "missing"}
+        mock_client.api.prompts.get.side_effect = RuntimeError("must not be called")
+        mock_client.get_prompt.side_effect = Exception(
+            "status_code: 404, body: {'message': \"Prompt not found: 'generate'\"}"
         )
 
         with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
             result = get_prompt("generate", fallback="fallback", cache_ttl=60)
 
         assert result == "fallback"
-        mock_client.api.prompts.get.assert_called_once()
-        mock_client.get_prompt.assert_not_called()
+        mock_client.get_prompt.assert_called_once()
+        mock_client.api.prompts.get.assert_not_called()
 
 
 class TestApplyFallbackVars:
@@ -216,10 +215,3 @@ class TestResetClient:
         _missing_prompts_until["some-prompt"] = 9999999999.0
         _reset_client()
         assert "some-prompt" not in _missing_prompts_until
-
-    def test_reset_clears_known_prompt_cache(self):
-        from telegram_bot.integrations.prompt_manager import _known_prompts_until
-
-        _known_prompts_until["some-prompt"] = 9999999999.0
-        _reset_client()
-        assert "some-prompt" not in _known_prompts_until
