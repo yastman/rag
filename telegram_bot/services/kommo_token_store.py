@@ -1,29 +1,24 @@
-"""Redis-backed OAuth2 token store for Kommo CRM (#413).
+"""Compatibility shim for the canonical Kommo token store.
 
-Stores access_token + refresh_token in Redis hash.
-Auto-refreshes via Kommo OAuth2 endpoint when expired.
+Canonical implementation lives in :mod:`telegram_bot.services.kommo_tokens`.
+This module keeps backward-compatible import path and serialized refresh behavior.
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
-import time
 from typing import Any
 
-import httpx
-
-from telegram_bot.observability import get_client, observe
-
-
-logger = logging.getLogger(__name__)
-
-REDIS_KEY_PREFIX = "kommo:tokens:"
-TOKEN_REFRESH_BUFFER_S = 300  # Refresh 5 min before expiry
+from telegram_bot.observability import observe
+from telegram_bot.services.kommo_tokens import KommoTokenStore as _CanonicalKommoTokenStore
 
 
-class KommoTokenStore:
-    """Redis-backed Kommo OAuth2 token manager."""
+class KommoTokenStore(_CanonicalKommoTokenStore):
+    """Backward-compatible adapter over canonical Kommo token store.
+
+    Keeps legacy constructor defaults used by older tests/imports while delegating
+    token lifecycle/storage logic to the canonical implementation.
+    """
 
     def __init__(
         self,
@@ -34,73 +29,20 @@ class KommoTokenStore:
         client_secret: str = "",
         redirect_uri: str = "",
     ):
-        self._redis = redis
-        self._subdomain = subdomain
-        self._client_id = client_id
-        self._client_secret = client_secret
-        self._redirect_uri = redirect_uri
-        self._key = f"{REDIS_KEY_PREFIX}{subdomain}"
+        super().__init__(
+            redis=redis,
+            client_id=client_id,
+            client_secret=client_secret,
+            subdomain=subdomain,
+            redirect_uri=redirect_uri,
+        )
         self._refresh_lock = asyncio.Lock()
-
-    @observe(name="kommo-token-get", capture_input=False, capture_output=False)
-    async def get_valid_token(self) -> str:
-        """Get valid access token, refreshing if needed."""
-        lf = get_client()
-        data = await self._redis.hgetall(self._key)
-        if not data:
-            raise ValueError(f"No token stored for {self._subdomain}")
-
-        expires_at = self._to_int(data.get(b"expires_at", b"0"), default=0)
-        if time.time() < expires_at - TOKEN_REFRESH_BUFFER_S:
-            lf.update_current_span(output={"refresh_needed": False})
-            return self._to_str_token(data.get(b"access_token"), field="access_token")
-
-        lf.update_current_span(output={"refresh_needed": True})
-        return await self.force_refresh()
 
     @observe(name="kommo-token-refresh", capture_input=False, capture_output=False)
     async def force_refresh(self) -> str:
-        """Force token refresh via Kommo OAuth2.
-
-        Serialized via asyncio.Lock to prevent concurrent refreshes from sending
-        duplicate requests with the same (soon-to-be-invalidated) refresh_token.
-        """
+        """Serialize refresh calls to avoid concurrent refresh-token races."""
         async with self._refresh_lock:
-            lf = get_client()
-            data = await self._redis.hgetall(self._key)
-            refresh_token = self._to_str_token(
-                data.get(b"refresh_token", b""), field="refresh_token"
-            )
-
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"https://{self._subdomain}.kommo.com/oauth2/access_token",
-                    json={
-                        "client_id": self._client_id,
-                        "client_secret": self._client_secret,
-                        "grant_type": "refresh_token",
-                        "refresh_token": refresh_token,
-                        "redirect_uri": self._redirect_uri,
-                    },
-                )
-                response.raise_for_status()
-                tokens_raw = response.json()
-
-            if not isinstance(tokens_raw, dict):
-                raise ValueError("Invalid token response from Kommo")
-            access_token = self._to_str_token(tokens_raw.get("access_token"), field="access_token")
-            refreshed_token = self._to_str_token(
-                tokens_raw.get("refresh_token"), field="refresh_token"
-            )
-            expires_in = self._to_int(tokens_raw.get("expires_in", 86400), default=86400)
-
-            await self._store_tokens(
-                access_token,
-                refreshed_token,
-                expires_in,
-            )
-            lf.update_current_span(output={"refreshed": True, "expires_in_s": expires_in})
-            return access_token
+            return await super().force_refresh()
 
     async def _store_tokens(
         self,
@@ -108,33 +50,9 @@ class KommoTokenStore:
         refresh_token: str,
         expires_in: int,
     ) -> None:
-        """Save tokens to Redis hash with expiry timestamp."""
-        expires_at = int(time.time()) + expires_in
-        await self._redis.hset(
-            self._key,
-            mapping={
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "expires_at": str(expires_at),
-            },
+        """Legacy helper kept for script compatibility."""
+        await self._save_tokens(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=expires_in,
         )
-        logger.info("Stored Kommo tokens for %s (expires_in=%ds)", self._subdomain, expires_in)
-
-    @staticmethod
-    def _to_int(value: Any, *, default: int) -> int:
-        """Convert token fields to int with safe fallback."""
-        if isinstance(value, bytes):
-            value = value.decode()
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return default
-
-    @staticmethod
-    def _to_str_token(value: Any, *, field: str) -> str:
-        """Normalize token values to string or fail fast on invalid payload."""
-        if isinstance(value, bytes):
-            return value.decode()
-        if isinstance(value, str):
-            return value
-        raise ValueError(f"Invalid {field} value in token payload")

@@ -1,6 +1,6 @@
 # Base configuration — all services, no ports exposed.
 # Use with override: COMPOSE_FILE=compose.yml:compose.dev.yml
-# See docs/plans/2026-03-05-docker-compose-unification-design.md
+# See DOCKER.md and docs/LOCAL-DEVELOPMENT.md
 
 x-logging: &default-logging
   driver: json-file
@@ -192,8 +192,8 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # Langfuse v3 OTEL (Docker internal network)
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
       LANGFUSE_OTEL_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
       # Database disabled — config.yaml is source of truth for local dev
@@ -253,8 +253,8 @@ services:
       BOT_DOMAIN: ${BOT_DOMAIN:-недвижимость}
       BOT_LANGUAGE: ${BOT_LANGUAGE:-ru}
       # Langfuse observability (optional — bot degrades gracefully)
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
       LANGFUSE_TRACING_ENVIRONMENT: "${LANGFUSE_TRACING_ENVIRONMENT:-}"
       LANGFUSE_FLUSH_AT: "${LANGFUSE_FLUSH_AT:-512}"
@@ -328,8 +328,8 @@ services:
       LLM_API_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY is required}
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
       REALESTATE_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/realestate"
       KOMMO_ENABLED: "${KOMMO_ENABLED:-false}"
@@ -390,8 +390,8 @@ services:
     stop_grace_period: 30s
     logging: *default-logging
     environment:
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
       - GDRIVE_SYNC_DIR=/data/drive-sync
       - INGESTION_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/cocoindex
@@ -434,7 +434,7 @@ services:
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
@@ -458,7 +458,7 @@ services:
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
     environment:
       MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
     volumes:
       - minio_data:/data
     healthcheck:
@@ -477,9 +477,9 @@ services:
     image: redis:8.6.1@sha256:1c054d54ecd1597bba52f4304bca5afbc5565ebe614c5b3d7dc5b7f8a0cd768d
     restart: unless-stopped
     logging: *default-logging
-    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-langfuseredis}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD:-}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -513,27 +513,27 @@ services:
       CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
       CLICKHOUSE_URL: http://clickhouse:8123
       CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
       # S3/MinIO
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-}
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
       LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniosecret}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-}
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
       # Redis
       REDIS_HOST: redis-langfuse
       REDIS_PORT: 6379
-      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-langfuseredis}
+      REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:-}
       # Telemetry
       TELEMETRY_ENABLED: "false"
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "true"
@@ -720,8 +720,8 @@ services:
       LLM_BASE_URL: http://litellm:4000
       LLM_MODEL: gpt-4o-mini
       RERANK_PROVIDER: colbert
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     depends_on:
       redis:
@@ -768,12 +768,12 @@ services:
     restart: unless-stopped
     logging: *default-logging
     environment:
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       LIVEKIT_WS_URL: ws://livekit-server:7880
       SIP_CONFIG_BODY: |
-        api_key: ${LIVEKIT_API_KEY:-devkey}
-        api_secret: ${LIVEKIT_API_SECRET:-secret}
+        api_key: ${LIVEKIT_API_KEY:-}
+        api_secret: ${LIVEKIT_API_SECRET:-}
         ws_url: ws://livekit-server:7880
         redis:
           address: redis:6379
@@ -810,13 +810,13 @@ services:
     logging: *default-logging
     environment:
       LIVEKIT_URL: ws://livekit-server:7880
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-secret}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       ELEVEN_API_KEY: ${ELEVENLABS_API_KEY:-}
       RAG_API_URL: http://rag-api:8080
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/postgres
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-dev}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-dev}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8081')\" || exit 1"]
