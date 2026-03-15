@@ -43,3 +43,16 @@ class KommoTokenStore(_CanonicalKommoTokenStore):
         """Serialize refresh calls to avoid concurrent refresh-token races."""
         async with self._refresh_lock:
             return await super().force_refresh()
+
+    async def _store_tokens(
+        self,
+        access_token: str,
+        refresh_token: str,
+        expires_in: int,
+    ) -> None:
+        """Legacy helper kept for script compatibility."""
+        await self._save_tokens(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=expires_in,
+        )
