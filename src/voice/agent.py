@@ -9,7 +9,6 @@ import json
 import logging
 import os
 import time
-from typing import Any
 
 import httpx
 from dotenv import load_dotenv
@@ -26,6 +25,7 @@ from livekit.agents import (
 from livekit.plugins import elevenlabs, openai, silero
 
 from src.voice.observability import trace_voice_session, update_voice_trace, voice_session_id
+from src.voice.rag_api_client import RagApiClient, RagApiClientError, RagQueryRequest
 from src.voice.schemas import CallStatus
 from src.voice.transcript_store import TranscriptStore
 
@@ -36,28 +36,30 @@ logger = logging.getLogger(__name__)
 RAG_API_URL = os.getenv("RAG_API_URL", "http://rag-api:8080")
 DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("VOICE_DATABASE_URL", "")
 _transcript_store: TranscriptStore | None = None
-_http_client: httpx.AsyncClient | None = None
+_rag_api_client: RagApiClient | None = None
 _active_jobs = 0
 _jobs_lock: asyncio.Lock | None = None
 
 
+def _get_rag_api_client() -> RagApiClient:
+    """Return shared typed RAG API client."""
+    global _rag_api_client
+    if _rag_api_client is None:
+        _rag_api_client = RagApiClient(base_url=RAG_API_URL)
+    return _rag_api_client
+
+
 def _get_http_client() -> httpx.AsyncClient:
-    """Return a shared httpx client with connection pooling."""
-    global _http_client
-    if _http_client is None:
-        _http_client = httpx.AsyncClient(
-            timeout=30.0,
-            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
-        )
-    return _http_client
+    """Compatibility wrapper for tests that assert shared HTTP client behavior."""
+    return _get_rag_api_client().client
 
 
 async def _close_http_client() -> None:
-    """Close the shared httpx client (called on server shutdown)."""
-    global _http_client
-    if _http_client is not None:
-        await _http_client.aclose()
-        _http_client = None
+    """Close the shared typed RAG API client (called on server shutdown)."""
+    global _rag_api_client
+    if _rag_api_client is not None:
+        await _rag_api_client.close()
+        _rag_api_client = None
 
 
 def _get_jobs_lock() -> asyncio.Lock:
@@ -192,15 +194,11 @@ class VoiceBot(Agent):
         """
         await self._append_transcript("user", query)
         try:
-            client = _get_http_client()
-            payload: dict[str, Any] = {
-                "query": query,
-                "user_id": 0,
-                "session_id": self._session_id,
-                "channel": "voice",
-            }
-            if self._langfuse_trace_id:
-                payload["langfuse_trace_id"] = self._langfuse_trace_id
+            request = RagQueryRequest(
+                query=query,
+                session_id=self._session_id,
+                langfuse_trace_id=self._langfuse_trace_id,
+            )
             with contextlib.suppress(Exception):
                 update_voice_trace(
                     call_id=self._call_id,
@@ -208,15 +206,14 @@ class VoiceBot(Agent):
                     session_id=self._session_id,
                     langfuse_trace_id=self._langfuse_trace_id,
                 )
-            resp = await client.post(
-                f"{RAG_API_URL}/query",
-                json=payload,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            answer = str(data.get("response", "Информация не найдена."))
+            answer = await _get_rag_api_client().search_knowledge_base(request)
             await self._append_transcript("bot", answer)
             return answer
+        except RagApiClientError:
+            logger.exception("RAG API call failed")
+            fallback = "Извините, не могу найти информацию сейчас."
+            await self._append_transcript("bot", fallback)
+            return fallback
         except Exception:
             logger.exception("RAG API call failed")
             fallback = "Извините, не могу найти информацию сейчас."
