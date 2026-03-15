@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .colbert_reranker import ColbertRerankerService
     from .history_service import HistoryService
     from .lead_scoring_store import LeadScoringStore
-    from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult, LLMService
+    from .llm import LOW_CONFIDENCE_THRESHOLD, ConfidenceResult
     from .metrics import PipelineMetrics
     from .qdrant import QdrantService
     from .query_analyzer import QueryAnalyzer
@@ -38,8 +38,6 @@ __all__ = [
     "ExpandedChunk",
     "HistoryService",
     "HyDEGenerator",
-    # LLMService is deprecated — use generate_response() instead
-    "LLMService",
     "LeadScoringStore",
     "PipelineMetrics",
     "QdrantService",
@@ -66,7 +64,7 @@ _IMPORT_MAP = {
     "LeadScoringStore": ".lead_scoring_store",
     "SessionSummary": ".session_summary",
     "check_responses_parse_compat": ".session_summary",
-    # LLMService is deprecated — kept for backward compatibility only
+    # Compatibility-only export: deprecated, intentionally not in __all__.
     "LLMService": ".llm",
     "LOW_CONFIDENCE_THRESHOLD": ".llm",
     "PipelineMetrics": ".metrics",
