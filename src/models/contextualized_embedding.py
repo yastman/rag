@@ -311,7 +311,7 @@ class ContextualizedEmbeddingService:
         )
 
         embeddings: list[list[float]] = [
-            result.embeddings[0]
+            [float(value) for value in result.embeddings[0]]
             for result in response.results  # type: ignore[misc]
         ]
         total_tokens = getattr(response, "total_tokens", 0)
