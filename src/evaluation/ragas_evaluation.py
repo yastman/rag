@@ -206,7 +206,7 @@ def _log_ragas_scores_to_langfuse(
         # Flush to ensure scores are sent
         langfuse_client.flush()
 
-        return trace.id
+        return str(trace.id)
 
     except Exception as e:
         print(f"   Langfuse scoring failed: {e}")
