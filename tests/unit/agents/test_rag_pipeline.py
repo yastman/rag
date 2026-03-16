@@ -222,7 +222,7 @@ async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock
     from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
 
     await _hybrid_retrieve(
-        "рассрочка",
+        "какие есть варианты рассрочки",
         [0.1] * 1024,
         cache=mock_cache,
         sparse_embeddings=mock_sparse,
@@ -233,6 +233,34 @@ async def test_hybrid_retrieve_passes_topic_filter(mock_cache, mock_sparse, mock
 
     first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
     assert first_call["filters"] == {"topic": "finance"}
+
+
+async def test_hybrid_retrieve_prefers_faq_candidates_for_short_finance_query(
+    mock_cache, mock_sparse
+):
+    from telegram_bot.agents.rag_pipeline import _hybrid_retrieve
+
+    mock_qdrant = AsyncMock()
+    mock_qdrant.hybrid_search_rrf = AsyncMock(
+        return_value=(
+            [{"text": "FAQ рассрочка", "score": 0.9, "metadata": {"doc_type": "faq"}}],
+            {"backend_error": False, "error_type": None, "error_message": None},
+        )
+    )
+
+    result = await _hybrid_retrieve(
+        "рассрочки",
+        [0.1] * 1024,
+        cache=mock_cache,
+        sparse_embeddings=mock_sparse,
+        qdrant=mock_qdrant,
+        topic_hint="finance",
+        latency_stages={},
+    )
+
+    assert result["search_results_count"] > 0
+    first_call = mock_qdrant.hybrid_search_rrf.await_args_list[0].kwargs
+    assert first_call["filters"] == {"topic": "finance", "doc_type": "faq"}
 
 
 async def test_hybrid_retrieve_omits_topic_filter_by_default(mock_cache, mock_sparse, mock_qdrant):
@@ -271,7 +299,7 @@ async def test_hybrid_retrieve_retries_without_topic_filter_when_results_too_sma
     )
 
     result = await _hybrid_retrieve(
-        "рассрочка",
+        "какие есть варианты рассрочки",
         [0.1] * 1024,
         cache=mock_cache,
         sparse_embeddings=mock_sparse,
@@ -396,6 +424,20 @@ async def test_rerank_uses_cache_hit(mock_reranker):
     mock_reranker.rerank.assert_not_awaited()
 
 
+async def test_grade_or_rerank_drops_weak_tail_when_gap_is_small():
+    from telegram_bot.agents.rag_pipeline import _rerank
+
+    docs = [
+        {"score": 1.0, "text": "finance faq"},
+        {"score": 0.95, "text": "finance note"},
+        {"score": 0.52, "text": "ВНЖ"},
+    ]
+    result = await _rerank("рассрочки", docs, reranker=None, latency_stages={})
+
+    assert len(result["documents"]) == 2
+    assert all("ВНЖ" not in d["text"] for d in result["documents"])
+
+
 # ---------------------------------------------------------------------------
 # _rewrite_query tests
 # ---------------------------------------------------------------------------
@@ -439,6 +481,22 @@ async def test_rewrite_query_llm_fails():
     assert result["rewrite_effective"] is False
     assert result["rewritten_query"] == "квартиры"
     assert result["rewrite_count"] == 1
+
+
+async def test_short_finance_query_expands_before_rewrite_loop():
+    from telegram_bot.agents.rag_pipeline import _rewrite_query
+
+    fake_llm = MagicMock()
+    fake_llm.chat.completions.create = AsyncMock(side_effect=RuntimeError("LLM should not be used"))
+
+    result = await _rewrite_query(
+        "рассрочки",
+        0,
+        llm=fake_llm,
+        latency_stages={},
+    )
+
+    assert result["rewritten_query"] != "рассрочки"
 
 
 # ---------------------------------------------------------------------------
