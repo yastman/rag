@@ -84,11 +84,12 @@ Evidence timestamp: 2026-03-16 (UTC)
 ## #728
 - Issue claim: SDK migration closure still required.
 - Current code evidence:
-  - Plan states PR #972 already merged into `dev`; remaining work is reconciliation.
+  - `gh pr view 972` confirms MERGED at `2026-03-16T11:22:55Z`.
+  - Added status note in `docs/plans/2026-03-15-sdk-canonical-remediation-plan.md`.
 - Current test evidence:
-  - Doc/PR reconciliation pending in Task 12.
+  - Reconciliation completed via PR + issue state verification.
 - GitHub state evidence:
-  - OPEN - https://github.com/yastman/rag/issues/728
+  - CLOSED - https://github.com/yastman/rag/issues/728
 - Verdict: close
 
 ## #956
