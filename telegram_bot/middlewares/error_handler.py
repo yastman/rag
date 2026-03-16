@@ -68,9 +68,13 @@ async def handle_error(event: ErrorEvent) -> None:
             if callable(update_observation):
                 update_observation(level="ERROR", status_message=status_message)
             else:
-                update_generation = getattr(lf, "update_current_generation", None)
-                if callable(update_generation):
-                    update_generation(level="ERROR", status_message=status_message)
+                update_span = getattr(lf, "update_current_span", None)
+                if callable(update_span):
+                    update_span(level="ERROR", status_message=status_message)
+                else:
+                    update_generation = getattr(lf, "update_current_generation", None)
+                    if callable(update_generation):
+                        update_generation(level="ERROR", status_message=status_message)
     except Exception:
         logger.debug("Failed to report error to Langfuse", exc_info=True)
 
