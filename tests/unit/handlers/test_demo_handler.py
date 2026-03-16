@@ -48,6 +48,17 @@ class TestDemoFlow:
         assert sent.kwargs.get("reply_markup") is not None
 
     @pytest.mark.asyncio
+    async def test_demo_apartments_without_message_returns_cleanly(self) -> None:
+        callback = AsyncMock(spec=CallbackQuery)
+        callback.answer = AsyncMock()
+        callback.message = None
+        state = AsyncMock(spec=FSMContext)
+
+        await handle_demo_apartments(callback, state)
+
+        state.set_state.assert_awaited_once_with(DemoStates.waiting_query)
+
+    @pytest.mark.asyncio
     async def test_demo_search_calls_pipeline(self) -> None:
         message = AsyncMock()
         message.text = "двушка до 100к"
