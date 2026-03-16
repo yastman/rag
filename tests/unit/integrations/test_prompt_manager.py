@@ -150,6 +150,24 @@ class TestGetPrompt:
         )
         assert mock_client.api.prompts.get.call_count == 0
 
+    def test_forwards_langfuse_prompt_label_from_env(self, monkeypatch: pytest.MonkeyPatch):
+        mock_prompt = MagicMock()
+        mock_prompt.compile.return_value = "staging prompt"
+        mock_client = MagicMock()
+        mock_client.get_prompt.return_value = mock_prompt
+        monkeypatch.setenv("LANGFUSE_PROMPT_LABEL", "staging")
+
+        with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
+            result = get_prompt("my-prompt", fallback="fallback text")
+
+        assert result == "staging prompt"
+        mock_client.get_prompt.assert_called_once_with(
+            "my-prompt",
+            cache_ttl_seconds=DEFAULT_CACHE_TTL,
+            fallback="fallback text",
+            label="staging",
+        )
+
 
 class TestApplyFallbackVars:
     def test_no_vars(self):
