@@ -51,6 +51,58 @@ def _missing_or_unhealthy(services: dict[str, str]) -> list[str]:
     return failed
 
 
+def _docker_network_health_cmd(project_dir: str) -> str:
+    # Run health checks inside the bot container so compose DNS names resolve.
+    return (
+        f"cd {project_dir} && "
+        "docker compose exec -T bot sh -lc "
+        '"QDRANT_URL=http://qdrant:6333 '
+        "LLM_BASE_URL=http://litellm:4000 "
+        "python - <<'PY'\n"
+        "import json\n"
+        "import os\n"
+        "import sys\n"
+        "import urllib.request\n"
+        "\n"
+        "qdrant_url = os.environ.get('QDRANT_URL', 'http://qdrant:6333')\n"
+        "llm_url = os.environ.get('LLM_BASE_URL', 'http://litellm:4000')\n"
+        "collection = os.environ.get('QDRANT_COLLECTION', 'contextual_bulgaria_voyage')\n"
+        "mode = os.environ.get('QDRANT_QUANTIZATION_MODE', 'off')\n"
+        "base = collection.removesuffix('_binary').removesuffix('_scalar')\n"
+        "target = base\n"
+        "if mode == 'scalar':\n"
+        "    target = f'{base}_scalar'\n"
+        "elif mode == 'binary':\n"
+        "    target = f'{base}_binary'\n"
+        "\n"
+        "try:\n"
+        "    with urllib.request.urlopen(f'{qdrant_url}/collections', timeout=15) as response:\n"
+        "        payload = json.load(response)\n"
+        "except Exception:\n"
+        "    print(f'FAIL: Qdrant is unreachable at {qdrant_url}')\n"
+        "    raise SystemExit(1)\n"
+        "\n"
+        "collections = payload.get('result', {}).get('collections', [])\n"
+        "names = {item.get('name') for item in collections}\n"
+        "if target not in names:\n"
+        "    print(f\"FAIL: Qdrant collection '{target}' not found (mode={mode})\")\n"
+        "    raise SystemExit(1)\n"
+        "print(f'✓ Qdrant collection exists: {target} (mode={mode})')\n"
+        "\n"
+        "try:\n"
+        "    urllib.request.urlopen(f'{llm_url}/health/liveliness', timeout=15)\n"
+        "    print('✓ LLM health OK')\n"
+        "except Exception:\n"
+        "    try:\n"
+        "        urllib.request.urlopen(f'{llm_url}/v1/models', timeout=15)\n"
+        "        print('✓ LLM models OK')\n"
+        "    except Exception:\n"
+        "        print(f'FAIL: LLM endpoint not responding at {llm_url}')\n"
+        "        raise SystemExit(1)\n"
+        'PY"'
+    )
+
+
 def run_preflight(host: str, project_dir: str) -> int:
     ps_result = run_ssh(host, "docker ps --format '{{.Names}}\t{{.Status}}'")
     if ps_result.returncode != 0:
@@ -63,12 +115,7 @@ def run_preflight(host: str, project_dir: str) -> int:
         print(f"Missing/unhealthy core services: {', '.join(failed)}")
         return 1
 
-    health_cmd = (
-        f"cd {project_dir} && "
-        "QDRANT_URL=http://qdrant:6333 "
-        "LLM_BASE_URL=http://litellm:4000 "
-        "./scripts/test_bot_health.sh"
-    )
+    health_cmd = _docker_network_health_cmd(project_dir)
     health_result = run_ssh(host, health_cmd)
     if health_result.returncode != 0:
         print(health_result.stdout.strip())
