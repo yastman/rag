@@ -379,7 +379,7 @@ async def generate_response(
     max_context_docs: int = _MAX_CONTEXT_DOCS,
     format_context: Callable[[list[dict[str, Any]], int], str] = _format_context,
     select_recent_history: Callable[[list[Any], int], list[Any]] = _select_recent_history,
-    _build_system_prompt: Callable[[str], str] = _build_system_prompt,
+    build_system_prompt: Callable[[str], str] = _build_system_prompt,
     ensure_history_instruction: Callable[[str], str] = _ensure_history_instruction,
     build_fallback_response: Callable[[list[dict[str, Any]]], str] = _build_fallback_response,
     generate_streaming: Callable[..., Any] = _generate_streaming,
@@ -394,6 +394,8 @@ async def generate_response(
 ) -> dict[str, Any]:
     """Generate an LLM answer from retrieved context with optional Telegram streaming."""
     t0 = time.monotonic()
+    # Keep compatibility for injected prompt builders in tests/callers.
+    _ = build_system_prompt
 
     if config is None:
         config = get_config() if get_config is not None else _get_graph_config()
