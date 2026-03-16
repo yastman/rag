@@ -76,6 +76,15 @@ class TestFSMCancelMiddleware:
         handler.assert_awaited_once()
 
     @pytest.mark.asyncio()
+    async def test_non_message_event_passthrough(self, middleware):
+        event = object()
+        handler = AsyncMock()
+
+        await middleware(handler, event, {})
+
+        handler.assert_awaited_once_with(event, {})
+
+    @pytest.mark.asyncio()
     async def test_no_text_passes_through(self, middleware):
         msg = _make_message(None)
         state = _make_state("PhoneCollectorStates:waiting_phone")

@@ -79,7 +79,8 @@ class VoyageEmbedFunction:
             api_key: Voyage API key (defaults to VOYAGE_API_KEY env var)
             model: Voyage model name
         """
-        self.api_key = api_key or os.getenv("VOYAGE_API_KEY", "")
+        resolved_api_key = api_key if api_key is not None else os.getenv("VOYAGE_API_KEY")
+        self.api_key: str = resolved_api_key or ""
         self.model = model
         self._service: Any | None = None
 
