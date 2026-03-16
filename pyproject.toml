@@ -14,7 +14,7 @@ dependencies = [
     "numpy",
     "aiohttp",
     "requests",
-    "qdrant-client>=1.17.0",  ***REMOVED*** Vector database client (v1.17+ for weighted RRF, relevance feedback)
+    "qdrant-client>=1.17.1",  ***REMOVED*** Vector database client (v1.17+ for weighted RRF, relevance feedback)
     "langfuse>=3.14.0",       ***REMOVED*** LLM observability & tracing
     ***REMOVED*** Voyage AI Integration (2026-01-21)
     "voyageai>=0.3.0",        ***REMOVED*** Voyage AI embeddings and reranking
