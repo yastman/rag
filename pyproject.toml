@@ -300,37 +300,9 @@ disallow_untyped_defs = false  # Set to true for strict mode
 ignore_missing_imports = true  # Ignore missing stubs for now
 explicit_package_bases = true  # Resolve duplicate module names in services/
 
-# Per-module overrides
-[[tool.mypy.overrides]]
-module = "evaluation.*"
-ignore_errors = true
-
 [[tool.mypy.overrides]]
 module = "FlagEmbedding.*"
 ignore_missing_imports = true
-
-# Legacy noisy modules — suppress until refactored
-[[tool.mypy.overrides]]
-module = [
-    "src.contextualization.*",
-    "src.ingestion.indexer",
-    "src.ingestion.document_parser",
-    "src.ingestion.docling_client",
-    "src.ingestion.voyage_indexer",
-    "src.ingestion.cocoindex_flow",
-    "src.ingestion.unified.state_manager",
-    "src.ingestion.unified.qdrant_writer",
-    "src.ingestion.unified.cli",
-    "src.ingestion.gdrive_indexer",
-    "src.ingestion.service",
-    "src.retrieval.*",
-    "src.cache.*",
-    "src.evaluation.ragas_evaluation",
-    "src.evaluation.mlflow_integration",
-    "src.governance.model_registry",
-    "src.models.contextualized_embedding",
-]
-ignore_errors = true
 
 # =============================================================================
 # BANDIT CONFIGURATION (Security Linting)
