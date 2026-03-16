@@ -1,245 +1,114 @@
-"""Unit tests for scripts/index_services.py.
-
-Tests cover:
-- Parsing services.yaml → list of service dicts
-- Building chunks from parsed services
-- Deterministic point IDs (idempotency guarantee)
-- Skipping services with empty/missing card_text
-"""
+"""Tests for scripts/index_services.py."""
 
 from __future__ import annotations
 
-import textwrap
-import uuid
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-import pytest
-
-
-# ---------------------------------------------------------------------------
-# Helpers — import under test after path manipulation
-# ---------------------------------------------------------------------------
+from scripts.index_services import build_service_chunks, index_services, load_services
 
 
-def _get_module():
-    """Import scripts/index_services module lazily."""
-    import importlib.util
-    import sys
+def _write_services_yaml(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "services.yaml"
+    path.write_text(body, encoding="utf-8")
+    return path
 
-    spec = importlib.util.spec_from_file_location(
-        "index_services",
-        Path(__file__).parents[2] / "scripts" / "index_services.py",
+
+def test_load_services_skips_entries_without_card_text(tmp_path: Path) -> None:
+    services_path = _write_services_yaml(
+        tmp_path,
+        "services:\n"
+        "  one:\n"
+        "    title: One\n"
+        "    card_text: First\n"
+        "  two:\n"
+        "    title: Two\n"
+        "  three:\n"
+        "    title: Three\n"
+        "    card_text: '   '\n",
     )
-    assert spec is not None and spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["index_services"] = mod
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
-    return mod
+
+    services = load_services(services_path)
+
+    assert services == [("one", {"title": "One", "card_text": "First"})]
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+def test_build_service_chunks_includes_service_key_in_chunk_metadata(tmp_path: Path) -> None:
+    services_path = _write_services_yaml(
+        tmp_path,
+        "services:\n"
+        "  residence:\n"
+        "    title: Residence\n"
+        "    card_text: Support for residence permits.\n",
+    )
 
-SAMPLE_YAML = textwrap.dedent(
-    """\
-    services:
-      passive_income:
-        emoji: "💰"
-        title: "Пассивный доход"
-        callback_id: "svc:passive_income"
-        card_text: |
-          💰 Пассивный доход — сдаём вашу недвижимость
+    chunks = build_service_chunks(services_path)
 
-          Полный цикл управления.
-      infotour:
-        emoji: "✈️"
-        title: "Инфотур"
-        callback_id: "svc:infotour"
-        card_text: |
-          ✈️ Инфотур «Недвижимость в Болгарии»
-
-          Акционная цена 150 евро.
-      no_text_service:
-        emoji: "❓"
-        title: "Без текста"
-        callback_id: "svc:no_text"
-    """
-)
+    service_key, chunk = chunks[0]
+    assert service_key == "residence"
+    assert chunk.article_number == "residence"
+    assert chunk.document_name == "services.yaml"
+    assert chunk.section == "Residence"
+    assert chunk.extra_metadata == {"chunk_order": 0, "service_key": "residence"}
+    assert chunk.text == "Residence\n\nSupport for residence permits."
 
 
-@pytest.fixture()
-def services_yaml_file(tmp_path: Path) -> Path:
-    """Write sample YAML to a temp file and return path."""
-    f = tmp_path / "services.yaml"
-    f.write_text(SAMPLE_YAML, encoding="utf-8")
-    return f
+def test_index_services_calls_writer_with_writer_contract_metadata(tmp_path: Path) -> None:
+    services_path = _write_services_yaml(
+        tmp_path,
+        "services:\n"
+        "  one:\n"
+        "    title: One\n"
+        "    card_text: First\n"
+        "  two:\n"
+        "    title: Two\n"
+        "    card_text: Second\n",
+    )
+    writer = MagicMock()
+    writer.upsert_chunks_sync.return_value = SimpleNamespace(points_upserted=1, errors=None)
+
+    indexed = index_services(
+        writer=writer,
+        services_path=services_path,
+        collection_name="gdrive_documents_bge",
+    )
+
+    assert indexed == 2
+    assert writer.upsert_chunks_sync.call_count == 2
+
+    first_call = writer.upsert_chunks_sync.call_args_list[0].kwargs
+    second_call = writer.upsert_chunks_sync.call_args_list[1].kwargs
+
+    assert first_call["file_id"] == "services.yaml::one"
+    assert second_call["file_id"] == "services.yaml::two"
+    assert first_call["source_path"] == str(services_path)
+    assert first_call["file_metadata"]["file_name"] == "services.yaml"
+    assert first_call["file_metadata"]["mime_type"] == "application/yaml"
+    assert first_call["file_metadata"]["service_key"] == "one"
+    assert first_call["file_metadata"]["source"] == "services.yaml"
 
 
-# ---------------------------------------------------------------------------
-# parse_services_yaml
-# ---------------------------------------------------------------------------
+def test_index_services_is_idempotent_for_file_ids(tmp_path: Path) -> None:
+    services_path = _write_services_yaml(
+        tmp_path,
+        "services:\n  mortgage:\n    title: Mortgage\n    card_text: Mortgage consultation.\n",
+    )
+    writer = MagicMock()
+    writer.upsert_chunks_sync.return_value = SimpleNamespace(points_upserted=1, errors=None)
 
+    first_indexed = index_services(
+        writer=writer,
+        services_path=services_path,
+        collection_name="gdrive_documents_bge",
+    )
+    second_indexed = index_services(
+        writer=writer,
+        services_path=services_path,
+        collection_name="gdrive_documents_bge",
+    )
 
-class TestParseServicesYaml:
-    def test_returns_list_of_services(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        result = mod.parse_services_yaml(services_yaml_file)
-        # Only services WITH card_text are returned
-        assert isinstance(result, list)
-        assert len(result) == 2
-
-    def test_service_has_required_fields(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        result = mod.parse_services_yaml(services_yaml_file)
-        first = result[0]
-        assert "service_key" in first
-        assert "title" in first
-        assert "card_text" in first
-
-    def test_service_key_matches_yaml_key(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        result = mod.parse_services_yaml(services_yaml_file)
-        keys = {s["service_key"] for s in result}
-        assert "passive_income" in keys
-        assert "infotour" in keys
-
-    def test_skips_service_without_card_text(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        result = mod.parse_services_yaml(services_yaml_file)
-        keys = {s["service_key"] for s in result}
-        assert "no_text_service" not in keys
-
-    def test_card_text_not_empty(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        result = mod.parse_services_yaml(services_yaml_file)
-        for svc in result:
-            assert svc["card_text"].strip() != ""
-
-    def test_raises_on_missing_file(self, tmp_path: Path) -> None:
-        mod = _get_module()
-        with pytest.raises((FileNotFoundError, SystemExit)):
-            mod.parse_services_yaml(tmp_path / "nonexistent.yaml")
-
-
-# ---------------------------------------------------------------------------
-# build_chunks
-# ---------------------------------------------------------------------------
-
-
-class TestBuildChunks:
-    def test_returns_one_chunk_per_service(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-        assert len(chunks) == len(services)
-
-    def test_chunk_has_required_fields(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-        for chunk in chunks:
-            assert "id" in chunk
-            assert "text" in chunk
-            assert "service_key" in chunk
-            assert "title" in chunk
-            assert "source" in chunk
-
-    def test_source_is_services_yaml(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-        for chunk in chunks:
-            assert chunk["source"] == "services.yaml"
-
-    def test_text_contains_card_text(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-        passive = next(c for c in chunks if c["service_key"] == "passive_income")
-        assert "Пассивный доход" in passive["text"]
-
-
-# ---------------------------------------------------------------------------
-# Idempotency — deterministic IDs
-# ---------------------------------------------------------------------------
-
-
-class TestDeterministicIds:
-    def test_same_input_produces_same_ids(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks1 = mod.build_chunks(services)
-        chunks2 = mod.build_chunks(services)
-        ids1 = [c["id"] for c in chunks1]
-        ids2 = [c["id"] for c in chunks2]
-        assert ids1 == ids2
-
-    def test_ids_are_valid_uuids(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-        for chunk in chunks:
-            parsed = uuid.UUID(chunk["id"])
-            assert parsed.version == 5
-
-    def test_different_services_have_different_ids(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-        ids = [c["id"] for c in chunks]
-        assert len(ids) == len(set(ids)), "All chunk IDs must be unique"
-
-
-# ---------------------------------------------------------------------------
-# build_points — PointStruct construction (no network calls)
-# ---------------------------------------------------------------------------
-
-
-class TestBuildPoints:
-    def test_build_points_returns_correct_count(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-
-        # Fake embeddings matching chunk count
-        n = len(chunks)
-        fake_embeddings = {
-            "dense": [[0.1] * 4 for _ in range(n)],
-            "sparse": [{"indices": [0, 1], "values": [0.5, 0.5]} for _ in range(n)],
-            "colbert": [[[0.1] * 4] for _ in range(n)],
-        }
-        points = mod.build_points(chunks, fake_embeddings)
-        assert len(points) == n
-
-    def test_build_points_uses_chunk_ids(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-
-        n = len(chunks)
-        fake_embeddings = {
-            "dense": [[0.1] * 4 for _ in range(n)],
-            "sparse": [{"indices": [0], "values": [1.0]} for _ in range(n)],
-            "colbert": [[[0.1] * 4] for _ in range(n)],
-        }
-        points = mod.build_points(chunks, fake_embeddings)
-        point_ids = {str(p.id) for p in points}
-        chunk_ids = {c["id"] for c in chunks}
-        assert point_ids == chunk_ids
-
-    def test_build_points_payload_has_source(self, services_yaml_file: Path) -> None:
-        mod = _get_module()
-        services = mod.parse_services_yaml(services_yaml_file)
-        chunks = mod.build_chunks(services)
-
-        n = len(chunks)
-        fake_embeddings = {
-            "dense": [[0.1] * 4 for _ in range(n)],
-            "sparse": [{"indices": [0], "values": [1.0]} for _ in range(n)],
-            "colbert": [[[0.1] * 4] for _ in range(n)],
-        }
-        points = mod.build_points(chunks, fake_embeddings)
-        for p in points:
-            assert p.payload is not None
-            assert p.payload.get("metadata", {}).get("source") == "services.yaml"
+    assert first_indexed == 1
+    assert second_indexed == 1
+    call_file_ids = [call.kwargs["file_id"] for call in writer.upsert_chunks_sync.call_args_list]
+    assert call_file_ids == ["services.yaml::mortgage", "services.yaml::mortgage"]

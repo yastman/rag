@@ -1,113 +1,69 @@
 # AGENTS.md
 
-## Purpose
-- Define repository-wide instructions for Codex.
-- Keep rules concise, deterministic, and conflict-free.
-- Keep deep procedures in `docs/agent-rules/*.md` runbooks.
+## Project At A Glance
+- Production contextual RAG system for real-estate workflows.
+- Main surfaces: `telegram_bot/`, apartment search, CRM automation, voice agent, unified ingestion, local services, and k3s deployment.
+- Treat this repo as a multi-system product, not a single bot package.
 
-## Scope Resolution
-- Instruction precedence follows Codex scope rules:
-  1. Root `AGENTS.md` provides baseline rules.
-  2. The nearest `AGENTS.override.md` for the target path overrides root rules in that scope.
-  3. Deeper nested overrides supersede parent overrides in their own scope.
-- Directory-specific guidance belongs only in scoped overrides.
-- If external skill instructions conflict with repository AGENTS rules, follow repository AGENTS unless user says otherwise.
+## First Pass For New Sessions
+- Read `README.md` for system overview and entry points.
+- Read the nearest `AGENTS.override.md` before editing scoped subtrees.
+- Start code discovery with `grepai` MCP tools; use `rg` only for exact text or path matching.
+- Use `context-mode` MCP tools for large-output exploration, external docs, and large-file summarization.
 
-## Git Workflow
-- **Branch model:** `dev` → `main`. Main = prod (auto-deploy to VPS on push).
-- **Default branch for work:** `dev`. Never commit directly to main (pre-commit hook blocks it).
-- **Worktrees:** base off `dev`, not main: `git worktree add <path> -b feat/xxx dev`
-- **PRs:** target `dev` branch (not main). After merge to dev, deploy: merge dev → main → push.
-- Before PR review/diff analysis, refresh remote refs (`git fetch --prune`) and compare against the PR base branch (`origin/<base>`). If base is unknown, use `origin/dev`.
+## MCP Priority And Fallbacks
+- `grepai` is the default entry point for code discovery, semantic search, and call-graph tracing.
+- Use `rg` instead of `grepai` only for exact strings, imports, symbols, or file path patterns.
+- `context-mode` is the default entry point for high-output command exploration, external docs, and large-file analysis.
+- Use direct shell or file reads when you need exact file contents for editing, the output is small, or MCP adds no value.
+- If `grepai` is unavailable or returns weak results, fall back to `rg` plus direct file reads.
+- If `context-mode` is unavailable, fall back to short shell commands and targeted file reads.
 
-## Workflow
-- Before non-trivial edits, read:
-  - `README.md`
-  - nearest `AGENTS*.md`
-  - at least one relevant `docs/agent-rules/*.md` runbook for the changed area
-- For behavior changes, add or update tests in the nearest `tests/` scope.
-- Run pytest in parallel mode (`-n auto --dist=worksteal`) unless explicitly told otherwise.
+## Task Routing
+- `telegram_bot/`: handlers, dialogs, middlewares, agents, business services, orchestration.
+- `telegram_bot/services/` and `src/retrieval/`: search, RAG, cache, reranking, retrieval behavior.
+- `src/ingestion/unified/`: ingestion pipeline, chunking, manifests, Qdrant writes, resumability.
+- `src/voice/` and `telegram_bot/graph/`: voice agent and LangGraph runtime flow.
+- `mini_app/`: Telegram mini app backend and frontend.
+- `services/`: supporting local service containers and helper APIs.
+- `k8s/`, `compose*.yml`, `DOCKER.md`: deploy and environment orchestration.
 
-## Skill Routing
-- If user explicitly names a skill, use it.
-- At conversation start (if no explicit skill), run discovery via `using-superpowers`.
-- If multiple skills apply, prefer this order:
-  1. process (`using-superpowers`, `systematic-debugging`, `writing-plans`)
-  2. execution (`executing-plans`, `subagent-driven-development`, `test-driven-development`)
-  3. verification/review (`verification-before-completion`, `comprehensive-pr-review`, `requesting-code-review`)
+## Working Rules
+- Use `mcp__grepai__grepai_search` first for "where does this live?" and `mcp__grepai__grepai_trace_*` before non-trivial refactors.
+- Use `mcp__context-mode__ctx_batch_execute` for multi-command repo exploration.
+- Use `mcp__context-mode__ctx_fetch_and_index` plus `mcp__context-mode__ctx_search` for web docs and external pages.
+- Use direct shell/file reads when you need exact contents for editing or the output is small.
+- Before adding a new SDK, API client, or dependency, check `.claude/rules/sdk-registry.md`.
 
-### Default Skills For This Repo
-- `systematic-debugging`: any bug/failure/flaky behavior before proposing fixes.
-- `test-driven-development`: feature/bugfix behavior changes.
-- `test-suite-optimizer`: pytest/xdist speed, flakiness, test-tiering, gate strategy.
-- `writing-plans`: multi-step work requiring implementation plan first.
-- `executing-plans`: execute approved plan in batches with checkpoints.
-- `verification-before-completion`: mandatory before completion claims.
-- `using-git-worktrees`: isolated implementation/review work.
-- `comprehensive-pr-review`: PR-wide findings + verification + remediation.
-- `plan-reviewer`: plan-only review and point edits (without implementation).
+## Critical Invariants
+- Preserve service boundaries: transport-layer Telegram code should not absorb retrieval or domain logic.
+- Keep apartment search cheap-first: prefer deterministic parsing and filters before adding LLM work.
+- Preserve LangGraph state contracts, checkpoint assumptions, and routing shapes.
+- Preserve ingestion determinism and resumability; do not casually change manifest identity, hashing, or collection semantics.
+- Do not remove tracing, scoring, or observability hooks without a clear replacement.
 
-### Situational Skills
-- `brainstorming`: ambiguous requirements or architecture exploration before coding.
-- `subagent-driven-development`: when plan tasks are independent and reviewer loops are desired.
-- `requesting-code-review` / `receiving-code-review`: structured review exchange after milestones.
-- `finishing-a-development-branch`: explicit branch wrap-up / merge / cleanup flow.
-- `claude-md-writer`: editing `AGENTS.md` / `AGENTS.override.md` docs.
-
-### Deprioritized Skills (Not Default For Product Work)
-- `skill-creator`, `writing-skills`, `.system/skill-creator`, `.system/skill-installer`: only for Codex skill catalog maintenance.
-- `dispatching-parallel-agents`: use only for truly independent failures with no shared state; otherwise prefer `systematic-debugging`.
-
-## Required Verification
-- Minimum gate before completion for code/runtime changes:
+## Validation
+- Run fresh verification before claiming completion.
+- Base checks for most code changes:
   - `make check`
   - `PYTEST_ADDOPTS='-n auto --dist=worksteal' make test-unit`
-- For docs/plan-only changes (no runtime/test/infra code changes), skip full test gate and run documentation validation from:
-  - `docs/agent-rules/testing-and-validation.md`
-- For infra/integration/runtime-sensitive changes, run targeted checks from:
-  - `docs/agent-rules/testing-and-validation.md`
-- If required gates fail due to pre-existing or out-of-scope failures, do not silently ignore:
-  - report exact failing tests with command output summary;
-  - avoid bundling unrelated fixes unless user explicitly requests;
-  - link an existing tracking issue or create one per Issue Policy.
+- Use stricter checks from local overrides when working in their scope.
+- If you skip a relevant check, state that explicitly.
 
-## Issue Policy
-- Do not auto-create issues by default.
-- Create/update an issue only when:
-  - user explicitly requests it; or
-  - review finds a new unresolved `High`/`Medium` defect outside current change scope and no duplicate issue exists.
-- Before creating a new issue, deduplicate with `gh issue list --state open --search "<keywords>"`.
-- `Low` severity findings stay in PR comments unless user asks for issue tracking.
+## Fast Start Commands
+- `uv sync`
+- `make local-up`
+- `make run-bot`
+- `make check`
+- `make test-unit`
+- `make ingest-unified-status`
 
-## Safety
-- Do not run destructive git commands (`git reset --hard`, `git checkout --`, force-push) unless explicitly requested.
-- Do not commit `.env` secrets.
-- Prefer minimal, focused diffs.
-- Capture `git status --short --branch` at start and end of non-trivial tasks.
-- Preserve unrelated dirty files/worktree state; never revert changes you did not make.
-- Keep all AGENTS files concise (target <= 200 lines).
+## Local Overrides
+- `telegram_bot/AGENTS.override.md`
+- `k8s/AGENTS.override.md`
+- `src/ingestion/unified/AGENTS.override.md`
 
-## Project Map
-- `telegram_bot/` - LangGraph bot pipeline and integrations.
-- `src/api/` - FastAPI RAG endpoint.
-- `src/voice/` - LiveKit/SIP voice integration.
-- `src/ingestion/unified/` - unified ingestion runtime.
-- `src/retrieval/` - search engines and retrieval logic.
-- `src/evaluation/` - retrieval/RAG evaluation tooling.
-- `k8s/` - k3s manifests and overlays.
-- `docs/` - operational docs and plans.
-
-## Canonical References
+## References
 - `README.md`
-- `docs/PROJECT_STACK.md`
-- `docs/PIPELINE_OVERVIEW.md`
-- `docs/LOCAL-DEVELOPMENT.md`
-- `docs/QDRANT_STACK.md`
-- `docs/INGESTION.md`
-- `docs/ALERTING.md`
-- `docs/agent-rules/workflow.md`
-- `docs/agent-rules/testing-and-validation.md`
-- `docs/agent-rules/infra-and-deploy.md`
-- `docs/agent-rules/architecture-map.md`
-- `docs/agent-rules/project-analysis.md`
-- `docs/agent-rules/skills-authoring.md`
+- `.claude/rules/sdk-registry.md`
+- `DOCKER.md`
