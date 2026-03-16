@@ -7,6 +7,8 @@ Import specific services directly for best performance:
 
 from typing import TYPE_CHECKING
 
+from .generate_response import generate_response
+
 
 if TYPE_CHECKING:
     from .bge_m3_client import BGEM3Client, BGEM3SyncClient
@@ -49,6 +51,7 @@ __all__ = [
     "VoyageService",
     "check_responses_parse_compat",
     "format_summary_as_note",
+    "generate_response",
     "generate_summary",
 ]
 
