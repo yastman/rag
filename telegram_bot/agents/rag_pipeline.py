@@ -24,6 +24,7 @@ from typing import Any
 
 from src.retrieval.topic_classifier import detect_score_gap, get_query_topic_hint
 from telegram_bot.observability import get_client, observe
+from telegram_bot.services.query_preprocessor import expand_short_query
 from telegram_bot.services.rag_core import (
     CACHEABLE_QUERY_TYPES,
     check_semantic_cache,
@@ -319,7 +320,14 @@ async def _hybrid_retrieve(
     # Step 3: Hybrid search via Qdrant SDK (RRF fusion or ColBERT server-side rerank)
     _has_colbert_search = callable(getattr(qdrant, "hybrid_search_rrf_colbert", None))
     colbert_search_used = False
+    normalized_query = query.strip().lower()
+    query_word_count = len(normalized_query.split()) if normalized_query else 0
+    prefer_faq_doc_type = topic_hint == "finance" and 0 < query_word_count <= 2
     filters = {"topic": topic_hint} if topic_hint else None
+    relaxed_filters: dict[str, str] | None = None
+    if prefer_faq_doc_type and topic_hint:
+        filters = {"topic": topic_hint, "doc_type": "faq"}
+        relaxed_filters = {"topic": topic_hint}
 
     if colbert_query and _has_colbert_search:
         logger.info("metric", extra={"metric_name": "colbert_rerank_attempted", "value": 1})
@@ -351,6 +359,31 @@ async def _hybrid_retrieve(
             "metric",
             extra={"metric_name": "topic_filter_fallback", "value": 1},
         )
+        fallback_filters = relaxed_filters if relaxed_filters is not None else None
+        if colbert_query and _has_colbert_search:
+            qdrant_result = await qdrant.hybrid_search_rrf_colbert(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                colbert_query=colbert_query,
+                filters=fallback_filters,
+                top_k=top_k,
+                return_meta=True,
+            )
+        else:
+            qdrant_result = await qdrant.hybrid_search_rrf(
+                dense_vector=dense_vector,
+                sparse_vector=sparse_vector,
+                filters=fallback_filters,
+                top_k=top_k,
+                return_meta=True,
+            )
+        if isinstance(qdrant_result, tuple) and len(qdrant_result) == 2:
+            results, search_meta = qdrant_result
+        else:
+            results = qdrant_result
+            search_meta = {"backend_error": False, "error_type": None, "error_message": None}
+
+    if relaxed_filters is not None and len(results) < 3:
         if colbert_query and _has_colbert_search:
             qdrant_result = await qdrant.hybrid_search_rrf_colbert(
                 dense_vector=dense_vector,
@@ -546,6 +579,13 @@ async def _rerank(
         rerank_applied = False
         rerank_cache_hit = False
 
+    if len(reranked_docs) >= 3:
+        top_scores = [float(doc.get("score", 0.0)) for doc in reranked_docs[:3]]
+        lead_gap = detect_score_gap(top_scores[:2])
+        tail_gap = detect_score_gap(top_scores[1:3])
+        if not bool(lead_gap["confident"]) and bool(tail_gap["confident"]):
+            reranked_docs = reranked_docs[:2]
+
     elapsed = time.perf_counter() - t0
     logger.info(
         "rerank: %d → %d docs, applied=%s cache_hit=%s (%.3fs)",
@@ -581,6 +621,26 @@ async def _rewrite_query(
     Returns dict with rewritten_query, rewrite_count, rewrite_effective, and latency.
     """
     t0 = time.perf_counter()
+    topic_hint = get_query_topic_hint(query)
+    expanded_query = expand_short_query(
+        query,
+        topic_hint=topic_hint.value if topic_hint is not None else None,
+    )
+    if expanded_query != query:
+        elapsed = time.perf_counter() - t0
+        logger.info(
+            "rewrite: deterministic expansion '%s' → '%s' (%.3fs)",
+            query,
+            expanded_query,
+            elapsed,
+        )
+        return {
+            "rewritten_query": expanded_query,
+            "rewrite_count": rewrite_count + 1,
+            "rewrite_effective": True,
+            "rewrite_provider_model": "deterministic_short_query_expansion",
+            "latency_stages": {**latency_stages, "rewrite": elapsed},
+        }
 
     try:
         from telegram_bot.graph.config import GraphConfig
