@@ -602,7 +602,7 @@ _SCROLL_PAGE_SIZE = 10
 
 async def on_city_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -616,7 +616,7 @@ async def on_city_selected(
 
 async def on_property_type_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -630,7 +630,7 @@ async def on_property_type_selected(
 
 async def on_budget_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -653,7 +653,7 @@ async def on_pref_done(
 
 async def on_pref_category_selected(
     callback: CallbackQuery,
-    widget: ManagedMultiselect,
+    _widget: ManagedMultiselect,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -674,7 +674,7 @@ async def on_pref_category_selected(
 
 async def on_pref_floor_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -685,7 +685,7 @@ async def on_pref_floor_selected(
 
 async def on_pref_view_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -696,7 +696,7 @@ async def on_pref_view_selected(
 
 async def on_pref_furnished_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -707,7 +707,7 @@ async def on_pref_furnished_selected(
 
 async def on_pref_promotion_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -718,7 +718,7 @@ async def on_pref_promotion_selected(
 
 async def on_pref_area_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -729,7 +729,7 @@ async def on_pref_area_selected(
 
 async def on_pref_complex_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -740,7 +740,7 @@ async def on_pref_complex_selected(
 
 async def on_pref_section_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -861,7 +861,7 @@ async def on_summary_search(
 
 async def on_change_filter_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:
@@ -878,7 +878,7 @@ async def on_change_filter_selected(
 
 async def on_zero_suggestion_selected(
     callback: CallbackQuery,
-    widget: Select,
+    _widget: Select,
     manager: DialogManager,
     item_id: str,
 ) -> None:

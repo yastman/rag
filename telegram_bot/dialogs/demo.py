@@ -172,14 +172,14 @@ async def _dialog_search(query: str, message: Message, manager: DialogManager) -
 # ---------------------------------------------------------------------------
 
 
-async def on_text_input(message: Message, widget: MessageInput, manager: DialogManager) -> None:
+async def on_text_input(message: Message, _widget: MessageInput, manager: DialogManager) -> None:
     """Handle text message in intro window — run apartment search."""
     if not message.text:
         return
     await _dialog_search(message.text, message, manager)
 
 
-async def on_voice_input(message: Message, widget: MessageInput, manager: DialogManager) -> None:
+async def on_voice_input(message: Message, _widget: MessageInput, manager: DialogManager) -> None:
     """Handle voice message in intro window — STT then apartment search."""
     await message.answer("🎤 Распознаю голос...")
     text = await transcribe_voice(message)
@@ -192,7 +192,7 @@ async def on_voice_input(message: Message, widget: MessageInput, manager: Dialog
 
 async def on_example_selected(
     callback: CallbackQuery,
-    widget: Any,
+    _widget: Any,
     manager: DialogManager,
     item_id: str,
 ) -> None:

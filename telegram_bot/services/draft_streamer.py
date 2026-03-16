@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-import random
+import secrets
 from typing import TYPE_CHECKING, Any
 
 
 if TYPE_CHECKING:
     from aiogram import Bot
+
+
+def _new_draft_id() -> int:
+    return secrets.randbelow(2**31 - 1) + 1
 
 
 class DraftStreamer:
@@ -22,7 +26,7 @@ class DraftStreamer:
         self._bot = bot
         self._chat_id = chat_id
         self._thread_id = thread_id
-        self._draft_id = random.randint(1, 2**31 - 1)
+        self._draft_id = _new_draft_id()
 
     async def send_chunk(self, accumulated_text: str) -> None:
         """Send intermediate draft (animated on client side)."""

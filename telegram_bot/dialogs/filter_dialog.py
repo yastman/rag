@@ -179,7 +179,7 @@ def _make_radio_handler(field: str):
 
     async def handler(
         callback: CallbackQuery,
-        radio: Any,
+        _radio: Any,
         manager: DialogManager,
         item_id: str,
     ) -> None:

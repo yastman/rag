@@ -78,7 +78,7 @@ async def _contact_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[
 
 async def _on_goal_selected(
     callback: CallbackQuery,
-    widget: Any,
+    _widget: Any,
     manager: DialogManager,
     item_id: str,
 ) -> None:

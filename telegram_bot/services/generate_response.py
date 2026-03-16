@@ -394,6 +394,8 @@ async def generate_response(
 ) -> dict[str, Any]:
     """Generate an LLM answer from retrieved context with optional Telegram streaming."""
     t0 = time.monotonic()
+    # Keep compatibility for injected prompt builders in tests/callers.
+    _ = build_system_prompt
 
     if config is None:
         config = get_config() if get_config is not None else _get_graph_config()
