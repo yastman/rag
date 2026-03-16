@@ -51,8 +51,8 @@ class ParserCache:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_file_hash(self, filepath: Path) -> str:
-        """Calculate MD5 hash of file."""
-        md5 = hashlib.md5()
+        """Calculate a non-cryptographic MD5 hash for parser cache keys."""
+        md5 = hashlib.md5(usedforsecurity=False)
         with open(filepath, "rb") as f:
             for chunk in iter(lambda: f.read(8192), b""):
                 md5.update(chunk)
