@@ -821,7 +821,7 @@ ingest-status: ## Show collection statistics
 
 ingest-services: ## Index curated services.yaml content into Qdrant
 	@echo "$(BLUE)Indexing services.yaml content...$(NC)"
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python scripts/index_services.py
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; uv run python -m scripts.index_services
 	@echo "$(GREEN)✓ services.yaml indexing complete$(NC)"
 
 # =============================================================================
