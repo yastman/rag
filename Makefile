@@ -326,7 +326,7 @@ test-redis: ## Verify Redis Query Engine is available
 	fi
 	@echo "$(GREEN)✓ Redis capabilities verified$(NC)"
 
-.PHONY: test-bot-health test-bot-health-vps
+.PHONY: test-bot-health test-bot-health-vps vps-rag-preflight
 
 test-bot-health: ## Preflight: verify Qdrant collection + LLM (local dev, ports published)
 	@echo "$(BLUE)Running bot health preflight...$(NC)"
@@ -346,6 +346,11 @@ test-bot-health-vps: ## Preflight: verify Qdrant + LLM from inside Docker networ
 	print('  ✓ LiteLLM OK'); \
 	"
 	@echo "$(GREEN)✓ VPS bot health preflight passed$(NC)"
+
+vps-rag-preflight: ## Run VPS RAG preflight via SSH (core services + health script)
+	@echo "$(BLUE)Running VPS RAG preflight...$(NC)"
+	@uv run python scripts/vps_rag_preflight.py --host vps --project-dir /opt/rag-fresh
+	@echo "$(GREEN)✓ VPS RAG preflight passed$(NC)"
 
 # =============================================================================
 # PROJECT MANAGEMENT
