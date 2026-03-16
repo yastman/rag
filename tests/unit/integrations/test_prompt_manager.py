@@ -11,7 +11,6 @@ from telegram_bot.integrations.prompt_manager import (
     _apply_fallback_vars,
     _reset_client,
     get_prompt,
-    get_prompt_with_config,
 )
 
 
@@ -49,19 +48,15 @@ class TestGetPrompt:
     def test_fetches_prompt_from_langfuse(self):
         mock_prompt = MagicMock()
         mock_prompt.compile.return_value = "Langfuse prompt text"
-        mock_prompt.config = {"model": "gpt-4o-mini"}
         mock_client = MagicMock()
         mock_client.get_prompt.return_value = mock_prompt
 
         with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
-            result, config = get_prompt_with_config("my-prompt", fallback="fallback text")
+            result = get_prompt("my-prompt", fallback="fallback text")
 
         assert result == "Langfuse prompt text"
-        assert config == {"model": "gpt-4o-mini"}
         mock_client.get_prompt.assert_called_once_with(
-            "my-prompt",
-            cache_ttl_seconds=DEFAULT_CACHE_TTL,
-            fallback="fallback text",
+            "my-prompt", cache_ttl_seconds=DEFAULT_CACHE_TTL
         )
         mock_prompt.compile.assert_called_once_with()
 
@@ -79,11 +74,6 @@ class TestGetPrompt:
             )
 
         assert result == "Ассистент по недвижимость"
-        mock_client.get_prompt.assert_called_once_with(
-            "generate",
-            cache_ttl_seconds=DEFAULT_CACHE_TTL,
-            fallback="Ассистент по {{domain}}",
-        )
         mock_prompt.compile.assert_called_once_with(domain="недвижимость")
 
     def test_custom_cache_ttl(self):
@@ -95,11 +85,7 @@ class TestGetPrompt:
         with patch("telegram_bot.integrations.prompt_manager.get_client", return_value=mock_client):
             get_prompt("test", fallback="fb", cache_ttl=60)
 
-        mock_client.get_prompt.assert_called_once_with(
-            "test",
-            cache_ttl_seconds=60,
-            fallback="fb",
-        )
+        mock_client.get_prompt.assert_called_once_with("test", cache_ttl_seconds=60)
 
     def test_falls_back_on_exception(self):
         mock_client = MagicMock()
@@ -119,7 +105,7 @@ class TestGetPrompt:
 
         assert result == "Hello World"
 
-    def test_not_found_error_uses_sdk_fallback_each_time(self):
+    def test_not_found_error_is_temporarily_cached(self):
         mock_client = MagicMock()
         mock_client.get_prompt.side_effect = Exception(
             "status_code: 404, body: {'message': \"Prompt not found: 'generate'\"}"
@@ -131,10 +117,12 @@ class TestGetPrompt:
 
         assert first == "fallback"
         assert second == "fallback"
-        assert mock_client.get_prompt.call_count == 2
+        # 2nd call should use local missing-cache and skip Langfuse call.
+        assert mock_client.get_prompt.call_count == 1
 
-    def test_missing_prompt_uses_sdk_fallback_without_api_probe(self):
+    def test_no_manual_api_probe_for_missing_prompt(self):
         mock_client = MagicMock()
+        mock_client.api.prompts.get.side_effect = RuntimeError("must not be called")
         mock_client.get_prompt.side_effect = Exception(
             "status_code: 404, body: {'message': \"Prompt not found: 'generate'\"}"
         )
@@ -143,12 +131,8 @@ class TestGetPrompt:
             result = get_prompt("generate", fallback="fallback", cache_ttl=60)
 
         assert result == "fallback"
-        mock_client.get_prompt.assert_called_once_with(
-            "generate",
-            cache_ttl_seconds=60,
-            fallback="fallback",
-        )
-        assert mock_client.api.prompts.get.call_count == 0
+        mock_client.get_prompt.assert_called_once()
+        mock_client.api.prompts.get.assert_not_called()
 
     def test_forwards_langfuse_prompt_label_from_env(self, monkeypatch: pytest.MonkeyPatch):
         mock_prompt = MagicMock()
@@ -164,7 +148,6 @@ class TestGetPrompt:
         mock_client.get_prompt.assert_called_once_with(
             "my-prompt",
             cache_ttl_seconds=DEFAULT_CACHE_TTL,
-            fallback="fallback text",
             label="staging",
         )
 
@@ -243,5 +226,9 @@ class TestSpanOutputPromptVersion:
 
 
 class TestResetClient:
-    def test_reset_is_safe_noop(self):
+    def test_reset_clears_missing_prompt_cache(self):
+        from telegram_bot.integrations.prompt_manager import _missing_prompts_until
+
+        _missing_prompts_until["some-prompt"] = 9999999999.0
         _reset_client()
+        assert "some-prompt" not in _missing_prompts_until

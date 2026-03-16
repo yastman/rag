@@ -52,9 +52,9 @@ class TestLLMServiceInit:
         assert isinstance(service.client, AsyncOpenAI)
 
     def test_services_package_no_longer_exports_llmservice(self):
-        """Package-level API should steer callers to generate_response()."""
+        """Package-level API should keep LLMService as compatibility-only."""
         assert "LLMService" not in services.__all__
-        assert not hasattr(services, "LLMService")
+        assert services.LLMService is LLMService
 
 
 class TestFormatContext:
