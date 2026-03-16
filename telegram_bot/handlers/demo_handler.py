@@ -55,7 +55,11 @@ async def handle_demo_apartments(
 
     await state.update_data(examples=examples)
 
-    await callback.message.answer(
+    msg = callback.message
+    if msg is None or not hasattr(msg, "answer"):
+        return
+
+    await msg.answer(
         "🏖 Подбор апартаментов\n\n"
         "Напишите текстом или отправьте голосовое сообщение.\n"
         "Или выберите пример:",
