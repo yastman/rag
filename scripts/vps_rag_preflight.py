@@ -85,7 +85,7 @@ def _docker_network_health_cmd(project_dir: str) -> str:
         "collections = payload.get('result', {}).get('collections', [])\n"
         "names = {item.get('name') for item in collections}\n"
         "if target not in names:\n"
-        "    print(f\"FAIL: Qdrant collection '{target}' not found (mode={mode})\")\n"
+        "    print(f'FAIL: Qdrant collection {target} not found (mode={mode})')\n"
         "    raise SystemExit(1)\n"
         "print(f'✓ Qdrant collection exists: {target} (mode={mode})')\n"
         "\n"
