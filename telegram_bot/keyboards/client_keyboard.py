@@ -38,6 +38,18 @@ _ACTION_IDS: dict[str, str] = {
 }
 
 
+def collect_client_menu_texts(labels: list[Any]) -> set[str]:
+    texts: set[str] = set()
+    for label in labels:
+        if not isinstance(label, str) or not label:
+            continue
+        try:
+            texts.add(label)
+        except (AttributeError, TypeError):
+            logger.debug("Skipping malformed client keyboard label", exc_info=True)
+    return texts
+
+
 def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
     """Return all supported menu labels for handler filters."""
     texts = set(MENU_BUTTONS.keys())
@@ -45,15 +57,21 @@ def get_menu_button_texts(i18n_hub: Any = None) -> set[str]:
     if i18n_hub is None:
         return texts
 
+    translated_labels: list[Any] = []
     for locale in ("ru", "uk", "en"):
+        translator = None
         try:
             translator = i18n_hub.get_translator_by_locale(locale)
-            for ftl_key in _ACTION_IDS:
-                label = translator.get(ftl_key)
-                if isinstance(label, str) and label:
-                    texts.add(label)
-        except Exception:
+        except (AttributeError, TypeError):
+            logger.debug("Failed to load translator for locale=%s", locale, exc_info=True)
+        if translator is None:
             continue
+        for ftl_key in _ACTION_IDS:
+            try:
+                translated_labels.append(translator.get(ftl_key))
+            except (AttributeError, TypeError):
+                logger.debug("Malformed translation for locale=%s key=%s", locale, ftl_key)
+    texts.update(collect_client_menu_texts(translated_labels))
     return texts
 
 
