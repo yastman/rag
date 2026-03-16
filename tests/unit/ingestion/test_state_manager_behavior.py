@@ -68,6 +68,19 @@ def _make_state_row(
 
 
 # ---------------------------------------------------------------------------
+# SQL identifier hardening
+# ---------------------------------------------------------------------------
+
+
+class TestSqlIdentifierValidation:
+    """Verify SQL table identifier validation guard."""
+
+    def test_rejects_unsafe_identifier(self) -> None:
+        with pytest.raises(ValueError, match="Unsafe SQL identifier"):
+            UnifiedStateManager._safe_identifier("ingestion_state;DROP TABLE users")
+
+
+# ---------------------------------------------------------------------------
 # should_process_sync — hash comparison behavior
 # ---------------------------------------------------------------------------
 
