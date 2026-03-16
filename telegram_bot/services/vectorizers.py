@@ -70,16 +70,16 @@ class UserBaseVectorizer(BaseVectorizer):
     def embed(
         self,
         text: str,
-        preprocess: Any = None,
-        as_buffer: bool = False,
+        _preprocess: Any = None,
+        _as_buffer: bool = False,
         **kwargs: Any,
     ) -> list[float]:
         """Generate embedding for single text (sync).
 
         Args:
             text: Text to embed
-            preprocess: Optional preprocessing function (unused)
-            as_buffer: Return as buffer (unused)
+            _preprocess: Optional preprocessing function (unused)
+            _as_buffer: Return as buffer (unused)
             **kwargs: Additional arguments (unused)
 
         Returns:
@@ -94,16 +94,16 @@ class UserBaseVectorizer(BaseVectorizer):
     def embed_many(
         self,
         texts: list[str],
-        preprocess: Any = None,
-        as_buffer: bool = False,
+        _preprocess: Any = None,
+        _as_buffer: bool = False,
         **kwargs: Any,
     ) -> list[list[float]]:
         """Generate embeddings for multiple texts (sync).
 
         Args:
             texts: List of texts to embed
-            preprocess: Optional preprocessing function (unused)
-            as_buffer: Return as buffer (unused)
+            _preprocess: Optional preprocessing function (unused)
+            _as_buffer: Return as buffer (unused)
             **kwargs: Additional arguments (unused)
 
         Returns:
@@ -118,16 +118,16 @@ class UserBaseVectorizer(BaseVectorizer):
     async def aembed(
         self,
         text: str,
-        preprocess: Any = None,
-        as_buffer: bool = False,
+        _preprocess: Any = None,
+        _as_buffer: bool = False,
         **kwargs: Any,
     ) -> list[float]:
         """Generate embedding for single text (async).
 
         Args:
             text: Text to embed
-            preprocess: Optional preprocessing function (unused)
-            as_buffer: Return as buffer (unused)
+            _preprocess: Optional preprocessing function (unused)
+            _as_buffer: Return as buffer (unused)
             **kwargs: Additional arguments (unused)
 
         Returns:
@@ -142,16 +142,16 @@ class UserBaseVectorizer(BaseVectorizer):
     async def aembed_many(
         self,
         texts: list[str],
-        preprocess: Any = None,
-        as_buffer: bool = False,
+        _preprocess: Any = None,
+        _as_buffer: bool = False,
         **kwargs: Any,
     ) -> list[list[float]]:
         """Generate embeddings for multiple texts (async).
 
         Args:
             texts: List of texts to embed
-            preprocess: Optional preprocessing function (unused)
-            as_buffer: Return as buffer (unused)
+            _preprocess: Optional preprocessing function (unused)
+            _as_buffer: Return as buffer (unused)
             **kwargs: Additional arguments (unused)
 
         Returns:
@@ -201,21 +201,21 @@ class BgeM3CacheVectorizer(BaseVectorizer):
         return self._bge_client
 
     def embed(
-        self, text: str, preprocess: Any = None, as_buffer: bool = False, **kwargs: Any
+        self, text: str, _preprocess: Any = None, _as_buffer: bool = False, **kwargs: Any
     ) -> list[float]:
         raise NotImplementedError(
             "BgeM3CacheVectorizer: use vector= parameter instead of prompt-based embedding"
         )
 
     def embed_many(
-        self, texts: list[str], preprocess: Any = None, as_buffer: bool = False, **kwargs: Any
+        self, texts: list[str], _preprocess: Any = None, _as_buffer: bool = False, **kwargs: Any
     ) -> list[list[float]]:
         raise NotImplementedError(
             "BgeM3CacheVectorizer: use vector= parameter instead of prompt-based embedding"
         )
 
     async def aembed(
-        self, text: str, preprocess: Any = None, as_buffer: bool = False, **kwargs: Any
+        self, text: str, _preprocess: Any = None, _as_buffer: bool = False, **kwargs: Any
     ) -> list[float]:
         """Fallback: generate embedding via BGEM3Client (should rarely be called)."""
         client = self._get_bge_client()
@@ -223,7 +223,7 @@ class BgeM3CacheVectorizer(BaseVectorizer):
         return cast(list[float], result.vectors[0])
 
     async def aembed_many(
-        self, texts: list[str], preprocess: Any = None, as_buffer: bool = False, **kwargs: Any
+        self, texts: list[str], _preprocess: Any = None, _as_buffer: bool = False, **kwargs: Any
     ) -> list[list[float]]:
         """Fallback: generate embeddings via BGEM3Client (should rarely be called)."""
         client = self._get_bge_client()
